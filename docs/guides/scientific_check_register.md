@@ -259,7 +259,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_calculation_geometry` — `backend/app/services/geometry_validation.py:120`
+- `validate_calculation_geometry` — `backend/app/services/geometry_validation.py:121`
   *Species-owned `opt` calculations only. Transition states are deliberately excluded, having no canonical SMILES to compare against. Best-effort by policy: a missing SMILES, a missing output geometry, unparseable coordinates or a raising chemistry layer all write nothing and let the upload continue. A Kabsch RMSD above 1.0 A against the input geometry is recorded as a separate suspicion signal.*
 
 **Escape hatch.** The whole check is advisory, so there is nothing to escape. What a consumer must not do is read a `fail` row as 'this calculation is scientifically invalid'; it means only that the automated identity validator found a mismatch.

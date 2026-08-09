@@ -284,8 +284,8 @@ def _execution_environment() -> dict:
     }
 
 
-def test_computed_reaction_calculation_environment_persists_dedups_and_is_optional(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_computed_reaction_calculation_environment_persists_dedups_and_is_optional(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=50_199, username="computed_rxn_environment"))
         session.flush()
         payload = _minimal_payload()
@@ -304,24 +304,22 @@ def test_computed_reaction_calculation_environment_persists_dedups_and_is_option
 
 
 @contextmanager
-def _isolated_session(db_engine) -> Iterator[Session]:
-    """Open a session on a connection-bound transaction that is always rolled back.
+def _isolated_session(db_conn) -> Iterator[Session]:
+    """A session on the per-test transaction, closed but never committed.
 
-    The workflow tests run against a shared, session-scoped ``db_engine``
-    fixture with no transaction rollback between tests.  The computed reaction
-    workflow persists many rows (species, calcs, TS, thermo, kinetics), and
-    committing them would pollute other workflow tests that make unqualified
-    row counts (e.g. ``len(session.scalars(select(TransitionState)).all())``).
+    ``db_conn`` (``tests/conftest.py``) owns the rollback; this helper only
+    scopes the ORM session's lifetime. It matters because the computed
+    reaction workflow persists a great many rows — species, calcs, TS,
+    thermo, kinetics — and several tests below locate the one they just made
+    with an unqualified query (``session.scalar(select(Calculation).where(
+    Calculation.type == irc))``), which is only correct while the database
+    holds nothing but this test's own writes.
     """
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 def _patch_artifact_storage(monkeypatch) -> list[str]:
@@ -347,9 +345,9 @@ def _patch_artifact_storage(monkeypatch) -> list[str]:
 # ---------------------------------------------------------------------------
 
 
-def test_full_round_trip_persistence(db_engine) -> None:
+def test_full_round_trip_persistence(db_conn) -> None:
     """A minimal realistic bundle persists the full graph of related rows."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=501, username="computed_rxn_tester_1"))
         session.flush()
 
@@ -518,11 +516,11 @@ def test_full_round_trip_persistence(db_engine) -> None:
         assert kin.ea_kj_mol == 10.0
 
 
-def test_ts_freq_calc_with_hessian_persists(db_engine) -> None:
+def test_ts_freq_calc_with_hessian_persists(db_conn) -> None:
     """A TS freq calculation carrying a ``hessian`` persists one
     ``calculation_hessian`` row bound to the TS geometry with the correct
     triangle length (5-atom TS → 3N=15 → 15*16/2 = 120 entries)."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=577, username="computed_rxn_ts_hessian"))
         session.flush()
 
@@ -559,7 +557,7 @@ def test_ts_freq_calc_with_hessian_persists(db_engine) -> None:
         assert hess.geometry_id is not None
 
 
-def test_ts_calc_with_spin_diagnostic_persists(db_engine) -> None:
+def test_ts_calc_with_spin_diagnostic_persists(db_conn) -> None:
     """A TS calculation carrying an inline ``spin_diagnostic`` persists one
     ``calc_spin_diagnostic`` (<S^2>) row anchored to the TS calc.
 
@@ -567,7 +565,7 @@ def test_ts_calc_with_spin_diagnostic_persists(db_engine) -> None:
     plus adapter forwarding) reaches ``persist_calculation_result`` through
     the computed_reaction route — the field is no longer dropped by
     ``extra='forbid'`` and is no longer silently ignored by the adapter."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=591, username="computed_rxn_ts_spin"))
         session.flush()
 
@@ -605,7 +603,7 @@ def test_ts_calc_with_spin_diagnostic_persists(db_engine) -> None:
 
 
 def test_canonical_direction_kinetics_reuses_canonical_reaction_entry(
-    db_engine,
+    db_conn,
 ) -> None:
     """A forward-only fit attaches to the bundle's canonical reaction entry.
 
@@ -623,7 +621,7 @@ def test_canonical_direction_kinetics_reuses_canonical_reaction_entry(
     assert payload["kinetics"][0]["reactant_keys"] == payload["reactant_keys"]
     assert payload["kinetics"][0]["product_keys"] == payload["product_keys"]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=540, username="canonical_dir_tester"))
         session.flush()
 
@@ -657,7 +655,7 @@ def test_canonical_direction_kinetics_reuses_canonical_reaction_entry(
 
 
 def test_reverse_direction_kinetics_gets_separate_reaction_entry(
-    db_engine,
+    db_conn,
 ) -> None:
     """A reverse-direction fit gets its own reaction entry with swapped roles.
 
@@ -686,7 +684,7 @@ def test_reverse_direction_kinetics_gets_separate_reaction_entry(
         }
     )
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=541, username="reverse_dir_tester"))
         session.flush()
 
@@ -732,7 +730,7 @@ def test_reverse_direction_kinetics_gets_separate_reaction_entry(
         # Scope SpeciesEntry lookups to entries created by THIS upload —
         # other tests may have committed entries for the same SMILES, so
         # an unqualified ``Species.smiles == 'C'`` query is non-deterministic
-        # under the shared db_engine fixture.
+        # under the shared db_conn fixture.
         upload_se_ids = set(summary["species_entry_ids"])
         ch4_se = session.scalar(
             select(SpeciesEntry)
@@ -762,7 +760,7 @@ def test_reverse_direction_kinetics_gets_separate_reaction_entry(
 # ---------------------------------------------------------------------------
 
 
-def test_species_reuse_across_participants(db_engine) -> None:
+def test_species_reuse_across_participants(db_conn) -> None:
     """Two payload species with the same identity collapse to one species row."""
     payload = {
         "species": [
@@ -782,7 +780,7 @@ def test_species_reuse_across_participants(db_engine) -> None:
         "1\nH\nH 0.0 0.0 0.1"
     )
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -843,7 +841,7 @@ def test_species_reuse_across_participants(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_artifact_persists_and_links_to_calculation(db_engine, monkeypatch) -> None:
+def test_artifact_persists_and_links_to_calculation(db_conn, monkeypatch) -> None:
     """A calculation_artifact row is created and linked to its calculation."""
     _patch_artifact_storage(monkeypatch)
 
@@ -860,7 +858,7 @@ def test_artifact_persists_and_links_to_calculation(db_engine, monkeypatch) -> N
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         _summary = persist_computed_reaction_upload(session, request)
 
@@ -893,9 +891,9 @@ def test_artifact_persists_and_links_to_calculation(db_engine, monkeypatch) -> N
 # ---------------------------------------------------------------------------
 
 
-def test_kinetics_source_calculation_linkage(db_engine) -> None:
+def test_kinetics_source_calculation_linkage(db_conn) -> None:
     """SP calculations on participants are linked to the kinetics row."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**_minimal_payload())
         summary = persist_computed_reaction_upload(session, request)
 
@@ -929,7 +927,7 @@ def test_kinetics_source_calculation_linkage(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_frequency_scale_factor_resolution_on_statmech(db_engine) -> None:
+def test_frequency_scale_factor_resolution_on_statmech(db_conn) -> None:
     """A statmech payload with a freq_scale_factor ref resolves an FSF row."""
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -946,7 +944,7 @@ def test_frequency_scale_factor_resolution_on_statmech(db_engine) -> None:
         },
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -973,7 +971,7 @@ def test_frequency_scale_factor_resolution_on_statmech(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_statmech_point_group_persists_on_species_block(db_engine) -> None:
+def test_statmech_point_group_persists_on_species_block(db_conn) -> None:
     """Per-species statmech blocks accept and persist ``point_group``."""
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -984,7 +982,7 @@ def test_statmech_point_group_persists_on_species_block(db_engine) -> None:
         "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -995,7 +993,7 @@ def test_statmech_point_group_persists_on_species_block(db_engine) -> None:
         assert statmech.point_group == "D3h"
 
 
-def test_statmech_optical_isomers_persists_on_species_block(db_engine) -> None:
+def test_statmech_optical_isomers_persists_on_species_block(db_conn) -> None:
     """Per-species statmech blocks accept and persist ``optical_isomers``."""
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -1006,7 +1004,7 @@ def test_statmech_optical_isomers_persists_on_species_block(db_engine) -> None:
         "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1017,7 +1015,7 @@ def test_statmech_optical_isomers_persists_on_species_block(db_engine) -> None:
         assert statmech.optical_isomers == 2
 
 
-def test_statmech_optical_isomers_defaults_null_when_omitted(db_engine) -> None:
+def test_statmech_optical_isomers_defaults_null_when_omitted(db_conn) -> None:
     """A statmech block without ``optical_isomers`` still validates and
     stores NULL — old bundle payloads remain valid."""
     payload = _minimal_payload()
@@ -1028,7 +1026,7 @@ def test_statmech_optical_isomers_defaults_null_when_omitted(db_engine) -> None:
         "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1039,7 +1037,7 @@ def test_statmech_optical_isomers_defaults_null_when_omitted(db_engine) -> None:
         assert statmech.optical_isomers is None
 
 
-def test_reaction_participant_thermo_links_to_own_statmech(db_engine) -> None:
+def test_reaction_participant_thermo_links_to_own_statmech(db_conn) -> None:
     """Each participant's COMPUTED thermo must link to that same participant's
     statmech (audit finding #3) — never a sibling's. Two participants (ch3,
     ch4) each carry thermo + statmech; the third (h) carries thermo only and
@@ -1056,7 +1054,7 @@ def test_reaction_participant_thermo_links_to_own_statmech(db_engine) -> None:
             "point_group": "C1",
         }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1089,7 +1087,7 @@ def test_reaction_participant_thermo_links_to_own_statmech(db_engine) -> None:
         assert unlinked[0].statmech_id is None
 
 
-def test_reaction_non_computed_thermo_not_linked_to_statmech(db_engine) -> None:
+def test_reaction_non_computed_thermo_not_linked_to_statmech(db_conn) -> None:
     """Origin-guard, reaction side (mirror of the species-path test).
 
     The write path only attaches ``thermo.statmech_id`` when the thermo's
@@ -1122,7 +1120,7 @@ def test_reaction_non_computed_thermo_not_linked_to_statmech(db_engine) -> None:
         "point_group": "Td",
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1151,7 +1149,7 @@ def test_reaction_non_computed_thermo_not_linked_to_statmech(db_engine) -> None:
         assert ch4_thermo.statmech_id == statmech_entry_ids[ch4_entry_id]
 
 
-def test_statmech_optical_isomers_zero_rejected(db_engine) -> None:
+def test_statmech_optical_isomers_zero_rejected(db_conn) -> None:
     """``optical_isomers`` below 1 is rejected at the schema layer (422)."""
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -1163,7 +1161,7 @@ def test_statmech_optical_isomers_zero_rejected(db_engine) -> None:
         ComputedReactionUploadRequest(**payload)
 
 
-def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine) -> None:
+def test_statmech_source_calculations_persist_for_species_owned_calcs(db_conn) -> None:
     """Statmech source_calculations links resolve and persist correctly."""
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -1178,7 +1176,7 @@ def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine)
         ],
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1211,7 +1209,7 @@ def test_statmech_source_calculations_persist_for_species_owned_calcs(db_engine)
 
 
 def test_statmech_source_calculation_referencing_ts_calc_rejects_with_owned_by_ts_message(
-    db_engine,
+    db_conn,
 ) -> None:
     """A species statmech referencing a TS-owned calc rejects 422."""
     payload = _minimal_payload()
@@ -1224,7 +1222,7 @@ def test_statmech_source_calculation_referencing_ts_calc_rejects_with_owned_by_t
     }
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(
             ValueError, match=r"refers to a calculation owned by a transition state"
@@ -1233,7 +1231,7 @@ def test_statmech_source_calculation_referencing_ts_calc_rejects_with_owned_by_t
 
 
 def test_statmech_source_calculation_referencing_sibling_species_rejects_with_other_species_message(
-    db_engine,
+    db_conn,
 ) -> None:
     """A species statmech referencing a sibling-species-owned calc rejects 422."""
     payload = _minimal_payload()
@@ -1248,7 +1246,7 @@ def test_statmech_source_calculation_referencing_sibling_species_rejects_with_ot
     }
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(
             ValueError,
@@ -1274,7 +1272,7 @@ def test_statmech_source_calculation_undefined_key_rejects_at_schema_layer() -> 
         ComputedReactionUploadRequest(**payload)
 
 
-def test_statmech_without_new_fields_remains_valid(db_engine) -> None:
+def test_statmech_without_new_fields_remains_valid(db_conn) -> None:
     """Pre-expansion payloads without point_group / source_calculations still persist."""
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
@@ -1284,7 +1282,7 @@ def test_statmech_without_new_fields_remains_valid(db_engine) -> None:
         "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1324,7 +1322,7 @@ def _payload_with_ch4_scan() -> dict:
     return payload
 
 
-def test_reaction_statmech_torsion_with_one_coordinate_persists(db_engine) -> None:
+def test_reaction_statmech_torsion_with_one_coordinate_persists(db_conn) -> None:
     """1D rotor: one statmech_torsion_definition row, atom quartet 1-based."""
     payload = _payload_with_ch4_scan()
     payload["species"][2]["statmech"] = {
@@ -1351,7 +1349,7 @@ def test_reaction_statmech_torsion_with_one_coordinate_persists(db_engine) -> No
             }
         ],
     }
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1386,7 +1384,7 @@ def test_reaction_statmech_torsion_with_one_coordinate_persists(db_engine) -> No
 
 
 def test_reaction_statmech_torsion_without_coordinates_writes_no_definitions(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _minimal_payload()
     payload["species"][2]["statmech"] = {
@@ -1395,7 +1393,7 @@ def test_reaction_statmech_torsion_without_coordinates_writes_no_definitions(
         "source_calculations": [{"calculation_key": "ch4-freq", "role": "freq"}],
         "torsions": [{"torsion_index": 1, "symmetry_number": 3}],
     }
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1555,7 +1553,7 @@ def _ch4_scan_result_payload(*, points: int = 3) -> dict:
 
 
 def test_reaction_bundle_scan_calculation_persists_scan_result_rows(
-    db_engine,
+    db_conn,
 ) -> None:
     """A computed-reaction bundle with a type=scan species calc carrying
     scan_result persists rows in calc_scan_result, calc_scan_coordinate,
@@ -1569,7 +1567,7 @@ def test_reaction_bundle_scan_calculation_persists_scan_result_rows(
         "scan_result": _ch4_scan_result_payload(points=3),
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1645,7 +1643,7 @@ def test_reaction_bundle_scan_calc_rejects_non_scan_inline_results() -> None:
 
 
 def test_reaction_torsion_resolves_to_scan_calc_with_scan_result(
-    db_engine,
+    db_conn,
 ) -> None:
     """A statmech torsion's ``source_scan_calculation_key`` resolves to a
     bundle-local type=scan calc that carries a ``scan_result``; the
@@ -1673,7 +1671,7 @@ def test_reaction_torsion_resolves_to_scan_calc_with_scan_result(
         ],
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -1698,7 +1696,7 @@ def test_reaction_torsion_resolves_to_scan_calc_with_scan_result(
 
 
 def test_same_basin_conformer_payloads_create_distinct_observations_and_anchor_calcs(
-    db_engine,
+    db_conn,
 ) -> None:
     """Two conformer payloads may share a group but still own separate observations."""
     payload = _minimal_payload()
@@ -1747,7 +1745,7 @@ def test_same_basin_conformer_payloads_create_distinct_observations_and_anchor_c
         },
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=502, username="computed_rxn_tester_2"))
         session.flush()
 
@@ -1809,7 +1807,7 @@ def test_same_basin_conformer_payloads_create_distinct_observations_and_anchor_c
 # ---------------------------------------------------------------------------
 
 
-def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> None:
+def test_bundle_calculation_parameters_persist_via_shared_seam(db_conn) -> None:
     """Parsed parameters on a bundle ``CalculationIn`` land as relational rows
     and snapshot metadata when routed through the shared calculation seam."""
     from datetime import datetime, timezone
@@ -1847,7 +1845,7 @@ def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> Non
         }
     )
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         existing = session.scalar(
             select(CalculationParameterVocab).where(
                 CalculationParameterVocab.canonical_key == canonical_key
@@ -1884,7 +1882,7 @@ def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> Non
         assert second.canonical_key is None
 
 
-def test_bundle_inline_results_and_artifacts_preserved(db_engine, monkeypatch) -> None:
+def test_bundle_inline_results_and_artifacts_preserved(db_conn, monkeypatch) -> None:
     """Inline results (opt/freq/sp) and artifact persistence still work after
     convergence onto the shared seam. Artifact persistence is intentionally
     still bundle-owned — it is orchestration, not calculation creation."""
@@ -1903,7 +1901,7 @@ def test_bundle_inline_results_and_artifacts_preserved(db_engine, monkeypatch) -
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
         baseline_artifact_id = (
             session.scalar(select(func.max(CalculationArtifact.id))) or 0
@@ -1942,10 +1940,10 @@ def test_bundle_inline_results_and_artifacts_preserved(db_engine, monkeypatch) -
         assert artifacts[0].bytes == len(content)
 
 
-def test_bundle_owner_semantics_preserved_after_convergence(db_engine) -> None:
+def test_bundle_owner_semantics_preserved_after_convergence(db_conn) -> None:
     """Calculations produced via the bundle path keep their exclusive-owner FKs
     (species XOR TS), and TS-owned calculations never leak a species-entry id."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
 
         request = ComputedReactionUploadRequest(**_minimal_payload())
@@ -2009,7 +2007,7 @@ def _payload_with_ts_irc() -> dict:
     return payload
 
 
-def test_kinetics_source_calculations_explicit_local_keys(db_engine) -> None:
+def test_kinetics_source_calculations_explicit_local_keys(db_conn) -> None:
     """source_calculations declarations resolve to KineticsSourceCalculation
     rows with the exact (calc_id, role) pairs the producer asked for."""
     payload = _payload_with_ts_irc()
@@ -2024,7 +2022,7 @@ def test_kinetics_source_calculations_explicit_local_keys(db_engine) -> None:
         {"calculation_key": "ch3-opt", "role": "fit_source"},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -2057,7 +2055,7 @@ def test_kinetics_source_calculations_explicit_local_keys(db_engine) -> None:
         assert (KineticsCalculationRole.fit_source, CalculationType.opt) in role_owner_pairs
 
 
-def test_declared_source_calculations_override_legacy_fallback(db_engine) -> None:
+def test_declared_source_calculations_override_legacy_fallback(db_conn) -> None:
     """Even when species SPs exist (which the legacy fallback would auto-link),
     a non-empty source_calculations writes only the declared rows."""
     payload = _payload_with_ts_irc()
@@ -2065,7 +2063,7 @@ def test_declared_source_calculations_override_legacy_fallback(db_engine) -> Non
         {"calculation_key": "ts-sp", "role": "ts_energy"},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         kin_id = summary["kinetics_ids"][0]
@@ -2087,11 +2085,11 @@ def test_declared_source_calculations_override_legacy_fallback(db_engine) -> Non
         )
 
 
-def test_empty_source_calculations_preserves_legacy_fallback(db_engine) -> None:
+def test_empty_source_calculations_preserves_legacy_fallback(db_conn) -> None:
     """When source_calculations is empty, the legacy auto-link still
     produces species-owned SP reactant_energy/product_energy rows."""
     # _minimal_payload() leaves source_calculations empty by default.
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**_minimal_payload())
         summary = persist_computed_reaction_upload(session, request)
         kin_id = summary["kinetics_ids"][0]
@@ -2110,7 +2108,7 @@ def test_empty_source_calculations_preserves_legacy_fallback(db_engine) -> None:
         }
 
 
-def test_unknown_source_calculation_key_raises(db_engine) -> None:
+def test_unknown_source_calculation_key_raises(db_conn) -> None:
     """A calculation_key not present in the bundle is rejected at validation."""
     payload = _minimal_payload()
     payload["kinetics"][0]["source_calculations"] = [
@@ -2135,7 +2133,7 @@ def test_duplicate_source_calculation_pair_raises() -> None:
         ComputedReactionUploadRequest(**payload)
 
 
-def test_role_owner_mismatch_rejects_species_sp_for_ts_energy(db_engine) -> None:
+def test_role_owner_mismatch_rejects_species_sp_for_ts_energy(db_conn) -> None:
     """ts_energy must point to a TS-owned sp, not species-owned."""
     payload = _payload_with_ts_irc()
     payload["kinetics"][0]["source_calculations"] = [
@@ -2143,13 +2141,13 @@ def test_role_owner_mismatch_rejects_species_sp_for_ts_energy(db_engine) -> None
     ]
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError, match="ts_energy"):
             persist_computed_reaction_upload(session, request)
 
 
-def test_role_owner_mismatch_rejects_ts_sp_for_reactant_energy(db_engine) -> None:
+def test_role_owner_mismatch_rejects_ts_sp_for_reactant_energy(db_conn) -> None:
     """reactant_energy must point to a species-owned sp, not TS-owned."""
     payload = _payload_with_ts_irc()
     payload["kinetics"][0]["source_calculations"] = [
@@ -2157,13 +2155,13 @@ def test_role_owner_mismatch_rejects_ts_sp_for_reactant_energy(db_engine) -> Non
     ]
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError, match="reactant_energy"):
             persist_computed_reaction_upload(session, request)
 
 
-def test_role_type_mismatch_rejects_sp_for_freq_role(db_engine) -> None:
+def test_role_type_mismatch_rejects_sp_for_freq_role(db_conn) -> None:
     """role=freq requires a TS-owned freq, not a TS-owned sp."""
     payload = _payload_with_ts_irc()
     payload["kinetics"][0]["source_calculations"] = [
@@ -2171,13 +2169,13 @@ def test_role_type_mismatch_rejects_sp_for_freq_role(db_engine) -> None:
     ]
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError, match="freq"):
             persist_computed_reaction_upload(session, request)
 
 
-def test_role_type_mismatch_rejects_freq_for_irc_role(db_engine) -> None:
+def test_role_type_mismatch_rejects_freq_for_irc_role(db_conn) -> None:
     """role=irc requires a TS-owned irc, not a TS-owned freq."""
     payload = _payload_with_ts_irc()
     payload["kinetics"][0]["source_calculations"] = [
@@ -2185,13 +2183,13 @@ def test_role_type_mismatch_rejects_freq_for_irc_role(db_engine) -> None:
     ]
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError, match="irc"):
             persist_computed_reaction_upload(session, request)
 
 
-def test_freq_role_rejects_species_owned_freq(db_engine) -> None:
+def test_freq_role_rejects_species_owned_freq(db_conn) -> None:
     """v0 contract: role=freq is TS frequency only, never species frequency.
 
     Reactant/product frequency provenance belongs in
@@ -2214,13 +2212,13 @@ def test_freq_role_rejects_species_owned_freq(db_engine) -> None:
     ]
     import pytest
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError, match="freq"):
             persist_computed_reaction_upload(session, request)
 
 
-def test_input_geometries_persist(db_engine) -> None:
+def test_input_geometries_persist(db_conn) -> None:
     """A producer-declared input_geometries list creates input geometry rows."""
     payload = _minimal_payload()
     # Attach an explicit input_geometries entry to the CH3 SP calc using
@@ -2230,7 +2228,7 @@ def test_input_geometries_persist(db_engine) -> None:
         {"xyz_text": _XYZ_CH3},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request)
 
@@ -2258,7 +2256,7 @@ def test_input_geometries_persist(db_engine) -> None:
         assert rows[0].input_order == 1
 
 
-def test_output_geometries_persist_with_declared_role_and_order(db_engine) -> None:
+def test_output_geometries_persist_with_declared_role_and_order(db_conn) -> None:
     """A producer-declared output_geometries list creates rows with role/order."""
     payload = _payload_with_ts_irc()
     # Attach an explicit output_geometries to the TS-IRC calc with two
@@ -2272,7 +2270,7 @@ def test_output_geometries_persist_with_declared_role_and_order(db_engine) -> No
     # index 2 is "ts-sp" since _payload_with_ts_irc appends them in that order).
     # We re-look up by key below.
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request)
 
@@ -2295,7 +2293,7 @@ def test_output_geometries_persist_with_declared_role_and_order(db_engine) -> No
         assert rows[1].role == CalculationGeometryRole.irc_reverse
 
 
-def test_depends_on_persists_with_role(db_engine) -> None:
+def test_depends_on_persists_with_role(db_conn) -> None:
     """A computed-reaction calc may declare depends_on edges by local key."""
     payload = _payload_with_ts_irc()
     # Make the TS SP depend on the TS opt, role=single_point_on (compatible:
@@ -2305,7 +2303,7 @@ def test_depends_on_persists_with_role(db_engine) -> None:
         {"parent_calculation_key": "ts-opt", "role": "single_point_on"},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request)
 
@@ -2333,7 +2331,7 @@ def test_depends_on_persists_with_role(db_engine) -> None:
         assert edges[0].dependency_role == CalculationDependencyRole.single_point_on
 
 
-def test_depends_on_optimized_from_with_freq_parent_raises(db_engine) -> None:
+def test_depends_on_optimized_from_with_freq_parent_raises(db_conn) -> None:
     """``optimized_from`` parent must be opt or path_search.
 
     Regression: the bundle path delivers ``role`` as a wire-mirror enum
@@ -2353,14 +2351,14 @@ def test_depends_on_optimized_from_with_freq_parent_raises(db_engine) -> None:
         {"parent_calculation_key": "ts-freq", "role": "optimized_from"},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError) as exc:
             persist_computed_reaction_upload(session, request)
         assert "optimized_from" in str(exc.value)
 
 
-def test_loose_roles_accept_any_calc_type_and_owner(db_engine) -> None:
+def test_loose_roles_accept_any_calc_type_and_owner(db_conn) -> None:
     """master_equation and fit_source are intentionally unrestricted in v0.
 
     Linking a species-owned opt under fit_source must succeed; linking
@@ -2383,7 +2381,7 @@ def test_loose_roles_accept_any_calc_type_and_owner(db_engine) -> None:
             {"calculation_key": "ch3-master-freq", "role": "master_equation"},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         kin_id = summary["kinetics_ids"][0]
@@ -2476,7 +2474,7 @@ def _find_ts_irc_calc(session: Session) -> Calculation:
     return calc
 
 
-def test_computed_reaction_accepts_structured_irc_result(db_engine) -> None:
+def test_computed_reaction_accepts_structured_irc_result(db_conn) -> None:
     """A structured ``irc_result`` on the TS-IRC calc creates one
     ``calc_irc_result`` row through the existing persistence seam."""
     payload = _payload_with_ts_irc()
@@ -2486,7 +2484,7 @@ def test_computed_reaction_accepts_structured_irc_result(db_engine) -> None:
     )
     ts_irc_in["irc_result"] = _irc_result_block(with_points=False)
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request)
 
@@ -2499,7 +2497,7 @@ def test_computed_reaction_accepts_structured_irc_result(db_engine) -> None:
 
 
 def test_computed_reaction_irc_points_persist_with_directions_and_geometries(
-    db_engine,
+    db_conn,
 ) -> None:
     """Forward/reverse IRC points persist with directions preserved and
     inline geometries resolved through the shared geometry resolver."""
@@ -2509,7 +2507,7 @@ def test_computed_reaction_irc_points_persist_with_directions_and_geometries(
     )
     ts_irc_in["irc_result"] = _irc_result_block(with_points=True)
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         persist_computed_reaction_upload(session, request)
 
@@ -2539,7 +2537,7 @@ def test_computed_reaction_irc_points_persist_with_directions_and_geometries(
 
 
 def test_computed_reaction_irc_dependency_and_kinetics_source_coexist(
-    db_engine,
+    db_conn,
 ) -> None:
     """A bundle may simultaneously declare an ``irc_start`` dependency
     edge from TS-opt to TS-IRC, a ``role=irc`` kinetics source link
@@ -2556,7 +2554,7 @@ def test_computed_reaction_irc_dependency_and_kinetics_source_coexist(
         {"calculation_key": "ts-irc", "role": "irc"},
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -2688,7 +2686,7 @@ def _payload_with_aec_carriers() -> dict:
 # --- Species-side: 1-12 ----------------------------------------------------
 
 
-def test_species_aec_total_no_components_persists(db_engine) -> None:
+def test_species_aec_total_no_components_persists(db_conn) -> None:
     """Spec test 1: species-side AEC persists targeting species_entry."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2701,7 +2699,7 @@ def test_species_aec_total_no_components_persists(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -2726,7 +2724,7 @@ def test_species_aec_total_no_components_persists(db_engine) -> None:
         assert source_calc.species_entry_id == ac.target_species_entry_id
 
 
-def test_species_bac_total_persists(db_engine) -> None:
+def test_species_bac_total_persists(db_conn) -> None:
     """Spec test 2: species-side BAC persists targeting species_entry."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2739,7 +2737,7 @@ def test_species_bac_total_persists(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
 
@@ -2755,7 +2753,7 @@ def test_species_bac_total_persists(db_engine) -> None:
         assert scheme.kind.value == "bac_petersson"
 
 
-def test_species_correction_components_optional(db_engine) -> None:
+def test_species_correction_components_optional(db_conn) -> None:
     """Spec test 3: components are optional (no rows when omitted)."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2768,7 +2766,7 @@ def test_species_correction_components_optional(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -2786,7 +2784,7 @@ def test_species_correction_components_optional(db_engine) -> None:
         assert comps == []
 
 
-def test_species_correction_components_persist_when_supplied(db_engine) -> None:
+def test_species_correction_components_persist_when_supplied(db_conn) -> None:
     """Spec test 4: components persist when supplied."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2810,7 +2808,7 @@ def test_species_correction_components_persist_when_supplied(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -2832,7 +2830,7 @@ def test_species_correction_components_persist_when_supplied(db_engine) -> None:
 
 
 def test_species_source_calculation_key_resolves_to_species_owned_calc(
-    db_engine,
+    db_conn,
 ) -> None:
     """Spec test 5: source_calculation_key resolves into the bundle namespace."""
     payload = _payload_with_aec_carriers()
@@ -2846,7 +2844,7 @@ def test_species_source_calculation_key_resolves_to_species_owned_calc(
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -2899,7 +2897,7 @@ def test_species_role_scheme_kind_mismatch_returns_422() -> None:
         ComputedReactionUploadRequest(**payload)
 
 
-def test_species_repeated_scheme_identity_reuses_scheme_row(db_engine) -> None:
+def test_species_repeated_scheme_identity_reuses_scheme_row(db_conn) -> None:
     """Spec test 8: duplicate scheme refs across two species reuse one row."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2921,7 +2919,7 @@ def test_species_repeated_scheme_identity_reuses_scheme_row(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         applied = session.scalars(
@@ -2936,7 +2934,7 @@ def test_species_repeated_scheme_identity_reuses_scheme_row(db_engine) -> None:
         assert len(scheme_ids) == 1
 
 
-def test_species_note_does_not_affect_scheme_identity(db_engine) -> None:
+def test_species_note_does_not_affect_scheme_identity(db_conn) -> None:
     """Spec test 9: scheme ``note`` differs but identity tuple matches → same row."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2958,7 +2956,7 @@ def test_species_note_does_not_affect_scheme_identity(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         applied = session.scalars(
@@ -2971,7 +2969,7 @@ def test_species_note_does_not_affect_scheme_identity(db_engine) -> None:
         assert {ac.scheme_id for ac in applied} == {applied[0].scheme_id}
 
 
-def test_species_aec_does_not_create_freq_scale_factor_row(db_engine) -> None:
+def test_species_aec_does_not_create_freq_scale_factor_row(db_conn) -> None:
     """Spec test 10: AEC/BAC corrections do not create a frequency_scale_factor row."""
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
@@ -2984,7 +2982,7 @@ def test_species_aec_does_not_create_freq_scale_factor_row(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         before = session.scalar(
             select(func.count()).select_from(FrequencyScaleFactor)
         )
@@ -2996,9 +2994,9 @@ def test_species_aec_does_not_create_freq_scale_factor_row(db_engine) -> None:
         assert after == before
 
 
-def test_existing_payload_without_corrections_remains_valid(db_engine) -> None:
+def test_existing_payload_without_corrections_remains_valid(db_conn) -> None:
     """Spec test 11: bundles without applied_energy_corrections still work."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**_minimal_payload())
         summary = persist_computed_reaction_upload(session, request)
         assert summary["species_count"] == 3
@@ -3013,7 +3011,7 @@ def test_existing_payload_without_corrections_remains_valid(db_engine) -> None:
         assert applied == []
 
 
-def test_computed_species_applied_correction_behavior_unchanged(db_engine) -> None:
+def test_computed_species_applied_correction_behavior_unchanged(db_conn) -> None:
     """Spec test 12: computed-species AEC behavior remains unchanged.
 
     Smoke-test the species-side primitive payload by re-running one
@@ -3077,7 +3075,7 @@ def test_computed_species_applied_correction_behavior_unchanged(db_engine) -> No
         }
     )
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -3092,7 +3090,7 @@ def test_computed_species_applied_correction_behavior_unchanged(db_engine) -> No
 # --- TS-side: 13-17 --------------------------------------------------------
 
 
-def test_ts_aec_total_persists_targeting_transition_state_entry(db_engine) -> None:
+def test_ts_aec_total_persists_targeting_transition_state_entry(db_conn) -> None:
     """Spec test 13: TS-side AEC targets transition_state_entry_id."""
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
@@ -3105,7 +3103,7 @@ def test_ts_aec_total_persists_targeting_transition_state_entry(db_engine) -> No
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         applied = session.scalars(
@@ -3121,7 +3119,7 @@ def test_ts_aec_total_persists_targeting_transition_state_entry(db_engine) -> No
         assert ac.application_role.value == "aec_total"
 
 
-def test_ts_bac_total_persists_targeting_transition_state_entry(db_engine) -> None:
+def test_ts_bac_total_persists_targeting_transition_state_entry(db_conn) -> None:
     """Spec test 14: TS-side BAC targets transition_state_entry_id."""
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
@@ -3134,7 +3132,7 @@ def test_ts_bac_total_persists_targeting_transition_state_entry(db_engine) -> No
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -3147,7 +3145,7 @@ def test_ts_bac_total_persists_targeting_transition_state_entry(db_engine) -> No
         assert scheme.kind.value == "bac_petersson"
 
 
-def test_ts_source_calculation_key_resolves_to_ts_sp(db_engine) -> None:
+def test_ts_source_calculation_key_resolves_to_ts_sp(db_conn) -> None:
     """Spec test 15: TS-side ``source_calculation_key="ts-sp"`` resolves correctly."""
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
@@ -3160,7 +3158,7 @@ def test_ts_source_calculation_key_resolves_to_ts_sp(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -3177,7 +3175,7 @@ def test_ts_source_calculation_key_resolves_to_ts_sp(db_engine) -> None:
         )
 
 
-def test_ts_correction_never_uses_target_reaction_entry_id(db_engine) -> None:
+def test_ts_correction_never_uses_target_reaction_entry_id(db_conn) -> None:
     """Spec test 16: TS corrections are never stored as reaction-entry corrections."""
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
@@ -3190,7 +3188,7 @@ def test_ts_correction_never_uses_target_reaction_entry_id(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         # The reaction entry must have ZERO applied corrections attached.
@@ -3206,7 +3204,7 @@ def test_ts_correction_never_uses_target_reaction_entry_id(db_engine) -> None:
 @pytest.mark.filterwarnings(
     "ignore:transaction already deassociated from connection"
 )
-def test_target_exclusivity_enforced_by_check_constraint(db_engine) -> None:
+def test_target_exclusivity_enforced_by_check_constraint(db_conn) -> None:
     """Spec test 17: exactly one of species/reaction/TS target may be set.
 
     The check constraint ``num_nonnulls(target_species_entry_id,
@@ -3222,7 +3220,7 @@ def test_target_exclusivity_enforced_by_check_constraint(db_engine) -> None:
 
     # First isolated session: persist a real bundle so we have valid
     # FK targets for the probe row.
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**_payload_with_aec_carriers())
         summary = persist_computed_reaction_upload(session, request)
         # Capture the ids while the row visibility is still in scope.
@@ -3265,7 +3263,7 @@ def test_target_exclusivity_enforced_by_check_constraint(db_engine) -> None:
 # --- Cross-owner negatives -------------------------------------------------
 
 
-def test_species_correction_referencing_ts_calc_returns_422(db_engine) -> None:
+def test_species_correction_referencing_ts_calc_returns_422(db_conn) -> None:
     """Species-side correction whose ``source_calculation_key`` names a
     TS-owned calc rejects with 422."""
     import pytest
@@ -3281,13 +3279,13 @@ def test_species_correction_referencing_ts_calc_returns_422(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(ValueError, match="not owned by this species entry"):
             persist_computed_reaction_upload(session, request)
 
 
-def test_ts_correction_referencing_species_calc_returns_422(db_engine) -> None:
+def test_ts_correction_referencing_species_calc_returns_422(db_conn) -> None:
     """TS-side correction whose ``source_calculation_key`` names a
     species-owned calc rejects with 422."""
     import pytest
@@ -3303,7 +3301,7 @@ def test_ts_correction_referencing_species_calc_returns_422(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         with pytest.raises(
             ValueError, match="not owned by this transition state entry"
@@ -3311,7 +3309,7 @@ def test_ts_correction_referencing_species_calc_returns_422(db_engine) -> None:
             persist_computed_reaction_upload(session, request)
 
 
-def test_ts_side_scheme_atom_params_persist(db_engine) -> None:
+def test_ts_side_scheme_atom_params_persist(db_conn) -> None:
     """TS-side AEC scheme params populate the atom_param table."""
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
@@ -3330,7 +3328,7 @@ def test_ts_side_scheme_atom_params_persist(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -3350,7 +3348,7 @@ def test_ts_side_scheme_atom_params_persist(db_engine) -> None:
         }
 
 
-def test_ts_side_scheme_bond_params_persist(db_engine) -> None:
+def test_ts_side_scheme_bond_params_persist(db_conn) -> None:
     """TS-side BAC scheme params populate the bond_param table."""
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
@@ -3369,7 +3367,7 @@ def test_ts_side_scheme_bond_params_persist(db_engine) -> None:
         }
     ]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
         summary = persist_computed_reaction_upload(session, request)
         ac = session.scalars(
@@ -3469,12 +3467,12 @@ def test_computed_reaction_payload_accepts_degeneracy_regression() -> None:
     assert request.kinetics[0].degeneracy == 2.0
 
 
-def test_computed_reaction_persists_degeneracy(db_engine) -> None:
+def test_computed_reaction_persists_degeneracy(db_conn) -> None:
     """``kinetics[].degeneracy`` is written to the kinetics row."""
     payload = _minimal_payload()
     payload["kinetics"][0]["degeneracy"] = 3.0
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=601, username="degeneracy_persist_tester"))
         session.flush()
 
@@ -3489,12 +3487,12 @@ def test_computed_reaction_persists_degeneracy(db_engine) -> None:
         assert kin.degeneracy == 3.0
 
 
-def test_computed_reaction_persists_null_degeneracy_when_omitted(db_engine) -> None:
+def test_computed_reaction_persists_null_degeneracy_when_omitted(db_conn) -> None:
     """Omitting ``degeneracy`` persists a NULL — never silently defaulted to 1.0."""
     payload = _minimal_payload()
     assert "degeneracy" not in payload["kinetics"][0]
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=602, username="degeneracy_null_tester"))
         session.flush()
 
@@ -3509,12 +3507,12 @@ def test_computed_reaction_persists_null_degeneracy_when_omitted(db_engine) -> N
         assert kin.degeneracy is None
 
 
-def test_computed_reaction_persists_explicit_degeneracy_convention(db_engine) -> None:
+def test_computed_reaction_persists_explicit_degeneracy_convention(db_conn) -> None:
     payload = _minimal_payload()
     payload["kinetics"][0]["degeneracy"] = 3.0
     payload["kinetics"][0]["degeneracy_convention"] = "not_applied"
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         session.add(AppUser(id=603, username="degeneracy_convention_tester"))
         session.flush()
         summary = persist_computed_reaction_upload(
@@ -3564,7 +3562,7 @@ def _payload_with_ts_evidence(**evidence_overrides) -> dict:
     return payload
 
 
-def test_bundle_transition_state_persists_irc_evidence(db_engine) -> None:
+def test_bundle_transition_state_persists_irc_evidence(db_conn) -> None:
     from app.db.models.transition_state import TransitionStateValidationEvidence
     from app.services.scientific_read.transition_states import (
         _build_validation_descriptor,
@@ -3572,7 +3570,7 @@ def test_bundle_transition_state_persists_irc_evidence(db_engine) -> None:
 
     # Rolled back: this bundle persists species/conformers that other workflow
     # tests count without qualification.
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = persist_computed_reaction_upload(
             session,
             ComputedReactionUploadRequest(**_payload_with_ts_evidence()),

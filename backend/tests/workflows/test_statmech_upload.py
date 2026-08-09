@@ -100,10 +100,10 @@ def _basic_request(**overrides) -> StatmechUploadRequest:
 # ---------------------------------------------------------------------------
 
 
-def test_persist_statmech_upload_creates_row_linked_to_species_entry(db_engine) -> None:
+def test_persist_statmech_upload_creates_row_linked_to_species_entry(db_conn) -> None:
     """A minimal standalone upload creates one ``Statmech`` row correctly
     linked to the resolved ``species_entry``."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=2201, username="statmech_tester_basic"))
         session.flush()
 
@@ -127,10 +127,10 @@ def test_persist_statmech_upload_creates_row_linked_to_species_entry(db_engine) 
         assert statmech.torsions == []
 
 
-def test_persist_statmech_upload_persists_rotational_constants(db_engine) -> None:
+def test_persist_statmech_upload_persists_rotational_constants(db_conn) -> None:
     """First-class rotational constants (cm⁻¹) on the request are applied
     to the created ``Statmech`` row."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=2209, username="statmech_tester_rot"))
         session.flush()
 
@@ -152,7 +152,7 @@ def test_persist_statmech_upload_persists_rotational_constants(db_engine) -> Non
 
 
 def test_persist_statmech_upload_resolves_all_provenance_refs(
-    db_engine, monkeypatch,
+    db_conn, monkeypatch,
 ) -> None:
     """Literature, software release, and workflow tool release all resolve
     via the canonical resolvers used by the nested path."""
@@ -176,7 +176,7 @@ def test_persist_statmech_upload_resolves_all_provenance_refs(
         workflow_tool_release={"name": "ARC", "version": "1.1.0"},
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         statmech = persist_statmech_upload(session, request)
 
         assert statmech.literature_id is not None
@@ -202,7 +202,7 @@ def test_persist_statmech_upload_resolves_all_provenance_refs(
 # ---------------------------------------------------------------------------
 
 
-def test_persist_statmech_upload_persists_source_calculations(db_engine) -> None:
+def test_persist_statmech_upload_persists_source_calculations(db_conn) -> None:
     """Inline calcs + source_calculations persist (statmech, calc, role) links
     and preserve the declared roles."""
     request = _basic_request(
@@ -217,7 +217,7 @@ def test_persist_statmech_upload_persists_source_calculations(db_engine) -> None
         ],
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         statmech = persist_statmech_upload(session, request)
 
         links = session.scalars(
@@ -250,7 +250,7 @@ def test_persist_statmech_upload_persists_source_calculations(db_engine) -> None
 
 
 def test_persist_statmech_upload_persists_torsions_and_definitions(
-    db_engine,
+    db_conn,
 ) -> None:
     """Torsion rows, coordinate definitions, ordering, and the local-key
     resolution of ``source_scan_calculation_key`` all persist correctly."""
@@ -300,7 +300,7 @@ def test_persist_statmech_upload_persists_torsions_and_definitions(
         ],
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         statmech = persist_statmech_upload(session, request)
 
         torsions = session.scalars(
@@ -343,12 +343,12 @@ def test_persist_statmech_upload_persists_torsions_and_definitions(
 # ---------------------------------------------------------------------------
 
 
-def test_repeated_statmech_uploads_are_append_only(db_engine) -> None:
+def test_repeated_statmech_uploads_are_append_only(db_conn) -> None:
     """Two uploads against the same species entry yield two distinct
     statmech rows; statmech is a provenance-bearing result table and must
     never silently dedupe."""
     species = {"smiles": "N", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         first = persist_statmech_upload(
             session,
             _basic_request(species_entry=dict(species), note="first"),
@@ -583,7 +583,7 @@ def _statmech_request_with_fsf(
     )
 
 
-def test_unified_fsf_ref_supports_full_identity(db_engine, monkeypatch) -> None:
+def test_unified_fsf_ref_supports_full_identity(db_conn, monkeypatch) -> None:
     """A FreqScaleFactorRef carrying every identity field — LoT, software,
     scale_kind, value, source_literature, workflow_tool_release — and a
     descriptive note round-trips into a single FrequencyScaleFactor row,
@@ -610,7 +610,7 @@ def test_unified_fsf_ref_supports_full_identity(db_engine, monkeypatch) -> None:
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         statmech = persist_statmech_upload(session, request)
 
         assert statmech.frequency_scale_factor_id is not None
@@ -629,7 +629,7 @@ def test_unified_fsf_ref_supports_full_identity(db_engine, monkeypatch) -> None:
         assert fsf.note == "wB97X-D/def2-TZVP fundamental factor"
 
 
-def test_bare_citation_string_lives_in_note_no_fake_literature(db_engine) -> None:
+def test_bare_citation_string_lives_in_note_no_fake_literature(db_conn) -> None:
     """When a producer has only a citation string, it goes into the FSF
     note. No Literature row is synthesized from raw prose, and the
     ``source_literature_id`` stays NULL."""
@@ -639,7 +639,7 @@ def test_bare_citation_string_lives_in_note_no_fake_literature(db_engine) -> Non
         fsf_overrides={"note": citation},
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         lit_count_before = session.scalar(select(func.count()).select_from(Literature))
         statmech = persist_statmech_upload(session, request)
         lit_count_after = session.scalar(select(func.count()).select_from(Literature))
@@ -652,7 +652,7 @@ def test_bare_citation_string_lives_in_note_no_fake_literature(db_engine) -> Non
         assert fsf.note == citation
 
 
-def test_note_does_not_affect_identity_first_writer_wins(db_engine) -> None:
+def test_note_does_not_affect_identity_first_writer_wins(db_conn) -> None:
     """Two refs that share every identity field but differ only in
     ``note`` resolve to the SAME FrequencyScaleFactor row. The note from
     the first writer is preserved; subsequent notes are silently
@@ -673,7 +673,7 @@ def test_note_does_not_affect_identity_first_writer_wins(db_engine) -> None:
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         sm_a = persist_statmech_upload(session, request_a)
         sm_b = persist_statmech_upload(session, request_b)
 
@@ -702,7 +702,7 @@ def test_note_does_not_affect_identity_first_writer_wins(db_engine) -> None:
         assert len(matching) == 1
 
 
-def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_engine) -> None:
+def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_conn) -> None:
     """Linking a frequency scale factor through ``statmech.frequency_scale_factor_id``
     is statmech provenance, not an applied correction. No
     ``applied_energy_correction`` row should be produced for this path."""
@@ -711,7 +711,7 @@ def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_engine) ->
         fsf_overrides={"software": {"name": "Gaussian"}},
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         aec_before = session.scalar(
             select(func.count()).select_from(AppliedEnergyCorrection)
         )
@@ -729,7 +729,7 @@ def test_fsf_in_statmech_does_not_create_applied_energy_correction(db_engine) ->
 # ---------------------------------------------------------------------------
 
 
-def test_optical_isomers_and_electronic_levels_persist(db_engine) -> None:
+def test_optical_isomers_and_electronic_levels_persist(db_conn) -> None:
     from app.db.models.statmech import Statmech, StatmechElectronicLevel
 
     # OH-like: doublet ground state split by spin-orbit coupling (~139 cm-1),
@@ -743,7 +743,7 @@ def test_optical_isomers_and_electronic_levels_persist(db_engine) -> None:
             {"level_index": 2, "energy_cm1": 139.7, "degeneracy": 2},
         ],
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         statmech = persist_statmech_upload(session, request)
         session.flush()
 
@@ -788,13 +788,11 @@ def _water_identity_payload():
     )
 
 
-def test_bundle_statmech_persists_rotational_constants(db_engine) -> None:
+def test_bundle_statmech_persists_rotational_constants(db_conn) -> None:
     """Strict standalone statmech persistence writes A/B/C (cm^-1)."""
     from app.db.models.statmech import Statmech
 
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         stm = persist_statmech_upload(session, _basic_request(
             rotational_constant_a_cm1=27.88,
@@ -809,11 +807,9 @@ def test_bundle_statmech_persists_rotational_constants(db_engine) -> None:
         assert row.rotational_constant_c_cm1 == pytest.approx(9.28)
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
-def test_rotational_constant_positive_check(db_engine) -> None:
+def test_rotational_constant_positive_check(db_conn) -> None:
     """The columns exist and the per-column ``> 0`` CHECK rejects
     zero/negative values while accepting positive ones."""
     from sqlalchemy.exc import IntegrityError
@@ -821,9 +817,7 @@ def test_rotational_constant_positive_check(db_engine) -> None:
     from app.db.models.statmech import Statmech
     from app.services.species_resolution import resolve_species_entry
 
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         se = resolve_species_entry(session, _water_identity_payload())
         session.flush()
@@ -852,5 +846,3 @@ def test_rotational_constant_positive_check(db_engine) -> None:
             savepoint.rollback()
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()

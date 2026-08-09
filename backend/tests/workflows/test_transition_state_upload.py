@@ -98,9 +98,9 @@ def _basic_ts_request() -> TransitionStateUploadRequest:
 # ---------------------------------------------------------------------------
 
 
-def test_basic_ts_upload_creates_concept_and_entry(db_engine) -> None:
+def test_basic_ts_upload_creates_concept_and_entry(db_conn) -> None:
     """Primary opt only — verifies TS concept, entry, geometry, and calc."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=50, username="ts_tester"))
         session.flush()
 
@@ -140,9 +140,9 @@ def test_basic_ts_upload_creates_concept_and_entry(db_engine) -> None:
         assert len(geo_links) == 1
 
 
-def test_ts_upload_with_additional_calcs_and_results(db_engine) -> None:
+def test_ts_upload_with_additional_calcs_and_results(db_conn) -> None:
     """Upload with freq (+ result) and sp (+ result) additional calcs."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=51, username="ts_tester_full"))
         session.flush()
 
@@ -238,9 +238,9 @@ def test_ts_upload_with_additional_calcs_and_results(db_engine) -> None:
         assert geo_links[0].calculation_id == opt_calc.id
 
 
-def test_ts_upload_without_results_succeeds(db_engine) -> None:
+def test_ts_upload_without_results_succeeds(db_conn) -> None:
     """Additional calcs without result blocks are fine."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=52, username="ts_no_results"))
         session.flush()
 
@@ -365,10 +365,10 @@ _XYZ_PS_0 = "1\nI0\nH  0.0  0.0  0.0\n"
 _XYZ_PS_2 = "1\nI2\nH  0.0  0.0  1.5\n"
 
 
-def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
+def test_ts_upload_with_irc_additional_persists_irc_result(db_conn) -> None:
     """TS upload carrying an IRC additional calc persists IRC structured rows."""
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         # Let the DB assign the user id rather than hardcoding 60 — other
         # committed tests in the suite may consume IDs in that range and
         # trigger a unique-constraint violation under certain orderings.
@@ -469,14 +469,14 @@ def test_ts_upload_with_irc_additional_persists_irc_result(db_engine) -> None:
 
 
 def test_ts_upload_with_path_search_neb_additional_persists_points(
-    db_engine,
+    db_conn,
 ) -> None:
     """TS upload carrying a path_search (NEB) additional calc persists
     path-search points and wires the inverted ``optimized_from`` edge:
     the path-search calc is the *parent* of the primary TS opt.
     """
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=61, username="ts_path_search_writer"))
         session.flush()
 
@@ -625,7 +625,7 @@ def _ts_request_with_evidence(**evidence_overrides) -> TransitionStateUploadRequ
     )
 
 
-def test_standalone_ts_upload_persists_irc_evidence(db_engine) -> None:
+def test_standalone_ts_upload_persists_irc_evidence(db_conn) -> None:
     """The owner's "optional but visible on read" decision is reachable here.
 
     Before this, structured evidence was depositable only through the PDep
@@ -637,7 +637,7 @@ def test_standalone_ts_upload_persists_irc_evidence(db_engine) -> None:
         _build_validation_descriptor,
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         warnings: list = []
         ts_entry = persist_transition_state_upload(
             session, _ts_request_with_evidence(), warnings=warnings
@@ -663,7 +663,7 @@ def test_standalone_ts_upload_persists_irc_evidence(db_engine) -> None:
 
 
 def test_standalone_ts_evidence_element_checks_its_participant_mapping(
-    db_engine,
+    db_conn,
 ) -> None:
     """The element rule reaches this path too, through the shared persist seam.
 
@@ -679,7 +679,7 @@ def test_standalone_ts_evidence_element_checks_its_participant_mapping(
     request = _ts_request_with_evidence(
         reactant_participant_mapping={"reactant:1": [1, 2], "reactant:2": [3]},
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         with pytest.raises(ValueError) as excinfo:
             persist_transition_state_upload(session, request, warnings=[])
         session.rollback()
@@ -689,8 +689,8 @@ def test_standalone_ts_evidence_element_checks_its_participant_mapping(
     assert "reactant:1" in message
 
 
-def test_standalone_ts_upload_without_evidence_warns(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_standalone_ts_upload_without_evidence_warns(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         warnings: list = []
         ts_entry = persist_transition_state_upload(
             session, _basic_ts_request(), warnings=warnings

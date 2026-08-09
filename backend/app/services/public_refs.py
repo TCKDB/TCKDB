@@ -217,6 +217,30 @@ def _canonical_species(obj: Any) -> str:
     ``inchi_key`` instead of the canonical ``smiles`` would collide the
     refs of standard-InChIKey-merged tautomers (2-pyridone vs
     2-hydroxypyridine), which are now distinct species.
+
+    ``kind`` (:class:`~app.db.models.common.MoleculeKind`) is deliberately
+    **not** here, and that is an invariant rather than an oversight: species
+    identity is ``uq_species_identity`` on ``(smiles, charge, multiplicity)``,
+    which does not carry ``kind`` either. Adding ``kind`` to this string alone
+    would mint two distinct refs for a pair of rows the database's own unique
+    constraint cannot hold, which is worse than the omission. The consequence
+    — that a ``pseudo`` species cannot coexist with a ``molecule`` of the same
+    ``(smiles, charge, multiplicity)`` — is a property of the identity key,
+    and changing it is a schema decision (new constraint + migration +
+    backfill), not a ref-generation one.
+
+    Nothing reachable can currently collide across ``kind``:
+    :func:`app.services.species_resolution.resolve_species` is the only
+    writer of a ``species`` row in the application, and
+    :func:`app.chemistry.species.canonical_species_identity` admits only
+    ``molecule`` and ``electron``. ``electron`` is pinned by
+    ``SpeciesIdentityPayload.check_electron_identity`` to
+    ``smiles="[e-]", charge=-1, multiplicity=2`` in *both* directions — a
+    molecule may not carry ``[e-]`` and an electron may not carry anything
+    else — so the one live non-``molecule`` kind occupies an identity tuple
+    no molecule can reach. See
+    ``tests/invariants/test_structure_invariants.py`` for the executable
+    statement of that chain.
     """
     return (
         f"species:smiles={obj.smiles};"

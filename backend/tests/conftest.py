@@ -352,8 +352,35 @@ def db_engine():
 
 @pytest.fixture
 def db_conn(db_engine) -> Iterator[Connection]:
+    """A connection inside a transaction that is always rolled back.
+
+    Two nested scopes are opened deliberately:
+
+    ``begin()``
+        The per-test transaction. Rolling it back at teardown is what makes
+        the shared, session-scoped database safe to reuse — nothing a test
+        writes survives it, whether the test committed or not.
+
+    ``begin_nested()``
+        A SAVEPOINT wrapped around the whole test. This is not about undoing
+        anything; it changes how ``Session(db_conn)`` behaves. SQLAlchemy's
+        default ``join_transaction_mode="conditional_savepoint"`` picks
+        ``"rollback_only"`` for a plain in-transaction Connection, which means
+        one ``session.rollback()`` — including the implicit one when a test
+        asserts that an upload raises — tears down the *outer* transaction and
+        leaves the connection unusable for the rest of the test. With a
+        SAVEPOINT already in progress the same default resolves to
+        ``"create_savepoint"``, so each ``Session`` gets its own nested scope:
+        its commits stay inside the per-test transaction and its rollbacks
+        undo only its own work.
+
+    That second property is what lets test bodies keep writing
+    ``with Session(db_conn) as session, session.begin(): ...`` unchanged while
+    no longer committing anything to the shared database.
+    """
     with db_engine.connect() as connection:
         transaction = connection.begin()
+        connection.begin_nested()
         try:
             yield connection
         finally:

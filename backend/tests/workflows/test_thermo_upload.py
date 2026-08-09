@@ -145,9 +145,9 @@ def _make_calculation(
 # ---------------------------------------------------------------------------
 
 
-def test_persist_thermo_upload_creates_row_with_scalar_fields(db_engine) -> None:
+def test_persist_thermo_upload_creates_row_with_scalar_fields(db_conn) -> None:
     """A1: scalar thermo fields persist and link to the resolved species entry."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         # Let Postgres assign the id rather than pinning a specific value:
         # other tests in the session-scoped DB create app_user rows via API
         # endpoints (auto-increment) that can advance the sequence past any
@@ -178,9 +178,9 @@ def test_persist_thermo_upload_creates_row_with_scalar_fields(db_engine) -> None
         assert thermo.source_calculations == []
 
 
-def test_persist_thermo_upload_creates_and_links_nasa_row(db_engine) -> None:
+def test_persist_thermo_upload_creates_and_links_nasa_row(db_conn) -> None:
     """A2: a NASA block creates one child row attached to the parent thermo."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
             _thermo_request(nasa=_nasa_block()),
@@ -200,10 +200,10 @@ def test_persist_thermo_upload_creates_and_links_nasa_row(db_engine) -> None:
         assert nasa.b6 == pytest.approx(-3.00042971e4)
 
 
-def test_persist_thermo_upload_persists_tabulated_points(db_engine) -> None:
+def test_persist_thermo_upload_persists_tabulated_points(db_conn) -> None:
     """A3: each ThermoPoint is persisted keyed by (thermo_id, temperature_k)."""
     points = _thermo_points()
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session, _thermo_request(points=points)
         )
@@ -225,7 +225,7 @@ def test_persist_thermo_upload_persists_tabulated_points(db_engine) -> None:
             assert by_temp[t].g_kj_mol == pytest.approx(expected["g_kj_mol"])
 
 
-def test_persist_thermo_source_calculations_link_by_role(db_engine) -> None:
+def test_persist_thermo_source_calculations_link_by_role(db_conn) -> None:
     """A4: ``thermo_source_calculation`` rows persist the correct (calc, role).
 
     NOTE: ``ThermoUploadRequest`` has no ``source_calculations`` field, so
@@ -233,7 +233,7 @@ def test_persist_thermo_source_calculations_link_by_role(db_engine) -> None:
     exercises the internal ``persist_thermo`` path directly, which is the
     surface that will be wired up once the upload schema is extended.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session,
             SpeciesEntryIdentityPayload(**_SPECIES_ENTRY),
@@ -279,7 +279,7 @@ def test_persist_thermo_source_calculations_link_by_role(db_engine) -> None:
 
 
 def test_persist_thermo_upload_resolves_all_provenance_refs(
-    db_engine, monkeypatch,
+    db_conn, monkeypatch,
 ) -> None:
     """A5: literature, software release, and workflow tool release all resolve."""
     monkeypatch.setattr(
@@ -301,7 +301,7 @@ def test_persist_thermo_upload_resolves_all_provenance_refs(
         workflow_tool_release={"name": "ARC", "version": "1.1.0"},
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
 
         assert thermo.literature_id is not None
@@ -322,7 +322,7 @@ def test_persist_thermo_upload_resolves_all_provenance_refs(
         assert wtr.workflow_tool.name == "ARC"
 
 
-def test_repeated_thermo_uploads_are_append_only(db_engine) -> None:
+def test_repeated_thermo_uploads_are_append_only(db_conn) -> None:
     """A6: two uploads for the same species entry create two distinct thermo rows.
 
     Thermo is an append-only result table — deduplication lives at the species
@@ -332,7 +332,7 @@ def test_repeated_thermo_uploads_are_append_only(db_engine) -> None:
     # Use a distinct species so this test is independent of any other test
     # that writes thermo for water or similar common species.
     distinct_species = {"smiles": "CCO", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         first = persist_thermo_upload(
             session,
             _thermo_request(species_entry=dict(distinct_species), note="first"),
@@ -457,14 +457,14 @@ def test_schema_rejects_duplicate_thermo_point_temperatures() -> None:
 # --- B6: source-calculation reference errors -------------------------------
 
 
-def test_persist_thermo_raises_on_unknown_source_calculation(db_engine) -> None:
+def test_persist_thermo_raises_on_unknown_source_calculation(db_conn) -> None:
     """B6: an unknown calculation_id fails cleanly at DB commit time.
 
     The workflow route cannot reach this today (no source_calculations in
     the upload schema) but the internal persistence path must still raise
     rather than silently accept a dangling FK.
     """
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         try:
             with session.begin():
                 species_entry = resolve_species_entry(
@@ -490,13 +490,13 @@ def test_persist_thermo_raises_on_unknown_source_calculation(db_engine) -> None:
             pass
 
 
-def test_schema_rejects_duplicate_source_calculation_role_pairs(db_engine) -> None:
+def test_schema_rejects_duplicate_source_calculation_role_pairs(db_conn) -> None:
     """B6: two source-calc rows with the same (calculation_id, role) are rejected.
 
     Pydantic catches the duplicate before the DB sees the row, protecting
     the ``(thermo_id, calculation_id, role)`` primary key.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session, _thermo_request().species_entry,
         )
@@ -529,7 +529,7 @@ def test_schema_rejects_duplicate_source_calculation_role_pairs(db_engine) -> No
 # and ``docs/thermo_tests.md §B8``.
 
 
-def test_schema_rejects_empty_scientific_thermo_payload(db_engine) -> None:
+def test_schema_rejects_empty_scientific_thermo_payload(db_conn) -> None:
     """B8: an upload with no scalars, no NASA, and no points is rejected.
 
     Verifies the schema-level validator fires and that the database sees
@@ -539,7 +539,7 @@ def test_schema_rejects_empty_scientific_thermo_payload(db_engine) -> None:
     empty_species = {"smiles": "N#N", "charge": 0, "multiplicity": 1}
 
     # Baseline: any rows for this species that may exist from other tests.
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         before_entry_ids = {
             row.species_entry_id
             for row in session.scalars(
@@ -557,7 +557,7 @@ def test_schema_rejects_empty_scientific_thermo_payload(db_engine) -> None:
     # DB-clean check: no new thermo / nasa / point rows resulted from the
     # rejected request (schema validation runs before any session work, so
     # this is a belt-and-suspenders assertion).
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         after_entries = {
             row.species_entry_id
             for row in session.scalars(
@@ -576,10 +576,10 @@ def test_schema_rejects_empty_scientific_thermo_payload(db_engine) -> None:
         assert hollow_rows == []
 
 
-def test_scalar_only_thermo_upload_is_valid(db_engine) -> None:
+def test_scalar_only_thermo_upload_is_valid(db_conn) -> None:
     """Scalar-only payloads (no NASA, no points) remain valid."""
     distinct = {"smiles": "CO", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
@@ -597,14 +597,14 @@ def test_scalar_only_thermo_upload_is_valid(db_engine) -> None:
         ).all() == []
 
 
-def test_nasa_only_thermo_upload_is_valid(db_engine) -> None:
+def test_nasa_only_thermo_upload_is_valid(db_conn) -> None:
     """NASA-only payloads (no scalars, no points) remain valid.
 
     The schema has no rule tying NASA presence to scalar or point presence,
     and NASA carries its own full thermodynamic model, so this is accepted.
     """
     distinct = {"smiles": "C#N", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
@@ -623,14 +623,14 @@ def test_nasa_only_thermo_upload_is_valid(db_engine) -> None:
         assert len(nasa_rows) == 1
 
 
-def test_points_only_thermo_upload_is_valid(db_engine) -> None:
+def test_points_only_thermo_upload_is_valid(db_conn) -> None:
     """Points-only payloads (no scalars, no NASA) remain valid.
 
     Tabulated points are a standalone thermodynamic representation and the
     schema does not require NASA coefficients alongside them.
     """
     distinct = {"smiles": "[C-]#[O+]", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
             ThermoUploadRequest(
@@ -677,7 +677,7 @@ def _freq_calc_payload() -> dict:
     }
 
 
-def test_thermo_upload_persists_source_calculations_via_upload(db_engine) -> None:
+def test_thermo_upload_persists_source_calculations_via_upload(db_conn) -> None:
     """Uploading thermo with declared calcs + source_calculations populates
     ``thermo_source_calculation`` with the right (calculation_id, role)."""
     distinct = {"smiles": "CCCC", "charge": 0, "multiplicity": 1}
@@ -693,7 +693,7 @@ def test_thermo_upload_persists_source_calculations_via_upload(db_engine) -> Non
         ],
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
 
         links = session.scalars(
@@ -711,7 +711,7 @@ def test_thermo_upload_persists_source_calculations_via_upload(db_engine) -> Non
         assert calc.type == CalculationType.sp
 
 
-def test_thermo_upload_with_multiple_source_calculations_and_roles(db_engine) -> None:
+def test_thermo_upload_with_multiple_source_calculations_and_roles(db_conn) -> None:
     """Multiple inline calcs with distinct roles persist as distinct rows."""
     distinct = {"smiles": "c1ccccc1", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
@@ -728,7 +728,7 @@ def test_thermo_upload_with_multiple_source_calculations_and_roles(db_engine) ->
         ],
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
 
         links = session.scalars(
@@ -749,7 +749,7 @@ def test_thermo_upload_with_multiple_source_calculations_and_roles(db_engine) ->
         assert freq_calc.species_entry_id == thermo.species_entry_id
 
 
-def test_applied_correction_source_calculation_key_resolves_to_id(db_engine) -> None:
+def test_applied_correction_source_calculation_key_resolves_to_id(db_conn) -> None:
     """Applied corrections attached to a thermo upload no longer drop their
     source-calculation provenance.
 
@@ -780,7 +780,7 @@ def test_applied_correction_source_calculation_key_resolves_to_id(db_engine) -> 
         ],
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
 
         applied = session.scalars(
@@ -874,7 +874,7 @@ def test_schema_rejects_applied_correction_with_undefined_source_calc_key() -> N
         )
 
 
-def test_wrong_owner_source_calc_rejected_by_workflow_check(db_engine) -> None:
+def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
     """Owner-consistency check fires when a resolved calculation's
     ``species_entry_id`` does not match the thermo target.
 
@@ -883,7 +883,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_engine) -> None:
     entry. This test exercises the defensive check directly so regressions
     in that guard are caught.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_a = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**_SPECIES_ENTRY),
         )
@@ -898,7 +898,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_engine) -> None:
 
 
 def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
-    db_engine,
+    db_conn,
 ) -> None:
     """If owner-consistency fails for an applied correction's source calc,
     the whole thermo transaction rolls back — no partial thermo row, no
@@ -952,7 +952,7 @@ def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
         )
 
     with pytest.raises(ValueError, match="simulated cross-owner"):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             original = thermo_module._assert_calculation_owned_by
             thermo_module._assert_calculation_owned_by = _fail_on_second_call
             try:
@@ -961,7 +961,7 @@ def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
                 thermo_module._assert_calculation_owned_by = original
 
     # Verify no partial persistence.
-    with Session(db_engine) as verify:
+    with Session(db_conn) as verify:
         leaked_thermo = session_scalar_count(
             verify, Thermo, note="wrong-owner-sentinel",
         )
@@ -979,7 +979,7 @@ def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
 # ---------------------------------------------------------------------------
 
 
-def test_child_nasa_failure_rolls_back_parent_thermo(db_engine) -> None:
+def test_child_nasa_failure_rolls_back_parent_thermo(db_conn) -> None:
     """D1: if NASA insertion fails after the parent is flushed, the whole
     transaction rolls back and no partial thermo row remains.
 
@@ -990,13 +990,13 @@ def test_child_nasa_failure_rolls_back_parent_thermo(db_engine) -> None:
     """
     unique_note = "rollback-sentinel-D1"
 
-    with Session(db_engine) as outer_session, outer_session.begin():
+    with Session(db_conn) as outer_session, outer_session.begin():
         # Any pre-existing data is already committed from other tests.
         baseline = session_scalar_count(outer_session, Thermo, note=unique_note)
         assert baseline == 0
 
     with pytest.raises(IntegrityError):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             species_entry = resolve_species_entry(
                 session, _thermo_request().species_entry,
             )
@@ -1019,7 +1019,7 @@ def test_child_nasa_failure_rolls_back_parent_thermo(db_engine) -> None:
             # session.begin() context will call commit on exit; the FK
             # violation surfaces there, triggering rollback.
 
-    with Session(db_engine) as verify_session:
+    with Session(db_conn) as verify_session:
         leaked = session_scalar_count(verify_session, Thermo, note=unique_note)
         assert leaked == 0, "rollback should have removed the parent thermo row"
 
@@ -1056,12 +1056,12 @@ def _make_persisted_calc(
 
 
 def test_thermo_upload_links_existing_calculation_ids_for_opt_freq_sp(
-    db_engine,
+    db_conn,
 ) -> None:
     """DR-0028: existing_calculation_id references for opt/freq/sp produce
     thermo_source_calculation rows that point at those exact calc ids."""
     distinct = {"smiles": "CC", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**distinct),
         )
@@ -1106,12 +1106,12 @@ def test_thermo_upload_links_existing_calculation_ids_for_opt_freq_sp(
 
 
 def test_thermo_upload_with_existing_calc_id_creates_no_duplicate_calc(
-    db_engine,
+    db_conn,
 ) -> None:
     """DR-0028: linking an existing calc must NOT insert a new calculation
     row — the whole point is to avoid row explosion."""
     distinct = {"smiles": "CCN", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**distinct),
         )
@@ -1146,12 +1146,12 @@ def test_thermo_upload_with_existing_calc_id_creates_no_duplicate_calc(
         assert {row.id for row in after} == {calc.id}
 
 
-def test_thermo_upload_mixed_inline_and_existing_calc_references(db_engine) -> None:
+def test_thermo_upload_mixed_inline_and_existing_calc_references(db_conn) -> None:
     """DR-0028: a single source_calculations list may mix inline keys with
     existing-id references. Both produce link rows; inline calcs are
     inserted as new calc rows, existing references reuse prior rows."""
     distinct = {"smiles": "CCO", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**distinct),
         )
@@ -1205,7 +1205,7 @@ def test_thermo_upload_mixed_inline_and_existing_calc_references(db_engine) -> N
 
 
 def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
-    db_engine,
+    db_conn,
 ) -> None:
     """DR-0028 Req 2: a missing existing_calculation_id must surface as 404
     via NotFoundError (mapped to HTTP 404 by the API exception handler)."""
@@ -1222,12 +1222,12 @@ def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
     )
 
     with pytest.raises(NotFoundError, match="does not exist"):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             persist_thermo_upload(session, request)
 
 
 def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
-    db_engine,
+    db_conn,
 ) -> None:
     """DR-0028 Req 2: an existing_calculation_id whose species_entry_id
     differs from the thermo target's must surface as 422 (ValueError) and
@@ -1236,7 +1236,7 @@ def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
     species_b = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
 
     with pytest.raises(ValueError, match="different species entry") as exc_info:
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             entry_a = resolve_species_entry(
                 session, SpeciesEntryIdentityPayload(**species_a),
             )
@@ -1261,11 +1261,11 @@ def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
     assert "id=" not in detail
 
 
-def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_engine) -> None:
+def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_conn) -> None:
     """DR-0028 Req 1: role=freq pointing at a calc whose type=opt is rejected."""
     distinct = {"smiles": "CCC", "charge": 0, "multiplicity": 1}
     with pytest.raises(ValueError, match="incompatible"):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             species_entry = resolve_species_entry(
                 session, SpeciesEntryIdentityPayload(**distinct),
             )
@@ -1286,11 +1286,11 @@ def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_engine) -> None:
             )
 
 
-def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_engine) -> None:
+def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_conn) -> None:
     """DR-0028 Req 1: role=sp pointing at a calc whose type=freq is rejected."""
     distinct = {"smiles": "CCCO", "charge": 0, "multiplicity": 1}
     with pytest.raises(ValueError, match="incompatible"):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             species_entry = resolve_species_entry(
                 session, SpeciesEntryIdentityPayload(**distinct),
             )
@@ -1311,13 +1311,13 @@ def test_thermo_upload_role_sp_with_freq_calc_raises_422(db_engine) -> None:
             )
 
 
-def test_thermo_upload_inline_calc_role_type_mismatch_raises_422(db_engine) -> None:
+def test_thermo_upload_inline_calc_role_type_mismatch_raises_422(db_conn) -> None:
     """DR-0028 Req 1: the role/type compatibility check applies to inline
     calcs too. Declaring a freq inline and tagging it role=opt is the same
     error class as a typo'd existing_calculation_id."""
     distinct = {"smiles": "CCCN", "charge": 0, "multiplicity": 1}
     with pytest.raises(ValueError, match="incompatible"):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
@@ -1385,11 +1385,11 @@ def test_schema_rejects_existing_calculation_id_zero_or_negative() -> None:
         )
 
 
-def test_schema_allows_role_composite_with_any_calc_type(db_engine) -> None:
+def test_schema_allows_role_composite_with_any_calc_type(db_conn) -> None:
     """DR-0028 Req 1: role=composite has no strict type check at v0 — it
     describes a scientific origin rather than a specific job type."""
     distinct = {"smiles": "CCCC=O", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**distinct),
         )
@@ -1441,10 +1441,10 @@ def _make_statmech(
     return statmech
 
 
-def test_thermo_upload_persists_reference_state_fields(db_engine) -> None:
+def test_thermo_upload_persists_reference_state_fields(db_conn) -> None:
     """Reference pressure, phase, and ΔfH°(0 K) persist and read back."""
     distinct = {"smiles": "CCCCCC", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
             _thermo_request(
@@ -1469,7 +1469,7 @@ def test_thermo_upload_persists_reference_state_fields(db_engine) -> None:
         assert read.enthalpy_formation_0k_uncertainty_kj_mol == pytest.approx(0.4)
 
 
-def test_thermo_upload_defaults_reference_pressure_and_phase(db_engine) -> None:
+def test_thermo_upload_defaults_reference_pressure_and_phase(db_conn) -> None:
     """Omitting reference pressure / phase applies the IUPAC 1 bar, gas defaults."""
     distinct = {"smiles": "CCCCCCC", "charge": 0, "multiplicity": 1}
     request = ThermoUploadRequest(
@@ -1480,7 +1480,7 @@ def test_thermo_upload_defaults_reference_pressure_and_phase(db_engine) -> None:
     assert request.reference_pressure_bar == pytest.approx(1.0)
     assert request.phase == PhaseKind.gas
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
         assert thermo.reference_pressure_bar == pytest.approx(1.0)
         assert thermo.phase == PhaseKind.gas
@@ -1488,10 +1488,10 @@ def test_thermo_upload_defaults_reference_pressure_and_phase(db_engine) -> None:
         assert thermo.enthalpy_formation_0k_kj_mol is None
 
 
-def test_thermo_upload_allows_condensed_phase_override(db_engine) -> None:
+def test_thermo_upload_allows_condensed_phase_override(db_conn) -> None:
     """A liquid-phase record overrides the gas default."""
     distinct = {"smiles": "CCCCCCCC", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(
             session,
             _thermo_request(
@@ -1504,7 +1504,7 @@ def test_thermo_upload_allows_condensed_phase_override(db_engine) -> None:
 
 @pytest.mark.parametrize("origin", ["experimental", "estimated"])
 def test_non_computed_origin_does_not_default_phase_or_pressure(
-    db_engine, origin: str,
+    db_conn, origin: str,
 ) -> None:
     """Experimental/literature/estimated uploads must NOT be silently
     stamped gas @ 1 bar. Only computed uploads get the QC defaults; other
@@ -1519,13 +1519,13 @@ def test_non_computed_origin_does_not_default_phase_or_pressure(
     assert request.reference_pressure_bar is None
     assert request.phase is None
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
         assert thermo.reference_pressure_bar is None
         assert thermo.phase is None
 
 
-def test_computed_origin_defaults_phase_and_pressure(db_engine) -> None:
+def test_computed_origin_defaults_phase_and_pressure(db_conn) -> None:
     """A computed upload without phase/pressure defaults to gas @ 1 bar."""
     request = ThermoUploadRequest(
         species_entry={"smiles": "CCCCCCCCCCC", "charge": 0, "multiplicity": 1},
@@ -1535,14 +1535,14 @@ def test_computed_origin_defaults_phase_and_pressure(db_engine) -> None:
     assert request.reference_pressure_bar == pytest.approx(1.0)
     assert request.phase == PhaseKind.gas
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
         assert thermo.reference_pressure_bar == pytest.approx(1.0)
         assert thermo.phase == PhaseKind.gas
 
 
 def test_explicit_reference_state_honored_for_experimental_origin(
-    db_engine,
+    db_conn,
 ) -> None:
     """Explicit phase/pressure are honored regardless of origin: an
     experimental liquid record keeps its own values, not the QC defaults."""
@@ -1556,7 +1556,7 @@ def test_explicit_reference_state_honored_for_experimental_origin(
     assert request.phase == PhaseKind.liquid
     assert request.reference_pressure_bar == pytest.approx(1.01325)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
         assert thermo.phase == PhaseKind.liquid
         assert thermo.reference_pressure_bar == pytest.approx(1.01325)
@@ -1577,10 +1577,10 @@ def test_explicit_none_phase_honored_for_computed_origin() -> None:
     assert request.reference_pressure_bar is None
 
 
-def test_thermo_upload_links_existing_statmech(db_engine) -> None:
+def test_thermo_upload_links_existing_statmech(db_conn) -> None:
     """A computed thermo cites its statmech basis via existing_statmech_id."""
     distinct = {"smiles": "CCCCCCCCC", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**distinct),
         )
@@ -1604,13 +1604,13 @@ def test_thermo_upload_links_existing_statmech(db_engine) -> None:
         assert thermo.id in {t.id for t in statmech.thermo_records}
 
 
-def test_thermo_upload_statmech_not_found_raises_not_found(db_engine) -> None:
+def test_thermo_upload_statmech_not_found_raises_not_found(db_conn) -> None:
     """A missing existing_statmech_id surfaces as 404 (NotFoundError)."""
     from app.api.errors import NotFoundError
 
     distinct = {"smiles": "CCCCCCCCCC", "charge": 0, "multiplicity": 1}
     with pytest.raises(NotFoundError, match="does not exist"):
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             persist_thermo_upload(
                 session,
                 ThermoUploadRequest(
@@ -1622,14 +1622,14 @@ def test_thermo_upload_statmech_not_found_raises_not_found(db_engine) -> None:
             )
 
 
-def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_engine) -> None:
+def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
     """A statmech owned by a different species entry is rejected (422) and
     the message must not leak internal ids."""
     species_a = {"smiles": "[NH2]", "charge": 0, "multiplicity": 2}
     species_b = {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}
 
     with pytest.raises(ValueError, match="different species entry") as exc_info:
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             entry_a = resolve_species_entry(
                 session, SpeciesEntryIdentityPayload(**species_a),
             )

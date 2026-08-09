@@ -74,7 +74,7 @@ def _network_request() -> NetworkUploadRequest:
 
 
 def test_persist_network_upload_resolves_links_and_provenance(
-    db_engine,
+    db_conn,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -88,7 +88,7 @@ def test_persist_network_upload_resolves_links_and_provenance(
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user = AppUser(username="network_tester")
         session.add(user)
         session.flush()
@@ -121,9 +121,9 @@ def test_persist_network_upload_resolves_links_and_provenance(
 
 
 def test_persist_network_upload_creates_species_and_reaction_entries_without_user_ids(
-    db_engine,
+    db_conn,
 ) -> None:
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         reactions_before = len(session.scalars(select(ReactionEntry)).all())
 
         network = persist_network_upload(session, _network_request())

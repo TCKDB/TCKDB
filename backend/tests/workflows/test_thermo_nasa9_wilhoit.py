@@ -24,25 +24,21 @@ from app.workflows.thermo import persist_thermo_upload
 
 
 @pytest.fixture
-def rb_session(db_engine):
+def rb_session(db_conn):
     """A Session whose work is fully rolled back at teardown.
 
     These tests both persist and immediately read back, so they must not
-    commit into the session-scoped test DB — a committed species with a
-    common SMILES would collide (on the content-derived ``public_ref``)
-    with species other tests create via ``unique_smiles()``. Binding the
-    Session to a connection-level transaction that is rolled back keeps the
-    flushed rows visible for the read-back yet leaves the DB untouched.
+    commit into the shared test DB — a committed species with a common
+    SMILES would collide (on the content-derived ``public_ref``) with
+    species other tests create via ``unique_smiles()``. Binding to
+    ``db_conn`` keeps the flushed rows visible for the read-back while the
+    per-test transaction it owns leaves the database untouched.
     """
-    conn = db_engine.connect()
-    txn = conn.begin()
-    session = Session(bind=conn)
+    session = Session(bind=db_conn)
     try:
         yield session
     finally:
         session.close()
-        txn.rollback()
-        conn.close()
 
 
 def _nasa9_intervals() -> list[dict]:

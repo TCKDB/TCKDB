@@ -151,10 +151,8 @@ def _execution_environment() -> dict:
     }
 
 
-def test_computed_species_calculation_environment_persists_dedups_and_is_optional(db_engine) -> None:
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+def test_computed_species_calculation_environment_persists_dedups_and_is_optional(db_conn) -> None:
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         user_id = _ensure_user(session, username="bundle_environment")
         with_env = _hydrogen_bundle()
@@ -169,8 +167,6 @@ def test_computed_species_calculation_environment_persists_dedups_and_is_optiona
         assert legacy.conformers[0].primary_calculation.execution_environment_manifest_id is None
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 # ---------------------------------------------------------------------------
@@ -178,8 +174,8 @@ def test_computed_species_calculation_environment_persists_dedups_and_is_optiona
 # ---------------------------------------------------------------------------
 
 
-def test_minimal_bundle_persists(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_minimal_bundle_persists(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_min")
         outcome = persist_computed_species_upload(
             session, _hydrogen_bundle(), created_by=user_id
@@ -191,12 +187,12 @@ def test_minimal_bundle_persists(db_engine) -> None:
 
 
 def test_bundle_sp_calc_with_wavefunction_diagnostic_persists(
-    db_engine,
+    db_conn,
 ) -> None:
     """A bundle SP additional calc carrying ``wavefunction_diagnostic``
     persists one ``calc_wavefunction_diagnostic`` row anchored to the SP
     calculation row."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_wfn_diag")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
@@ -229,13 +225,13 @@ def test_bundle_sp_calc_with_wavefunction_diagnostic_persists(
 
 
 def test_bundle_sp_calc_with_spin_diagnostic_persists(
-    db_engine,
+    db_conn,
 ) -> None:
     """A bundle SP additional calc carrying ``spin_diagnostic`` persists one
     ``calc_spin_diagnostic`` (<S^2>) row anchored to the SP calculation row.
     Guards ``computed_species._to_payload`` forwarding of
     ``spin_diagnostic``."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_spin_diag")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
@@ -269,11 +265,11 @@ def test_bundle_sp_calc_with_spin_diagnostic_persists(
         assert rows[0].note == "UHF doublet"
 
 
-def test_bundle_freq_calc_with_hessian_persists(db_engine) -> None:
+def test_bundle_freq_calc_with_hessian_persists(db_conn) -> None:
     """A bundle freq additional calc carrying a ``hessian`` persists one
     ``calculation_hessian`` row bound to the geometry the Hessian was
     computed at, with the correct triangle length (3N(3N+1)/2)."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_hessian")
         bundle = _hydrogen_bundle()
         # 1-atom geometry → 3N = 3 → lower triangle length = 3*4/2 = 6.
@@ -317,10 +313,10 @@ def test_bundle_freq_calc_with_hessian_persists(db_engine) -> None:
         assert hess.geometry_id == input_geom.geometry_id
 
 
-def test_bundle_with_freq_and_sp_creates_auto_dependencies(db_engine) -> None:
+def test_bundle_with_freq_and_sp_creates_auto_dependencies(db_conn) -> None:
     """Additional freq + sp calcs auto-link freq_on / single_point_on
     edges to the primary opt — same semantics as /uploads/conformers."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_auto_deps")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
@@ -356,14 +352,14 @@ def test_bundle_with_freq_and_sp_creates_auto_dependencies(db_engine) -> None:
         )
 
 
-def test_bundle_freq_and_sp_get_input_geometry_rows(db_engine) -> None:
+def test_bundle_freq_and_sp_get_input_geometry_rows(db_conn) -> None:
     """Bundle additionals of type freq/sp must produce one
     calculation_input_geometry row each, pointing at the conformer
     geometry. The primary opt has one output_geometry row (role=final);
     freq/sp produce zero output_geometry rows under the narrowed
     fallback (only opt qualifies for the auto-create).
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_input_geom")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
@@ -433,8 +429,8 @@ def test_bundle_freq_and_sp_get_input_geometry_rows(db_engine) -> None:
 
         # Bundle scope: exactly the freq + sp calcs get input rows;
         # the primary opt does not. Scope to the three calcs in this
-        # bundle to avoid coupling to rows persisted by prior tests
-        # (db_engine is session-scoped; see conftest).
+        # bundle so the assertion cannot pick up rows another tree committed
+        # into the shared database.
         bundle_calc_ids = [primary_id, freq_id, sp_id]
         bundle_input_rows = session.scalars(
             select(CalculationInputGeometry).where(
@@ -445,13 +441,13 @@ def test_bundle_freq_and_sp_get_input_geometry_rows(db_engine) -> None:
         assert {r.calculation_id for r in bundle_input_rows} == {freq_id, sp_id}
 
 
-def test_bundle_explicit_input_geometries_for_opt(db_engine) -> None:
+def test_bundle_explicit_input_geometries_for_opt(db_conn) -> None:
     """A producer that knows opt's pre-opt input xyz can declare it via
     ``input_geometries``; the workflow lands one
     ``calculation_input_geometry`` row pointing at the resolved geometry,
     which is distinct from opt's output (the conformer geometry)."""
     pre_opt_xyz = "1\npre-opt H\nH 0.0 0.0 0.123"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_explicit_opt")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].primary_calculation.input_geometries = [
@@ -482,13 +478,13 @@ def test_bundle_explicit_input_geometries_for_opt(db_engine) -> None:
 
 
 def test_bundle_explicit_input_geometries_overrides_freq_sp_fallback(
-    db_engine,
+    db_conn,
 ) -> None:
     """When ``input_geometries`` is set on a freq calc, the workflow must
     use the producer-declared geometry, not the conformer geometry that
     the fallback would otherwise pick."""
     declared_xyz = "1\ndeclared\nH 0.0 0.0 0.999"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_explicit_freq")
         bundle = _hydrogen_bundle()
         freq_in = type(bundle.conformers[0].primary_calculation)(
@@ -522,11 +518,11 @@ def test_bundle_explicit_input_geometries_overrides_freq_sp_fallback(
         assert freq_inputs[0].geometry_id != conformer_geom_id
 
 
-def test_bundle_empty_input_geometries_uses_fallback(db_engine) -> None:
+def test_bundle_empty_input_geometries_uses_fallback(db_conn) -> None:
     """When every calc has an empty ``input_geometries``, the workflow
     preserves the prior PR's behavior: freq+sp link to the conformer
     geometry, opt skips."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_fallback")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
@@ -554,12 +550,12 @@ def test_bundle_empty_input_geometries_uses_fallback(db_engine) -> None:
         assert {r.calculation_id for r in rows} == {freq_id, sp_id}
 
 
-def test_bundle_multi_input_geometries_for_one_calc(db_engine) -> None:
+def test_bundle_multi_input_geometries_for_one_calc(db_conn) -> None:
     """A producer can declare multiple input geometries for one calc;
     each lands at ``input_order = 1, 2, ...`` in declaration order."""
     xyz_a = "1\ngeom-a\nH 0.0 0.0 0.111"
     xyz_b = "1\ngeom-b\nH 0.0 0.0 0.222"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_multi_input")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].primary_calculation.input_geometries = [
@@ -580,12 +576,12 @@ def test_bundle_multi_input_geometries_for_one_calc(db_engine) -> None:
         assert rows[0].geometry_id != rows[1].geometry_id
 
 
-def test_bundle_duplicate_input_geometries_rejected(db_engine) -> None:
+def test_bundle_duplicate_input_geometries_rejected(db_conn) -> None:
     """Declaring the same geometry twice in a single calc's
     ``input_geometries`` list is rejected as a 422 (``ValueError`` from
     a workflow-level pre-check, not a bare ``IntegrityError``)."""
     same_xyz = "1\nsame\nH 0.0 0.0 0.314"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         _ensure_user(session, username="bundle_dup_input")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].primary_calculation.input_geometries = [
@@ -596,12 +592,12 @@ def test_bundle_duplicate_input_geometries_rejected(db_engine) -> None:
             persist_computed_species_upload(session, bundle)
 
 
-def test_bundle_explicit_output_geometries_for_opt(db_engine) -> None:
+def test_bundle_explicit_output_geometries_for_opt(db_conn) -> None:
     """A producer can declare opt's converged output explicitly via
     ``output_geometries``; the producer-explicit path runs and the
     fallback does NOT also fire."""
     declared_xyz = "1\ndeclared-final\nH 0.0 0.0 0.987"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         from app.db.models.common import CalculationGeometryRole
 
         _ensure_user(session, username="bundle_explicit_output_opt")
@@ -627,13 +623,13 @@ def test_bundle_explicit_output_geometries_for_opt(db_engine) -> None:
         assert rows[0].role == CalculationGeometryRole.final
 
 
-def test_bundle_explicit_output_geometries_for_scan(db_engine) -> None:
+def test_bundle_explicit_output_geometries_for_scan(db_conn) -> None:
     """A scan calc that declares three output geometries with role=scan_point
     produces three rows at output_order=1, 2, 3 with the matching role."""
     xyz_a = "1\nscan-1\nH 0.0 0.0 0.10"
     xyz_b = "1\nscan-2\nH 0.0 0.0 0.20"
     xyz_c = "1\nscan-3\nH 0.0 0.0 0.30"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         from app.db.models.common import CalculationGeometryRole
 
         _ensure_user(session, username="bundle_scan_outputs")
@@ -672,12 +668,12 @@ def test_bundle_explicit_output_geometries_for_scan(db_engine) -> None:
         assert len({r.geometry_id for r in rows}) == 3
 
 
-def test_bundle_explicit_output_geometries_with_irc_roles(db_engine) -> None:
+def test_bundle_explicit_output_geometries_with_irc_roles(db_conn) -> None:
     """An IRC calc that declares one ``irc_forward`` and one ``irc_reverse``
     output geometry produces two rows with the producer-declared roles."""
     xyz_fwd = "1\nirc-fwd\nH 0.0 0.0 0.40"
     xyz_rev = "1\nirc-rev\nH 0.0 0.0 0.50"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         from app.db.models.common import CalculationGeometryRole
 
         _ensure_user(session, username="bundle_irc_outputs")
@@ -714,11 +710,11 @@ def test_bundle_explicit_output_geometries_with_irc_roles(db_engine) -> None:
         assert [r.output_order for r in rows] == [1, 2]
 
 
-def test_bundle_empty_output_geometries_opt_uses_fallback(db_engine) -> None:
+def test_bundle_empty_output_geometries_opt_uses_fallback(db_conn) -> None:
     """When opt has empty ``output_geometries``, the narrowed fallback
     fires: one row at (role=final, output_order=1) pointing at the
     conformer geometry."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         _ensure_user(session, username="bundle_opt_fallback")
         bundle = _hydrogen_bundle()
         outcome = persist_computed_species_upload(session, bundle)
@@ -736,12 +732,12 @@ def test_bundle_empty_output_geometries_opt_uses_fallback(db_engine) -> None:
         assert rows[0].output_order == 1
 
 
-def test_bundle_empty_output_geometries_freq_sp_get_zero_rows(db_engine) -> None:
+def test_bundle_empty_output_geometries_freq_sp_get_zero_rows(db_conn) -> None:
     """Freq and sp with empty ``output_geometries`` produce ZERO
     calculation_output_geometry rows. THIS IS THE BEHAVIOR CHANGE: the
     pre-PR fallback would have written one row each; the narrowed
     fallback only fires for opt."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         _ensure_user(session, username="bundle_freq_sp_zero_outputs")
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
@@ -797,10 +793,10 @@ def test_bundle_output_geometries_with_role_required_at_schema_layer() -> None:
     assert "role" in str(excinfo.value).lower()
 
 
-def test_multiple_conformers_create_distinct_groups(db_engine) -> None:
+def test_multiple_conformers_create_distinct_groups(db_conn) -> None:
     """3 distinct geometries → 3 conformer_observation rows (groups may
     share for trivial single-atom species without a torsion fingerprint)."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         _ensure_user(session, username="bundle_multi")
         bundle_data = {
             "species_entry": {
@@ -843,8 +839,8 @@ def test_multiple_conformers_create_distinct_groups(db_engine) -> None:
         )
 
 
-def test_chemistry_only_bundle_omits_thermo(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_chemistry_only_bundle_omits_thermo(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _hydrogen_bundle()
         )
@@ -895,8 +891,8 @@ def _bundle_with_thermo() -> ComputedSpeciesUploadRequest:
     )
 
 
-def test_thermo_block_persists_with_source_links(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_thermo_block_persists_with_source_links(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _bundle_with_thermo()
         )
@@ -982,12 +978,12 @@ def _bundle_multi_conformer_thermo_statmech() -> ComputedSpeciesUploadRequest:
     )
 
 
-def test_bundle_species_calcs_carry_conformer_observation_id(db_engine) -> None:
+def test_bundle_species_calcs_carry_conformer_observation_id(db_conn) -> None:
     """Every species-side calculation a computed-species bundle persists must
     carry ``conformer_observation_id`` (the audit invariant). Mirrors the SQL
     audit predicate: zero species-side calcs with a NULL conformer link.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _bundle_multi_conformer_thermo_statmech()
         )
@@ -1030,13 +1026,13 @@ def test_bundle_species_calcs_carry_conformer_observation_id(db_engine) -> None:
 
 
 def test_bundle_thermo_statmech_sources_trace_to_conformer_observations(
-    db_engine,
+    db_conn,
 ) -> None:
     """Computed thermo and statmech source calculations must trace back to a
     conformer observation — i.e. each source calc carries a non-null
     ``conformer_observation_id``.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _bundle_multi_conformer_thermo_statmech()
         )
@@ -1077,13 +1073,13 @@ def test_bundle_thermo_statmech_sources_trace_to_conformer_observations(
 # ---------------------------------------------------------------------------
 
 
-def test_bundle_computed_thermo_links_to_statmech(db_engine) -> None:
+def test_bundle_computed_thermo_links_to_statmech(db_conn) -> None:
     """A bundle carrying a COMPUTED thermo alongside a statmech must set
     ``thermo.statmech_id`` to the statmech it was derived from — so the read
     layer never has to fall back to ``min(statmech_id)`` when a species entry
     accumulates multiple statmech rows.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _bundle_multi_conformer_thermo_statmech()
         )
@@ -1093,10 +1089,10 @@ def test_bundle_computed_thermo_links_to_statmech(db_engine) -> None:
         assert outcome.thermo.statmech_id == outcome.statmech.id
 
 
-def test_bundle_thermo_without_statmech_leaves_statmech_id_null(db_engine) -> None:
+def test_bundle_thermo_without_statmech_leaves_statmech_id_null(db_conn) -> None:
     """A computed thermo with no statmech in the bundle has nothing to link to;
     ``statmech_id`` must remain NULL."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _bundle_with_thermo()
         )
@@ -1105,7 +1101,7 @@ def test_bundle_thermo_without_statmech_leaves_statmech_id_null(db_engine) -> No
         assert outcome.thermo.statmech_id is None
 
 
-def test_bundle_experimental_thermo_not_linked_to_statmech(db_engine) -> None:
+def test_bundle_experimental_thermo_not_linked_to_statmech(db_conn) -> None:
     """An experimental (non-computed) thermo that happens to coexist with a
     statmech must NOT be linked — only computed thermo is derived from a
     statmech basis."""
@@ -1113,7 +1109,7 @@ def test_bundle_experimental_thermo_not_linked_to_statmech(db_engine) -> None:
     bundle.thermo.scientific_origin = ScientificOriginKind.experimental
     # Experimental thermo is not derived from bundle calcs; drop source links.
     bundle.thermo.source_calculations = []
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         assert outcome.thermo is not None
         assert outcome.statmech is not None
@@ -1123,8 +1119,8 @@ def test_bundle_experimental_thermo_not_linked_to_statmech(db_engine) -> None:
         assert outcome.thermo.statmech_id is None
 
 
-def test_thermo_role_type_mismatch_raises(db_engine) -> None:
-    with Session(db_engine) as session, session.begin():
+def test_thermo_role_type_mismatch_raises(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
         # source role=opt but pointing at a freq calc → 422 in route, ValueError here.
         bundle = _bundle_with_thermo()
         bundle.thermo.source_calculations[0].calculation_key = "freq0"
@@ -1133,10 +1129,10 @@ def test_thermo_role_type_mismatch_raises(db_engine) -> None:
         assert "incompatible" in str(exc.value)
 
 
-def test_dependency_role_type_mismatch_raises(db_engine) -> None:
+def test_dependency_role_type_mismatch_raises(db_conn) -> None:
     """freq_on must point at an opt parent. Pointing it at the same
     calc as another freq calc (which is type=freq) raises ValueError."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle = _hydrogen_bundle()
         bundle.conformers[0].additional_calculations = [
             type(bundle.conformers[0].primary_calculation)(
@@ -1160,7 +1156,7 @@ def test_dependency_role_type_mismatch_raises(db_engine) -> None:
         assert "incompatible" in str(exc.value)
 
 
-def test_optimized_from_with_freq_parent_raises(db_engine) -> None:
+def test_optimized_from_with_freq_parent_raises(db_conn) -> None:
     """``optimized_from`` parent must be opt or path_search.
 
     Regression: the bundle path delivers ``role`` as a wire-mirror enum
@@ -1169,7 +1165,7 @@ def test_optimized_from_with_freq_parent_raises(db_engine) -> None:
     enum and silently skipped this validation. Pointing ``optimized_from``
     at a freq parent must now raise 422-style ValueError.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle = _hydrogen_bundle()
         klass = type(bundle.conformers[0].primary_calculation)
         bundle.conformers[0].additional_calculations = [
@@ -1221,12 +1217,12 @@ def _hydrogen_bundle_with_freq_dep() -> ComputedSpeciesUploadRequest:
 
 
 def test_redundant_explicit_dep_matching_auto_edge_is_idempotent(
-    db_engine,
+    db_conn,
 ) -> None:
     """Bundle declares an explicit ``depends_on`` that matches the
     auto-edge created from primary→freq. Insertion must be idempotent:
     one edge persisted, no duplicate-key error."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _hydrogen_bundle_with_freq_dep()
         )
@@ -1243,14 +1239,14 @@ def test_redundant_explicit_dep_matching_auto_edge_is_idempotent(
 
 
 def test_explicit_dep_with_conflicting_role_to_auto_edge_raises(
-    db_engine,
+    db_conn,
 ) -> None:
     """Auto-edge fires with role=freq_on for a primary→freq pair. An
     explicit depends_on for the same pair but with a different role
     (``optimized_from`` — type-compatible since parent is opt) must
     surface as a clear ValueError, not a silent overwrite or pk
     violation."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle = _hydrogen_bundle()
         klass = type(bundle.conformers[0].primary_calculation)
         bundle.conformers[0].additional_calculations = [
@@ -1276,12 +1272,12 @@ def test_explicit_dep_with_conflicting_role_to_auto_edge_raises(
 
 
 def test_duplicate_explicit_deps_in_same_bundle_is_idempotent(
-    db_engine,
+    db_conn,
 ) -> None:
     """Same ``depends_on`` triple declared twice within a single bundle
     must not double-insert. Exercises the in-session ``session.new``
     branch of the helper directly."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle = _hydrogen_bundle()
         klass = type(bundle.conformers[0].primary_calculation)
         bundle.conformers[0].additional_calculations = [
@@ -1309,7 +1305,7 @@ def test_duplicate_explicit_deps_in_same_bundle_is_idempotent(
 
 
 def test_dependency_edge_idempotent_across_committed_transactions(
-    db_engine,
+    db_conn,
 ) -> None:
     """Faithful reproduction of the original migration bug: edge persisted
     in transaction A, fresh session in transaction B re-inserts the same
@@ -1319,7 +1315,7 @@ def test_dependency_edge_idempotent_across_committed_transactions(
         add_dependency_edge_idempotent as _add_dependency_edge_idempotent,
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _hydrogen_bundle_with_freq_dep()
         )
@@ -1327,7 +1323,7 @@ def test_dependency_edge_idempotent_across_committed_transactions(
         freq_id = outcome.conformers[0].additional_calculations[0].id
 
     # Fresh session — identity map is empty, helper must round-trip.
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         before = session.scalar(
             select(func.count()).select_from(CalculationDependency)
         )
@@ -1357,7 +1353,7 @@ def test_dependency_edge_idempotent_across_committed_transactions(
         assert "different role" in str(exc.value)
 
 
-def test_per_role_child_uniqueness_rejected_in_session(db_engine) -> None:
+def test_per_role_child_uniqueness_rejected_in_session(db_conn) -> None:
     """In-session: a ``freq_on`` edge is pending for child=C from parent=A.
     A second pending ``freq_on`` for the same child from a different
     parent must be rejected by the helper before flush — never reach
@@ -1366,7 +1362,7 @@ def test_per_role_child_uniqueness_rejected_in_session(db_engine) -> None:
         add_dependency_edge_idempotent as _add_dependency_edge_idempotent,
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _hydrogen_bundle_with_freq_dep()
         )
@@ -1414,7 +1410,7 @@ def test_per_role_child_uniqueness_rejected_in_session(db_engine) -> None:
 
 
 def test_per_role_child_uniqueness_rejected_across_transactions(
-    db_engine,
+    db_conn,
 ) -> None:
     """Persisted: a committed ``freq_on`` edge already exists for child=C
     from parent=A. A fresh transaction trying to add a second
@@ -1424,7 +1420,7 @@ def test_per_role_child_uniqueness_rejected_across_transactions(
         add_dependency_edge_idempotent as _add_dependency_edge_idempotent,
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome_a = persist_computed_species_upload(
             session, _hydrogen_bundle_with_freq_dep()
         )
@@ -1451,7 +1447,7 @@ def test_per_role_child_uniqueness_rejected_across_transactions(
         primary_b_id = outcome_b.conformers[0].primary_calculation.id
 
     # Fresh transaction — identity map empty, helper must round-trip.
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         before = session.scalar(
             select(func.count()).select_from(CalculationDependency)
         )
@@ -1491,7 +1487,7 @@ def _opt_only_bundle(geom_xyz: str) -> ComputedSpeciesUploadRequest:
 
 
 def test_per_role_child_uniqueness_does_not_block_unrestricted_role(
-    db_engine,
+    db_conn,
 ) -> None:
     """``arkane_source`` is not in the per-role-child uniqueness set.
     Two parents pointing to the same child with role=arkane_source must
@@ -1512,7 +1508,7 @@ def test_per_role_child_uniqueness_does_not_block_unrestricted_role(
         not in _ONE_PARENT_PER_CHILD_ROLES
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         a = persist_computed_species_upload(
             session, _opt_only_bundle("1\nH\nH 0.0 0.0 0.0")
         )
@@ -1556,7 +1552,7 @@ def test_per_role_child_uniqueness_does_not_block_unrestricted_role(
 
 
 def test_dependency_edge_helper_idempotent_against_persisted_row(
-    db_engine,
+    db_conn,
 ) -> None:
     """Direct exercise of the helper: a persisted DB row plus a re-insert
     attempt with the same role no-ops; with a different role raises."""
@@ -1564,7 +1560,7 @@ def test_dependency_edge_helper_idempotent_against_persisted_row(
         add_dependency_edge_idempotent as _add_dependency_edge_idempotent,
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _hydrogen_bundle_with_freq_dep()
         )
@@ -1606,10 +1602,10 @@ def test_dependency_edge_helper_idempotent_against_persisted_row(
 # ---------------------------------------------------------------------------
 
 
-def test_two_bundles_same_basin_reuse_conformer_group(db_engine) -> None:
+def test_two_bundles_same_basin_reuse_conformer_group(db_conn) -> None:
     """Bundle A creates a group; bundle B with the same molecule and
     geometry reuses A's group but creates a fresh conformer_observation."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome_a = persist_computed_species_upload(session, _hydrogen_bundle())
         outcome_b = persist_computed_species_upload(session, _hydrogen_bundle())
 
@@ -1628,7 +1624,7 @@ def test_two_bundles_same_basin_reuse_conformer_group(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_computed_species_statmech_block_persists_with_fsf(db_engine) -> None:
+def test_computed_species_statmech_block_persists_with_fsf(db_conn) -> None:
     """The computed-species bundle accepts an inline statmech block,
     resolves the unified ``FreqScaleFactorRef`` through the shared
     resolver, and links the resulting FSF row through
@@ -1667,7 +1663,7 @@ def test_computed_species_statmech_block_persists_with_fsf(db_engine) -> None:
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_statmech")
         aec_before = session.scalar(
             select(func.count()).select_from(AppliedEnergyCorrection)
@@ -1712,7 +1708,7 @@ def test_computed_species_statmech_block_persists_with_fsf(db_engine) -> None:
         assert aec_after == aec_before
 
 
-def test_computed_species_statmech_optical_isomers_persists(db_engine) -> None:
+def test_computed_species_statmech_optical_isomers_persists(db_conn) -> None:
     """The computed-species bundle accepts ``optical_isomers`` on the
     inline statmech block and persists it (reads back as given). This
     reaches the DB column through the bundle path, closing the gap where
@@ -1727,7 +1723,7 @@ def test_computed_species_statmech_optical_isomers_persists(db_engine) -> None:
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_optical")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -1739,7 +1735,7 @@ def test_computed_species_statmech_optical_isomers_persists(db_engine) -> None:
         assert statmech.optical_isomers == 2
 
 
-def test_computed_species_statmech_optical_isomers_defaults_null(db_engine) -> None:
+def test_computed_species_statmech_optical_isomers_defaults_null(db_conn) -> None:
     """A statmech block without ``optical_isomers`` still validates and
     stores NULL — old bundle payloads remain valid."""
     bundle = _hydrogen_bundle(
@@ -1751,7 +1747,7 @@ def test_computed_species_statmech_optical_isomers_defaults_null(db_engine) -> N
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_optical_null")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -1763,7 +1759,7 @@ def test_computed_species_statmech_optical_isomers_defaults_null(db_engine) -> N
         assert statmech.optical_isomers is None
 
 
-def test_computed_species_statmech_optical_isomers_zero_rejected(db_engine) -> None:
+def test_computed_species_statmech_optical_isomers_zero_rejected(db_conn) -> None:
     """``optical_isomers`` below 1 is rejected at the schema layer (422)."""
     from pydantic import ValidationError
 
@@ -1777,7 +1773,7 @@ def test_computed_species_statmech_optical_isomers_zero_rejected(db_engine) -> N
         )
 
 
-def test_computed_species_statmech_source_key_must_resolve(db_engine) -> None:
+def test_computed_species_statmech_source_key_must_resolve(db_conn) -> None:
     """Statmech ``source_calculations`` keys are validated against the
     bundle's global calc namespace at the schema layer; ghost keys are
     rejected before the workflow runs."""
@@ -1838,7 +1834,7 @@ def _ethane_bundle_with_scan(**overrides) -> dict:
     return payload
 
 
-def test_species_statmech_torsion_with_one_coordinate_persists(db_engine) -> None:
+def test_species_statmech_torsion_with_one_coordinate_persists(db_conn) -> None:
     """1D rotor with a single coordinate writes one
     ``statmech_torsion_definition`` row, atom quartet preserved 1-based."""
     bundle = ComputedSpeciesUploadRequest(
@@ -1869,7 +1865,7 @@ def test_species_statmech_torsion_with_one_coordinate_persists(db_engine) -> Non
         )
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_torsion_1d")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -1905,7 +1901,7 @@ def test_species_statmech_torsion_with_one_coordinate_persists(db_engine) -> Non
 
 
 def test_species_statmech_torsion_without_coordinates_writes_no_definitions(
-    db_engine,
+    db_conn,
 ) -> None:
     """Producers may omit ``coordinates``: the torsion row is created
     but no ``statmech_torsion_definition`` rows are written. This
@@ -1921,7 +1917,7 @@ def test_species_statmech_torsion_without_coordinates_writes_no_definitions(
         )
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_torsion_nocoords")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -1943,7 +1939,7 @@ def test_species_statmech_torsion_without_coordinates_writes_no_definitions(
 
 
 def test_species_statmech_torsion_dimension_two_persists_two_definitions(
-    db_engine,
+    db_conn,
 ) -> None:
     """A 2D coupled rotor with two coordinates writes two definition rows."""
     bundle = ComputedSpeciesUploadRequest(
@@ -1975,7 +1971,7 @@ def test_species_statmech_torsion_dimension_two_persists_two_definitions(
             }
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_torsion_2d")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -2142,7 +2138,7 @@ def _ethane_scan_result_payload(
     }
 
 
-def test_bundle_scan_calculation_persists_scan_result_rows(db_engine) -> None:
+def test_bundle_scan_calculation_persists_scan_result_rows(db_conn) -> None:
     """A bundle with a type=scan additional calc carrying scan_result
     persists rows in calc_scan_result, calc_scan_coordinate,
     calc_scan_point, and calc_scan_point_coordinate_value."""
@@ -2156,7 +2152,7 @@ def test_bundle_scan_calculation_persists_scan_result_rows(db_engine) -> None:
     }
     bundle = ComputedSpeciesUploadRequest(**payload)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_scan_result")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -2207,7 +2203,7 @@ def test_bundle_scan_calculation_persists_scan_result_rows(db_engine) -> None:
         assert [v.coordinate_value for v in values] == [0.0, 30.0, 60.0]
 
 
-def test_bundle_scan_inline_point_geometry_populates_geometry_id(db_engine) -> None:
+def test_bundle_scan_inline_point_geometry_populates_geometry_id(db_conn) -> None:
     """A scan_result whose points carry inline ``geometry`` payloads is
     resolved through ``resolve_geometry_payload`` and the resolved IDs land
     on ``calc_scan_point.geometry_id``."""
@@ -2222,7 +2218,7 @@ def test_bundle_scan_inline_point_geometry_populates_geometry_id(db_engine) -> N
     additional[scan_idx] = {**additional[scan_idx], "scan_result": scan_result}
     bundle = ComputedSpeciesUploadRequest(**payload)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user_id = _ensure_user(session, username="bundle_scan_inline_geom")
         outcome = persist_computed_species_upload(
             session, bundle, created_by=user_id
@@ -2270,7 +2266,7 @@ def test_bundle_scan_calc_rejects_non_scan_result_blocks() -> None:
         ComputedSpeciesUploadRequest(**payload)
 
 
-def test_bundle_torsion_resolves_to_scan_calc_with_scan_result(db_engine) -> None:
+def test_bundle_torsion_resolves_to_scan_calc_with_scan_result(db_conn) -> None:
     """A statmech torsion's ``source_scan_calculation_key`` resolves to a
     bundle-local type=scan calc that itself carries a ``scan_result`` —
     the torsion's ``source_scan_calculation_id`` points at that calc."""
@@ -2297,7 +2293,7 @@ def test_bundle_torsion_resolves_to_scan_calc_with_scan_result(db_engine) -> Non
     }
     bundle = ComputedSpeciesUploadRequest(**payload)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         _ensure_user(session, username="bundle_torsion_scan_result")
         outcome = persist_computed_species_upload(session, bundle)
 
@@ -2419,10 +2415,9 @@ def _geom_for_smiles(smiles: str) -> str:
 def _bundle_with_sp_calc(*, smiles: str, **overrides) -> dict:
     """Bundle template that exposes a 'sp0' calc key for source linking.
 
-    A distinct ``smiles`` per test is required because ``db_engine`` is
-    session-scoped and writes commit between tests; reusing the same
-    species across tests would accumulate ``applied_energy_correction``
-    rows that target the same species entry.
+    A distinct ``smiles`` per test keeps each test's
+    ``applied_energy_correction`` rows on their own species entry, so the
+    unqualified assertions below cannot pick up a sibling test's.
     """
     return {
         "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},
@@ -2440,7 +2435,7 @@ def _bundle_with_sp_calc(*, smiles: str, **overrides) -> dict:
     }
 
 
-def test_aec_total_no_components_persists(db_engine) -> None:
+def test_aec_total_no_components_persists(db_conn) -> None:
     """Spec test 1: AEC applied correction persists with scheme and no components."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -2456,7 +2451,7 @@ def test_aec_total_no_components_persists(db_engine) -> None:
             ]
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         applied = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -2480,7 +2475,7 @@ def test_aec_total_no_components_persists(db_engine) -> None:
         assert comps == []
 
 
-def test_aec_total_with_atom_components_persists(db_engine) -> None:
+def test_aec_total_with_atom_components_persists(db_conn) -> None:
     """Spec test 2: AEC applied correction persists with atom components."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -2510,7 +2505,7 @@ def test_aec_total_with_atom_components_persists(db_engine) -> None:
             ]
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -2536,7 +2531,7 @@ def test_aec_total_with_atom_components_persists(db_engine) -> None:
         assert {p.element for p in atom_params} == {"H"}
 
 
-def test_bac_petersson_with_bond_components_persists(db_engine) -> None:
+def test_bac_petersson_with_bond_components_persists(db_conn) -> None:
     """Spec test 3: Petersson BAC persists with bond components."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -2566,7 +2561,7 @@ def test_bac_petersson_with_bond_components_persists(db_engine) -> None:
             ]
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -2594,7 +2589,7 @@ def test_bac_petersson_with_bond_components_persists(db_engine) -> None:
         assert {p.bond_key for p in bond_params} == {"C-H"}
 
 
-def test_bac_melius_no_components_persists(db_engine) -> None:
+def test_bac_melius_no_components_persists(db_conn) -> None:
     """Spec test 4: Melius BAC persists with no components.
 
     Melius BAC totals are scientifically meaningful but lack a stable
@@ -2614,7 +2609,7 @@ def test_bac_melius_no_components_persists(db_engine) -> None:
             ]
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -2632,7 +2627,7 @@ def test_bac_melius_no_components_persists(db_engine) -> None:
         assert comps == []
 
 
-def test_source_calculation_key_resolves_by_local_key(db_engine) -> None:
+def test_source_calculation_key_resolves_by_local_key(db_conn) -> None:
     """Spec test 5: source_calculation_key resolves by local key.
 
     The applied correction row's ``source_calculation_id`` must match
@@ -2652,7 +2647,7 @@ def test_source_calculation_key_resolves_by_local_key(db_engine) -> None:
             ]
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         sp_calc = next(
             c
@@ -2731,7 +2726,7 @@ def test_bac_total_with_non_bac_scheme_returns_422() -> None:
         )
 
 
-def test_repeated_upload_reuses_scheme_row(db_engine) -> None:
+def test_repeated_upload_reuses_scheme_row(db_conn) -> None:
     """Spec test 9: repeated upload with same scheme identity reuses the row."""
     payload = {
         "applied_energy_corrections": [
@@ -2744,7 +2739,7 @@ def test_repeated_upload_reuses_scheme_row(db_engine) -> None:
             }
         ]
     }
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(smiles="CCCCCCCCCC", **payload)
         )
@@ -2793,7 +2788,7 @@ def test_repeated_upload_reuses_scheme_row(db_engine) -> None:
         )
 
 
-def test_note_does_not_affect_scheme_identity(db_engine) -> None:
+def test_note_does_not_affect_scheme_identity(db_conn) -> None:
     """Spec test 10: note does not affect scheme identity.
 
     Two uploads with the same identity tuple but different ``note`` text
@@ -2801,7 +2796,7 @@ def test_note_does_not_affect_scheme_identity(db_engine) -> None:
     ignored, mirroring FrequencyScaleFactor's note semantics.
     """
     scheme_name = "AEC note-identity test"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="CCCCCCCCCCCC",
@@ -2856,9 +2851,9 @@ def test_note_does_not_affect_scheme_identity(db_engine) -> None:
         assert scheme.note == "first run"
 
 
-def test_aec_bac_does_not_create_frequency_scale_factor_row(db_engine) -> None:
+def test_aec_bac_does_not_create_frequency_scale_factor_row(db_conn) -> None:
     """Spec test 11: no frequency_scale_factor row is created for AEC/BAC."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         before = session.scalar(
             select(func.count()).select_from(FrequencyScaleFactor)
         )
@@ -2956,7 +2951,7 @@ def _ac_with_scheme(scheme: dict, *, application_role: str, value: float) -> dic
     }
 
 
-def test_aec_scheme_atom_params_persist(db_engine) -> None:
+def test_aec_scheme_atom_params_persist(db_conn) -> None:
     """Spec 1: AEC scheme atom_params populate the atom_param table."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -2977,7 +2972,7 @@ def test_aec_scheme_atom_params_persist(db_engine) -> None:
             ],
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -2997,7 +2992,7 @@ def test_aec_scheme_atom_params_persist(db_engine) -> None:
         }
 
 
-def test_pbac_scheme_bond_params_persist(db_engine) -> None:
+def test_pbac_scheme_bond_params_persist(db_conn) -> None:
     """Spec 2: Petersson BAC scheme bond_params populate the bond_param table."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -3018,7 +3013,7 @@ def test_pbac_scheme_bond_params_persist(db_engine) -> None:
             ],
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -3038,7 +3033,7 @@ def test_pbac_scheme_bond_params_persist(db_engine) -> None:
         }
 
 
-def test_melius_scheme_component_params_persist(db_engine) -> None:
+def test_melius_scheme_component_params_persist(db_conn) -> None:
     """Spec 3: Melius BAC scheme component_params populate the table."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -3059,7 +3054,7 @@ def test_melius_scheme_component_params_persist(db_engine) -> None:
             ],
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -3079,11 +3074,11 @@ def test_melius_scheme_component_params_persist(db_engine) -> None:
         }
 
 
-def test_repeated_scheme_param_upload_is_idempotent(db_engine) -> None:
+def test_repeated_scheme_param_upload_is_idempotent(db_conn) -> None:
     """Spec 4: re-uploading the same scheme + params is a no-op."""
     name = "AEC idempotency"
     atom_params = [{"element": "H", "value": -0.5}, {"element": "C", "value": -37.7}]
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCN",
@@ -3127,10 +3122,10 @@ def test_repeated_scheme_param_upload_is_idempotent(db_engine) -> None:
         assert {(r.element, r.value) for r in rows} == {("H", -0.5), ("C", -37.7)}
 
 
-def test_conflicting_atom_param_value_raises(db_engine) -> None:
+def test_conflicting_atom_param_value_raises(db_conn) -> None:
     """Spec 5: same atom key with a different value raises ValueError (→ 422)."""
     name = "AEC atom conflict"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCN",
@@ -3148,7 +3143,7 @@ def test_conflicting_atom_param_value_raises(db_engine) -> None:
         )
         persist_computed_species_upload(session, bundle_a)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_b = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCCN",
@@ -3171,10 +3166,10 @@ def test_conflicting_atom_param_value_raises(db_engine) -> None:
             persist_computed_species_upload(session, bundle_b)
 
 
-def test_conflicting_bond_param_value_raises(db_engine) -> None:
+def test_conflicting_bond_param_value_raises(db_conn) -> None:
     """Spec 6: same bond key with a different value raises ValueError (→ 422)."""
     name = "PBAC bond conflict"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrC=CC",
@@ -3192,7 +3187,7 @@ def test_conflicting_bond_param_value_raises(db_engine) -> None:
         )
         persist_computed_species_upload(session, bundle_a)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_b = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrC=CCC",
@@ -3215,10 +3210,10 @@ def test_conflicting_bond_param_value_raises(db_engine) -> None:
             persist_computed_species_upload(session, bundle_b)
 
 
-def test_conflicting_component_param_value_raises(db_engine) -> None:
+def test_conflicting_component_param_value_raises(db_conn) -> None:
     """Bonus: same component (kind, key) with different value raises (→ 422)."""
     name = "Melius component conflict"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrC=CCCO",
@@ -3238,7 +3233,7 @@ def test_conflicting_component_param_value_raises(db_engine) -> None:
         )
         persist_computed_species_upload(session, bundle_a)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_b = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrC=CCCCO",
@@ -3263,7 +3258,7 @@ def test_conflicting_component_param_value_raises(db_engine) -> None:
             persist_computed_species_upload(session, bundle_b)
 
 
-def test_scheme_without_params_remains_valid(db_engine) -> None:
+def test_scheme_without_params_remains_valid(db_conn) -> None:
     """Spec 8: schemes without params still work (no params persisted, no error)."""
     bundle = ComputedSpeciesUploadRequest(
         **_bundle_with_sp_calc(
@@ -3277,7 +3272,7 @@ def test_scheme_without_params_remains_valid(db_engine) -> None:
             ],
         )
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(session, bundle)
         ac = session.scalars(
             select(AppliedEnergyCorrection).where(
@@ -3293,10 +3288,10 @@ def test_scheme_without_params_remains_valid(db_engine) -> None:
         assert rows == []
 
 
-def test_existing_paramless_scheme_can_be_extended_with_params(db_engine) -> None:
+def test_existing_paramless_scheme_can_be_extended_with_params(db_conn) -> None:
     """A scheme created without params can have params added by a later upload."""
     name = "Extend-with-params"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCCO",
@@ -3342,10 +3337,10 @@ def test_existing_paramless_scheme_can_be_extended_with_params(db_engine) -> Non
         assert {(r.element, r.value) for r in rows} == {("H", -0.5)}
 
 
-def test_existing_paramless_scheme_can_be_backfilled_with_bond_params(db_engine) -> None:
+def test_existing_paramless_scheme_can_be_backfilled_with_bond_params(db_conn) -> None:
     """A paramless PBAC scheme can have bond_params added by a later upload."""
     name = "Backfill bond params"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCCCCO",
@@ -3398,11 +3393,11 @@ def test_existing_paramless_scheme_can_be_backfilled_with_bond_params(db_engine)
 
 
 def test_existing_paramless_scheme_can_be_backfilled_with_component_params(
-    db_engine,
+    db_conn,
 ) -> None:
     """A paramless Melius scheme can have component_params added by a later upload."""
     name = "Backfill component params"
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCCCCCCO",
@@ -3462,11 +3457,11 @@ def test_existing_paramless_scheme_can_be_backfilled_with_component_params(
         }
 
 
-def test_repeated_bond_param_upload_is_idempotent(db_engine) -> None:
+def test_repeated_bond_param_upload_is_idempotent(db_conn) -> None:
     """Re-uploading the same scheme + same bond params keeps a single row set."""
     name = "PBAC idempotency"
     bond_params = [{"bond_key": "C-H", "value": -0.11}, {"bond_key": "C-C", "value": -0.13}]
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCCCCCCCCO",
@@ -3512,14 +3507,14 @@ def test_repeated_bond_param_upload_is_idempotent(db_engine) -> None:
         }
 
 
-def test_repeated_component_param_upload_is_idempotent(db_engine) -> None:
+def test_repeated_component_param_upload_is_idempotent(db_conn) -> None:
     """Re-uploading the same scheme + same component params keeps a single row set."""
     name = "Melius idempotency"
     component_params = [
         {"component_kind": "atom_corr", "key": "C", "value": -0.001},
         {"component_kind": "bond_corr_length", "key": "C-H", "value": 0.04},
     ]
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         bundle_a = ComputedSpeciesUploadRequest(
             **_bundle_with_sp_calc(
                 smiles="BrCCCCCCCCCCCCCCO",
@@ -3604,7 +3599,7 @@ def _deuterated_methyl_request(second_conformer_isotopes: dict[int, int] | None)
     )
 
 
-def test_every_conformer_geometry_is_isotope_checked(db_engine) -> None:
+def test_every_conformer_geometry_is_isotope_checked(db_conn) -> None:
     """A later conformer cannot smuggle in an all-protium geometry.
 
     Only ``conformers[0]`` used to be cross-checked, so a deuterated entry
@@ -3612,16 +3607,16 @@ def test_every_conformer_geometry_is_isotope_checked(db_engine) -> None:
     analysis reading those geometries would compute a different molecule
     from the one the identity names.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         with pytest.raises(ValueError, match="does not match"):
             persist_computed_species_upload(
                 session, _deuterated_methyl_request(second_conformer_isotopes=None)
             )
 
 
-def test_consistently_labelled_conformers_still_upload(db_engine) -> None:
+def test_consistently_labelled_conformers_still_upload(db_conn) -> None:
     """Regression guard: matching labels on every conformer still succeed."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_computed_species_upload(
             session, _deuterated_methyl_request(second_conformer_isotopes={2: 2})
         )

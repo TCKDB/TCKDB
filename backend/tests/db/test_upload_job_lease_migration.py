@@ -70,3 +70,11 @@ def test_lease_upgrade_recovers_processing_rows_and_creates_index(db_engine, mon
                     {"ids": inserted_ids},
                 )
         engine.dispose()
+        # Put the schema back where this test found it. It downgrades the
+        # *per-run database every other test in the process is using*, and
+        # ``CURRENT_HEAD`` above is a historical revision — stopping there
+        # leaves every later migration un-applied, which is how this one file
+        # used to take the rest of the suite down with it
+        # (``species_entry.isotope_key does not exist``, hundreds of tests
+        # later, in files with nothing to do with upload jobs).
+        command.upgrade(config, "head")

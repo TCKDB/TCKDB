@@ -80,7 +80,7 @@ def _request(*, reactants: list[dict], products: list[dict]) -> ReactionUploadRe
 # ---------------------------------------------------------------------------
 
 
-def test_associative_detachment_deposits(db_engine) -> None:
+def test_associative_detachment_deposits(db_conn) -> None:
     """``OH- + H -> H2O + e-``. The reaction the refusal was really about.
 
     Atoms: OH2 on both sides, the electron contributing none. Charge: -1 on
@@ -89,7 +89,7 @@ def test_associative_detachment_deposits(db_engine) -> None:
     the second one true.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -98,7 +98,7 @@ def test_associative_detachment_deposits(db_engine) -> None:
             assert entry.id is not None
 
 
-def test_the_same_reaction_without_its_electron_is_still_refused(db_engine) -> None:
+def test_the_same_reaction_without_its_electron_is_still_refused(db_conn) -> None:
     """The check did not go soft. Omit the electron and the deposit still fails.
 
     This is the pairing that makes the tier claim honest: the rule now refuses
@@ -107,7 +107,7 @@ def test_the_same_reaction_without_its_electron_is_still_refused(db_engine) -> N
     participant list happened to be inexpressible.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             with pytest.raises(ValueError) as excinfo:
                 persist_reaction_upload(
@@ -121,14 +121,14 @@ def test_the_same_reaction_without_its_electron_is_still_refused(db_engine) -> N
     assert "pseudo" not in message
 
 
-def test_an_electron_may_be_a_reactant(db_engine) -> None:
+def test_an_electron_may_be_a_reactant(db_conn) -> None:
     """Dissociative attachment: ``e- + H2 -> H- + H``.
 
     Charge -1 both sides; atoms H2 both sides. Nothing about the electron's
     handling depends on which side of the arrow it sits on.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -137,7 +137,7 @@ def test_an_electron_may_be_a_reactant(db_engine) -> None:
             assert entry.id is not None
 
 
-def test_two_electrons_carry_a_stoichiometric_coefficient(db_engine) -> None:
+def test_two_electrons_carry_a_stoichiometric_coefficient(db_conn) -> None:
     """``[O-2] -> O + 2 e-``. A two-electron process needs two electrons.
 
     Both electrons resolve to the same species row and are compressed into a
@@ -147,7 +147,7 @@ def test_two_electrons_carry_a_stoichiometric_coefficient(db_engine) -> None:
     correct chemistry.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -164,7 +164,7 @@ def test_two_electrons_carry_a_stoichiometric_coefficient(db_engine) -> None:
             assert electron_rows[0].stoichiometry == 2
 
 
-def test_the_electron_is_part_of_the_reaction_identity(db_engine) -> None:
+def test_the_electron_is_part_of_the_reaction_identity(db_conn) -> None:
     """It is a participant row, so it is inside the stoichiometry hash.
 
     ``A -> B`` and ``A -> B + e-`` are different reactions and must not dedupe
@@ -173,7 +173,7 @@ def test_the_electron_is_part_of_the_reaction_identity(db_engine) -> None:
     makes that automatic.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             with_electron = persist_reaction_upload(
                 session,
@@ -193,7 +193,7 @@ def test_the_electron_is_part_of_the_reaction_identity(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_an_electron_does_not_switch_off_elemental_balance(db_engine) -> None:
+def test_an_electron_does_not_switch_off_elemental_balance(db_conn) -> None:
     """The whole risk of this feature, pinned.
 
     ``OH- + H + CH4 -> H2O + e-`` has a carbon and four hydrogens that simply
@@ -204,7 +204,7 @@ def test_an_electron_does_not_switch_off_elemental_balance(db_engine) -> None:
     adding an electron to it.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             before = session.scalar(select(func.count()).select_from(ChemReaction))
             with pytest.raises(ValueError) as excinfo:
@@ -220,7 +220,7 @@ def test_an_electron_does_not_switch_off_elemental_balance(db_engine) -> None:
             assert after == before
 
 
-def test_an_electron_does_not_switch_off_charge_conservation(db_engine) -> None:
+def test_an_electron_does_not_switch_off_charge_conservation(db_conn) -> None:
     """``OH- + H -> H2O + 2 e-`` releases one electron too many.
 
     Atoms balance, so only the charge rule can catch it: -1 on the left
@@ -228,7 +228,7 @@ def test_an_electron_does_not_switch_off_charge_conservation(db_engine) -> None:
     expressible, never optional.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             with pytest.raises(ValueError) as excinfo:
                 persist_reaction_upload(
@@ -245,7 +245,7 @@ def test_an_electron_does_not_switch_off_charge_conservation(db_engine) -> None:
 
 
 def test_a_pseudo_participant_still_exempts_and_an_electron_still_does_not(
-    db_engine,
+    db_conn,
 ) -> None:
     """The contrast, in one place, on the same unbalanced reaction.
 
@@ -259,12 +259,12 @@ def test_a_pseudo_participant_still_exempts_and_an_electron_still_does_not(
         "products": [_WATER, _ELECTRON],
     }
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             with pytest.raises(ValueError):
                 persist_reaction_upload(session, _request(**unbalanced))
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             # Same reaction, with a lumped construct standing in for the
             # electron. The composition is now declared unknowable, so nothing
@@ -355,7 +355,7 @@ def test_an_electron_payload_may_not_contradict_itself(payload, reason) -> None:
         SpeciesEntryIdentityPayload(**payload)
 
 
-def test_every_electron_deposit_resolves_to_the_one_electron(db_engine) -> None:
+def test_every_electron_deposit_resolves_to_the_one_electron(db_conn) -> None:
     """There is one electron, so there is one row, with no molecular graph.
 
     ``smiles`` holds the reserved token and ``inchi_key`` a sentinel that
@@ -363,7 +363,7 @@ def test_every_electron_deposit_resolves_to_the_one_electron(db_engine) -> None:
     graph-derived column of the entry is NULL, because there is no graph.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             detachment = persist_reaction_upload(
                 session,
@@ -400,9 +400,9 @@ def test_every_electron_deposit_resolves_to_the_one_electron(db_engine) -> None:
             assert entries[0].isotope_key is None
 
             # It is a participant of both reactions, not a decoration on one.
-            # Asserted per reaction rather than as a total: ``db_engine`` is
-            # session-scoped and these tests commit, so other reactions in
-            # this file share the one electron row.
+            # Asserted per reaction rather than as a total: both reactions in
+            # this test share the one electron row, so a total would be a
+            # statement about this test's own arithmetic, not about linkage.
             participating = set(
                 session.scalars(
                     select(ReactionParticipant.reaction_id).where(

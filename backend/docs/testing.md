@@ -136,10 +136,22 @@ matters when diagnosing cross-file failures (see
 
 - `db_session` / `db_conn` / `client` roll back per test. Rows written
   through these never outlive the test.
-- The session-scoped `db_engine` fixture does **not**. Around 45 test
-  files use it with `with session.begin():`, which commits, so the shared
-  test database genuinely accumulates committed rows for the whole
-  pytest session.
+- The session-scoped `db_engine` fixture does **not**. Test files that
+  use it with `with session.begin():` commit, so the shared test
+  database genuinely accumulates committed rows for the whole pytest
+  session. Those files must delete what they wrote, in a fixture
+  `finally` — see "Isolation contract" below.
+
+All of `tests/workflows/` is now in the first tier and is held there by a
+tripwire in [`tests/workflows/conftest.py`](../tests/workflows/conftest.py)
+that fails any test in that tree which commits. It used to be in the second:
+running `test_network_pdep_upload.py` before `test_computed_reaction_upload.py`
+left fifteen committed `type=irc` calculations behind and five tests that
+locate "the" IRC calculation with an unqualified query then asserted against
+the wrong row — deterministically, under `-p no:randomly`, with no seed
+involved. The same residue accounted for every one of the 75 failures and 47
+errors that `pytest tests/workflows/ tests/services/` produced; that
+combination is green now.
 
 Two consequences worth remembering. Committed rows from tier two are
 visible to every later test file in the same run. And rollback does not
@@ -285,6 +297,64 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
   external storage (MinIO) skip themselves when MinIO is not
   reachable — that's expected on a workstation without the dev
   container running.
+
+### Isolation contract: what a test may leave behind
+
+The database is created once per pytest process and shared by every test
+in it. **Nothing a test writes may outlive it**, because the next test
+cannot know what ran before it. Three fixtures deliver that, and a test
+should use one of them rather than opening its own connection:
+
+| Fixture | What you get | Use it when |
+|---|---|---|
+| `db_conn` | A `Connection` inside a transaction rolled back at teardown, with a SAVEPOINT already open so `Session(db_conn)` nests instead of joining | Anything that persists rows — this is the default, and what all of `tests/workflows/` uses |
+| `client` / `db_session` | The same, plus a `TestClient` whose `get_db`/`get_write_db` are bound to it | Anything going through a route |
+| `db_engine` | The raw session-scoped `Engine` | Only when a test genuinely needs **two concurrent transactions** — a race, an advisory lock, a `READ COMMITTED` visibility check |
+
+`Session(db_conn)` keeps working with the ordinary
+`with Session(...) as s, s.begin(): ...` idiom: because `db_conn` is inside a
+SAVEPOINT, SQLAlchemy's default `join_transaction_mode` resolves to
+`create_savepoint`, so the session's commit stays inside the per-test
+transaction and its rollback (including the implicit one when a test asserts
+that an upload raises) undoes only its own work.
+
+A test that takes `db_engine` **commits for real and must clean up after
+itself**, in a fixture `finally` so it also cleans up when the test fails.
+`tests/services/test_concurrent_deposit_isolation.py` and
+`tests/services/test_record_review_write_isolation.py` show the shape.
+
+The one thing a test cannot clean up is an append-only table.
+`record_review_event` and `scientific_record_supersession` carry a
+`BEFORE UPDATE OR DELETE` trigger (`tckdb_reject_mutation`, revision
+`c6f2a9d4e7b1`), and the scientific tables additionally refuse `TRUNCATE`, so
+the rows the record-review race tests commit cannot be removed by any
+test-level code. Deleting them would require the harness to disable a
+production integrity guard — which would leave that guarantee unenforced in
+the very suite meant to enforce it. **The harness answer is the per-run
+disposable database**: `_recreate_test_database` at session start and
+`_drop_test_database` at session end, plus the startup sweep above. Tests in
+that position must confine themselves to a reserved, non-colliding id band
+(as `test_record_review_write_isolation.py` does) so the residue can never be
+mistaken for another test's data, and no test may make an *absolute*
+unqualified count over those tables — before/after deltas only.
+
+The other thing that outlives a test is **the schema itself**. The migration
+round-trip tests in `tests/db/` run `alembic downgrade` against the per-run
+database the whole process shares, so they must upgrade back to `head` — not
+to the revision they were written about — in a `finally`. Stopping at a
+historical revision leaves every migration after it un-applied for the rest of
+the session, and the failure surfaces hundreds of tests later as
+`column ... does not exist` in files that have nothing to do with migrations.
+That single omission was what made `make test-full` unusable; see
+`tests/db/test_dataset_release_migration.py::_restore_head`.
+
+Running Alembic in-process also reconfigures **logging**: `alembic/env.py`
+calls `logging.config.fileConfig`, which by default disables existing loggers
+and replaces the root handlers — including the one `caplog` reads. Every
+`caplog` assertion in the process comes back empty afterwards, in trees with
+no connection to migrations. `tests/db/conftest.py` neutralises `fileConfig`
+for that tree; a future in-process Alembic caller anywhere else needs the same
+fixture moved up.
 
 ## Test policy
 
