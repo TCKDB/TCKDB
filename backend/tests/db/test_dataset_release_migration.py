@@ -49,6 +49,20 @@ def _configure(db_engine, monkeypatch) -> Config:
     return Config(str(REPO_ROOT / "alembic.ini"))
 
 
+def _restore_head(config: Config) -> None:
+    """Put the shared test database back at ``head``, not at ``CURRENT_HEAD``.
+
+    These tests downgrade the *per-run database every other test in the process
+    is using*, so restoring it is not optional. Restoring to ``CURRENT_HEAD``
+    is not enough either: that is a historical revision, and every migration
+    after it stays un-applied, which is how one file in ``tests/db/`` used to
+    take the rest of the suite down with it — ``species_entry.isotope_key does
+    not exist`` and similar, hundreds of tests later, in files that had nothing
+    to do with releases.
+    """
+    command.upgrade(config, "head")
+
+
 def _table_names(connection) -> set[str]:
     return set(
         connection.scalars(
@@ -87,7 +101,7 @@ def test_downgrade_then_upgrade_round_trips(db_engine, monkeypatch):
             assert set(_OWNED_ENUMS) <= _enum_names(connection)
     finally:
         engine.dispose()
-        command.upgrade(config, CURRENT_HEAD)
+        _restore_head(config)
 
 
 def test_downgrade_refuses_to_orphan_a_published_citation(db_engine, monkeypatch):
@@ -140,7 +154,7 @@ def test_downgrade_refuses_to_orphan_a_published_citation(db_engine, monkeypatch
                 text("DELETE FROM app_user WHERE username = 'release-migration-user'")
             )
         engine.dispose()
-        command.upgrade(config, CURRENT_HEAD)
+        _restore_head(config)
 
 
 def test_downgrade_also_refuses_when_the_release_was_withdrawn(
@@ -202,7 +216,7 @@ def test_downgrade_also_refuses_when_the_release_was_withdrawn(
                 text("DELETE FROM app_user WHERE username = 'release-withdrawn-user'")
             )
         engine.dispose()
-        command.upgrade(config, CURRENT_HEAD)
+        _restore_head(config)
 
 
 def test_append_only_tables_have_both_row_and_truncate_triggers(db_engine):
