@@ -14,13 +14,24 @@ the warning is all that path can honestly offer, so it says so rather than
 telling a depositor to fill in a field that does not exist: see
 ``_PDEP_ABSENCE_REMEDY`` in :mod:`app.workflows.network_pdep`.
 
-Blocking validation is *not* here. A self-contradictory map is refused by
+Validation a map can fail *on its own* is not here. A self-contradictory map is
+refused by
 :func:`tckdb_schemas.fragments.reaction_atom_map.validate_reaction_atom_map`
 at the schema boundary — the payload already holds every XYZ block the checks
 need, so the refusal arrives as a clean 422 before anything is written — and by
 the constraints on ``reaction_atom_map_pair``, which are the same rules stated
 where a second write path cannot get around them. This module resolves keys to
 rows, writes the map, and turns what is *missing* into warnings.
+
+One blocking rule does live here, because it is the only one that cannot be
+seen from the ``atom_map`` fragment alone.
+:func:`validate_atom_map_agrees_with_irc_evidence` compares the map against the
+IRC participant mappings on ``transition_state_validation_evidence``, which the
+same deposit writes through a different surface. Those mappings partition the
+saddle-point atoms among the declared participants and the map refines that
+partition into a bijection, so the two are one claim at two resolutions and may
+not disagree. Both surfaces passed independently until this existed, and
+nothing compared them.
 
 Absence warns
 -------------
@@ -44,6 +55,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from itertools import permutations
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -54,7 +66,9 @@ from tckdb_schemas.upload_warning import UploadWarning
 from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import AtomMapSource, ReactionRole
 from app.db.models.geometry import GeometryAtom
+from app.db.models.reaction import ReactionEntryStructureParticipant
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
+from app.db.models.transition_state import TransitionStateValidationEvidence
 from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
 
 #: Emitted when a reaction with a transition state is deposited without a map.
@@ -66,6 +80,10 @@ SUPPLY_THE_MAP_REMEDY = (
     "If you followed the intrinsic reaction coordinate, you already have "
     "this — supply it as 'atom_map' (ADR 0011)."
 )
+
+#: Raised when a deposit's atom map and its IRC participant mapping give two
+#: different answers about which saddle-point atoms a participant is made of.
+W_ATOM_MAP_CONTRADICTS_IRC_MAPPING = "atom_map_contradicts_irc_mapping"
 
 #: Emitted when a map omits a declared participant molecule entirely.
 W_ATOM_MAP_PARTICIPANTS_INCOMPLETE = "reaction_atom_map_participants_incomplete"
@@ -106,6 +124,7 @@ def persist_reaction_atom_map(
     geometry_id_by_key: Mapping[str, int],
     field_path: str = "atom_map",
     absence_remedy: str = SUPPLY_THE_MAP_REMEDY,
+    subject_label: str = "transition state",
     created_by: int | None = None,
     warnings: list[UploadWarning] | None = None,
 ) -> ReactionAtomMap | None:
@@ -125,6 +144,8 @@ def persist_reaction_atom_map(
         this deposit path's user what to actually do. Overridden by a path
         whose payload schema has nowhere to put a map, so the warning does not
         name a field that does not exist.
+    :param subject_label: Producer-facing name of the saddle point, used by the
+        agreement check below when it has to name what it refused.
     :param warnings: Optional sink for the absence and incompleteness warnings.
     :returns: The persisted map, or ``None`` when none was supplied.
     """
@@ -250,6 +271,18 @@ def persist_reaction_atom_map(
 
     session.flush()
 
+    # Blocking, and it has to run here rather than at the wire boundary: the
+    # IRC partition lives in rows this payload's *other* surface wrote, not in
+    # the atom_map fragment. Called from both seams so the deposit order does
+    # not decide whether the contradiction is seen.
+    validate_atom_map_agrees_with_irc_evidence(
+        session,
+        reaction_entry_id=reaction_entry_id,
+        transition_state_entry_id=transition_state_entry_id,
+        subject_label=subject_label,
+        field_path=field_path,
+    )
+
     _warn_incomplete(
         warnings,
         field_path=field_path,
@@ -266,6 +299,221 @@ def persist_reaction_atom_map(
         transition_state_geometry_id=transition_state_geometry_id,
     )
     return row
+
+
+def validate_atom_map_agrees_with_irc_evidence(
+    session: Session,
+    *,
+    reaction_entry_id: int,
+    transition_state_entry_id: int | None,
+    subject_label: str = "transition state",
+    field_path: str = "atom_map",
+) -> None:
+    """Refuse two contradictory partitions of one saddle point.
+
+    ``transition_state_validation_evidence``'s participant mappings *partition*
+    the saddle-point atoms among the declared participants — "TS atoms 1,2,3
+    belong to reactant 1". An atom map says which reactant atom each of those
+    saddle-point atoms **is**. As
+    :mod:`app.db.models.reaction_atom_map` puts it, the atom map is "the
+    refinement of that partition into a bijection": they are one claim at two
+    resolutions, so a refinement that contradicts what it refines is a
+    contradiction rather than a difference of detail. Until this existed both
+    could be deposited on the same saddle point, stating incompatible
+    partitions, and each passed on its own because nothing compared them.
+
+    Reads both surfaces from the database rather than from either caller's
+    payload, so it gives the same verdict from whichever seam runs second — see
+    the ordering note on the call sites.
+
+    What is compared, and what deliberately is not
+    ----------------------------------------------
+    Only saddle-point atoms *both* surfaces speak about. The rule is a subset
+    containment per participant, not an equality, and that is what makes
+    partiality safe:
+
+    * **A partial atom map is not a contradiction.** A map covering three of a
+      molecule's five atoms, or omitting a participant altogether, simply says
+      nothing about the rest; the coverage guard next door already reports that
+      as ``reaction_atom_map_participants_incomplete`` /
+      ``reaction_atom_map_atoms_incomplete``. Absence is not disagreement.
+    * **An absent IRC mapping is not a contradiction.** The mappings are
+      optional on every path. A reaction releasing a free electron *must* omit
+      them — ``TransitionStateValidationEvidenceIn`` refuses an empty atom list
+      and ``validate_ts_evidence_set`` requires every declared participant to be
+      named, so a zero-atom participant cannot be expressed at all (recorded as
+      the divergence on ``CHECK_TS_IRC_MAPPING_ELEMENTS``). Such a deposit
+      carries a map and no partition, and must still be accepted.
+    * **A barrierless channel has neither.** Both legs of a map run toward the
+      saddle point, so a reaction with no transition state has no map to compare
+      and no evidence to compare it with.
+    * **Failed evidence is not compared.** ``passed=False`` records are skipped,
+      matching ``validate_ts_evidence_participant_composition``: a mapping that
+      does not claim to be evidence is not contradicted by anything, and
+      ``validate_ts_evidence_set`` only holds *passing* mappings to covering
+      every atom, so a failed one may be partial or exploratory by design.
+
+    Indistinguishable participants
+    ------------------------------
+    Two participants on the same side that are the same species entry are
+    interchangeable, and which one a depositor called "reactant 1" is arbitrary
+    in each surface independently. A disagreement that a permutation *within
+    such a group* would resolve is a labelling difference, not a contradiction,
+    so it is not refused. The partition itself is still checked: swapping one
+    atom between two identical methyls changes which atoms form a molecule and
+    no permutation repairs that. Symmetry *inside* one molecule never reaches
+    this check at all, because the comparison is between sets of saddle-point
+    atoms rather than between per-atom bijections.
+
+    :param reaction_entry_id: The micro reaction both surfaces describe.
+    :param transition_state_entry_id: The saddle point both surfaces describe.
+        ``None`` compares nothing.
+    :raises ValueError: If the two surfaces assign a saddle-point atom to
+        different participants.
+    """
+
+    if transition_state_entry_id is None:
+        return
+
+    atom_map_id = session.execute(
+        select(ReactionAtomMap.id).where(
+            ReactionAtomMap.reaction_entry_id == reaction_entry_id,
+            ReactionAtomMap.transition_state_entry_id == transition_state_entry_id,
+        )
+    ).scalar_one_or_none()
+    if atom_map_id is None:
+        return
+
+    evidence_rows = session.execute(
+        select(
+            TransitionStateValidationEvidence.reactant_participant_mapping,
+            TransitionStateValidationEvidence.product_participant_mapping,
+        ).where(
+            TransitionStateValidationEvidence.transition_state_entry_id
+            == transition_state_entry_id,
+            TransitionStateValidationEvidence.passed.is_(True),
+        )
+    ).all()
+    if not evidence_rows:
+        return
+
+    slot_by_participant_id: dict[int, tuple[ReactionRole, int]] = {}
+    species_by_slot: dict[tuple[ReactionRole, int], int | None] = {}
+    for participant_id, role, participant_index, species_entry_id in session.execute(
+        select(
+            ReactionEntryStructureParticipant.id,
+            ReactionEntryStructureParticipant.role,
+            ReactionEntryStructureParticipant.participant_index,
+            ReactionEntryStructureParticipant.species_entry_id,
+        ).where(
+            ReactionEntryStructureParticipant.reaction_entry_id == reaction_entry_id
+        )
+    ).all():
+        slot = (role, participant_index)
+        slot_by_participant_id[participant_id] = slot
+        species_by_slot[slot] = species_entry_id
+
+    map_claims: dict[tuple[ReactionRole, int], set[int]] = {}
+    for structure_participant_id, ts_atom_index in session.execute(
+        select(
+            ReactionAtomMapPair.structure_participant_id,
+            ReactionAtomMapPair.ts_atom_index,
+        ).where(ReactionAtomMapPair.atom_map_id == atom_map_id)
+    ).all():
+        slot = slot_by_participant_id.get(structure_participant_id)
+        if slot is None:  # pragma: no cover - composite FK already guarantees it
+            continue
+        map_claims.setdefault(slot, set()).add(ts_atom_index)
+
+    if not map_claims:  # pragma: no cover - a map with no pairs cannot be written
+        return
+
+    for reactant_mapping, product_mapping in evidence_rows:
+        if reactant_mapping is None or product_mapping is None:
+            continue
+        irc_claims: dict[tuple[ReactionRole, int], set[int]] = {}
+        for role, mapping in (
+            (ReactionRole.reactant, reactant_mapping),
+            (ReactionRole.product, product_mapping),
+        ):
+            for participant_key, atom_indices in mapping.items():
+                _, _, index_text = participant_key.partition(":")
+                try:
+                    participant_index = int(index_text)
+                except ValueError:  # pragma: no cover - shape already validated
+                    continue
+                irc_claims[(role, participant_index)] = set(atom_indices)
+        _raise_on_partition_disagreement(
+            map_claims=map_claims,
+            irc_claims=irc_claims,
+            species_by_slot=species_by_slot,
+            subject_label=subject_label,
+            field_path=field_path,
+        )
+
+
+def _raise_on_partition_disagreement(
+    *,
+    map_claims: Mapping[tuple[ReactionRole, int], set[int]],
+    irc_claims: Mapping[tuple[ReactionRole, int], set[int]],
+    species_by_slot: Mapping[tuple[ReactionRole, int], int | None],
+    subject_label: str,
+    field_path: str,
+) -> None:
+    """Compare the two partitions one side at a time, tolerating relabelling."""
+
+    for role in (ReactionRole.reactant, ReactionRole.product):
+        side_claims = {
+            slot: atoms for slot, atoms in irc_claims.items() if slot[0] is role
+        }
+        if not side_claims:
+            continue
+
+        groups: dict[int | None, list[tuple[ReactionRole, int]]] = {}
+        for slot in side_claims:
+            groups.setdefault(species_by_slot.get(slot), []).append(slot)
+
+        for slots in groups.values():
+            slots.sort()
+            mapped = [slot for slot in slots if map_claims.get(slot)]
+            if not mapped:
+                continue
+            # ``tuple(mapped)`` is itself one of these candidates, so reaching
+            # the raise below guarantees the identity assignment failed too.
+            if any(
+                all(
+                    map_claims[claimed] <= side_claims[against]
+                    for claimed, against in zip(mapped, candidate, strict=True)
+                )
+                for candidate in permutations(slots, len(mapped))
+            ):
+                continue
+
+            offender = next(
+                slot
+                for slot in mapped
+                if not map_claims[slot] <= side_claims[slot]
+            )
+            disputed = sorted(map_claims[offender] - side_claims[offender])
+            elsewhere = sorted(
+                {
+                    f"{other[0].value} {other[1]}"
+                    for other in side_claims
+                    if side_claims[other] & set(disputed)
+                }
+            )
+            raise ValueError(
+                f"Transition state '{subject_label}' {field_path} contradicts "
+                "its own IRC participant mapping: the atom map assigns "
+                f"saddle-point atom(s) {disputed} to {offender[0].value} "
+                f"{offender[1]}, which the IRC mapping assigns to "
+                f"{', '.join(elsewhere) or 'no participant'} "
+                f"({W_ATOM_MAP_CONTRADICTS_IRC_MAPPING}). An atom map is the "
+                "refinement of that partition into a bijection, so the two are "
+                "one claim about one saddle point at two resolutions and a "
+                "record cannot assert both. Correct whichever surface is wrong, "
+                "or omit one of them."
+            )
 
 
 def _element_index(
@@ -420,9 +668,80 @@ def _warn_incomplete(
         )
 
 
-CHECK_ATOM_MAP_ABSENT = ScientificCheck(
+CHECK_ATOM_MAP_AGREES_WITH_IRC_MAPPING = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=5,
+    code=W_ATOM_MAP_CONTRADICTS_IRC_MAPPING,
+    asserts=(
+        "Where a deposit carries both an atom map and an IRC participant "
+        "mapping for the same saddle point, they agree about which "
+        "saddle-point atoms each participant is made of."
+    ),
+    tier=CheckTier.block,
+    tier_rationale=(
+        "Definitional, because the two surfaces are one claim at two "
+        "resolutions rather than two claims. An IRC participant mapping "
+        "partitions the saddle-point atoms among the declared participants; an "
+        "atom map is, in this schema's own words, 'the refinement of that "
+        "partition into a bijection'. A refinement that contradicts what it "
+        "refines is not extra detail, it is a record asserting that one saddle "
+        "point is two incompatible things at once, and no correct calculation "
+        "produces both halves of it — the depositor followed one intrinsic "
+        "reaction coordinate, not two. This is the same class of claim as "
+        "``CHECK_TS_IRC_MAPPING_ELEMENTS`` and "
+        "``CHECK_ATOM_MAP_ELEMENT_CONSERVED``, which already block, and leaving "
+        "it advisory would let the pair assert together what neither is allowed "
+        "to assert alone."
+    ),
+    adr="0011, 0008",
+    enforced_by=(
+        PythonCheck(
+            validate_atom_map_agrees_with_irc_evidence,
+            note=(
+                "Called from *both* seams — ``persist_reaction_atom_map`` and "
+                "``persist_transition_state_validation_evidence`` — and reads "
+                "both surfaces from the database rather than from either "
+                "caller's payload, so whichever a deposit writes second "
+                "delivers the same verdict. Today the second is always the "
+                "atom map: the computed-reaction bundle is the only payload "
+                "with an ``atom_map`` field and writes it after the evidence, "
+                "and no path can attach a map to a saddle point deposited "
+                "earlier because every transition-state entry is created fresh "
+                "by the deposit that writes it. Both are incidental orderings, "
+                "so neither is relied on."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Omit one surface, or correct whichever is wrong — the mappings are "
+        "optional on every path and a partial atom map is always accepted. "
+        "Three absences are deliberately *not* disagreements: an atom map that "
+        "omits a participant or leaves atoms unmapped is compared only over "
+        "what it does claim, a transition state with no passing IRC mapping is "
+        "not compared at all, and a barrierless channel has neither surface. "
+        "Two participants on one side that are the same species entry are "
+        "interchangeable, so a disagreement a permutation within that group "
+        "would resolve is treated as arbitrary labelling rather than "
+        "contradiction."
+    ),
+    divergence=(
+        "A reaction releasing a free electron is compared over its atom map "
+        "alone, and silently. ``MoleculeKind.electron`` gives a participant "
+        "with no atoms, which neither surface can express — "
+        "``TransitionStateValidationEvidenceIn`` refuses an empty atom list "
+        "and ``atom_to_ts`` carries ``min_length=1`` — so the IRC mappings must "
+        "be omitted entirely and the atom map must skip that participant. "
+        "There is therefore nothing to compare and nothing said about it, "
+        "which is correct but weaker than for every other reaction. Widening "
+        "both wire schemas to accept a zero-atom participant is the fix and is "
+        "a wire-package change with its own version bump, tracked alongside "
+        "the identical gap recorded on ``CHECK_TS_IRC_MAPPING_ELEMENTS``."
+    ),
+)
+
+CHECK_ATOM_MAP_ABSENT = ScientificCheck(
+    group="Atom mapping across a reaction",
+    sort_key=6,
     code=W_MISSING_REACTION_ATOM_MAP,
     asserts=(
         "A reaction that has a transition state should say which atom of the "
@@ -462,7 +781,7 @@ CHECK_ATOM_MAP_ABSENT = ScientificCheck(
 
 CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
     group="Atom mapping across a reaction",
-    sort_key=6,
+    sort_key=7,
     code=(W_ATOM_MAP_PARTICIPANTS_INCOMPLETE, W_ATOM_MAP_ATOMS_INCOMPLETE),
     asserts=(
         "A supplied atom map should cover every declared participant molecule, "
@@ -497,8 +816,10 @@ CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
 __all__ = [
     "SUPPLY_THE_MAP_REMEDY",
     "W_ATOM_MAP_ATOMS_INCOMPLETE",
+    "W_ATOM_MAP_CONTRADICTS_IRC_MAPPING",
     "W_ATOM_MAP_PARTICIPANTS_INCOMPLETE",
     "W_MISSING_REACTION_ATOM_MAP",
     "ResolvedAtomMapParticipant",
     "persist_reaction_atom_map",
+    "validate_atom_map_agrees_with_irc_evidence",
 ]

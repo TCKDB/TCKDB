@@ -624,7 +624,7 @@ CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM = ScientificCheck(
 
 CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
     group="Atom mapping across a reaction",
-    sort_key=7,
+    sort_key=8,
     code=None,
     asserts=(
         "An atom map records whether a human asserted it or an algorithm "

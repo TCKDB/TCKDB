@@ -64,11 +64,11 @@ disagree about a line number, this one is right by construction.
 
 | Tier | Entries | Meaning |
 | --- | --- | --- |
-| `block` | 15 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
+| `block` | 16 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 8 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `review` | 0 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **28** | |
+| **total** | **29** | |
 
 ## Recorded divergences
 
@@ -78,7 +78,8 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - **[7]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
 - **[10]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
 - **[14]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
-- **[26]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+- **[21]** Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
+- **[27]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
 
@@ -259,7 +260,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_calculation_geometry` — `backend/app/services/geometry_validation.py:120`
+- `validate_calculation_geometry` — `backend/app/services/geometry_validation.py:121`
   *Species-owned `opt` calculations only. Transition states are deliberately excluded, having no canonical SMILES to compare against. Best-effort by policy: a missing SMILES, a missing output geometry, unparseable coordinates or a raising chemistry layer all write nothing and let the upload continue. A Kabsch RMSD above 1.0 A against the input geometry is recorded as a separate suspicion signal.*
 
 **Escape hatch.** The whole check is advisory, so there is nothing to escape. What a consumer must not do is read a `fail` row as 'this calculation is scientifically invalid'; it means only that the automated identity validator found a mismatch.
@@ -402,7 +403,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py:36`
+- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py:39`
   *Every path that can carry a transition state routes through this seam — the PDep bundle, the computed-reaction bundle and the standalone transition-state upload — so all three write identical rows and report an identical gap. Before the seam existed only the PDep bundle could deposit the evidence, so a TS uploaded any other way always read back as `irc: absent` even when the depositor had run one.*
 
 **Escape hatch.** None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* record, so evidence that was run and failed is stored and still warns.
@@ -497,7 +498,26 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 *(This check raises prose with no machine-readable code. Recorded as a gap rather than invented, because a code that appears in no message is a code no client can match on.)*
 
-### 21. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
+### 21. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `atom_map_contradicts_irc_mapping` |
+| **Governing ADR** | 0011, 0008 |
+
+**Why this tier.** Definitional, because the two surfaces are one claim at two resolutions rather than two claims. An IRC participant mapping partitions the saddle-point atoms among the declared participants; an atom map is, in this schema's own words, 'the refinement of that partition into a bijection'. A refinement that contradicts what it refines is not extra detail, it is a record asserting that one saddle point is two incompatible things at once, and no correct calculation produces both halves of it — the depositor followed one intrinsic reaction coordinate, not two. This is the same class of claim as `CHECK_TS_IRC_MAPPING_ELEMENTS` and `CHECK_ATOM_MAP_ELEMENT_CONSERVED`, which already block, and leaving it advisory would let the pair assert together what neither is allowed to assert alone.
+
+**Enforced at.**
+
+- `validate_atom_map_agrees_with_irc_evidence` — `backend/app/services/reaction_atom_map.py:304`
+  *Called from *both* seams — `persist_reaction_atom_map` and `persist_transition_state_validation_evidence` — and reads both surfaces from the database rather than from either caller's payload, so whichever a deposit writes second delivers the same verdict. Today the second is always the atom map: the computed-reaction bundle is the only payload with an `atom_map` field and writes it after the evidence, and no path can attach a map to a saddle point deposited earlier because every transition-state entry is created fresh by the deposit that writes it. Both are incidental orderings, so neither is relied on.*
+
+**Escape hatch.** Omit one surface, or correct whichever is wrong — the mappings are optional on every path and a partial atom map is always accepted. Three absences are deliberately *not* disagreements: an atom map that omits a participant or leaves atoms unmapped is compared only over what it does claim, a transition state with no passing IRC mapping is not compared at all, and a barrierless channel has neither surface. Two participants on one side that are the same species entry are interchangeable, so a disagreement a permutation within that group would resolve is treated as arbitrary labelling rather than contradiction.
+
+**Recorded divergence.** A reaction releasing a free electron is compared over its atom map alone, and silently. `MoleculeKind.electron` gives a participant with no atoms, which neither surface can express — `TransitionStateValidationEvidenceIn` refuses an empty atom list and `atom_to_ts` carries `min_length=1` — so the IRC mappings must be omitted entirely and the atom map must skip that participant. There is therefore nothing to compare and nothing said about it, which is correct but weaker than for every other reaction. Widening both wire schemas to accept a zero-atom participant is the fix and is a wire-package change with its own version bump, tracked alongside the identical gap recorded on `CHECK_TS_IRC_MAPPING_ELEMENTS`.
+
+### 22. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
 | Field | Value |
 | --- | --- |
@@ -509,12 +529,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `_warn_absent` — `backend/app/services/reaction_atom_map.py:309`
+- `_warn_absent` — `backend/app/services/reaction_atom_map.py:557`
   *A reaction with no transition state is not warned about: both legs of a map run toward the saddle point, so a barrierless channel has nothing to map onto and a warning it could never satisfy would train depositors to ignore the one that matters. The PDep bundle has no `atom_map` field yet, so on that path the warning carries a different remedy sentence rather than naming a field that does not exist.*
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
 
-### 22. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
+### 23. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
 | Field | Value |
 | --- | --- |
@@ -526,12 +546,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `_warn_incomplete` — `backend/app/services/reaction_atom_map.py:340`
+- `_warn_incomplete` — `backend/app/services/reaction_atom_map.py:588`
   *Two codes from one seam: `reaction_atom_map_participants_incomplete` when a declared molecule is missing from the map entirely, `reaction_atom_map_atoms_incomplete` when a mapped participant leaves its own atoms unmapped or a leg leaves saddle-point atoms claimed by nobody.*
 
 **Escape hatch.** None.
 
-### 23. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
+### 24. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 | Field | Value |
 | --- | --- |
@@ -554,7 +574,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 24. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 25. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
 
 | Field | Value |
 | --- | --- |
@@ -575,7 +595,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Statistical mechanics
 
-### 25. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
+### 26. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
 
 | Field | Value |
 | --- | --- |
@@ -596,7 +616,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Pressure-dependent networks
 
-### 26. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+### 27. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 | Field | Value |
 | --- | --- |
@@ -617,7 +637,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 27. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
+### 28. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -636,7 +656,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Reproducibility
 
-### 28. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 29. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |

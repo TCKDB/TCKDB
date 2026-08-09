@@ -614,6 +614,11 @@ def persist_computed_reaction_upload(
             for species_key, row in structure_participants
         ],
         geometry_id_by_key=geometry_key_to_id,
+        subject_label=(
+            (request.transition_state.label or "transition state")
+            if request.transition_state is not None
+            else "transition state"
+        ),
         created_by=created_by,
         warnings=sp_energy_warnings,
     )
