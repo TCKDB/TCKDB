@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Iterator
 
 import pytest
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.db.models.common import KineticsDegeneracyConvention
@@ -34,7 +35,6 @@ from app.services.contribution_bundle_export import (
     export_kinetics_bundle,
     export_thermo_bundle,
 )
-from app.services.record_review import ReviewPolicy
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
 
@@ -67,19 +67,8 @@ def _isolated_session(db_engine) -> Iterator[Session]:
 # ---------------------------------------------------------------------------
 
 
-def _seed_thermo(
-    session: Session,
-    *,
-    smiles: str,
-    note: str,
-    review_policy: ReviewPolicy | None = ReviewPolicy(),
-) -> int:
-    """Persist one thermo row via the real upload workflow and return its id.
-
-    ``review_policy`` mirrors ``persist_thermo_upload``'s own default so
-    callers that seed inside a rolled-back transaction exercise the full
-    workflow. The committing CLI fixture passes ``None`` — see the note there.
-    """
+def _seed_thermo(session: Session, *, smiles: str, note: str) -> int:
+    """Persist one thermo row via the real upload workflow and return its id."""
     request = ThermoUploadRequest(
         species_entry={"smiles": smiles, "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
@@ -91,7 +80,7 @@ def _seed_thermo(
         tmax_k=3000.0,
         note=note,
     )
-    thermo = persist_thermo_upload(session, request, review_policy=review_policy)
+    thermo = persist_thermo_upload(session, request)
     session.flush()
     return thermo.id
 
@@ -449,26 +438,29 @@ def _seeded_thermo_for_cli(db_engine) -> int:
     """Commit one thermo row so the CLI subprocess can see it.
 
     The CLI opens its own DB session against the dev/test database, so the
-    fixture must commit (not roll back) and clean up after the test.
+    fixture must commit (not roll back) and clean up after the test. The seed
+    goes through the real upload workflow with its real default review policy —
+    the point of this fixture is that the CLI reads a row produced the way rows
+    are actually produced.
 
-    ``review_policy=None`` keeps that cleanup possible. The default policy
-    would also write ``record_review`` rows plus their ``record_review_event``
-    log, and the log carries an append-only database trigger that refuses
-    ``DELETE`` — so those rows could never be removed again and the committed
-    seed would outlive the test in the shared database. The exporter under
-    test never reads review state, so opting out changes nothing it asserts.
+    That means it also writes ``record_review`` rows and their
+    ``record_review_event`` log, and the log is append-only at the database
+    level (``tckdb_reject_mutation``), so teardown suppresses user triggers for
+    its own transaction with ``session_replication_role = replica`` — scoped to
+    the review ids created after the high-water mark taken below. Same escape
+    hatch, same scoping discipline as
+    ``tests/services/test_record_review_write_isolation.py`` and
+    ``tests/workers/test_upload_worker.py``.
     """
     from app.db.models.species import Species, SpeciesEntry
     from app.db.models.thermo import Thermo
 
     with Session(db_engine) as session:
         with session.begin():
-            thermo_id = _seed_thermo(
-                session,
-                smiles="C#N",
-                note="cli-test-thermo",
-                review_policy=None,
+            before_review_id = (
+                session.scalar(text("SELECT max(id) FROM record_review")) or 0
             )
+            thermo_id = _seed_thermo(session, smiles="C#N", note="cli-test-thermo")
 
     yield thermo_id
 
@@ -477,6 +469,18 @@ def _seeded_thermo_for_cli(db_engine) -> int:
     # back session here would leave the seed row in the test DB and
     # pollute later tests.
     with Session(db_engine) as session, session.begin():
+        session.execute(text("SET LOCAL session_replication_role = replica"))
+        session.execute(
+            text(
+                "DELETE FROM record_review_event WHERE record_review_id IN "
+                "(SELECT id FROM record_review WHERE id > :before_review_id)"
+            ),
+            {"before_review_id": before_review_id},
+        )
+        session.execute(
+            text("DELETE FROM record_review WHERE id > :before_review_id"),
+            {"before_review_id": before_review_id},
+        )
         thermo = session.get(Thermo, thermo_id)
         if thermo is None:
             return
