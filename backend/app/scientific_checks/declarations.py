@@ -76,9 +76,14 @@ from app.services import (
 )
 from app.services import geometry_validation as geometry_validation_service
 from app.services import reaction_atom_map as reaction_atom_map_service
+from app.services.artifact_integrity import record_integrity_failure
+from app.services.artifact_storage import load_artifact_bytes
 from app.services.provenance_warnings import (
     W_NETWORK_WIDE_ENERGY_TRANSFER,
     W_REPORTED_NETWORK_SOLVE,
+)
+from app.services.trust.evaluator import (
+    _detect_calculation_hard_fail as detect_calculation_hard_fail,
 )
 
 # ---------------------------------------------------------------------------
@@ -830,6 +835,99 @@ CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT = ScientificCheck(
     ),
     escape_hatch=None,
 )
+
+# ---------------------------------------------------------------------------
+# Custody of the evidence
+# ---------------------------------------------------------------------------
+
+CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
+    group="Custody of the evidence",
+    sort_key=1,
+    code="artifact_integrity_failed",
+    asserts=(
+        "The bytes TCKDB serves for a stored artifact are the bytes it "
+        "stored, and a record whose evidence is known not to be is labelled "
+        "as such at read time rather than graded as if it were intact."
+    ),
+    tier=CheckTier.label,
+    tier_rationale=(
+        "It cannot block, because the fact does not exist at upload: the "
+        "artifact hashed correctly when it was accepted, and the break "
+        "happened afterwards, in TCKDB's own custody. It cannot be a warning "
+        "either, because a warning annotates the payload for whoever "
+        "deposited it, while the party who needs to know here is every "
+        "future reader of a record the depositor got right. So the "
+        "consequence is a read-time label. It is a *hard* fail rather than "
+        "an advisory one because the alternative is to keep publishing an "
+        "evidence-completeness score computed over bytes TCKDB cannot "
+        "produce — and note what this reason does not say: unlike every "
+        "other hard fail, it does not claim the record is wrong, only that "
+        "the evidence behind it can no longer be shown. The label fires on "
+        "recorded detections only, so its absence is never a verification "
+        "claim; an artifact nobody has read has been checked by nothing."
+    ),
+    adr="0014, 0004, 0002",
+    emitted=True,
+    enforced_by=(
+        PythonCheck(
+            load_artifact_bytes,
+            note=(
+                "Recomputes SHA-256 over every retrieval and compares it "
+                "against the content-addressed key, in constant time. This "
+                "is the detection; it is reached by the approved-byte "
+                "download, the ESS-parameter backfill, archive streaming, "
+                "and the operator verification pass, and by nothing else — "
+                "an object none of those touch is never checked."
+            ),
+        ),
+        PythonCheck(
+            record_integrity_failure,
+            note=(
+                "Turns a detection into an append-only "
+                "``artifact_integrity_event`` row, in its own transaction so "
+                "the record survives the request that discovered it. Carries "
+                "expected-versus-observed digest and size plus the store's "
+                "own ``LastModified`` / ``ETag`` / ``ContentLength``, which "
+                "is what lets an operator separate 'the object was modified "
+                "after write' from 'we never stored what we said we did' "
+                "from 'the store returned wrong bytes on this read'."
+            ),
+        ),
+        PythonCheck(
+            detect_calculation_hard_fail,
+            note=(
+                "Applies the label. Any calculation with a recorded break on "
+                "any of its artifacts hard-fails, ahead of the "
+                "geometry-validation verdict, and the existing "
+                "``source_calculation_hard_failed_for_required_role`` "
+                "propagates that to every product naming the calculation as "
+                "a required source. Reads database rows only — the trust "
+                "rubric's ``artifacts_present`` deliberately does not verify "
+                "bytes, so that a storage outage can never be reported as a "
+                "depositor who failed to upload a log."
+            ),
+        ),
+        DatabaseConstraint(
+            table="artifact_integrity_event",
+            name="ck_artifact_integrity_event_observed_digest_present_iff_read",
+            kind="check",
+            definition=(
+                "(finding = 'object_missing' AND observed_sha256 IS NULL) OR "
+                "(finding <> 'object_missing' AND observed_sha256 IS NOT NULL)"
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None, and deliberately so — there is no legitimate deposit this "
+        "refuses, because it refuses nothing. The corrupt object is never "
+        "deleted or repaired, so the evidence of the incident survives for "
+        "an operator to act on; remediation is re-uploading the original "
+        "bytes under the same digest, which restores the record without "
+        "rewriting history, and the event row remains as the account of "
+        "what happened."
+    ),
+)
+
 
 # ---------------------------------------------------------------------------
 # Reproducibility

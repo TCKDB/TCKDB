@@ -34,6 +34,7 @@ Create Date: 2026-08-09 00:00:00.000000
 from typing import Sequence, Union
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -59,10 +60,13 @@ _CONTEXT_VALUES = (
 
 def upgrade() -> None:
     """Create the integrity-event table and its two enums."""
-    finding = sa.Enum(*_FINDING_VALUES, name=_FINDING_ENUM)
-    finding.create(op.get_bind(), checkfirst=False)
-    context = sa.Enum(*_CONTEXT_VALUES, name=_CONTEXT_ENUM)
-    context.create(op.get_bind(), checkfirst=False)
+    # ``create_type=False`` on the column objects: the types are created
+    # explicitly just below, and ``op.create_table`` would otherwise
+    # auto-create them a second time and fail on DuplicateObject.
+    finding = postgresql.ENUM(*_FINDING_VALUES, name=_FINDING_ENUM, create_type=False)
+    context = postgresql.ENUM(*_CONTEXT_VALUES, name=_CONTEXT_ENUM, create_type=False)
+    finding.create(op.get_bind(), checkfirst=True)
+    context.create(op.get_bind(), checkfirst=True)
 
     op.create_table(
         "artifact_integrity_event",
@@ -81,7 +85,7 @@ def upgrade() -> None:
         sa.Column("object_content_length", sa.BigInteger(), nullable=True),
         sa.Column("artifact_recorded_at", sa.DateTime(timezone=False), nullable=True),
         sa.Column("detail", sa.Text(), nullable=True),
-        sa.Column("created_by", sa.Integer(), nullable=True),
+        sa.Column("created_by", sa.BigInteger(), nullable=True),
         sa.Column(
             "created_at",
             sa.DateTime(timezone=False),

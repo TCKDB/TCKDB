@@ -121,6 +121,18 @@ class CheckTier(str, Enum):
     #: expectations and for absences.
     warn = "warn"
 
+    #: Labels a stored record at read time without refusing anything —
+    #: a :class:`~app.services.trust.models.HardFailReason` in the trust
+    #: evaluator. ADR 0008 names this consequence in prose ("labelling")
+    #: alongside refusal, annotation and referral, but the enum only ever
+    #: carried three of the four, so a position enforced solely at read
+    #: time had no honest tier to declare. It is not ``structural``: the
+    #: record can be represented, it is simply labelled once TCKDB knows
+    #: something about it. Reserved for facts TCKDB observes about a
+    #: record *after* it was accepted, where refusing at upload was never
+    #: possible because the fact did not exist yet.
+    label = "label"
+
     #: Referred to ``machine_review`` under a versioned rubric. ADR 0008
     #: puts every cross-check against external reference data here.
     review = "review"
