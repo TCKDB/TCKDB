@@ -34,7 +34,16 @@ import pytest
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.db.models.common import MoleculeKind, StereoKind
+from app.db.models.calculation import (
+    Calculation,
+    CalculationGeometryValidation,
+)
+from app.db.models.common import (
+    CalculationType,
+    MoleculeKind,
+    StereoKind,
+    ValidationStatus,
+)
 from app.db.models.literature import Literature
 from app.db.models.species import Species
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
@@ -236,12 +245,86 @@ class TestGeometryValidationIsTrulyBestEffort:
             }
             assert found == {f"[He]{MARKER}-geom", f"[He]{MARKER}-geom2"}
 
-    def test_the_function_routes_its_write_through_the_isolation(self) -> None:
-        """Pin the wiring: a future edit must not reintroduce a bare add()."""
-        import inspect
+    def test_the_function_routes_its_write_through_the_isolation(
+        self, db_engine, committed_scratch, monkeypatch
+    ) -> None:
+        """Pin the wiring behaviourally: a bare ``add()`` must not come back.
 
-        source = inspect.getsource(geomval.run_and_persist_geometry_validation)
-        assert "isolated_best_effort(" in source, (
-            "geometry validation persistence must stay inside the best-effort "
-            "isolation; a bare session.add() escapes to the caller's COMMIT"
+        This calls the real ``run_and_persist_geometry_validation`` and makes
+        its verdict row unstorable, by handing it a ``Calculation`` whose id
+        does not exist — so the ``calculation_id`` foreign key fails on the
+        INSERT. The two implementations differ exactly here:
+
+        * inside ``isolated_best_effort`` the INSERT is flushed within a
+          SAVEPOINT, so the failure is absorbed, the function returns ``None``,
+          and the caller's own work still commits;
+        * with a bare ``session.add()`` the row stays pending and its INSERT is
+          emitted by the caller's ``COMMIT`` — which is the shape this test
+          exists to forbid, and which would fail the ``session.commit()`` below
+          and lose the species written before it.
+
+        The predecessor of this test asserted ``"isolated_best_effort("`` was
+        present in ``inspect.getsource(...)``, which passes for a reformat and
+        fails for a rename — it never executed the path it claimed to protect.
+
+        Everything before the persist step is a pure skip-gate on inputs this
+        test does not care about, so the geometry lookups and the chemistry
+        call are stubbed; the write itself is real.
+        """
+        # An id no calculation row will ever have, so the FK cannot resolve.
+        orphan_calculation_id = 2**40
+        calculation = Calculation(
+            id=orphan_calculation_id, type=CalculationType.opt
         )
+
+        class _Link:
+            geometry = object()
+            geometry_id = None
+
+        monkeypatch.setattr(geomval, "_select_output_geometry", lambda s, cid: _Link())
+        monkeypatch.setattr(geomval, "_select_input_geometry", lambda s, cid: None)
+        monkeypatch.setattr(
+            geomval, "_atoms_from_geometry", lambda geometry: (("He", 0.0, 0.0, 0.0),)
+        )
+        monkeypatch.setattr(
+            geomval,
+            "validate_calculation_geometry",
+            lambda **kwargs: geomval.GeometryValidationResult(
+                species_smiles=kwargs["species_smiles"],
+                is_isomorphic=True,
+                rmsd=None,
+                atom_mapping=None,
+                n_mappings=1,
+                validation_status=ValidationStatus.passed,
+                validation_reason=None,
+                rmsd_warning_threshold=None,
+                input_geometry_id=None,
+                output_geometry_id=None,
+            ),
+        )
+
+        with Session(db_engine) as session:
+            session.add(Species(**_species_kwargs("-wiring")))
+
+            assert (
+                geomval.run_and_persist_geometry_validation(
+                    session, calculation, species_smiles=f"[He]{MARKER}"
+                )
+                is None
+            ), "an unstorable verdict must be absorbed, not returned"
+
+            # The caller's commit is where a bare add() would surface.
+            session.commit()
+
+        with Session(db_engine) as verify:
+            assert verify.scalar(
+                select(Species).where(Species.smiles == f"[He]{MARKER}-wiring")
+            ) is not None, (
+                "the upload's own row was lost with the verdict about it"
+            )
+            assert verify.scalar(
+                select(CalculationGeometryValidation).where(
+                    CalculationGeometryValidation.calculation_id
+                    == orphan_calculation_id
+                )
+            ) is None

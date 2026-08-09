@@ -13,8 +13,14 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
+from tckdb_schemas.fragments.identity import (
+    ELECTRON_CHARGE,
+    ELECTRON_MULTIPLICITY,
+    ELECTRON_SMILES,
+)
+
 from app.chemistry.geometry import parse_xyz
-from app.db.models.common import ValidationStatus
+from app.db.models.common import MoleculeKind, StereoKind, ValidationStatus
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
@@ -211,4 +217,104 @@ def test_thermo_upload_schema_rejects_source_calc_key_with_no_declared_calc() ->
             source_calculations=[
                 {"calculation_key": "missing", "role": "sp"},
             ],
+        )
+
+
+# ---------------------------------------------------------------------------
+# Invariant 5: species identity does not carry ``kind``, and nothing reachable
+# needs it to
+# ---------------------------------------------------------------------------
+
+
+def test_species_identity_key_excludes_molecule_kind() -> None:
+    """``uq_species_identity`` and the content-derived public ref agree.
+
+    Species identity is ``(smiles, charge, multiplicity)`` — DR-0031 — and
+    ``Species.kind`` is not part of it. ``_canonical_species`` is keyed on the
+    same tuple (plus ``stereo_kind``, which that constraint makes functionally
+    dependent on it), so the two cannot drift into a state where two rows
+    share a constraint slot but not a ref, or the reverse.
+
+    This test exists so that adding ``kind`` to either side *alone* fails
+    here rather than silently in a hosted database. Making ``kind`` part of
+    species identity is a schema decision — a new unique constraint, a
+    migration, and a story for existing rows — not a ref-generation one.
+    """
+    from app.db.models.species import Species
+    from app.services.public_refs import _canonical_species
+
+    identity = {
+        constraint.name: [column.name for column in constraint.columns]
+        for constraint in Species.__table__.constraints
+        if getattr(constraint, "name", None) == "uq_species_identity"
+    }
+    assert identity["uq_species_identity"] == ["smiles", "charge", "multiplicity"]
+
+    canonical = _canonical_species(
+        Species(
+            kind=MoleculeKind.molecule,
+            smiles="CC",
+            inchi_key="A" * 27,
+            charge=0,
+            multiplicity=1,
+            stereo_kind=StereoKind.achiral,
+        )
+    )
+    assert "kind=" not in canonical.replace("stereo_kind=", "")
+
+
+def test_only_molecule_and_electron_can_reach_a_species_row() -> None:
+    """The write path admits two kinds, and they cannot share one identity.
+
+    ``resolve_species`` is the application's only ``Species`` writer and it
+    canonicalises through ``canonical_species_identity``, which refuses every
+    ``molecule_kind`` but ``molecule`` and ``electron``. The collision the
+    identity key would otherwise permit — a ``pseudo`` row occupying the slot
+    a ``molecule`` needs, silently handing that molecule the pseudo exemption
+    from elemental balance and charge conservation — is therefore unreachable.
+
+    ``electron`` is reachable, and safe for a second, independent reason: its
+    payload validator pins ``electron`` to ``[e-]``/-1/2 in both directions,
+    so it occupies an identity tuple no molecule can express.
+
+    Should ``pseudo`` ever become depositable, this test fails, and the
+    question it fails on is the one worth answering first: ``resolve_species``
+    returns an existing row without comparing its ``kind`` to the payload's,
+    so the first writer's ``kind`` would silently win for every later deposit.
+    """
+    from app.chemistry.species import canonical_species_identity
+
+    electron = SpeciesEntryIdentityPayload(
+        molecule_kind=MoleculeKind.electron,
+        smiles=ELECTRON_SMILES,
+        charge=ELECTRON_CHARGE,
+        multiplicity=ELECTRON_MULTIPLICITY,
+    )
+    assert canonical_species_identity(electron)[0] == ELECTRON_SMILES
+
+    # A molecule may not occupy the electron's identity tuple ...
+    with pytest.raises(ValidationError):
+        SpeciesEntryIdentityPayload(
+            molecule_kind=MoleculeKind.molecule,
+            smiles=ELECTRON_SMILES,
+            charge=ELECTRON_CHARGE,
+            multiplicity=ELECTRON_MULTIPLICITY,
+        )
+    # ... and the electron may not occupy any other.
+    with pytest.raises(ValidationError):
+        SpeciesEntryIdentityPayload(
+            molecule_kind=MoleculeKind.electron,
+            smiles="CC",
+            charge=0,
+            multiplicity=1,
+        )
+
+    with pytest.raises(ValueError, match="only molecule species"):
+        canonical_species_identity(
+            SpeciesEntryIdentityPayload(
+                molecule_kind=MoleculeKind.pseudo,
+                smiles="CC",
+                charge=0,
+                multiplicity=1,
+            )
         )

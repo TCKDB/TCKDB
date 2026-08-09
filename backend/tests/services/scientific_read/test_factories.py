@@ -10,11 +10,14 @@ from __future__ import annotations
 
 from sqlalchemy import select
 
+from app.db.models.common import SpeciesEntryStateKind, StationaryPointKind
+from app.db.models.species import SpeciesEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_literature,
     make_species,
+    make_species_entry,
     make_workflow_tool_release,
     next_inchi_key,
 )
@@ -86,6 +89,50 @@ def test_make_chem_reaction_explicit_hash_override_creates_distinct_row(
     )
     assert forced.id != first.id
     assert forced.public_ref != first.public_ref
+
+
+def test_make_species_entry_is_get_or_create(db_session):
+    """``make_species_entry`` must be get-or-create, like ``make_species``.
+
+    The two are almost always called as a pair. ``make_species`` already
+    returns a pre-existing row for a colliding identity — which is the point,
+    since a shared test database routinely already holds water or argon — so
+    an entry factory that always inserted would violate
+    ``uq_species_entry_species_id`` the moment that happened. That mismatch
+    used to surface as an unexplained ``IntegrityError`` in whichever suite
+    happened to run second.
+    """
+    species = make_species(db_session, smiles="O", inchi_key=next_inchi_key("SEA"))
+    first = make_species_entry(db_session, species)
+    second = make_species_entry(db_session, species)
+    assert first.id == second.id
+
+    entries = db_session.scalars(
+        select(SpeciesEntry).where(SpeciesEntry.species_id == species.id)
+    ).all()
+    assert len(entries) == 1
+
+
+def test_make_species_entry_forks_on_electronic_state(db_session):
+    """Only the discriminators the unique constraint carries fork a row.
+
+    ``electronic_state_kind`` is part of ``uq_species_entry_species_id``, so
+    an excited-state entry is a genuinely different row. ``kind``
+    (``StationaryPointKind``) is *not* part of it — asking for a second entry
+    that differs only in ``kind`` must return the existing row rather than
+    request one the database cannot hold.
+    """
+    species = make_species(db_session, smiles="N", inchi_key=next_inchi_key("SEB"))
+    ground = make_species_entry(db_session, species)
+    excited = make_species_entry(
+        db_session, species, electronic_state_kind=SpeciesEntryStateKind.excited
+    )
+    assert ground.id != excited.id
+
+    same_row = make_species_entry(
+        db_session, species, kind=StationaryPointKind.vdw_complex
+    )
+    assert same_row.id == ground.id
 
 
 def test_make_workflow_tool_release_default_is_duplicate_safe(db_session):

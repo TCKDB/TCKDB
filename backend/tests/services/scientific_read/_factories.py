@@ -183,7 +183,18 @@ def make_species_entry(
     kind: StationaryPointKind = StationaryPointKind.minimum,
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground,
 ) -> SpeciesEntry:
-    """Create a SpeciesEntry row attached to a Species.
+    """Resolve a SpeciesEntry attached to a Species, creating it if absent.
+
+    Get-or-create, for the same reason :func:`make_species` is: the two are
+    almost always called as a pair, and once ``make_species`` returns a row
+    another suite has already committed, a blind ``INSERT`` here violates
+    ``uq_species_entry_species_id`` — which is unique on
+    ``(species_id, stereo_label, electronic_state_kind, electronic_state_label,
+    term_symbol, isotope_key)`` with ``NULLS NOT DISTINCT``. This factory
+    leaves every discriminator but ``electronic_state_kind`` NULL, so the two
+    parameters below are the whole of the identity it can vary. ``kind`` is
+    deliberately not part of the lookup: it is not part of the constraint, so
+    treating it as identity here would ask for a row the database cannot hold.
 
     Populates the RDKit cartridge ``mol`` column from the parent
     species's SMILES so structure-search tests exercise the same
@@ -196,6 +207,19 @@ def make_species_entry(
     treats NULL ``mol`` rows as un-searchable.
     """
     from rdkit import Chem
+
+    existing = session.scalar(
+        select(SpeciesEntry).where(
+            SpeciesEntry.species_id == species.id,
+            SpeciesEntry.stereo_label.is_(None),
+            SpeciesEntry.electronic_state_kind == electronic_state_kind,
+            SpeciesEntry.electronic_state_label.is_(None),
+            SpeciesEntry.term_symbol.is_(None),
+            SpeciesEntry.isotope_key.is_(None),
+        )
+    )
+    if existing is not None:
+        return existing
 
     mol_value: str | None = None
     if species.smiles is not None:
