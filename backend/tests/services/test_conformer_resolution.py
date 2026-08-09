@@ -47,7 +47,8 @@ def test_resolve_conformer_group_takes_advisory_xact_lock(db_conn) -> None:
     with Session(db_conn) as session:
         with session.begin():
             # Set up a real species_entry (and its first conformer group) so the
-            # FK targets exist and the resolve below runs against committed rows.
+            # FK targets exist and the resolve below runs against rows that are
+            # visible to it — flushed within this transaction, not committed.
             persist_conformer_upload(session, _hydrogen_request(label="conf-a"))
             session.flush()
 
