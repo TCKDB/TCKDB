@@ -48,6 +48,12 @@ _TIER_BLURB = {
         "for expectations (which could fire on a correct novel result) and for "
         "absences (an incomplete record is still a true one)."
     ),
+    CheckTier.label: (
+        "Labels a stored record at read time without refusing anything — a "
+        "`HardFailReason` in the trust evaluator. For facts TCKDB observes "
+        "about a record after it was accepted, which no upload-time check "
+        "could have refused because they did not exist yet."
+    ),
     CheckTier.review: (
         "Referred to `machine_review` under a versioned rubric. ADR 0008 puts "
         "every cross-check against external reference data here."
@@ -269,6 +275,7 @@ def _ordered_groups(checks: list[ScientificCheck]) -> list[str]:
         "Rate coefficients",
         "Statistical mechanics",
         "Pressure-dependent networks",
+        "Custody of the evidence",
         "Reproducibility",
     ]
     present = {check.group for check in checks}

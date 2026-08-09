@@ -66,9 +66,10 @@ disagree about a line number, this one is right by construction.
 | --- | --- | --- |
 | `block` | 16 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 8 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
+| `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 0 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **29** | |
+| **total** | **30** | |
 
 ## Recorded divergences
 
@@ -529,7 +530,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `_warn_absent` — `backend/app/services/reaction_atom_map.py:557`
+- `_warn_absent` — `backend/app/services/reaction_atom_map.py:560`
   *A reaction with no transition state is not warned about: both legs of a map run toward the saddle point, so a barrierless channel has nothing to map onto and a warning it could never satisfy would train depositors to ignore the one that matters. The PDep bundle has no `atom_map` field yet, so on that path the warning carries a different remedy sentence rather than naming a field that does not exist.*
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
@@ -546,7 +547,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `_warn_incomplete` — `backend/app/services/reaction_atom_map.py:588`
+- `_warn_incomplete` — `backend/app/services/reaction_atom_map.py:591`
   *Two codes from one seam: `reaction_atom_map_participants_incomplete` when a declared molecule is missing from the map entirely, `reaction_atom_map_atoms_incomplete` when a mapped participant leaves its own atoms unmapped or a leg leaves saddle-point atoms claimed by nobody.*
 
 **Escape hatch.** None.
@@ -654,9 +655,36 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Declare `scope='network_wide'`. The physics behind the old per-well rule was never in dispute — ⟨ΔE⟩down depends on the density of states of the excited well and on the collider's ability to accept internal energy, so argon and helium do not relax the same well identically. The rule was wrong in practice because it confused what the quantity *is* with what a calculation *determined*: the only way to satisfy it was to paste one number once per well, and the repository's own Arkane ingester did exactly that. Those rows are indistinguishable from independently determined values — a provenance loss manufactured by the validation itself, worse than the gap it closed, because an absent value is honest while a duplicated one is a false positive every consumer will faithfully propagate.
 
+## Custody of the evidence
+
+### 29. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `label` |
+| **Code** | `artifact_integrity_failed` |
+| **Governing ADR** | 0014, 0004, 0002 |
+
+**Why this tier.** It cannot block, because the fact does not exist at upload: the artifact hashed correctly when it was accepted, and the break happened afterwards, in TCKDB's own custody. It cannot be a warning either, because a warning annotates the payload for whoever deposited it, while the party who needs to know here is every future reader of a record the depositor got right. So the consequence is a read-time label. It is a *hard* fail rather than an advisory one because the alternative is to keep publishing an evidence-completeness score computed over bytes TCKDB cannot produce — and note what this reason does not say: unlike every other hard fail, it does not claim the record is wrong, only that the evidence behind it can no longer be shown. The label fires on recorded detections only, so its absence is never a verification claim; an artifact nobody has read has been checked by nothing.
+
+**Enforced at.**
+
+- `load_artifact_bytes` — `backend/app/services/artifact_storage.py:395`
+  *Recomputes SHA-256 over every retrieval and compares it against the content-addressed key, in constant time. This is the detection; it is reached by the approved-byte download, the ESS-parameter backfill, archive streaming, and the operator verification pass, and by nothing else — an object none of those touch is never checked.*
+- `record_integrity_observation` — `backend/app/services/artifact_integrity.py:89`
+  *Turns a detection into an append-only `artifact_integrity_event` row, in its own transaction so the record survives the request that discovered it. Carries expected-versus-observed digest and size plus the store's own `LastModified` / `ETag` / `ContentLength`, which is what lets an operator separate 'the object was modified after write' from 'we never stored what we said we did' from 'the store returned wrong bytes on this read'.*
+- `_detect_calculation_hard_fail` — `backend/app/services/trust/evaluator.py:85`
+  *Applies the label. Any calculation with a recorded break on any of its artifacts hard-fails, ahead of the geometry-validation verdict, and the existing `source_calculation_hard_failed_for_required_role` propagates that to every product naming the calculation as a required source. Reads database rows only — the trust rubric's `artifacts_present` deliberately does not verify bytes, so that a storage outage can never be reported as a depositor who failed to upload a log.*
+- `ck_artifact_integrity_event_observed_digest_present_iff_read` (check on `artifact_integrity_event`)
+  `(finding = 'object_missing' AND observed_sha256 IS NULL) OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)`
+- `ck_artifact_integrity_event_verified_requires_matching_digest` (check on `artifact_integrity_event`)
+  `finding <> 'verified' OR observed_sha256 = sha256`
+
+**Escape hatch.** Restore the object. There is no legitimate deposit this refuses — it refuses nothing — but a label that could never be cleared would be a trap, so the door is a later observation rather than an edit: the corrupt object is never deleted or overwritten by TCKDB, and re-uploading the original bytes under the same digest lets the verification pass record a `verified` observation that supersedes the break. A check constraint requires that row to carry a digest matching the key, so the hard fail is cleared by bytes that actually hash correctly and never by an operator asserting that they do. The break row stays as the account of what happened.
+
 ## Reproducibility
 
-### 29. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 30. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |

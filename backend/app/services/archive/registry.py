@@ -19,6 +19,12 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
     {
         "app_user",
         "applied_energy_correction",
+        # Custody observations travel with the science, not with the
+        # operational state. A restore that dropped them would resurrect
+        # as sound every record the source database had labelled
+        # ``artifact_integrity_failed`` — a silent trust regression
+        # created by the archive itself. See ADR 0014.
+        "artifact_integrity_event",
         "applied_energy_correction_component",
         "applied_group_additivity",
         "applied_group_additivity_component",

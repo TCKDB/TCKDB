@@ -22,10 +22,12 @@ from sqlalchemy import (
 )
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
+    ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
@@ -1137,12 +1139,197 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
 
     calculation: Mapped["Calculation"] = relationship(back_populates="artifacts")
 
+    #: Recorded custody breaks for the *object* this row points at.
+    #:
+    #: Joined on ``sha256``, not on a foreign key, and that is the whole
+    #: point. The store is content-addressed: N artifact rows across N
+    #: calculations may share one object, and if that object's bytes stop
+    #: matching their digest then every one of those rows is affected —
+    #: not just the row whose download happened to discover it. A
+    #: per-row FK would let a corrupt object condemn one record and leave
+    #: its N-1 twins reading as sound.
+    #:
+    #: ``lazy="selectin"`` rather than a loader option at each call site.
+    #: Eleven read paths already ``selectinload(Calculation.artifacts)`` on
+    #: the way to a trust evaluation, and a custody break that is only
+    #: visible to the paths someone remembered to annotate is the same
+    #: failure this whole change exists to end. The price is one extra
+    #: indexed ``sha256 IN (...)`` per artifact-loading statement, which
+    #: returns nothing in the normal case; verifying custody is not free
+    #: and this is the bounded, constant version of the bill.
+    integrity_events: Mapped[list["ArtifactIntegrityEvent"]] = relationship(
+        primaryjoin=lambda: foreign(ArtifactIntegrityEvent.sha256)
+        == CalculationArtifact.sha256,
+        viewonly=True,
+        lazy="selectin",
+        order_by="ArtifactIntegrityEvent.id",
+    )
+
     __table_args__ = (
         CheckConstraint(
             "sha256 ~ '^[0-9a-f]{64}$'",
             name="sha256_lower_hex",
         ),
         CheckConstraint("bytes > 0", name="bytes_gt_0"),
+    )
+
+
+class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
+    """One observation about TCKDB's custody of a stored artifact.
+
+    Append-only. A row here says: *at this moment, the bytes behind this
+    content-addressed digest were / were not the bytes TCKDB claims to
+    hold.* A break is not an HTTP incident and not a transient error — it
+    is corruption of stored evidence, or a swapped object, and TCKDB
+    refuses payloads for less. A log line is not a record; this table is.
+
+    Nothing here is ever updated or deleted, including on repair. An
+    object restored to its correct bytes is a **new** observation
+    (``finding='verified'``) that supersedes the older break, and a check
+    constraint requires it to carry a digest matching the key — so a hard
+    fail can be cleared by evidence and never by assertion. The trust
+    evaluator reads the *latest* observation per digest, which is what
+    keeps the label a judgement rather than a trap.
+
+    Keyed by digest, not by row
+    ---------------------------
+    ``sha256`` is NOT NULL and is the primary handle; ``artifact_id`` is
+    nullable and merely names the row that led us to look. In a
+    content-addressed store the unit of corruption is the *object*, and
+    an object may be shared by many ``calculation_artifact`` rows or —
+    on the ``store_artifact`` dedup path — by none yet, because the row
+    that would have referenced it is being refused. Both cases have to be
+    recordable.
+
+    Telling the three causes apart
+    ------------------------------
+    A digest mismatch has three distinct causes with three different
+    remedies, and the row captures enough to separate them without a
+    second investigation:
+
+    ==================================================  ==========================================
+    Evidence in the row                                  Reading
+    ==================================================  ==========================================
+    ``object_last_modified_at`` materially later than    The object was **modified after write**.
+    ``artifact_recorded_at``                             Look for a writer with bucket
+                                                         credentials; the ingest was sound.
+    ``object_last_modified_at`` at or before             We **never stored what we said we did**.
+    ``artifact_recorded_at``, and ``object_etag``        The digest was computed over different
+    consistent with the bytes read                       bytes than were PUT. Look at the ingest
+                                                         path, not the store.
+    ``object_etag`` inconsistent with the bytes read,    The **store returned wrong bytes** on this
+    or ``object_content_length`` disagreeing with        read. The object may still be sound;
+    ``observed_bytes``                                   re-read before condemning it.
+    ==================================================  ==========================================
+
+    ``artifact_recorded_at`` is a *copy* of the artifact row's
+    ``created_at`` taken at detection rather than a join, so the
+    comparison above survives the artifact row being removed and does not
+    depend on a correspondence this table exists to doubt.
+
+    Consequence
+    -----------
+    The existence of a row here is what
+    :class:`~app.services.trust.models.HardFailReason.artifact_integrity_failed`
+    reads. Detection therefore has a read-time consequence for *every*
+    reader of the owning calculation, not only for whoever requested the
+    download. See ``docs/adr/0014-custody-of-stored-evidence.md``.
+    """
+
+    __tablename__ = "artifact_integrity_event"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+
+    #: The content-addressed object whose custody broke. The handle.
+    sha256: Mapped[str] = mapped_column(CHAR(64), nullable=False, index=True)
+
+    #: The row that led us to read the object, when there was one.
+    #: NULL on the ``store_dedup_verification`` path, where the upload
+    #: whose row would have referenced it is being refused.
+    artifact_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("calculation_artifact.id", deferrable=True, initially="IMMEDIATE"),
+        nullable=True,
+        index=True,
+    )
+
+    finding: Mapped[ArtifactIntegrityFinding] = mapped_column(
+        SAEnum(ArtifactIntegrityFinding, name="artifact_integrity_finding"),
+        nullable=False,
+    )
+    detected_during: Mapped[ArtifactIntegrityDetectionContext] = mapped_column(
+        SAEnum(
+            ArtifactIntegrityDetectionContext,
+            name="artifact_integrity_detection_context",
+        ),
+        nullable=False,
+    )
+
+    #: What the database said the object should be, copied at detection.
+    expected_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    #: What was actually read back. NULL when the object was absent.
+    observed_sha256: Mapped[Optional[str]] = mapped_column(CHAR(64), nullable=True)
+    observed_bytes: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+
+    #: Object metadata as the store reported it at detection (HEAD), best
+    #: effort. These three columns are the cause discriminators above; a
+    #: store that cannot be reached for metadata leaves them NULL and the
+    #: row still records that the failure happened.
+    object_last_modified_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
+    object_etag: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    object_content_length: Mapped[Optional[int]] = mapped_column(
+        BigInteger, nullable=True
+    )
+
+    #: Copy of ``calculation_artifact.created_at`` — when TCKDB says it
+    #: took custody. Compared against ``object_last_modified_at``.
+    artifact_recorded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=False), nullable=True
+    )
+
+    #: The verifier's own message. Prose, for the operator; every
+    #: machine-readable fact is in a column above.
+    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    # created_by from CreatedByMixin — the reader who hit it, when a
+    # request actor is in scope. NULL for the sweep.
+    # created_at from TimestampMixin — when it was detected.
+
+    artifact: Mapped[Optional["CalculationArtifact"]] = relationship(
+        foreign_keys=[artifact_id],
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "sha256 ~ '^[0-9a-f]{64}$'",
+            name="sha256_lower_hex",
+        ),
+        CheckConstraint(
+            "observed_sha256 IS NULL OR observed_sha256 ~ '^[0-9a-f]{64}$'",
+            name="observed_sha256_lower_hex",
+        ),
+        # An object that is missing cannot have been read, and an object
+        # whose digest mismatched must say what it read instead —
+        # otherwise the row records an alarm without its evidence.
+        CheckConstraint(
+            "(finding = 'object_missing' AND observed_sha256 IS NULL) "
+            "OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)",
+            name="observed_digest_present_iff_read",
+        ),
+        # A clearing observation has to carry its own proof. Recording
+        # ``verified`` without the matching digest would let an operator
+        # clear a hard fail by assertion, which is precisely the move
+        # this table exists to make impossible.
+        CheckConstraint(
+            "finding <> 'verified' OR observed_sha256 = sha256",
+            name="verified_requires_matching_digest",
+        ),
+        Index(
+            "ix_artifact_integrity_event_sha256_created_at",
+            "sha256",
+            "created_at",
+        ),
     )
 
 

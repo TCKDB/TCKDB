@@ -18,6 +18,7 @@ from app.db.models.calculation import (
     CalculationSPResult,
 )
 from app.db.models.common import (
+    ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationDependencyRole,
     CalculationType,
@@ -80,9 +81,22 @@ def _verified_loader(objects: dict[str, bytes]):
             raise ArtifactStorageUnavailable("missing mocked object")
         content = objects[sha256]
         if not hmac.compare_digest(hashlib.sha256(content).hexdigest(), sha256):
-            raise ArtifactIntegrityError("mocked digest mismatch")
+            raise ArtifactIntegrityError(
+                "mocked digest mismatch",
+                finding=ArtifactIntegrityFinding.digest_mismatch,
+                sha256=sha256,
+                observed_sha256=hashlib.sha256(content).hexdigest(),
+                observed_bytes=len(content),
+            )
         if expected_bytes is not None and len(content) != expected_bytes:
-            raise ArtifactIntegrityError("mocked size mismatch")
+            raise ArtifactIntegrityError(
+                "mocked size mismatch",
+                finding=ArtifactIntegrityFinding.size_mismatch,
+                sha256=sha256,
+                observed_sha256=hashlib.sha256(content).hexdigest(),
+                expected_bytes=expected_bytes,
+                observed_bytes=len(content),
+            )
         return content
 
     return load
@@ -390,7 +404,12 @@ def test_artifact_verification_failure_fails_closed(
         del expected_bytes
         if failure == "unavailable":
             raise ArtifactStorageUnavailable("mock unavailable")
-        raise ArtifactIntegrityError("mock corrupt")
+        raise ArtifactIntegrityError(
+            "mock corrupt",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=_sha256,
+            observed_sha256="0" * 64,
+        )
 
     result = evaluate_reproducibility(
         db_session,

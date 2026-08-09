@@ -91,6 +91,22 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
     """
     if calc.quality is CalculationQuality.rejected:
         return HardFailReason.calculation_rejected
+    # Custody is checked before the science. Every other reason here says
+    # the record contradicts itself; this one says we can no longer
+    # produce the evidence the record rests on, which makes the rest of
+    # the grading a report about bytes we do not have. Reporting a
+    # geometry-validation verdict derived from a log whose stored copy is
+    # corrupt would be the more misleading of the two answers.
+    # The *latest* observation per artifact, not merely "any break ever".
+    # The events table is append-only, so a repaired object is recorded as
+    # a later ``verified`` observation rather than by deleting the break —
+    # and reading "any break" would leave a restored record condemned
+    # forever, which would make this label a trap rather than a judgement.
+    if any(
+        artifact.integrity_events and artifact.integrity_events[-1].finding.is_break
+        for artifact in calc.artifacts
+    ):
+        return HardFailReason.artifact_integrity_failed
     gv = calc.geometry_validation
     if gv is not None and gv.validation_status is ValidationStatus.fail:
         return HardFailReason.geometry_validation_failed

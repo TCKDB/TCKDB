@@ -47,6 +47,7 @@ from sqlalchemy.sql.sqltypes import (
 
 import app.db.models  # noqa: F401 -- register the complete mapper graph
 from app.db.base import Base
+from app.db.models.common import ArtifactIntegrityDetectionContext
 from app.db.types import RDKitMol
 from app.services.archive.registry import (
     EXCLUDED_COLUMNS,
@@ -55,7 +56,12 @@ from app.services.archive.registry import (
     included_column_names,
     included_tables_in_fk_order,
 )
-from app.services.artifact_storage import load_artifact_bytes, store_artifact
+from app.services.artifact_integrity import record_from_error
+from app.services.artifact_storage import (
+    ArtifactIntegrityError,
+    load_artifact_bytes,
+    store_artifact,
+)
 
 ARCHIVE_SCHEMA = "tckdb.archive.v1"
 _MANIFEST_PATH = "manifest.json"
@@ -310,7 +316,20 @@ def _load_blob_spools(session: Session) -> list[_BlobSpool]:
         for sha256, expected_size in sorted(persisted.items()):
             if not _SHA256_RE.fullmatch(sha256):
                 raise ArchiveIntegrityError(f"Malformed artifact sha256: {sha256!r}")
-            content = load_artifact_bytes(sha256, expected_bytes=expected_size)
+            try:
+                content = load_artifact_bytes(sha256, expected_bytes=expected_size)
+            except ArtifactIntegrityError as exc:
+                # An archive export already re-reads and re-verifies every
+                # stored object — it has been a full verification pass all
+                # along, and it threw the answer away. Record the break
+                # before failing the export (ADR 0014); refusing to
+                # archive corrupt evidence is right, but so is knowing
+                # afterwards which object it was.
+                record_from_error(
+                    exc,
+                    detected_during=ArtifactIntegrityDetectionContext.archive,
+                )
+                raise
             actual_sha = hashlib.sha256(content).hexdigest()
             if actual_sha != sha256 or len(content) != expected_size:
                 raise ArchiveIntegrityError(f"Artifact storage returned invalid bytes for sha256={sha256}")

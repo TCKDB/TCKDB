@@ -59688,7 +59688,7 @@
     },
     "/api/v1/scientific/artifacts/{sha256}/download": {
       "get": {
-        "description": "Download curator-approved bytes by their content-addressed digest.\n\nUnlike the metadata search endpoints, which are part of the public\nread surface, raw-artifact bytes are served only to authenticated\ncallers (any valid API key or session): unredacted logs may embed\nproducer-side scratch paths, usernames, and cluster hostnames that\nmust never reach anonymous clients. This gate is unconditional (no\nopt-out flag) so no deployment can accidentally re-expose the bytes;\nsee ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.\nThe digest is still re-verified against the stored bytes below.",
+        "description": "Download curator-approved bytes by their content-addressed digest.\n\nUnlike the metadata search endpoints, which are part of the public\nread surface, raw-artifact bytes are served only to authenticated\ncallers (any valid API key or session): unredacted logs may embed\nproducer-side scratch paths, usernames, and cluster hostnames that\nmust never reach anonymous clients. This gate is unconditional (no\nopt-out flag) so no deployment can accidentally re-expose the bytes;\nsee ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.\nThe digest is still re-verified against the stored bytes below.\n\nWhen that verification fails, this route does more than answer: it\nwrites an ``artifact_integrity_event``, which hard-fails the owning\ncalculation at read time for every subsequent reader. A 502 here is\ntherefore not a private incident between one caller and the store —\nit is a recorded break in TCKDB's custody of the evidence\n(``docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md``).",
         "operationId": "download_approved_artifact_api_v1_scientific_artifacts__sha256__download_get",
         "parameters": [
           {
@@ -59787,7 +59787,7 @@
             "description": "Validation Error"
           },
           "502": {
-            "description": "Stored bytes failed integrity verification."
+            "description": "Stored bytes failed integrity verification. Recorded durably; retrying will not clear it."
           },
           "503": {
             "description": "Artifact storage is unavailable."

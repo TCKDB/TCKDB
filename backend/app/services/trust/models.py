@@ -143,6 +143,23 @@ class HardFailReason(str, Enum):
     invalid_external_symmetry = "invalid_external_symmetry"  # backstop
     invalid_torsion_dimension = "invalid_torsion_dimension"  # backstop
     geometry_validation_failed = "geometry_validation_failed"
+    #: TCKDB has recorded that the bytes behind one of this calculation's
+    #: artifacts do not match their content-addressed digest.
+    #:
+    #: Not a backstop and not a grading outcome — it is a statement about
+    #: *TCKDB's* custody of the evidence, not about the depositor's
+    #: science. Every other reason on this list says the record is
+    #: internally wrong; this one says the record may be fine and we can
+    #: no longer show you what it rests on. It is a hard fail because the
+    #: alternative is to keep serving a completeness score computed over
+    #: evidence we cannot produce.
+    #:
+    #: Driven by ``artifact_integrity_event`` rows, so it asserts only
+    #: what has actually been *detected*. Absence of this reason is not a
+    #: verification claim: an artifact nobody has read has been checked
+    #: by nothing. See ADR 0014 and
+    #: ``backend/scripts/ops/verify_artifact_integrity.py``.
+    artifact_integrity_failed = "artifact_integrity_failed"
     missing_required_identity = "missing_required_identity"
     source_calculation_hard_failed_for_required_role = (
         "source_calculation_hard_failed_for_required_role"

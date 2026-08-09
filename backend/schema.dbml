@@ -23,6 +23,21 @@ enum ArrheniusAUnits {
   m6_mol2_s
 }
 
+enum ArtifactIntegrityDetectionContext {
+  download
+  verification_sweep
+  store_dedup_verification
+  parameter_extraction
+  archive
+}
+
+enum ArtifactIntegrityFinding {
+  digest_mismatch
+  size_mismatch
+  object_missing
+  verified
+}
+
 enum ArtifactKind {
   input
   output_log
@@ -815,6 +830,39 @@ Table applied_group_additivity_component {
   }
 
   Note: 'Per-Benson-group contribution within one applied GA estimation.'
+}
+
+Table artifact_integrity_event {
+  id bigint [pk, not null]
+  sha256 varchar(64) [not null]
+  artifact_id bigint [ref: > calculation_artifact.id]
+  finding ArtifactIntegrityFinding [not null]
+  detected_during ArtifactIntegrityDetectionContext [not null]
+  expected_bytes bigint
+  observed_sha256 varchar(64)
+  observed_bytes bigint
+  object_last_modified_at timestamp
+  object_etag text
+  object_content_length bigint
+  artifact_recorded_at timestamp
+  detail text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    artifact_id [name: 'ix_artifact_integrity_event_artifact_id']
+    sha256 [name: 'ix_artifact_integrity_event_sha256']
+    (sha256, created_at) [name: 'ix_artifact_integrity_event_sha256_created_at']
+  }
+
+  checks {
+    `(finding = 'object_missing' AND observed_sha256 IS NULL) OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)` [name: 'ck_artifact_integrity_event_observed_digest_present_iff_read']
+    `observed_sha256 IS NULL OR observed_sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_artifact_integrity_event_observed_sha256_lower_hex']
+    `sha256 ~ '^[0-9a-f]{64}$'` [name: 'ck_artifact_integrity_event_sha256_lower_hex']
+    `finding <> 'verified' OR observed_sha256 = sha256` [name: 'ck_artifact_integrity_event_verified_requires_matching_digest']
+  }
+
+  Note: 'One observation about TCKDB\'s custody of a stored artifact.'
 }
 
 Table author {
