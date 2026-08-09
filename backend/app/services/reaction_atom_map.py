@@ -63,13 +63,19 @@ from tckdb_schemas.enums import ReactionRole as WireReactionRole
 from tckdb_schemas.fragments.reaction_atom_map import ReactionAtomMapIn
 from tckdb_schemas.upload_warning import UploadWarning
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import AtomMapSource, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction import ReactionEntryStructureParticipant
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
 from app.db.models.transition_state import TransitionStateValidationEvidence
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
 
 #: Emitted when a reaction with a transition state is deposited without a map.
 W_MISSING_REACTION_ATOM_MAP = "reaction_atom_map_absent"
@@ -505,7 +511,8 @@ def _raise_on_partition_disagreement(
                     if side_claims[other] & set(disputed)
                 }
             )
-            raise ValueError(
+            raise CodedValueError(
+                W_ATOM_MAP_CONTRADICTS_IRC_MAPPING,
                 f"Transition state '{subject_label}' {field_path} contradicts "
                 "its own IRC participant mapping: the atom map assigns "
                 f"saddle-point atom(s) {disputed} to {offender[0].value} "
@@ -515,7 +522,13 @@ def _raise_on_partition_disagreement(
                 "refinement of that partition into a bijection, so the two are "
                 "one claim about one saddle point at two resolutions and a "
                 "record cannot assert both. Correct whichever surface is wrong, "
-                "or omit one of them."
+                "or omit one of them.",
+                context={
+                    "disputed_ts_atoms": disputed,
+                    "atom_map_assigns_to": f"{offender[0].value} {offender[1]}",
+                    "irc_mapping_assigns_to": elsewhere,
+                },
+                message_prefix=False,
             )
 
 
@@ -681,6 +694,7 @@ CHECK_ATOM_MAP_AGREES_WITH_IRC_MAPPING = ScientificCheck(
         "saddle-point atoms each participant is made of."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, because the two surfaces are one claim at two "
         "resolutions rather than two claims. An IRC participant mapping "
@@ -751,6 +765,7 @@ CHECK_ATOM_MAP_ABSENT = ScientificCheck(
         "reactants is which atom of the saddle point and of the products."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "Absence, not contradiction. An unmapped reaction is an incomplete "
         "record rather than a false one — the rate constant is still the rate "
@@ -792,6 +807,7 @@ CHECK_ATOM_MAP_INCOMPLETE = ScientificCheck(
         "point."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "Absence again, at finer grain. A partial map is a true-but-partial "
         "record; only a map that contradicts *itself* is refused, and that is "

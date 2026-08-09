@@ -60,6 +60,7 @@ from app.chemistry import species as chemistry_species
 from app.chemistry import units as chemistry_units
 from app.scientific_checks import (
     CheckTier,
+    CodeChannel,
     ConstantThreshold,
     DatabaseConstraint,
     DesignPosition,
@@ -162,6 +163,7 @@ CHECK_TRANSITION_STATE_REACTION_COORDINATE = ScientificCheck(
         "undeclared mode is stiff enough to make that designation meaningless."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, and narrower than what it replaced. ADR 0008's worked "
         "example was ``n_imag == 1``; ADR 0012 retired that, because "
@@ -235,6 +237,7 @@ CHECK_MINIMUM_ZERO_IMAGINARY_MODES = ScientificCheck(
         "modes."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. A covalently bound minimum whose own frequency "
         "evidence reports an imaginary mode is mislabelled: the correct "
@@ -278,6 +281,7 @@ CHECK_VDW_COMPLEX_IMAGINARY_MODE = ScientificCheck(
         "reaction coordinate."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "The carve-out is the scientific content. A van der Waals complex is "
         "held together by intermolecular forces and its stretch, bends and "
@@ -323,6 +327,7 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
         "protocol that produced them, not by counting them."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "The extra modes cannot be classified from the frequency list, so "
         "refusing the deposit would assert a determination the deposit does "
@@ -388,6 +393,7 @@ CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE = ScientificCheck(
         f"{TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm-1 in magnitude."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "ADR 0008's worked counter-example, and the sharpest statement of the "
         "whole rule. A very soft imaginary mode is suspicious — often an "
@@ -453,18 +459,18 @@ _ATOM_MAP_DUAL_ENFORCEMENT = (
 CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=1,
-    code=None,
+    code=wire_atom_map.W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
     asserts=(
         "An atom does not change element on the way across a reaction: carbon "
         "does not map onto nitrogen."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. A map asserting that an element transmutes is a record "
         "that cannot be what it says it is, not an unusual result."
     ),
     adr="0011, 0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(wire_atom_map.validate_reaction_atom_map, note=_ATOM_MAP_DUAL_ENFORCEMENT),
         DatabaseConstraint(
@@ -489,18 +495,18 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
 CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=2,
-    code=None,
+    code=wire_atom_map.W_ATOM_MAP_NOT_A_BIJECTION,
     asserts=(
         "One saddle-point atom is claimed by exactly one atom of each leg, and "
         "one participant atom maps to exactly one saddle-point atom."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. A map is a bijection or it is not a map; an atom "
         "claimed twice describes no mechanism at all."
     ),
     adr="0011, 0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(wire_atom_map.validate_reaction_atom_map, note=_ATOM_MAP_DUAL_ENFORCEMENT),
         DatabaseConstraint(
@@ -528,13 +534,14 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
 CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=3,
-    code=None,
+    code=wire_atom_map.W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
     asserts=(
         "Every atom index in a map is counted against a named geometry that "
         "the participant actually owns, and names an atom that geometry "
         "actually has."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, and it is where ADR 0011's central choice is cashed "
         "out. Atom indices are not a property of a species — "
@@ -545,7 +552,6 @@ CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
         "was chosen to make impossible."
     ),
     adr="0011, 0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(wire_atom_map.validate_reaction_atom_map, note=_ATOM_MAP_DUAL_ENFORCEMENT),
         DatabaseConstraint(
@@ -591,13 +597,14 @@ CHECK_ATOM_MAP_INDICES_ARE_GEOMETRY_RELATIVE = ScientificCheck(
 CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=4,
-    code=None,
+    code=wire_atom_map.W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
     asserts=(
         "When a map covers every declared participant of an atom-balanced "
         "reaction, both legs claim the same saddle-point atoms and no "
         "saddle-point atom is left unclaimed."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, but only under a precondition that has to be checked "
         "first. A reactant atom unaccounted for in the products is a "
@@ -609,7 +616,6 @@ CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM = ScientificCheck(
         "otherwise."
     ),
     adr="0011, 0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(
             wire_atom_map.validate_reaction_atom_map,
@@ -630,13 +636,14 @@ CHECK_ATOM_MAP_ACCOUNTS_FOR_EVERY_ATOM = ScientificCheck(
 CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
     group="Atom mapping across a reaction",
     sort_key=8,
-    code=None,
+    code=wire_atom_map.W_ATOM_MAP_INFERRED_REQUIRES_NOTE,
     asserts=(
         "An atom map records whether a human asserted it or an algorithm "
         "produced it, an inferred map names the algorithm, and neither "
         "attribution can be relabelled afterwards."
     ),
     tier=CheckTier.structural,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Not a runtime check but a shape. ADR 0011 permits inference only as "
         "a labelled and separable thing, because an atom map is a scientific "
@@ -649,8 +656,19 @@ CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
         "and a CHECK cannot read ``OLD``."
     ),
     adr="0011",
-    emitted=False,
     enforced_by=(
+        PythonCheck(
+            wire_atom_map.ReactionAtomMapIn.validate_inferred_names_its_algorithm,
+            note=(
+                "The wire half of the rule, and it was missing from this entry "
+                "until the codes were audited: the register listed only the two "
+                "schema objects, so it read as enforced by the database alone "
+                "when in fact an inferred map with no note is refused at the "
+                "payload boundary first. Only the note half is stated here — "
+                "the immutability of ``source`` is a statement about an UPDATE, "
+                "which no payload validator can see."
+            ),
+        ),
         DatabaseConstraint(
             table="reaction_atom_map",
             name="ck_reaction_atom_map_inferred_requires_note",
@@ -693,6 +711,7 @@ CHECK_NETWORK_SOLVE_KIND_EVIDENCE = ScientificCheck(
         "cite the publication it was transcribed from."
     ),
     tier=CheckTier.structural,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "The blocking half is definitional: a computed solve with *zero* state "
         "energies contradicts its own kind, and a reported solve with no "
@@ -759,6 +778,7 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
         "network."
     ),
     tier=CheckTier.structural,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "A network-wide ⟨ΔE⟩down is correct, common, published science — "
         "Arkane, RMG and MESS inputs routinely specify a single "
@@ -813,6 +833,7 @@ CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT = ScientificCheck(
         "or a transition-state entry, never both and never neither."
     ),
     tier=CheckTier.structural,
+    channel=CodeChannel.none,
     tier_rationale=(
         "A modelling position rather than an arithmetic bound. Canonical "
         "transition state theory needs the saddle point's own partition "
@@ -850,6 +871,7 @@ CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
         "as such at read time rather than graded as if it were intact."
     ),
     tier=CheckTier.label,
+    channel=CodeChannel.trust_label,
     tier_rationale=(
         "It cannot block, because the fact does not exist at upload: the "
         "artifact hashed correctly when it was accepted, and the break "
@@ -954,6 +976,7 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
         "disagree."
     ),
     tier=CheckTier.structural,
+    channel=CodeChannel.none,
     tier_rationale=(
         "Not a check that fires but a position about what may never be "
         "collapsed into a single verdict. Reproducibility is graded under "

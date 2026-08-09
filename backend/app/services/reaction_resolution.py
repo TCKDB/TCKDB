@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 from collections import Counter
 from typing import Mapping, Sequence
 
@@ -13,6 +14,7 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
 )
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.species import element_counts_from_smiles, format_element_counts
 from app.db.models.common import MoleculeKind, ReactionRole
@@ -26,7 +28,29 @@ from app.db.models.reaction import (
 from app.db.models.species import Species, SpeciesEntry
 from app.schemas.reaction_family import find_canonical_reaction_family
 from app.schemas.utils import normalize_optional_text
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
+
+logger = logging.getLogger(__name__)
+
+#: Raised when a reaction's two sides do not hold the same atoms.
+W_REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
+
+#: Raised when a reaction's two sides do not hold the same total charge.
+W_REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
+
+#: Raised when a saddle point is not made of its own reaction's atoms.
+W_TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
+
+#: Raised when a saddle point does not carry its reactants' total charge.
+W_TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
+
+#: Raised when a stored SMILES cannot be parsed while balancing a reaction.
+W_STORED_SMILES_UNPARSEABLE = "stored_species_smiles_unparseable"
 
 
 def compress_species_stoichiometry(
@@ -73,7 +97,7 @@ def _element_counts_for_species(species: Species) -> Counter[str]:
     :func:`_load_participant_species` before it ever gets here: an electron
     still has to balance, it simply has no atoms to bring to the balance.
 
-    :raises ValueError: If the stored SMILES cannot be parsed by RDKit.
+    :raises CodedValueError: If the stored SMILES cannot be parsed by RDKit.
     """
 
     if species.kind == MoleculeKind.electron:
@@ -82,9 +106,26 @@ def _element_counts_for_species(species: Species) -> Counter[str]:
     try:
         return element_counts_from_smiles(species.smiles)
     except ValueError as exc:
-        raise ValueError(
-            f"Cannot parse stored SMILES for species_id={species.id} "
-            "while validating reaction elemental balance."
+        # The species is named by its public ref, never by ``species.id``.
+        # A primary key is an internal identifier a caller can neither use
+        # nor verify, and handing one out in an error body is the leak the
+        # project rule forbids; the row id goes to the log, where whoever
+        # has to fix the stored row can act on it.
+        logger.warning(
+            "Unparseable stored SMILES on species id=%s public_ref=%s: %r",
+            species.id,
+            species.public_ref,
+            species.smiles,
+        )
+        raise CodedValueError(
+            W_STORED_SMILES_UNPARSEABLE,
+            f"Cannot parse the stored SMILES {species.smiles!r} of participant "
+            f"{species.public_ref} while validating reaction elemental balance.",
+            context={
+                "species_ref": species.public_ref,
+                "smiles": species.smiles,
+            },
+            message_prefix=False,
         ) from exc
 
 
@@ -180,8 +221,14 @@ def validate_reaction_elemental_balance(
             product_totals[element] += coefficient * count
 
     if reactant_totals != product_totals:
-        raise ValueError(
-            "Reaction is not element-balanced (reaction_mass_balance_failed)."
+        raise CodedValueError(
+            W_REACTION_MASS_BALANCE_FAILED,
+            "Reaction is not element-balanced (reaction_mass_balance_failed).",
+            context={
+                "reactants": dict(sorted(reactant_totals.items())),
+                "products": dict(sorted(product_totals.items())),
+            },
+            message_prefix=False,
         )
 
 
@@ -194,6 +241,7 @@ CHECK_REACTION_ELEMENTAL_BALANCE = ScientificCheck(
         "of atoms of every element."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. Mass balance is what makes a set of species a reaction "
         "rather than a list, so no correct calculation can produce an "
@@ -304,7 +352,8 @@ def validate_reaction_charge_conservation(
     )
 
     if reactant_charge != product_charge:
-        raise ValueError(
+        raise CodedValueError(
+            W_REACTION_CHARGE_NOT_CONSERVED,
             f"Reaction reactants total charge {reactant_charge:+d} but products "
             f"total {product_charge:+d} (reaction_charge_not_conserved). Charge "
             "is conserved across a reaction, so the two sides describe "
@@ -315,7 +364,12 @@ def validate_reaction_charge_conservation(
             "photodetachment — declare the electron as a participant: "
             '{"molecule_kind": "electron", "smiles": "[e-]", "charge": -1, '
             '"multiplicity": 2}. It balances the charge and still leaves the '
-            "elemental balance to be satisfied on its own terms."
+            "elemental balance to be satisfied on its own terms.",
+            context={
+                "reactant_charge": reactant_charge,
+                "product_charge": product_charge,
+            },
+            message_prefix=False,
         )
 
 
@@ -328,6 +382,7 @@ CHECK_REACTION_CHARGE_CONSERVATION = ScientificCheck(
         "products."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, and only because the escape hatch exists. Electrons are "
         "neither created nor destroyed by rearranging bonds. Without a way to "
@@ -450,7 +505,8 @@ def validate_transition_state_composition(
             reactant_totals += _element_counts_for_species(species)
 
         if ts_counts != reactant_totals:
-            raise ValueError(
+            raise CodedValueError(
+                W_TRANSITION_STATE_COMPOSITION_MISMATCH,
                 f"Transition state '{subject_label}' is "
                 f"{format_element_counts(ts_counts)}, but the reaction it sits "
                 f"in is {format_element_counts(reactant_totals)} "
@@ -459,19 +515,30 @@ def validate_transition_state_composition(
                 "reaction's atoms, so a saddle point made of different atoms "
                 "cannot be that reaction's saddle point. If the saddle-point "
                 "structure genuinely contains additional species, declare them "
-                "as participants of the reaction."
+                "as participants of the reaction.",
+                context={
+                    "transition_state": dict(sorted(ts_counts.items())),
+                    "reaction": dict(sorted(reactant_totals.items())),
+                },
+                message_prefix=False,
             )
 
     if transition_state_charge is not None:
         reactant_charge = sum(species.charge for species in reactants)
         if transition_state_charge != reactant_charge:
-            raise ValueError(
+            raise CodedValueError(
+                W_TRANSITION_STATE_CHARGE_MISMATCH,
                 f"Transition state '{subject_label}' carries charge "
                 f"{transition_state_charge:+d}, but its reactants total "
                 f"{reactant_charge:+d} "
                 "(transition_state_charge_mismatch). Charge is conserved along "
                 "a reaction coordinate, so a saddle point at a different charge "
-                "is on a different potential energy surface."
+                "is on a different potential energy surface.",
+                context={
+                    "transition_state_charge": transition_state_charge,
+                    "reactant_charge": reactant_charge,
+                },
+                message_prefix=False,
             )
 
 
@@ -502,6 +569,7 @@ CHECK_TRANSITION_STATE_COMPOSITION = ScientificCheck(
         "declared to sit in."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. A transition state is a stationary point on the "
         "potential energy surface *of those atoms*, so a saddle point with a "
@@ -540,6 +608,7 @@ CHECK_TRANSITION_STATE_CHARGE = ScientificCheck(
         "between."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. Charge is conserved along a reaction coordinate, so a "
         "saddle point at a different charge is on a different potential energy "
@@ -727,7 +796,8 @@ def validate_ts_evidence_participant_composition(
                     assigned[element] += 1
 
                 if assigned != declared:
-                    raise ValueError(
+                    raise CodedValueError(
+                        W_IRC_MAPPING_ELEMENT_MISMATCH,
                         f"Transition state '{subject_label}' {field_path} assigns "
                         f"saddle-point atoms "
                         f"{sorted(atom_indices)} to {participant_key}, which is "
@@ -752,6 +822,7 @@ CHECK_TS_IRC_MAPPING_ELEMENTS = ScientificCheck(
         "participant are that participant's own atoms, element for element."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional. 'These saddle-point atoms become C2H4' while those atoms "
         "are C2O2H2 is a contradiction no correct calculation can produce — the "

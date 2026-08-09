@@ -93,6 +93,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.enums import (
     HessianMethod,
     ImaginaryModeDisposition,
@@ -988,15 +989,38 @@ def has_structural_flag(findings: Sequence[StationaryPointFinding]) -> bool:
 
 
 def raise_for_blocking_findings(findings: list[StationaryPointFinding]) -> None:
-    """Raise ``ValueError`` if any finding is at the blocking tier.
+    """Raise if any finding is at the blocking tier.
 
     Upload schemas call this from a ``model_validator`` so a definitional
     contradiction becomes a 422 naming the contradiction, before the
     route body opens a submission.
+
+    Every finding already carries a ``code``; until the refusal did too,
+    that code reached a client only as a substring of an English sentence
+    and the response body said ``validation_error``. It is now the
+    exception's own attribute, so the 422 names the contradiction in a
+    field a client can switch on.
+
+    A refusal reports one code only when the blocking findings agree on
+    one. Two different contradictions in one payload are two things to fix,
+    and naming either of them would tell the client the other is not there;
+    the joined message still names both, and the envelope falls back to the
+    generic code. ``message_prefix=False`` keeps the message exactly what it
+    has always been.
     """
     blocked = blocking_findings(findings)
-    if blocked:
-        raise ValueError(" ".join(f.message for f in blocked))
+    if not blocked:
+        return
+    message = " ".join(f.message for f in blocked)
+    codes = {f.code for f in blocked if f.code}
+    if len(codes) != 1:
+        raise ValueError(message)
+    raise CodedValidationError(
+        codes.pop(),
+        message,
+        context={"codes": sorted({f.code for f in blocked if f.code})},
+        message_prefix=False,
+    )
 
 
 __all__ = [

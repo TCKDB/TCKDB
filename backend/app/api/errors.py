@@ -13,7 +13,7 @@ from sqlalchemy.exc import IntegrityError, NoResultFound, OperationalError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.error_contract import (
-    CodedValueError,
+    CodedValidationError,
     error_envelope,
     validation_detail_code,
 )
@@ -58,7 +58,9 @@ class DataIntegrityError(Exception):
 
 
 def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
-    if isinstance(exc, CodedValueError):
+    # ``CodedValueError`` is the backend subclass; a wire-schema check raises
+    # the base directly, because ``tckdb_schemas`` may not import ``app``.
+    if isinstance(exc, CodedValidationError):
         content = error_envelope(
             str(exc),
             code=exc.code,

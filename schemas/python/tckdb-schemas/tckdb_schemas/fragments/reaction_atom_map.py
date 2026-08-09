@@ -50,6 +50,7 @@ from typing import Self
 
 from pydantic import Field, model_validator
 
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import AtomMapSource, ReactionRole
 from tckdb_schemas.utils import normalize_optional_text
@@ -58,9 +59,56 @@ __all__ = [
     "AtomMapParticipantGeometry",
     "ReactionAtomMapIn",
     "ReactionAtomMapParticipantIn",
+    "W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR",
+    "W_ATOM_MAP_ELEMENT_NOT_CONSERVED",
+    "W_ATOM_MAP_GEOMETRY_UNPARSEABLE",
+    "W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE",
+    "W_ATOM_MAP_INFERRED_REQUIRES_NOTE",
+    "W_ATOM_MAP_NOT_A_BIJECTION",
+    "W_ATOM_MAP_PARTICIPANT_NOT_DECLARED",
+    "W_ATOM_MAP_WITHOUT_TRANSITION_STATE",
     "parse_xyz_elements",
     "validate_reaction_atom_map",
 ]
+
+# ---------------------------------------------------------------------------
+# Codes
+# ---------------------------------------------------------------------------
+#
+# One code per refusal, so a client can tell "your map transmutes an
+# element" (a mechanism error — stop) from "your map counts against the
+# wrong geometry" (a payload error — fix the key and retry) without
+# reading English. The four that correspond to a register entry are named
+# after that entry, so the code and the registered check are visibly the
+# same thing; the rest are payload shape rather than chemistry and are
+# named for what they are.
+
+#: An atom changed element on the way across the reaction.
+W_ATOM_MAP_ELEMENT_NOT_CONSERVED = "atom_map_element_not_conserved"
+
+#: One saddle-point atom was claimed twice on the same leg.
+W_ATOM_MAP_NOT_A_BIJECTION = "atom_map_not_a_bijection"
+
+#: An index names a geometry the participant does not own, or an atom the
+#: named geometry does not have.
+W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE = "atom_map_indices_not_geometry_relative"
+
+#: A complete map of a balanced reaction leaves saddle-point atoms
+#: unaccounted for.
+W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR = "atom_map_atoms_unaccounted_for"
+
+#: An inferred map does not name the algorithm that produced it.
+W_ATOM_MAP_INFERRED_REQUIRES_NOTE = "atom_map_inferred_requires_note"
+
+#: A map was supplied for a reaction that declares no saddle point.
+W_ATOM_MAP_WITHOUT_TRANSITION_STATE = "atom_map_without_transition_state"
+
+#: The map names a participant the reaction does not declare, names the
+#: wrong species for one, or names the same participant twice.
+W_ATOM_MAP_PARTICIPANT_NOT_DECLARED = "atom_map_participant_not_declared"
+
+#: A geometry the map has to count into is not a readable XYZ block.
+W_ATOM_MAP_GEOMETRY_UNPARSEABLE = "atom_map_geometry_unparseable"
 
 
 def parse_xyz_elements(xyz_text: str) -> list[str]:
@@ -74,16 +122,27 @@ def parse_xyz_elements(xyz_text: str) -> list[str]:
 
     lines = xyz_text.strip().splitlines()
     if len(lines) < 1:
-        raise ValueError("geometry is not a valid XYZ block.")
+        raise CodedValidationError(
+            W_ATOM_MAP_GEOMETRY_UNPARSEABLE,
+            "geometry is not a valid XYZ block.",
+            message_prefix=False,
+        )
     try:
         declared = int(lines[0].strip())
     except ValueError as exc:
-        raise ValueError("geometry is not a valid XYZ block.") from exc
+        raise CodedValidationError(
+            W_ATOM_MAP_GEOMETRY_UNPARSEABLE,
+            "geometry is not a valid XYZ block.",
+            message_prefix=False,
+        ) from exc
     body = [line for line in lines[2:] if line.strip()]
     if len(body) != declared:
-        raise ValueError(
+        raise CodedValidationError(
+            W_ATOM_MAP_GEOMETRY_UNPARSEABLE,
             f"geometry declares {declared} atoms but carries {len(body)} "
-            "coordinate lines."
+            "coordinate lines.",
+            context={"declared_atoms": declared, "coordinate_lines": len(body)},
+            message_prefix=False,
         )
     elements: list[str] = []
     for line in body:
@@ -117,10 +176,17 @@ class ReactionAtomMapParticipantIn(SchemaBase):
     def validate_indices_are_one_based(self) -> Self:
         for atom_index, ts_atom_index in self.atom_to_ts.items():
             if atom_index < 1 or ts_atom_index < 1:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                     f"atom_map participant '{self.species_key}' "
                     f"[{self.side.value} {self.participant_index}] uses 1-based "
-                    "atom indices on both sides."
+                    "atom indices on both sides.",
+                    context={
+                        "species_key": self.species_key,
+                        "side": self.side.value,
+                        "participant_index": self.participant_index,
+                    },
+                    message_prefix=False,
                 )
         return self
 
@@ -173,10 +239,12 @@ class ReactionAtomMapIn(SchemaBase):
         assertion.
         """
         if self.source is AtomMapSource.inferred and self.note is None:
-            raise ValueError(
+            raise CodedValidationError(
+                W_ATOM_MAP_INFERRED_REQUIRES_NOTE,
                 "atom_map.source='inferred' requires atom_map.note naming the "
                 "algorithm that produced the map. An inferred map is recorded "
-                "only as a labelled, separable thing (ADR 0011)."
+                "only as a labelled, separable thing (ADR 0011).",
+                message_prefix=False,
             )
         return self
 
@@ -187,10 +255,16 @@ class ReactionAtomMapIn(SchemaBase):
         for participant in self.participants:
             slot = (participant.side, participant.participant_index)
             if slot in seen:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
                     f"atom_map names {participant.side.value} "
                     f"{participant.participant_index} more than once. Each "
-                    "participant molecule is mapped at most once."
+                    "participant molecule is mapped at most once.",
+                    context={
+                        "side": participant.side.value,
+                        "participant_index": participant.participant_index,
+                    },
+                    message_prefix=False,
                 )
             seen.add(slot)
         return self
@@ -270,18 +344,27 @@ def validate_reaction_atom_map(
         return
 
     if ts_xyz_text is None or ts_geometry_key is None:
-        raise ValueError(
+        raise CodedValidationError(
+            W_ATOM_MAP_WITHOUT_TRANSITION_STATE,
             f"{field_path} was supplied for a reaction with no transition "
             "state. Both legs of an atom map run toward the saddle point "
-            "(ADR 0011), so a reaction without one cannot carry a map."
+            "(ADR 0011), so a reaction without one cannot carry a map.",
+            context={"field_path": field_path},
+            message_prefix=False,
         )
 
     if atom_map.ts_geometry_key != ts_geometry_key:
-        raise ValueError(
+        raise CodedValidationError(
+            W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
             f"{field_path}.ts_geometry_key='{atom_map.ts_geometry_key}' is not "
             f"the transition state's geometry ('{ts_geometry_key}'). Atom "
             "indices are geometry-relative; a map written against a different "
-            "geometry refers to different atoms."
+            "geometry refers to different atoms.",
+            context={
+                "declared_geometry_key": atom_map.ts_geometry_key,
+                "transition_state_geometry_key": ts_geometry_key,
+            },
+            message_prefix=False,
         )
 
     ts_elements = parse_xyz_elements(ts_xyz_text)
@@ -304,23 +387,44 @@ def validate_reaction_atom_map(
         slot = (mapping.side, mapping.participant_index)
         declared = by_slot.get(slot)
         if declared is None:
-            raise ValueError(
+            raise CodedValidationError(
+                W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
                 f"{field_path} names {mapping.side.value} "
                 f"{mapping.participant_index}, which this reaction does not "
-                "declare."
+                "declare.",
+                context={
+                    "side": mapping.side.value,
+                    "participant_index": mapping.participant_index,
+                },
+                message_prefix=False,
             )
         if declared.species_key != mapping.species_key:
-            raise ValueError(
+            raise CodedValidationError(
+                W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
                 f"{field_path} names species '{mapping.species_key}' as "
                 f"{mapping.side.value} {mapping.participant_index}, but that "
-                f"participant is species '{declared.species_key}'."
+                f"participant is species '{declared.species_key}'.",
+                context={
+                    "side": mapping.side.value,
+                    "participant_index": mapping.participant_index,
+                    "declared_species_key": declared.species_key,
+                    "mapped_species_key": mapping.species_key,
+                },
+                message_prefix=False,
             )
         if mapping.geometry_key not in declared.geometry_keys:
-            raise ValueError(
+            raise CodedValidationError(
+                W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                 f"{field_path} maps {mapping.side.value} "
                 f"{mapping.participant_index} against geometry "
                 f"'{mapping.geometry_key}', which does not belong to species "
-                f"'{mapping.species_key}'. Atom indices are geometry-relative."
+                f"'{mapping.species_key}'. Atom indices are geometry-relative.",
+                context={
+                    "geometry_key": mapping.geometry_key,
+                    "species_key": mapping.species_key,
+                    "permitted_geometry_keys": sorted(declared.geometry_keys),
+                },
+                message_prefix=False,
             )
 
         elements = parse_xyz_elements(
@@ -334,35 +438,64 @@ def validate_reaction_atom_map(
 
         for atom_index, ts_atom_index in sorted(mapping.atom_to_ts.items()):
             if atom_index > natoms:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                     f"{field_path} maps atom {atom_index} of {label}, but "
-                    f"geometry '{mapping.geometry_key}' has {natoms} atoms."
+                    f"geometry '{mapping.geometry_key}' has {natoms} atoms.",
+                    context={
+                        "atom_index": atom_index,
+                        "geometry_key": mapping.geometry_key,
+                        "geometry_atom_count": natoms,
+                    },
+                    message_prefix=False,
                 )
             if ts_atom_index > ts_natoms:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
                     f"{field_path} maps atom {atom_index} of {label} onto "
                     f"transition-state atom {ts_atom_index}, but geometry "
-                    f"'{atom_map.ts_geometry_key}' has {ts_natoms} atoms."
+                    f"'{atom_map.ts_geometry_key}' has {ts_natoms} atoms.",
+                    context={
+                        "ts_atom_index": ts_atom_index,
+                        "geometry_key": atom_map.ts_geometry_key,
+                        "geometry_atom_count": ts_natoms,
+                    },
+                    message_prefix=False,
                 )
 
             element = elements[atom_index - 1]
             ts_element = ts_elements[ts_atom_index - 1]
             if element != ts_element:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
                     f"{field_path} maps atom {atom_index} of {label}, which is "
                     f"{element}, onto transition-state atom {ts_atom_index}, "
                     f"which is {ts_element}. An element does not change across "
-                    "a reaction."
+                    "a reaction.",
+                    context={
+                        "atom_index": atom_index,
+                        "element": element,
+                        "ts_atom_index": ts_atom_index,
+                        "ts_element": ts_element,
+                    },
+                    message_prefix=False,
                 )
 
             claimed = claimed_ts_by_side[mapping.side]
             if ts_atom_index in claimed:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_ATOM_MAP_NOT_A_BIJECTION,
                     f"{field_path} claims transition-state atom "
                     f"{ts_atom_index} twice on the {mapping.side.value} leg: "
                     f"from {claimed[ts_atom_index]} and from atom "
                     f"{atom_index} of {label}. One saddle-point atom is one "
-                    "atom."
+                    "atom.",
+                    context={
+                        "ts_atom_index": ts_atom_index,
+                        "side": mapping.side.value,
+                        "first_claim": claimed[ts_atom_index],
+                    },
+                    message_prefix=False,
                 )
             claimed[ts_atom_index] = f"atom {atom_index} of {label}"
 
@@ -382,22 +515,31 @@ def validate_reaction_atom_map(
     if reactant_claims != product_claims:
         missing_in_products = sorted(reactant_claims - product_claims)
         missing_in_reactants = sorted(product_claims - reactant_claims)
-        raise ValueError(
+        raise CodedValidationError(
+            W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
             f"{field_path} is complete over every declared participant of an "
             "atom-balanced reaction, yet its two legs do not cover the same "
             "saddle-point atoms: "
             f"{missing_in_products or 'none'} appear only on the reactant leg "
             f"and {missing_in_reactants or 'none'} only on the product leg. "
-            "No species is missing, so those atoms are unaccounted for."
+            "No species is missing, so those atoms are unaccounted for.",
+            context={
+                "reactant_leg_only": missing_in_products,
+                "product_leg_only": missing_in_reactants,
+            },
+            message_prefix=False,
         )
 
     unclaimed = sorted(set(range(1, ts_natoms + 1)) - reactant_claims)
     if unclaimed:
-        raise ValueError(
+        raise CodedValidationError(
+            W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
             f"{field_path} is complete over every declared participant of an "
             "atom-balanced reaction, yet transition-state atom(s) "
             f"{unclaimed} are claimed by neither leg. No species is missing, "
-            "so the saddle point cannot hold atoms the reaction does not."
+            "so the saddle point cannot hold atoms the reaction does not.",
+            context={"unclaimed_ts_atoms": unclaimed},
+            message_prefix=False,
         )
 
 

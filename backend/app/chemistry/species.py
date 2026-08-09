@@ -8,13 +8,23 @@ from rdkit import Chem
 from rdkit.Chem import AllChem, inchi, rdDetermineBonds
 from tckdb_schemas.fragments.identity import ELECTRON_SMILES
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
 from app.chemistry.isotopes import normalize_isotope, validate_isotope
 from app.db.models.common import MoleculeKind, StereoKind
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
 
 logger = logging.getLogger(__name__)
+
+#: Raised when a species entry's declared charge is not the formal charge of
+#: its own SMILES.
+W_SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
 
 #: The value stored in ``species.inchi_key`` for the free electron.
 #:
@@ -567,8 +577,14 @@ def canonical_species_identity(
     charge = formal_charge(ident)
 
     if charge != payload.charge:
-        raise ValueError(
-            f"species_entry.charge={payload.charge} does not match SMILES charge {charge}"
+        raise CodedValueError(
+            W_SPECIES_SMILES_CHARGE_MISMATCH,
+            f"species_entry.charge={payload.charge} does not match SMILES charge {charge}",
+            context={
+                "declared_charge": payload.charge,
+                "smiles_charge": charge,
+            },
+            message_prefix=False,
         )
 
     bare = strip_isotopes(ident)
@@ -580,12 +596,13 @@ def canonical_species_identity(
 CHECK_SMILES_CHARGE_MATCHES_DECLARED = ScientificCheck(
     group="A structure against its own label",
     sort_key=3,
-    code=None,
+    code=W_SPECIES_SMILES_CHARGE_MISMATCH,
     asserts=(
         "A species entry's declared charge equals the summed formal charge of "
         "its own SMILES."
     ),
     tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
     tier_rationale=(
         "Definitional, and the anchor the reaction-level charge law stands on: "
         "``validate_reaction_charge_conservation`` sums ``Species.charge`` and "
@@ -596,7 +613,6 @@ CHECK_SMILES_CHARGE_MATCHES_DECLARED = ScientificCheck(
         "not re-check charge."
     ),
     adr="0008",
-    emitted=False,
     enforced_by=(
         PythonCheck(
             canonical_species_identity,

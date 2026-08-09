@@ -24,7 +24,12 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.db.models.transition_state import TransitionStateValidationEvidence
-from app.scientific_checks import CheckTier, PythonCheck, ScientificCheck
+from app.scientific_checks import (
+    CheckTier,
+    CodeChannel,
+    PythonCheck,
+    ScientificCheck,
+)
 from app.services.reaction_atom_map import (
     validate_atom_map_agrees_with_irc_evidence,
 )
@@ -157,6 +162,7 @@ CHECK_TS_IRC_EVIDENCE = ScientificCheck(
         "products."
     ),
     tier=CheckTier.warn,
+    channel=CodeChannel.upload_warning,
     tier_rationale=(
         "Absence, not contradiction. Refusing a transition state without an "
         "IRC would lose the saddle point entirely, and a saddle point with no "
