@@ -43,8 +43,11 @@ from dataclasses import dataclass
 from sqlalchemy.orm import Session
 
 from app.db.models.calculation import CalculationArtifact
+from app.db.models.common import ArtifactIntegrityDetectionContext
 from app.schemas.fragments.artifact import ArtifactIn
+from app.services.artifact_integrity import record_from_error
 from app.services.artifact_storage import (
+    ArtifactIntegrityError,
     ArtifactStorageUnavailable,
     ArtifactValidationError,
     store_artifact,
@@ -213,6 +216,21 @@ def _store_and_record(
     try:
         uri = store_artifact(decoded.content, decoded.computed_sha256)
     except ArtifactValidationError:
+        raise
+    except ArtifactIntegrityError as exc:
+        # ``store_artifact`` verifies an existing content-addressed object
+        # before attaching another row to the shared key, so this means the
+        # object already in the store is corrupt — and the rows that already
+        # point at it are affected, not just this upload. Relabelling it
+        # ``ArtifactStorageUnavailable`` told the uploader to retry a
+        # condition retrying cannot fix, and discarded the one moment TCKDB
+        # had noticed. Record it, then let it out as itself (ADR 0014).
+        record_from_error(
+            exc,
+            detected_during=(
+                ArtifactIntegrityDetectionContext.store_dedup_verification
+            ),
+        )
         raise
     except Exception as exc:
         raise ArtifactStorageUnavailable(

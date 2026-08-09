@@ -17,7 +17,10 @@ from app.api.error_contract import (
     error_envelope,
     validation_detail_code,
 )
-from app.services.artifact_storage import ArtifactStorageUnavailable
+from app.services.artifact_storage import (
+    ArtifactIntegrityError,
+    ArtifactStorageUnavailable,
+)
 from app.services.idempotency import (
     IDEMPOTENCY_UNIQUE_CONSTRAINT,
     IdempotencyConflict,
@@ -236,6 +239,40 @@ def _invalid_idempotency_key_handler(
     )
 
 
+def _artifact_integrity_handler(
+    request: Request, exc: ArtifactIntegrityError
+) -> JSONResponse:
+    """502, and never 503 — retrying cannot fix a digest that will not match.
+
+    Reached from the upload path, where ``store_artifact`` verifies an
+    existing content-addressed object before attaching another row to the
+    shared key. Previously this was relabelled ``ArtifactStorageUnavailable``
+    on its way out, which told the uploader to retry a permanent condition
+    and named the wrong subsystem in the journal. The durable record is
+    written at the detection site (``app.services.artifact_integrity``), not
+    here: a handler runs only for the requests that happen to surface, and
+    detection happens in places that never see one.
+    """
+    logger.error(
+        "ArtifactIntegrityError on %s %s: %s",
+        request.method,
+        request.url.path,
+        exc,
+        exc_info=exc,
+    )
+    return JSONResponse(
+        status_code=502,
+        content={
+            "detail": (
+                "A stored artifact failed integrity verification. This has "
+                "been recorded; retrying will not clear it."
+            ),
+            "code": "artifact_integrity_failed",
+            "context": {},
+        },
+    )
+
+
 def _artifact_storage_unavailable_handler(
     request: Request, exc: ArtifactStorageUnavailable
 ) -> JSONResponse:
@@ -340,4 +377,5 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(OperationalError, _operational_error_handler)  # type: ignore[arg-type]
     app.add_exception_handler(InvalidIdempotencyKey, _invalid_idempotency_key_handler)  # type: ignore[arg-type]
     app.add_exception_handler(IdempotencyConflict, _idempotency_conflict_handler)  # type: ignore[arg-type]
+    app.add_exception_handler(ArtifactIntegrityError, _artifact_integrity_handler)  # type: ignore[arg-type]
     app.add_exception_handler(ArtifactStorageUnavailable, _artifact_storage_unavailable_handler)  # type: ignore[arg-type]

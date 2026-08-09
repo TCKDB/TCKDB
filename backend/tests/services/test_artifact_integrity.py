@@ -408,6 +408,66 @@ def test_record_survives_the_transaction_that_discovered_it(
                 cleanup.commit()
 
 
+def test_dedup_integrity_break_escapes_as_itself_and_is_recorded(
+    db_session, monkeypatch
+) -> None:
+    """``store_artifact`` verifies the object it is about to share.
+
+    When that verification fails the object already in the store is
+    corrupt, and the rows already pointing at it are affected — not just
+    this upload. Relabelling it ``ArtifactStorageUnavailable`` told the
+    uploader to retry a condition retrying cannot fix, and discarded the
+    one moment TCKDB had noticed.
+    """
+    import base64
+
+    from app.db.models.common import ArtifactKind
+    from app.schemas.fragments.artifact import ArtifactIn
+    from app.services import artifact_persistence
+
+    _, _, calculation = _make_species_owned_calc(db_session)
+    content = b"Entering Gaussian System, corrupt twin\n" * 4
+    sha = hashlib.sha256(content).hexdigest()
+    existing = attach_artifact(db_session, calculation=calculation)
+    existing.sha256 = sha
+    existing.bytes = len(content)
+    db_session.flush()
+
+    def exploding_store(*_args, **_kwargs):
+        raise ArtifactIntegrityError(
+            f"Artifact digest verification failed for sha={sha}",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=sha,
+            observed_sha256="a" * 64,
+            observed_bytes=3,
+        )
+
+    monkeypatch.setattr(artifact_persistence, "store_artifact", exploding_store)
+    monkeypatch.setattr(
+        "app.services.artifact_integrity.head_artifact_object", lambda *a, **k: None
+    )
+    monkeypatch.setattr("app.api.deps.SessionLocal", _SessionProxy(db_session))
+
+    payload = ArtifactIn(
+        kind=ArtifactKind.output_log,
+        filename="twin.log",
+        content_base64=base64.b64encode(content).decode(),
+    )
+
+    with pytest.raises(ArtifactIntegrityError):
+        artifact_persistence.persist_artifact(
+            db_session, calculation_id=calculation.id, artifact_in=payload
+        )
+
+    (event,) = _events(db_session, sha)
+    assert event.detected_during is (
+        ArtifactIntegrityDetectionContext.store_dedup_verification
+    )
+    # No row existed for the refused upload, so the record names the
+    # committed row that already shares the corrupt object.
+    assert event.artifact_id == existing.id
+
+
 def test_digests_with_recorded_breaks_answers_a_batch_in_one_query(
     db_session,
 ) -> None:
