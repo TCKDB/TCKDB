@@ -1018,7 +1018,12 @@ def raise_for_blocking_findings(findings: list[StationaryPointFinding]) -> None:
     raise CodedValidationError(
         codes.pop(),
         message,
-        context={"codes": sorted({f.code for f in blocked if f.code})},
+        # Which records the contradiction was found on. One code can be
+        # reported for several of them at once — a bundle depositing four
+        # transition states, three of them fine — and the locations are
+        # the part of that a client would otherwise have to read out of
+        # the joined message.
+        context={"locations": sorted({f.location for f in blocked if f.location})},
         message_prefix=False,
     )
 
