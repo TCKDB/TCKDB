@@ -97,21 +97,17 @@ _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
 
 @contextmanager
-def _isolated_session(db_engine) -> Iterator[Session]:
+def _isolated_session(db_conn) -> Iterator[Session]:
     """Open a session on a connection-bound transaction that is always
     rolled back. Mirrors the helper used in
     ``test_computed_reaction_upload.py``: keeps each wiring test
     hermetic against species/InChI conflicts when reusing common
     SMILES like water."""
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 # ---------------------------------------------------------------------------
@@ -233,8 +229,8 @@ def _make_minimal_species_calc(
 # ---------------------------------------------------------------------------
 
 
-def test_computed_species_opt_persists_passed_row(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_computed_species_opt_persists_passed_row(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         outcome = persist_computed_species_upload(
             session, _species_bundle(smiles="O", xyz=_XYZ_WATER)
         )
@@ -257,7 +253,7 @@ def test_computed_species_opt_persists_passed_row(db_engine) -> None:
 
 
 def test_computed_species_opt_records_fail_when_identity_mismatch(
-    db_engine,
+    db_conn,
 ) -> None:
     """The declared species is ethanol and the opt calculation reports a
     methane output geometry — the chemistry layer must reject isomorphism, and
@@ -279,7 +275,7 @@ def test_computed_species_opt_records_fail_when_identity_mismatch(
     differ, which is what ``resolve_atom_mapping`` actually detects — see the
     note in this module's docstring about how narrow ``is_isomorphic=False``
     has become."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         bundle = _species_bundle(
             smiles="CCO", xyz=_XYZ_ETHANOL, output_xyz=_XYZ_METHANE
         )
@@ -301,12 +297,12 @@ def test_computed_species_opt_records_fail_when_identity_mismatch(
 # ---------------------------------------------------------------------------
 
 
-def test_helper_skips_when_output_geometry_missing(db_engine) -> None:
+def test_helper_skips_when_output_geometry_missing(db_conn) -> None:
     """If a calculation has no attached output geometry, the helper is a
     no-op and writes nothing. Constructed by adding a bare
     Calculation row directly so we can assert the skip semantics
     without fighting the workflow's fallback geometry attachment."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         calc = _make_minimal_species_calc(
             session, inchi_key="GVSKIP000000000000000000001"
         )
@@ -322,8 +318,8 @@ def test_helper_skips_when_output_geometry_missing(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_freq_calc_does_not_get_geometry_validation(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_freq_calc_does_not_get_geometry_validation(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         outcome = persist_computed_species_upload(
             session, _species_bundle_with_freq()
         )
@@ -458,8 +454,8 @@ def _reaction_payload_h2o_self() -> dict:
     }
 
 
-def test_computed_reaction_species_opt_writes_validation_rows(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_computed_reaction_species_opt_writes_validation_rows(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         # Snapshot the max calc id BEFORE running the workflow so we
         # can filter strictly to calcs created in THIS transaction.
         # Prior committed tests in the same session may have left
@@ -495,7 +491,7 @@ def test_computed_reaction_species_opt_writes_validation_rows(db_engine) -> None
 # ---------------------------------------------------------------------------
 
 
-def test_ts_opt_does_not_get_geometry_validation(db_engine) -> None:
+def test_ts_opt_does_not_get_geometry_validation(db_conn) -> None:
     """End-to-end TS deferral: a computed-reaction bundle with a TS
     must persist validation rows for the species-side opt calcs but
     NOT for the TS opt calc. The species-graph isomorphism check
@@ -615,7 +611,7 @@ def test_ts_opt_does_not_get_geometry_validation(db_engine) -> None:
         },
     }
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         baseline = session.scalar(
             select(func.coalesce(func.max(Calculation.id), 0))
         )
@@ -672,7 +668,7 @@ def test_ts_opt_does_not_get_geometry_validation(db_engine) -> None:
         )
 
 
-def test_helper_skips_when_species_smiles_is_none(db_engine) -> None:
+def test_helper_skips_when_species_smiles_is_none(db_conn) -> None:
     """TS opt geometry validation is intentionally NOT wired in phase 1.
 
     The current ``validate_calculation_geometry`` service takes a
@@ -691,7 +687,7 @@ def test_helper_skips_when_species_smiles_is_none(db_engine) -> None:
 
     This test asserts the second half of that contract directly.
     """
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         calc = _make_minimal_species_calc(
             session, inchi_key="GVTSDEFER000000000000000001"
         )

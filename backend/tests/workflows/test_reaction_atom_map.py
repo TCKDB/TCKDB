@@ -81,19 +81,15 @@ _USER_ID = 50_411
 
 
 @contextmanager
-def _isolated_session(db_engine) -> Iterator[Session]:
+def _isolated_session(db_conn) -> Iterator[Session]:
     """Roll back everything: the workflow writes a large graph per call."""
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         session.add(AppUser(id=_USER_ID, username="reaction_atom_map_tests"))
         session.flush()
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 def _species(key: str, smiles: str, multiplicity: int, xyz: str) -> dict:
@@ -225,12 +221,12 @@ def _codes(result: dict) -> set[str]:
 
 
 def test_declared_map_persists_both_legs_toward_the_transition_state(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _payload()
     payload["atom_map"] = _complete_map(equivalent_map_count=3)
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
 
         atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
@@ -286,22 +282,22 @@ def test_declared_map_persists_both_legs_toward_the_transition_state(
 
 
 def test_declared_map_emits_no_absence_or_incompleteness_warning(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _payload()
     payload["atom_map"] = _complete_map()
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
     assert W_MISSING_REACTION_ATOM_MAP not in _codes(result)
     assert W_ATOM_MAP_PARTICIPANTS_INCOMPLETE not in _codes(result)
     assert W_ATOM_MAP_ATOMS_INCOMPLETE not in _codes(result)
 
 
-def test_equivalent_map_count_absent_is_no_claim_not_one(db_engine) -> None:
+def test_equivalent_map_count_absent_is_no_claim_not_one(db_conn) -> None:
     """Symmetry makes a valid map non-unique; silence is not a count of 1."""
     payload = _payload()
     payload["atom_map"] = _complete_map()
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
         assert atom_map.equivalent_map_count is None
@@ -312,12 +308,12 @@ def test_equivalent_map_count_absent_is_no_claim_not_one(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_inferred_map_is_stored_and_read_back_as_inferred(db_engine) -> None:
+def test_inferred_map_is_stored_and_read_back_as_inferred(db_conn) -> None:
     payload = _payload()
     payload["atom_map"] = _complete_map(
         source="inferred", note="mapped by a maximum-common-substructure search"
     )
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
         assert atom_map.source is AtomMapSource.inferred
@@ -325,7 +321,7 @@ def test_inferred_map_is_stored_and_read_back_as_inferred(db_engine) -> None:
         assert "maximum-common-substructure" in atom_map.note
 
 
-def test_inferred_map_without_a_note_is_refused(db_engine) -> None:
+def test_inferred_map_without_a_note_is_refused(db_conn) -> None:
     """An inferred map whose origin is anonymous is one step from a lie."""
     payload = _payload()
     payload["atom_map"] = _complete_map(source="inferred")
@@ -333,7 +329,7 @@ def test_inferred_map_without_a_note_is_refused(db_engine) -> None:
         ComputedReactionUploadRequest(**payload)
 
 
-def test_a_blank_note_does_not_name_an_algorithm(db_engine) -> None:
+def test_a_blank_note_does_not_name_an_algorithm(db_conn) -> None:
     """Whitespace is not the name of an inference engine.
 
     Without normalisation ``note='   '`` satisfies "an inferred map says what
@@ -346,26 +342,26 @@ def test_a_blank_note_does_not_name_an_algorithm(db_engine) -> None:
         ComputedReactionUploadRequest(**payload)
 
 
-def test_a_declared_map_note_is_trimmed(db_engine) -> None:
+def test_a_declared_map_note_is_trimmed(db_conn) -> None:
     payload = _payload()
     payload["atom_map"] = _complete_map(note="  followed the IRC by hand  ")
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
         assert atom_map.note == "followed the IRC by hand"
 
 
-def test_a_blank_declared_note_becomes_no_note(db_engine) -> None:
+def test_a_blank_declared_note_becomes_no_note(db_conn) -> None:
     payload = _payload()
     payload["atom_map"] = _complete_map(note="  ")
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
         assert atom_map.note is None
 
 
 def test_database_refuses_relabelling_an_inferred_map_as_declared(
-    db_engine,
+    db_conn,
 ) -> None:
     """The laundering path, closed where a second write path cannot reopen it.
 
@@ -385,7 +381,7 @@ def test_database_refuses_relabelling_an_inferred_map_as_declared(
         source="inferred", note="mapped by RXNMapper"
     )
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         atom_map_id = result["atom_map_id"]
 
@@ -402,7 +398,7 @@ def test_database_refuses_relabelling_an_inferred_map_as_declared(
 
 @pytest.mark.parametrize("blanked", ["'   '", "''", "NULL"])
 def test_database_refuses_blanking_an_inferred_maps_note(
-    db_engine, blanked: str
+    db_conn, blanked: str
 ) -> None:
     """Freezing ``source`` is only half of "an inferred map names its origin".
 
@@ -425,7 +421,7 @@ def test_database_refuses_blanking_an_inferred_maps_note(
         source="inferred", note="mapped by RXNMapper"
     )
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
 
         with pytest.raises(DBAPIError) as excinfo:
@@ -439,7 +435,7 @@ def test_database_refuses_blanking_an_inferred_maps_note(
         assert "inferred_requires_note" in str(excinfo.value)
 
 
-def test_an_inferred_map_may_still_have_its_note_corrected(db_engine) -> None:
+def test_an_inferred_map_may_still_have_its_note_corrected(db_conn) -> None:
     """Freezing the token must not freeze the record it labels.
 
     A depositor correcting the name of the algorithm is completing the record,
@@ -453,7 +449,7 @@ def test_an_inferred_map_may_still_have_its_note_corrected(db_engine) -> None:
     payload = _payload()
     payload["atom_map"] = _complete_map(source="inferred", note="RXNMapper")
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         atom_map_id = result["atom_map_id"]
 
@@ -478,8 +474,8 @@ def test_an_inferred_map_may_still_have_its_note_corrected(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_reaction_without_a_map_is_accepted_and_warned(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_reaction_without_a_map_is_accepted_and_warned(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, _payload())
 
     assert result["reaction_entry_id"] is not None
@@ -494,14 +490,14 @@ def test_reaction_without_a_map_is_accepted_and_warned(db_engine) -> None:
     assert "intrinsic reaction coordinate" in warning.message
 
 
-def test_reaction_without_a_transition_state_is_not_warned(db_engine) -> None:
+def test_reaction_without_a_transition_state_is_not_warned(db_conn) -> None:
     """A barrierless channel has nothing for the two legs to point at."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, _payload(with_ts=False))
     assert W_MISSING_REACTION_ATOM_MAP not in _codes(result)
 
 
-def test_map_without_a_transition_state_is_refused(db_engine) -> None:
+def test_map_without_a_transition_state_is_refused(db_conn) -> None:
     payload = _payload(with_ts=False)
     payload["atom_map"] = _complete_map()
     with pytest.raises(ValidationError, match="no transition state"):
@@ -513,7 +509,7 @@ def test_map_without_a_transition_state_is_refused(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_map_omitting_a_participant_is_accepted_and_warned(db_engine) -> None:
+def test_map_omitting_a_participant_is_accepted_and_warned(db_conn) -> None:
     payload = _payload()
     atom_map = _complete_map()
     atom_map["participants"] = [
@@ -521,7 +517,7 @@ def test_map_omitting_a_participant_is_accepted_and_warned(db_engine) -> None:
     ]
     payload["atom_map"] = atom_map
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         assert result["atom_map_id"] is not None
 
@@ -534,7 +530,7 @@ def test_map_omitting_a_participant_is_accepted_and_warned(db_engine) -> None:
 
 
 def test_map_omitting_atoms_of_a_mapped_participant_is_accepted_and_warned(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _payload()
     atom_map = _complete_map()
@@ -549,7 +545,7 @@ def test_map_omitting_atoms_of_a_mapped_participant_is_accepted_and_warned(
             break
     payload["atom_map"] = atom_map
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         assert result["atom_map_id"] is not None
 
@@ -564,7 +560,7 @@ def test_map_omitting_atoms_of_a_mapped_participant_is_accepted_and_warned(
 # ---------------------------------------------------------------------------
 
 
-def test_element_changing_across_the_map_is_refused(db_engine) -> None:
+def test_element_changing_across_the_map_is_refused(db_conn) -> None:
     """Carbon does not become nitrogen."""
     payload = _payload()
     payload["species"][0] = _species("ch3", "[NH3]", 1, _XYZ_NH3)
@@ -580,7 +576,7 @@ def test_element_changing_across_the_map_is_refused(db_engine) -> None:
     assert "An element does not change across a reaction" in message
 
 
-def test_transition_state_atom_claimed_twice_is_refused(db_engine) -> None:
+def test_transition_state_atom_claimed_twice_is_refused(db_conn) -> None:
     """One saddle-point atom is one atom."""
     payload = _payload()
     atom_map = _complete_map()
@@ -597,7 +593,7 @@ def test_transition_state_atom_claimed_twice_is_refused(db_engine) -> None:
     assert "reactant leg" in message
 
 
-def test_saddle_point_atom_claimed_by_neither_leg_is_refused(db_engine) -> None:
+def test_saddle_point_atom_claimed_by_neither_leg_is_refused(db_conn) -> None:
     """A balanced, fully mapped reaction cannot leave a saddle-point atom over.
 
     Both legs are complete over every declared participant and the reaction
@@ -661,7 +657,7 @@ def test_unbalanced_reaction_is_not_refused_for_an_unaccounted_atom() -> None:
 
 
 def test_legs_covering_different_atoms_of_a_balanced_reaction_is_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     """The named case from ADR 0011, with nothing missing to explain it.
 
@@ -695,7 +691,7 @@ def test_legs_covering_different_atoms_of_a_balanced_reaction_is_refused(
     assert "No species is missing" in message
 
 
-def test_index_outside_the_named_geometry_is_refused(db_engine) -> None:
+def test_index_outside_the_named_geometry_is_refused(db_conn) -> None:
     payload = _payload()
     atom_map = _complete_map()
     for participant in atom_map["participants"]:
@@ -710,7 +706,7 @@ def test_index_outside_the_named_geometry_is_refused(db_engine) -> None:
 
 
 def test_transition_state_index_outside_the_saddle_point_geometry_is_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _payload()
     atom_map = _complete_map()
@@ -725,7 +721,7 @@ def test_transition_state_index_outside_the_saddle_point_geometry_is_refused(
 
 
 def test_map_written_against_a_geometry_that_is_not_the_saddle_point_is_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     """Atom indices are geometry-relative; the wrong geometry is wrong atoms."""
     payload = _payload()
@@ -736,7 +732,7 @@ def test_map_written_against_a_geometry_that_is_not_the_saddle_point_is_refused(
 
 
 def test_participant_mapped_against_another_species_geometry_is_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _payload()
     atom_map = _complete_map()
@@ -751,7 +747,7 @@ def test_participant_mapped_against_another_species_geometry_is_refused(
 
 
 def test_map_naming_a_participant_the_reaction_does_not_declare_is_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     payload = _payload()
     atom_map = _complete_map()
@@ -771,7 +767,7 @@ def test_map_naming_a_participant_the_reaction_does_not_declare_is_refused(
     assert "which this reaction does not declare" in str(excinfo.value)
 
 
-def test_same_participant_mapped_twice_is_refused(db_engine) -> None:
+def test_same_participant_mapped_twice_is_refused(db_conn) -> None:
     payload = _payload()
     atom_map = _complete_map()
     atom_map["participants"].append(
@@ -804,7 +800,7 @@ _XYZ_CH3_LOWER = (
 
 
 def test_map_across_geometries_that_disagree_only_about_case_persists(
-    db_engine,
+    db_conn,
 ) -> None:
     """``c`` and ``C`` are one element, and a map across them is one map.
 
@@ -822,7 +818,7 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
     payload["species"][0] = _species("ch3", "[CH3]", 2, _XYZ_CH3_LOWER)
     payload["atom_map"] = _complete_map()
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
 
         atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
@@ -850,7 +846,7 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
 
 
 def test_an_element_really_changing_across_the_map_is_still_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     """Normalising case must not cost the rule it is normalising for.
 
@@ -879,7 +875,7 @@ def test_an_element_really_changing_across_the_map_is_still_refused(
 
 
 def test_database_refuses_a_pair_whose_two_ends_are_really_different_elements(
-    db_engine,
+    db_conn,
 ) -> None:
     """The check constraint owns the element rule; prove it is not dead.
 
@@ -895,7 +891,7 @@ def test_database_refuses_a_pair_whose_two_ends_are_really_different_elements(
     payload = _payload()
     payload["atom_map"] = _complete_map()
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         pair = session.scalars(
             select(ReactionAtomMapPair)
@@ -911,7 +907,7 @@ def test_database_refuses_a_pair_whose_two_ends_are_really_different_elements(
 
 
 def test_database_refuses_a_pair_whose_two_ends_are_different_elements(
-    db_engine,
+    db_conn,
 ) -> None:
     """The element rule is a constraint, not just a validator on one path.
 
@@ -923,7 +919,7 @@ def test_database_refuses_a_pair_whose_two_ends_are_different_elements(
     payload = _payload()
     payload["atom_map"] = _complete_map()
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         pair = session.scalars(
             select(ReactionAtomMapPair)
@@ -939,14 +935,14 @@ def test_database_refuses_a_pair_whose_two_ends_are_different_elements(
 
 
 def test_database_refuses_two_reactant_atoms_claiming_one_saddle_point_atom(
-    db_engine,
+    db_conn,
 ) -> None:
     from sqlalchemy.exc import IntegrityError
 
     payload = _payload()
     payload["atom_map"] = _complete_map()
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
         session.add(
             ReactionAtomMapPair(

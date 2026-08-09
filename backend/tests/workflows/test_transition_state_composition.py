@@ -115,18 +115,14 @@ _USER_ID = 50_612
 
 
 @contextmanager
-def _isolated_session(db_engine) -> Iterator[Session]:
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+def _isolated_session(db_conn) -> Iterator[Session]:
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         session.add(AppUser(id=_USER_ID, username="ts_composition_tests"))
         session.flush()
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 def _species(key: str, smiles: str, multiplicity: int, xyz: str) -> dict:
@@ -202,14 +198,14 @@ def _upload(session: Session, payload: dict) -> dict:
 # ---------------------------------------------------------------------------
 
 
-def test_a_saddle_point_with_its_reaction_atoms_is_accepted(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_a_saddle_point_with_its_reaction_atoms_is_accepted(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, _bundle())
     assert result["transition_state_entry_id"] is not None
 
 
-def test_a_saddle_point_missing_an_atom_is_refused(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_a_saddle_point_missing_an_atom_is_refused(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(session, _bundle(ts_xyz=_XYZ_TS_MISSING_AN_ATOM))
     message = str(excinfo.value)
@@ -218,14 +214,14 @@ def test_a_saddle_point_missing_an_atom_is_refused(db_engine) -> None:
 
 
 def test_a_saddle_point_carrying_an_undeclared_spectator_is_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     """Extra atoms are a *different* reaction, not a richer description of this one.
 
     The message points at the fix that keeps the science: declare the spectator
     as a participant, so the record says what was actually computed.
     """
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(
                 session, _bundle(ts_xyz=_XYZ_TS_WITH_AN_UNDECLARED_SPECTATOR)
@@ -235,9 +231,9 @@ def test_a_saddle_point_carrying_an_undeclared_spectator_is_refused(
     assert "declare them as participants" in message
 
 
-def test_a_saddle_point_at_the_wrong_charge_is_refused(db_engine) -> None:
+def test_a_saddle_point_at_the_wrong_charge_is_refused(db_conn) -> None:
     """Charge is conserved along a reaction coordinate."""
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(session, _bundle(ts_charge=1))
     message = str(excinfo.value)
@@ -290,7 +286,7 @@ def _chlorine_bundle(*, ts_xyz: str) -> dict:
 
 
 def test_a_saddle_point_whose_xyz_shouts_its_elements_is_accepted(
-    db_engine,
+    db_conn,
 ) -> None:
     """``CL`` and ``c`` are ``Cl`` and ``C``, and this check must know it.
 
@@ -301,18 +297,18 @@ def test_a_saddle_point_whose_xyz_shouts_its_elements_is_accepted(
     correct chemistry over capitalisation, which ADR 0008 disqualifies a
     blocking check from doing.
     """
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, _chlorine_bundle(ts_xyz=_XYZ_TS_MIXED_CASE))
     assert result["transition_state_entry_id"] is not None
 
 
-def test_normalising_case_does_not_blunt_the_check(db_engine) -> None:
+def test_normalising_case_does_not_blunt_the_check(db_conn) -> None:
     """A mixed-case saddle point with the wrong *atoms* is still refused.
 
     Otherwise the fix for the capitalisation regression would have bought
     acceptance by making the rule stop firing.
     """
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(
                 session,
@@ -325,7 +321,7 @@ def test_normalising_case_does_not_blunt_the_check(db_engine) -> None:
     assert "is CH3, but the reaction it sits in is CH3Cl" in message
 
 
-def test_multiplicity_is_deliberately_not_checked(db_engine) -> None:
+def test_multiplicity_is_deliberately_not_checked(db_conn) -> None:
     """Spin is not conserved the way charge and atoms are.
 
     Two doublets may react over a singlet or a triplet surface, and
@@ -334,7 +330,7 @@ def test_multiplicity_is_deliberately_not_checked(db_engine) -> None:
     """
     payload = _bundle()
     payload["transition_state"]["multiplicity"] = 4
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         result = _upload(session, payload)
     assert result["transition_state_entry_id"] is not None
 
@@ -369,8 +365,8 @@ def _standalone_ts_payload(xyz: str, *, charge: int = 0) -> dict:
     }
 
 
-def test_standalone_transition_state_upload_is_checked_too(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_standalone_transition_state_upload_is_checked_too(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         entry = persist_transition_state_upload(
             session,
             TransitionStateUploadRequest(**_standalone_ts_payload(_XYZ_TS)),
@@ -378,7 +374,7 @@ def test_standalone_transition_state_upload_is_checked_too(db_engine) -> None:
         )
         assert entry.id is not None
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             persist_transition_state_upload(
                 session,

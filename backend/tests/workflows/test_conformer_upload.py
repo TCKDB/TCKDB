@@ -50,8 +50,8 @@ def _hydrogen_request(*, label: str | None = None) -> ConformerUploadRequest:
     )
 
 
-def test_persist_conformer_upload_creates_expected_rows(db_engine) -> None:
-    with Session(db_engine) as session:
+def test_persist_conformer_upload_creates_expected_rows(db_conn) -> None:
+    with Session(db_conn) as session:
         with session.begin():
             outcome = persist_conformer_upload(
                 session, _hydrogen_request(label="conf-a")
@@ -111,9 +111,9 @@ def test_persist_conformer_upload_creates_expected_rows(db_engine) -> None:
 
 
 def test_persist_conformer_upload_reuses_species_entry_and_labeled_group(
-    db_engine,
+    db_conn,
 ) -> None:
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             first_outcome = persist_conformer_upload(
                 session, _hydrogen_request(label="conf-a")
@@ -156,7 +156,7 @@ def test_persist_conformer_upload_reuses_species_entry_and_labeled_group(
             assert {first.id, second.id}.issubset(grouped_ids)
 
 
-def test_persist_conformer_upload_creates_linked_statmech_record(db_engine) -> None:
+def test_persist_conformer_upload_creates_linked_statmech_record(db_conn) -> None:
     request = ConformerUploadRequest(
         species_entry={
             "smiles": "[H]",
@@ -195,7 +195,7 @@ def test_persist_conformer_upload_creates_linked_statmech_record(db_engine) -> N
         },
     )
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             observation = persist_conformer_upload(session, request).observation
 
@@ -218,7 +218,7 @@ def test_persist_conformer_upload_creates_linked_statmech_record(db_engine) -> N
             assert len(statmech.torsions[0].coordinates) == 1
 
 
-def test_conformer_upload_with_additional_calculations(db_engine) -> None:
+def test_conformer_upload_with_additional_calculations(db_conn) -> None:
     """Upload with primary opt + freq and sp additional calculations."""
     request = ConformerUploadRequest(
         species_entry={
@@ -260,7 +260,7 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
         label="h2-full",
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         observation = persist_conformer_upload(session, request).observation
 
         primary_calc = observation.calculations[0]
@@ -351,7 +351,7 @@ def test_conformer_upload_with_additional_calculations(db_engine) -> None:
         assert sp_inputs[0].geometry_id == shared_geo_id
 
 
-def test_conformer_upload_opt_primary_has_no_input_geometry(db_engine) -> None:
+def test_conformer_upload_opt_primary_has_no_input_geometry(db_conn) -> None:
     """An opt-primary upload yields one output_geometry row (final) and
     zero input_geometry rows — opt's true input is the pre-opt xyz, which
     the producer doesn't surface."""
@@ -370,7 +370,7 @@ def test_conformer_upload_opt_primary_has_no_input_geometry(db_engine) -> None:
         },
         label="opt-only",
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_conformer_upload(session, request)
         opt_id = outcome.primary_calculation.calculation_id
 
@@ -390,7 +390,7 @@ def test_conformer_upload_opt_primary_has_no_input_geometry(db_engine) -> None:
 
 
 def test_conformer_upload_statmech_resolves_literature_from_payload(
-    db_engine, monkeypatch,
+    db_conn, monkeypatch,
 ) -> None:
     """Nested literature payload on statmech must resolve into a Literature row,
     without the upload ever exposing a raw ``literature_id`` FK.
@@ -429,7 +429,7 @@ def test_conformer_upload_statmech_resolves_literature_from_payload(
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         observation = persist_conformer_upload(session, request).observation
         calculation = observation.calculations[0]
 
@@ -449,7 +449,7 @@ def test_conformer_upload_statmech_resolves_literature_from_payload(
 
 
 def test_primitive_conformer_explicit_input_geometries_for_opt(
-    db_engine,
+    db_conn,
 ) -> None:
     """Primitive ``/uploads/conformers``: a primary opt that declares
     ``input_geometries`` lands a row, distinct from opt's converged
@@ -471,7 +471,7 @@ def test_primitive_conformer_explicit_input_geometries_for_opt(
         },
         label="opt-explicit-input",
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_conformer_upload(session, request)
         opt_id = outcome.primary_calculation.calculation_id
 
@@ -493,7 +493,7 @@ def test_primitive_conformer_explicit_input_geometries_for_opt(
 
 
 def test_primitive_conformer_empty_input_geometries_uses_fallback(
-    db_engine,
+    db_conn,
 ) -> None:
     """With no ``input_geometries`` declared, the prior PR's freq fallback
     still fires for an additional freq calc and skips the primary opt."""
@@ -520,7 +520,7 @@ def test_primitive_conformer_empty_input_geometries_uses_fallback(
         ],
         label="primitive-fallback",
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_conformer_upload(session, request)
         opt_id = outcome.primary_calculation.calculation_id
         freq_id = outcome.additional_calculations[0].calculation_id
@@ -541,7 +541,7 @@ def test_primitive_conformer_empty_input_geometries_uses_fallback(
 
 
 def test_primitive_conformer_explicit_output_geometries_for_opt(
-    db_engine,
+    db_conn,
 ) -> None:
     """Primitive ``/uploads/conformers``: a primary opt that declares
     ``output_geometries`` lands a row with the producer-declared role,
@@ -568,7 +568,7 @@ def test_primitive_conformer_explicit_output_geometries_for_opt(
         },
         label="opt-explicit-output",
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_conformer_upload(session, request)
         opt_id = outcome.primary_calculation.calculation_id
 
@@ -582,7 +582,7 @@ def test_primitive_conformer_explicit_output_geometries_for_opt(
         assert rows[0].output_order == 1
 
 
-def test_primitive_conformer_empty_output_geometries_freq_sp(db_engine) -> None:
+def test_primitive_conformer_empty_output_geometries_freq_sp(db_conn) -> None:
     """Primitive ``/uploads/conformers``: with no ``output_geometries``
     declared on the additional freq calc, the narrowed fallback skips
     freq (not in the {opt} set), so freq gets ZERO rows."""
@@ -615,7 +615,7 @@ def test_primitive_conformer_empty_output_geometries_freq_sp(db_engine) -> None:
         ],
         label="primitive-output-fallback",
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         outcome = persist_conformer_upload(session, request)
         opt_id = outcome.primary_calculation.calculation_id
         freq_id = outcome.additional_calculations[0].calculation_id

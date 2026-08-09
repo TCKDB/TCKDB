@@ -24,7 +24,7 @@ from app.workflows.thermo import persist_thermo_upload
 
 
 @pytest.fixture
-def rb_session(db_engine):
+def rb_session(db_conn):
     """A Session whose work is fully rolled back at teardown.
 
     These tests both persist and immediately read back, so they must not
@@ -34,15 +34,11 @@ def rb_session(db_engine):
     Session to a connection-level transaction that is rolled back keeps the
     flushed rows visible for the read-back yet leaves the DB untouched.
     """
-    conn = db_engine.connect()
-    txn = conn.begin()
-    session = Session(bind=conn)
+    session = Session(bind=db_conn)
     try:
         yield session
     finally:
         session.close()
-        txn.rollback()
-        conn.close()
 
 
 def _nasa9_intervals() -> list[dict]:

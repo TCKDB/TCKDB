@@ -127,18 +127,14 @@ _XYZ_NH4 = (
 
 
 @contextmanager
-def _isolated_session(db_engine) -> Iterator[Session]:
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+def _isolated_session(db_conn) -> Iterator[Session]:
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         session.add(AppUser(id=_USER_ID, username="species_composition_tests"))
         session.flush()
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
 def _bundle(
@@ -187,10 +183,10 @@ def _upload(session: Session, payload: dict):
 # ---------------------------------------------------------------------------
 
 
-def test_methane_declared_with_a_methyl_geometry_is_refused(db_engine) -> None:
+def test_methane_declared_with_a_methyl_geometry_is_refused(db_conn) -> None:
     """The exact deposit that used to succeed: CH4's entry given CH3's XYZ."""
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(session, _bundle(smiles="C", xyz=_XYZ_CH3))
     message = str(excinfo.value)
@@ -199,14 +195,14 @@ def test_methane_declared_with_a_methyl_geometry_is_refused(db_engine) -> None:
     assert "is CH4" in message
 
 
-def test_a_geometry_that_omits_hydrogen_entirely_is_refused(db_engine) -> None:
+def test_a_geometry_that_omits_hydrogen_entirely_is_refused(db_conn) -> None:
     """The fixture-rot shape: heavy atoms listed, hydrogens simply absent.
 
     Ethyl deposited as ``C C H``. Three atoms where C2H5 has seven, which is
     what went unnoticed for as long as those fixtures existed.
     """
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(
                 session,
@@ -227,7 +223,7 @@ def test_a_geometry_that_omits_hydrogen_entirely_is_refused(db_engine) -> None:
     assert "is C2H5" in message
 
 
-def test_a_later_conformer_with_the_wrong_atoms_is_refused(db_engine) -> None:
+def test_a_later_conformer_with_the_wrong_atoms_is_refused(db_conn) -> None:
     """Every conformer is checked, not only the first.
 
     The first conformer is the one that drives stereo perception, and checking
@@ -248,7 +244,7 @@ def test_a_later_conformer_with_the_wrong_atoms_is_refused(db_engine) -> None:
         },
     }
     payload["conformers"].append(second)
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(session, payload)
     assert "species_geometry_composition_mismatch" in str(excinfo.value)
@@ -259,13 +255,13 @@ def test_a_later_conformer_with_the_wrong_atoms_is_refused(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_geometry_that_matches_its_smiles_is_accepted(db_engine) -> None:
-    with _isolated_session(db_engine) as session:
+def test_a_geometry_that_matches_its_smiles_is_accepted(db_conn) -> None:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(session, _bundle(smiles="C", xyz=_XYZ_CH4))
     assert outcome.species_entry_id is not None
 
 
-def test_a_deuterated_isotopologue_is_accepted(db_engine) -> None:
+def test_a_deuterated_isotopologue_is_accepted(db_conn) -> None:
     """CD4 declares four ``[2H]``; its geometry declares four H at mass 2.
 
     The canonical form stores element ``H`` for ``[2H]``, and the XYZ writes
@@ -276,7 +272,7 @@ def test_a_deuterated_isotopologue_is_accepted(db_engine) -> None:
     deposit as well.
     """
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(
             session,
             _bundle(
@@ -288,10 +284,10 @@ def test_a_deuterated_isotopologue_is_accepted(db_engine) -> None:
     assert outcome.species_entry_id is not None
 
 
-def test_a_partially_deuterated_isotopologue_is_accepted(db_engine) -> None:
+def test_a_partially_deuterated_isotopologue_is_accepted(db_conn) -> None:
     """CH3D: one deuterium, three protium, still C1H4 by element."""
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(
             session,
             _bundle(smiles="[2H]C", xyz=_XYZ_CH4, isotopes={2: 2}),
@@ -299,39 +295,39 @@ def test_a_partially_deuterated_isotopologue_is_accepted(db_engine) -> None:
     assert outcome.species_entry_id is not None
 
 
-def test_an_anion_is_accepted(db_engine) -> None:
+def test_an_anion_is_accepted(db_conn) -> None:
     """Hydroxide. RDKit's implicit-H handling on a charged heteroatom is the
     thing most likely to be got wrong here: ``[OH-]`` carries one hydrogen,
     not zero and not two."""
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(
             session, _bundle(smiles="[OH-]", xyz=_XYZ_OH, charge=-1)
         )
     assert outcome.species_entry_id is not None
 
 
-def test_a_cation_is_accepted(db_engine) -> None:
+def test_a_cation_is_accepted(db_conn) -> None:
     """Ammonium. Four hydrogens on a positively charged nitrogen."""
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(
             session, _bundle(smiles="[NH4+]", xyz=_XYZ_NH4, charge=1)
         )
     assert outcome.species_entry_id is not None
 
 
-def test_a_radical_is_accepted(db_engine) -> None:
+def test_a_radical_is_accepted(db_conn) -> None:
     """Methyl, where the implicit-H count depends on reading the radical."""
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(
             session, _bundle(smiles="[CH3]", xyz=_XYZ_CH3, multiplicity=2)
         )
     assert outcome.species_entry_id is not None
 
 
-def test_deuterium_written_as_the_element_D_is_accepted(db_engine) -> None:
+def test_deuterium_written_as_the_element_D_is_accepted(db_conn) -> None:
     """``D`` is hydrogen, and this check must know it.
 
     ``D`` is a legal, common XYZ token — Gaussian, ORCA, Molpro and CFOUR all
@@ -350,21 +346,21 @@ def test_deuterium_written_as_the_element_D_is_accepted(db_engine) -> None:
     here.
     """
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(session, _bundle(smiles="O", xyz=_XYZ_D2O))
     assert outcome.species_entry_id is not None
 
 
-def test_tritium_written_as_the_element_T_is_accepted(db_engine) -> None:
+def test_tritium_written_as_the_element_T_is_accepted(db_conn) -> None:
     """``T`` is hydrogen too, and for exactly the same reason."""
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(session, _bundle(smiles="C", xyz=_XYZ_CH3T))
     assert outcome.species_entry_id is not None
 
 
 def test_a_D_geometry_with_the_wrong_atom_count_is_still_refused(
-    db_engine,
+    db_conn,
 ) -> None:
     """Resolving ``D`` to ``H`` must not blunt the check.
 
@@ -372,7 +368,7 @@ def test_a_D_geometry_with_the_wrong_atom_count_is_still_refused(
     acceptance by making the rule stop counting hydrogens at all.
     """
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         with pytest.raises(ValueError) as excinfo:
             _upload(
                 session,
@@ -387,7 +383,7 @@ def test_a_D_geometry_with_the_wrong_atom_count_is_still_refused(
     assert "is H2O" in message
 
 
-def test_element_symbols_in_any_case_are_accepted(db_engine) -> None:
+def test_element_symbols_in_any_case_are_accepted(db_conn) -> None:
     """``CL`` is chlorine and ``c`` is carbon.
 
     ``geometry_atom.element`` holds whatever the depositor's XYZ said, and
@@ -406,14 +402,14 @@ def test_element_symbols_in_any_case_are_accepted(db_engine) -> None:
     one.
     """
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         outcome = _upload(
             session, _bundle(smiles="CCl", xyz=_XYZ_CH3CL_MIXED_CASE)
         )
         assert outcome.species_entry_id is not None
 
         session.flush()
-        # Scoped to this deposit's own calculation: ``db_engine`` is
+        # Scoped to this deposit's own calculation: ``db_conn`` is
         # session-scoped and other test modules commit, so an unfiltered
         # count would depend on what else ran first.
         validation = session.scalar(
@@ -430,7 +426,7 @@ def test_element_symbols_in_any_case_are_accepted(db_engine) -> None:
         assert validation.validation_status == ValidationStatus.passed
 
 
-def test_a_deposit_with_no_geometry_is_accepted(db_engine) -> None:
+def test_a_deposit_with_no_geometry_is_accepted(db_conn) -> None:
     """Absence is incompleteness, not contradiction.
 
     A thermo or transport record uploaded from a paper has an identity and no
@@ -438,7 +434,7 @@ def test_a_deposit_with_no_geometry_is_accepted(db_engine) -> None:
     at all. There is nothing to disagree with, so there is nothing to refuse.
     """
 
-    with _isolated_session(db_engine) as session:
+    with _isolated_session(db_conn) as session:
         entry = resolve_species_entry(
             session, _identity("C"), created_by=_USER_ID
         )

@@ -86,9 +86,9 @@ def _transport_request(**overrides) -> TransportUploadRequest:
 # ---------------------------------------------------------------------------
 
 
-def test_persist_transport_upload_creates_row_with_scalar_fields(db_engine) -> None:
+def test_persist_transport_upload_creates_row_with_scalar_fields(db_conn) -> None:
     """Transport scalar fields persist and link to the resolved species entry."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=1201, username="transport_tester_basic"))
         session.flush()
 
@@ -110,7 +110,7 @@ def test_persist_transport_upload_creates_row_with_scalar_fields(db_engine) -> N
 
 
 def test_persist_transport_upload_resolves_all_provenance_refs(
-    db_engine, monkeypatch,
+    db_conn, monkeypatch,
 ) -> None:
     """Literature, software release, and workflow tool release all resolve."""
     monkeypatch.setattr(
@@ -133,7 +133,7 @@ def test_persist_transport_upload_resolves_all_provenance_refs(
         workflow_tool_release={"name": "ARC", "version": "1.1.0"},
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         transport = persist_transport_upload(session, request)
 
         assert transport.literature_id is not None
@@ -154,7 +154,7 @@ def test_persist_transport_upload_resolves_all_provenance_refs(
         assert wtr.workflow_tool.name == "ARC"
 
 
-def test_persist_transport_upload_persists_source_calculations(db_engine) -> None:
+def test_persist_transport_upload_persists_source_calculations(db_conn) -> None:
     """Inline calcs + source_calculations persist the correct (calc, role) links."""
     distinct = {"smiles": "CCO", "charge": 0, "multiplicity": 1}
     request = TransportUploadRequest(
@@ -172,7 +172,7 @@ def test_persist_transport_upload_persists_source_calculations(db_engine) -> Non
         ],
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         transport = persist_transport_upload(session, request)
 
         links = session.scalars(
@@ -201,14 +201,14 @@ def test_persist_transport_upload_persists_source_calculations(db_engine) -> Non
         assert freq_calc.species_entry_id == transport.species_entry_id
 
 
-def test_repeated_transport_uploads_are_append_only(db_engine) -> None:
+def test_repeated_transport_uploads_are_append_only(db_conn) -> None:
     """Two uploads for the same species entry create two distinct transport rows.
 
     Transport is append-only — repeated uploads for the same species
     entry are valid and must not dedupe.
     """
     distinct = {"smiles": "CCCC", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         first = persist_transport_upload(
             session,
             _transport_request(species_entry=dict(distinct), note="first"),
@@ -230,7 +230,7 @@ def test_repeated_transport_uploads_are_append_only(db_engine) -> None:
         assert [r.note for r in rows] == ["first", "second"]
 
 
-def test_transport_without_lj_pair_is_valid(db_engine) -> None:
+def test_transport_without_lj_pair_is_valid(db_conn) -> None:
     """A transport upload with neither sigma nor epsilon is accepted.
 
     Only the paired presence/absence of the LJ parameters is enforced;
@@ -244,7 +244,7 @@ def test_transport_without_lj_pair_is_valid(db_engine) -> None:
         epsilon_over_k_k=None,
         note="dipole-only",
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         transport = persist_transport_upload(session, request)
         assert transport.sigma_angstrom is None
         assert transport.epsilon_over_k_k is None
@@ -348,7 +348,7 @@ def test_schema_rejects_duplicate_source_calculation_pairs() -> None:
         )
 
 
-def test_wrong_owner_source_calc_rejected_by_workflow_check(db_engine) -> None:
+def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
     """The defensive owner-consistency guard fires when a calculation's
     species_entry_id does not match the transport target.
 
@@ -357,7 +357,7 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_engine) -> None:
     species entry. This test exercises the defensive check directly so
     regressions in that guard are caught.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_a = resolve_species_entry(
             session, SpeciesEntryIdentityPayload(**_SPECIES_ENTRY),
         )

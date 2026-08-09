@@ -101,7 +101,7 @@ def _conformer_request(
     )
 
 
-def test_persist_reaction_upload_creates_graph_and_entry_layers(db_engine) -> None:
+def test_persist_reaction_upload_creates_graph_and_entry_layers(db_conn) -> None:
     request = ReactionUploadRequest(
         reversible=False,
         reactants=[
@@ -134,7 +134,7 @@ def test_persist_reaction_upload_creates_graph_and_entry_layers(db_engine) -> No
         ],
     )
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             reaction_entry = persist_reaction_upload(session, request)
 
@@ -184,9 +184,9 @@ def test_persist_reaction_upload_creates_graph_and_entry_layers(db_engine) -> No
 
 
 def test_persist_reaction_upload_reuses_graph_layer_for_matching_submission(
-    db_engine,
+    db_conn,
 ) -> None:
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             # Distinct species that still balance (isomers, both C2H6O):
             # under DR-0031 two "[He]" resolve to one species, which would
@@ -228,9 +228,9 @@ def test_persist_reaction_upload_reuses_graph_layer_for_matching_submission(
 
 
 def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
-    db_engine,
+    db_conn,
 ) -> None:
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             species_entry_count_before = session.scalar(
                 select(func.count()).select_from(SpeciesEntry)
@@ -311,7 +311,7 @@ def test_persist_reaction_upload_reuses_species_entries_from_conformer_upload(
 # exception. See ``docs/strict-reaction-balance-policy-spec.md``.
 
 
-def test_balanced_ordinary_reaction_persists(db_engine) -> None:
+def test_balanced_ordinary_reaction_persists(db_conn) -> None:
     """Balanced ordinary reactions must continue to upload successfully."""
     request = ReactionUploadRequest(
         reversible=False,
@@ -324,14 +324,14 @@ def test_balanced_ordinary_reaction_persists(db_engine) -> None:
         ],
     )
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             reaction_entry = persist_reaction_upload(session, request)
             assert reaction_entry.id is not None
             assert session.get(ChemReaction, reaction_entry.reaction_id) is not None
 
 
-def test_imbalanced_ordinary_reaction_is_rejected(db_engine) -> None:
+def test_imbalanced_ordinary_reaction_is_rejected(db_conn) -> None:
     """Imbalanced ordinary reactions must fail with a stable error and
     leave no reaction rows persisted."""
     request = ReactionUploadRequest(
@@ -340,7 +340,7 @@ def test_imbalanced_ordinary_reaction_is_rejected(db_engine) -> None:
         products=[{"species_entry": {"smiles": "[He]", "charge": 0, "multiplicity": 1}}],
     )
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             chem_reaction_count_before = session.scalar(
                 select(func.count()).select_from(ChemReaction)
@@ -354,10 +354,10 @@ def test_imbalanced_ordinary_reaction_is_rejected(db_engine) -> None:
             assert chem_reaction_count_after == chem_reaction_count_before
 
 
-def test_pseudo_species_participant_skips_elemental_balance(db_engine) -> None:
+def test_pseudo_species_participant_skips_elemental_balance(db_conn) -> None:
     """A reaction participant with ``species.kind == pseudo`` exempts the
     reaction from strict elemental-balance rejection in this first pass."""
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             # Unique smiles (identity is smiles+charge+multiplicity, DR-0031);
             # balance is skipped for pseudo reactions so it is never parsed.

@@ -487,7 +487,7 @@ def _parallel_path_payload() -> dict:
     return payload
 
 
-def test_parallel_path_upload_persists_ts_subject_and_distinct_barriers(db_engine) -> None:
+def test_parallel_path_upload_persists_ts_subject_and_distinct_barriers(db_conn) -> None:
     """One elementary step retains two distinct saddle-point pathways.
 
     Regression guard for the schema rule that used to forbid a second TS per
@@ -496,7 +496,7 @@ def test_parallel_path_upload_persists_ts_subject_and_distinct_barriers(db_engin
     a duplicate row into an identity table. Here the two paths share ONE
     reaction entry and differ only by transition state.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         # Let the sequence assign the id: hard-coded ids do not advance the
         # app_user sequence and collide with other files that insert without one.
         actor = AppUser(username="parallel_path_tester")
@@ -589,9 +589,9 @@ def test_parallel_path_upload_persists_ts_subject_and_distinct_barriers(db_engin
         )
 
 
-def test_full_end_to_end_upload(db_engine) -> None:
+def test_full_end_to_end_upload(db_conn) -> None:
     """Full PDep upload creates all entities end-to-end."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         actor = AppUser(username="e2e_tester")
         session.add(actor)
         session.flush()
@@ -756,9 +756,9 @@ def test_full_end_to_end_upload(db_engine) -> None:
         assert len(energy_transfers) == 1
 
 
-def test_upload_without_solve(db_engine) -> None:
+def test_upload_without_solve(db_conn) -> None:
     """Upload without solve creates species, calcs, TS, but no solve."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
         network = persist_network_pdep_upload(session, request)
 
@@ -784,9 +784,9 @@ def test_composition_hash_order_independent() -> None:
     assert len(hash_a) == 64
 
 
-def test_geometry_reuse_via_key(db_engine) -> None:
+def test_geometry_reuse_via_key(db_conn) -> None:
     """A species freq calculation using geometry_key should share the geometry."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
         network = persist_network_pdep_upload(session, request)
 
@@ -831,7 +831,7 @@ def test_geometry_reuse_via_key(db_engine) -> None:
 
 
 def test_same_basin_species_conformers_keep_distinct_observations_and_calc_anchors(
-    db_engine,
+    db_conn,
 ) -> None:
     """Species-side calculations should anchor to the observation for their geometry key."""
     payload = _full_payload(include_solve=False)
@@ -881,7 +881,7 @@ def test_same_basin_species_conformers_keep_distinct_observations_and_calc_ancho
         },
     ]
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         actor = AppUser(username="anchor_tester")
         session.add(actor)
         session.flush()
@@ -937,21 +937,17 @@ from typing import Iterator as _Iterator
 
 
 @contextmanager
-def _rolled_back_session(db_engine) -> _Iterator[Session]:
+def _rolled_back_session(db_conn) -> _Iterator[Session]:
     """Connection-bound session that always rolls back, to isolate tests
     that exercise the bundle workflow without committing to the shared DB."""
-    connection = db_engine.connect()
-    transaction = connection.begin()
-    session = Session(bind=connection, expire_on_commit=False)
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
         yield session
     finally:
         session.close()
-        transaction.rollback()
-        connection.close()
 
 
-def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> None:
+def test_bundle_calculation_parameters_persist_via_shared_seam(db_conn) -> None:
     """Parsed parameters on a bundle CalculationIn now flow through the shared
     seam and land as ``calculation_parameter`` rows plus snapshot metadata."""
     from datetime import datetime, timezone
@@ -991,7 +987,7 @@ def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> Non
         }
     )
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         session.add(CalculationParameterVocab(canonical_key=canonical_key))
         session.flush()
 
@@ -1029,7 +1025,7 @@ def test_bundle_calculation_parameters_persist_via_shared_seam(db_engine) -> Non
         assert second.unit == "GB"
 
 
-def test_bundle_unknown_canonical_key_demoted_through_shared_seam(db_engine) -> None:
+def test_bundle_unknown_canonical_key_demoted_through_shared_seam(db_conn) -> None:
     """Unknown canonical_key observations still persist (with canonical_key=NULL)
     — shared-seam vocab demotion applies through the bundle path."""
     from app.db.models.calculation import CalculationParameter
@@ -1044,7 +1040,7 @@ def test_bundle_unknown_canonical_key_demoted_through_shared_seam(db_engine) -> 
         }
     ]
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**payload)
         persist_network_pdep_upload(session, request, created_by=None)
 
@@ -1058,10 +1054,10 @@ def test_bundle_unknown_canonical_key_demoted_through_shared_seam(db_engine) -> 
         assert rows[0].canonical_value is None
 
 
-def test_bundle_owner_semantics_preserved_after_convergence(db_engine) -> None:
+def test_bundle_owner_semantics_preserved_after_convergence(db_conn) -> None:
     """Species-owned and TS-owned calculations keep their exclusive-owner FKs
     after routing through the shared seam."""
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
 
         request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
@@ -1088,10 +1084,10 @@ def test_bundle_owner_semantics_preserved_after_convergence(db_engine) -> None:
         assert all(c.species_entry_id is None for c in ts_calcs)
 
 
-def test_bundle_inline_results_and_geometry_links_preserved(db_engine) -> None:
+def test_bundle_inline_results_and_geometry_links_preserved(db_conn) -> None:
     """Inline opt/freq/sp results and the CalculationOutputGeometry link still
     persist correctly after routing through the shared seam."""
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         # Record the highest calculation.id before the upload so we can scope
         # subsequent queries to just-created rows and ignore any state that
         # prior committed tests may have left behind.
@@ -1150,7 +1146,7 @@ def test_bundle_inline_results_and_geometry_links_preserved(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_pdep_workflow_rejects_imbalanced_micro_reaction(db_engine) -> None:
+def test_pdep_workflow_rejects_imbalanced_micro_reaction(db_conn) -> None:
     """PDep uploads reuse the shared reaction seam and must enforce
     strict elemental balance on their micro reactions.
 
@@ -1162,24 +1158,24 @@ def test_pdep_workflow_rejects_imbalanced_micro_reaction(db_engine) -> None:
     payload = _full_payload(include_solve=False)
     payload["micro_reactions"][0]["reactants"] = [{"species_key": "ethyl"}]
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**payload)
         with pytest.raises(ValueError, match="not element-balanced"):
             persist_network_pdep_upload(session, request)
 
 
-def test_pdep_workflow_allows_balanced_micro_reaction(db_engine) -> None:
+def test_pdep_workflow_allows_balanced_micro_reaction(db_conn) -> None:
     """Regression guard: the canonical balanced PDep payload
     (``ethyl + O2 -> ethylperoxy``) must still succeed under the strict
     elemental-balance rule."""
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**_full_payload(include_solve=False))
         network = persist_network_pdep_upload(session, request)
         assert network.id is not None
 
 
 def test_pdep_workflow_persists_calculation_artifacts(
-    db_engine, monkeypatch,
+    db_conn, monkeypatch,
 ) -> None:
     """Inline ``calc_in.artifacts`` on a PDep calculation must produce
     a real ``CalculationArtifact`` row.
@@ -1211,30 +1207,22 @@ def test_pdep_workflow_persists_calculation_artifacts(
         }
     ]
 
-    # Use a connection-bound rollback so this artifact row does not leak
-    # into other workflow tests sharing the session-scoped ``db_engine``.
-    connection = db_engine.connect()
-    transaction = connection.begin()
+    session = Session(bind=db_conn, expire_on_commit=False)
     try:
-        session = Session(bind=connection, expire_on_commit=False)
-        try:
-            request = NetworkPDepUploadRequest(**payload)
-            persist_network_pdep_upload(session, request)
-            session.flush()
-            rows = session.scalars(
-                select(CalculationArtifact).where(
-                    CalculationArtifact.uri.like("s3://test-bucket/%")
-                )
-            ).all()
-            assert len(rows) == 1
-        finally:
-            session.close()
+        request = NetworkPDepUploadRequest(**payload)
+        persist_network_pdep_upload(session, request)
+        session.flush()
+        rows = session.scalars(
+            select(CalculationArtifact).where(
+                CalculationArtifact.uri.like("s3://test-bucket/%")
+            )
+        ).all()
+        assert len(rows) == 1
     finally:
-        transaction.rollback()
-        connection.close()
+        session.close()
 
 
-def test_pdep_workflow_persists_and_reads_back_channel_kinetics(db_engine) -> None:
+def test_pdep_workflow_persists_and_reads_back_channel_kinetics(db_conn) -> None:
     """A Chebyshev ``channel_kinetics`` entry on the solve produces a
     ``NetworkKinetics`` + ``NetworkKineticsChebyshev`` row for the referenced
     channel, and round-trips through the existing network-kinetics read path.
@@ -1275,7 +1263,7 @@ def test_pdep_workflow_persists_and_reads_back_channel_kinetics(db_engine) -> No
         }
     ]
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**payload)
         network = persist_network_pdep_upload(session, request)
         session.flush()
@@ -1655,7 +1643,7 @@ def test_pdep_channel_kinetics_rejects_duplicate_plog_pressure_index() -> None:
 
 
 def test_pdep_workflow_persists_and_reads_back_plog_channel_kinetics(
-    db_engine,
+    db_conn,
 ) -> None:
     """A ``model_kind=plog`` ``channel_kinetics`` entry produces a
     ``NetworkKinetics`` (model_kind=plog) + one ``NetworkKineticsPlog`` row per
@@ -1701,7 +1689,7 @@ def test_pdep_workflow_persists_and_reads_back_plog_channel_kinetics(
         }
     ]
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**payload)
         network = persist_network_pdep_upload(session, request)
         session.flush()
@@ -1767,7 +1755,7 @@ def test_pdep_workflow_persists_and_reads_back_plog_channel_kinetics(
 
 
 def test_pdep_workflow_persists_mixed_chebyshev_and_plog_channel_kinetics(
-    db_engine,
+    db_conn,
 ) -> None:
     """One payload may carry a Chebyshev fit on one channel and a PLOG fit on
     another; both persist to their respective child tables."""
@@ -1824,7 +1812,7 @@ def test_pdep_workflow_persists_mixed_chebyshev_and_plog_channel_kinetics(
         },
     ]
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**payload)
         network = persist_network_pdep_upload(session, request)
         session.flush()
@@ -1864,7 +1852,7 @@ def test_pdep_workflow_persists_mixed_chebyshev_and_plog_channel_kinetics(
         assert cheb_plog == []
 
 
-def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:
+def test_pdep_species_statmech_persists_via_shared_seam(db_conn) -> None:
     """A network species carrying a statmech block persists a Statmech row
     (external_symmetry / optical_isomers) with a resolved source-calc link,
     reusing the computed-species bundle's shared statmech seam."""
@@ -1883,7 +1871,7 @@ def test_pdep_species_statmech_persists_via_shared_seam(db_engine) -> None:
         ],
     }
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         baseline_statmech_id = session.scalar(select(func.max(Statmech.id))) or 0
         request = NetworkPDepUploadRequest(**payload)
         persist_network_pdep_upload(session, request, created_by=None)
@@ -1953,7 +1941,7 @@ def _payload_with_ethyl_scan() -> dict:
     return payload
 
 
-def test_pdep_species_statmech_torsion_scan_persists(db_engine) -> None:
+def test_pdep_species_statmech_torsion_scan_persists(db_conn) -> None:
     """A per-species torsion with a scan-type source persists and links the
     scan calculation owned by the same species entry."""
     from app.db.models.statmech import Statmech, StatmechTorsion
@@ -1977,7 +1965,7 @@ def test_pdep_species_statmech_torsion_scan_persists(db_engine) -> None:
         ],
     }
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         baseline_statmech_id = session.scalar(select(func.max(Statmech.id))) or 0
         request = NetworkPDepUploadRequest(**payload)
         persist_network_pdep_upload(session, request, created_by=None)
@@ -2066,7 +2054,7 @@ def test_pdep_species_statmech_torsion_rejects_cross_species_scan_key() -> None:
         NetworkPDepUploadRequest(**payload)
 
 
-def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> None:
+def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_conn) -> None:
     """Direct unit test of the shared seam's torsion ownership guard.
 
     Bypasses the network request validator to prove the seam itself rejects a
@@ -2095,7 +2083,7 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
         }
     )
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         baseline_calc_id = session.scalar(select(func.max(Calculation.id))) or 0
         baseline_torsion_id = (
             session.scalar(select(func.max(StatmechTorsion.id))) or 0
@@ -2242,12 +2230,12 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_engine) -> N
     ids=lambda case: case if isinstance(case, str) else None,
 )
 def test_pdep_strict_v2_schema_rejects_incomplete_path_and_evidence_matrix(
-    db_engine, mutate, label
+    db_conn, mutate, label
 ) -> None:
     """Strict v2 rejects malformed path, solve-scope, and TS evidence input before writes."""
     payload = _full_payload()
     mutate(payload)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         before = session.scalar(select(func.count()).select_from(Network))
         with pytest.raises(ValueError):
             NetworkPDepUploadRequest(**payload)
@@ -2259,14 +2247,14 @@ def test_pdep_strict_v2_schema_rejects_incomplete_path_and_evidence_matrix(
 # ---------------------------------------------------------------------------
 
 
-def test_barrierless_channel_round_trips_without_a_transition_state(db_engine) -> None:
+def test_barrierless_channel_round_trips_without_a_transition_state(db_conn) -> None:
     """A barrierless association persists with a NULL TS and no barrier row.
 
     Radical-radical association has no saddle point. Before this, the only
     way to deposit such a channel was to invent a transition state and a
     barrier height for it.
     """
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**_full_payload())
         network = persist_network_pdep_upload(session, request)
         session.flush()
@@ -2309,11 +2297,11 @@ def test_barrierless_channel_round_trips_without_a_transition_state(db_engine) -
         assert association_read.microreactions[0].transition_state_entry_ref is None
 
 
-def test_submerged_barrier_is_accepted(db_engine) -> None:
+def test_submerged_barrier_is_accepted(db_conn) -> None:
     """A barrier below the declared zero is legitimate, not a validation error."""
     payload = _full_payload()
     payload["solve"]["channel_barriers"][0]["forward_barrier_kj_mol"] = -8.0
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**payload)
         network = persist_network_pdep_upload(session, request)
         session.flush()
@@ -2336,13 +2324,13 @@ def test_non_finite_barrier_is_rejected() -> None:
 
 
 def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
-    db_engine,
+    db_conn,
 ) -> None:
     """IRC evidence is recommended, not required — but its absence is stated."""
     payload = _full_payload()
     payload["transition_states"][0]["validation_evidence"] = []
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         warnings: list[UploadWarning] = []
         request = NetworkPDepUploadRequest(**payload)
         network = persist_network_pdep_upload(session, request, warnings=warnings)
@@ -2359,7 +2347,7 @@ def test_transition_state_without_irc_evidence_succeeds_with_a_warning(
 
 
 def test_every_pdep_saddle_point_reports_its_missing_atom_map(
-    db_engine,
+    db_conn,
 ) -> None:
     """A network's micro reactions are reactions, and their gaps are visible.
 
@@ -2372,7 +2360,7 @@ def test_every_pdep_saddle_point_reports_its_missing_atom_map(
     """
     payload = _full_payload()
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         warnings: list[UploadWarning] = []
         request = NetworkPDepUploadRequest(**payload)
         persist_network_pdep_upload(session, request, warnings=warnings)
@@ -2619,7 +2607,7 @@ def test_two_network_wide_energy_transfer_entries_are_refused() -> None:
         NetworkPDepUploadRequest(**payload)
 
 
-def test_network_wide_energy_transfer_round_trips_and_warns(db_engine) -> None:
+def test_network_wide_energy_transfer_round_trips_and_warns(db_conn) -> None:
     """Accepted, annotated, and readable back as network-wide.
 
     The three things a reader needs: the row survives with its scope intact,
@@ -2637,7 +2625,7 @@ def test_network_wide_energy_transfer_round_trips_and_warns(db_engine) -> None:
             "note": "one energyTransferModel declared for the whole network",
         }
     ]
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**payload)
         warnings: list[UploadWarning] = []
         network = persist_network_pdep_upload(session, request, warnings=warnings)
@@ -2671,14 +2659,14 @@ def test_network_wide_energy_transfer_round_trips_and_warns(db_engine) -> None:
         assert read_rows[0].collider_species_entry_ref is None
 
 
-def test_per_well_energy_transfer_round_trips_and_does_not_warn(db_engine) -> None:
+def test_per_well_energy_transfer_round_trips_and_does_not_warn(db_conn) -> None:
     """The preferred form keeps working and stays unannotated.
 
     Lowering the barrier for the network-wide case must not blur the two: a
     per-well deposit still resolves both axes on the read surface and carries
     no completeness warning.
     """
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         request = NetworkPDepUploadRequest(**_parallel_path_payload())
         warnings: list[UploadWarning] = []
         network = persist_network_pdep_upload(session, request, warnings=warnings)
@@ -2866,7 +2854,7 @@ def test_well_skipping_rejected_without_a_well_intermediate() -> None:
         NetworkPDepUploadRequest(**payload)
 
 
-def test_well_skipping_channel_round_trips(db_engine) -> None:
+def test_well_skipping_channel_round_trips(db_conn) -> None:
     """A declared chemically-activated channel uploads, persists, and reads back.
 
     It stores zero ``network_channel_microreaction`` rows and zero barriers —
@@ -2877,7 +2865,7 @@ def test_well_skipping_channel_round_trips(db_engine) -> None:
     from app.db.models.common import NetworkChannelMechanism
     from app.db.models.network_pdep import NetworkKinetics
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**_well_skipping_payload())
         network = persist_network_pdep_upload(session, request)
         session.flush()
@@ -3161,7 +3149,7 @@ def test_reported_solve_still_validates_what_it_does_supply() -> None:
     assert len(request.solve.state_energies) == 1
 
 
-def test_reported_solve_round_trips_and_warns(db_engine) -> None:
+def test_reported_solve_round_trips_and_warns(db_conn) -> None:
     """The kind survives persistence and the read path, and is annotated.
 
     Both halves are load-bearing. A reported record that could not be told
@@ -3171,11 +3159,11 @@ def test_reported_solve_round_trips_and_warns(db_engine) -> None:
     """
     from app.db.models.network_pdep import NetworkKinetics
 
-    # Rolled back rather than committed: ``db_engine`` is session-scoped, and
+    # Rolled back rather than committed: ``db_conn`` is session-scoped, and
     # a leaked NetworkKinetics row breaks
     # ``test_pdep_workflow_persists_and_reads_back_channel_kinetics``, which
     # counts them across the whole table.
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**_reported_payload())
         warnings: list[UploadWarning] = []
         network = persist_network_pdep_upload(session, request, warnings=warnings)
@@ -3222,14 +3210,14 @@ def test_reported_solve_round_trips_and_warns(db_engine) -> None:
         assert solve_read.record.network_solve.kind is NetworkSolveKind.reported
 
 
-def test_computed_solve_carries_no_reported_warning(db_engine) -> None:
+def test_computed_solve_carries_no_reported_warning(db_conn) -> None:
     """The preferred form stays unannotated.
 
     Admitting the weaker record must not blur the two: a computed deposit
     reads back as computed and carries no completeness warning about its
     origin.
     """
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         request = NetworkPDepUploadRequest(**_full_payload())
         warnings: list[UploadWarning] = []
         network = persist_network_pdep_upload(session, request, warnings=warnings)

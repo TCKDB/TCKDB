@@ -174,7 +174,7 @@ def test_tunneling_label_must_match_its_evidence() -> None:
 
 
 def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
-    db_engine,
+    db_conn,
 ) -> None:
     """A deposited computed rate retains every statmech subject and Wigner input."""
     from tests.workflows.test_network_pdep_upload import _parallel_path_payload
@@ -204,7 +204,7 @@ def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
         "degeneracy_interpretation": "reaction_path_degeneracy",
     }
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         session.add(AppUser(id=77, username="computed_kinetics_roundtrip"))
         session.flush()
         persist_network_pdep_upload(session, NetworkPDepUploadRequest(**payload), created_by=77)
@@ -298,7 +298,7 @@ def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
 
 
 def test_persist_kinetics_upload_resolves_reaction_and_provenance(
-    db_engine,
+    db_conn,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -315,7 +315,7 @@ def test_persist_kinetics_upload_resolves_reaction_and_provenance(
         },
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         user = AppUser(username="kinetics_tester")
         session.add(user)
         session.flush()
@@ -343,7 +343,7 @@ def test_persist_kinetics_upload_resolves_reaction_and_provenance(
 
 
 def test_persist_kinetics_upload_reuses_existing_literature_by_doi(
-    db_engine,
+    db_conn,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -353,7 +353,7 @@ def test_persist_kinetics_upload_reuses_existing_literature_by_doi(
 
     request = _kinetics_request()
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         before_kinetics = len(session.scalars(select(Kinetics)).all())
         first = persist_kinetics_upload(session, request)
         after_first_literature = len(session.scalars(select(Literature)).all())
@@ -403,7 +403,7 @@ def test_additive_a_uncertainty_accepts_small_values() -> None:
     ["already_applied", "not_applied", "unknown"],
 )
 def test_persist_kinetics_upload_preserves_degeneracy_convention(
-    db_engine, convention
+    db_conn, convention
 ) -> None:
     request = _kinetics_request(
         degeneracy_convention=convention,
@@ -411,7 +411,7 @@ def test_persist_kinetics_upload_preserves_degeneracy_convention(
         software_release=None,
         workflow_tool_release=None,
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, request)
         assert kinetics.degeneracy_convention.value == convention
 
@@ -452,7 +452,7 @@ def test_kinetics_upload_rejects_non_positive_or_nonfinite_degeneracy(
 
 
 def test_persist_kinetics_upload_carries_multiplicative_uncertainty(
-    db_engine,
+    db_conn,
     monkeypatch,
 ) -> None:
     monkeypatch.setattr(
@@ -465,7 +465,7 @@ def test_persist_kinetics_upload_carries_multiplicative_uncertainty(
     payload["a_uncertainty_kind"] = "multiplicative"
     request = KineticsUploadRequest.model_validate(payload)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, request)
         assert kinetics.a_uncertainty == 2.0
         assert kinetics.a_uncertainty_kind == KineticsUncertaintyKind.multiplicative
@@ -483,18 +483,18 @@ def _patch_doi(monkeypatch) -> None:
     )
 
 
-def test_tunneling_model_defaults_to_null_without_application(db_engine, monkeypatch) -> None:
+def test_tunneling_model_defaults_to_null_without_application(db_conn, monkeypatch) -> None:
     _patch_doi(monkeypatch)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, _kinetics_request())
         assert kinetics.tunneling_model is None
 
 
-def test_pressure_context_high_p_limit_persists(db_engine, monkeypatch) -> None:
+def test_pressure_context_high_p_limit_persists(db_conn, monkeypatch) -> None:
     from app.db.models.common import PressureContext
 
     _patch_doi(monkeypatch)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(
             session, _kinetics_request(pressure_context="high_p_limit")
         )
@@ -502,11 +502,11 @@ def test_pressure_context_high_p_limit_persists(db_engine, monkeypatch) -> None:
         assert kinetics.pressure_bar is None
 
 
-def test_apparent_at_pressure_persists_with_pressure(db_engine, monkeypatch) -> None:
+def test_apparent_at_pressure_persists_with_pressure(db_conn, monkeypatch) -> None:
     from app.db.models.common import PressureContext
 
     _patch_doi(monkeypatch)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(
             session,
             _kinetics_request(
@@ -527,7 +527,7 @@ def test_apparent_at_pressure_without_pressure_bar_rejected() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_troe_falloff_and_third_body_persist(db_engine, monkeypatch) -> None:
+def test_troe_falloff_and_third_body_persist(db_conn, monkeypatch) -> None:
     from app.db.models.kinetics import (
         KineticsFalloff,
         KineticsThirdBodyEfficiency,
@@ -553,7 +553,7 @@ def test_troe_falloff_and_third_body_persist(db_engine, monkeypatch) -> None:
              "efficiency": 0.7},
         ],
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, request)
         session.flush()
 
@@ -586,7 +586,7 @@ def test_negative_third_body_efficiency_rejected() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_standalone_plog_persists(db_engine, monkeypatch) -> None:
+def test_standalone_plog_persists(db_conn, monkeypatch) -> None:
     from app.db.models.kinetics import KineticsPlog
 
     _patch_doi(monkeypatch)
@@ -599,7 +599,7 @@ def test_standalone_plog_persists(db_engine, monkeypatch) -> None:
              "ea_kj_mol": 52.0, "a_units": "cm3_mol_s"},
         ],
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, request)
         session.flush()
         entries = session.scalars(
@@ -610,7 +610,7 @@ def test_standalone_plog_persists(db_engine, monkeypatch) -> None:
         assert [e.pressure_bar for e in entries] == [0.1, 1.0]
 
 
-def test_standalone_chebyshev_persists(db_engine, monkeypatch) -> None:
+def test_standalone_chebyshev_persists(db_conn, monkeypatch) -> None:
     from app.db.models.kinetics import KineticsChebyshev
 
     _patch_doi(monkeypatch)
@@ -626,7 +626,7 @@ def test_standalone_chebyshev_persists(db_engine, monkeypatch) -> None:
             "coefficients": [[1.0, 0.1], [0.2, 0.02]],
         },
     )
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, request)
         session.flush()
         cheb = session.get(KineticsChebyshev, kinetics.id)
@@ -693,13 +693,13 @@ def test_falloff_main_line_uses_k_inf_order() -> None:
     assert request.a_units == ArrheniusAUnits.cm3_mol_s
 
 
-def test_persist_simple_third_body_flag(db_engine, monkeypatch) -> None:
+def test_persist_simple_third_body_flag(db_conn, monkeypatch) -> None:
     _patch_doi(monkeypatch)
     payload = _kinetics_request().model_dump()
     payload["is_third_body"] = True
     payload["a_units"] = "cm6_mol2_s"
     request = KineticsUploadRequest.model_validate(payload)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         kinetics = persist_kinetics_upload(session, request)
         session.flush()
         assert kinetics.is_third_body is True
@@ -711,14 +711,14 @@ def test_persist_simple_third_body_flag(db_engine, monkeypatch) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_forward_and_reverse_kinetics_persist_distinctly(db_engine, monkeypatch):
+def test_forward_and_reverse_kinetics_persist_distinctly(db_conn, monkeypatch):
     """Forward and reverse fits persist with distinct direction (previously
     indistinguishable). The single-reaction_entry coexistence case is covered
     at the read layer in test_get_reaction_kinetics."""
     from app.db.models.common import KineticsDirection
 
     _patch_doi(monkeypatch)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         fwd = persist_kinetics_upload(
             session, _kinetics_request(direction="forward")
         )
@@ -730,14 +730,14 @@ def test_forward_and_reverse_kinetics_persist_distinctly(db_engine, monkeypatch)
         assert rev.direction == KineticsDirection.reverse
 
 
-def test_direction_defaults_to_null(db_engine, monkeypatch):
+def test_direction_defaults_to_null(db_conn, monkeypatch):
     _patch_doi(monkeypatch)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         k = persist_kinetics_upload(session, _kinetics_request())
         assert k.direction is None
 
 
-def test_multi_arrhenius_persists_summed_terms(db_engine, monkeypatch):
+def test_multi_arrhenius_persists_summed_terms(db_conn, monkeypatch):
     from app.db.models.kinetics import KineticsArrheniusEntry
 
     _patch_doi(monkeypatch)
@@ -752,7 +752,7 @@ def test_multi_arrhenius_persists_summed_terms(db_engine, monkeypatch):
     ]
     request = KineticsUploadRequest.model_validate(payload)
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         k = persist_kinetics_upload(session, request)
         session.flush()
         assert k.a is None
@@ -842,12 +842,12 @@ def _make_network_kinetics(session):
     return nk
 
 
-def test_network_bridge_resolves(db_engine, monkeypatch):
+def test_network_bridge_resolves(db_conn, monkeypatch):
     _patch_doi(monkeypatch)
     # Roll back rather than commit: the shared session-scoped test DB is
     # global, and other tests select NetworkKinetics without a network
     # filter, so a committed bridge row here would pollute them.
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         nk = _make_network_kinetics(session)
         k = persist_kinetics_upload(
             session,
@@ -859,9 +859,9 @@ def test_network_bridge_resolves(db_engine, monkeypatch):
         session.rollback()
 
 
-def test_network_bridge_unknown_id_rejected(db_engine, monkeypatch):
+def test_network_bridge_unknown_id_rejected(db_conn, monkeypatch):
     _patch_doi(monkeypatch)
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         with pytest.raises(ValueError, match="does not reference an existing"):
             persist_kinetics_upload(
                 session,
@@ -1252,7 +1252,7 @@ def test_model_identifier_is_a_machine_token_and_only_for_other() -> None:
 
 
 def test_computed_statmech_without_source_calculations_cannot_back_a_rate(
-    db_engine,
+    db_conn,
 ) -> None:
     """Deposit-time statmech only warns; a rate that DEPENDS on it must not.
 
@@ -1272,17 +1272,13 @@ def test_computed_statmech_without_source_calculations_cannot_back_a_rate(
 
     @contextmanager
     def _rolled_back_session(engine):
-        connection = engine.connect()
-        transaction = connection.begin()
-        opened = Session(bind=connection, expire_on_commit=False)
+        opened = Session(bind=engine, expire_on_commit=False)
         try:
             yield opened
         finally:
             opened.close()
-            transaction.rollback()
-            connection.close()
 
-    with _rolled_back_session(db_engine) as session:
+    with _rolled_back_session(db_conn) as session:
         # One species entry: the H atom is both sides of this trivial rate, so
         # the workflow resolves both participants onto the entry that owns the
         # statmech under test.

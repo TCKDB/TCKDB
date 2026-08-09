@@ -61,13 +61,13 @@ def _request(*, reactants: list[dict], products: list[dict]) -> ReactionUploadRe
 # ---------------------------------------------------------------------------
 
 
-def test_a_reaction_that_loses_an_electron_is_refused(db_engine) -> None:
+def test_a_reaction_that_loses_an_electron_is_refused(db_conn) -> None:
     """``[OH-] + [H] -> H2O``: element-balanced (OH2 both sides), charge -1 -> 0.
 
     The exact deposit that used to succeed silently.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             before = session.scalar(select(func.count()).select_from(ChemReaction))
             with pytest.raises(ValueError) as excinfo:
@@ -83,7 +83,7 @@ def test_a_reaction_that_loses_an_electron_is_refused(db_engine) -> None:
             assert after == before
 
 
-def test_stoichiometric_coefficients_are_multiplied_in(db_engine) -> None:
+def test_stoichiometric_coefficients_are_multiplied_in(db_conn) -> None:
     """``2 [OH-] -> H2O + O``: two hydroxides carry -2, not -1.
 
     A per-participant comparison that ignored the coefficient would read this
@@ -93,7 +93,7 @@ def test_stoichiometric_coefficients_are_multiplied_in(db_engine) -> None:
     sees it, exactly as elemental balance receives it.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             with pytest.raises(ValueError) as excinfo:
                 persist_reaction_upload(
@@ -111,10 +111,10 @@ def test_stoichiometric_coefficients_are_multiplied_in(db_engine) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_a_neutral_reaction_is_accepted(db_engine) -> None:
+def test_a_neutral_reaction_is_accepted(db_conn) -> None:
     """The overwhelming majority of the database: 0 on both sides."""
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -125,10 +125,10 @@ def test_a_neutral_reaction_is_accepted(db_engine) -> None:
             assert entry.id is not None
 
 
-def test_ion_recombination_to_a_neutral_product_is_accepted(db_engine) -> None:
+def test_ion_recombination_to_a_neutral_product_is_accepted(db_conn) -> None:
     """``[OH-] + [H+] -> H2O``. Charge -1 and +1 sum to the product's 0."""
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -137,7 +137,7 @@ def test_ion_recombination_to_a_neutral_product_is_accepted(db_engine) -> None:
             assert entry.id is not None
 
 
-def test_a_reaction_with_a_conserved_nonzero_charge_is_accepted(db_engine) -> None:
+def test_a_reaction_with_a_conserved_nonzero_charge_is_accepted(db_conn) -> None:
     """``[OH-] + CH4 -> [CH3-] + H2O``, a proton transfer that stays at -1.
 
     Conservation, not neutrality, is the rule. Requiring both sides to be
@@ -145,7 +145,7 @@ def test_a_reaction_with_a_conserved_nonzero_charge_is_accepted(db_engine) -> No
     is the false-positive ADR 0008 disqualifies a blocking check for.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -157,10 +157,10 @@ def test_a_reaction_with_a_conserved_nonzero_charge_is_accepted(db_engine) -> No
             assert entry.id is not None
 
 
-def test_a_reaction_conserving_a_charge_of_minus_two_is_accepted(db_engine) -> None:
+def test_a_reaction_conserving_a_charge_of_minus_two_is_accepted(db_conn) -> None:
     """``2 [OH-] -> H2O + [O-2]``. -2 on both sides, with a coefficient of 2."""
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             entry = persist_reaction_upload(
                 session,
@@ -172,14 +172,14 @@ def test_a_reaction_conserving_a_charge_of_minus_two_is_accepted(db_engine) -> N
             assert entry.id is not None
 
 
-def test_a_pseudo_species_participant_is_exempt(db_engine) -> None:
+def test_a_pseudo_species_participant_is_exempt(db_conn) -> None:
     """Mirrors the elemental-balance exemption, and shares its implementation.
 
     A lumped or phenomenological construct is not atom-resolved, so neither its
     elements nor its charge is a quantity a conservation law applies to.
     """
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             # An anion on one side and a neutral pseudo-species on the other:
             # -1 against 0, which would be refused were the reaction judged.
