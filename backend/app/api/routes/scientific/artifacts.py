@@ -177,7 +177,12 @@ def artifacts_search_post(
         200: {"content": {"application/octet-stream": {}}},
         401: {"description": "Authentication required."},
         404: {"description": "No approved artifact has this digest."},
-        502: {"description": "Stored bytes failed integrity verification."},
+        502: {
+            "description": (
+                "Stored bytes failed integrity verification. Recorded "
+                "durably; retrying will not clear it."
+            )
+        },
         503: {"description": "Artifact storage is unavailable."},
     },
 )
@@ -196,6 +201,13 @@ def download_approved_artifact(
     opt-out flag) so no deployment can accidentally re-expose the bytes;
     see ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.
     The digest is still re-verified against the stored bytes below.
+
+    When that verification fails, this route does more than answer: it
+    writes an ``artifact_integrity_event``, which hard-fails the owning
+    calculation at read time for every subsequent reader. A 502 here is
+    therefore not a private incident between one caller and the store —
+    it is a recorded break in TCKDB's custody of the evidence
+    (``docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md``).
     """
 
     artifact = resolve_approved_artifact_by_sha256(session, sha256)
