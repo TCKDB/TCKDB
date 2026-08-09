@@ -139,6 +139,33 @@ curl -s "https://<host>/api/v1/scientific/releases/2026.07.0/selections?limit=20
 
 ---
 
+## 3b. Verify custody of the evidence the release will cite
+
+Run this **before** publishing. A release is the moment TCKDB turns a set of
+records into a citable claim, so it is the moment "we still hold the evidence
+behind these" has to be true — and it is the trigger ADR 0014 chose instead of
+a cron, because the cost of re-reading objects should be paid against what
+someone will actually cite rather than against total stored volume.
+
+```bash
+conda run -n tckdb_env python backend/scripts/ops/verify_artifact_integrity.py \
+  --release <release_public_ref>
+```
+
+Exit status is `1` if any stored object no longer matches its digest, so this
+can gate the runbook. Every break is written to `artifact_integrity_event`,
+which hard-fails the owning calculation at read time; investigate before
+publishing rather than shipping a release whose evidence TCKDB cannot produce.
+See `docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md` for
+how to read the row and tell the three causes apart.
+
+Note the current scope limit: `--release` covers the calculations a release
+selects **directly**, not the ones its selected thermo/kinetics/statmech rows
+cite as sources. Until that traversal exists, pair it with `--all --sample` for
+background coverage.
+
+---
+
 ## 4. Publish — this freezes the manifest
 
 **Publishing is irreversible in practice.** After this, selections can no

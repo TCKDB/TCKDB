@@ -35,7 +35,11 @@ from app.db.models.calculation import (
     CalculationArtifact,
     CalculationParameter,
 )
-from app.db.models.common import ArtifactKind, ParameterSource
+from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
+    ArtifactKind,
+    ParameterSource,
+)
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.fragments.calculation import CalculationParameterObservation
 from app.services import (
@@ -43,7 +47,9 @@ from app.services import (
     molpro_parameter_parser,
     orca_parameter_parser,
 )
+from app.services.artifact_integrity import record_from_error
 from app.services.artifact_storage import (
+    ArtifactIntegrityError,
     ArtifactStorageUnavailable,
     load_artifact_bytes,
 )
@@ -353,6 +359,25 @@ def try_extract_parameters_from_input_artifact_row(
         logger.warning(
             "calculation_parameter extraction skipped: storage read "
             "failed for artifact id=%s: %s",
+            artifact.id,
+            exc,
+        )
+        return None
+    except ArtifactIntegrityError as exc:
+        # The docstring promises this returns None on *any* failure so the
+        # backfill can continue across the corpus, and it did not: an
+        # integrity failure escaped and stopped the loop at the first
+        # corrupt object. Record the break (ADR 0014) and keep going —
+        # aborting the backfill is the one response that guarantees the
+        # rest of the corpus stays unexamined.
+        record_from_error(
+            exc,
+            detected_during=ArtifactIntegrityDetectionContext.parameter_extraction,
+            artifact=artifact,
+        )
+        logger.error(
+            "calculation_parameter extraction skipped: artifact id=%s "
+            "failed integrity verification and has been recorded: %s",
             artifact.id,
             exc,
         )
