@@ -85,7 +85,15 @@ class TestConservationAcrossAReaction:
         body = _assert_code(response, "reaction_mass_balance_failed")
         # Additive, not a rewrite: the sentence a prose-matching client has
         # always seen is byte-for-byte the one it still sees.
-        assert "not element-balanced" in str(body["detail"])
+        assert body["detail"] == (
+            "Reaction is not element-balanced (reaction_mass_balance_failed)."
+        )
+        # The message says the reaction does not balance; the context says
+        # what it is short of, without anyone parsing a sentence for it.
+        assert body["context"] == {
+            "reactants": {"C": 1, "H": 5},
+            "products": {"C": 1, "H": 3},
+        }
 
     def test_charge_losing_reaction_names_charge_conservation(self, client):
         # [OH-] + [H] -> H2O drops an electron on the way across. The
@@ -602,6 +610,29 @@ class TestAtomMapping:
         )
         body = _assert_code(response, "atom_map_inferred_requires_note")
         assert "ADR 0011" in str(body["detail"])
+
+    def test_the_structured_facts_reach_the_envelope_context(self, client):
+        """``context`` is the half of the contract that is not prose.
+
+        A wire-schema refusal is reported as a Pydantic error list, so its
+        structured facts used to be reachable only by parsing the sentence
+        that named them. They are lifted to the envelope's own ``context``,
+        which is where a service-raised refusal has always put them — so a
+        client reads one place regardless of which side of the boundary
+        refused it.
+        """
+        participants = _map()["participants"]
+        participants[0]["atom_to_ts"] = {1: 1, 2: 2, 3: 3, 9: 4}
+        response = client.post(
+            "/api/v1/uploads/computed-reaction",
+            json=_bundle(_map(participants=participants)),
+        )
+        body = _assert_code(response, "atom_map_indices_not_geometry_relative")
+        assert body["context"] == {
+            "atom_index": 9,
+            "geometry_key": "ch3-geom",
+            "geometry_atom_count": 4,
+        }
 
 
 # ---------------------------------------------------------------------------

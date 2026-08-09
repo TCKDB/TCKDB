@@ -16,6 +16,7 @@ from app.api.error_contract import (
     CodedValidationError,
     error_envelope,
     validation_detail_code,
+    validation_detail_context,
 )
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
@@ -76,6 +77,7 @@ def _value_error_handler(_request: Request, exc: ValueError) -> JSONResponse:
             code=validation_detail_code(
                 validation_detail, fallback="validation_error"
             ),
+            context=validation_detail_context(validation_detail),
             fallback_code="validation_error",
         )
     return JSONResponse(status_code=422, content=content)
@@ -93,6 +95,7 @@ def _request_validation_error_handler(
                 code=validation_detail_code(
                     details, fallback="request_validation_error"
                 ),
+                context=validation_detail_context(details),
                 fallback_code="request_validation_error",
             )
         ),

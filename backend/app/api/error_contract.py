@@ -82,19 +82,19 @@ def detail_code(detail: object, *, fallback: str) -> str:
     return fallback
 
 
-def _declared_codes(detail: object) -> set[str]:
-    """Codes taken from the exception object Pydantic preserved, not from prose.
+def _declared_errors(detail: object) -> list[CodedValidationError]:
+    """The coded exceptions Pydantic preserved inside a validation detail.
 
     A ``ValueError`` raised inside a validator reaches ``errors()`` as
     ``{"type": "value_error", "msg": "Value error, <prose>", "ctx":
     {"error": <the exception>}}``. When that exception is a
-    :class:`CodedValidationError` the code is an attribute of it, so the
-    code a client receives is the code the check declared — not whatever
-    survives in the sentence. This is what lets a refusal gain a code
-    without its ``detail`` moving by a single byte.
+    :class:`CodedValidationError` its code and context are attributes of
+    it, so what a client receives is what the check declared — not
+    whatever survives in the sentence. This is what lets a refusal gain a
+    code without its message moving by a single byte.
     """
 
-    codes: set[str] = set()
+    found: list[CodedValidationError] = []
 
     def visit(value: object) -> None:
         if isinstance(value, dict):
@@ -102,13 +102,38 @@ def _declared_codes(detail: object) -> set[str]:
             if isinstance(context, dict):
                 error = context.get("error")
                 if isinstance(error, CodedValidationError) and error.code:
-                    codes.add(error.code)
+                    found.append(error)
         elif isinstance(value, (list, tuple)):
             for nested in value:
                 visit(nested)
 
     visit(detail)
-    return codes
+    return found
+
+
+def validation_detail_context(detail: object) -> dict[str, Any]:
+    """Structured facts from the coded error behind a validation failure.
+
+    A check raised from service code hands its ``context`` straight to the
+    handler; one raised inside a Pydantic validator has it buried in the
+    error list, where the only way to find the two element counts that
+    disagreed is to parse the sentence that named them. Lifting it to the
+    envelope's own ``context`` puts both kinds of refusal in the same
+    place, which is what makes "read ``context``, never ``detail``"
+    advice a client can actually follow.
+
+    Empty unless exactly one code was promoted, for the same reason
+    :func:`validation_detail_code` falls back there: facts attached to a
+    code the envelope is not reporting would be facts about nothing.
+    """
+
+    errors = _declared_errors(detail)
+    if len({error.code for error in errors}) != 1:
+        return {}
+    merged: dict[str, Any] = {}
+    for error in errors:
+        merged.update(error.context)
+    return merged
 
 
 def validation_detail_code(detail: object, *, fallback: str) -> str:
@@ -125,7 +150,7 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
     if isinstance(detail, (list, tuple)) and len(detail) != 1:
         return fallback
 
-    declared = _declared_codes(detail)
+    declared = {error.code for error in _declared_errors(detail)}
     if len(declared) == 1:
         return declared.pop()
     if declared:
@@ -210,4 +235,5 @@ __all__ = [
     "error_envelope",
     "reject_unsupported_filters",
     "validation_detail_code",
+    "validation_detail_context",
 ]
