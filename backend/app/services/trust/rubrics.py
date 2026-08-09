@@ -216,7 +216,29 @@ def _check_scf_stability_present_if_claimed(calc: Calculation) -> EvidenceOutcom
 
 
 def _check_artifacts_present(calc: Calculation) -> EvidenceOutcome:
-    """Return passed when at least one calculation_artifact is attached."""
+    """Return passed when at least one calculation_artifact is attached.
+
+    **This check does not verify the bytes, and must not.** It asserts a
+    claim about the *depositor* — this calculation retained its evidence
+    — and that claim is satisfied by the row. Whether the stored object
+    still hashes to its digest is a claim about *TCKDB*, and the two are
+    deliberately kept apart (ADR 0002, ADR 0014):
+
+    * A rubric runner is contractually pure and free of I/O; the
+      evaluator's determinism depends on it. Fetching from the object
+      store here would make a trust grade a function of the network, so
+      the same record would score differently on two consecutive reads.
+    * Blending them would make TCKDB's own storage failure
+      indistinguishable from a contributor who never uploaded a log. An
+      operational fault would be reported as depositor incompleteness,
+      and the corpus-level statistic "how many calculations retained
+      their logs" would quietly track object-store health.
+
+    Byte-level custody is answered instead by
+    :attr:`~app.services.trust.models.HardFailReason.artifact_integrity_failed`,
+    which reads recorded ``artifact_integrity_event`` rows — a database
+    fact, evaluated in the same transaction as everything else here.
+    """
     return _bool_outcome(len(calc.artifacts) >= 1)
 
 

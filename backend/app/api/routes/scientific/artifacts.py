@@ -20,6 +20,8 @@ from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
+    ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationQuality,
     CalculationType,
@@ -28,6 +30,10 @@ from app.db.models.common import (
 from app.schemas.reads.scientific_artifact_search import (
     ScientificArtifactSearchRequest,
     ScientificArtifactSearchResponse,
+)
+from app.services.artifact_integrity import (
+    record_from_error,
+    record_integrity_failure,
 )
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
@@ -177,7 +183,7 @@ def artifacts_search_post(
 )
 def download_approved_artifact(
     sha256: str = Path(pattern=r"^[0-9a-f]{64}$"),
-    _user: AppUser = Depends(get_current_user),
+    user: AppUser = Depends(get_current_user),
     session: Session = Depends(get_db),
 ) -> Response:
     """Download curator-approved bytes by their content-addressed digest.
@@ -214,6 +220,17 @@ def download_approved_artifact(
             exc,
             exc_info=exc,
         )
+        # A log is not a record. This reader gets a 502 either way; the
+        # row is what makes the break visible to the *next* reader, and
+        # to the trust evaluator, without anyone having to grep. Written
+        # in its own transaction and best-effort, so it cannot turn a
+        # 502 into a 500. See ADR 0014.
+        record_from_error(
+            exc,
+            detected_during=ArtifactIntegrityDetectionContext.download,
+            artifact=artifact,
+            detected_by=user.id,
+        )
         raise HTTPException(
             status_code=502,
             detail="Stored artifact failed integrity verification.",
@@ -222,6 +239,21 @@ def download_approved_artifact(
         logger.warning(
             "Artifact storage unavailable on download: %s", exc, exc_info=exc
         )
+        # An unreachable store says nothing about the object and must not
+        # be recorded as a custody break — but a store that answered and
+        # said the object is *not there*, for a digest a row still
+        # references, has told us something durable.
+        if getattr(exc, "missing", False):
+            record_integrity_failure(
+                sha256=sha256,
+                finding=ArtifactIntegrityFinding.object_missing,
+                detected_during=ArtifactIntegrityDetectionContext.download,
+                expected_bytes=artifact.bytes,
+                artifact_id=artifact.id,
+                artifact_recorded_at=artifact.created_at,
+                detected_by=user.id,
+                detail=str(exc),
+            )
         raise HTTPException(
             status_code=503,
             detail="Artifact storage is unavailable.",

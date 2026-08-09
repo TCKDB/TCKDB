@@ -325,6 +325,56 @@ class ArtifactKind(str, Enum):
     ancillary = "ancillary"
 
 
+class ArtifactIntegrityFinding(str, Enum):
+    """What went wrong when stored bytes were checked against their digest.
+
+    The three members are not severities; they are three different
+    observations about a content-addressed object, and an operator needs
+    to tell them apart before deciding what to do.
+    """
+
+    #: The object was read and its SHA-256 is not the key it is stored
+    #: under. The bytes are not the bytes TCKDB claims to hold.
+    digest_mismatch = "digest_mismatch"
+
+    #: The object was read, its digest could not be faulted, but its
+    #: length differs from the byte count persisted on the artifact row.
+    #: Almost always a truncated read rather than a changed object, which
+    #: is why it is not folded into ``digest_mismatch``.
+    size_mismatch = "size_mismatch"
+
+    #: The object is absent from the store entirely. A row references an
+    #: object that is not there — a lifecycle rule, a manual delete, or a
+    #: write that never landed.
+    object_missing = "object_missing"
+
+
+class ArtifactIntegrityDetectionContext(str, Enum):
+    """Which read discovered an integrity failure.
+
+    Recorded because coverage is uneven by construction: an artifact
+    nobody downloads is verified by nothing, so "we have never seen a
+    failure" means very different things depending on which contexts have
+    actually run over a given object.
+    """
+
+    #: A curator-approved byte download (``GET /artifacts/{sha}/download``).
+    download = "download"
+
+    #: The operator-triggered verification pass.
+    verification_sweep = "verification_sweep"
+
+    #: ``store_artifact`` re-reading an existing content-addressed object
+    #: before attaching another row to the shared key.
+    store_dedup_verification = "store_dedup_verification"
+
+    #: The ESS-parameter backfill reading a stored log.
+    parameter_extraction = "parameter_extraction"
+
+    #: Archive export or restore streaming stored objects.
+    archive = "archive"
+
+
 class HessianSource(str, Enum):
     """Where a stored Cartesian Hessian matrix was obtained from.
 

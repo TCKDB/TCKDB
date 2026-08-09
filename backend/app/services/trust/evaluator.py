@@ -91,6 +91,14 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
     """
     if calc.quality is CalculationQuality.rejected:
         return HardFailReason.calculation_rejected
+    # Custody is checked before the science. Every other reason here says
+    # the record contradicts itself; this one says we can no longer
+    # produce the evidence the record rests on, which makes the rest of
+    # the grading a report about bytes we do not have. Reporting a
+    # geometry-validation verdict derived from a log whose stored copy is
+    # corrupt would be the more misleading of the two answers.
+    if any(artifact.integrity_events for artifact in calc.artifacts):
+        return HardFailReason.artifact_integrity_failed
     gv = calc.geometry_validation
     if gv is not None and gv.validation_status is ValidationStatus.fail:
         return HardFailReason.geometry_validation_failed

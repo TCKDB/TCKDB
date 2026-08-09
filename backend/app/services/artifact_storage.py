@@ -28,9 +28,9 @@ import hmac
 import os
 
 import boto3
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError
 
-from app.db.models.common import ArtifactKind
+from app.db.models.common import ArtifactIntegrityFinding, ArtifactKind
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -86,6 +86,10 @@ OUTPUT_LOG_SIGNATURES: dict[str, bytes] = {
 #: How many bytes to inspect for signature detection.
 _SIGNATURE_WINDOW = 4096
 
+#: S3/MinIO error codes that mean "the store answered, and the object is
+#: not there" — as opposed to "the store did not answer".
+_MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
+
 # ---------------------------------------------------------------------------
 # Kinds that must be valid UTF-8 text (no binary allowed).
 # ---------------------------------------------------------------------------
@@ -108,17 +112,62 @@ class ArtifactValidationError(ValueError):
 
 
 class ArtifactStorageUnavailable(Exception):
-    """Raised when the object store cannot accept a write that has already
-    passed validation.
+    """Raised when the object store cannot serve or accept a request.
 
     Distinct from :class:`ArtifactValidationError` so the API layer can
     map it to a 503 Service Unavailable response while validation
     failures stay 422.
+
+    :param missing: ``True`` when the store answered and said the object
+        is *not there*, as opposed to not answering at all. Both are 503
+        to a client — a caller cannot act differently — but they are
+        opposite facts for custody: an unreachable store says nothing
+        about the object, while a store that reports ``NoSuchKey`` for a
+        digest a row still references is a break TCKDB should record.
+        Kept as an attribute rather than a separate exception type so no
+        existing ``except ArtifactStorageUnavailable`` handler changes
+        behaviour.
     """
+
+    def __init__(self, message: str, *, missing: bool = False) -> None:
+        super().__init__(message)
+        self.missing = missing
 
 
 class ArtifactIntegrityError(Exception):
-    """Raised when stored bytes no longer match their persisted digest/size."""
+    """Raised when stored bytes no longer match their persisted digest/size.
+
+    Carries the comparison as *fields*, not only in the message. The
+    caller's job is to write a durable record of what was expected and
+    what was found (see :mod:`app.services.artifact_integrity`), and
+    re-parsing that out of an f-string would be the same class of
+    fragility the scientific check register exists to prevent.
+
+    :param finding: Which of the three observations this is.
+    :param sha256: The content-addressed key — what the object should
+        hash to.
+    :param observed_sha256: What the retrieved bytes actually hash to.
+        ``None`` only when nothing was retrieved.
+    :param expected_bytes: Persisted byte count, when the caller knew one.
+    :param observed_bytes: Length of what was retrieved.
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        finding: ArtifactIntegrityFinding,
+        sha256: str,
+        observed_sha256: str | None = None,
+        expected_bytes: int | None = None,
+        observed_bytes: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.finding = finding
+        self.sha256 = sha256
+        self.observed_sha256 = observed_sha256
+        self.expected_bytes = expected_bytes
+        self.observed_bytes = observed_bytes
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +376,7 @@ def store_artifact(
         return f"s3://{bucket}/{key}"
     except ClientError as exc:
         code = str(exc.response.get("Error", {}).get("Code", ""))
-        if code not in {"404", "NoSuchKey", "NotFound"}:
+        if code not in _MISSING_OBJECT_CODES:
             raise ArtifactStorageUnavailable(
                 f"Artifact storage HEAD failed for sha={sha256}: "
                 f"{code or type(exc).__name__}"
@@ -372,6 +421,19 @@ def load_artifact_bytes(
         response = client.get_object(Bucket=bucket, Key=key)
         content = response["Body"].read()
     except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage read failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}",
+            missing=code in _MISSING_OBJECT_CODES,
+        ) from exc
+    except BotoCoreError as exc:
+        # Not a ``ClientError``: ``EndpointConnectionError`` and friends
+        # descend from ``BotoCoreError`` only. Without this arm a real
+        # storage outage escaped this function raw, sailed past every
+        # ``except ArtifactStorageUnavailable`` handler downstream, and
+        # surfaced as an unexplained 500 on the download route — the
+        # opposite of the 503 that route documents.
         raise ArtifactStorageUnavailable(
             f"Artifact storage read failed for sha={sha256}: "
             f"{type(exc).__name__}: {exc}"
@@ -381,14 +443,59 @@ def load_artifact_bytes(
     if not hmac.compare_digest(computed_sha256, sha256):
         raise ArtifactIntegrityError(
             f"Artifact digest verification failed for sha={sha256}: "
-            f"retrieved sha={computed_sha256}."
+            f"retrieved sha={computed_sha256}.",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=sha256,
+            observed_sha256=computed_sha256,
+            expected_bytes=expected_bytes,
+            observed_bytes=len(content),
         )
     if expected_bytes is not None and len(content) != expected_bytes:
         raise ArtifactIntegrityError(
             f"Artifact size verification failed for sha={sha256}: "
-            f"expected {expected_bytes} bytes, retrieved {len(content)}."
+            f"expected {expected_bytes} bytes, retrieved {len(content)}.",
+            finding=ArtifactIntegrityFinding.size_mismatch,
+            sha256=sha256,
+            observed_sha256=computed_sha256,
+            expected_bytes=expected_bytes,
+            observed_bytes=len(content),
         )
     return content
+
+
+def head_artifact_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> dict[str, object] | None:
+    """Return the store's own metadata for an object, or ``None``.
+
+    A metadata-only probe (``HEAD``), used by the integrity recorder to
+    capture what the store says about an object *at the moment a break
+    was observed*. Cheap by design: it must not re-download a body on a
+    path that has already failed once.
+
+    The three keys that matter are ``LastModified``, ``ETag`` and
+    ``ContentLength``, and they are what separates "the object was
+    overwritten after we wrote it" from "we never stored what we said we
+    did" from "the store handed back the wrong bytes on this read". See
+    :class:`~app.db.models.calculation.ArtifactIntegrityEvent`.
+
+    Returns ``None`` rather than raising: the recorder must still write
+    its row when the store cannot even be asked for metadata. A missing
+    discriminator is a gap in the record; a raised exception here would
+    be a missing record.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    try:
+        return client.head_object(Bucket=bucket, Key=content_addressed_key(sha256))
+    except ClientError:
+        return None
+    except Exception:  # pragma: no cover - defensive; probe must never raise
+        return None
 
 
 def delete_artifact_object(
