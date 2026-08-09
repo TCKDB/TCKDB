@@ -1148,6 +1148,7 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     #: not just the row whose download happened to discover it. A
     #: per-row FK would let a corrupt object condemn one record and leave
     #: its N-1 twins reading as sound.
+    #:
     #: ``lazy="selectin"`` rather than a loader option at each call site.
     #: Eleven read paths already ``selectinload(Calculation.artifacts)`` on
     #: the way to a trust evaluation, and a custody break that is only
