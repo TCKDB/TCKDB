@@ -14,9 +14,19 @@ Transaction management lives in the route's ``get_write_db`` dependency:
 this function only needs to *raise* on failure for everything (including
 the submission, audit, and link rows it created moments earlier) to roll
 back atomically.
+
+That atomicity is right for the import and its record links, and wrong for
+the audit event, and the difference is what a row *is* rather than when it is
+written. A ``submission_record_link`` is load-bearing — approval flips exactly
+the linked records, so a bundle imported without its links is permanently
+unapprovable. The ``ingestion_succeeded`` event describes an import that has
+already happened. Only the latter is confined to a ``SAVEPOINT``; see
+:func:`_append_import_audit` and the comments at each site.
 """
 
 from __future__ import annotations
+
+import logging
 
 from sqlalchemy.orm import Session
 
@@ -56,6 +66,62 @@ from app.services.submission import (
 )
 from app.workflows.kinetics import persist_kinetics_upload
 from app.workflows.thermo import persist_thermo_upload
+
+logger = logging.getLogger(__name__)
+
+
+def _append_import_audit(
+    session: Session,
+    *,
+    submission,
+    bundle_kind: BundleKind,
+    imported_count: int,
+    linked_count: int,
+) -> bool:
+    """Append ``ingestion_succeeded`` without risking the imported bundle.
+
+    Lowest failure probability in this workflow, largest blast radius: it runs
+    after the biggest payload the API accepts has been fully imported. The
+    event's ``summary`` is ``Text`` and its ``details_json`` is ``JSONB`` — the
+    two column types that failed in the 2026-08-05 incident — so it is flushed
+    inside a ``SAVEPOINT``, after an explicit flush that puts the whole import
+    outside the savepoint's reach.
+
+    Returns whether the event was written. Never raises for a reason confined
+    to the event.
+    """
+    session.flush()
+    savepoint = session.begin_nested()
+    try:
+        mark_ingestion_succeeded(
+            session,
+            submission=submission,
+            summary=(
+                f"Imported {imported_count} {bundle_kind.value} "
+                f"record(s) from contribution bundle."
+            ),
+            details_json={
+                "bundle_kind": bundle_kind.value,
+                "records_imported": imported_count,
+                "records_linked": linked_count,
+            },
+        )
+    except Exception as exc:
+        savepoint.rollback()
+        logger.error(
+            "ingestion_succeeded audit event could not be written for bundle "
+            "submission_id=%s (kind=%s): %s. The bundle imported successfully "
+            "and its records, links and review rows are intact; only this line "
+            "of the submission's audit history is missing.",
+            submission.id,
+            bundle_kind.value,
+            type(exc).__name__,
+            exc_info=exc,
+        )
+        return False
+    savepoint.commit()
+    return True
+
 
 # ---------------------------------------------------------------------------
 # Dry-run gate
@@ -281,6 +347,16 @@ def submit_contribution_bundle(
     # 4. Create record links — products and immediate identity parents,
     #    deduped per (record_type, record_id) since a bundle may touch the
     #    same species_entry from multiple uploads.
+    #
+    #    These are deliberately NOT isolated from the import, unlike the audit
+    #    event below. A ``submission_record_link`` is not a description of the
+    #    bundle; it is the index a curator approves *through*
+    #    (``approve_submission`` flips exactly the linked records). A bundle
+    #    imported with missing links would be permanently unapprovable —
+    #    stranded science that reads as ``not_reviewed`` forever. And because
+    #    this runs before the response is determined, failing here yields an
+    #    honest error to a client that can simply resubmit the same bundle.
+    #    Isolation would trade a recoverable failure for an unrecoverable one.
     seen: set[tuple[SubmittedRecordType, int]] = set()
     for rec in records:
         key = (rec.record_type, rec.record_id)
@@ -296,21 +372,22 @@ def submit_contribution_bundle(
 
     # 5. Audit-log the successful import. Status stays at ``pending`` —
     #    ingestion success is not curator approval.
+    #
+    #    This one *is* isolated. It is purely a description of an import that
+    #    has already happened, and it lands after the largest payload the API
+    #    accepts: the lowest probability of failure in the flow, attached to
+    #    the largest blast radius. Losing it costs one line of a submission's
+    #    audit history, which the submission row, its ``submission_created``
+    #    event, the record links and the review rows all survive.
     imported_count = sum(
         1 for r in records if r.action is SubmittedRecordAction.imported
     )
-    mark_ingestion_succeeded(
+    _append_import_audit(
         session,
         submission=submission,
-        summary=(
-            f"Imported {imported_count} {bundle.bundle_kind.value} "
-            f"record(s) from contribution bundle."
-        ),
-        details_json={
-            "bundle_kind": bundle.bundle_kind.value,
-            "records_imported": imported_count,
-            "records_linked": len(records) - imported_count,
-        },
+        bundle_kind=bundle.bundle_kind,
+        imported_count=imported_count,
+        linked_count=len(records) - imported_count,
     )
 
     # 6. Carry warnings forward; add an ingestion_succeeded info note so

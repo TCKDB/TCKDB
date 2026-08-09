@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.models.common import LiteratureKind
@@ -113,21 +114,19 @@ def resolve_literature_submission(
     )
 
 
-def resolve_or_create_literature(
+def _select_existing_literature(
     session: Session,
-    request: LiteratureUploadRequest,
-) -> Literature:
-    """Resolve or create a literature row from workflow submission data.
+    *,
+    normalized_doi: str | None,
+    normalized_isbn: str | None,
+) -> Literature | None:
+    """Look up an existing citation by normalized DOI, then normalized ISBN.
 
-    :param session: Active SQLAlchemy session.
-    :param request: Workflow-facing literature submission payload.
-    :returns: Existing or newly created ``Literature`` row.
-    :raises ValueError: If identifier normalization or literature resolution fails.
+    Shared by the pre-insert check and the concurrent-insert recovery so both
+    answer "is this citation already here?" the same way.
+
+    :raises ValueError: If the DOI and ISBN resolve to two different rows.
     """
-
-    normalized_doi = normalize_doi(request.doi)
-    normalized_isbn = normalize_isbn(request.isbn) if request.isbn is not None else None
-
     existing_by_doi = None
     if normalized_doi is not None:
         existing_by_doi = session.scalar(
@@ -147,25 +146,83 @@ def resolve_or_create_literature(
     ):
         raise ValueError("DOI and ISBN resolve to different existing literature rows")
 
-    existing = existing_by_doi or existing_by_isbn
+    return existing_by_doi or existing_by_isbn
+
+
+def resolve_or_create_literature(
+    session: Session,
+    request: LiteratureUploadRequest,
+) -> Literature:
+    """Resolve or create a literature row from workflow submission data.
+
+    Idempotent across transactions as well as within one: a concurrent upload
+    that creates the same citation first is adopted rather than collided with.
+
+    :param session: Active SQLAlchemy session.
+    :param request: Workflow-facing literature submission payload.
+    :returns: Existing or newly created ``Literature`` row.
+    :raises ValueError: If identifier normalization or literature resolution fails.
+    """
+
+    normalized_doi = normalize_doi(request.doi)
+    normalized_isbn = normalize_isbn(request.isbn) if request.isbn is not None else None
+
+    existing = _select_existing_literature(
+        session,
+        normalized_doi=normalized_doi,
+        normalized_isbn=normalized_isbn,
+    )
     if existing is not None:
         return existing
 
     literature_create = resolve_literature_submission(session, request)
-    literature = Literature(
-        kind=literature_create.kind,
-        title=literature_create.title,
-        journal=literature_create.journal,
-        year=literature_create.year,
-        volume=literature_create.volume,
-        issue=literature_create.issue,
-        pages=literature_create.pages,
-        doi=literature_create.doi,
-        isbn=literature_create.isbn,
-        url=str(literature_create.url) if literature_create.url is not None else None,
-        publisher=literature_create.publisher,
-        institution=literature_create.institution,
-    )
-    session.add(literature)
-    session.flush()
+
+    def _build() -> Literature:
+        return Literature(
+            kind=literature_create.kind,
+            title=literature_create.title,
+            journal=literature_create.journal,
+            year=literature_create.year,
+            volume=literature_create.volume,
+            issue=literature_create.issue,
+            pages=literature_create.pages,
+            doi=literature_create.doi,
+            isbn=literature_create.isbn,
+            url=(
+                str(literature_create.url)
+                if literature_create.url is not None
+                else None
+            ),
+            publisher=literature_create.publisher,
+            institution=literature_create.institution,
+        )
+
+    # Check-then-insert against the normalized DOI/ISBN uniqueness indexes
+    # (``ix_literature_doi_normalized`` / ``ix_literature_isbn_normalized``).
+    # Two contributors citing the same paper at the same time both read
+    # ``None`` above, and the loser's violation would abort a transaction that
+    # already holds its entire upload — literature is resolved *during*
+    # deposit, so the collateral is scientific records, not a citation.
+    #
+    # Every sibling resolver (species, reaction, geometry, software,
+    # calculation, energy-correction) already wraps its identity insert this
+    # way; this one was the exception. Losing the race is not a conflict: the
+    # winner's row is the same citation this call was about to create, so the
+    # loser adopts it, exactly as it would have done had it arrived a moment
+    # later.
+    try:
+        with session.begin_nested():
+            literature = _build()
+            session.add(literature)
+            session.flush()
+    except IntegrityError:
+        existing = _select_existing_literature(
+            session,
+            normalized_doi=normalized_doi,
+            normalized_isbn=normalized_isbn,
+        )
+        if existing is None:
+            # Not the identity race — a genuinely broken row. Let it out.
+            raise
+        return existing
     return literature

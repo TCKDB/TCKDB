@@ -79,13 +79,29 @@ def get_write_db() -> Iterator[Session]:
     """Yield a database session that commits on success, rolls back on error.
 
     Use this for endpoints that mutate data (uploads, creates).
+
+    The ``commit`` here runs in dependency *teardown* — after the route
+    function has returned and after any decorator wrapping it has finished.
+    That makes this the only place in the request that can observe a
+    commit-time failure, which is the failure class where the response has
+    already been determined and the work is nonetheless gone. So the error
+    path gives ``app.services.upload_submission`` the chance to write the
+    durable failed-upload audit its route decorator structurally cannot
+    reach; the call no-ops for every session that is not a decorated
+    synchronous upload, and never raises.
     """
     session = SessionLocal()
     try:
         yield session
         session.commit()
-    except Exception:
+    except Exception as exc:
         session.rollback()
+        # Imported lazily: ``app.services.upload_submission`` reaches back
+        # into this module for ``SessionLocal``, and a module-level import
+        # would close that loop.
+        from app.services.upload_submission import audit_upload_failure_at_commit
+
+        audit_upload_failure_at_commit(session, exc)
         raise
     finally:
         session.close()

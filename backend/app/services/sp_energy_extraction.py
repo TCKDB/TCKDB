@@ -36,6 +36,7 @@ from tckdb_schemas.upload_warning import UploadWarning
 from app.db.models.calculation import Calculation, CalculationSPResult
 from app.db.models.common import ArtifactKind, CalculationType
 from app.schemas.fragments.artifact import ArtifactIn
+from app.services.best_effort import isolated_best_effort
 from app.services.sp_energy_reconciliation import (
     SpEnergyAction,
     SpEnergyReconciliation,
@@ -63,6 +64,18 @@ def try_reconcile_sp_energy_from_output_upload(
     failure — a broad safety net guarantees the canonical artifact upload
     is never aborted by a reconciliation error, matching the sibling
     parameter-extraction hook.
+
+    The safety net is :func:`isolated_best_effort` rather than a bare
+    ``try``/``except``. Catching the exception was never enough on its own:
+
+    * The fill path's in-place ``existing.electronic_energy_hartree = energy``
+      issues no SQL, so an unstorable value used to fail at the caller's
+      ``COMMIT`` — outside this guard, after the response was determined.
+      The savepoint's flush now surfaces it here instead.
+    * A database error that reached the old ``except Exception`` left the
+      transaction aborted, because nothing rolled back to a savepoint. The
+      catch-all then *hid* that until commit. Swallowing without rolling back
+      is worse than not swallowing at all.
     """
     # ``artifact_in.kind`` is typed against ``tckdb_schemas.enums.ArtifactKind``
     # while ``ArtifactKind`` here is the parallel ORM enum; both are
@@ -73,17 +86,11 @@ def try_reconcile_sp_energy_from_output_upload(
     if calculation.type != CalculationType.sp:
         return None
 
-    try:
-        return _reconcile_and_fill(session, calculation, artifact_in)
-    except Exception:
-        # Artifact upload is canonical and must never be aborted by a
-        # reconciliation failure — swallow anything and log it.
-        logger.warning(
-            "sp_energy reconciliation failed for artifact '%s'",
-            artifact_in.filename,
-            exc_info=True,
-        )
-        return None
+    return isolated_best_effort(
+        session,
+        lambda: _reconcile_and_fill(session, calculation, artifact_in),
+        what=f"sp_energy reconciliation for artifact '{artifact_in.filename}'",
+    )
 
 
 def _reconcile_and_fill(
@@ -151,8 +158,20 @@ def _fill(
             )
         )
         session.flush()
-    except IntegrityError:
+    except Exception as exc:
+        # The concurrent-duplicate ``IntegrityError`` is the expected case,
+        # but the ``except`` is deliberately wider. A savepoint whose failure
+        # is not rolled back leaves the transaction aborted, and the hook's
+        # outer safety net would then hide that until the caller's COMMIT.
+        # Whatever went wrong, undoing the fill is the correct response.
         savepoint.rollback()
         session.expire(calculation, ["sp_result"])
+        if not isinstance(exc, IntegrityError):
+            logger.warning(
+                "sp_energy fill skipped for calculation id=%s (%s)",
+                calculation.id,
+                type(exc).__name__,
+                exc_info=exc,
+            )
         return None
     return outcome.warning
