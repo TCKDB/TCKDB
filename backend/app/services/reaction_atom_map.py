@@ -463,8 +463,11 @@ def _raise_on_partition_disagreement(
     """Compare the two partitions one side at a time, tolerating relabelling."""
 
     for role in (ReactionRole.reactant, ReactionRole.product):
+        # ``==`` rather than ``is``: ``ReactionRole`` is a ``str`` enum, so a
+        # driver handing back a bare ``'reactant'`` would compare equal and fail
+        # an identity test, silently dropping a whole leg from the comparison.
         side_claims = {
-            slot: atoms for slot, atoms in irc_claims.items() if slot[0] is role
+            slot: atoms for slot, atoms in irc_claims.items() if slot[0] == role
         }
         if not side_claims:
             continue
