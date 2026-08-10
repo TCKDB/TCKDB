@@ -71,14 +71,14 @@ first one refuses.
   what its own geometry stores, and the ``upper(...)`` check carries the
   scientific rule the shared column used to carry.
 
-  Alembic revision ``b4e7c1d20f83`` removed that reason at the source:
-  ``geometry_atom.element`` is now canonicalised at ingestion and was
-  backfilled, so both geometries spell an element the same way and the two
-  columns hold the same string on every valid row. The split is kept anyway —
-  collapsing it is a schema change with its own migration, its own backfill and
-  its own reconsideration of whether the case-insensitive ``upper(...)`` check
-  should become a plain equality, and none of that belongs in the revision that
-  merely made the two agree.
+  Alembic revision ``b4e7c1d20f83`` made that rare rather than impossible:
+  ``geometry_atom.element`` is canonicalised at ingestion and older rows were
+  backfilled, so two geometries deposited through the API now spell an element
+  the same way. It is a convention and not a constraint — no CHECK enforces it,
+  and a restore or a bulk import can reintroduce ``CL`` — so the two columns and
+  the case-insensitive ``upper(...)`` check both remain load-bearing rather than
+  vestigial. Collapsing them would require canonicality to be structural first,
+  which is its own task.
 
   ``isotope_mass_number`` is *not* carried the same way, because it is nullable
   and a NULL column silently disables a MATCH SIMPLE foreign key — isotope
@@ -294,10 +294,10 @@ class ReactionAtomMapPair(Base):
     #: geometry spells it. Held equal to ``element`` case-insensitively by
     #: ``ck_reaction_atom_map_pair_element_matches``, which is the rule "an
     #: element does not change across a reaction". It has its own column
-    #: because the two geometries could capitalise the same element
-    #: differently and a shared column would have refused that correct map
-    #: outright; since ``b4e7c1d20f83`` they cannot, and the module docstring
-    #: says why the split is kept regardless.
+    #: because the two geometries may capitalise the same element differently
+    #: and a shared column would refuse that correct map outright. Ingestion
+    #: canonicalisation (``b4e7c1d20f83``) makes that rare, not impossible —
+    #: nothing enforces it — so the split stays; see the module docstring.
     ts_element: Mapped[str] = mapped_column(CHAR(2), nullable=False)
 
     atom_map: Mapped["ReactionAtomMap"] = relationship(back_populates="pairs")
@@ -363,15 +363,13 @@ class ReactionAtomMapPair(Base):
         CheckConstraint("atom_index >= 1", name="atom_index_ge_1"),
         CheckConstraint("ts_atom_index >= 1", name="ts_atom_index_ge_1"),
         # "An element does not change across a reaction." Case-insensitive
-        # because the two ends quote two geometries, and a geometry used to
-        # store the symbol its depositor's XYZ wrote: carbon becoming nitrogen
-        # is a record that cannot be what it says it is, while ``Cl`` becoming
+        # because the two ends quote two geometries, and nothing guarantees the
+        # two spell an element the same way: carbon becoming nitrogen is a
+        # record that cannot be what it says it is, while ``Cl`` becoming
         # ``CL`` is one program shouting where another did not. Ingestion
-        # canonicalisation (``b4e7c1d20f83``) means both ends now arrive
-        # identical, so ``upper(...)`` no longer changes which rows pass; it is
-        # left in place because tightening it to plain equality is a separate
-        # constraint change, and a check that is merely wider than it needs to
-        # be refuses nothing correct.
+        # canonicalisation (``b4e7c1d20f83``) makes disagreement rare on rows
+        # written through the API, and does not make it impossible -- no
+        # constraint holds the column canonical -- so this stays case-blind.
         CheckConstraint(
             "upper(element) = upper(ts_element)",
             name="element_matches",

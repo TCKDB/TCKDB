@@ -466,9 +466,10 @@ def _find_matches_using_smiles_graph(
     Both sides go through
     :func:`~app.chemistry.geometry.resolve_element_symbol` before they are
     grouped, because they come from sources that spell elements differently by
-    construction: the XYZ side keeps the depositor's nuclide labelling (``D``,
-    ``T``) and may not have been through ``parse_xyz`` at all, the reference
-    side holds RDKit's title-case ``GetSymbol()``. Grouping the raw strings
+    construction: the XYZ side holds whatever the depositor's file said
+    (``CL``, ``c``, ``D``) — ingestion canonicalises the case by convention,
+    but the reference side holds RDKit's title-case ``GetSymbol()`` and the
+    nuclide labelling is preserved on purpose. Grouping the raw strings
     makes a correct geometry look
     like it has no atoms in common with its own SMILES, and the caller records
     that as ``is_isomorphic=False`` / ``validation_status='fail'`` — a false

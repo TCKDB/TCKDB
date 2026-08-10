@@ -68,13 +68,18 @@ class GeometryAtom(Base):
 
     atom_index: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    #: Element symbol, **case-canonical**: first character upper, rest lower
-    #: (:func:`app.chemistry.geometry.normalize_element_symbol`, applied by
-    #: :func:`app.chemistry.geometry.parse_xyz` and backfilled onto older rows
-    #: by Alembic revision ``b4e7c1d20f83``). A file that writes ``CL`` stores
-    #: ``Cl`` here while ``geometry.xyz_text`` keeps the ``CL`` it deposited;
-    #: this column is the index the database joins and compares on, and a
-    #: column that is compared has to have one spelling.
+    #: Element symbol, **case-canonical by convention**: first character upper,
+    #: rest lower (:func:`app.chemistry.geometry.normalize_element_symbol`,
+    #: applied by :func:`app.chemistry.geometry.parse_xyz` and backfilled onto
+    #: older rows by Alembic revision ``b4e7c1d20f83``). A file that writes
+    #: ``CL`` stores ``Cl`` here while ``geometry.xyz_text`` keeps the ``CL`` it
+    #: deposited; this column is the index the database joins and compares on.
+    #:
+    #: "By convention" is load-bearing: there is deliberately **no** CHECK
+    #: constraint enforcing it, so a restore from a backup older than
+    #: ``b4e7c1d20f83`` or a write path that bypasses ``parse_xyz`` can hold a
+    #: non-canonical symbol. Readers that compare this column must normalise;
+    #: none of them may assume it.
     #:
     #: Case is the *only* thing canonicalised. ``D`` and ``T`` are stored as
     #: ``D`` and ``T``: they are the depositor's isotope labelling, and code

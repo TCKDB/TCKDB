@@ -481,15 +481,19 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "Case is not load-bearing, and since ``b4e7c1d20f83`` it cannot be: "
-        "``geometry_atom.element`` is canonicalised on the way in, so both "
-        "ends of a pair spell an element the same way. The constraint stays "
-        "case-insensitive anyway — carbon becoming nitrogen is a "
-        "contradiction, while ``Cl`` becoming ``CL`` is one program shouting "
-        "where another did not, and a check wider than it needs to be refuses "
-        "nothing correct. Isotope mass number is deliberately *not* carried "
-        "across the same way, because a NULL disables a MATCH SIMPLE foreign "
-        "key; isotope consistency is checked in the service layer instead."
+        "Case is not load-bearing. The comparison is deliberately "
+        "case-insensitive because the two ends quote two different "
+        "geometries and nothing guarantees they spell an element the same "
+        "way — carbon becoming nitrogen is a contradiction, while ``Cl`` "
+        "becoming ``CL`` is one program shouting where another did not. "
+        "``b4e7c1d20f83`` canonicalises the symbol on the way into "
+        "``geometry_atom.element``, which makes disagreement rare on rows "
+        "written through the API; it is a convention rather than a "
+        "constraint, so both the database check and the Python check still "
+        "normalise instead of assuming it. Isotope mass number is "
+        "deliberately *not* carried across the same way, because a NULL "
+        "disables a MATCH SIMPLE foreign key; isotope consistency is checked "
+        "in the service layer instead."
     ),
 )
 

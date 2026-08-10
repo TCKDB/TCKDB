@@ -24,20 +24,29 @@ def normalize_element_symbol(symbol: str) -> str:
     the same rule :mod:`app.chemistry.isotopes` already applies before handing
     a symbol to RDKit's periodic table.
 
-    Where this is applied
-    ---------------------
-    At **ingestion**, since Alembic revision ``b4e7c1d20f83``. :func:`parse_xyz`
-    runs every parsed symbol through this function before it becomes a
-    ``geometry_atom.element`` row, and that revision backfilled the rows written
-    before it. A symbol read out of ``geometry_atom`` is therefore canonical by
-    construction, and two of them may be compared directly — see
-    :mod:`app.services.reaction_atom_map`, which used to normalise at
-    comparison time and no longer needs to.
+    Where this is applied — in two places, on purpose
+    -------------------------------------------------
+    **At ingestion**, since Alembic revision ``b4e7c1d20f83``.
+    :func:`parse_xyz` runs every parsed symbol through this function before it
+    becomes a ``geometry_atom.element`` row, and that revision brought the rows
+    written before it into the same form. That is what makes the column one
+    spelling per element in the ordinary case.
 
-    It is still required wherever a symbol arrives from *outside* that column
-    and has to be lined up against it: RDKit's title-case ``GetSymbol()``, a
-    raw XYZ string that has not been through :func:`parse_xyz`, the wire
-    schema's
+    **And still at comparison time**, everywhere it already was. Ingestion
+    canonicalisation is a convention held by this module, not an invariant the
+    schema enforces: no CHECK constraint requires
+    ``geometry_atom.element`` to be canonical, so a restore from an older
+    backup, a bulk import, or any future write path that does not call
+    :func:`parse_xyz` can put ``CL`` back. Anything **blocking** has to be
+    correct on rows the running process never wrote, so it normalises both
+    sides rather than trusting the convention — see the element-conservation
+    check in :mod:`app.services.reaction_atom_map`. On canonical input that is
+    a no-op, so the correctness costs nothing.
+
+    It is required outright wherever a symbol arrives from *outside* that
+    column and has to be lined up against it: RDKit's title-case
+    ``GetSymbol()``, a raw XYZ string that has not been through
+    :func:`parse_xyz`, the wire schema's
     :func:`tckdb_schemas.fragments.reaction_atom_map.parse_xyz_elements`. Those
     sides are canonicalised by their own rules, or not at all, and this
     function is what makes the two rules one rule.
@@ -127,10 +136,12 @@ class ParsedXYZ:
     def isotope_substitutions(self) -> dict[tuple[str, int], int]:
         """Count non-standard isotope substitutions by ``(element, mass_number)``.
 
-        The element is read straight out of :attr:`atoms`, which
-        :func:`parse_xyz` has already canonicalised, so the key lines up with
-        the title-case symbols RDKit produces for the SMILES side without a
-        second normalisation step here.
+        The element is read straight out of :attr:`atoms` of *this* object,
+        which only :func:`parse_xyz` constructs and which it canonicalises on
+        the way in — so unlike a symbol read back out of ``geometry_atom``,
+        this one is canonical by construction and the key lines up with the
+        title-case symbols RDKit produces for the SMILES side without a second
+        normalisation step.
 
         :returns: Mapping used to cross-check the geometry against the
             isotope labels declared in the species-entry SMILES.
@@ -156,10 +167,14 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     canonicalised through :func:`normalize_element_symbol`, so a file that
     writes ``CL`` and a file that writes ``Cl`` both store ``Cl``. That column
     is the *parsed index* the database computes on: it is the target of
-    ``reaction_atom_map_pair``'s two composite foreign keys, the ``character(2)``
-    value every element comparison in the service layer reads, and the thing
-    ADR 0008 forbids from refusing a correct deposit over a capital letter.
-    A column that is compared has to have one spelling.
+    ``reaction_atom_map_pair``'s two composite foreign keys and the
+    ``character(2)`` value every element comparison in the service layer reads,
+    and one spelling per element is what makes those reads say what they mean.
+
+    This is a *convention*, not an invariant: nothing in the schema requires the
+    column to be canonical, so the comparisons still normalise both sides and
+    stay correct on rows that arrived some other way. Canonicalising here makes
+    the common case clean; it does not license anything downstream to assume it.
 
     ``canonical_xyz_text`` becomes ``geometry.xyz_text`` and, hashed, becomes
     ``geom_hash``. Element symbols there are left **exactly as deposited**. Two

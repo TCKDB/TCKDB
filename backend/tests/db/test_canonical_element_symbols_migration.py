@@ -17,15 +17,17 @@ one:
    references and stop a re-upload of the same file deduping onto its own row.
    The deposited spelling survives in ``xyz_text``, which is what makes the
    divergence between the two columns a design decision rather than drift.
-3. **An accepted calculation's geometry is backfilled too.**
-   ``trg_as_geometry_atom`` refuses updates to a geometry attached to an
-   accepted calculation, so the revision stands the guard down for its own
-   transaction. A backfill that silently skipped accepted rows would leave the
-   invariant false on precisely the oldest and most-cited data -- and the code
-   shipping with the revision stops normalising at comparison time.
-4. **The guard is back on afterwards.** Standing it down is scoped to the
-   migration; if it stayed down, the revision would have quietly removed
-   accepted-science immutability for every geometry in the database.
+3. **A non-canonical row inside an accepted calculation stops the
+   migration, loudly.** ``trg_as_geometry_atom`` refuses updates to a geometry
+   attached to an accepted calculation, and this revision leaves that guard
+   **standing**. Failing is the designed outcome: rewriting a value inside
+   approved science is the operator's decision, not a migration's, and nothing
+   downstream needs the rewrite because comparisons still normalise. The
+   earlier draft of this revision disabled the guard, so the test asserts the
+   failure happens rather than merely that the data is fine afterwards.
+4. **The revision contains no ``DISABLE TRIGGER``.** Read straight off the
+   file, so that standing the guard down cannot come back by accident in a
+   later edit and pass on the strength of an empty test database.
 
 ``D`` is seeded alongside the shouted symbols to pin the other half of the
 policy: case is canonicalised, isotope labelling is not.
@@ -132,12 +134,16 @@ def _seed_geometry(conn, *, geom_hash: str, xyz_text: str, elements) -> int:
     return geometry_id
 
 
-def _seed(conn) -> dict[str, int]:
+def _seed(conn, *, accepted: bool = False) -> dict[str, int]:
     """Write a mapped reaction whose geometries shout their elements.
 
     Deliberately built with raw SQL at ``BASE_REVISION``: the point is to
     reproduce rows that the *old* ingestion path could write, which the new one
     can no longer produce.
+
+    :param accepted: Approve the calculation that owns the reactant geometry,
+        arming ``trg_as_geometry_atom`` over its atoms. The backfill must then
+        fail rather than rewrite them.
     """
     suffix = uuid4().hex[:8]
 
@@ -245,9 +251,10 @@ def _seed(conn) -> dict[str, int]:
             },
         )
 
-    # The reactant geometry is the output of a calculation somebody approved.
-    # Everything above had to exist before this row, because the guard refuses
-    # writes to `geometry_atom` once it does.
+    # The reactant geometry is the output of a calculation. Whether anybody
+    # approved it decides whether the backfill is allowed to touch its atoms.
+    # Everything above had to exist before the approval, because the guard
+    # refuses writes to `geometry_atom` from the moment it lands.
     calculation_id = conn.scalar(
         text(
             "INSERT INTO calculation (type, species_entry_id) "
@@ -263,23 +270,24 @@ def _seed(conn) -> dict[str, int]:
         ),
         {"calculation_id": calculation_id, "geometry_id": reactant_geometry_id},
     )
-    reviewer_id = conn.scalar(
-        text(
-            "INSERT INTO app_user (username, role) "
-            "VALUES (:username, 'curator') RETURNING id"
-        ),
-        {"username": f"element-migration-reviewer-{suffix}"},
-    )
-    conn.execute(
-        text(
-            "INSERT INTO record_review "
-            "(record_type, record_id, status, reviewed_by, reviewed_at, "
-            " first_approved_at) "
-            "VALUES ('calculation', :calculation_id, 'approved', :reviewer_id, "
-            " now(), now())"
-        ),
-        {"calculation_id": calculation_id, "reviewer_id": reviewer_id},
-    )
+    if accepted:
+        reviewer_id = conn.scalar(
+            text(
+                "INSERT INTO app_user (username, role) "
+                "VALUES (:username, 'curator') RETURNING id"
+            ),
+            {"username": f"element-migration-reviewer-{suffix}"},
+        )
+        conn.execute(
+            text(
+                "INSERT INTO record_review "
+                "(record_type, record_id, status, reviewed_by, reviewed_at, "
+                " first_approved_at) "
+                "VALUES ('calculation', :calculation_id, 'approved', "
+                " :reviewer_id, now(), now())"
+            ),
+            {"calculation_id": calculation_id, "reviewer_id": reviewer_id},
+        )
 
     return {
         "reactant_geometry_id": reactant_geometry_id,
@@ -303,7 +311,7 @@ def _elements(conn, geometry_id: int) -> list[str]:
 
 
 def _assert_guard_refuses(harness, geometry_id: int, element: str) -> None:
-    """The accepted-science guard still stops an ordinary UPDATE.
+    """The accepted-science guard stops an ordinary UPDATE.
 
     Rolled back explicitly rather than through ``engine.begin()``: the
     statement aborts the transaction, and committing an aborted one is not
@@ -325,6 +333,27 @@ def _assert_guard_refuses(harness, geometry_id: int, element: str) -> None:
             transaction.rollback()
 
 
+def test_the_revision_leaves_the_accepted_science_guard_alone() -> None:
+    """No ``DISABLE TRIGGER``, asserted off the file rather than the database.
+
+    An earlier draft of this revision disabled ``trg_as_geometry_atom`` to push
+    the backfill through accepted rows. On a database with no non-canonical
+    accepted rows -- which is every one we can see, including the deployed
+    Pi -- that is indistinguishable from not disabling it, so no behavioural
+    test can tell the two apart. Reading the source can.
+    """
+    revision = (
+        Path(__file__).resolve().parents[2]
+        / "alembic"
+        / "versions"
+        / "b4e7c1d20f83_canonical_element_symbols.py"
+    ).read_text()
+    body = revision.split('"""', 2)[2]
+    assert "DISABLE TRIGGER" not in body.upper()
+    assert "ENABLE TRIGGER" not in body.upper()
+    assert "SESSION_REPLICATION_ROLE" not in body.upper()
+
+
 def test_element_symbols_are_canonicalised_without_re_keying_a_geometry(
     harness,
 ) -> None:
@@ -333,14 +362,9 @@ def test_element_symbols_are_canonicalised_without_re_keying_a_geometry(
         seeded = _seed(conn)
 
         # The pre-migration state this revision exists to remove: one element,
-        # two spellings, and the accepted-science guard already standing over
-        # the reactant.
+        # two spellings.
         assert _elements(conn, seeded["reactant_geometry_id"]) == ["CL", "c", "D"]
         assert _elements(conn, seeded["ts_geometry_id"]) == ["Cl", "C", "D"]
-
-    # Exactly the refusal the revision has to get past, quoted here so a
-    # reader can see the migration is not merely lucky.
-    _assert_guard_refuses(harness, seeded["reactant_geometry_id"], "Cl")
 
     harness.run("upgrade", CANONICAL_REVISION)
 
@@ -379,7 +403,9 @@ def test_element_symbols_are_canonicalised_without_re_keying_a_geometry(
         assert stored.geom_hash.strip() == _REACTANT_HASH
         assert stored.xyz_text == _REACTANT_XYZ
 
-        # 4. The guard is back on, and the calculation is still accepted.
+        # 3/4. The guard is enabled, and was never otherwise: the revision does
+        #      not touch it, so a migration that ran to completion proves the
+        #      rows it rewrote were ones it was permitted to rewrite.
         assert conn.scalar(
             text(
                 "SELECT tgenabled = 'O' FROM pg_trigger "
@@ -387,6 +413,61 @@ def test_element_symbols_are_canonicalised_without_re_keying_a_geometry(
             )
         )
 
+
+def test_a_non_canonical_row_inside_accepted_science_stops_the_migration(
+    harness,
+) -> None:
+    """Failing here is the feature, not the shortcoming.
+
+    Same seed, one difference: the calculation that owns the reactant geometry
+    has been approved, so ``trg_as_geometry_atom`` stands over its atoms. The
+    revision does not stand the guard down, so the backfill trips it and the
+    whole migration rolls back.
+
+    That is the correct outcome. Rewriting a value inside an approved record is
+    a decision for the operator holding that database, not for a migration
+    executing unattended, and nothing downstream depends on the rewrite: the
+    code shipping with this revision still normalises at comparison time, so a
+    row left spelled ``CL`` reads correctly everywhere it is compared.
+
+    Both halves are asserted -- that it fails, *and* that the data is untouched
+    -- because a migration that failed after a partial rewrite would be worse
+    than either outcome.
+    """
+    harness.run("upgrade", BASE_REVISION)
+    with harness.engine.begin() as conn:
+        seeded = _seed(conn, accepted=True)
+
+    _assert_guard_refuses(harness, seeded["reactant_geometry_id"], "Cl")
+
+    refused = harness.run("upgrade", CANONICAL_REVISION, check=False)
+    assert refused.returncode != 0
+    assert "is immutable" in refused.stderr
+
+    with harness.engine.begin() as conn:
+        # Untouched, both tables, and still at the previous revision.
+        assert _elements(conn, seeded["reactant_geometry_id"]) == ["CL", "c", "D"]
+        pairs = conn.execute(
+            text(
+                "SELECT btrim(element), btrim(ts_element) "
+                "FROM reaction_atom_map_pair WHERE atom_map_id = :id "
+                "ORDER BY atom_index"
+            ),
+            {"id": seeded["atom_map_id"]},
+        ).all()
+        assert pairs == [("CL", "Cl"), ("c", "C"), ("D", "D")]
+        assert conn.scalar(text("SELECT version_num FROM alembic_version")) == (
+            BASE_REVISION
+        )
+
+    # And the guard is exactly as it was: never disabled, never left down.
+    with harness.engine.begin() as conn:
+        assert conn.scalar(
+            text(
+                "SELECT tgenabled = 'O' FROM pg_trigger "
+                "WHERE tgname = 'trg_as_geometry_atom'"
+            )
+        )
     _assert_guard_refuses(harness, seeded["reactant_geometry_id"], "Br")
 
 

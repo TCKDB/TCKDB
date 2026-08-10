@@ -4,18 +4,35 @@
 exactly as the depositor's file wrote it. Electronic-structure codes do
 not agree about capitalisation, so a ``character(2)`` column that every
 element comparison in the codebase reads could hold ``Cl``, ``CL``,
-``cl`` and ``bR`` for one element. Three separate sites existed only to
-paper over that at comparison time, and the class of bug they papered
-over had already shipped twice: a saddle point written ``CL`` contradicted
-its own reaction, and a mixed-case deposit was accepted at the blocking
-tier while ``calc_geometry_validation`` recorded ``fail`` on the same
-bytes.
+``cl`` and ``bR`` for one element. Several sites normalise at comparison
+time to cope with that, and the class of bug they cope with had already
+shipped twice: a saddle point written ``CL`` contradicted its own
+reaction, and a mixed-case deposit was accepted at the blocking tier while
+``calc_geometry_validation`` recorded ``fail`` on the same bytes.
 
 ``parse_xyz`` now canonicalises the symbol before it becomes a row
 (``normalize_element_symbol`` -- first character upper, rest lower, and
 nothing else). This revision brings the rows written before it into the
-same form, so that "a symbol read out of ``geometry_atom`` is canonical"
-is true of the whole table rather than only of its future.
+same form.
+
+What that does and does not buy
+-------------------------------
+It makes the common case clean: one spelling per element in the column
+joins and comparisons run against. It does **not** establish an invariant.
+No CHECK constraint requires ``geometry_atom.element`` to be canonical, so
+canonicality is a convention held by application code, and a restore from
+an older backup or a bulk import can break it at any time. The
+comparison-time normalisation therefore **stays** everywhere it was --
+notably the blocking element-conservation check in
+``app.services.reaction_atom_map``, which has to be correct on rows the
+running process never wrote. Removing it would trade a tidy column for a
+false refusal on correct chemistry, which ADR 0008 puts out of bounds for
+a blocking check. On canonical input it is a no-op and costs nothing.
+
+Making canonicality structural is a separate question with a separate
+cost: a CHECK constraint cannot be added until the accepted rows are
+already canonical, which is exactly the thing this revision refuses to
+force (below). It can be its own task.
 
 Case only, deliberately
 -----------------------
@@ -86,39 +103,37 @@ Two constraints that could have been a problem and are not:
   ``(geometry_id, atom_index)`` is already the primary key, so the
   triple's uniqueness never depended on ``element``.
 
-Why the accepted-science guard is stood down for this UPDATE
-------------------------------------------------------------
+Why the accepted-science guard is left standing
+-----------------------------------------------
 ``trg_as_geometry_atom`` (from ``c6f2a9d4e7b1``) refuses any UPDATE to a
 ``geometry_atom`` row whose geometry is attached to an **accepted**
-calculation. On the deployed database that is most of the interesting
-rows, and skipping them is not an option: a backfill that leaves accepted
-geometries non-canonical leaves the invariant this revision exists to
-establish false, and the code change that goes with it -- deleting the
-comparison-time normalisation in ``app.services.reaction_atom_map`` --
-would then produce a *false refusal* on exactly the oldest, most-cited
-data. Partial is worse than either whole or none.
+calculation. This revision does **not** disable it, and deliberately does
+not: it is a scientific-integrity control, and a migration that stands one
+down mutates approved science without anybody being asked.
 
-The guard is therefore disabled for the duration of this transaction and
-re-enabled inside it. That is defensible here and would not be for an
-ordinary data edit, for a specific reason: **the accepted record does not
-change.** ``geom_hash`` is untouched, so the geometry's identity and its
-citable public ref are the same before and after; ``geometry.xyz_text``
-is untouched, so the evidence the record was approved on still reads back
-byte-for-byte as deposited; the coordinates, the isotope labels and the
-atom ordering are untouched. What changes is the case of a symbol in a
-derived index column that every consumer in the tree already read
-case-insensitively -- this revision makes the storage agree with the
-meaning the code always gave it. Reviewers approved the chlorine, not the
-shift key.
+Measured on the deployed database before writing this, read-only:
+``geometry_atom`` holds 46,566 rows over 3,653 geometries -- C 14368,
+H 28844, O 2415, S 331, N 222, Cl 202, F 184 -- and **every one is already
+canonical**. ``reaction_atom_map_pair`` holds 0 rows.
+``geometry.xyz_text`` is non-NULL everywhere. So on the database this was
+written for, the backfill below matches nothing, updates nothing, and the
+guard never fires. Standing a control down to repair rows that do not
+exist is not a trade-off; it is a straight loss.
 
-``ALTER TABLE ... DISABLE TRIGGER`` needs table ownership, which the
-migration role has and the application role does not; see
-``backend/docs/deployment/database_roles.md`` and the ownership boundary
-recorded in ``backend/docs/specs/dataset_release_and_profiles.md``.
+What happens on a database that *does* hold a non-canonical accepted row:
+the UPDATE trips the guard and the migration fails, loudly, with the
+guard's own ``accepted calculation record N is immutable`` message. That
+is the correct outcome rather than a shortcoming. The decision to rewrite
+a value inside an approved record belongs to the operator who has one, not
+to this file -- and nothing downstream depends on the rewrite happening,
+because the code that ships with this revision still normalises at
+comparison time (see ``app.services.reaction_atom_map``). Canonical
+storage is the common case made clean, not an invariant anything blocking
+relies on.
 
 The upgrade re-checks its own work before returning and raises if any
-non-canonical row survives, so a guard that could not be stood down
-fails the migration instead of silently half-applying it.
+non-canonical row survives, so a partial backfill -- for any reason, guard
+or otherwise -- fails the migration instead of silently half-applying it.
 
 Revision ID: b4e7c1d20f83
 Revises: d7f1a3c5e948
@@ -152,8 +167,6 @@ _GEOMETRY_ATOM_FKS = (
     "fk_reaction_atom_map_pair_ts_geometry_id_geometry_atom",
 )
 
-_ACCEPTED_SCIENCE_TRIGGER = "trg_as_geometry_atom"
-
 
 def upgrade() -> None:
     element = _canonical("element")
@@ -165,13 +178,9 @@ def upgrade() -> None:
     # docstring for why no ordering of undeferred updates works.
     op.execute(f"SET CONSTRAINTS {', '.join(_GEOMETRY_ATOM_FKS)} DEFERRED")
 
-    # Stood down, not removed: re-enabled below, in the same transaction, so a
-    # failure anywhere in this revision rolls the guard back on with the data.
-    op.execute(
-        f"ALTER TABLE public.geometry_atom "
-        f"DISABLE TRIGGER {_ACCEPTED_SCIENCE_TRIGGER}"
-    )
-
+    # `trg_as_geometry_atom` is left enabled on purpose. If a row here belongs
+    # to an accepted calculation, this statement fails with the guard's own
+    # message and the whole revision rolls back -- see the module docstring.
     op.execute(
         f"""
         UPDATE geometry_atom
@@ -189,20 +198,21 @@ def upgrade() -> None:
         """
     )
 
-    # Back to IMMEDIATE before the guard goes back on, and not only for
-    # tidiness: deferring the two foreign keys leaves pending trigger events on
-    # `geometry_atom`, and PostgreSQL refuses `ALTER TABLE ... ENABLE TRIGGER`
-    # on a table that has any ("cannot ALTER TABLE because it has pending
-    # trigger events"). Setting them IMMEDIATE runs the referential check here,
-    # against the finished state, which drains the queue -- and has the better
-    # failure mode besides: a violation is reported at this statement rather
-    # than at COMMIT, with the revision's own frame on the traceback.
+    # Back to IMMEDIATE, which runs the referential check here, against the
+    # finished state. Two reasons it is worth an explicit statement rather than
+    # letting COMMIT do it:
+    #
+    # * Failure mode. A violation is reported at this statement, with this
+    #   revision's own frame on the traceback, instead of surfacing from an
+    #   Alembic COMMIT with no indication of which migration produced it.
+    # * Pending trigger events are not free. A deferred constraint leaves them
+    #   queued on `geometry_atom`, and PostgreSQL refuses `ALTER TABLE` on a
+    #   table that has any ("cannot ALTER TABLE because it has pending trigger
+    #   events"). Nothing here alters the table any more, but a follow-up
+    #   revision that stacks onto this one would hit it, and draining the queue
+    #   at a known point is what makes the deferral local to these two
+    #   statements rather than to the whole transaction.
     op.execute(f"SET CONSTRAINTS {', '.join(_GEOMETRY_ATOM_FKS)} IMMEDIATE")
-
-    op.execute(
-        f"ALTER TABLE public.geometry_atom "
-        f"ENABLE TRIGGER {_ACCEPTED_SCIENCE_TRIGGER}"
-    )
 
     connection = op.get_bind()
     for table, columns in (
@@ -218,10 +228,12 @@ def upgrade() -> None:
         if remaining:
             raise RuntimeError(
                 f"b4e7c1d20f83: {remaining} row(s) of {table} still hold a "
-                "non-canonical element symbol after the backfill. The "
-                "migration refuses to leave the table half-canonical, "
-                "because the code that ships with it stops normalising at "
-                "comparison time."
+                "non-canonical element symbol after the backfill. An UPDATE "
+                "that matched fewer rows than it selected means something "
+                "silently refused part of the rewrite, and a half-canonical "
+                "table is a worse state to leave behind than an untouched "
+                "one. Nothing is broken by rolling back: comparisons still "
+                "normalise, so non-canonical rows read correctly either way."
             )
 
 

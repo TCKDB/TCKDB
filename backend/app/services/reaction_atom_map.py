@@ -70,6 +70,7 @@ from tckdb_schemas.fragments.reaction_atom_map import (
 from tckdb_schemas.upload_warning import UploadWarning
 
 from app.api.error_contract import CodedValueError
+from app.chemistry.geometry import normalize_element_symbol
 from app.db.models.common import AtomMapSource, ReactionRole
 from app.db.models.geometry import GeometryAtom
 from app.db.models.reaction import ReactionEntryStructureParticipant
@@ -264,17 +265,27 @@ def persist_reaction_atom_map(
                     context={"ts_atom_index": ts_atom_index},
                     message_prefix=False,
                 )
-            # Compared raw, and that is now safe. Both sides come out of
-            # ``geometry_atom.element``, which `parse_xyz` canonicalises at
-            # ingestion and Alembic revision ``b4e7c1d20f83`` backfilled, so
-            # ``Cl`` and ``CL`` deposited by two programs are one stored string
-            # by the time they reach here. This comparison used to run both
-            # ends through `normalize_element_symbol`, because refusing that
-            # map would reject correct chemistry over a capital letter, which
-            # ADR 0008 puts out of bounds for a blocking check; the rule is now
-            # kept by the column instead of by the comparison. Carbon becoming
-            # nitrogen still cannot be what it says it is, and still blocks.
-            if element != ts_element:
+            # Compared normalised, and it stays that way even though
+            # `parse_xyz` now canonicalises the case at ingestion.
+            #
+            # Ingestion canonicalisation is a *convention held by application
+            # code*, not an invariant the database enforces: no CHECK
+            # constraint requires `geometry_atom.element` to be canonical, so
+            # anything that writes the table without going through `parse_xyz`
+            # -- a restore from a backup older than ``b4e7c1d20f83``, a bulk
+            # import, a future write path -- can put `CL` back. This is a
+            # blocking check, so it has to be correct on rows this process
+            # never wrote. Dropping the normalisation would make it refuse a
+            # perfectly correct map over a capital letter on exactly those
+            # rows, which is what ADR 0008 disqualifies a blocking check from
+            # doing.
+            #
+            # On canonical input it is a no-op, so correctness here costs
+            # nothing. Carbon becoming nitrogen still cannot be what it says it
+            # is, and still blocks.
+            if normalize_element_symbol(element) != normalize_element_symbol(
+                ts_element
+            ):
                 raise CodedValueError(
                     W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
                     f"{field_path} maps atom {atom_index} of {side.value} "
@@ -300,11 +311,11 @@ def persist_reaction_atom_map(
                     transition_state_geometry_id=transition_state_geometry_id,
                     ts_atom_index=ts_atom_index,
                     # Each end stores what its own geometry stores, so both
-                    # composite foreign keys into ``geometry_atom`` resolve.
-                    # Since ingestion canonicalisation the two are the same
-                    # string whenever the map is valid; the columns stay
-                    # separate because collapsing them is a schema change with
-                    # its own migration, not a side effect of this one.
+                    # composite foreign keys into ``geometry_atom`` resolve
+                    # even where the two geometries disagree about case. On a
+                    # deposit that came through `parse_xyz` they now agree, but
+                    # the write path must not assume it any more than the
+                    # comparison above does.
                     element=element,
                     ts_element=ts_element,
                 )
@@ -581,12 +592,15 @@ def _element_index(
     values into two foreign keys that make the claim structural.
 
     Returned **as stored**, only unpadded — ``geometry_atom.element`` is
-    ``character(2)``, so a one-letter symbol reads back as ``"C "``. Nothing
-    else is done to it, for two reasons that now point the same way: each value
-    has to go back into its own geometry's foreign key exactly as that geometry
-    spells it, and since :func:`~app.chemistry.geometry.parse_xyz`
-    canonicalises the case at ingestion there is nothing left to normalise.
-    Callers may therefore compare two of these directly.
+    ``character(2)``, so a one-letter symbol reads back as ``"C "``. It is not
+    case-normalised here, because each value has to go back into its own
+    geometry's foreign key exactly as that geometry spells it; callers
+    normalise through
+    :func:`~app.chemistry.geometry.normalize_element_symbol` when they
+    *compare*. :func:`~app.chemistry.geometry.parse_xyz` canonicalises the case
+    on the way in, so in practice the stored value is already canonical — but
+    nothing in the schema requires it to be, so a caller that compares must
+    still normalise.
     """
 
     rows = session.execute(

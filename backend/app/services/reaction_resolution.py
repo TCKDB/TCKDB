@@ -906,12 +906,12 @@ def _transition_state_element_counts(
     elements differently by construction: ``geometry_atom.element`` holds the
     depositor's isotope labelling, while ``_element_counts_for_species`` reads
     RDKit's title-case ``GetSymbol()``. Comparing them raw makes a saddle point
-    written ``D`` contradict a reaction it is in fact made of, which refuses
-    correct chemistry over a string — the failure ADR 0008 puts out of bounds
-    for a blocking check. Capitalisation used to be the other half of this and
-    is no longer: ``b4e7c1d20f83`` canonicalises the case at ingestion, so
-    ``CL`` and ``c`` never reach a comparison. The resolution stays because
-    ``D`` and ``T`` still do.
+    written ``CL``, ``c`` or ``D`` contradict a reaction it is in fact made of,
+    which refuses correct chemistry over a string — the failure ADR 0008 puts
+    out of bounds for a blocking check. ``b4e7c1d20f83`` canonicalises the case
+    at ingestion, which makes ``CL`` and ``c`` rare here rather than absent;
+    ``D`` and ``T`` are preserved on purpose and are never absent. Both halves
+    of the resolution therefore stay.
     """
 
     if transition_state_geometry_id is not None:
