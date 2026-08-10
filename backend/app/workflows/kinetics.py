@@ -83,7 +83,7 @@ def _find_sp_for_species(
         raise ValueError(
             "Multiple SP calculations found for the requested species entry "
             "at the declared energy level of theory. "
-            "Cannot auto-resolve — multi-conformer disambiguation not yet supported."
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
         )
     return results[0]
 
