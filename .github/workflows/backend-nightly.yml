@@ -66,6 +66,13 @@ jobs:
       # See the note in backend-ci.yml: 4 vCPUs on a standard runner, and each
       # worker creates and migrates its own database.
       TCKDB_TEST_WORKERS: "4"
+      # The PR gates pin the order so a red gate is a regression rather than an
+      # unlucky draw. Something still has to run an order nobody chose, or the
+      # suite is only ever proved against the one ordering the pin selects --
+      # and a nightly is exactly the job that can afford to draw a new one.
+      # pytest-randomly prints the seed it drew, so anything this finds is
+      # reproducible with TCKDB_TEST_SEED=<that value>.
+      TCKDB_TEST_SEED: random
       AUTH_ALLOW_OPEN_REGISTRATION: "true"
       DEPLOYMENT_MODE: local
       EXPOSE_API_DOCS: "true"
