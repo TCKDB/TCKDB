@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import ast
 import inspect
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -374,6 +375,53 @@ def test_every_entry_states_its_tier_rationale_and_enforcement() -> None:
                 "check with no documented door is exactly what a referee will "
                 "probe."
             )
+
+
+def test_anchors_name_the_function_rather_than_a_line() -> None:
+    """No anchor may carry a line number, in the declarations or the document.
+
+    This is what keeps :func:`test_generated_document_is_in_sync` a *semantic*
+    gate. With line numbers the register is a build artifact of every line
+    above every declared check: #109 added one line to
+    ``app/services/geometry_validation.py``, shifting a check from 120 to 121,
+    and turned the tier red on main -- the entire drift being that digit.
+
+    A gate that fires on cosmetic movement gets regenerated reflexively
+    without anyone reading the diff, which is how a real drift eventually
+    lands unnoticed. So the anchor names the function, and the sync test keeps
+    its teeth for the things that matter: a renamed check, a removed code, a
+    vocab key that no longer resolves.
+
+    Asserted on both sides -- the live objects and the committed document --
+    because either one alone could regress without the other noticing.
+    """
+    line_anchor = re.compile(r"\.py:\d+")
+
+    offenders = [
+        (check.asserts, site.location)
+        for check in REGISTER
+        for site in check.enforced_by
+        if isinstance(site, PythonCheck) and line_anchor.search(site.location)
+    ]
+    offenders += [
+        (check.asserts, threshold.location)
+        for check in REGISTER
+        for threshold in check.thresholds
+        if isinstance(threshold, ProvenanceThreshold)
+        and line_anchor.search(threshold.location)
+    ]
+    assert not offenders, (
+        "These anchors carry a line number, which makes the register move "
+        "whenever the code above them does:\n"
+        + "\n".join(f"  {asserts!r}: {location}" for asserts, location in offenders)
+    )
+
+    document_offenders = sorted(set(line_anchor.findall(REGISTER_DOC.read_text())))
+    assert not document_offenders, (
+        f"{REGISTER_DOC} contains line-number anchors: {document_offenders}. "
+        "Regenerate it; if they persist, a `location` property has regressed "
+        "to `inspect.getsourcelines`."
+    )
 
 
 def test_generated_document_is_in_sync() -> None:

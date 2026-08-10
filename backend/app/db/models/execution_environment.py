@@ -32,14 +32,31 @@ class ExecutionEnvironmentManifest(Base, TimestampMixin):
     runtime_kind: Mapped[str] = mapped_column(String(32), nullable=False)
     runtime_locator: Mapped[str] = mapped_column(Text, nullable=False)
     executable_locator: Mapped[str] = mapped_column(Text, nullable=False)
+    # Both foreign keys name themselves. Left to ``NAMING_CONVENTION`` the
+    # generated names are 70 and 80 characters -- over PostgreSQL's 63-char
+    # identifier limit -- and SQLAlchemy would emit them truncated, so the
+    # model would be asserting a constraint name the database does not have.
+    # The names below are the ones ``a8b9c0d1e2f3`` actually created, which is
+    # why this is a model-only correction with no migration behind it: it
+    # makes the model say what the table already contains.
     software_release_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("software_release.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "software_release.id",
+            name="fk_execution_environment_manifest_software_release",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
         nullable=False,
     )
     workflow_tool_release_id: Mapped[int | None] = mapped_column(
         BigInteger,
-        ForeignKey("workflow_tool_release.id", deferrable=True, initially="IMMEDIATE"),
+        ForeignKey(
+            "workflow_tool_release.id",
+            name="fk_execution_environment_manifest_workflow_tool_release",
+            deferrable=True,
+            initially="IMMEDIATE",
+        ),
         nullable=True,
     )
     closure_json: Mapped[list[dict]] = mapped_column(JSONB, nullable=False)
