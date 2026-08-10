@@ -233,7 +233,7 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
         atoms.append((element, x, y, z))
 
     canonical_lines = [str(natoms), ""]
-    for deposited, (_element, x, y, z) in zip(deposited_symbols, atoms):
+    for deposited, (_element, x, y, z) in zip(deposited_symbols, atoms, strict=True):
         canonical_lines.append(f"{deposited} {x:.12f} {y:.12f} {z:.12f}")
 
     isotopes: list[tuple[int, int]] = []
