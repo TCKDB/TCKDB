@@ -563,6 +563,27 @@ def _committed_counts(connection) -> dict[str, int]:
     return dict(connection.execute(_COUNT_SQL).all())
 
 
+#: The watched counts as of the end of the last test that took them, and the
+#: nodeid of that test.  Together they close the tripwire's one blind spot:
+#: the fixture below can only see what happens *between its own two reads*, so
+#: a write that lands anywhere else — the setup of a session- or module-scoped
+#: fixture, which pytest instantiates before any function-scoped autouse
+#: fixture; a subprocess; an ``atexit`` handler; a background thread — is
+#: invisible to it, and surfaces hundreds of tests later as an unqualified
+#: query returning a row nothing in the file created.  Comparing this test's
+#: baseline against the previous test's final count names the gap the rows
+#: appeared in, which is the difference between a five-minute fix and a day of
+#: bisecting.
+_committed_baseline: dict[str, int] | None = None
+_committed_baseline_owner: str | None = None
+
+
+def _record_committed_baseline(counts: dict[str, int], nodeid: str) -> None:
+    global _committed_baseline, _committed_baseline_owner
+    _committed_baseline = counts
+    _committed_baseline_owner = nodeid
+
+
 @pytest.fixture(autouse=True)
 def _refuse_committed_rows(request) -> Iterator[None]:
     """Fail the test that commits, not the test that trips over the residue.
@@ -576,6 +597,11 @@ def _refuse_committed_rows(request) -> Iterator[None]:
     between, and the next test would be blamed for a leak it did not cause. A
     tripwire that reports order-dependent false positives would be a strange
     thing to install here.
+
+    Two checks, not one. The second compares this test's baseline against the
+    previous test's final count: rows that appeared in between were written by
+    something that is not a test body at all, which is the one leak the
+    original check cannot see (see ``_committed_baseline``).
 
     Set ``TCKDB_TEST_COMMIT_TRIPWIRE=0`` to disable — for bisecting an
     unrelated failure, never as a way to land a committing test.
@@ -592,9 +618,35 @@ def _refuse_committed_rows(request) -> Iterator[None]:
     probe = request.getfixturevalue("_committed_row_probe")
     before = _committed_counts(probe)
 
+    # Rows that appeared since the previous test finished belong to neither
+    # test's body.  Report the gap and re-baseline, so the next test is not
+    # blamed for the same rows a second time.
+    drifted = (
+        {}
+        if _committed_baseline is None
+        else {
+            table: (_committed_baseline[table], before[table])
+            for table in before
+            if table in _committed_baseline and before[table] != _committed_baseline[table]
+        }
+    )
+    if drifted:
+        previous = _committed_baseline_owner
+        _record_committed_baseline(before, request.node.nodeid)
+        raise AssertionError(
+            "the shared test database changed between "
+            f"{previous} and {request.node.nodeid}, outside either test body: "
+            + ", ".join(f"{t} {was}->{now}" for t, (was, now) in sorted(drifted.items()))
+            + ". Nothing between those two tests runs inside the per-test "
+            "rollback, so the writer is a session- or module-scoped fixture, a "
+            "subprocess, or a background thread. Give it a teardown that undoes "
+            "exactly what it did."
+        )
+
     yield
 
     after = _committed_counts(probe)
+    _record_committed_baseline(after, request.node.nodeid)
     if after == before:
         return
 

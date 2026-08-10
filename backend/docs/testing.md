@@ -271,6 +271,25 @@ purely because they drew different orders. A pinned seed does not make the
 suite order-independent; the rollback fixtures and the committed-row tripwire
 below do that. It makes a gate *result* reproducible.
 
+That claim is only worth anything if somebody checks it, so it is checked. The
+full suite is verified green at seeds **1, 2, 3, 4, 5, 7, 11, 90210 and
+424242**, under **8, 4, 2 and 0** workers — 0 (serial) being the strict case,
+since it puts all ~6,770 tests in one process against one database and so
+exercises every cross-file adjacency the sharded runs hide.
+
+**Set `TCKDB_TEST_SEED=random` for an unpinned order.** The script draws a
+fresh seed per invocation and echoes it:
+
+```
+tckdb: unpinned order, drew --randomly-seed=636985447 (replay with TCKDB_TEST_SEED=636985447)
+```
+
+It draws the seed itself rather than letting `pytest-randomly` pick one from
+the clock because the plugin announces its choice in `pytest_report_header`,
+which the `-q` every gate script passes suppresses — so a failure in an
+unpinned order would arrive with no way to replay the order that produced it.
+`backend-nightly.yml` runs this way; the PR gates stay pinned.
+
 **Workers default to 8**, not to core count. Each xdist worker creates its own
 database and runs `alembic upgrade head` into it (~6 s), so every extra worker
 costs a database, a migration and a connection pool against one shared
@@ -291,6 +310,7 @@ contention describe the contention rather than the tests.
 
 ```bash
 TCKDB_TEST_SEED=7 bash backend/scripts/test-full.sh        # a different order
+TCKDB_TEST_SEED=random bash backend/scripts/test-full.sh   # unpinned order
 bash backend/scripts/test-full.sh --randomly-seed=last     # caller wins
 TCKDB_TEST_WORKERS=16 bash backend/scripts/test-full.sh    # more workers
 TCKDB_TEST_WORKERS=0  bash backend/scripts/test-full.sh    # serial
@@ -362,9 +382,16 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
   *independence* by varying it on purpose:
 
   ```bash
-  TCKDB_TEST_SEED=1 bash backend/scripts/test-full.sh   # a different order
-  bash backend/scripts/test-full.sh -p no:randomly      # declaration order
+  TCKDB_TEST_SEED=1 bash backend/scripts/test-full.sh      # a different order
+  TCKDB_TEST_SEED=random bash backend/scripts/test-full.sh # any order at all
+  bash backend/scripts/test-full.sh -p no:randomly         # declaration order
   ```
+
+  Vary the *worker count* too, and finish with `TCKDB_TEST_WORKERS=0`.
+  Workers shard the suite, so an eight-way run only ever puts a leaking
+  test and its victim in the same process one time in eight; serial puts
+  every test in one process against one database and is the case that
+  actually decides order independence.
 
   For declaration order *reversed*, write a throwaway plugin outside the repo
   and load it by name — deliberately not a supported flag, because the suite
@@ -429,6 +456,17 @@ It started in `tests/workflows/conftest.py` and now covers every tree, because
 by cleaning up: the counts match again by teardown. There is no exemption
 marker, deliberately. `TCKDB_TEST_COMMIT_TRIPWIRE=0` disables it for bisecting
 an unrelated failure, never as a way to land a committing test.
+
+It makes **two** comparisons, not one. The first is the pair above: baseline
+against final count, which catches a test body that commits. The second is
+this test's baseline against the *previous* test's final count, which catches
+rows that appeared when no test body was running at all — the setup of a
+session- or module-scoped fixture (pytest instantiates those before any
+function-scoped autouse fixture, so the first check is blind to them), a
+subprocess, a background thread. That leak used to be undetectable by
+construction and surfaced only as an unqualified query in some later file
+returning a row nothing there created; now it names the two tests it appeared
+between.
 
 It watches a curated ~35-table union rather than all ~110 public tables
 because counting everything costs ~90 ms per probe (~12 minutes over the

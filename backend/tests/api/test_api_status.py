@@ -24,12 +24,41 @@ import time
 
 import pytest
 from botocore.exceptions import ClientError, EndpointConnectionError
+from sqlalchemy.orm import sessionmaker
 
 from app.api.routes import health
 from app.services import artifact_storage
 
 PROBE_ENDPOINT = "http://minio.test:9000"
 PROBE_BUCKET = "tckdb-artifacts-test"
+
+
+@pytest.fixture(autouse=True)
+def _bind_status_probes_to_test_database(db_engine, monkeypatch):
+    """Probe the migrated pytest database, not whatever ``DB_NAME`` names.
+
+    ``/status`` reports the database as unhealthy when ``alembic_version``
+    is missing, and it reaches that table through ``SessionLocal`` -- the
+    module-level factory bound at import to ``settings.database_url``, i.e.
+    to the ambient ``DB_NAME``, which is *not* the per-worker database this
+    suite creates and migrates.
+
+    So without this binding these tests assert on a database no fixture
+    owns. Whether they pass depends on whether something outside the test
+    run happened to migrate it: a developer shell inherits ``tckdb_dev``
+    and passes; the PR gate runs ``alembic upgrade head`` against its
+    ``DB_NAME`` in an earlier workflow step and passes; the nightly has no
+    such step and fails five tests every night for a reason that is
+    nowhere in this file.
+
+    ``tests/api/test_api_health.py`` binds the same way for the same
+    reason. Tests below that want a *specific* probe outcome monkeypatch
+    ``health.SessionLocal`` again in their own body, which wins here and is
+    undone first.
+    """
+    monkeypatch.setattr(
+        health, "SessionLocal", sessionmaker(bind=db_engine, expire_on_commit=False)
+    )
 
 
 class _FakeS3:
