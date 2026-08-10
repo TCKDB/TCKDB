@@ -247,6 +247,12 @@ for spec in $WATCHED; do
     latest_epoch="$(epoch_of "$latest_any_started")"
     if [[ -n "$latest_epoch" ]]; then
         age_hours=$(( (now_epoch - latest_epoch) / 3600 ))
+    elif [[ -n "$latest_any_started" ]]; then
+        # A timestamp that will not parse means the freshness check silently
+        # does not happen, and a freshness check that does not happen reads as
+        # "not silent". Say so rather than skip quietly.
+        echo "warning: could not parse the last run time for ${workflow}; freshness was not checked" >&2
+        annotate warning "CI watchdog could not check whether ${workflow} is still running"
     fi
 
     # ---------------------------------------------------------------

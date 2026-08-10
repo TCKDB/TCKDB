@@ -282,6 +282,16 @@ def test_a_still_running_workflow_is_not_silence(fake_host, run_ci_watchdog):
     assert pushes(fake_host) == []
 
 
+def test_an_unparseable_run_time_is_not_read_as_fresh(fake_host, run_ci_watchdog):
+    """A freshness check that does not happen reads as "not silent"."""
+    broken = run("success", hours_ago=1, run_id=200)
+    broken["run_started_at"] = "whenever"
+    broken["created_at"] = "whenever"
+    serve_runs(fake_host, [broken])
+    proc = run_ci_watchdog()
+    assert "freshness was not checked" in proc.stderr
+
+
 def test_a_workflow_that_has_never_run_is_reported(fake_host, run_ci_watchdog):
     serve_runs(fake_host, [])
     proc = run_ci_watchdog()
