@@ -13,7 +13,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError, NotFoundError
+from app.api.errors import DomainError, not_found
 from app.db.models.common import SpeciesEntryReviewRole
 from app.db.models.species import SpeciesEntry, SpeciesEntryReview
 
@@ -39,7 +39,7 @@ def create_species_entry_review(
         for the target species entry.
     """
     if session.get(SpeciesEntry, species_entry_id) is None:
-        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+        raise not_found("SpeciesEntry", row_id=species_entry_id)
 
     existing = session.scalar(
         select(SpeciesEntryReview).where(
@@ -51,7 +51,7 @@ def create_species_entry_review(
     if existing is not None:
         raise DomainError(
             f"A '{role.value}' review by the current user already exists for "
-            f"species entry {species_entry_id}"
+            "this species entry"
         )
 
     review = SpeciesEntryReview(
@@ -76,7 +76,7 @@ def list_species_entry_reviews(
         can distinguish "no reviews yet" from "unknown entry".
     """
     if session.get(SpeciesEntry, species_entry_id) is None:
-        raise NotFoundError(f"SpeciesEntry {species_entry_id} not found")
+        raise not_found("SpeciesEntry", row_id=species_entry_id)
 
     rows = session.scalars(
         select(SpeciesEntryReview)

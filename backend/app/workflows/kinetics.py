@@ -75,15 +75,15 @@ def _find_sp_for_species(
 
     if len(results) == 0:
         raise ValueError(
-            f"No SP calculation found for species_entry {species_entry_id} "
-            f"at the declared energy level of theory. "
-            f"Upload the conformer with the SP as an additional calculation first."
+            "No SP calculation found for the requested species entry "
+            "at the declared energy level of theory. "
+            "Upload the conformer with the SP as an additional calculation first."
         )
     if len(results) > 1:
         raise ValueError(
-            f"Multiple SP calculations found for species_entry {species_entry_id} "
-            f"at the declared energy level of theory. "
-            f"Cannot auto-resolve — multi-conformer disambiguation not yet supported."
+            "Multiple SP calculations found for the requested species entry "
+            "at the declared energy level of theory. "
+            "Cannot auto-resolve: multi-conformer disambiguation not yet supported."
         )
     return results[0]
 

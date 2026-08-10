@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -46,6 +47,44 @@ class NotFoundError(Exception):
     def __init__(self, message: str, *, code: str | None = None) -> None:
         super().__init__(message)
         self.code = code
+
+
+def not_found(
+    kind: str,
+    *,
+    row_id: object = None,
+    ref: str | None = None,
+    code: str | None = None,
+) -> NotFoundError:
+    """Build a 404 that names the resource without disclosing its row id.
+
+    The obvious way to write a 404 is ``f"{kind} not found ({kind}_id=
+    {row_id})"``, which is why roughly thirty of them were written that
+    way. It reads helpfully and it is wrong twice over. A row id is an
+    implementation detail of one database instance -- it does not survive
+    a restore, it does not agree across the hosted deployment and a lab
+    self-host, and no public surface is keyed on it -- so a client that
+    learns to read it builds against something TCKDB never promised to
+    keep stable. And the id is useless to the caller anyway: the whole
+    point of a 404 is that the row is not there.
+
+    Whoever actually needs the id is the operator reading the log, so it
+    goes there. A public ref *is* echoed, because the caller supplied it
+    and quoting it back is what makes a 404 diagnosable at all.
+
+    :param kind: The resource, in the vocabulary the API uses for it
+        (``"calculation"``, ``"species_entry"``).
+    :param row_id: The internal id that was looked up. Logged, never
+        returned.
+    :param ref: A public ref the caller supplied, echoed into the body.
+    :param code: Stable application code for the envelope.
+    """
+    if row_id is not None:
+        logger.info("404 %s not found: row_id=%s ref=%s", kind, row_id, ref)
+    detail = f"{kind} not found"
+    if ref is not None:
+        detail += f" ({kind}_ref={ref!r})"
+    return NotFoundError(detail, code=code)
 
 
 class DataIntegrityError(Exception):
@@ -161,6 +200,14 @@ def _no_result_found_handler(
 # Public responses must not leak raw psycopg/PostgreSQL text. We classify
 # the failure by SQLSTATE (stable across PG versions) and return a small,
 # stable envelope. Full driver detail goes to the server log.
+#
+# SQLSTATE is the *floor*, not the answer. It says a check constraint
+# fired; it cannot say which scientific rule that constraint encodes, so
+# on its own it renders "an atom changed element across this reaction"
+# and "a required column was null" as the same ``state_conflict``. A
+# constraint that the scientific check register names carries its own
+# code and sentence, looked up by name in ``_constraint_rejections``
+# below; everything else still falls back to the SQLSTATE bucket.
 
 _SQLSTATE_TO_CATEGORY: dict[str, tuple[str, str]] = {
     # (category code, sanitized public message)
@@ -175,6 +222,28 @@ _SQLSTATE_TO_CATEGORY: dict[str, tuple[str, str]] = {
 }
 
 _FALLBACK = ("integrity_conflict", "Integrity constraint violation.")
+
+
+@lru_cache(maxsize=1)
+def _constraint_rejections() -> dict[str, tuple[str, str]]:
+    """Scientific 409 codes, keyed on the constraint PostgreSQL names.
+
+    Imported lazily and cached because the register pulls in the service
+    and chemistry modules that declare its entries, several of which
+    import this module for :class:`DomainError` -- so a module-level
+    import would be a cycle. Nothing here runs until the first integrity
+    error, by which point the application is fully imported.
+
+    The mapping is *derived*, never written here. A hand-kept table in
+    this module would be a second place to remember a constraint rename;
+    building it from the register means the rename fails
+    ``test_database_object_exists_in_live_schema`` -- which queries
+    ``pg_constraint`` -- before it can silently downgrade a scientific
+    refusal back to a generic ``state_conflict``.
+    """
+    from app.scientific_checks.declarations import constraint_rejections
+
+    return constraint_rejections()
 
 
 def _classify_integrity_error(exc: IntegrityError) -> tuple[str, str]:
@@ -205,7 +274,22 @@ def _integrity_error_handler(
     constraint = getattr(getattr(orig, "diag", None), "constraint_name", None)
     if constraint:
         diag["constraint"] = constraint
-    if constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
+    context: dict[str, Any] = {}
+    # Named before classified. A constraint that encodes chemistry is a
+    # stronger guarantee than any Python check -- no write path can get
+    # around it -- and until now it was the one a client was told least
+    # about, because every violation collapsed into its SQLSTATE bucket.
+    # Keyed on the constraint name rather than on the driver's message
+    # text: parsing prose is what the typed envelope exists to replace.
+    rejection = _constraint_rejections().get(constraint) if constraint else None
+    if rejection is not None:
+        code, message = rejection
+        # The schema object name, not a row id. It is the key into
+        # ``docs/guides/scientific_check_register.md``, so a client (or a
+        # human reading a traceback) can look up which scientific position
+        # refused the write and what the escape hatch is.
+        context["constraint"] = constraint
+    elif constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
         code = "idempotency_conflict"
         message = (
             "Idempotency key was used concurrently for a different request."
@@ -226,7 +310,7 @@ def _integrity_error_handler(
             "detail": message,
             "code": code,
             "category": "integrity_error",
-            "context": {},
+            "context": context,
         },
     )
 

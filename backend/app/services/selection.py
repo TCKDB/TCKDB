@@ -11,7 +11,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError, NotFoundError
+from app.api.errors import DomainError, not_found
 from app.db.models.common import (
     ConformerSelectionKind,
     TransitionStateSelectionKind,
@@ -55,15 +55,13 @@ def create_conformer_selection(
     """
     group = session.get(ConformerGroup, conformer_group_id)
     if group is None:
-        raise NotFoundError(
-            f"ConformerGroup {conformer_group_id} not found"
-        )
+        raise not_found("ConformerGroup", row_id=conformer_group_id)
 
     if assignment_scheme_id is not None:
         scheme = session.get(ConformerAssignmentScheme, assignment_scheme_id)
         if scheme is None:
-            raise NotFoundError(
-                f"ConformerAssignmentScheme {assignment_scheme_id} not found"
+            raise not_found(
+                "ConformerAssignmentScheme", row_id=assignment_scheme_id
             )
 
     scheme_clause = (
@@ -80,9 +78,8 @@ def create_conformer_selection(
     )
     if existing is not None:
         raise DomainError(
-            f"A '{selection_kind.value}' selection already exists for "
-            f"conformer group {conformer_group_id} under the specified "
-            "assignment scheme"
+            f"A '{selection_kind.value}' selection already exists for this "
+            "conformer group under the specified assignment scheme"
         )
 
     selection = ConformerSelection(
@@ -124,9 +121,7 @@ def create_transition_state_selection(
     """
     transition_state = session.get(TransitionState, transition_state_id)
     if transition_state is None:
-        raise NotFoundError(
-            f"TransitionState {transition_state_id} not found"
-        )
+        raise not_found("TransitionState", row_id=transition_state_id)
 
     existing = session.scalar(
         select(TransitionStateSelection).where(
@@ -136,8 +131,8 @@ def create_transition_state_selection(
     )
     if existing is not None:
         raise DomainError(
-            f"A '{selection_kind.value}' selection already exists for "
-            f"transition state {transition_state_id}"
+            f"A '{selection_kind.value}' selection already exists for this "
+            "transition state"
         )
 
     selection = TransitionStateSelection(

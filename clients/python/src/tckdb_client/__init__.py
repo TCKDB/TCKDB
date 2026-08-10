@@ -20,6 +20,12 @@ from tckdb_client.errors import (
     TCKDBValidationError,
 )
 from tckdb_client.idempotency import make_idempotency_key, validate_idempotency_key
+from tckdb_client.rejection_codes import (
+    CONFLICT_REJECTION_CODES,
+    RejectionCode,
+    VALIDATION_REJECTION_CODES,
+    rejection_code,
+)
 from tckdb_client.replay import (
     ClientFactory,
     ReplayFailure,
@@ -101,6 +107,10 @@ __all__ = [
     "TCKDBConflictError",
     "TCKDBIdempotencyConflictError",
     "TCKDBPaginationError",
+    "CONFLICT_REJECTION_CODES",
+    "RejectionCode",
+    "VALIDATION_REJECTION_CODES",
+    "rejection_code",
     "validate_idempotency_key",
     "make_idempotency_key",
     "ClientFactory",

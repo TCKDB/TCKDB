@@ -19,7 +19,7 @@ from __future__ import annotations
 from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     RecordReviewStatus,
@@ -140,10 +140,7 @@ def get_transport(
     else:
         tr = session.get(Transport, tr_id)
     if tr is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"transport not found (transport_id={tr_id})",
-            code="handle_not_found",
-        )
+        raise not_found("transport", row_id=tr_id, code="handle_not_found")
 
     badge = _load_review_badge(session, tr.id)
     record = build_transport_record(

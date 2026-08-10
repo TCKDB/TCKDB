@@ -19,7 +19,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.author import Author
 from app.db.models.calculation import Calculation
 from app.db.models.kinetics import Kinetics
@@ -98,10 +98,7 @@ def get_literature(
     lit_id = resolve_literature_handle(session, literature_handle)
     lit = session.get(Literature, lit_id)
     if lit is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"literature not found (literature_id={lit_id})",
-            code="handle_not_found",
-        )
+        raise not_found("literature", row_id=lit_id, code="handle_not_found")
 
     authors = _load_authors(session, lit.id)
     counts = _load_record_counts(session, lit.id)

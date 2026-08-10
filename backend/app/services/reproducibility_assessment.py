@@ -126,7 +126,7 @@ def _require_record_exists(
     """Reject an assessment whose polymorphic target row does not exist."""
     _, model = resolve_reproducibility_record_model(record_type)
     if session.get(model, record_id) is None:
-        raise ValueError(f"{record_type.value} record {record_id} does not exist")
+        raise ValueError(f"the requested {record_type.value} record does not exist")
 
 
 def append_reproducibility_assessment(

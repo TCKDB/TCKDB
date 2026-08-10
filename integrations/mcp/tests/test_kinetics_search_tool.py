@@ -765,7 +765,8 @@ def test_software_forwarded() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_server_422_maps_to_invalid_input() -> None:
+def test_server_422_reports_the_server_code() -> None:
+    """The server said which refusal it was; the agent is told that."""
     def handler(request: httpx.Request) -> httpx.Response:
         return httpx.Response(
             422,
@@ -778,7 +779,8 @@ def test_server_422_maps_to_invalid_input() -> None:
     client = _make_client(handler)
     with pytest.raises(MCPToolError) as excinfo:
         ks_tool.run(client, _cfg(), {"family": "H_Abstraction"})
-    assert excinfo.value.code == "invalid_input"
+    assert excinfo.value.code == "missing_identifier"
+    assert excinfo.value.status_class == "invalid_input"
     assert excinfo.value.http_status == 422
     client.close()
 

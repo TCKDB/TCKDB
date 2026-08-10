@@ -13,7 +13,7 @@ from __future__ import annotations
 from sqlalchemy import exists, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -237,10 +237,7 @@ def get_calculation(
     calculation_id = resolve_calculation_handle(session, calculation_handle)
     calc = _load_calculation_for_read(session, calculation_id, includes)
     if calc is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"calculation not found (calculation_id={calculation_id})",
-            code="handle_not_found",
-        )
+        raise not_found("calculation", row_id=calculation_id, code="handle_not_found")
 
     badge = _load_review_badge(session, calculation_id)
     record = build_record(session, calc, includes, badge=badge)

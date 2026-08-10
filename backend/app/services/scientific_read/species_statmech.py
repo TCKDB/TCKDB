@@ -24,7 +24,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -107,9 +107,7 @@ def get_species_statmech(
 
     entry = session.get(SpeciesEntry, species_entry_id)
     if entry is None:
-        raise NotFoundError(
-            f"species_entry not found (species_entry_id={species_entry_id})"
-        )
+        raise not_found("species_entry", row_id=species_entry_id)
     species_entry_ref = entry.public_ref
 
     rows = session.execute(

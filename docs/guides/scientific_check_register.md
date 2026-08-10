@@ -51,6 +51,14 @@ disagree, this one is right by construction.
 - **Enforced at** — `file::qualified_name` for Python, or the
   constraint/trigger name for PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
+  Where a constraint names the 409 code it returns, that code is printed with
+  it. A database-held position is the *strongest* guarantee here — no write
+  path can bypass a check constraint — and it used to be the one a client was
+  told least about, because every violation collapsed into its SQLSTATE bucket
+  and arrived as `state_conflict`. The mapping is keyed on the constraint name
+  PostgreSQL reports, never on the driver's message text, and each one is
+  proved by `backend/tests/api/test_api_database_constraint_codes.py`, which
+  provokes the real violation and reads the code out of the response body.
 - **Thresholds** — the numeric lines the check fires on, and *where each number
   comes from*. A constant is fixed in code and printed. A provenance-derived
   threshold is not a number at all: it is resolved per record from the
@@ -90,8 +98,8 @@ disagree, this one is right by construction.
 | `error_envelope` | 17 | the `code` field of the 422 error body — a client can branch on it |
 | `upload_warning` | 9 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
-| `database_constraint` | 0 | PostgreSQL only, so the client sees a generic 409 integrity code rather than this check's name |
-| `none` | 3 | *nothing carries a code* |
+| `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
+| `none` | 2 | *nothing carries a code* |
 | **total** | **30** | |
 
 ## Recorded divergences
@@ -297,7 +305,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** The stored column is named `is_isomorphic` and the surrounding policy is worded as graph isomorphism, but the code tests the **molecular formula** only. Atom mapping falls back to a SMILES-graph matcher whenever bond perception from XYZ fails, which is the common case for the radicals, ions and stretched geometries this service mostly sees, and that fallback rejects a candidate on one condition: the per-element atom counts disagree. Verified by direct call in the module docstring — ethanol declared with dimethyl ether deposited passes, and methane with one hydrogen pulled to 5 A passes. So the rearrangement, bond-breaking, dissociation and proton-transfer cases the module was written to catch are not caught. Already self-documented in the module docstring rather than discovered here; recorded because the field name is what a consumer sees and it still overstates the guarantee.
 
-*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by a database constraint alone surfaces as a generic integrity conflict, and one held by schema shape or by a stored evidence row never surfaces as a refusal at all.)*
+*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
 ## Stationary points
 
@@ -463,6 +471,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   *Stated twice on purpose: once at the wire boundary, where the payload already holds every XYZ block the rule needs so the refusal arrives as a clean 422 before anything is written, and once as a database constraint, where a second write path cannot get around it.*
 - `ck_reaction_atom_map_pair_element_matches` (check on `reaction_atom_map_pair`)
   `upper(element) = upper(ts_element)`
+  Violating this returns **409 `atom_map_element_not_conserved`** — An atom map pairs two atoms of different elements. An atom does not change element on the way across a reaction.
 
 **Escape hatch.** Case is not load-bearing. The comparison is deliberately case-insensitive because the two ends quote two different geometries and nothing guarantees they spell an element the same way — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not. `b4e7c1d20f83` canonicalises the symbol on the way into `geometry_atom.element`, which makes disagreement rare on rows written through the API; it is a convention rather than a constraint, so both the database check and the Python check still normalise instead of assuming it. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
 
@@ -483,8 +492,10 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
   *Stated twice on purpose: once at the wire boundary, where the payload already holds every XYZ block the rule needs so the refusal arrives as a clean 422 before anything is written, and once as a database constraint, where a second write path cannot get around it.*
 - `uq_reaction_atom_map_pair_ts_atom_index` (unique on `reaction_atom_map_pair`)
   `(atom_map_id, side, ts_atom_index)`
+  Violating this returns **409 `atom_map_not_a_bijection`** — Two atoms of one leg claim the same saddle-point atom. A map is a bijection or it is not a map.
 - `uq_reaction_atom_map_pair_atom_map_id` (unique on `reaction_atom_map_pair`)
   `(atom_map_id, structure_participant_id, atom_index)`
+  Violating this returns **409 `atom_map_not_a_bijection`** — One participant atom is mapped more than once. A map is a bijection or it is not a map.
 
 **Escape hatch.** Per leg, not globally: the reactant and product legs each claim the whole saddle point, which is the point of storing two maps both pointing at it. A `side` column exists on the pair row purely so this can be a unique constraint, because SQL cannot dereference the participant to find its role.
 
@@ -635,8 +646,8 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | Field | Value |
 | --- | --- |
 | **Tier** | `structural` |
-| **Code** | *(none — prose only)* |
-| **Code reaches a client via** | *nothing carries a code* |
+| **Code** | `statmech_subject_not_exactly_one` |
+| **Code reaches a client via** | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
 | **Governing ADR** | 0008 |
 
 **Why this tier.** A modelling position rather than an arithmetic bound. Canonical transition state theory needs the saddle point's own partition function, so a transition state has to be a first-class subject of a statmech row. The alternative — encoding a transition state as a pseudo-species — would make every partition function's subject ambiguous and would put saddle points into a kind reserved for lumped and phenomenological constructs that the conservation laws deliberately exempt.
@@ -645,10 +656,9 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `ck_statmech_statmech_exactly_one_subject` (check on `statmech`)
   `(species_entry_id IS NULL) <> (transition_state_entry_id IS NULL)`
+  Violating this returns **409 `statmech_subject_not_exactly_one`** — A partition function names both a species entry and a transition-state entry, or neither. It belongs to exactly one subject.
 
 **Escape hatch.** None.
-
-*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by a database constraint alone surfaces as a generic integrity conflict, and one held by schema shape or by a stored evidence row never surfaces as a refusal at all.)*
 
 ## Pressure-dependent networks
 
@@ -667,6 +677,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `ck_network_solve_reported_requires_literature` (check on `network_solve`)
   `kind <> 'reported' OR literature_id IS NOT NULL`
+  Violating this returns **409 `network_solve_reported_requires_literature`** — A network solve declared as 'reported' cites no literature. Transcribed rates must name the publication they came from, because nothing else in the deposit accounts for them.
 - `ct_network_solve_computed_evidence` (trigger on `network_solve`)
   `deferred constraint trigger, at COMMIT: a computed solve must hold at least one state energy; at least one energy-transfer model if its network declares a well; at least one channel barrier if its network declares a saddle-point path`
 
@@ -689,6 +700,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 - `ck_network_solve_energy_transfer_scope_columns_agree` (check on `network_solve_energy_transfer`)
   `(scope='per_well' AND state_id IS NOT NULL AND collider_species_entry_id IS NOT NULL) OR (scope='network_wide' AND state_id IS NULL AND collider_species_entry_id IS NULL)`
+  Violating this returns **409 `energy_transfer_scope_columns_disagree`** — A collisional energy-transfer model declares a scope its own columns contradict: a 'per_well' model must name the well and the collider it was determined for, and a 'network_wide' one must name neither.
 
 **Escape hatch.** Declare `scope='network_wide'`. The physics behind the old per-well rule was never in dispute — ⟨ΔE⟩down depends on the density of states of the excited well and on the collider's ability to accept internal energy, so argon and helium do not relax the same well identically. The rule was wrong in practice because it confused what the quantity *is* with what a calculation *determined*: the only way to satisfy it was to paste one number once per well, and the repository's own Arkane ingester did exactly that. Those rows are indistinguishable from independently determined values — a provenance loss manufactured by the validation itself, worse than the gap it closed, because an absent value is honest while a duplicated one is a false positive every consumer will faithfully propagate.
 
@@ -739,7 +751,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None.
 
-*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by a database constraint alone surfaces as a generic integrity conflict, and one held by schema shape or by a stored evidence row never surfaces as a refusal at all.)*
+*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
 ---
 

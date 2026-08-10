@@ -19,7 +19,7 @@ from __future__ import annotations
 from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationGeometryValidation,
@@ -144,10 +144,7 @@ def get_conformer_group(
     cg_id = resolve_conformer_group_handle(session, conformer_group_handle)
     cg = session.get(ConformerGroup, cg_id)
     if cg is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"conformer_group not found (conformer_group_id={cg_id})",
-            code="handle_not_found",
-        )
+        raise not_found("conformer_group", row_id=cg_id, code="handle_not_found")
 
     cg_badge = _load_review_badge(
         session, SubmissionRecordType.conformer_group, cg.id
@@ -297,17 +294,13 @@ def get_conformer_observation(
     )
     obs = session.get(ConformerObservation, obs_id)
     if obs is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            "conformer_observation not found "
-            f"(conformer_observation_id={obs_id})",
-            code="handle_not_found",
-        )
+        raise not_found("conformer_observation", row_id=obs_id, code="handle_not_found")
 
     cg = session.get(ConformerGroup, obs.conformer_group_id)
     if cg is None:  # pragma: no cover — FK guarantees existence
-        raise NotFoundError(
-            "conformer_group not found for observation "
-            f"(conformer_observation_id={obs.id})",
+        raise not_found(
+            "conformer_group for the requested conformer_observation",
+            row_id=obs.conformer_group_id,
             code="handle_not_found",
         )
 

@@ -253,8 +253,12 @@ def test_expected_context_hash_must_match_computed_digest(db_session):
 
 
 def test_append_rejects_missing_polymorphic_target(db_session):
-    with pytest.raises(ValueError, match="reaction record 999999 does not exist"):
+    with pytest.raises(ValueError, match="reaction record does not exist") as caught:
         _append(db_session, record_id=999999)
+    # Names the record type, not the row id it was asked about. The id is
+    # an implementation detail of one database instance and is logged
+    # rather than returned; this message used to carry it.
+    assert "999999" not in str(caught.value)
 
 
 def test_timezone_aware_assessed_at_is_stored_as_naive_utc(db_session):

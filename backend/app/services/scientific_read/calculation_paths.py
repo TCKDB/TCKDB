@@ -17,7 +17,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationIRCPoint,
@@ -124,10 +124,7 @@ def get_calculation_scan(
     calculation_id = resolve_calculation_handle(session, calculation_handle)
     calc = session.get(Calculation, calculation_id)
     if calc is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"calculation not found (calculation_id={calculation_id})",
-            code="handle_not_found",
-        )
+        raise not_found("calculation", row_id=calculation_id, code="handle_not_found")
 
     scan_summary = _build_scan_include_summary(session, calculation_id)
     if scan_summary is None:
@@ -352,10 +349,7 @@ def get_calculation_irc(
     calculation_id = resolve_calculation_handle(session, calculation_handle)
     calc = session.get(Calculation, calculation_id)
     if calc is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"calculation not found (calculation_id={calculation_id})",
-            code="handle_not_found",
-        )
+        raise not_found("calculation", row_id=calculation_id, code="handle_not_found")
 
     irc_summary = _build_irc_include_summary(session, calculation_id)
     if irc_summary is None:
@@ -513,10 +507,7 @@ def get_calculation_path_search(
     calculation_id = resolve_calculation_handle(session, calculation_handle)
     calc = session.get(Calculation, calculation_id)
     if calc is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"calculation not found (calculation_id={calculation_id})",
-            code="handle_not_found",
-        )
+        raise not_found("calculation", row_id=calculation_id, code="handle_not_found")
 
     path_search_summary = _build_path_search_include_summary(
         session, calculation_id

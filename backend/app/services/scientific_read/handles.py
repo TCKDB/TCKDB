@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.energy_correction import (
@@ -248,9 +248,7 @@ def _enforce_curated_floor(
         row_id,
         status.value,
     )
-    raise NotFoundError(
-        f"{kind_label} not found", code="handle_not_found"
-    )
+    raise not_found(kind_label, code="handle_not_found")
 
 
 def resolve_path_handle(
@@ -298,9 +296,7 @@ def resolve_path_handle(
                 kind_label,
                 row_id,
             )
-            raise NotFoundError(
-                f"{kind_label} not found", code="handle_not_found"
-            )
+            raise not_found(kind_label, code="handle_not_found")
         _enforce_curated_floor(session, model_cls, row_id, kind_label)
         return row_id
 
@@ -323,10 +319,10 @@ def resolve_path_handle(
             kind_label,
             ref,
         )
-        raise NotFoundError(
-            f"{kind_label} not found ({kind_label}_ref={ref!r})",
-            code="handle_not_found",
-        )
+        # ``row_id`` is deliberately not passed: the specific log line
+        # above already carries more than the helper would, and the ref
+        # is the half a 404 may echo.
+        raise not_found(kind_label, ref=ref, code="handle_not_found")
     _enforce_curated_floor(session, model_cls, row_id, kind_label)
     return row_id
 
@@ -423,15 +419,22 @@ def reconcile_id_ref(
         # The ref points at no row; that contradicts the supplied id by
         # definition, which is a 422 conflict (not silent empty results).
         raise ValueError(
-            f"{conflict_code}: {kind_label}_id={id_value} and "
+            f"{conflict_code}: the supplied {kind_label}_id and "
             f"{kind_label}_ref={ref_value!r} do not refer to the same row "
-            f"(ref does not exist)"
+            f"(the ref does not exist)"
         )
     if resolved != int(id_value):
+        # The row id the ref resolves to is deliberately absent. Echoing
+        # it made this endpoint an oracle for the whole ref-to-id
+        # mapping: supply a public ref and any wrong id, and the 422 hands
+        # back the real one. That mapping is exactly what
+        # ``internal_ids`` exists to withhold, so the one place in the
+        # read layer that gave it away was a 422 nobody thought of as a
+        # disclosure. The caller supplied both inputs and is told which
+        # two disagreed, which is all it needs to fix the request.
         raise ValueError(
-            f"{conflict_code}: {kind_label}_id={id_value} and "
-            f"{kind_label}_ref={ref_value!r} resolve to different rows "
-            f"(ref → id={resolved})"
+            f"{conflict_code}: the supplied {kind_label}_id and "
+            f"{kind_label}_ref={ref_value!r} resolve to different rows"
         )
     return resolved
 

@@ -36,7 +36,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
-from app.api.errors import NotFoundError
+from app.api.errors import NotFoundError, not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -424,9 +424,7 @@ def _resolve_species_entry_context(
     if species_entry_id is not None:
         entry = session.get(SpeciesEntry, species_entry_id)
         if entry is None:
-            raise NotFoundError(
-                f"species_entry not found (species_entry_id={species_entry_id})"
-            )
+            raise not_found("species_entry", row_id=species_entry_id)
         species = session.get(Species, entry.species_id)
         if species is None:  # pragma: no cover — referential integrity
             raise NotFoundError("species_entry references a missing species row")
@@ -438,9 +436,7 @@ def _resolve_species_entry_context(
     if species_id is not None:
         species = session.get(Species, species_id)
         if species is None:
-            raise NotFoundError(
-                f"species not found (species_id={species_id})"
-            )
+            raise not_found("species", row_id=species_id)
         entries = list(species.entries)
         return {
             e.id: _species_context_from_orm(species, e) for e in entries

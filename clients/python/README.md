@@ -179,6 +179,50 @@ except TCKDBValidationError as exc:
     print(exc.status_code, exc.detail)
 ```
 
+### Telling one refusal from another
+
+The status tells you who is at fault; it does not tell you what to do.
+A `422` covers every refusal the server can make, and those want opposite
+responses — a geometry that disagrees with its declared SMILES is worth
+repairing and resending, while a reaction that does not balance means the
+deposit is wrong and should not be retried at all.
+
+`exc.code` names which one it was. `RejectionCode` is generated from the
+server's scientific check register, so a code that is renamed breaks the
+import rather than turning a branch into one that silently never matches:
+
+```python
+from tckdb_client import RejectionCode, TCKDBHTTPError, rejection_code
+
+try:
+    client.upload("reactions", payload)
+except TCKDBHTTPError as exc:
+    match rejection_code(exc.code):
+        case RejectionCode.SPECIES_GEOMETRY_COMPOSITION_MISMATCH:
+            payload = repair_geometry(payload)  # recoverable
+        case RejectionCode.REACTION_MASS_BALANCE_FAILED:
+            raise                               # the deposit is wrong
+        case None:
+            raise                               # not a code this client knows
+    print(exc.detail)                           # prose, for a human
+    print(exc.response_json["context"])         # the same facts, structured
+```
+
+Use `rejection_code(exc.code)` rather than `RejectionCode(exc.code)`: a
+server is routinely newer than the client pinned against it, and a code
+added since must return `None` rather than raise inside your own error
+handler.
+
+`VALIDATION_REJECTION_CODES` and `CONFLICT_REJECTION_CODES` say which
+status carries each code — `409` means a database-held rule refused the
+write, `422` means nothing was written at all. A code can be in both: the
+same scientific claim is sometimes enforced at the wire boundary and
+again in the schema.
+
+What each code asserts, why it refuses rather than warns, and how
+legitimate chemistry it would otherwise reject can still be deposited, is
+in [the scientific check register](https://github.com/TCKDB/TCKDB/blob/main/docs/guides/scientific_check_register.md).
+
 ## Scientific read/query methods
 
 The client exposes thin wrappers over the backend's `/api/v1/scientific/*`

@@ -143,8 +143,10 @@ class TCKDBHttpClient:
         if response.is_success:
             return parsed if parsed is not None else {}
 
-        detail = _extract_detail(parsed, response.status_code)
-        raise map_http_status(response.status_code, detail)
+        detail, code, context = _extract_error(parsed, response.status_code)
+        raise map_http_status(
+            response.status_code, detail, code=code, context=context
+        )
 
     def _headers(self) -> dict[str, str]:
         headers = {"Accept": "application/json"}
@@ -202,23 +204,53 @@ def _strip_api_prefix(url: str) -> str:
     return url.rstrip("/")
 
 
-def _extract_detail(parsed: Any, status: int) -> str:
-    """Pull a human-readable detail out of a server error envelope."""
+def _extract_error(
+    parsed: Any, status: int
+) -> tuple[str, str | None, dict[str, Any] | None]:
+    """Pull detail, code and context out of a server error envelope.
+
+    The backend's envelope is ``{code, detail, context}`` on every error
+    path. Reading only ``detail`` — which is what this did — was the
+    single line that undid the typed contract for every MCP consumer: the
+    code was present in the body, parsed, and dropped on the floor one
+    frame before it would have been reported.
+
+    Everything is optional, because not every non-2xx body is ours. A
+    reverse proxy's 502 page and a 404 from a route that does not exist
+    both arrive here, and neither carries a code; those fall back to the
+    status-derived bucket in :func:`map_http_status`.
+    """
+    detail = f"HTTP {status}"
+    code: str | None = None
+    context: dict[str, Any] | None = None
     if isinstance(parsed, dict):
-        d = parsed.get("detail")
-        if isinstance(d, str) and d:
-            return d
-        if isinstance(d, list):
-            return str(d)
-        code = parsed.get("code")
-        if isinstance(code, str) and code:
-            return code
-    return f"HTTP {status}"
+        raw_detail = parsed.get("detail")
+        if isinstance(raw_detail, str) and raw_detail:
+            detail = raw_detail
+        elif isinstance(raw_detail, list):
+            detail = str(raw_detail)
+        raw_code = parsed.get("code")
+        if isinstance(raw_code, str) and raw_code:
+            code = raw_code
+            if detail == f"HTTP {status}":
+                # A body with a code and no usable prose. Saying the code
+                # twice beats saying "HTTP 422" and nothing.
+                detail = raw_code
+        raw_context = parsed.get("context")
+        if isinstance(raw_context, dict) and raw_context:
+            context = raw_context
+    return detail, code, context
 
 
-def raise_for_status(status: int, detail: str) -> MCPToolError:
+def raise_for_status(
+    status: int,
+    detail: str,
+    *,
+    code: str | None = None,
+    context: dict[str, Any] | None = None,
+) -> MCPToolError:
     """Re-export of ``map_http_status`` for callers that build errors directly."""
-    return map_http_status(status, detail)
+    return map_http_status(status, detail, code=code, context=context)
 
 
 __all__ = [

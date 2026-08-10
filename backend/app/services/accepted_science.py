@@ -66,7 +66,7 @@ def lock_scientific_records(
             continue
         row = session.scalar(select(model).where(model.id == record_id).with_for_update())
         if row is None:
-            raise DomainError(f"{record_type.value} record {record_id} does not exist")
+            raise DomainError(f"the requested {record_type.value} record does not exist")
         rows[(record_type, record_id)] = row
     return rows
 

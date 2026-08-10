@@ -640,7 +640,7 @@ def evaluate_reproducibility(
         raise ValueError("record_id must be positive")
     target = session.get(model, record_id)
     if target is None:
-        raise ValueError(f"{resolved_type.value} record {record_id} does not exist")
+        raise ValueError(f"the requested {resolved_type.value} record does not exist")
 
     target_evidence = _target_snapshot(target, resolved_type)
     source_refs = _source_refs(target)
