@@ -21,8 +21,23 @@
 # 424242 is the seed the order-dependence audit was conducted against; it is
 # deliberately a known-hostile order rather than a lucky one.
 #
+# Pinning is reproducibility, not a workaround — and the difference is only
+# credible if something still runs an unpinned order. The suite is verified
+# order-independent at seeds 1, 2, 3, 4, 5, 7, 11, 90210 and 424242, across 8,
+# 4, 2 and 0 workers (see backend/docs/testing.md), so the pin now costs
+# nothing but the coverage it would remove if it were the only mode. Hence:
+#
+#   TCKDB_TEST_SEED=random bash backend/scripts/test-full.sh
+#
+# drops --randomly-seed entirely and lets pytest-randomly seed itself from the
+# clock. It prints the seed it drew in its header, so a failure found that way
+# is still reproducible with TCKDB_TEST_SEED=<that value>. That is the mode a
+# scheduled full-suite run should use: a nightly that draws the same order
+# every night re-tests one ordering 365 times a year.
+#
 # Run a different order on purpose:
 #   TCKDB_TEST_SEED=1 bash backend/scripts/test-full.sh
+#   TCKDB_TEST_SEED=random bash backend/scripts/test-full.sh
 #   bash backend/scripts/test-full.sh --randomly-seed=last   # (caller wins)
 #
 # ---------------------------------------------------------------------------
@@ -66,7 +81,12 @@ tckdb_pytest_run_args() {
     # is the *operator's* override and outranks it.
     local workers="${TCKDB_TEST_WORKERS:-${TCKDB_DEFAULT_WORKERS:-8}}"
 
-    if [[ "$caller_args" != *" -p no:randomly "* && "$caller_args" != *"--randomly-seed"* ]]; then
+    # ``random`` is not a value pytest-randomly accepts; the way to ask for an
+    # unpinned order is to pass no seed at all, which is what it already does
+    # by default. Handled here rather than by asking every caller to know that.
+    if [[ "$seed" != "random" \
+          && "$caller_args" != *" -p no:randomly "* \
+          && "$caller_args" != *"--randomly-seed"* ]]; then
         TCKDB_PYTEST_ARGS+=("--randomly-seed=${seed}")
     fi
 
