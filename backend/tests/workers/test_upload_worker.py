@@ -804,6 +804,17 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
 
     with worker_db.begin():
         before = worker_db.scalar(select(func.count()).select_from(Thermo)) or 0
+        # High-water mark for the review bookkeeping this workflow will create.
+        # The upload writes a `record_review` row per reviewable record — the
+        # thermo *and* its species_entry — and only the thermo one used to be
+        # cleaned up, so this test committed one review row into the shared
+        # database on every run. Primary-key sequences are non-transactional and
+        # only ever advance, so "id greater than this" is exactly the set of
+        # review rows this test is responsible for, whatever record types the
+        # workflow decides to review.
+        before_review_id = (
+            worker_db.scalar(text("SELECT max(id) FROM record_review")) or 0
+        )
         existing_species_entry_id = worker_db.scalar(
             select(SpeciesEntry.id)
             .join(Species)
@@ -874,17 +885,19 @@ def test_abandoned_claim_recovers_real_thermo_workflow_exactly_once(worker_db, d
             persisted = cleanup.get(UploadJob, job_id)
             thermo_id = persisted.result["id"] if persisted and persisted.result else None
             species_entry_id = persisted.result.get("species_entry_id") if persisted and persisted.result else None
+            cleanup.execute(
+                text(
+                    "DELETE FROM record_review_event "
+                    "WHERE record_review_id IN "
+                    "(SELECT id FROM record_review WHERE id > :before_review_id)"
+                ),
+                {"before_review_id": before_review_id},
+            )
+            cleanup.execute(
+                text("DELETE FROM record_review WHERE id > :before_review_id"),
+                {"before_review_id": before_review_id},
+            )
             if thermo_id is not None:
-                cleanup.execute(
-                    text(
-                        "DELETE FROM record_review_event WHERE record_review_id IN (SELECT id FROM record_review WHERE record_type = 'thermo' AND record_id = :thermo_id)"
-                    ),
-                    {"thermo_id": thermo_id},
-                )
-                cleanup.execute(
-                    text("DELETE FROM record_review WHERE record_type = 'thermo' AND record_id = :thermo_id"),
-                    {"thermo_id": thermo_id},
-                )
                 cleanup.execute(
                     text("DELETE FROM thermo_source_calculation WHERE thermo_id = :thermo_id"), {"thermo_id": thermo_id}
                 )

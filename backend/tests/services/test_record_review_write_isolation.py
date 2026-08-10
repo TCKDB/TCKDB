@@ -37,7 +37,7 @@ import threading
 import time
 
 import pytest
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -64,9 +64,7 @@ MARKER = "revrace"
 #: can never be mistaken for a fresh identity by the next. ``record_review``
 #: is polymorphic over ``record_type`` and carries no FK on ``record_id``, so
 #: these need not resolve to live rows for the uniqueness race to be exactly
-#: the real one. ``record_review_event`` is append-only at the database level
-#: (``tckdb_reject_mutation``), so these rows are deliberately never deleted —
-#: the per-run test database is dropped wholesale instead.
+#: the real one.
 _record_ids = itertools.count(900_100)
 
 
@@ -84,22 +82,56 @@ def _species_kwargs(suffix: str) -> dict:
 
 @pytest.fixture
 def committed_scratch(db_engine):
-    """A committing scratch space with guaranteed payload cleanup.
+    """A committing scratch space with guaranteed cleanup of everything it wrote.
 
     Every other fixture in the suite isolates by rolling a transaction back,
     which is precisely the thing under test here: the loser's rollback is the
     bug. So these tests commit for real.
 
-    Yields a fresh ``record_id`` allocator. Payload species rows are deleted
-    on the way out, whether the test passed or failed.
+    Yields a fresh ``record_id`` allocator. Both the payload species rows and
+    the ``record_review``/``record_review_event`` rows the test committed are
+    removed on the way out, whether the test passed or failed — a committing
+    test that does not clean up is what makes the suite order-dependent, and
+    ``tests/conftest.py`` fails any test that leaves rows behind.
+
+    ``record_review_event`` is append-only at the database level
+    (``trg_append_only_record_review_event`` calling ``tckdb_reject_mutation``;
+    see ``alembic/versions/c6f2a9d4e7b1_...``), so its rows cannot be deleted
+    through the normal path. ``session_replication_role = replica`` suppresses
+    user triggers for this transaction only — the same narrowly scoped
+    test-only escape hatch already used by
+    ``tests/workers/test_upload_worker.py`` and
+    ``tests/services/archive/test_archive.py`` for their committed teardown.
+    It is confined here to the record ids this fixture handed out.
     """
+    handed_out: list[int] = []
+
+    def _next_record_id() -> int:
+        record_id = next(_record_ids)
+        handed_out.append(record_id)
+        return record_id
+
     try:
-        yield lambda: next(_record_ids)
+        yield _next_record_id
     finally:
         with Session(db_engine) as cleanup:
+            cleanup.execute(text("SET LOCAL session_replication_role = replica"))
             cleanup.execute(
                 delete(Species).where(Species.smiles.like(f"[He]{MARKER}%"))
             )
+            if handed_out:
+                cleanup.execute(
+                    delete(RecordReviewEvent).where(
+                        RecordReviewEvent.record_review_id.in_(
+                            select(RecordReview.id).where(
+                                RecordReview.record_id.in_(handed_out)
+                            )
+                        )
+                    )
+                )
+                cleanup.execute(
+                    delete(RecordReview).where(RecordReview.record_id.in_(handed_out))
+                )
             cleanup.commit()
 
 

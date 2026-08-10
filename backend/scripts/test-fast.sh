@@ -13,7 +13,20 @@
 #
 # Conda is intentionally NOT invoked here so the script is composable
 # with whatever python the caller has on PATH (uv, venv, conda).
+#
+# The random-order seed is pinned (see scripts/lib/pytest_run_args.sh) so a
+# failure you are chasing reproduces on the next invocation. Workers default to
+# 0 here: each xdist worker creates and migrates its own database, which is pure
+# overhead when the target is one file.
 set -euo pipefail
 
-cd "$(dirname "$0")/.."
-exec pytest -v -x --tb=short "$@"
+# Resolve the script directory *before* changing directory. "$0" is relative
+# to the invoking cwd, so re-deriving it after the cd resolves against the
+# new one -- which works from backend/ and fails from the repo root, the way
+# CI invokes these.
+TCKDB_SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$TCKDB_SCRIPT_DIR/.."
+# shellcheck source=lib/pytest_run_args.sh
+source "$TCKDB_SCRIPT_DIR/lib/pytest_run_args.sh"
+TCKDB_DEFAULT_WORKERS=0 tckdb_pytest_run_args "$@"
+exec pytest -v -x --tb=short "${TCKDB_PYTEST_ARGS[@]}" "$@"

@@ -98,8 +98,8 @@ class TestHessianPayloadValidation:
 # ---------------------------------------------------------------------------
 
 
-def test_persist_hessian_binds_geometry_and_natoms(db_engine) -> None:
-    with Session(db_engine) as session:
+def test_persist_hessian_binds_geometry_and_natoms(db_conn) -> None:
+    with Session(db_conn) as session:
         with session.begin():
             species_entry_id = _create_species_entry(
                 session.connection(), inchi_key=_next_inchi_key("HESS")
@@ -126,10 +126,10 @@ def test_persist_hessian_binds_geometry_and_natoms(db_engine) -> None:
             assert geom.natoms == 2
 
 
-def test_hessian_geometry_is_deduped_with_calc_input_geometry(db_engine) -> None:
+def test_hessian_geometry_is_deduped_with_calc_input_geometry(db_conn) -> None:
     """The Hessian's geometry resolves through the content-addressed seam,
     so re-uploading the same XYZ does not create a duplicate geometry row."""
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             se1 = _create_species_entry(
                 session.connection(), inchi_key=_next_inchi_key("HESSDEDUPA")
@@ -162,12 +162,12 @@ def test_hessian_geometry_is_deduped_with_calc_input_geometry(db_engine) -> None
             assert g1 == g2  # same XYZ → same deduped geometry row
 
 
-def test_db_check_rejects_wrong_cardinality(db_engine) -> None:
+def test_db_check_rejects_wrong_cardinality(db_conn) -> None:
     """The DB CHECK is the last line of defence if a row is inserted
     outside the validated payload path."""
     from sqlalchemy.exc import IntegrityError
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             connection = session.connection()
             species_entry_id = _create_species_entry(

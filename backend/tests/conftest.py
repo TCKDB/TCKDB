@@ -90,27 +90,68 @@ def _database_url(db_name: str) -> str:
     )
 
 
+#: PostgreSQL truncates identifiers at ``NAMEDATALEN - 1`` bytes and does it
+#: silently, which would collapse two long per-worker names onto one database.
+_MAX_IDENTIFIER_BYTES = 63
+
+
+def _sanitize_identifier(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9_]+", "_", value)
+
+
+def _with_worker_suffix(base: str, safe_worker: str) -> str:
+    """Append the xdist worker id to ``base``, keeping the result distinct.
+
+    Postgres truncates over-long identifiers rather than rejecting them, so
+    naively concatenating could hand ``gw10`` and ``gw11`` the same database.
+    The base is trimmed instead — the suffix, which is what makes the name
+    unique, is always preserved intact.
+    """
+    suffix = f"_{safe_worker}"
+    budget = _MAX_IDENTIFIER_BYTES - len(suffix)
+    if budget < 1:
+        # Pathologically long worker id: the suffix alone is the identity.
+        return f"tckdb_test{suffix}"[:_MAX_IDENTIFIER_BYTES]
+    return f"{base[:budget]}{suffix}"
+
+
 def _resolve_test_db_name() -> str:
     """Derive a test-DB name that won't collide across concurrent runners.
 
     Precedence:
 
-    1. Explicit ``DB_TEST_NAME`` — used verbatim for backward compatibility.
-       Explicit names are single-tenant; do not point two concurrent pytest
-       runs at the same value on one Postgres host (see ``docs/testing.md``).
-    2. ``PYTEST_XDIST_WORKER`` — pytest-xdist worker id (e.g. ``gw0``),
+    1. ``DB_TEST_NAME`` **plus** ``PYTEST_XDIST_WORKER`` — the explicit name
+       with the worker id appended, e.g. ``tckdb_test_api_991_gw3``. This case
+       comes first deliberately. Every gate script and CI job sets
+       ``DB_TEST_NAME`` (see ``.github/workflows/backend-ci.yml``), and while
+       the explicit name won unconditionally, turning on ``-n`` pointed all
+       workers at one database: they raced to ``DROP``/``CREATE`` it during
+       session setup, and whichever survived was then written concurrently by
+       every worker — reintroducing exactly the cross-test visibility the
+       per-test rollback exists to prevent. An operator asking for a specific
+       database name and asking for N workers is asking for N databases.
+    2. Explicit ``DB_TEST_NAME`` alone — used verbatim. Single-tenant: do not
+       point two concurrent pytest runs at the same value on one Postgres host
+       (see ``docs/testing.md``).
+    3. ``PYTEST_XDIST_WORKER`` alone — pytest-xdist worker id (e.g. ``gw0``),
        producing ``tckdb_test_<worker>``. Sanitized so any value Postgres
        would reject becomes safe identifier characters.
-    3. Fallback — ``tckdb_test_<pid>`` so two ad-hoc pytest processes on
+    4. Fallback — ``tckdb_test_<pid>`` so two ad-hoc pytest processes on
        one host never share a database, even without xdist.
+
+    The xdist controller process has ``PYTEST_XDIST_WORKER`` unset and never
+    creates a database (it collects but does not run tests), so only the
+    workers reach cases 1 and 3.
     """
     explicit = os.environ.get("DB_TEST_NAME")
+    worker = os.environ.get("PYTEST_XDIST_WORKER")
+    safe_worker = _sanitize_identifier(worker) if worker else None
+
+    if explicit and safe_worker:
+        return _with_worker_suffix(explicit, safe_worker)
     if explicit:
         return explicit
-
-    worker = os.environ.get("PYTEST_XDIST_WORKER")
-    if worker:
-        safe_worker = re.sub(r"[^A-Za-z0-9_]+", "_", worker)
+    if safe_worker:
         return f"tckdb_test_{safe_worker}"
 
     return f"tckdb_test_{os.getpid()}"
@@ -385,6 +426,171 @@ def db_conn(db_engine) -> Iterator[Connection]:
             yield connection
         finally:
             transaction.rollback()
+
+
+# ---------------------------------------------------------------------------
+# Committed-row tripwire
+#
+# One database is shared by the whole pytest process, so anything a test
+# *commits* is visible to every test that runs after it.  Hundreds of tests in
+# this repo locate "the" row they just wrote with an unqualified query —
+# ``session.scalar(select(Calculation).where(Calculation.type == irc))`` — which
+# is only correct while the database holds nothing but the current test's own
+# writes.  A single committing test therefore turns the suite order-dependent,
+# and the failure surfaces in whatever unrelated file ``pytest-randomly``
+# happens to schedule next.
+#
+# This fixture blames the test that commits instead.  It started life in
+# ``tests/workflows/conftest.py`` (PR #111) and now covers every tree: a
+# committing test is named wherever it lives.
+#
+# Tests that genuinely need two concurrent transactions (the ``*_isolation``
+# family, the upload-worker tests) take ``db_engine`` directly and delete their
+# rows in a fixture ``finally`` — they satisfy the tripwire because the counts
+# match again by teardown, not because they are exempt.
+# ---------------------------------------------------------------------------
+
+#: Tables watched for committed growth.  Deliberately a tripwire rather than an
+#: audit: counting all ~110 public tables costs ~90 ms per probe (~12 min over
+#: the suite), while this curated union costs ~2 ms.  Any commit big enough to
+#: confuse a later test lands in at least one of these.
+#:
+#: ``app_user``/``api_key`` are intentionally absent: the session-scoped
+#: ``_api_test_user`` fixture commits exactly one user + key on first use, and
+#: watching those tables would blame whichever test happened to be first.
+_WATCHED_TABLES: tuple[str, ...] = (
+    # identity
+    "species",
+    "species_entry",
+    "chem_reaction",
+    "reaction_entry",
+    "transition_state",
+    "transition_state_entry",
+    # calculations and artifacts
+    "calculation",
+    "calculation_artifact",
+    "calculation_parameter",
+    "geometry",
+    "calc_sp_result",
+    "calc_opt_result",
+    "calc_freq_result",
+    # conformers
+    "conformer_group",
+    "conformer_observation",
+    "conformer_selection",
+    # scientific products
+    "statmech",
+    "thermo",
+    "kinetics",
+    "transport",
+    "network",
+    "network_solve",
+    # provenance
+    "software",
+    "software_release",
+    "workflow_tool",
+    "workflow_tool_release",
+    "level_of_theory",
+    "literature",
+    "author",
+    "execution_environment_manifest",
+    # submission / review / curation
+    "submission",
+    "submission_record_link",
+    "upload_job",
+    "idempotency_record",
+    "record_review",
+    "record_machine_review",
+    "species_entry_review",
+    "dataset_release",
+    "release_selection",
+)
+
+_COUNT_SQL = text(
+    " UNION ALL ".join(
+        f"SELECT '{table}' AS t, count(*) AS n FROM public.{table}"
+        for table in _WATCHED_TABLES
+    )
+)
+
+#: Fixtures whose presence means the test can reach the shared database.
+#: ``request.fixturenames`` is the resolved closure, so a test that only takes
+#: ``client`` still lists ``db_engine``.  Pure unit tests list none of them and
+#: must not be made to create a database.
+_DB_FIXTURE_NAMES = frozenset({"db_engine", "db_conn", "db_session", "client"})
+
+
+@pytest.fixture(scope="session")
+def _committed_row_probe(db_engine) -> Iterator[Connection]:
+    """A connection that always reads the latest *committed* state.
+
+    ``AUTOCOMMIT`` matters: a pooled connection holding an open transaction
+    would keep returning its first snapshot and the tripwire would never fire.
+    """
+    connection = db_engine.connect().execution_options(isolation_level="AUTOCOMMIT")
+    try:
+        # Fail loudly at session start if the watched list has drifted from the
+        # schema, rather than silently watching nothing for the whole run.
+        connection.execute(_COUNT_SQL)
+        yield connection
+    finally:
+        connection.close()
+
+
+def _committed_counts(connection) -> dict[str, int]:
+    return dict(connection.execute(_COUNT_SQL).all())
+
+
+@pytest.fixture(autouse=True)
+def _refuse_committed_rows(request) -> Iterator[None]:
+    """Fail the test that commits, not the test that trips over the residue.
+
+    Autouse, so it is set up before the test's own fixtures and therefore torn
+    down after them — the second count is read once ``db_conn``/``client`` has
+    rolled back, so only a genuine commit shows up.
+
+    The baseline is taken per test rather than once per session on purpose. A
+    session-wide baseline would be perturbed by any *other* test committing in
+    between, and the next test would be blamed for a leak it did not cause. A
+    tripwire that reports order-dependent false positives would be a strange
+    thing to install here.
+
+    Set ``TCKDB_TEST_COMMIT_TRIPWIRE=0`` to disable — for bisecting an
+    unrelated failure, never as a way to land a committing test.
+    """
+    if os.environ.get("TCKDB_TEST_COMMIT_TRIPWIRE", "1") == "0":
+        yield
+        return
+    if _DB_FIXTURE_NAMES.isdisjoint(request.fixturenames):
+        yield
+        return
+
+    # Resolved here rather than as a parameter so that a test which never
+    # touches the database never pays for a connection.
+    probe = request.getfixturevalue("_committed_row_probe")
+    before = _committed_counts(probe)
+
+    yield
+
+    after = _committed_counts(probe)
+    if after == before:
+        return
+
+    grew = {
+        table: (before[table], after[table])
+        for table in after
+        if after[table] != before[table]
+    }
+    raise AssertionError(
+        f"{request.node.nodeid} committed rows into the shared test database: "
+        + ", ".join(f"{t} {was}->{now}" for t, (was, now) in sorted(grew.items()))
+        + ". Tests must persist through the `db_conn`/`db_session` fixtures, "
+        "whose transaction is rolled back at teardown — committed rows are "
+        "visible to every later test in the process and are what makes this "
+        "suite order-dependent. If a test genuinely needs two concurrent "
+        "transactions, take `db_engine` and delete its rows in a fixture "
+        "`finally`."
+    )
 
 
 # ---------------------------------------------------------------------------

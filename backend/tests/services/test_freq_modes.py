@@ -151,8 +151,8 @@ def _freq_calc_payload(modes: list[dict] | None = None) -> CalculationWithResult
     return CalculationWithResultsPayload.model_validate(base)
 
 
-def test_persist_freq_result_without_modes_keeps_existing_behavior(db_engine) -> None:
-    with Session(db_engine) as session:
+def test_persist_freq_result_without_modes_keeps_existing_behavior(db_conn) -> None:
+    with Session(db_conn) as session:
         with session.begin():
             species_entry_id = _create_species_entry(
                 session.connection(), inchi_key=_next_inchi_key("FREQNOMODE")
@@ -176,8 +176,8 @@ def test_persist_freq_result_without_modes_keeps_existing_behavior(db_engine) ->
             ).all() == []
 
 
-def test_persist_freq_result_with_modes_persists_rows(db_engine) -> None:
-    with Session(db_engine) as session:
+def test_persist_freq_result_with_modes_persists_rows(db_conn) -> None:
+    with Session(db_conn) as session:
         with session.begin():
             species_entry_id = _create_species_entry(
                 session.connection(), inchi_key=_next_inchi_key("FREQMODES")
@@ -253,9 +253,9 @@ def test_freq_modes_round_trip_via_read_endpoint(client: TestClient, db_session)
     assert body["modes"][1]["is_imaginary"] is False
 
 
-def test_freq_modes_check_constraint_blocks_inconsistent_sign(db_engine) -> None:
+def test_freq_modes_check_constraint_blocks_inconsistent_sign(db_conn) -> None:
     """The DB CHECK is a backstop if the Pydantic validator is ever bypassed."""
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             species_entry_id = _create_species_entry(
                 session.connection(), inchi_key=_next_inchi_key("FREQCHECK")

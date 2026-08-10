@@ -247,7 +247,7 @@ class TestValidationService:
 class TestValidationPersistence:
     """Test storing/reading CalculationGeometryValidation rows."""
 
-    def test_persist_validation_result(self, db_engine):
+    def test_persist_validation_result(self, db_conn):
         """Create a validation row and verify it reads back."""
         from sqlalchemy.orm import Session
 
@@ -263,7 +263,7 @@ class TestValidationPersistence:
         )
         from app.db.models.species import Species, SpeciesEntry
 
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             species = Species(
                 smiles="[N]=NCCC",
                 inchi_key="TEST_INCHI_KEY_001",
@@ -311,7 +311,7 @@ class TestValidationPersistence:
             assert calc.geometry_validation.rmsd == pytest.approx(0.05)
             assert calc.geometry_validation.atom_mapping == {0: 0, 1: 1, 2: 2}
 
-    def test_fail_status_persists(self, db_engine):
+    def test_fail_status_persists(self, db_conn):
         """A fail validation row persists correctly."""
         from sqlalchemy.orm import Session
 
@@ -327,7 +327,7 @@ class TestValidationPersistence:
         )
         from app.db.models.species import Species, SpeciesEntry
 
-        with Session(db_engine) as session, session.begin():
+        with Session(db_conn) as session, session.begin():
             species = Species(
                 smiles="CCO",
                 inchi_key="TEST_INCHI_KEY_002",

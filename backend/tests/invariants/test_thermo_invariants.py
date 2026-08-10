@@ -276,7 +276,7 @@ def test_nasa_schema_enforces_t_low_lt_t_mid_lt_t_high() -> None:
 
 
 def test_repeated_thermo_uploads_for_same_species_append_not_overwrite(
-    db_engine,
+    db_conn,
 ) -> None:
     """Two thermo uploads for the same species entry must create two
     distinct ``thermo`` rows. Identity dedup happens at ``species_entry``
@@ -288,7 +288,7 @@ def test_repeated_thermo_uploads_for_same_species_append_not_overwrite(
     covered indirectly in the thermo-upload tests.
     """
     unique = {"smiles": "COC", "charge": 0, "multiplicity": 1}
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         first = persist_thermo_upload(
             session,
             _thermo_request(species_entry=dict(unique), note="run 1"),

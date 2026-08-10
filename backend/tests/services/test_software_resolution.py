@@ -9,9 +9,9 @@ from app.services.software_resolution import resolve_software_release_ref
 
 
 def test_resolve_software_release_ref_consolidates_same_software_and_release(
-    db_engine,
+    db_conn,
 ) -> None:
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             first = resolve_software_release_ref(
                 session,
@@ -65,12 +65,12 @@ def test_resolve_software_release_ref_consolidates_same_software_and_release(
 
 
 def test_resolve_software_release_ref_reuses_software_but_splits_versions(
-    db_engine,
+    db_conn,
 ) -> None:
     first_version = "test-9.9.1"
     second_version = "test-9.9.2"
 
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             existing_software = session.scalar(
                 select(Software).where(Software.name == "ORCA")

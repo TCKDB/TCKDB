@@ -36,7 +36,7 @@ def _hydrogen_request(*, label: str | None = None) -> ConformerUploadRequest:
     )
 
 
-def test_resolve_conformer_group_takes_advisory_xact_lock(db_engine) -> None:
+def test_resolve_conformer_group_takes_advisory_xact_lock(db_conn) -> None:
     """resolve_conformer_group must acquire a transaction-scoped advisory lock.
 
     The lock serializes basin resolution per species_entry to close the
@@ -44,10 +44,11 @@ def test_resolve_conformer_group_takes_advisory_xact_lock(db_engine) -> None:
     conformer_group rows. Here we assert the guard is present by capturing the
     SQL emitted during a resolve call and checking for pg_advisory_xact_lock.
     """
-    with Session(db_engine) as session:
+    with Session(db_conn) as session:
         with session.begin():
             # Set up a real species_entry (and its first conformer group) so the
-            # FK targets exist and the resolve below runs against committed rows.
+            # FK targets exist and the resolve below runs against rows that are
+            # visible to it — flushed within this transaction, not committed.
             persist_conformer_upload(session, _hydrogen_request(label="conf-a"))
             session.flush()
 

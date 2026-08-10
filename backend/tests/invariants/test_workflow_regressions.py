@@ -55,7 +55,7 @@ _THERMO_POINTS = [
 
 
 def test_thermo_upload_preserves_nasa_coefficients_and_tabulated_points(
-    db_engine,
+    db_conn,
 ) -> None:
     """Push a full thermo payload through ``persist_thermo_upload`` and
     verify that every invariant-carrying field survives unchanged.
@@ -80,7 +80,7 @@ def test_thermo_upload_preserves_nasa_coefficients_and_tabulated_points(
         note="invariant-regression",
     )
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         thermo = persist_thermo_upload(session, request)
 
         # NASA block — every coefficient must round-trip exactly.
@@ -121,7 +121,7 @@ def test_thermo_upload_preserves_nasa_coefficients_and_tabulated_points(
 
 
 def test_two_calculations_with_equivalent_lot_share_one_level_of_theory_row(
-    db_engine,
+    db_conn,
 ) -> None:
     """Two calculations uploaded with the same level-of-theory payload must
     resolve to the same ``LevelOfTheory`` row, and the persisted row's
@@ -157,7 +157,7 @@ def test_two_calculations_with_equivalent_lot_share_one_level_of_theory_row(
         "sp_result": {"electronic_energy_hartree": -79.86},
     }
 
-    with Session(db_engine) as session, session.begin():
+    with Session(db_conn) as session, session.begin():
         species_entry = resolve_species_entry(
             session,
             SpeciesEntryIdentityPayload(

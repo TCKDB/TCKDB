@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hashlib
+import os
+import re
 from pathlib import Path
 
 import pytest
@@ -27,8 +29,21 @@ GAUSSIAN_OPT_LOG = FIXTURES / "gaussian" / "opt_g09.log"
 GAUSSIAN_FREQ_LOG = FIXTURES / "gaussian" / "freq_g09.log"
 ORCA_OPT_LOG = FIXTURES / "orca" / "opt_orca.out"
 
-# Dedicated test bucket so tests don't pollute the dev bucket.
-TEST_BUCKET = "tckdb-artifacts-test"
+# Dedicated test bucket so tests don't pollute the dev bucket — and one bucket
+# per xdist worker, because the ``s3_test_bucket`` fixture below is
+# function-scoped and *deletes the bucket* at teardown. Sharing one name across
+# workers means one worker's teardown drops the bucket, and its objects, out
+# from under another worker's test. Unlike the database, MinIO is a single
+# shared service, so the isolation has to be in the name.
+#
+# S3 bucket names allow only lowercase alphanumerics, hyphens and dots, so the
+# worker id is normalised rather than interpolated raw.
+_XDIST_WORKER = re.sub(
+    r"[^a-z0-9-]+", "-", os.environ.get("PYTEST_XDIST_WORKER", "").lower()
+).strip("-")
+TEST_BUCKET = (
+    f"tckdb-artifacts-test-{_XDIST_WORKER}" if _XDIST_WORKER else "tckdb-artifacts-test"
+)
 
 
 class _BytesBody:
