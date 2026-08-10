@@ -1249,14 +1249,30 @@ scientific surface — only metadata is exposed.
 
 ### 11.1 IntegrityError / 422 hygiene
 
-`backend/app/api/errors.py:117-152`:
+`backend/app/api/errors.py::_integrity_error_handler`:
 
-- Constraint name extracted from `orig.diag` is **logged server-side
-  only**, never echoed in the HTTP body.
-- Responses use stable codes: `unique_conflict`, `reference_conflict`,
-  `state_conflict`, `integrity_conflict`.
-- `NotFoundError` (404) logs the integer id server-side; the
-  client-facing detail is generic.
+- Raw psycopg/PostgreSQL text is **logged server-side only**, never
+  echoed in the HTTP body.
+- Unrecognised violations use stable SQLSTATE-derived codes:
+  `unique_conflict`, `reference_conflict`, `state_conflict`,
+  `integrity_conflict`.
+- A constraint that the scientific check register names carries its own
+  code and sentence instead — `atom_map_element_not_conserved` rather
+  than `state_conflict` — and echoes the **constraint name** in
+  `context.constraint`. That is a deliberate reversal of the earlier
+  position that the name is never echoed. A schema object name is not a
+  row id: it is stable across instances, it is the key into
+  `docs/guides/scientific_check_register.md`, and withholding it left
+  the client unable to tell which scientific rule refused the write when
+  the guarantee behind it is the strongest one TCKDB makes. See
+  `backend/tests/api/test_api_database_constraint_codes.py`.
+- `app.api.errors.not_found` is the single constructor for a 404: it
+  logs the integer id server-side and returns a detail that names the
+  resource kind, plus the public ref if the caller supplied one. A
+  structural guard,
+  `backend/tests/api/test_no_row_ids_in_user_facing_text.py`, fails CI
+  if a row id is interpolated into user-facing text anywhere under
+  `backend/app/`.
 - 422 codes are stable application codes (`invalid_handle`,
   `handle_type_mismatch`, `*_handle_conflict`, `unknown_include_token`,
   `client_sort_not_supported`, `missing_identifier`, etc.) — no raw
