@@ -208,6 +208,57 @@ def test_the_contexts_that_have_looked_are_reported(
     assert set(record["detected_during"]) == {"download", "verification_sweep"}
 
 
+def test_a_digest_with_no_artifact_row_is_still_findable(
+    client, db_session, login_as, _api_curator_user
+):
+    """The dedup-refusal case has observations and no row to reach them by.
+
+    ``store_artifact`` verifies an object already at the content-addressed
+    key before attaching another row to it, so when that verification
+    fails the upload that would have created the row is being refused --
+    and if nothing else happens to share the object, the break exists with
+    ``artifact_id`` null. Resolving a ``sha256`` filter through
+    ``calculation_artifact`` would have hidden exactly that case.
+    """
+    sha = _digest("no-row-points-here")
+    _record(
+        db_session,
+        sha,
+        ArtifactIntegrityFinding.digest_mismatch,
+        ArtifactIntegrityDetectionContext.store_dedup_verification,
+    )
+    login_as(_api_curator_user)
+
+    (record,) = client.get(LIST_URL, params={"sha256": sha}).json()["records"]
+
+    assert record["sha256"] == sha
+    assert record["calculation_refs"] == []
+    assert record["currently_broken"] is True
+
+
+def test_filtering_by_calculation_ref_reaches_its_digests(
+    client, db_session, login_as, _api_curator_user
+):
+    calculation, artifact, sha = _broken_artifact(db_session, "by-calculation")
+    _record(
+        db_session,
+        sha,
+        ArtifactIntegrityFinding.object_missing,
+        ArtifactIntegrityDetectionContext.verification_sweep,
+        artifact_id=artifact.id,
+    )
+    login_as(_api_curator_user)
+
+    body = client.get(
+        LIST_URL, params={"calculation_ref": calculation.public_ref}
+    ).json()
+
+    assert [record["sha256"] for record in body["records"]] == [sha]
+    assert body["records"][0]["latest"]["finding"] == "object_missing"
+    # ``object_missing`` retrieved nothing, so there is no observed digest.
+    assert body["records"][0]["latest"]["observed_sha256"] is None
+
+
 # ---------------------------------------------------------------------------
 # The history
 # ---------------------------------------------------------------------------

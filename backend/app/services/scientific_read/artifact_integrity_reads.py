@@ -61,20 +61,22 @@ def _observation(row: ArtifactIntegrityEvent) -> ArtifactIntegrityObservation:
     )
 
 
-def _digest_scope(
-    *, sha256: str | None, calculation_ref: str | None
-) -> Select | None:
-    """A subquery restricting which digests are in scope, or ``None``."""
-    if sha256 is None and calculation_ref is None:
-        return None
-    statement = select(CalculationArtifact.sha256)
-    if sha256 is not None:
-        statement = statement.where(CalculationArtifact.sha256 == sha256)
-    if calculation_ref is not None:
-        statement = statement.join(
-            Calculation, Calculation.id == CalculationArtifact.calculation_id
-        ).where(Calculation.public_ref == calculation_ref)
-    return statement
+def _calculation_digests(calculation_ref: str) -> Select:
+    """The digests one calculation's artifact rows point at.
+
+    Only ``calculation_ref`` is resolved through ``calculation_artifact``.
+    A ``sha256`` filter is matched against the event rows directly,
+    because a digest can have observations and no artifact row at all --
+    the ``store_dedup_verification`` context records exactly that, on an
+    object whose referencing row is being refused. Routing an explicit
+    digest through the artifact table would hide the one case that most
+    needs looking up by digest.
+    """
+    return (
+        select(CalculationArtifact.sha256)
+        .join(Calculation, Calculation.id == CalculationArtifact.calculation_id)
+        .where(Calculation.public_ref == calculation_ref)
+    )
 
 
 def _summaries(
@@ -106,14 +108,11 @@ def _summaries(
     latest = ArtifactIntegrityEvent
     statement = select(stats, latest).join(latest, latest.id == stats.c.latest_id)
 
-    scope = _digest_scope(sha256=sha256, calculation_ref=calculation_ref)
-    if scope is not None:
-        statement = statement.where(stats.c.sha256.in_(scope))
+    if calculation_ref is not None:
+        statement = statement.where(
+            stats.c.sha256.in_(_calculation_digests(calculation_ref))
+        )
     if sha256 is not None:
-        # A digest with recorded observations but no surviving artifact row
-        # is still a real answer -- the ``store_dedup_verification`` context
-        # records exactly that -- so an explicit digest is matched directly
-        # rather than only through the artifact table.
         statement = statement.where(stats.c.sha256 == sha256)
     if only_currently_broken:
         statement = statement.where(latest.finding.in_(_BREAK_FINDINGS))
