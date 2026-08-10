@@ -239,12 +239,35 @@ class PythonCheck:
 
     @property
     def location(self) -> str:
-        """``path/to/module.py:LINE``, resolved from the live object."""
+        """``path/to/module.py::qualified_name``, resolved from the live object.
+
+        A qualified name rather than a line number, and that is the whole
+        point of this property.
+
+        The register is a generated artifact that CI compares against the
+        committed copy, so whatever this returns becomes an input to that
+        comparison. A line number makes the document a build artifact of
+        *every line above every declared check*: adding a comment to
+        ``app/services/geometry_validation.py`` shifted one check from 120 to
+        121 and turned the gate red on main, and the entire drift was that one
+        digit.
+
+        The cost is not the regeneration. It is that a gate which fires on
+        cosmetic movement teaches everyone to regenerate reflexively without
+        reading the diff, which is exactly how a real drift eventually gets
+        committed unnoticed. The guard exists to catch a renamed check, a
+        removed code, a vocab key that no longer resolves -- and a qualified
+        name still moves for every one of those, because it is derived from
+        the same live object.
+
+        What is given up is the click-to-line convenience. ``file::qualname``
+        is greppable and unique, which is enough to find a function, and it
+        does not change when someone edits the docstring above it.
+        """
         source_file = inspect.getsourcefile(self.func)
         if source_file is None:  # pragma: no cover - builtins only
             return f"{self.func.__module__}.{self.func.__qualname__}"
-        _lines, first = inspect.getsourcelines(self.func)
-        return f"{_repo_relative(source_file)}:{first}"
+        return f"{_repo_relative(source_file)}::{self.func.__qualname__}"
 
     @property
     def label(self) -> str:
@@ -383,12 +406,17 @@ class ProvenanceThreshold:
 
     @property
     def location(self) -> str:
-        """``path/to/module.py:LINE``, resolved from the live object."""
+        """``path/to/module.py::qualified_name``, resolved from the live object.
+
+        Same rule, and for the same reason, as
+        :attr:`PythonCheck.location` -- see the argument there. Both feed the
+        generated register, so a line number in either one is enough to make
+        the drift gate fire on a comment.
+        """
         source_file = inspect.getsourcefile(self.resolver)
         if source_file is None:  # pragma: no cover - builtins only
             return f"{self.resolver.__module__}.{self.resolver.__qualname__}"
-        _lines, first = inspect.getsourcelines(self.resolver)
-        return f"{_repo_relative(source_file)}:{first}"
+        return f"{_repo_relative(source_file)}::{self.resolver.__qualname__}"
 
     @property
     def summary(self) -> str:

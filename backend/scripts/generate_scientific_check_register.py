@@ -1,11 +1,17 @@
 #!/usr/bin/env python
 """Generate ``docs/guides/scientific_check_register.md`` from the declarations.
 
-The register is generated so it cannot drift. Every ``file:line`` below
-is resolved from the live function object at generation time, so the
-document has no pinned commit and no hand-maintained line numbers — the
+The register is generated so it cannot drift. Every ``file::name``
+below is resolved from the live function object at generation time, so
+the document has no pinned commit and nothing hand-maintained — the
 failure mode that left ``docs/reviews/validation_check_audit.md`` stale
 by many codes within weeks of being written.
+
+Anchors carry a qualified name, deliberately not a line number. CI
+compares this document against the committed copy, so a line number
+would make it a build artifact of every line above every declared check,
+and a comment added anywhere in a declaring module would fail the gate.
+See ``PythonCheck.location`` for the full argument.
 
 Usage::
 
@@ -87,8 +93,10 @@ _PREAMBLE = """# The scientific check register
 
 **Generated. Do not edit by hand.** Regenerate with
 `conda run -n tckdb_env python backend/scripts/generate_scientific_check_register.py`.
-Every `file:line` here is resolved from the live function object at generation
-time, so it cannot go stale the way a hand-written table does.
+Every `file::name` here is resolved from the live function object at
+generation time, so it cannot go stale the way a hand-written table does.
+Anchors name the function rather than a line, so editing the code around a
+check does not change this document.
 
 ## What this is
 
@@ -113,7 +121,7 @@ review of one tier, pinned to a commit, and it is now stale by several codes.
 This register asks *what does TCKDB guarantee about chemistry* — it spans the
 service layer, the wire schemas and the database, it is generated rather than
 transcribed, and it is guarded in CI. Neither supersedes the other. Where they
-disagree about a line number, this one is right by construction.
+disagree, this one is right by construction.
 
 ## How to read a row
 
@@ -131,8 +139,8 @@ disagree about a line number, this one is right by construction.
   `backend/tests/db/test_scientific_check_register.py` holds each channel to
   its obligation, and an `error_envelope` code must both be raised through the
   typed path and be proved to arrive by an end-to-end HTTP test.
-- **Enforced at** — `file:line` for Python, or the constraint/trigger name for
-  PostgreSQL. Database names are verified against live schema metadata by
+- **Enforced at** — `file::qualified_name` for Python, or the
+  constraint/trigger name for PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
 - **Thresholds** — the numeric lines the check fires on, and *where each number
   comes from*. A constant is fixed in code and printed. A provenance-derived

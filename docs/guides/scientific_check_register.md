@@ -2,8 +2,10 @@
 
 **Generated. Do not edit by hand.** Regenerate with
 `conda run -n tckdb_env python backend/scripts/generate_scientific_check_register.py`.
-Every `file:line` here is resolved from the live function object at generation
-time, so it cannot go stale the way a hand-written table does.
+Every `file::name` here is resolved from the live function object at
+generation time, so it cannot go stale the way a hand-written table does.
+Anchors name the function rather than a line, so editing the code around a
+check does not change this document.
 
 ## What this is
 
@@ -28,7 +30,7 @@ review of one tier, pinned to a commit, and it is now stale by several codes.
 This register asks *what does TCKDB guarantee about chemistry* — it spans the
 service layer, the wire schemas and the database, it is generated rather than
 transcribed, and it is guarded in CI. Neither supersedes the other. Where they
-disagree about a line number, this one is right by construction.
+disagree, this one is right by construction.
 
 ## How to read a row
 
@@ -46,8 +48,8 @@ disagree about a line number, this one is right by construction.
   `backend/tests/db/test_scientific_check_register.py` holds each channel to
   its obligation, and an `error_envelope` code must both be raised through the
   typed path and be proved to arrive by an end-to-end HTTP test.
-- **Enforced at** — `file:line` for Python, or the constraint/trigger name for
-  PostgreSQL. Database names are verified against live schema metadata by
+- **Enforced at** — `file::qualified_name` for Python, or the
+  constraint/trigger name for PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
 - **Thresholds** — the numeric lines the check fires on, and *where each number
   comes from*. A constant is fixed in code and printed. A provenance-derived
@@ -120,7 +122,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_elemental_balance` — `backend/app/services/reaction_resolution.py:175`
+- `validate_reaction_elemental_balance` — `backend/app/services/reaction_resolution.py::validate_reaction_elemental_balance`
   *Called from `resolve_chem_reaction`, so it fires on every path that resolves a reaction, including the PDep bundle.*
 
 **Escape hatch.** Declare a participant with `molecule_kind: pseudo`. A lumped or phenomenological construct has no atom-resolved composition, so one such participant suspends the law for the whole reaction. A declared electron does **not** exempt it — an electron contributes zero atoms and the reaction still has to balance.
@@ -138,7 +140,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_charge_conservation` — `backend/app/services/reaction_resolution.py:270`
+- `validate_reaction_charge_conservation` — `backend/app/services/reaction_resolution.py::validate_reaction_charge_conservation`
   *Sums `Species.charge`, which `canonical_species_identity` has already reconciled against the formal charge of each species' own SMILES.*
 
 **Escape hatch.** Declare the free electron as a participant — `{"molecule_kind": "electron", "smiles": "[e-]", "charge": -1, "multiplicity": 2}` — which is how associative and dissociative attachment, photoionization and photodetachment are deposited. It contributes -1 to the side it sits on and zero atoms, so elemental balance still has to be satisfied separately. A `pseudo` participant suspends the law entirely, as it does for elemental balance. Conservation is not neutrality: any net charge is accepted as long as both sides carry the same one, so ion-molecule reactions are unaffected.
@@ -156,7 +158,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py:419`
+- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py::validate_transition_state_composition`
   *Composition is read from the saddle-point geometry when there is one and from `unmapped_smiles` otherwise. The PDep path passes no SMILES, so it compares geometry only.*
 
 **Escape hatch.** Declare the extra species as participants of the reaction. A `pseudo` *reactant* exempts the reaction; a pseudo product does not, and that is not an oversight — see below. Absence does not block: no geometry and no parseable SMILES means nothing is compared, and an unparseable transition-state SMILES is treated as silence rather than as a contradiction, because a TS SMILES is a lossy label for a structure that is by construction not a stable molecule. The pseudo-species exemption here is narrower than `_load_participant_species`'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
@@ -174,7 +176,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py:419`
+- `validate_transition_state_composition` — `backend/app/services/reaction_resolution.py::validate_transition_state_composition`
   *Second, independent leg of the same function. Skipped entirely when the caller passes no `transition_state_charge`.*
 
 **Escape hatch.** Omit the transition state's charge, which skips the comparison. Multiplicity is deliberately **not** checked here at all: spin is not conserved the way charge and atoms are — two doublets may react over a singlet or a triplet surface, and spin-forbidden reactions are real chemistry — so a multiplicity rule would fire on correct novel results. The pseudo-species exemption here is narrower than `_load_participant_species`'s, and deliberately so. That helper exempts elemental balance and charge conservation on a pseudo participant on **either** side, because both compare one side against the other and a lumped construct makes the side it sits on unknowable. This check compares the saddle point against the **reactant side only**, so only a *reactant* being pseudo can make it meaningless; a pseudo *product* leaves the reactant side fully atom-resolved and is not exempted. Aligning the two would discard a guarantee that is still well-defined, and would discard it exactly where it is worth most: a reaction with a pseudo product has already lost elemental balance and charge conservation, so this is the only atom-level statement left about its saddle point.
@@ -192,7 +194,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_ts_evidence_participant_composition` — `backend/app/services/reaction_resolution.py:668`
+- `validate_ts_evidence_participant_composition` — `backend/app/services/reaction_resolution.py::validate_ts_evidence_participant_composition`
   *Called from `persist_transition_state_validation_evidence`, the single seam every deposit path that can carry a transition state already routes through, so the PDep bundle, the computed-reaction bundle and the standalone transition-state upload cannot enforce different standards. It is a service-layer check rather than a wire-boundary one because a participant's composition comes from its SMILES, and `tckdb_schemas` is chemistry-free — RDKit is not available where `validate_ts_evidence_set` runs. That function keeps the *shape* half of the rule: keys name every declared participant, indices partition the TS atoms exactly once.*
 
 **Escape hatch.** Omit the participant mappings. They are optional on every path — evidence without them still deposits and still reads back as `irc: present` — so a depositor who cannot resolve the partition per atom is never forced to guess at one. Declaring a participant `molecule_kind: pseudo` skips that participant alone rather than the whole record, because the others' compositions are still well-defined. Isotopologues are safe by construction: both sides are compared through `resolve_element_symbol`, so a geometry written `D` counts as the hydrogen its SMILES spells `[2H]`.
@@ -214,7 +216,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `assert_geometry_composition_matches_identity` — `backend/app/services/species_resolution.py:242`
+- `assert_geometry_composition_matches_identity` — `backend/app/services/species_resolution.py::assert_geometry_composition_matches_identity`
   *Conformer geometries only, via `resolve_species_entry`: the computed-species bundle, `/uploads/conformers`, the computed-reaction bundle and the PDep bundle. **Calculation** input and output geometries are reached by no composition check on any path — benzene coordinates can still be attached as a calculation geometry under a `smiles: "C"` entry. Closing that for *output* geometries would be wrong (an optimisation that dissociated is science to record); for *input* geometries it is an open gap.*
 
 **Escape hatch.** Declare `molecule_kind: pseudo`, which has no atom-resolved composition to agree with. A free electron is deliberately **not** exempt — its composition is not unknown but empty, so any geometry deposited under one is refused, which stops `electron` becoming a quieter way to smuggle a structure past the check. Absence does not block: no geometry, or a SMILES RDKit will not parse, is incompleteness.
@@ -232,7 +234,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `assert_geometry_isotopes_match_identity` — `backend/app/services/species_resolution.py:116`
+- `assert_geometry_isotopes_match_identity` — `backend/app/services/species_resolution.py::assert_geometry_isotopes_match_identity`
   *Runs from `resolve_species_entry` only when a geometry is supplied. The refusal was prose-only until the code above was attached; a client could not tell it from any other 422, which is why the entry used to record the gap here.*
 
 **Escape hatch.** Deposit no geometry. An explicitly declared *standard* isotope is dropped before comparison, so `{1: 1}` on a hydrogen cannot fork an identity away from an unlabelled deposit of the same molecule.
@@ -252,7 +254,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `canonical_species_identity` — `backend/app/chemistry/species.py:541`
+- `canonical_species_identity` — `backend/app/chemistry/species.py::canonical_species_identity`
   *Charge is compared against `formal_charge` of the sanitized identity molecule — the sum of RDKit per-atom formal charges, which is a notation convention rather than an electron count. A referee may object that formal-charge assignment on hypervalent, zwitterionic or dative-bonded SMILES is notation-dependent.*
 
 **Escape hatch.** A free electron short-circuits before the comparison, returning a pinned identity pair. Multiplicity is deliberately **not** validated against the SMILES at all: standard SMILES does not encode spin state, so RDKit's inferred radical count is only a hint and the uploaded multiplicity is authoritative — which is what lets singlet CH2 (whose SMILES `[CH2]` implies a triplet) and the singlet and triplet states of O2 be represented.
@@ -270,7 +272,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `reconcile_charge_multiplicity` — `backend/app/services/charge_multiplicity_reconciliation.py:222`
+- `reconcile_charge_multiplicity` — `backend/app/services/charge_multiplicity_reconciliation.py::reconcile_charge_multiplicity`
   *Re-reads charge and multiplicity from the uploaded artifact using the wired Gaussian, ORCA, Psi4 and Molpro parsers.*
 
 **Escape hatch.** Absence is not contradiction: if the producing program is not one of the wired parsers, the artifact is missing, the log is truncated, or the declarations inside a single log disagree with each other, the value is left unknown and **no** warning is emitted. Only a value genuinely read from the log may contradict a declaration — emitting a mismatch because parsing failed would fabricate a contradiction out of ignorance.
@@ -288,7 +290,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_calculation_geometry` — `backend/app/services/geometry_validation.py:126`
+- `validate_calculation_geometry` — `backend/app/services/geometry_validation.py::validate_calculation_geometry`
   *Species-owned `opt` calculations only. Transition states are deliberately excluded, having no canonical SMILES to compare against. Best-effort by policy: a missing SMILES, a missing output geometry, unparseable coordinates or a raising chemistry layer all write nothing and let the upload continue. A Kabsch RMSD above 1.0 A against the input geometry is recorded as a separate suspicion signal.*
 
 **Escape hatch.** The whole check is advisory, so there is nothing to escape. What a consumer must not do is read a `fail` row as 'this calculation is scientifically invalid'; it means only that the automated identity validator found a mismatch.
@@ -312,7 +314,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:699`
+- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_transition_state_frequency`
   *A transition state carries no `stationary_point_kind` column — the entity *is* the claim — so the rule needs no kind argument. Upload schemas call `raise_for_blocking_findings` from a `model_validator`, so the contradiction becomes a 422 before the route body opens a submission. The designation is then persisted on `calc_freq_result.reaction_coordinate_mode_index`, which is what lets the read-time trust rubric cite this judgement instead of re-deriving it.*
 - `_check_ts_reaction_coordinate_designated` and `_detect_transition_state_entry_hard_fail` (`backend/app/services/trust/rubrics.py`, `backend/app/services/trust/evaluator.py`) ask at read time whether the record carries the designation this blocking tier required of it — a question about persisted state, not a second opinion about physics. They cannot disagree with the verdict above, which is the collapse ADR 0008 section 9 asked for.
 
@@ -331,7 +333,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:561`
+- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_species_entry_frequency`
   *One imaginary mode and two-or-more are folded into a single blocking message that names `n_imag_higher_order_saddle` for the higher-order case. A stationary-point kind the module has not been taught about produces no findings — adding an enum member must be a deliberate decision, not a default.*
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
@@ -349,7 +351,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:561`
+- `evaluate_species_entry_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_species_entry_frequency`
   *Same entry point as the blocking minimum rule; the declared kind decides the tier while the code names the finding. A mode at or above 100 cm-1 additionally raises `n_imag_suggests_transition_state`, because that is far too stiff to be intermolecular.*
 
 **Escape hatch.** This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
@@ -367,12 +369,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:699`
+- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_transition_state_frequency`
   *Above tau the record is flagged as well as warned: the flag is ADR 0012's answer to 'warnings get ignored', excluding the record from default transition-state consumption without creating the incentive to edit the frequency list that a hard block creates. Below tau it is warned only. The flag and the tau that decided it are persisted on `calc_freq_result` rather than recomputed, so a later parser improvement cannot silently re-label historical records.*
 
 **Thresholds.**
 
-- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:224`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
+- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::resolve_tau`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
   The Hessian noise floor is flat in omega-squared, not in omega, so the uncertainty in a frequency diverges as omega goes to zero: at 300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. Where the crossover sits depends on how the second derivatives were built, on what integration grid, and how tightly the geometry was converged. The same -42 cm-1 is real negative curvature under an analytic Hessian on a tight grid and indistinguishable from zero under a numerical one on a default grid, so it cannot be classified from the frequency list at all — only against the protocol that produced it. A constant here would be a claim about physics that is false.
 
   | recorded protocol | `tau` / cm-1 |
@@ -402,14 +404,14 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:699`
+- `evaluate_transition_state_frequency` — `schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::evaluate_transition_state_frequency`
   *ADR 0012 changed what this fires *on* without changing what it fires at. It used to read the single imaginary mode of a record that had passed the `n_imag == 1` gate; it now reads the designated reaction coordinate of a record that may carry several. Both thresholds are declared above because both reach the same message: the warning quotes the protocol's tau alongside its own constant, so a reader who is told a reaction coordinate is soft can see immediately whether that calculation could resolve a small mode at all.*
 
 **Thresholds.**
 
 - `TS_IMAGINARY_FREQUENCY_MIN_CM1` = **100 cm-1** — a constant fixed in code.
   A starting point rather than a physical constant: reaction coordinates for hydrogen transfers run to thousands of cm-1, while genuinely flat barriers fall well under 100. Unlike tau it really is fixed in code, because it is a statement about chemistry — what a reaction coordinate looks like — rather than about numerics. It is also the scale that separates a van der Waals complex's soft intermolecular modes from a real reaction coordinate, and is reused for that judgement.
-- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py:224`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
+- `tau` — **not a constant.** Resolved per record, in cm-1, by `resolve_tau` (`schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py::resolve_tau`) from the recorded execution provenance `freq.hessian_method`, `grid.quality`, `opt.convergence`.
   The Hessian noise floor is flat in omega-squared, not in omega, so the uncertainty in a frequency diverges as omega goes to zero: at 300 cm-1 the sign is never in doubt, at 20 cm-1 it is indeterminate. Where the crossover sits depends on how the second derivatives were built, on what integration grid, and how tightly the geometry was converged. The same -42 cm-1 is real negative curvature under an analytic Hessian on a tight grid and indistinguishable from zero under a numerical one on a default grid, so it cannot be classified from the frequency list at all — only against the protocol that produced it. A constant here would be a claim about physics that is false.
 
   | recorded protocol | `tau` / cm-1 |
@@ -437,7 +439,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py:44`
+- `persist_transition_state_validation_evidence` — `backend/app/services/transition_state_validation.py::persist_transition_state_validation_evidence`
   *Every path that can carry a transition state routes through this seam — the PDep bundle, the computed-reaction bundle and the standalone transition-state upload — so all three write identical rows and report an identical gap. Before the seam existed only the PDep bundle could deposit the evidence, so a TS uploaded any other way always read back as `irc: absent` even when the depositor had run one.*
 
 **Escape hatch.** None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* record, so evidence that was run and failed is stored and still warns.
@@ -457,7 +459,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py:302`
+- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py::validate_reaction_atom_map`
   *Stated twice on purpose: once at the wire boundary, where the payload already holds every XYZ block the rule needs so the refusal arrives as a clean 422 before anything is written, and once as a database constraint, where a second write path cannot get around it.*
 - `ck_reaction_atom_map_pair_element_matches` (check on `reaction_atom_map_pair`)
   `upper(element) = upper(ts_element)`
@@ -477,7 +479,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py:302`
+- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py::validate_reaction_atom_map`
   *Stated twice on purpose: once at the wire boundary, where the payload already holds every XYZ block the rule needs so the refusal arrives as a clean 422 before anything is written, and once as a database constraint, where a second write path cannot get around it.*
 - `uq_reaction_atom_map_pair_ts_atom_index` (unique on `reaction_atom_map_pair`)
   `(atom_map_id, side, ts_atom_index)`
@@ -499,7 +501,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py:302`
+- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py::validate_reaction_atom_map`
   *Stated twice on purpose: once at the wire boundary, where the payload already holds every XYZ block the rule needs so the refusal arrives as a clean 422 before anything is written, and once as a database constraint, where a second write path cannot get around it.*
 - `fk_reaction_atom_map_pair_geometry_id_geometry_atom` (foreign_key on `reaction_atom_map_pair`)
   `(geometry_id, atom_index, element) -> geometry_atom(geometry_id, atom_index, element)`
@@ -523,7 +525,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py:302`
+- `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py::validate_reaction_atom_map`
   *Wire boundary only. This one has no database counterpart: it is a statement about a whole map rather than about one pair row, and a per-row constraint cannot see it.*
 
 **Escape hatch.** Leave the map incomplete, or deposit an unbalanced reaction — either drops the rule to the warning tier by design rather than by accident.
@@ -541,7 +543,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_atom_map_agrees_with_irc_evidence` — `backend/app/services/reaction_atom_map.py:359`
+- `validate_atom_map_agrees_with_irc_evidence` — `backend/app/services/reaction_atom_map.py::validate_atom_map_agrees_with_irc_evidence`
   *Called from *both* seams — `persist_reaction_atom_map` and `persist_transition_state_validation_evidence` — and reads both surfaces from the database rather than from either caller's payload, so whichever a deposit writes second delivers the same verdict. Today the second is always the atom map: the computed-reaction bundle is the only payload with an `atom_map` field and writes it after the evidence, and no path can attach a map to a saddle point deposited earlier because every transition-state entry is created fresh by the deposit that writes it. Both are incidental orderings, so neither is relied on.*
 
 **Escape hatch.** Omit one surface, or correct whichever is wrong — the mappings are optional on every path and a partial atom map is always accepted. Three absences are deliberately *not* disagreements: an atom map that omits a participant or leaves atoms unmapped is compared only over what it does claim, a transition state with no passing IRC mapping is not compared at all, and a barrierless channel has neither surface. Two participants on one side that are the same species entry are interchangeable, so a disagreement a permutation within that group would resolve is treated as arbitrary labelling rather than contradiction.
@@ -561,7 +563,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `_warn_absent` — `backend/app/services/reaction_atom_map.py:625`
+- `_warn_absent` — `backend/app/services/reaction_atom_map.py::_warn_absent`
   *A reaction with no transition state is not warned about: both legs of a map run toward the saddle point, so a barrierless channel has nothing to map onto and a warning it could never satisfy would train depositors to ignore the one that matters. The PDep bundle has no `atom_map` field yet, so on that path the warning carries a different remedy sentence rather than naming a field that does not exist.*
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
@@ -579,7 +581,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `_warn_incomplete` — `backend/app/services/reaction_atom_map.py:656`
+- `_warn_incomplete` — `backend/app/services/reaction_atom_map.py::_warn_incomplete`
   *Two codes from one seam: `reaction_atom_map_participants_incomplete` when a declared molecule is missing from the map entirely, `reaction_atom_map_atoms_incomplete` when a mapped participant leaves its own atoms unmapped or a leg leaves saddle-point atoms claimed by nobody.*
 
 **Escape hatch.** None.
@@ -597,7 +599,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `ReactionAtomMapIn.validate_inferred_names_its_algorithm` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py:232`
+- `ReactionAtomMapIn.validate_inferred_names_its_algorithm` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py::ReactionAtomMapIn.validate_inferred_names_its_algorithm`
   *The wire half of the rule, and it was missing from this entry until the codes were audited: the register listed only the two schema objects, so it read as enforced by the database alone when in fact an inferred map with no note is refused at the payload boundary first. Only the note half is stated here — the immutability of `source` is a statement about an UPDATE, which no payload validator can see.*
 - `ck_reaction_atom_map_inferred_requires_note` (check on `reaction_atom_map`)
   `source <> 'inferred' OR (note IS NOT NULL AND btrim(note) <> '')`
@@ -621,7 +623,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `validate_a_units_for_molecularity` — `backend/app/chemistry/units.py:62`
+- `validate_a_units_for_molecularity` — `backend/app/chemistry/units.py::validate_a_units_for_molecularity`
   *Called from the kinetics upload schema, so it refuses at the wire boundary. The order is not simply `len(reactants)`: a simple `+M` third-body reaction carries a `[M]` term on the main line and validates one order higher, while a falloff reaction's main line is the high-pressure limit k-infinity and keeps `len(reactants)`, its low-pressure limit k0 being validated separately one order up.*
 
 **Escape hatch.** None, and the refinements are the reason it can block without firing on correct science: PLOG and Chebyshev are refused the `is_third_body` flag outright, because both already encode the full pressure dependence and the flag would otherwise inflate the expected order by one — rejecting a PLOG entry carrying the *correct* units and accepting one carrying the units of the next order up.
@@ -705,11 +707,11 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `load_artifact_bytes` — `backend/app/services/artifact_storage.py:395`
+- `load_artifact_bytes` — `backend/app/services/artifact_storage.py::load_artifact_bytes`
   *Recomputes SHA-256 over every retrieval and compares it against the content-addressed key, in constant time. This is the detection; it is reached by the approved-byte download, the ESS-parameter backfill, archive streaming, and the operator verification pass, and by nothing else — an object none of those touch is never checked.*
-- `record_integrity_observation` — `backend/app/services/artifact_integrity.py:89`
+- `record_integrity_observation` — `backend/app/services/artifact_integrity.py::record_integrity_observation`
   *Turns a detection into an append-only `artifact_integrity_event` row, in its own transaction so the record survives the request that discovered it. Carries expected-versus-observed digest and size plus the store's own `LastModified` / `ETag` / `ContentLength`, which is what lets an operator separate 'the object was modified after write' from 'we never stored what we said we did' from 'the store returned wrong bytes on this read'.*
-- `_detect_calculation_hard_fail` — `backend/app/services/trust/evaluator.py:85`
+- `_detect_calculation_hard_fail` — `backend/app/services/trust/evaluator.py::_detect_calculation_hard_fail`
   *Applies the label. Any calculation with a recorded break on any of its artifacts hard-fails, ahead of the geometry-validation verdict, and the existing `source_calculation_hard_failed_for_required_role` propagates that to every product naming the calculation as a required source. Reads database rows only — the trust rubric's `artifacts_present` deliberately does not verify bytes, so that a storage outage can never be reported as a depositor who failed to upload a log.*
 - `ck_artifact_integrity_event_observed_digest_present_iff_read` (check on `artifact_integrity_event`)
   `(finding = 'object_missing' AND observed_sha256 IS NULL) OR (finding <> 'object_missing' AND observed_sha256 IS NOT NULL)`
