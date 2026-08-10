@@ -204,9 +204,17 @@ class CodeChannel(str, Enum):
     trust_label = "trust_label"
 
     #: Enforced only by PostgreSQL, so the refusal arrives through the
-    #: integrity handler as a 409 whose code names the SQLSTATE class
-    #: (``state_conflict`` and friends) rather than the scientific claim.
-    #: An honest "the client is told *something*, but not which check".
+    #: integrity handler as a 409 rather than a 422. It used to mean "the
+    #: client is told *something*, but not which check", because the
+    #: handler classified every violation by SQLSTATE and reported
+    #: ``state_conflict`` for all of them -- a guarantee that is
+    #: *stronger* than a Python check, since no write path can bypass it,
+    #: paired with the weakest thing a client could be told about it.
+    #: A constraint that declares
+    #: :attr:`DatabaseConstraint.rejection_code` is now named: the handler
+    #: keys on ``diag.constraint_name`` and reports the scientific code.
+    #: The channel still exists to say *which status* carries it, because
+    #: 409-with-a-code and 422-with-a-code are different retry advice.
     database_constraint = "database_constraint"
 
     #: No machine-readable code reaches anybody. Recorded rather than
@@ -274,6 +282,14 @@ class PythonCheck:
         return f"``{self.func.__qualname__}``"
 
 
+#: Constraint kinds for which PostgreSQL populates ``diag.constraint_name``
+#: on the error it raises, which is the only thing the integrity handler
+#: can key on. Measured rather than assumed: a NOT NULL violation
+#: (SQLSTATE 23502) arrives with ``constraint_name = None``, so a claim
+#: held only by a NOT NULL column cannot be named to a client this way.
+_NAMED_BY_POSTGRES = frozenset({"check", "unique", "foreign_key", "exclusion"})
+
+
 @dataclass(frozen=True)
 class DatabaseConstraint:
     """A check enforced by PostgreSQL, identified by its schema object name.
@@ -289,12 +305,48 @@ class DatabaseConstraint:
     :param name: Expanded object name as PostgreSQL holds it.
     :param kind: ``check``, ``unique``, ``foreign_key`` or ``trigger``.
     :param definition: The SQL predicate, for the register document.
+    :param rejection_code: The code the 409 body carries when *this*
+        object is the one that fired. Declaring it here rather than on
+        the entry is what lets one claim own several constraints that a
+        client must be able to tell apart, and lets a claim enforced both
+        in Python and in PostgreSQL report the *same* code from both
+        sites. ``None`` means the refusal still arrives as the
+        SQLSTATE-derived category, which is honest but tells a client
+        only that *some* consistency rule fired.
+    :param rejection_detail: The sanitized public sentence that goes out
+        with ``rejection_code``. Written here, in the register, beside the
+        scientific claim it explains — not in the exception handler,
+        which has no idea what the constraint means. ASCII only: it is a
+        runtime string.
     """
 
     table: str
     name: str
     kind: str
     definition: str | None = None
+    rejection_code: str | None = None
+    rejection_detail: str | None = None
+
+    def __post_init__(self) -> None:
+        if bool(self.rejection_code) != bool(self.rejection_detail):
+            raise ValueError(
+                f"DatabaseConstraint({self.name!r}) declares "
+                f"rejection_code={self.rejection_code!r} and "
+                f"rejection_detail={self.rejection_detail!r}. A code with no "
+                "sentence would reach a client as a bare token, and a sentence "
+                "with no code is the generic 409 this field exists to replace; "
+                "declare both or neither."
+            )
+        if self.rejection_code and self.kind not in _NAMED_BY_POSTGRES:
+            raise ValueError(
+                f"DatabaseConstraint({self.name!r}) is a {self.kind!r} and "
+                f"declares rejection_code={self.rejection_code!r}, but the "
+                "handler keys on ``diag.constraint_name`` and PostgreSQL "
+                f"populates it only for {sorted(_NAMED_BY_POSTGRES)}. A "
+                "NOT NULL violation reports no name at all, and a trigger that "
+                "RAISEs reports whatever the function chose. Mapping one of "
+                "those would declare a code that can never arrive."
+            )
 
     @property
     def location(self) -> str:
@@ -559,6 +611,45 @@ def collect_registered_checks(modules: tuple[ModuleType, ...]) -> list[Scientifi
     )
 
 
+def collect_constraint_rejections(
+    checks: list[ScientificCheck],
+) -> dict[str, tuple[str, str]]:
+    """Map PostgreSQL constraint name to the ``(code, detail)`` a 409 carries.
+
+    The integrity handler builds its lookup from this rather than holding
+    a table of its own. A second table would be a second thing to keep in
+    step with the schema, and the register is already the one place that
+    is drift-guarded against live ``pg_constraint`` metadata -- so a
+    constraint that is renamed in a migration fails the *existing* guard
+    instead of quietly reverting its refusal to a generic
+    ``state_conflict`` that nobody would notice.
+
+    :param checks: The register, as :func:`collect_registered_checks`
+        returns it.
+    :returns: Constraint name to ``(code, public detail)``.
+    :raises ValueError: If two entries claim the same constraint name
+        with different codes, which would make the refusal depend on
+        dictionary order.
+    """
+
+    rejections: dict[str, tuple[str, str]] = {}
+    for check in checks:
+        for site in check.enforced_by:
+            if not isinstance(site, DatabaseConstraint) or not site.rejection_code:
+                continue
+            assert site.rejection_detail is not None  # enforced in __post_init__
+            entry = (site.rejection_code, site.rejection_detail)
+            existing = rejections.setdefault(site.name, entry)
+            if existing != entry:
+                raise ValueError(
+                    f"Constraint {site.name!r} is declared with two different "
+                    f"rejections, {existing!r} and {entry!r}. One violation "
+                    "cannot report two codes; the same object named by two "
+                    "entries must agree on what a client is told."
+                )
+    return rejections
+
+
 __all__ = [
     "CheckTier",
     "CodeChannel",
@@ -570,5 +661,6 @@ __all__ = [
     "PythonCheck",
     "ScientificCheck",
     "Threshold",
+    "collect_constraint_rejections",
     "collect_registered_checks",
 ]

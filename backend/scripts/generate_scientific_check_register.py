@@ -83,8 +83,8 @@ _CHANNEL_BLURB = {
         "a read-time trust label (`HardFailReason`), not any refusal"
     ),
     CodeChannel.database_constraint: (
-        "PostgreSQL only, so the client sees a generic 409 integrity code "
-        "rather than this check's name"
+        "PostgreSQL only, so the refusal is a 409 rather than a 422 — named, "
+        "where the constraint declares a rejection code"
     ),
     CodeChannel.none: "*nothing carries a code*",
 }
@@ -142,6 +142,14 @@ disagree, this one is right by construction.
 - **Enforced at** — `file::qualified_name` for Python, or the
   constraint/trigger name for PostgreSQL. Database names are verified against live schema metadata by
   `backend/tests/db/test_scientific_check_register.py`, not trusted as strings.
+  Where a constraint names the 409 code it returns, that code is printed with
+  it. A database-held position is the *strongest* guarantee here — no write
+  path can bypass a check constraint — and it used to be the one a client was
+  told least about, because every violation collapsed into its SQLSTATE bucket
+  and arrived as `state_conflict`. The mapping is keyed on the constraint name
+  PostgreSQL reports, never on the driver's message text, and each one is
+  proved by `backend/tests/api/test_api_database_constraint_codes.py`, which
+  provokes the real violation and reads the code out of the response body.
 - **Thresholds** — the numeric lines the check fires on, and *where each number
   comes from*. A constant is fixed in code and printed. A provenance-derived
   threshold is not a number at all: it is resolved per record from the
@@ -230,6 +238,11 @@ def _render_enforcement(check: ScientificCheck) -> str:
             body = site.label
             if site.definition:
                 body += f"\n  `{site.definition}`"
+            if site.rejection_code:
+                body += (
+                    f"\n  Violating this returns **409 `{site.rejection_code}`** — "
+                    f"{_md(site.rejection_detail or '')}"
+                )
         elif isinstance(site, DesignPosition):
             body = site.label
         else:  # pragma: no cover - exhaustive over Enforcement
@@ -322,9 +335,10 @@ def _render_check(check: ScientificCheck, index: int) -> str:
             "*(No machine-readable code reaches anybody for this one. Recorded "
             "as a gap rather than invented, because a code nothing carries is a "
             "code no client can match on. See the enforcement sites above for "
-            "why: a position held by a database constraint alone surfaces as a "
-            "generic integrity conflict, and one held by schema shape or by a "
-            "stored evidence row never surfaces as a refusal at all.)*",
+            "why: a position held by schema shape, or by a stored evidence row, "
+            "never surfaces as a refusal at all. A position held by a database "
+            "constraint no longer belongs here — such a constraint can declare "
+            "a rejection code and be named in its 409.)*",
             "",
         ]
     return "\n".join(lines)

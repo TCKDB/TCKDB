@@ -67,6 +67,7 @@ from app.scientific_checks import (
     ProvenanceThreshold,
     PythonCheck,
     ScientificCheck,
+    collect_constraint_rejections,
     collect_registered_checks,
 )
 from app.services import (
@@ -478,6 +479,17 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
             name="ck_reaction_atom_map_pair_element_matches",
             kind="check",
             definition="upper(element) = upper(ts_element)",
+            # Deliberately the *same* code the wire check raises. The two
+            # sites enforce one claim, so a client that learned to handle
+            # ``atom_map_element_not_conserved`` from a 422 handles it
+            # identically when a second write path reaches the database
+            # first; only the status differs, and the status is what says
+            # whether the payload was rejected before or after resolution.
+            rejection_code=wire_atom_map.W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
+            rejection_detail=(
+                "An atom map pairs two atoms of different elements. An atom "
+                "does not change element on the way across a reaction."
+            ),
         ),
     ),
     escape_hatch=(
@@ -519,12 +531,22 @@ CHECK_ATOM_MAP_IS_A_BIJECTION = ScientificCheck(
             name="uq_reaction_atom_map_pair_ts_atom_index",
             kind="unique",
             definition="(atom_map_id, side, ts_atom_index)",
+            rejection_code=wire_atom_map.W_ATOM_MAP_NOT_A_BIJECTION,
+            rejection_detail=(
+                "Two atoms of one leg claim the same saddle-point atom. A map "
+                "is a bijection or it is not a map."
+            ),
         ),
         DatabaseConstraint(
             table="reaction_atom_map_pair",
             name="uq_reaction_atom_map_pair_atom_map_id",
             kind="unique",
             definition="(atom_map_id, structure_participant_id, atom_index)",
+            rejection_code=wire_atom_map.W_ATOM_MAP_NOT_A_BIJECTION,
+            rejection_detail=(
+                "One participant atom is mapped more than once. A map is a "
+                "bijection or it is not a map."
+            ),
         ),
     ),
     escape_hatch=(
@@ -705,6 +727,19 @@ CHECK_ATOM_MAP_PROVENANCE_IS_DECLARED = ScientificCheck(
 # Pressure-dependent networks
 # ---------------------------------------------------------------------------
 
+#: 409 codes for the PDep constraints. These are refusal codes, not
+#: :mod:`app.services.provenance_warnings` tokens, and the distinction is
+#: load-bearing: ``network_wide_energy_transfer_scope`` is the *warning*
+#: that says a network-wide <dE>down was declared, which is accepted
+#: science. The code below is the opposite -- a row whose ``scope`` and
+#: whose columns contradict each other, which is not a deposit anyone
+#: meant to make. Reusing the warning token for it would tell a client
+#: that an accepted upload and a refused one were the same event.
+R_ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
+R_NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = (
+    "network_solve_reported_requires_literature"
+)
+
 CHECK_NETWORK_SOLVE_KIND_EVIDENCE = ScientificCheck(
     group="Pressure-dependent networks",
     sort_key=1,
@@ -734,6 +769,12 @@ CHECK_NETWORK_SOLVE_KIND_EVIDENCE = ScientificCheck(
             name="ck_network_solve_reported_requires_literature",
             kind="check",
             definition="kind <> 'reported' OR literature_id IS NOT NULL",
+            rejection_code=R_NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
+            rejection_detail=(
+                "A network solve declared as 'reported' cites no literature. "
+                "Transcribed rates must name the publication they came from, "
+                "because nothing else in the deposit accounts for them."
+            ),
         ),
         DatabaseConstraint(
             table="network_solve",
@@ -807,6 +848,13 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
                 "(scope='network_wide' AND state_id IS NULL AND "
                 "collider_species_entry_id IS NULL)"
             ),
+            rejection_code=R_ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
+            rejection_detail=(
+                "A collisional energy-transfer model declares a scope its own "
+                "columns contradict: a 'per_well' model must name the well and "
+                "the collider it was determined for, and a 'network_wide' one "
+                "must name neither."
+            ),
         ),
     ),
     escape_hatch=(
@@ -829,16 +877,22 @@ CHECK_ENERGY_TRANSFER_SCOPE = ScientificCheck(
 # Statistical mechanics
 # ---------------------------------------------------------------------------
 
+#: The 409 code for the statmech subject constraint. This entry was the
+#: register's own worked example of the gap #66 closes: it was the one
+#: check declared with no code and no channel *solely* because its claim
+#: was held by PostgreSQL, where nothing could carry a code to a client.
+R_STATMECH_SUBJECT_NOT_EXACTLY_ONE = "statmech_subject_not_exactly_one"
+
 CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT = ScientificCheck(
     group="Statistical mechanics",
     sort_key=1,
-    code=None,
+    code=R_STATMECH_SUBJECT_NOT_EXACTLY_ONE,
     asserts=(
         "A partition function belongs to exactly one subject — a species entry "
         "or a transition-state entry, never both and never neither."
     ),
     tier=CheckTier.structural,
-    channel=CodeChannel.none,
+    channel=CodeChannel.database_constraint,
     tier_rationale=(
         "A modelling position rather than an arithmetic bound. Canonical "
         "transition state theory needs the saddle point's own partition "
@@ -850,13 +904,19 @@ CHECK_STATMECH_HAS_EXACTLY_ONE_SUBJECT = ScientificCheck(
         "deliberately exempt."
     ),
     adr="0008",
-    emitted=False,
+    emitted=True,
     enforced_by=(
         DatabaseConstraint(
             table="statmech",
             name="ck_statmech_statmech_exactly_one_subject",
             kind="check",
             definition="(species_entry_id IS NULL) <> (transition_state_entry_id IS NULL)",
+            rejection_code=R_STATMECH_SUBJECT_NOT_EXACTLY_ONE,
+            rejection_detail=(
+                "A partition function names both a species entry and a "
+                "transition-state entry, or neither. It belongs to exactly one "
+                "subject."
+            ),
         ),
     ),
     escape_hatch=None,
@@ -1036,4 +1096,16 @@ def register() -> list[ScientificCheck]:
     return collect_registered_checks(DECLARING_MODULES)
 
 
-__all__ = ["DECLARING_MODULES", "register"]
+def constraint_rejections() -> dict[str, tuple[str, str]]:
+    """Constraint name to the ``(code, detail)`` a 409 body should carry.
+
+    Consumed by ``app.api.errors._integrity_error_handler``. Kept here
+    rather than in the handler because the register is what the schema
+    drift guard already checks against live ``pg_constraint`` metadata,
+    so the name in this mapping is the name PostgreSQL will report or CI
+    is already red.
+    """
+    return collect_constraint_rejections(register())
+
+
+__all__ = ["DECLARING_MODULES", "constraint_rejections", "register"]

@@ -38,7 +38,11 @@ from app.scientific_checks import (
     PythonCheck,
     ScientificCheck,
 )
-from app.scientific_checks.declarations import DECLARING_MODULES, register
+from app.scientific_checks.declarations import (
+    DECLARING_MODULES,
+    constraint_rejections,
+    register,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BACKEND_ROOT = REPO_ROOT / "backend"
@@ -52,10 +56,18 @@ ENVELOPE_PROOF = (
     BACKEND_ROOT / "tests" / "api" / "test_api_scientific_rejection_codes.py"
 )
 
+#: The equivalent proof for the positions PostgreSQL holds: it violates
+#: each named constraint for real and asserts the declared code reaches
+#: the 409 body.
+CONSTRAINT_PROOF = (
+    BACKEND_ROOT / "tests" / "api" / "test_api_database_constraint_codes.py"
+)
+
 #: The exception types that carry a code out of a check as an attribute.
 CODED_ERROR_TYPES = frozenset({"CodedValueError", "CodedValidationError"})
 
 REGISTER = register()
+REJECTIONS = constraint_rejections()
 
 
 def test_register_is_non_empty_and_proportionate() -> None:
@@ -300,6 +312,105 @@ def test_every_error_envelope_code_is_proved_end_to_end() -> None:
         "response.json()['code'] == the code — not that the message contains "
         "it, which is the assertion that let the gap survive."
     )
+
+
+def test_constraint_rejections_exist_to_verify() -> None:
+    """Guard the guard: an empty mapping makes the three below vacuous."""
+    assert REJECTIONS, (
+        "No DatabaseConstraint declares a rejection_code, so every "
+        "database-enforced scientific position is back to arriving as a "
+        "generic 409 and the guards below pass by describing nothing."
+    )
+
+
+def test_constraint_rejections_are_usable_runtime_strings() -> None:
+    """A 409's code and sentence must be ASCII, and the sentence a sentence.
+
+    ASCII because these are runtime strings on the wire, and the register
+    prose around them is not -- the ``asserts`` field is written with em
+    dashes for the document. Copying one of those into a response body is
+    the easy mistake, so it is checked rather than remembered.
+    """
+    for name, (code, detail) in sorted(REJECTIONS.items()):
+        assert code.isascii() and detail.isascii(), (
+            f"{name}: non-ASCII in the 409 payload ({code!r} / {detail!r}). "
+            "The register's prose fields may use typographic punctuation; a "
+            "runtime string may not."
+        )
+        assert re.fullmatch(r"[a-z][a-z0-9_]*", code), (
+            f"{name}: {code!r} is not a matchable token. Clients branch on "
+            "this string, and the generated client enum derives its member "
+            "name from it."
+        )
+        assert len(detail) > 40 and detail.endswith("."), (
+            f"{name}: {detail!r} is not a sentence a depositor can act on. "
+            "The point of naming the constraint is to say which scientific "
+            "rule refused the write, not to emit a second token."
+        )
+
+
+def test_a_constraint_that_names_a_code_is_not_declared_as_carrying_none() -> None:
+    """``channel=none`` and a named constraint cannot both be true.
+
+    ``CodeChannel.none`` is the register's way of saying *no
+    machine-readable code reaches anybody*. The moment a constraint
+    declares a rejection code that claim is false, and the entry that
+    still says ``none`` is the one a reader would trust.
+    """
+    for check in REGISTER:
+        named = [
+            site
+            for site in check.enforced_by
+            if isinstance(site, DatabaseConstraint) and site.rejection_code
+        ]
+        if not named:
+            continue
+        assert check.channel is not CodeChannel.none, (
+            f"{check.asserts!r} declares channel=none while "
+            f"{[site.name for site in named]} name codes a client now receives."
+        )
+
+
+def test_every_constraint_rejection_code_is_provoked_against_postgres() -> None:
+    """Each named constraint must be violated for real by the proof file.
+
+    The weak version of this guard would assert the mapping is non-empty
+    and stop. That would not catch the failure that actually matters:
+    a constraint whose *name* in the register no longer matches what
+    PostgreSQL reports, because a migration renamed it or because the
+    violation trips a different constraint first. Neither is visible from
+    Python -- only from provoking the violation and reading
+    ``diag.constraint_name`` -- so the register's claim is anchored to a
+    test that does exactly that, and a new rejection code cannot be
+    declared without one.
+    """
+    assert CONSTRAINT_PROOF.exists(), f"{CONSTRAINT_PROOF} is missing"
+    from tests.api.test_api_database_constraint_codes import PROVOCATIONS
+
+    missing = sorted(set(REJECTIONS) - set(PROVOCATIONS))
+    assert not missing, (
+        f"These constraints declare a rejection code but {CONSTRAINT_PROOF.name} "
+        f"never provokes them: {missing}. Add an entry to PROVOCATIONS -- the "
+        "code is otherwise a claim that the mapping key matches what PostgreSQL "
+        "reports, which nothing has checked."
+    )
+    stale = sorted(set(PROVOCATIONS) - set(REJECTIONS))
+    assert not stale, (
+        f"{CONSTRAINT_PROOF.name} provokes constraints the register no longer "
+        f"names: {stale}. Drop the provocation or restore the declaration."
+    )
+
+
+def test_the_handler_reads_the_register_rather_than_its_own_table() -> None:
+    """The API's mapping must *be* the register's, not a copy of it.
+
+    A hand-kept table in ``app/api/errors.py`` would pass every other
+    guard here while drifting from the schema at its own pace. Comparing
+    the objects is what makes "derived, never written twice" enforced.
+    """
+    from app.api.errors import _constraint_rejections
+
+    assert _constraint_rejections() == REJECTIONS
 
 
 def test_declaring_modules_covers_every_file_that_declares_a_check() -> None:
