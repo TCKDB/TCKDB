@@ -13,6 +13,8 @@ be pinned explicitly here.
 
 from __future__ import annotations
 
+import hashlib
+
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.refs import LevelOfTheoryRef
 from app.services.calculation_resolution import _level_of_theory_hash
@@ -85,6 +87,118 @@ def test_geom_hash_changes_when_an_element_changes() -> None:
     coordinates and must be independently sensitive."""
     altered = _WATER_XYZ.replace("O 0.0000", "S 0.0000", 1)
     assert _geom_hash(_WATER_XYZ) != _geom_hash(altered)
+
+
+# ---------------------------------------------------------------------------
+# geom_hash vs. the canonical element column
+# ---------------------------------------------------------------------------
+
+#: Chloromethane the way an ESS that shouts halogens writes it.
+_CH3CL_SHOUTED = (
+    "5\nchloromethane, elements as an ESS wrote them\n"
+    "c  0.000  0.000  0.000\n"
+    "CL 1.781  0.000  0.000\n"
+    "h -0.372  1.028  0.000\n"
+    "h -0.372 -0.514  0.890\n"
+    "h -0.372 -0.514 -0.890\n"
+)
+
+
+def _hash_of_canonical_text(atoms: list[tuple[str, float, float, float]]) -> str:
+    """Rebuild the hashed text from first principles, without ``parse_xyz``.
+
+    Deliberately duplicates the format string rather than importing it: a test
+    that reads the hash input out of the code under test cannot notice the code
+    changing it.
+    """
+    lines = [str(len(atoms)), ""]
+    for element, x, y, z in atoms:
+        lines.append(f"{element} {x:.12f} {y:.12f} {z:.12f}")
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+
+
+def test_geom_hash_is_untouched_by_element_symbol_canonicalisation() -> None:
+    """``geom_hash`` is what it was before ingestion canonicalised anything.
+
+    ``parse_xyz`` now stores ``Cl`` in ``geometry_atom.element`` for a file
+    that wrote ``CL``, but the hashed text still carries ``CL``. It has to:
+    ``geom_hash`` is the dedupe key *and* ``app.services.public_refs`` mints
+    ``geometry:geom_hash=<hash>`` as a citable identifier, so moving it would
+    dangle every published reference to a geometry whose XYZ shouted an
+    element and stop a re-upload of the same file deduping onto its own row.
+
+    The expected value is rebuilt here from the deposited symbols rather than
+    read back from the parser, so this fails if the canonicalisation ever
+    leaks into the hash input.
+    """
+    expected = _hash_of_canonical_text(
+        [
+            ("c", 0.0, 0.0, 0.0),
+            ("CL", 1.781, 0.0, 0.0),
+            ("h", -0.372, 1.028, 0.0),
+            ("h", -0.372, -0.514, 0.890),
+            ("h", -0.372, -0.514, -0.890),
+        ]
+    )
+    assert _geom_hash(_CH3CL_SHOUTED) == expected
+
+
+def test_the_deposited_spelling_survives_in_the_hashed_text() -> None:
+    """``xyz_text`` is the evidence, and it reads back as deposited.
+
+    This is the other half of the divergence: ``geometry_atom.element`` is
+    canonical because it is compared, ``geometry.xyz_text`` is verbatim
+    because it is cited.
+    """
+    created = geometry_create_from_payload(GeometryPayload(xyz_text=_CH3CL_SHOUTED))
+
+    assert [line.split()[0] for line in created.xyz_text.splitlines()[2:]] == [
+        "c",
+        "CL",
+        "h",
+        "h",
+        "h",
+    ]
+    assert [atom.element for atom in created.atoms] == ["C", "Cl", "H", "H", "H"]
+
+
+def test_two_spellings_of_one_geometry_still_hash_apart() -> None:
+    """Known, deliberate under-normalization, pinned so it cannot drift silently.
+
+    The same molecule at the same coordinates, deposited by a program that
+    shouts and one that does not, produces two ``geometry`` rows. Closing that
+    would mean canonicalising the hashed text, which is exactly what re-keys
+    published geometries -- so the duplicate is the cheaper of the two costs,
+    and it is a duplicate rather than a contradiction: both rows carry the same
+    canonical ``geometry_atom`` elements, so every comparison downstream reads
+    them as the same chemistry.
+    """
+    whispered = _CH3CL_SHOUTED.replace("CL 1.781", "Cl 1.781")
+    assert _geom_hash(_CH3CL_SHOUTED) != _geom_hash(whispered)
+
+    shouted_atoms = geometry_create_from_payload(
+        GeometryPayload(xyz_text=_CH3CL_SHOUTED)
+    ).atoms
+    whispered_atoms = geometry_create_from_payload(
+        GeometryPayload(xyz_text=whispered)
+    ).atoms
+    assert [atom.element for atom in shouted_atoms] == [
+        atom.element for atom in whispered_atoms
+    ]
+
+
+def test_hydrogen_isotope_labels_are_not_canonicalised_away() -> None:
+    """Case is settled at ingestion; nuclide labelling is not.
+
+    ``D`` and ``T`` are what the depositor wrote, and they stay in
+    ``geometry_atom.element``. Collapsing them to ``H`` here would destroy
+    deposited isotope labelling; code that *counts* elements resolves them at
+    the point of counting instead
+    (``app.chemistry.geometry.resolve_element_symbol``).
+    """
+    heavy_water = "3\nheavy water\nO 0.0 0.0 0.117\nd 0.0 0.757 -0.469\nT 0.0 -0.757 -0.469"
+    created = geometry_create_from_payload(GeometryPayload(xyz_text=heavy_water))
+    assert [atom.element for atom in created.atoms] == ["O", "D", "T"]
 
 
 # ---------------------------------------------------------------------------
