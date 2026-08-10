@@ -158,6 +158,7 @@ jobs:
           bash -n backend/scripts/test-profile.sh
           bash -n backend/scripts/update-openapi-golden.sh
           bash -n backend/scripts/ops/tckdb_alert_check.sh
+          bash -n backend/scripts/ops/tckdb_ci_watchdog.sh
           bash -n backend/scripts/ops/tckdb_deploy.sh
           make help
 

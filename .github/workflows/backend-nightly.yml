@@ -5,6 +5,12 @@ name: Backend Nightly (full suite)
 # (backend/scripts/test-full.sh, ~4,700 tests) so regressions in the
 # untier-gated areas (workflows, invariants, parsers, CLI, importers)
 # surface within a day instead of at the next manual pre-push run.
+#
+# A red run here notifies nobody by itself: GitHub does not email about a
+# failed scheduled workflow and it leaves no mark on any PR, which is how this
+# job came to fail eleven nights in a row unnoticed. ci-watchdog.yml reads this
+# workflow's run history once a day and pushes to ntfy on a change of verdict,
+# and on this job going silent as well as on it going red.
 
 on:
   schedule:

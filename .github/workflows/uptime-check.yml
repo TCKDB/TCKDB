@@ -99,7 +99,12 @@ jobs:
 
           if [ -n "${NTFY_TOPIC}" ]; then
             message="$(printf '%s\n\nChecked from GitHub Actions, which runs independently of the deployment host. Repeats every ~15 minutes until resolved.' "$detail")"
-            curl -sS --max-time 25 \
+            # --fail because here an HTTP error IS the answer: a 401 from a
+            # protected topic or a 5xx from ntfy means the push reached
+            # nobody, and without it curl exits 0 and this job logs a
+            # delivered alert that was never delivered. The same bug was
+            # fixed in the Pi-side checker; it lived on here.
+            curl -sS --fail --max-time 25 \
               -H "Title: ${summary}" \
               -H "Priority: urgent" \
               -H "Tags: rotating_light" \
