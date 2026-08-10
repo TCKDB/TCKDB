@@ -264,6 +264,31 @@ def record_integrity_verified(
     )
 
 
+def latest_integrity_observations(
+    session: Session, sha256s: list[str]
+) -> dict[str, ArtifactIntegrityEvent]:
+    """Return the *latest* observation row per digest, for callers that cite it.
+
+    :func:`digests_with_recorded_breaks` answers the yes/no question the
+    trust evaluator asks and deliberately reads two columns to do it.
+    This is for the callers that must point at the specific observation
+    they are relying on -- the reproducibility rubric quoting the event
+    it deferred to, a read surface reporting expected versus observed --
+    and it costs whole rows, so it is used on bounded sets of digests.
+    """
+    if not sha256s:
+        return {}
+    rows = session.scalars(
+        select(ArtifactIntegrityEvent)
+        .where(ArtifactIntegrityEvent.sha256.in_(sorted(set(sha256s))))
+        .order_by(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.id)
+    ).all()
+    latest: dict[str, ArtifactIntegrityEvent] = {}
+    for row in rows:
+        latest[row.sha256] = row
+    return latest
+
+
 def digests_with_recorded_breaks(
     session: Session, sha256s: list[str]
 ) -> frozenset[str]:
@@ -293,6 +318,7 @@ def digests_with_recorded_breaks(
 
 __all__ = [
     "digests_with_recorded_breaks",
+    "latest_integrity_observations",
     "record_from_error",
     "record_integrity_observation",
     "record_integrity_verified",

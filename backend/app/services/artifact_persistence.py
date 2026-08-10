@@ -253,10 +253,16 @@ def _store_and_record(
 def _compensate_stored_objects(stored_shas: list[str]) -> None:
     """Retain possible orphans rather than risk deleting shared CAS keys.
 
-    Kept as the cross-workflow failure hook while callers migrate to a
-    reference-aware garbage-collection design. A digest in this list does not
-    prove the current transaction created the object; ``store_artifact`` may
-    have deduplicated against committed or concurrently written content.
+    A digest in this list does not prove the current transaction created
+    the object; ``store_artifact`` may have deduplicated against committed
+    or concurrently written content, so deleting here could take away
+    bytes another row is pointing at.
+
+    What reclaims them is the sweep, out of band and on an age floor no
+    in-flight upload can be under:
+    ``backend/scripts/ops/verify_artifact_integrity.py --reclaim-orphans``
+    moves month-old unreferenced objects to a hold they can be restored
+    from, and only a separate ``--purge-hold-days`` run deletes anything.
     """
     if stored_shas:
         logger.warning(

@@ -29,6 +29,7 @@ enum ArtifactIntegrityDetectionContext {
   store_dedup_verification
   parameter_extraction
   archive
+  reproducibility_verification
 }
 
 enum ArtifactIntegrityFinding {

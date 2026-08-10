@@ -389,6 +389,13 @@ class ArtifactIntegrityDetectionContext(str, Enum):
     #: Archive export or restore streaming stored objects.
     archive = "archive"
 
+    #: The reproducibility rubric re-reading a graded calculation's output
+    #: log. The rubric has verified those bytes since it was written; what
+    #: it used to do with a failure was record a warning of its own, which
+    #: made it a second, quieter owner of the same fact (ADR 0008). It is
+    #: now a detector that reports to this table like every other one.
+    reproducibility_verification = "reproducibility_verification"
+
 
 class HessianSource(str, Enum):
     """Where a stored Cartesian Hessian matrix was obtained from.

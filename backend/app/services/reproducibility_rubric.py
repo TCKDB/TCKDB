@@ -12,6 +12,16 @@ dependency snapshot, and no warnings about artifact bytes we could not read. It
 is a statement about the completeness of what was deposited, not a promise of
 bitwise-identical output.
 
+**The rubric does not own artifact integrity.** It re-reads output-log
+bytes and so detects custody breaks, but ``artifact_integrity_event`` is
+where that fact lives (ADR 0014) and the trust label is its consequence.
+A detection here is therefore written to that table, and for any artifact
+this evaluation does not read the snapshot copies the recorded verdict
+and cites the observation it copied. Keeping a second, private opinion
+was the defect ADR 0008 names: the two tiers could disagree about the
+same record, and which answer a reader got depended on which path ran
+last.
+
 The execution-environment manifest is deliberately **not** graded. It is
 recorded in ``context_json['execution_environment']`` as provenance. Gating a
 grade on a byte digest of a site-installed binary would make the top grade
@@ -39,8 +49,13 @@ from typing import Any
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.db.models.calculation import Calculation, CalculationArtifact
+from app.db.models.calculation import (
+    ArtifactIntegrityEvent,
+    Calculation,
+    CalculationArtifact,
+)
 from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
     ArtifactKind,
     CalculationType,
     ReproducibilityAssessorKind,
@@ -58,6 +73,11 @@ from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport
+from app.services.artifact_integrity import (
+    latest_integrity_observations,
+    record_from_error,
+    record_integrity_verified,
+)
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
@@ -122,6 +142,75 @@ class ReproducibilityWarning:
 
     def snapshot(self) -> dict[str, Any]:
         return _json_value(asdict(self))
+
+
+@dataclass(frozen=True)
+class _Custody:
+    """The rubric's link to the one owner of artifact integrity (ADR 0008).
+
+    The rubric re-reads output-log bytes, so it *detects* custody breaks.
+    It used to also *decide* what they meant: a warning in its own
+    snapshot, and nothing durable. The trust layer, which grades from
+    recorded ``artifact_integrity_event`` rows, therefore went on calling
+    the record sound while the reproducibility snapshot said its evidence
+    had rotted -- two tiers holding the same fact with different
+    consequences, so a reader's answer depended on which path ran last.
+
+    Both directions now go through this object. Detections are reported
+    to the custody record (``record_break`` / ``record_repair``, each in
+    its own transaction, ADR 0014), and the rubric's verdict for an
+    artifact it did *not* read is copied from that record rather than
+    invented -- which also closes the reverse gap, where a break found by
+    the download route on an input artifact was invisible here.
+
+    ``session_factory`` and ``storage_client`` exist so a caller can hand
+    the recorder somewhere to write; the defaults are the recorder's own.
+    """
+
+    latest: dict[str, ArtifactIntegrityEvent]
+    session_factory: Callable[[], Session] | None = None
+    storage_client: Any = None
+
+    def recorded_break(self, sha256: str) -> ArtifactIntegrityEvent | None:
+        """The latest observation for ``sha256``, when it is a break.
+
+        Latest, not "any break ever": the log is append-only and a repair
+        is a later ``verified`` row, so reading "any" would leave a
+        restored artifact condemned forever.
+        """
+        event = self.latest.get(sha256)
+        if event is None or not event.finding.is_break:
+            return None
+        return event
+
+    def record_break(
+        self, error: ArtifactIntegrityError, artifact: CalculationArtifact
+    ) -> int | None:
+        return record_from_error(
+            error,
+            detected_during=(
+                ArtifactIntegrityDetectionContext.reproducibility_verification
+            ),
+            artifact=artifact,
+            session_factory=self.session_factory,
+            storage_client=self.storage_client,
+        )
+
+    def record_repair(
+        self, artifact: CalculationArtifact, *, observed_bytes: int
+    ) -> int | None:
+        return record_integrity_verified(
+            sha256=artifact.sha256,
+            detected_during=(
+                ArtifactIntegrityDetectionContext.reproducibility_verification
+            ),
+            observed_bytes=observed_bytes,
+            artifact_id=artifact.id,
+            artifact_recorded_at=artifact.created_at,
+            detail="rubric re-read cleanly; supersedes the recorded break",
+            session_factory=self.session_factory,
+            storage_client=self.storage_client,
+        )
 
 
 @dataclass(frozen=True)
@@ -353,17 +442,57 @@ def _typed_output_snapshot(calculation: Calculation) -> tuple[bool, dict[str, An
     return bool(meaningful), snapshot
 
 
+def _cited_break(
+    snapshot: dict[str, Any],
+    artifact: CalculationArtifact,
+    event: ArtifactIntegrityEvent,
+) -> tuple[dict[str, Any], ReproducibilityWarning]:
+    """Report a break this evaluation did not observe, naming its source.
+
+    The rubric is not entitled to a private opinion about custody, so
+    when it has not read the bytes itself it repeats the custody record's
+    verdict and says which row it is repeating. ``integrity_event_id``
+    is the citation: a reader of the snapshot can go to the observation,
+    see expected versus observed and what discovered it, instead of
+    finding a second unexplained assertion of the same fact.
+    """
+    snapshot["verification"] = ArtifactVerificationStatus.integrity_failed.value
+    return snapshot, ReproducibilityWarning(
+        code="artifact_integrity_failed",
+        evidence={
+            "artifact_id": artifact.id,
+            "sha256": artifact.sha256,
+            "integrity_event_id": event.id,
+            "finding": event.finding.value,
+            "detected_during": event.detected_during.value,
+            "observed_by_this_evaluation": False,
+        },
+    )
+
+
 def _verify_artifact(
     artifact: CalculationArtifact,
     *,
     artifact_loader: ArtifactLoader,
     verify_output: bool,
+    custody: _Custody,
 ) -> tuple[dict[str, Any], ReproducibilityWarning | None]:
     snapshot = _mapped_columns(artifact)
+    recorded = custody.recorded_break(artifact.sha256)
     if artifact.kind is not ArtifactKind.output_log or not verify_output:
+        # Includes every input, checkpoint and Hessian artifact, and every
+        # artifact of an upstream dependency. The rubric never reads those,
+        # which is exactly why it must not conclude anything about them on
+        # its own -- before this, a break the download route had recorded
+        # against an input log left the snapshot reporting `not_requested`
+        # while the trust layer hard-failed the same calculation.
+        if recorded is not None:
+            return _cited_break(snapshot, artifact, recorded)
         snapshot["verification"] = ArtifactVerificationStatus.not_requested.value
         return snapshot, None
     if artifact.bytes > MAX_ARTIFACT_VERIFICATION_BYTES:
+        if recorded is not None:
+            return _cited_break(snapshot, artifact, recorded)
         snapshot["verification"] = ArtifactVerificationStatus.size_limit_exceeded.value
         return snapshot, ReproducibilityWarning(
             code="artifact_verification_size_limit",
@@ -376,17 +505,39 @@ def _verify_artifact(
     try:
         content = artifact_loader(artifact.sha256, expected_bytes=artifact.bytes)
     except ArtifactStorageUnavailable:
+        # A store that will not answer says nothing about the object, so it
+        # cannot clear a break somebody already recorded against it.
+        if recorded is not None:
+            return _cited_break(snapshot, artifact, recorded)
         snapshot["verification"] = ArtifactVerificationStatus.unavailable.value
         return snapshot, ReproducibilityWarning(
             code="artifact_storage_unavailable",
             evidence={"artifact_id": artifact.id, "sha256": artifact.sha256},
         )
-    except ArtifactIntegrityError:
+    except ArtifactIntegrityError as exc:
+        # Detected here, owned there. The row is written in its own
+        # transaction, so it outlives this evaluation whether or not the
+        # assessment it feeds is ever committed.
+        event_id = custody.record_break(exc, artifact)
         snapshot["verification"] = ArtifactVerificationStatus.integrity_failed.value
         return snapshot, ReproducibilityWarning(
             code="artifact_integrity_failed",
-            evidence={"artifact_id": artifact.id, "sha256": artifact.sha256},
+            evidence={
+                "artifact_id": artifact.id,
+                "sha256": artifact.sha256,
+                "integrity_event_id": event_id,
+                "finding": exc.finding.value,
+                "detected_during": (
+                    ArtifactIntegrityDetectionContext.reproducibility_verification.value
+                ),
+                "observed_by_this_evaluation": True,
+            },
         )
+    if recorded is not None:
+        # Bytes that hash correctly are the only thing that clears a break,
+        # and this read produced them. Recorded as a later observation; the
+        # break stays in the log as the account of what happened.
+        custody.record_repair(artifact, observed_bytes=len(content))
     snapshot["verification"] = ArtifactVerificationStatus.verified.value
     snapshot["verified_bytes"] = len(content)
     return snapshot, None
@@ -397,6 +548,7 @@ def _calculation_snapshot(
     *,
     artifact_loader: ArtifactLoader,
     verify_output_artifacts: bool,
+    custody: _Custody,
 ) -> tuple[dict[str, Any], list[ReproducibilityWarning]]:
     artifact_rows: list[dict[str, Any]] = []
     warnings: list[ReproducibilityWarning] = []
@@ -432,7 +584,14 @@ def _calculation_snapshot(
                 verification_bytes += artifact.bytes
         if budget_status is not None:
             snapshot = _mapped_columns(artifact)
-            snapshot["verification"] = budget_status.value
+            # A recorded break outranks "we ran out of budget to look":
+            # one is a fact about the object, the other is a fact about
+            # this evaluation.
+            recorded = custody.recorded_break(artifact.sha256)
+            if recorded is not None:
+                snapshot, budget_warning = _cited_break(snapshot, artifact, recorded)
+            else:
+                snapshot["verification"] = budget_status.value
             artifact_rows.append(snapshot)
             warnings.append(budget_warning)
             continue
@@ -440,6 +599,7 @@ def _calculation_snapshot(
             artifact,
             artifact_loader=artifact_loader,
             verify_output=should_verify,
+            custody=custody,
         )
         artifact_rows.append(snapshot)
         if warning is not None:
@@ -633,8 +793,18 @@ def evaluate_reproducibility(
     record_type: str | SubmissionRecordType,
     record_id: int,
     artifact_loader: ArtifactLoader = load_artifact_bytes,
+    integrity_session_factory: Callable[[], Session] | None = None,
+    integrity_storage_client: Any = None,
 ) -> ReproducibilityEvaluation:
-    """Evaluate one record and snapshot every datum the rubric consumed."""
+    """Evaluate one record and snapshot every datum the rubric consumed.
+
+    ``integrity_session_factory`` and ``integrity_storage_client`` are
+    the seam for where a detected custody break gets recorded and where
+    the store is asked for its metadata about the object. Both default to
+    the recorder's own (a fresh application session and a real S3
+    client), which is what production wants; tests hand in their own so
+    an evaluation does not commit rows outside the test transaction.
+    """
     resolved_type, model = resolve_reproducibility_record_model(record_type)
     if record_id <= 0:
         raise ValueError("record_id must be positive")
@@ -646,6 +816,18 @@ def evaluate_reproducibility(
     source_refs = _source_refs(target)
     roots = sorted({calculation.id: calculation for calculation, _ in source_refs}.values(), key=lambda row: row.id)
     closure, dependency_cycle = _calculation_closure(roots)
+    # One query for the whole closure. The rubric does not decide whether
+    # an artifact's bytes are sound -- ``artifact_integrity_event`` does
+    # (ADR 0008) -- so it fetches that verdict once and defers to it for
+    # every artifact it will not read itself.
+    custody = _Custody(
+        latest=latest_integrity_observations(
+            session,
+            [artifact.sha256 for calculation in closure for artifact in calculation.artifacts],
+        ),
+        session_factory=integrity_session_factory,
+        storage_client=integrity_storage_client,
+    )
     calculations: dict[str, Any] = {}
     warnings: list[ReproducibilityWarning] = []
     for calculation in closure:
@@ -653,6 +835,7 @@ def evaluate_reproducibility(
             calculation,
             artifact_loader=artifact_loader,
             verify_output_artifacts=(isinstance(target, Calculation) and calculation.id == target.id),
+            custody=custody,
         )
         calculations[str(calculation.id)] = snapshot
         warnings.extend(calculation_warnings)
@@ -831,6 +1014,8 @@ def evaluate_and_append_reproducibility(
     record_type: str | SubmissionRecordType,
     record_id: int,
     artifact_loader: ArtifactLoader = load_artifact_bytes,
+    integrity_session_factory: Callable[[], Session] | None = None,
+    integrity_storage_client: Any = None,
 ) -> RecordReproducibilityAssessment:
     """Derive and append a system-owned assessment; callers provide no claims."""
     evaluation = evaluate_reproducibility(
@@ -838,6 +1023,8 @@ def evaluate_and_append_reproducibility(
         record_type=record_type,
         record_id=record_id,
         artifact_loader=artifact_loader,
+        integrity_session_factory=integrity_session_factory,
+        integrity_storage_client=integrity_storage_client,
     )
     return append_reproducibility_assessment(
         session,

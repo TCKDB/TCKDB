@@ -1297,6 +1297,223 @@
         "title": "ArtifactIn",
         "type": "object"
       },
+      "ArtifactIntegrityDetectionContext": {
+        "description": "Which read discovered an integrity failure.\n\nRecorded because coverage is uneven by construction: an artifact\nnobody downloads is verified by nothing, so \"we have never seen a\nfailure\" means very different things depending on which contexts have\nactually run over a given object.",
+        "enum": [
+          "download",
+          "verification_sweep",
+          "store_dedup_verification",
+          "parameter_extraction",
+          "archive",
+          "reproducibility_verification"
+        ],
+        "title": "ArtifactIntegrityDetectionContext",
+        "type": "string"
+      },
+      "ArtifactIntegrityDigestSummary": {
+        "description": "The custody history of one content-addressed object, aggregated.\n\n``currently_broken`` reads the *latest* observation, not \"any break\never\". The log is append-only and a repair is recorded as a later\n``verified`` row, so \"any\" would leave a restored object condemned\nforever -- which would make this a trap rather than a report.",
+        "properties": {
+          "break_count": {
+            "title": "Break Count",
+            "type": "integer"
+          },
+          "calculation_refs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Calculation Refs",
+            "type": "array"
+          },
+          "currently_broken": {
+            "title": "Currently Broken",
+            "type": "boolean"
+          },
+          "detected_during": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactIntegrityDetectionContext"
+            },
+            "title": "Detected During",
+            "type": "array"
+          },
+          "filenames": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Filenames",
+            "type": "array"
+          },
+          "first_observed_at": {
+            "format": "date-time",
+            "title": "First Observed At",
+            "type": "string"
+          },
+          "last_observed_at": {
+            "format": "date-time",
+            "title": "Last Observed At",
+            "type": "string"
+          },
+          "latest": {
+            "$ref": "#/components/schemas/ArtifactIntegrityObservation"
+          },
+          "observation_count": {
+            "title": "Observation Count",
+            "type": "integer"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "title": "Sha256",
+            "type": "string"
+          }
+        },
+        "required": [
+          "sha256",
+          "currently_broken",
+          "latest",
+          "first_observed_at",
+          "last_observed_at",
+          "observation_count",
+          "break_count",
+          "detected_during"
+        ],
+        "title": "ArtifactIntegrityDigestSummary",
+        "type": "object"
+      },
+      "ArtifactIntegrityFinding": {
+        "description": "What was observed when stored bytes were checked against their digest.\n\nNot severities: four different observations about a content-addressed\nobject, and an operator needs to tell them apart before deciding what\nto do. Three are breaks; the fourth is the observation that clears\nthem, which is what keeps the record append-only. Nothing is ever\nupdated or deleted — a repaired object is a *new* observation that\nsupersedes the older one, evidenced by the digest it now hashes to.",
+        "enum": [
+          "digest_mismatch",
+          "size_mismatch",
+          "object_missing",
+          "verified"
+        ],
+        "title": "ArtifactIntegrityFinding",
+        "type": "string"
+      },
+      "ArtifactIntegrityObservation": {
+        "description": "One recorded observation about custody of one stored object.\n\nCarries expected *and* observed, plus the store's own metadata as it\nwas at the moment of detection. That pairing is what separates the\nthree causes of a digest mismatch -- the object was modified after we\nwrote it, we never stored what we said we did, or the store returned\nwrong bytes on this read -- and an operator who cannot tell them apart\nwill investigate the wrong one.",
+        "properties": {
+          "artifact_recorded_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Artifact Recorded At"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "detected_at": {
+            "format": "date-time",
+            "title": "Detected At",
+            "type": "string"
+          },
+          "detected_during": {
+            "$ref": "#/components/schemas/ArtifactIntegrityDetectionContext"
+          },
+          "expected_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Bytes"
+          },
+          "expected_sha256": {
+            "maxLength": 64,
+            "title": "Expected Sha256",
+            "type": "string"
+          },
+          "finding": {
+            "$ref": "#/components/schemas/ArtifactIntegrityFinding"
+          },
+          "is_break": {
+            "title": "Is Break",
+            "type": "boolean"
+          },
+          "object_content_length": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Content Length"
+          },
+          "object_etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Etag"
+          },
+          "object_last_modified_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Object Last Modified At"
+          },
+          "observed_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Bytes"
+          },
+          "observed_sha256": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observed Sha256"
+          }
+        },
+        "required": [
+          "finding",
+          "detected_during",
+          "detected_at",
+          "is_break",
+          "expected_sha256"
+        ],
+        "title": "ArtifactIntegrityObservation",
+        "type": "object"
+      },
       "ArtifactKind": {
         "enum": [
           "input",
@@ -15849,6 +16066,52 @@
         "title": "ImaginaryModeDisposition",
         "type": "string"
       },
+      "IntegrityRequestEcho": {
+        "description": "Echo of the parsed request, surfaced in the response envelope.",
+        "properties": {
+          "filter": {
+            "additionalProperties": true,
+            "title": "Filter",
+            "type": "object"
+          },
+          "include": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Include",
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ReadProfile",
+            "default": "exploratory"
+          },
+          "profile_recommendation": {
+            "$ref": "#/components/schemas/ProfileRecommendation",
+            "default": "none"
+          },
+          "profile_release_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Release Ref"
+          },
+          "sort": {
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "filter",
+          "sort"
+        ],
+        "title": "IntegrityRequestEcho",
+        "type": "object"
+      },
       "JobEnqueueResponse": {
         "description": "Returned immediately when a job is queued.",
         "properties": {
@@ -29821,6 +30084,71 @@
           "value"
         ],
         "title": "SchemeComponentParamPayload",
+        "type": "object"
+      },
+      "ScientificArtifactIntegrityHistoryResponse": {
+        "description": "Response envelope for ``/scientific/artifacts/{sha256}/integrity``.\n\nThe summary and the sequence together: a caller that only needs the\ncurrent verdict does not have to reconstruct it from the page, and a\ncaller reconstructing an incident gets the observations in the order\nthey were recorded.",
+        "properties": {
+          "observations": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactIntegrityObservation"
+            },
+            "title": "Observations",
+            "type": "array"
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "request": {
+            "$ref": "#/components/schemas/IntegrityRequestEcho"
+          },
+          "sha256": {
+            "maxLength": 64,
+            "title": "Sha256",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ArtifactIntegrityDigestSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "request",
+          "sha256",
+          "pagination"
+        ],
+        "title": "ScientificArtifactIntegrityHistoryResponse",
+        "type": "object"
+      },
+      "ScientificArtifactIntegrityResponse": {
+        "description": "Response envelope for ``/scientific/artifacts/integrity``.",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ArtifactIntegrityDigestSummary"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/IntegrityRequestEcho"
+          }
+        },
+        "required": [
+          "request",
+          "records",
+          "pagination"
+        ],
+        "title": "ScientificArtifactIntegrityResponse",
         "type": "object"
       },
       "ScientificArtifactRecord": {
@@ -59102,6 +59430,183 @@
         ]
       }
     },
+    "/api/v1/scientific/artifacts/integrity": {
+      "get": {
+        "description": "What TCKDB has observed about custody of its own stored objects.\n\n``hard_fail_reason`` already tells a client that a calculation's\nevidence can no longer be produced. This is where a curator finds out\n*what happened* -- expected against observed digest and size, the\nstore's own metadata at the moment of detection, which read found it,\nwhen it started and whether it has recurred.\n\nOne record per digest, not one per observation: repeat detections are\nappended forever by design (persistence is evidence), so a raw listing\nwould bury one incident under its own retries. The full sequence is at\n``/{sha256}/integrity``.\n\nCurator or admin only. The rows carry verifier prose and the object\nstore's own ``ETag`` and paths, which is operational detail about a\ndeployment rather than science about a record -- the same reasoning\nthat gates raw artifact bytes (ADR 0004).",
+        "operationId": "artifact_integrity_search_api_v1_scientific_artifacts_integrity_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "sha256",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sha256"
+            }
+          },
+          {
+            "in": "query",
+            "name": "calculation_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Calculation Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "only_currently_broken",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Only Currently Broken",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificArtifactIntegrityResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifact Integrity Search",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
     "/api/v1/scientific/artifacts/search": {
       "get": {
         "description": "Standalone artifact-metadata search.\n\nAt least one meaningful filter is required (422 ``missing_filter``\notherwise). Filters AND-combine. Sort vocabulary is v0-frozen —\nsupplying ``sort=`` yields 422 ``client_sort_not_supported``.\n\nReturns artifact metadata only; never bodies, never download URLs.",
@@ -59794,6 +60299,134 @@
           }
         },
         "summary": "Download Approved Artifact",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/artifacts/{sha256}/integrity": {
+      "get": {
+        "description": "Every observation recorded for one object, oldest first.\n\nNot flattened to current state. A break followed by a ``verified``\nobservation followed by another break is a claim about the storage\nlayer that no summary can express, and it is the claim an operator\ndeciding whether to trust a bucket needs. The summary block carries\nthe current verdict so a caller that only wants that does not have to\nreconstruct it.\n\nAn unknown or never-observed digest returns an empty history rather\nthan a 404: \"nothing has ever been recorded about this object\" is a\ntrue and useful answer, and it is emphatically *not* a verification\nclaim -- an artifact nobody has read has been checked by nothing.",
+        "operationId": "artifact_integrity_detail_api_v1_scientific_artifacts__sha256__integrity_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sha256",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificArtifactIntegrityHistoryResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifact Integrity Detail",
         "tags": [
           "scientific"
         ]

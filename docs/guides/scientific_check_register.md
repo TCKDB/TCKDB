@@ -720,7 +720,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 **Enforced at.**
 
 - `load_artifact_bytes` — `backend/app/services/artifact_storage.py::load_artifact_bytes`
-  *Recomputes SHA-256 over every retrieval and compares it against the content-addressed key, in constant time. This is the detection; it is reached by the approved-byte download, the ESS-parameter backfill, archive streaming, and the operator verification pass, and by nothing else — an object none of those touch is never checked.*
+  *Recomputes SHA-256 over every retrieval and compares it against the content-addressed key, in constant time. This is the detection; it is reached by the approved-byte download, the ESS-parameter backfill, archive streaming, the reproducibility rubric's re-read of a graded output log, and the operator verification pass, and by nothing else — an object none of those touch is never checked.*
 - `record_integrity_observation` — `backend/app/services/artifact_integrity.py::record_integrity_observation`
   *Turns a detection into an append-only `artifact_integrity_event` row, in its own transaction so the record survives the request that discovered it. Carries expected-versus-observed digest and size plus the store's own `LastModified` / `ETag` / `ContentLength`, which is what lets an operator separate 'the object was modified after write' from 'we never stored what we said we did' from 'the store returned wrong bytes on this read'.*
 - `_detect_calculation_hard_fail` — `backend/app/services/trust/evaluator.py::_detect_calculation_hard_fail`

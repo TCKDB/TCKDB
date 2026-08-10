@@ -16,6 +16,8 @@ when the fixed overhead of a page changes.
 
 from __future__ import annotations
 
+import hashlib
+
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
@@ -25,6 +27,7 @@ from app.schemas.reads.scientific_calculation_search import (
 )
 from app.services.scientific_read.calculations_search import search_calculations
 from tests.services.scientific_read._factories import (
+    attach_artifact,
     make_calculation,
     make_lot,
     make_species,
@@ -112,4 +115,154 @@ def test_a_search_page_costs_a_fixed_few_statements_per_record(db_session):
         f"record, expected at most {STATEMENTS_PER_RECORD} "
         f"({small} statements for {_SMALL_PAGE} records, "
         f"{large} for {_LARGE_PAGE})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The cost of never missing a custody break
+# ---------------------------------------------------------------------------
+
+#: How many artifacts each calculation in the integrity fixture carries.
+#: Two values, because the property under test is that the integrity load
+#: does not scale with either of them.
+_FEW_ARTIFACTS = 1
+_MANY_ARTIFACTS = 6
+
+
+def _integrity_statements_for_page(
+    session: Session, *, method: str, limit: int
+) -> tuple[int, int]:
+    """Return (statements loading artifacts, statements loading their custody)."""
+    artifacts = 0
+    integrity = 0
+    engine = session.connection().engine
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        nonlocal artifacts, integrity
+        if "artifact_integrity_event" in statement:
+            integrity += 1
+        elif "FROM calculation_artifact" in statement:
+            artifacts += 1
+
+    try:
+        response = search_calculations(
+            session,
+            CalculationsSearchRequest(
+                calculation_type=CalculationType.sp,
+                method=method,
+                limit=limit,
+                include=["artifacts"],
+            ),
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+
+    assert len(response.records) == limit, "page must be full to be comparable"
+    return artifacts, integrity
+
+
+def _page_with_artifacts(db_session, *, method: str, calcs: int, artifacts: int):
+    lot = make_lot(db_session, method=method, basis="def2tzvp")
+    entry = make_species_entry(
+        db_session, make_species(db_session, smiles=f"[CH4:{abs(hash(method)) % 90 + 5}]")
+    )
+    for index in range(calcs):
+        calc = make_calculation(
+            db_session,
+            type=CalculationType.sp,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+        )
+        for slot in range(artifacts):
+            attach_artifact(
+                db_session,
+                calculation=calc,
+                sha256=hashlib.sha256(
+                    f"{method}-{index}-{slot}".encode()
+                ).hexdigest(),
+                filename=f"job-{slot}.log",
+            )
+    return lot
+
+
+def test_the_integrity_eager_load_does_not_scale_with_artifact_count(db_session):
+    """``lazy="selectin"`` was chosen over annotating eleven call sites.
+
+    The reason is that a recorded custody break must not be invisible to
+    whichever read path somebody forgot to annotate -- corruption
+    discoverable only by the lucky reader is the failure the whole custody
+    record exists to end. The price is one indexed ``sha256 IN (...)`` per
+    artifact-loading statement, and *per statement* is the load-bearing
+    half of that sentence. A drop to ``lazy="select"`` would turn it into
+    one query per artifact row, which on a 50-record page of
+    multi-artifact calculations is hundreds of round trips rather than
+    one, and nothing else in the suite would notice.
+
+    So this pins the shape, not a wall-clock number: the integrity load
+    is a fixed cost per page, independent of how many artifacts the page's
+    calculations carry.
+    """
+    _page_with_artifacts(
+        db_session, method="integrity-few", calcs=8, artifacts=_FEW_ARTIFACTS
+    )
+    _page_with_artifacts(
+        db_session, method="integrity-many", calcs=8, artifacts=_MANY_ARTIFACTS
+    )
+
+    _, few = _integrity_statements_for_page(
+        db_session, method="integrity-few", limit=8
+    )
+    _, many = _integrity_statements_for_page(
+        db_session, method="integrity-many", limit=8
+    )
+
+    assert few >= 1, "the integrity relationship must actually be loaded"
+    assert many == few, (
+        f"{many} integrity statements for {_MANY_ARTIFACTS} artifacts per "
+        f"calculation against {few} for {_FEW_ARTIFACTS}: the custody load "
+        "is fanning out per artifact row"
+    )
+
+
+def test_the_integrity_load_costs_exactly_one_statement_per_artifact_load(
+    db_session,
+):
+    """One custody statement per artifact-loading statement, and no more.
+
+    That ratio is the whole claim made for ``lazy="selectin"``. Measured on
+    this fixture the calculations search issues one artifact load per
+    record rather than one per page, so the integrity load costs one more
+    statement per record too -- a real per-record cost, bounded by
+    ``limit`` and not by the corpus. Pinning the *ratio* rather than the
+    absolute number is what makes this assertion survive the fix: batching
+    the artifact load across a page takes both numbers down together.
+    """
+    _page_with_artifacts(
+        db_session, method="integrity-small-page", calcs=4, artifacts=2
+    )
+    _page_with_artifacts(
+        db_session, method="integrity-large-page", calcs=20, artifacts=2
+    )
+
+    small_artifacts, small_integrity = _integrity_statements_for_page(
+        db_session, method="integrity-small-page", limit=4
+    )
+    large_artifacts, large_integrity = _integrity_statements_for_page(
+        db_session, method="integrity-large-page", limit=20
+    )
+
+    assert small_artifacts >= 1 and large_artifacts >= 1
+    assert small_integrity <= small_artifacts, (
+        f"{small_integrity} custody statements against {small_artifacts} "
+        "artifact loads on a 4-record page"
+    )
+    assert large_integrity <= large_artifacts, (
+        f"{large_integrity} custody statements against {large_artifacts} "
+        "artifact loads on a 20-record page"
+    )
+    # One per record, and the slope is what a regression would move.
+    assert (large_integrity - small_integrity) <= (20 - 4), (
+        f"{(large_integrity - small_integrity) / 16} custody statements per "
+        "additional record"
     )

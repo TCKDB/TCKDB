@@ -8,12 +8,14 @@ import re
 from pathlib import Path
 
 import pytest
+from botocore.exceptions import ClientError
 
 from app.db.models.common import ArtifactKind
 from app.services.artifact_storage import (
     MAX_ARTIFACT_BYTES,
     MAX_TOTAL_UPLOAD_BYTES,
     ArtifactIntegrityError,
+    ArtifactStorageUnavailable,
     ArtifactValidationError,
     _ensure_bucket,
     _get_s3_client,
@@ -329,3 +331,69 @@ class TestS3Storage:
         uri2 = store_artifact(content2, sha2, client=client, bucket=bucket)
 
         assert uri1 != uri2
+
+
+def test_store_artifact_wraps_a_dead_endpoint_on_every_arm() -> None:
+    """A direct caller must never see a raw botocore exception.
+
+    ``load_artifact_bytes`` grew this arm; ``store_artifact`` did not, and
+    the difference was invisible because most callers reach it through
+    ``_store_and_record``, whose broad ``except`` relabels anything.
+    Archive restore calls it directly, and a direct caller got
+    ``EndpointConnectionError`` -- which is not a ``ClientError`` and so
+    sails past every ``except ArtifactStorageUnavailable`` downstream.
+    """
+    from botocore.exceptions import EndpointConnectionError
+
+    content = b"Entering Gaussian System, storable\n"
+    sha = hashlib.sha256(content).hexdigest()
+
+    class _DeadOnHead:
+        def head_bucket(self, **_kwargs):
+            return {}
+
+        def head_object(self, **_kwargs):
+            raise EndpointConnectionError(endpoint_url="http://127.0.0.1:9000")
+
+    class _DeadOnPut:
+        def head_bucket(self, **_kwargs):
+            return {}
+
+        def head_object(self, **_kwargs):
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "nope"}}, "HeadObject"
+            )
+
+        def put_object(self, **_kwargs):
+            raise EndpointConnectionError(endpoint_url="http://127.0.0.1:9000")
+
+    class _DeadOnBucket:
+        def head_bucket(self, **_kwargs):
+            raise EndpointConnectionError(endpoint_url="http://127.0.0.1:9000")
+
+    for client in (_DeadOnBucket(), _DeadOnHead(), _DeadOnPut()):
+        with pytest.raises(ArtifactStorageUnavailable, match="127.0.0.1:9000"):
+            store_artifact(content, sha, client=client, bucket="b")
+
+
+def test_store_artifact_wraps_a_refusing_put() -> None:
+    """A ``ClientError`` on the write is a storage failure, not a 500."""
+    content = b"Entering Gaussian System, storable\n"
+    sha = hashlib.sha256(content).hexdigest()
+
+    class _RefusingPut:
+        def head_bucket(self, **_kwargs):
+            return {}
+
+        def head_object(self, **_kwargs):
+            raise ClientError(
+                {"Error": {"Code": "NoSuchKey", "Message": "nope"}}, "HeadObject"
+            )
+
+        def put_object(self, **_kwargs):
+            raise ClientError(
+                {"Error": {"Code": "AccessDenied", "Message": "no"}}, "PutObject"
+            )
+
+    with pytest.raises(ArtifactStorageUnavailable, match="AccessDenied"):
+        store_artifact(content, sha, client=_RefusingPut(), bucket="b")

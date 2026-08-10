@@ -8,8 +8,10 @@ import json
 from pathlib import Path
 
 import pytest
+from sqlalchemy import select
 
 from app.db.models.calculation import (
+    ArtifactIntegrityEvent,
     Calculation,
     CalculationArtifact,
     CalculationDependency,
@@ -18,6 +20,7 @@ from app.db.models.calculation import (
     CalculationSPResult,
 )
 from app.db.models.common import (
+    ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationDependencyRole,
@@ -41,6 +44,7 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
 from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
+from app.services.artifact_integrity import record_integrity_observation
 from app.services.artifact_storage import ArtifactIntegrityError, ArtifactStorageUnavailable
 from app.services.calculation_resolution import resolve_execution_environment_manifest
 from app.services.execution_environment_integrity import manifest_integrity_evidence
@@ -68,6 +72,7 @@ from tests.services.scientific_read._factories import (
     make_transport,
     next_inchi_key,
 )
+from tests.services.test_artifact_integrity import _SessionProxy
 
 
 def _snapshot_hash(snapshot) -> str:
@@ -191,12 +196,69 @@ def _calculation(
     return calculation
 
 
+class _MuteStoreProbe:
+    """An object store that declines to describe anything.
+
+    The integrity recorder ``HEAD``s the object to capture ``ETag`` and
+    friends at the moment of detection and treats an unanswerable probe
+    as a gap in the row, never as a reason not to write one. Handing the
+    recorder this keeps the rubric tests off the network without
+    changing which rows get written.
+    """
+
+    def head_object(self, **_kwargs):
+        raise RuntimeError("no object store in this test")
+
+
+def _integrity_seam(db_session) -> dict:
+    """Send the rubric's custody records into the test's own transaction.
+
+    The recorder deliberately opens its own session so a break outlives
+    the request that found it (ADR 0014); that durability is tested
+    against a real engine in ``tests/services/test_artifact_integrity``.
+    Here the subject is *which* rows appear, so they go in the rolled-back
+    transaction with everything else.
+    """
+    return {
+        "integrity_session_factory": _SessionProxy(db_session),
+        "integrity_storage_client": _MuteStoreProbe(),
+    }
+
+
+def _integrity_events(db_session, sha256: str) -> list[ArtifactIntegrityEvent]:
+    return list(
+        db_session.scalars(
+            select(ArtifactIntegrityEvent)
+            .where(ArtifactIntegrityEvent.sha256 == sha256)
+            .order_by(ArtifactIntegrityEvent.id)
+        ).all()
+    )
+
+
+def _output_artifact(calculation: Calculation) -> CalculationArtifact:
+    return next(row for row in calculation.artifacts if row.kind is ArtifactKind.output_log)
+
+
+def _input_artifact(calculation: Calculation) -> CalculationArtifact:
+    return next(row for row in calculation.artifacts if row.kind is ArtifactKind.input)
+
+
+def _artifact_snapshot(result, artifact: CalculationArtifact) -> dict:
+    calculation_evidence = result.context_json["calculation_evidence"]
+    for snapshot in calculation_evidence.values():
+        for row in snapshot["artifacts"]:
+            if row["sha256"] == artifact.sha256:
+                return row
+    raise AssertionError(f"no snapshot for sha256={artifact.sha256}")
+
+
 def _evaluate(db_session, calculation: Calculation, objects: dict[str, bytes]):
     return evaluate_reproducibility(
         db_session,
         record_type="calculation",
         record_id=calculation.id,
         artifact_loader=_verified_loader(objects),
+        **_integrity_seam(db_session),
     )
 
 
@@ -303,7 +365,11 @@ def test_corrupt_or_unavailable_output_blocks_rerunnable(db_session, _api_test_u
     )
     db_session.flush()
     result = evaluate_reproducibility(
-        db_session, record_type="calculation", record_id=calculation.id, artifact_loader=_verified_loader(objects)
+        db_session,
+        record_type="calculation",
+        record_id=calculation.id,
+        artifact_loader=_verified_loader(objects),
+        **_integrity_seam(db_session),
     )
     assert result.grade is not ReproducibilityGrade.rerunnable
     assert "evidence_warnings_clear" in {item["name"] for item in result.missing}
@@ -416,6 +482,7 @@ def test_artifact_verification_failure_fails_closed(
         record_type="calculation",
         record_id=calculation.id,
         artifact_loader=failing_loader,
+        **_integrity_seam(db_session),
     )
 
     assert result.grade is ReproducibilityGrade.described
@@ -424,6 +491,113 @@ def test_artifact_verification_failure_fails_closed(
         result.warnings[0]["code"]
         == f"artifact_{'storage_unavailable' if failure == 'unavailable' else 'integrity_failed'}"
     )
+
+
+# ---------------------------------------------------------------------------
+# One owner for artifact integrity (ADR 0008 applied to ADR 0014)
+# ---------------------------------------------------------------------------
+
+
+def test_rubric_detection_is_recorded_as_a_custody_event(db_session, _api_test_user) -> None:
+    """A break the rubric finds goes into the table that owns the fact.
+
+    Before this the rubric wrote a warning into its own snapshot and
+    nothing else, so the trust layer -- which grades from recorded events
+    -- kept calling the calculation sound while the reproducibility
+    snapshot said its evidence had rotted.
+    """
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _output_artifact(calculation)
+    # Corrupt the stored copy: same key, different bytes.
+    objects[artifact.sha256] = b"Entering Gaussian System but not the same bytes"
+
+    result = _evaluate(db_session, calculation, objects)
+
+    events = _integrity_events(db_session, artifact.sha256)
+    assert len(events) == 1
+    assert events[0].finding is ArtifactIntegrityFinding.digest_mismatch
+    assert (
+        events[0].detected_during
+        is ArtifactIntegrityDetectionContext.reproducibility_verification
+    )
+    assert events[0].artifact_id == artifact.id
+    warning = next(w for w in result.warnings if w["code"] == "artifact_integrity_failed")
+    assert warning["evidence"]["integrity_event_id"] == events[0].id
+    assert warning["evidence"]["observed_by_this_evaluation"] is True
+
+
+def test_rubric_cites_a_break_recorded_by_another_path(db_session, _api_test_user) -> None:
+    """The verdict on bytes the rubric never reads is copied, not invented.
+
+    The rubric only re-reads output logs of the graded calculation, so a
+    break the download route recorded against an *input* artifact used to
+    leave the snapshot reporting ``not_requested`` -- a clean bill of
+    health for an object the trust layer was hard-failing the same
+    calculation over.
+    """
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _input_artifact(calculation)
+    event_id = record_integrity_observation(
+        sha256=artifact.sha256,
+        finding=ArtifactIntegrityFinding.digest_mismatch,
+        detected_during=ArtifactIntegrityDetectionContext.download,
+        observed_sha256="0" * 64,
+        artifact_id=artifact.id,
+        artifact_recorded_at=artifact.created_at,
+        session_factory=_SessionProxy(db_session),
+        storage_client=_MuteStoreProbe(),
+    )
+
+    result = _evaluate(db_session, calculation, objects)
+
+    snapshot = _artifact_snapshot(result, artifact)
+    assert snapshot["verification"] == "integrity_failed"
+    warning = next(w for w in result.warnings if w["code"] == "artifact_integrity_failed")
+    assert warning["evidence"]["integrity_event_id"] == event_id
+    assert warning["evidence"]["detected_during"] == "download"
+    assert warning["evidence"]["observed_by_this_evaluation"] is False
+    # The two tiers now agree: evidence TCKDB cannot produce is not rerunnable.
+    assert result.grade is not ReproducibilityGrade.rerunnable
+
+
+def test_rubric_clean_read_clears_a_recorded_break(db_session, _api_test_user) -> None:
+    """A repair is cleared by bytes, and by a later observation, not an edit."""
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _output_artifact(calculation)
+    record_integrity_observation(
+        sha256=artifact.sha256,
+        finding=ArtifactIntegrityFinding.digest_mismatch,
+        detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
+        observed_sha256="0" * 64,
+        artifact_id=artifact.id,
+        artifact_recorded_at=artifact.created_at,
+        session_factory=_SessionProxy(db_session),
+        storage_client=_MuteStoreProbe(),
+    )
+
+    result = _evaluate(db_session, calculation, objects)
+
+    events = _integrity_events(db_session, artifact.sha256)
+    assert [event.finding for event in events] == [
+        ArtifactIntegrityFinding.digest_mismatch,
+        ArtifactIntegrityFinding.verified,
+    ]
+    assert (
+        events[-1].detected_during
+        is ArtifactIntegrityDetectionContext.reproducibility_verification
+    )
+    assert events[-1].observed_sha256 == artifact.sha256
+    assert _artifact_snapshot(result, artifact)["verification"] == "verified"
+    assert result.grade is ReproducibilityGrade.rerunnable
 
 
 def test_typed_output_absence_caps_calculation_at_described(

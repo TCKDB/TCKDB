@@ -30,11 +30,43 @@ Usage::
     # Report unreferenced objects alongside (never deletes).
     python backend/scripts/ops/verify_artifact_integrity.py --all --orphans
 
+    # Move month-old unreferenced objects out of the way. Reversible:
+    # they are copied to ``reclaimed/<digest>``, not deleted.
+    python backend/scripts/ops/verify_artifact_integrity.py --all --reclaim-orphans
+
+    # Finally delete what has sat in the hold for a quarter. Irreversible.
+    python backend/scripts/ops/verify_artifact_integrity.py --all --purge-hold-days 90
+
+    # Undo a reclaim: put one held object back at its content-addressed key.
+    python backend/scripts/ops/verify_artifact_integrity.py --restore abc123...
+
     # See what would be read without reading it.
     python backend/scripts/ops/verify_artifact_integrity.py --all --dry-run
 
 Exit status is ``1`` when any break was found, so a release runbook can
 gate on it.
+
+Reclaiming orphans is deliberately two operators' decisions in sequence,
+not one. Objects accumulate because ``store_artifact`` writes bytes
+before the row that references them commits, so an unreferenced digest
+may be an upload in flight rather than garbage; nothing in a single pass
+can tell those apart with certainty, because there is no lock spanning
+the database and the object store. So the first step only *moves* the
+object, out of the content-addressed namespace and into a hold where it
+can be put back, and the second step -- the one that destroys bytes --
+re-reads the references and refuses any digest a row points at.
+
+**The move can lose a race, and what that costs is a key, not bytes.**
+``store_artifact`` deduplicates: an upload of bytes already at the
+content-addressed key verifies and returns without writing, transaction
+still open. So a genuine month-old orphan can be deduplicated against
+mid-sweep and moved anyway, leaving a committed row pointing at a held
+digest. The window is seconds and the recovery is ``--restore <sha256>``;
+until someone runs it, the next read of that artifact records
+``object_missing`` and hard-fails a legitimate calculation. Both age
+gates have enforced floors for this reason -- at zero they stop being
+guards -- and an object the store will not date is left alone rather than
+assumed ancient.
 """
 
 from __future__ import annotations
@@ -42,12 +74,13 @@ from __future__ import annotations
 import argparse
 import random
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db.models.calculation import Calculation, CalculationArtifact  # noqa: E402
@@ -61,12 +94,17 @@ from app.services.artifact_integrity import (  # noqa: E402
     record_integrity_verified,
 )
 from app.services.artifact_storage import (  # noqa: E402
+    RECLAIM_HOLD_PREFIX,
     S3_BUCKET,
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
     _get_s3_client,
     content_addressed_key,
+    head_artifact_object,
+    hold_artifact_object,
     load_artifact_bytes,
+    purge_held_object,
+    restore_held_object,
 )
 
 
@@ -92,11 +130,13 @@ def _distinct_artifacts(
             Calculation, Calculation.id == CalculationArtifact.calculation_id
         ).where(Calculation.public_ref == calculation_ref)
     if release_ref:
-        statement = statement.where(
-            CalculationArtifact.calculation_id.in_(
-                _release_calculation_ids(session, release_ref)
+        ids = _release_calculation_ids(session, release_ref)
+        if not ids:
+            raise SystemExit(
+                f"dataset release {release_ref!r} cites no calculations; "
+                "nothing to verify"
             )
-        )
+        statement = statement.where(CalculationArtifact.calculation_id.in_(ids))
 
     seen: dict[str, CalculationArtifact] = {}
     for row in session.scalars(statement):
@@ -106,32 +146,91 @@ def _distinct_artifacts(
     return list(seen.values())
 
 
-def _release_calculation_ids(session: Session, release_ref: str):
-    """Calculation ids a dataset release selects directly.
+def _release_calculation_ids(session: Session, release_ref: str) -> set[int]:
+    """Every calculation a dataset release rests on, transitively.
 
-    **Scope limit, stated rather than hidden.** A release selects
-    *products* — thermo, kinetics, statmech, transport — and only
-    sometimes a calculation directly. The calculations those products
-    cite as sources are reached through per-product source tables and are
-    NOT yet included here; verifying a release therefore covers its
-    directly-selected calculations only. Sweeping the full transitive
-    evidence of a release is the right eventual behaviour and is left as
-    a separate change rather than approximated silently.
+    A release selects *products* — thermo, kinetics, statmech, transport,
+    network solves — and saddle-point entries. It cannot select a
+    calculation: ``SELECTABLE_RECORD_TYPES`` excludes it and a check
+    constraint enforces that, so the earlier filter on
+    ``record_type == calculation`` matched nothing and ``--release``
+    swept an empty set while exiting 0. A release gate that verifies
+    nothing and reports success is worse than no gate, because the
+    runbook then cites it.
+
+    Three hops, all of them things a reader can actually reach from the
+    release:
+
+    1. the selections that still stand (a withdrawn or superseded
+       selection is not part of the release and its evidence is not what
+       the release rests on);
+    2. the calculations each selected record cites through its
+       ``*_source_calculation`` table — the same helper the release
+       artifact uses to print cited provenance, so the sweep and the
+       published citation list cannot drift apart — plus, for a selected
+       ``transition_state_entry``, the calculations attached to it;
+    3. the transitive upstream closure over ``calculation_dependency``.
+       A freq cited by a statmech was run on a geometry from an opt whose
+       log is equally part of the evidence, and a reader following the
+       provenance will land there.
     """
     from app.db.models.common import SubmissionRecordType
-    from app.db.models.dataset_release import DatasetRelease, ReleaseSelection
+    from app.db.models.dataset_release import DatasetRelease
+    from app.services.release.artifacts import load_selection_state
+    from app.services.release.records import cited_calculation_ids
 
-    release_id = session.scalar(
-        select(DatasetRelease.id).where(DatasetRelease.public_ref == release_ref)
-    )
-    if release_id is None:
+    release = session.scalars(
+        select(DatasetRelease).where(DatasetRelease.public_ref == release_ref)
+    ).first()
+    if release is None:
         raise SystemExit(f"no dataset release with public_ref={release_ref!r}")
-    return (
-        select(ReleaseSelection.record_id)
-        .where(ReleaseSelection.dataset_release_id == release_id)
-        .where(ReleaseSelection.record_type == SubmissionRecordType.calculation)
-        .scalar_subquery()
+
+    by_type: dict[SubmissionRecordType, list[int]] = {}
+    for selection in load_selection_state(session, release).active:
+        by_type.setdefault(selection.record_type, []).append(selection.record_id)
+
+    roots: set[int] = set()
+    for record_type, record_ids in by_type.items():
+        if record_type is SubmissionRecordType.transition_state_entry:
+            roots.update(
+                session.scalars(
+                    select(Calculation.id).where(
+                        Calculation.transition_state_entry_id.in_(sorted(set(record_ids)))
+                    )
+                ).all()
+            )
+            continue
+        cited = cited_calculation_ids(
+            session, record_type=record_type, record_ids=sorted(set(record_ids))
+        )
+        for ids in cited.values():
+            roots.update(ids)
+    return _dependency_closure(session, roots)
+
+
+def _dependency_closure(session: Session, roots: set[int]) -> set[int]:
+    """Add every calculation the roots depend on, however far up.
+
+    One recursive CTE rather than a Python walk: the depth is unbounded
+    and the sweep should not issue a query per level. Cycles cannot loop
+    forever here because the CTE's ``UNION`` (not ``UNION ALL``) drops
+    rows it has already produced.
+    """
+    if not roots:
+        return set()
+    from app.db.models.calculation import CalculationDependency
+
+    seed = (
+        select(Calculation.id)
+        .where(Calculation.id.in_(sorted(roots)))
+        .cte("evidence", recursive=True)
     )
+    closure = seed.union(
+        select(CalculationDependency.parent_calculation_id).join(
+            seed, seed.c.id == CalculationDependency.child_calculation_id
+        )
+    )
+    return set(session.scalars(select(closure.c.id)).all())
 
 
 def _verify_one(
@@ -208,24 +307,184 @@ def _verify_one(
         return ArtifactIntegrityFinding.object_missing.value
 
 
-def _report_orphans(session: Session, *, client, bucket: str) -> list[str]:
-    """List content-addressed objects no row references. Never deletes.
+def _find_orphans(
+    session: Session, *, client, bucket: str, min_age_days: int
+) -> list[str]:
+    """Content-addressed objects no row references and nobody wrote recently.
 
-    Nearly free here because the bucket is already being enumerated. It
-    stays a report: ``artifact_persistence`` retains objects after a
-    failed upload precisely because a digest may be shared with a
-    committed row or a concurrent transaction, and a collector that
-    cannot see concurrent writers is a data-loss mechanism.
+    Nearly free here because the bucket is already being enumerated.
+
+    The age floor is what makes the answer mean anything. A digest may be
+    unreferenced simply because the upload that will reference it has not
+    committed yet -- ``store_artifact`` writes the object before the row,
+    which is the correct order -- so "unreferenced right now" and
+    "garbage" are different claims for as long as any transaction could
+    still be in flight. An object nobody has referenced for a month is
+    the second thing; an object written four seconds ago is not.
     """
     referenced = set(session.scalars(select(CalculationArtifact.sha256)).all())
+    cutoff = datetime.now(timezone.utc) - timedelta(days=min_age_days)
     orphans: list[str] = []
     paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket):
         for obj in page.get("Contents", []):
-            digest = str(obj["Key"]).rsplit("/", 1)[-1]
-            if len(digest) == 64 and digest not in referenced:
-                orphans.append(digest)
+            key = str(obj["Key"])
+            if key.startswith(RECLAIM_HOLD_PREFIX):
+                continue
+            digest = key.rsplit("/", 1)[-1]
+            if len(digest) != 64 or digest in referenced:
+                continue
+            if not _older_than(obj.get("LastModified"), cutoff):
+                continue
+            orphans.append(digest)
     return orphans
+
+
+def _older_than(modified, cutoff) -> bool:
+    """Is the store willing to say this object predates ``cutoff``?
+
+    ``None`` is **not** old enough. A store that will not date an object
+    has told us its age is unknown, and the age floor is the only thing
+    standing between a reclaim and an upload still in flight -- so
+    treating an undated object as ancient would quietly delete the guard
+    for exactly the objects we know least about. Unknown age means leave
+    it alone; an operator who wants it gone can say so by digest.
+    """
+    return modified is not None and modified <= cutoff
+
+
+def _reclaim_orphans(
+    session_factory, orphans: list[str], *, client, bucket: str
+) -> list[str]:
+    """Move orphans to the reclaim hold, re-reading the references first.
+
+    Two checks, not one. The first was against the reference set captured
+    before the bucket was enumerated, which is stale by the length of the
+    enumeration; this one is taken immediately before the move, in a fresh
+    session, so a row committed during the sweep is seen. Neither check
+    can be perfect -- there is no lock spanning the database and the
+    object store -- which is exactly why the move is a move: the failure
+    mode of being wrong is an object under a different key, not an object
+    that no longer exists.
+    """
+    if not orphans:
+        return []
+    with session_factory() as session:
+        referenced = set(
+            session.scalars(
+                select(CalculationArtifact.sha256).where(
+                    CalculationArtifact.sha256.in_(sorted(orphans))
+                )
+            ).all()
+        )
+    held: list[str] = []
+    for digest in orphans:
+        if digest in referenced:
+            print(f"  ! skipping {digest}: referenced since the scan began")
+            continue
+        if hold_artifact_object(digest, client=client, bucket=bucket):
+            held.append(digest)
+    return held
+
+
+def _purge_hold(
+    session: Session, *, client, bucket: str, min_age_days: int
+) -> list[str]:
+    """Delete held objects that have sat in the hold long enough.
+
+    This is the only irreversible operation in this script, and it is
+    reachable only for objects that have been out of the
+    content-addressed namespace for ``min_age_days``. Being held is most
+    of the argument: an object that is not at its content-addressed key
+    cannot be deduplicated against, so an upload of the same bytes
+    repopulates the key rather than pointing at this copy.
+
+    The reference re-check is the rest of it, and it is not decoration.
+    A row *can* end up referencing a held digest -- an upload that
+    deduplicated against the object moments before it was moved commits
+    afterwards -- and this is the last thing standing between that row
+    and the permanent loss of its bytes. If a held digest turns out to be
+    referenced, the reasoning above has failed somewhere, and the right
+    response to a failure of reasoning about an irreversible operation is
+    to keep the bytes and let a human look.
+    """
+    referenced = set(session.scalars(select(CalculationArtifact.sha256)).all())
+    cutoff = datetime.now(timezone.utc) - timedelta(days=min_age_days)
+    purged: list[str] = []
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=RECLAIM_HOLD_PREFIX):
+        for obj in page.get("Contents", []):
+            digest = str(obj["Key"]).rsplit("/", 1)[-1]
+            if len(digest) != 64:
+                continue
+            if digest in referenced:
+                print(
+                    f"  ! NOT purging {digest}: a row references it. Restore it "
+                    f"with --restore {digest}"
+                )
+                continue
+            if not _older_than(obj.get("LastModified"), cutoff):
+                continue
+            purge_held_object(digest, client=client, bucket=bucket)
+            purged.append(digest)
+    return purged
+
+
+def _restore_held(session: Session, digest: str, *, client, bucket: str) -> bool:
+    """Put a held object back at its content-addressed key.
+
+    The documented recovery for the one race the reclaim cannot close.
+    Refuses when the key is already occupied: that is the ordinary
+    outcome of somebody re-uploading the same bytes, and the copy sitting
+    there is the one every row is reading. Overwriting it would either be
+    a no-op or would destroy the evidence of a genuine corruption, and
+    ADR 0014 does not let this script do the second one.
+    """
+    if head_artifact_object(digest, client=client, bucket=bucket):
+        print(
+            f"  ! {digest} is already at its content-addressed key; leaving both "
+            "copies alone"
+        )
+        return False
+    if not restore_held_object(digest, client=client, bucket=bucket):
+        print(f"  ! nothing held under {digest}")
+        return False
+    referenced = session.scalar(
+        select(func.count())
+        .select_from(CalculationArtifact)
+        .where(CalculationArtifact.sha256 == digest)
+    )
+    print(f"  restored {digest} ({referenced or 0} row(s) reference it)")
+    return True
+
+
+#: Floors on the two age gates, enforced rather than merely defaulted.
+#:
+#: The gates are the whole safety argument, and both degenerate at zero:
+#: ``--orphan-age-days 0`` reclaims objects an upload wrote a second ago
+#: and has not yet committed a row for, and ``--purge-hold-days 0``
+#: deletes a held object before an operator could plausibly notice it was
+#: held. A default nobody is required to keep is not a guard, so these
+#: are rejected rather than warned about. A week is longer than any
+#: upload transaction this system can hold open and short enough that an
+#: operator clearing a full bucket is not blocked for a month.
+MIN_ORPHAN_AGE_DAYS = 7
+MIN_HOLD_DAYS = 7
+
+
+def _validate_age_floors(args) -> None:
+    if args.orphan_age_days < MIN_ORPHAN_AGE_DAYS:
+        raise SystemExit(
+            f"--orphan-age-days must be at least {MIN_ORPHAN_AGE_DAYS}: an "
+            "object younger than that may belong to an upload that has not "
+            "committed its row yet"
+        )
+    if args.purge_hold_days is not None and args.purge_hold_days < MIN_HOLD_DAYS:
+        raise SystemExit(
+            f"--purge-hold-days must be at least {MIN_HOLD_DAYS}: the hold "
+            "exists so a mistaken reclaim can be noticed and undone, and it "
+            "cannot do that if it is emptied immediately"
+        )
 
 
 def main() -> int:
@@ -235,6 +494,11 @@ def main() -> int:
     scope.add_argument("--sha256", help="one content-addressed digest")
     scope.add_argument("--calculation-ref", help="artifacts of one calculation")
     scope.add_argument("--release", help="artifacts cited by one dataset release")
+    scope.add_argument(
+        "--restore",
+        metavar="SHA256",
+        help="copy one held object back to its content-addressed key and stop",
+    )
     parser.add_argument("--limit", type=int, default=None, help="cap digests read")
     parser.add_argument(
         "--sample",
@@ -249,16 +513,50 @@ def main() -> int:
         help="also report objects in the bucket that no row references",
     )
     parser.add_argument(
+        "--reclaim-orphans",
+        action="store_true",
+        help=(
+            "move reported orphans to the reclaim hold (implies --orphans; "
+            "reversible - nothing is deleted)"
+        ),
+    )
+    parser.add_argument(
+        "--orphan-age-days",
+        type=int,
+        default=30,
+        help=(
+            "only treat an unreferenced object as an orphan once it is this "
+            "old, so an upload still in flight is never mistaken for garbage "
+            f"(minimum {MIN_ORPHAN_AGE_DAYS})"
+        ),
+    )
+    parser.add_argument(
+        "--purge-hold-days",
+        type=int,
+        default=None,
+        help=(
+            "DELETE held objects that have been in the reclaim hold for at "
+            f"least this many days (minimum {MIN_HOLD_DAYS}). Irreversible."
+        ),
+    )
+    parser.add_argument(
         "--dry-run",
         action="store_true",
         help="list what would be read without reading or recording",
     )
     args = parser.parse_args()
+    _validate_age_floors(args)
 
     from app.api.deps import SessionLocal
 
     client = _get_s3_client()
     bucket = S3_BUCKET
+
+    if args.restore:
+        with SessionLocal() as session:
+            return 0 if _restore_held(
+                session, args.restore, client=client, bucket=bucket
+            ) else 1
 
     with SessionLocal() as session:
         artifacts = _distinct_artifacts(
@@ -272,9 +570,25 @@ def main() -> int:
             rng = random.Random(args.seed)
             keep = max(1, round(len(artifacts) * args.sample)) if artifacts else 0
             artifacts = rng.sample(artifacts, keep)
+        want_orphans = (args.orphans or args.reclaim_orphans) and not args.dry_run
         orphans = (
-            _report_orphans(session, client=client, bucket=bucket)
-            if args.orphans and not args.dry_run
+            _find_orphans(
+                session,
+                client=client,
+                bucket=bucket,
+                min_age_days=args.orphan_age_days,
+            )
+            if want_orphans
+            else []
+        )
+        purged = (
+            _purge_hold(
+                session,
+                client=client,
+                bucket=bucket,
+                min_age_days=args.purge_hold_days,
+            )
+            if args.purge_hold_days is not None and not args.dry_run
             else []
         )
         # Which of these already carry a break, so a clean read of one
@@ -313,9 +627,19 @@ def main() -> int:
     for name, count in sorted(findings.items()):
         print(f"  {name}: {count}")
     if orphans:
-        print(f"unreferenced objects (reported, NOT deleted): {len(orphans)}")
+        print(
+            f"unreferenced objects older than {args.orphan_age_days}d: {len(orphans)}"
+        )
         for digest in orphans[:50]:
             print(f"  orphan {digest}")
+    if args.reclaim_orphans:
+        held = _reclaim_orphans(SessionLocal, orphans, client=client, bucket=bucket)
+        print(
+            f"moved to the reclaim hold ({RECLAIM_HOLD_PREFIX}): {len(held)} "
+            "- bytes retained; undo any one of them with --restore <sha256>"
+        )
+    if purged:
+        print(f"purged from the reclaim hold (DELETED): {len(purged)}")
 
     return 1 if breaks else 0
 

@@ -15,7 +15,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, Response
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, get_db
+from app.api.deps import get_current_user, get_db, require_curator_or_admin
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.db.models.app_user import AppUser
@@ -26,6 +26,10 @@ from app.db.models.common import (
     CalculationQuality,
     CalculationType,
     RecordReviewStatus,
+)
+from app.schemas.reads.scientific_artifact_integrity import (
+    ScientificArtifactIntegrityHistoryResponse,
+    ScientificArtifactIntegrityResponse,
 )
 from app.schemas.reads.scientific_artifact_search import (
     ScientificArtifactSearchRequest,
@@ -42,6 +46,10 @@ from app.services.artifact_storage import (
 )
 from app.services.scientific_read.artifact_download import (
     resolve_approved_artifact_by_sha256,
+)
+from app.services.scientific_read.artifact_integrity_reads import (
+    artifact_integrity_history,
+    search_artifact_integrity,
 )
 from app.services.scientific_read.artifacts_search import search_artifacts
 from app.services.scientific_read.internal_ids import (
@@ -168,6 +176,82 @@ def artifacts_search_post(
             ),
         )
     return apply_internal_ids_visibility(search_artifacts(session, body))
+
+
+@router.get("/integrity", response_model=ScientificArtifactIntegrityResponse)
+def artifact_integrity_search(
+    _user: AppUser = Depends(require_curator_or_admin),
+    session: Session = Depends(get_db),
+    sha256: str | None = Query(None, pattern=r"^[0-9a-f]{64}$"),
+    calculation_ref: str | None = Query(None),
+    only_currently_broken: bool = Query(False),
+    sort: str | None = Query(None),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> ScientificArtifactIntegrityResponse:
+    """What TCKDB has observed about custody of its own stored objects.
+
+    ``hard_fail_reason`` already tells a client that a calculation's
+    evidence can no longer be produced. This is where a curator finds out
+    *what happened* -- expected against observed digest and size, the
+    store's own metadata at the moment of detection, which read found it,
+    when it started and whether it has recurred.
+
+    One record per digest, not one per observation: repeat detections are
+    appended forever by design (persistence is evidence), so a raw listing
+    would bury one incident under its own retries. The full sequence is at
+    ``/{sha256}/integrity``.
+
+    Curator or admin only. The rows carry verifier prose and the object
+    store's own ``ETag`` and paths, which is operational detail about a
+    deployment rather than science about a record -- the same reasoning
+    that gates raw artifact bytes (ADR 0004).
+    """
+    try:
+        payload = search_artifact_integrity(
+            session,
+            sha256=sha256,
+            calculation_ref=calculation_ref,
+            only_currently_broken=only_currently_broken,
+            sort=sort,
+            offset=offset,
+            limit=limit,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return apply_internal_ids_visibility(payload)
+
+
+@router.get(
+    "/{sha256}/integrity",
+    response_model=ScientificArtifactIntegrityHistoryResponse,
+)
+def artifact_integrity_detail(
+    sha256: str = Path(pattern=r"^[0-9a-f]{64}$"),
+    _user: AppUser = Depends(require_curator_or_admin),
+    session: Session = Depends(get_db),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> ScientificArtifactIntegrityHistoryResponse:
+    """Every observation recorded for one object, oldest first.
+
+    Not flattened to current state. A break followed by a ``verified``
+    observation followed by another break is a claim about the storage
+    layer that no summary can express, and it is the claim an operator
+    deciding whether to trust a bucket needs. The summary block carries
+    the current verdict so a caller that only wants that does not have to
+    reconstruct it.
+
+    An unknown or never-observed digest returns an empty history rather
+    than a 404: "nothing has ever been recorded about this object" is a
+    true and useful answer, and it is emphatically *not* a verification
+    claim -- an artifact nobody has read has been checked by nothing.
+    """
+    return apply_internal_ids_visibility(
+        artifact_integrity_history(
+            session, sha256=sha256, offset=offset, limit=limit
+        )
+    )
 
 
 @router.get(

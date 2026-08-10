@@ -358,7 +358,20 @@ def store_artifact(
         client = _get_s3_client()
     bucket = bucket or S3_BUCKET
 
-    _ensure_bucket(client)
+    # Every arm below turns a botocore failure into the one typed exception
+    # the rest of the code contracts on. ``BotoCoreError`` matters as much as
+    # ``ClientError`` and is a separate hierarchy: ``EndpointConnectionError``
+    # -- a dead object store, the most ordinary outage there is -- descends
+    # only from the former. Most callers reach this through
+    # ``_store_and_record``, whose broad ``except`` hid the gap; a *direct*
+    # caller such as archive restore saw the raw botocore exception instead,
+    # which is the shape that produced an undiagnosable 503 once already.
+    try:
+        _ensure_bucket(client)
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage is unreachable: {type(exc).__name__}: {exc}"
+        ) from exc
 
     key = content_addressed_key(sha256)
 
@@ -381,13 +394,30 @@ def store_artifact(
                 f"Artifact storage HEAD failed for sha={sha256}: "
                 f"{code or type(exc).__name__}"
             ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage HEAD failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
 
-    client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=content,
-        ContentType="application/octet-stream",
-    )
+    try:
+        client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=content,
+            ContentType="application/octet-stream",
+        )
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage write failed for sha={sha256}: "
+            f"{code or type(exc).__name__}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage write failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
 
     return f"s3://{bucket}/{key}"
 
@@ -506,9 +536,11 @@ def delete_artifact_object(
 ) -> None:
     """Delete an object previously written by :func:`store_artifact`.
 
-    Reserved for a future reference-aware garbage collector. Upload failure
-    paths must never call this directly: content-addressed keys may already be
-    shared by committed rows or concurrent transactions.
+    The second half of :func:`hold_artifact_object`, and nothing else may
+    call it. Upload failure paths in particular must not: a
+    content-addressed key can already be shared by committed rows or by a
+    concurrent transaction, so "the upload I was doing failed" is not
+    evidence that the object is unreferenced.
     """
     if client is None:
         client = _get_s3_client()
@@ -516,5 +548,142 @@ def delete_artifact_object(
     key = content_addressed_key(sha256)
     try:
         client.delete_object(Bucket=bucket, Key=key)
+    except ClientError:
+        pass
+
+
+#: Where reclaimed objects wait. Deliberately outside the two-hex-character
+#: content-addressed layout, so a held object can never be found by
+#: :func:`content_addressed_key` and therefore can never be deduplicated
+#: against or served.
+RECLAIM_HOLD_PREFIX = "reclaimed/"
+
+
+def reclaim_hold_key(sha256: str) -> str:
+    """The key an unreferenced object is moved to, never deleted from."""
+    return f"{RECLAIM_HOLD_PREFIX}{sha256}"
+
+
+def hold_artifact_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> bool:
+    """Move an unreferenced object out of the content-addressed namespace.
+
+    Copy first, delete second, and never the other way round. The point is
+    that reclaiming an orphan must not be able to destroy bytes: if the
+    caller's "nothing references this" turns out to have been wrong -- a
+    row committed a moment later, an upload that deduplicated against the
+    key between the check and the move -- the object is still there, under
+    a name an operator can put back. What the move *does* accomplish is
+    that the digest stops being deduplicable, so a later upload of the same
+    bytes repopulates the content-addressed key rather than pointing at
+    this copy. It does not make the move atomic with respect to an upload
+    already in flight: one that deduplicated against the object seconds
+    ago can still commit its row afterwards, which is what
+    :func:`restore_held_object` exists to undo.
+
+    Returns ``False`` when the object was not there to move, which is the
+    normal outcome of two sweeps racing each other.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    source = content_addressed_key(sha256)
+    try:
+        client.copy_object(
+            Bucket=bucket,
+            Key=reclaim_hold_key(sha256),
+            CopySource={"Bucket": bucket, "Key": source},
+        )
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        if code in _MISSING_OBJECT_CODES:
+            return False
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage copy failed for sha={sha256}: "
+            f"{code or type(exc).__name__}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage copy failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    delete_artifact_object(sha256, client=client, bucket=bucket)
+    return True
+
+
+def restore_held_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> bool:
+    """Put a held object back at its content-addressed key.
+
+    The inverse of :func:`hold_artifact_object`, and the reason that one
+    is a move rather than a delete. The reclaim sweep cannot see an
+    upload that deduplicated against an object seconds before it was
+    held, so a committed row can end up pointing at a digest whose object
+    is in the hold; this is how that is undone, and it is why the cost of
+    that race is a manual step rather than lost bytes.
+
+    Callers must check that the content-addressed key is free first --
+    an occupied key means somebody re-uploaded the same bytes, and that
+    copy is the one every row is reading.
+
+    Returns ``False`` when nothing is held under the digest.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    try:
+        client.copy_object(
+            Bucket=bucket,
+            Key=content_addressed_key(sha256),
+            CopySource={"Bucket": bucket, "Key": reclaim_hold_key(sha256)},
+        )
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        if code in _MISSING_OBJECT_CODES:
+            return False
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage restore failed for sha={sha256}: "
+            f"{code or type(exc).__name__}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage restore failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    purge_held_object(sha256, client=client, bucket=bucket)
+    return True
+
+
+def purge_held_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> None:
+    """Delete an object from the reclaim hold. This is irreversible.
+
+    Safer than deleting a content-addressed object, but not unconditionally
+    safe, and the caller carries the rest. A held object is not at its
+    content-addressed key, so no upload can deduplicate against it *now*.
+    What that does not rule out is an upload that deduplicated against it
+    shortly before it was held and committed its row afterwards. The
+    caller must therefore re-read the references and refuse any digest a
+    row points at -- see ``_purge_hold`` in
+    ``backend/scripts/ops/verify_artifact_integrity.py``, the only caller,
+    where that check is load-bearing rather than defensive.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    try:
+        client.delete_object(Bucket=bucket, Key=reclaim_hold_key(sha256))
     except ClientError:
         pass
