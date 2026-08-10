@@ -358,7 +358,20 @@ def store_artifact(
         client = _get_s3_client()
     bucket = bucket or S3_BUCKET
 
-    _ensure_bucket(client)
+    # Every arm below turns a botocore failure into the one typed exception
+    # the rest of the code contracts on. ``BotoCoreError`` matters as much as
+    # ``ClientError`` and is a separate hierarchy: ``EndpointConnectionError``
+    # -- a dead object store, the most ordinary outage there is -- descends
+    # only from the former. Most callers reach this through
+    # ``_store_and_record``, whose broad ``except`` hid the gap; a *direct*
+    # caller such as archive restore saw the raw botocore exception instead,
+    # which is the shape that produced an undiagnosable 503 once already.
+    try:
+        _ensure_bucket(client)
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage is unreachable: {type(exc).__name__}: {exc}"
+        ) from exc
 
     key = content_addressed_key(sha256)
 
@@ -381,13 +394,30 @@ def store_artifact(
                 f"Artifact storage HEAD failed for sha={sha256}: "
                 f"{code or type(exc).__name__}"
             ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage HEAD failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
 
-    client.put_object(
-        Bucket=bucket,
-        Key=key,
-        Body=content,
-        ContentType="application/octet-stream",
-    )
+    try:
+        client.put_object(
+            Bucket=bucket,
+            Key=key,
+            Body=content,
+            ContentType="application/octet-stream",
+        )
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage write failed for sha={sha256}: "
+            f"{code or type(exc).__name__}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage write failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
 
     return f"s3://{bucket}/{key}"
 
