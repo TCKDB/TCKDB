@@ -4,6 +4,12 @@ Description=TCKDB health check with ntfy push on state change
 After=network-online.target
 Wants=network-online.target
 
+# When the checker itself fails, say so. Without this a broken checker is
+# indistinguishable from a healthy deployment: both produce silence. See
+# tckdb-alert-failed.service, and TCKDB_DEADMAN_URL in the script for the
+# case this cannot cover (the whole host going away).
+OnFailure=tckdb-alert-failed.service
+
 [Service]
 Type=oneshot
 # oneshot + Type=oneshot means systemd runs it, waits, records the exit code,

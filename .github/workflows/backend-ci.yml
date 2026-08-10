@@ -139,6 +139,8 @@ jobs:
           bash -n backend/scripts/test-full.sh
           bash -n backend/scripts/test-profile.sh
           bash -n backend/scripts/update-openapi-golden.sh
+          bash -n backend/scripts/ops/tckdb_alert_check.sh
+          bash -n backend/scripts/ops/tckdb_deploy.sh
           make help
 
       - name: Alembic upgrade head
@@ -191,6 +193,16 @@ jobs:
         if: matrix.gate == 'api'
         working-directory: backend
         run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
+
+      - name: Ops script gate
+        if: matrix.gate == 'api'
+        working-directory: backend
+        # tests/ops/ is outside tests/api/, so neither test-api.sh nor
+        # test-scientific.sh reaches it and it would otherwise only run
+        # nightly. These cover the alerting path -- the one part of the
+        # deployment whose failure produces silence rather than an error --
+        # so they need to gate the PR that breaks them, not the night after.
+        run: conda run -n tckdb_env pytest tests/ops/ -q
 
       - name: API test gate
         if: matrix.gate == 'api'

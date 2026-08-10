@@ -55,6 +55,16 @@ watches.** The fix is a *dead man's switch* — the Pi pings an external service
 on a schedule, and that service alerts when the ping *stops*. Absence becomes
 the signal. Setup is in the last section.
 
+**4. Something notices when the checker dies but the host does not.** The
+narrower and more likely version of (3), and the one that hid for longest: the
+host is fine, the API is fine, and the *checker* is gone. The timer was never
+enabled, the unit failed on a missing `EnvironmentFile`, `ExecStart` points at
+a path the repo has since moved. Nothing is pushed, nothing complains, and the
+absence of alerts reads as good news. Two mechanisms cover it, in two failure
+domains: `TCKDB_DEADMAN_URL` (external, also covers the host dying) and
+`OnFailure=tckdb-alert-failed.service` (local, catches the cases where the
+script never gets far enough to ping anything). Neither alone is enough.
+
 ## What `/status` reports
 
 ```json
@@ -193,23 +203,68 @@ Then break something on purpose — `sudo systemctl stop tckdb-api` — run the
 check, confirm the push arrives, start it again, confirm the recovery push
 arrives. Ten minutes, and it is the only way to know.
 
-## The dead man's switch (covers total host death)
+## The dead man's switch (covers the checker dying, and the host with it)
 
-The checker above cannot report its own host dying. Close that with a free
-external service — [healthchecks.io](https://healthchecks.io) is the usual
-choice — which expects a ping on a schedule and alerts when one does not
-arrive.
+The checker above cannot report its own death. Close that with a free external
+service — [healthchecks.io](https://healthchecks.io) is the usual choice —
+which expects a ping on a schedule and alerts when one does not arrive.
 
 1. Create a check with a period of 10 minutes and a grace of 5.
 2. Copy its ping URL.
-3. Add it to `~/.config/tckdb-alert.env` as `TCKDB_DEADMAN_URL=...` and append
-   a curl to that URL at the end of a healthy check run, or simply add a
-   second systemd timer that pings it.
+3. Add it to `~/.config/tckdb-alert.env` as `TCKDB_DEADMAN_URL=...`. The
+   checker pings it itself; there is nothing to append and no second timer.
 4. Point healthchecks.io's notification at the **same ntfy topic**, so both
    classes of alarm land in one place.
 
-Now: the Pi tells you when a component breaks, and healthchecks.io tells you
-when the Pi stops talking at all. Neither depends on the other surviving.
+**The ping means "the checker ran", not "TCKDB is well",** and it is sent on
+every completed run including a degraded one. That distinction is the whole
+design. If the ping were conditional on a healthy verdict, an object-store
+outage would stop the heartbeat, healthchecks.io would page *the host is gone*,
+and you would go looking for a dead Raspberry Pi while the Pi was pushing an
+accurate description of the real fault to your phone — the wrong page of the
+runbook, produced by your own monitoring. The two channels answer two
+questions and must never be collapsed into one.
+
+The ping is deliberately **not** sent when the script aborts before reaching a
+verdict — an unset `TCKDB_NTFY_TOPIC`, say. That is a dead checker, and its
+silence is the only signal it can send. Forging a heartbeat there would be
+worse than having none.
+
+If `TCKDB_DEADMAN_URL` is unset the checker pushes one notice saying so, on its
+first run, and then never mentions it again. An unmonitored monitor is worth
+exactly one interruption.
+
+### When the checker cannot even start
+
+`tckdb-alert.service` carries `OnFailure=tckdb-alert-failed.service`, so a unit
+that fails — moved `ExecStart` path, unreadable `EnvironmentFile`, exit 2 from
+a missing topic — pushes *"TCKDB health checker FAILED"* rather than leaving a
+red unit nobody looks at. Install it alongside the others:
+
+```bash
+sudo cp backend/scripts/ops/tckdb-alert-failed.service /etc/systemd/system/
+sudo systemctl daemon-reload
+```
+
+It runs on the same host, so it cannot cover the host going away; that is what
+the dead man's switch is for. Between them: the Pi tells you when a component
+breaks, systemd tells you when the checker breaks, and healthchecks.io tells
+you when the Pi stops talking at all. No one of them depends on another
+surviving.
+
+Prove it, rather than assuming — the same ten minutes that is the only way to
+know anything about monitoring:
+
+```bash
+sudo systemctl stop tckdb-alert.timer     # then wait past the deadman period
+# expect: a healthchecks.io alert, and no ntfy traffic at all
+sudo systemctl start tckdb-alert.timer
+```
+
+The behaviour above is covered by `backend/tests/ops/test_alert_check_liveness.py`,
+which runs the real script as a subprocess against a fake host and asserts what
+reaches the outside world on each broken path — including that a checker which
+refuses to start sends nothing.
 
 ## Redeploying elsewhere
 

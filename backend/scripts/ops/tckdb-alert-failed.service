@@ -1,0 +1,26 @@
+[Unit]
+Description=Push an alert when the TCKDB health checker itself fails
+# Wired as OnFailure= on tckdb-alert.service. It exists because every way the
+# checker can break looks, from a phone, exactly like a healthy deployment:
+# nothing arrives. A failed ExecStart (the repo moved and the absolute path in
+# tckdb-alert.service no longer resolves), a missing EnvironmentFile, an unset
+# TCKDB_NTFY_TOPIC -- all of them leave a red unit in `systemctl status` that
+# nobody is looking at.
+#
+# This covers the checker crashing. It cannot cover the host dying, because it
+# runs on the same host; that is what TCKDB_DEADMAN_URL is for. Two mechanisms,
+# two failure domains, and neither one is sufficient alone.
+
+[Service]
+Type=oneshot
+EnvironmentFile=/home/calvin/.config/tckdb-alert.env
+# %i is not available on a non-templated OnFailure unit, so the failing unit is
+# named literally. If you rename tckdb-alert.service, rename it here too.
+ExecStart=/bin/sh -c 'curl -sS --max-time 20 \
+  -H "Title: TCKDB health checker FAILED" \
+  -H "Priority: urgent" \
+  -H "Tags: rotating_light" \
+  -d "tckdb-alert.service failed on $(hostname). The health checker is not running, so TCKDB is now unmonitored from this host and its silence means nothing. Diagnose: systemctl status tckdb-alert.service; journalctl -u tckdb-alert -n 50" \
+  "${TCKDB_NTFY_SERVER:-https://ntfy.sh}/${TCKDB_NTFY_TOPIC}"'
+
+User=calvin
