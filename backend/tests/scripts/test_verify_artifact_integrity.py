@@ -15,6 +15,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
+from botocore.exceptions import ClientError
 
 from app.db.models.common import (
     ArtifactKind,
@@ -282,6 +283,13 @@ class _FakeBucket:
 
         return _Paginator()
 
+    def head_object(self, *, Bucket, Key):
+        if Key not in self.objects:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "not there"}}, "HeadObject"
+            )
+        return {"LastModified": self.objects[Key], "ETag": '"etag"'}
+
     def copy_object(self, *, Bucket, Key, CopySource):
         source = CopySource["Key"]
         if source not in self.objects:
@@ -444,3 +452,122 @@ class _SessionFactory:
 
     def __exit__(self, *_exc):
         return False
+
+
+# ---------------------------------------------------------------------------
+# The purge guard
+# ---------------------------------------------------------------------------
+
+
+def test_purging_refuses_a_held_object_a_row_references(db_session, sweep):
+    """The last line of defense on the only irreversible operation here.
+
+    Being held is most of the safety argument -- an object away from its
+    content-addressed key cannot be deduplicated against -- but not all
+    of it. An upload that deduplicated against the object moments before
+    it was moved commits afterwards, and then a committed
+    ``calculation_artifact`` row points at a digest sitting in the hold.
+    This check is the only thing between that row and the permanent loss
+    of its bytes, so it gets a test of its own.
+    """
+    calculation = _owned_calculation(db_session)
+    digest = _digest("held-but-referenced")
+    attach_artifact(db_session, calculation=calculation, sha256=digest)
+    db_session.flush()
+    client = _FakeBucket(
+        {f"reclaimed/{digest}": datetime.now(timezone.utc) - timedelta(days=365)}
+    )
+
+    purged = sweep._purge_hold(db_session, client=client, bucket="b", min_age_days=90)
+
+    assert purged == []
+    assert client.deleted == []
+    assert f"reclaimed/{digest}" in client.objects
+
+
+def test_purging_refuses_an_undated_held_object(db_session, sweep):
+    """Unknown age is not "old enough".
+
+    The age gate is the whole guard, and a store that will not date an
+    object has said its age is unknown -- which is a reason to leave it
+    alone, not to treat it as ancient.
+    """
+    digest = _digest("held-without-a-date")
+    client = _FakeBucket({f"reclaimed/{digest}": None})
+
+    purged = sweep._purge_hold(db_session, client=client, bucket="b", min_age_days=90)
+
+    assert purged == []
+    assert f"reclaimed/{digest}" in client.objects
+
+
+def test_an_undated_object_is_not_an_orphan(db_session, sweep):
+    digest = _digest("unreferenced-without-a-date")
+    client = _FakeBucket({_cas_key(digest): None})
+
+    orphans = sweep._find_orphans(
+        db_session, client=client, bucket="b", min_age_days=30
+    )
+
+    assert orphans == []
+
+
+# ---------------------------------------------------------------------------
+# Age floors
+# ---------------------------------------------------------------------------
+
+
+class _Args:
+    def __init__(self, orphan_age_days=30, purge_hold_days=None):
+        self.orphan_age_days = orphan_age_days
+        self.purge_hold_days = purge_hold_days
+
+
+def test_a_zero_orphan_age_is_rejected(sweep):
+    """``--orphan-age-days 0`` reclaims uploads that are still in flight."""
+    with pytest.raises(SystemExit, match="orphan-age-days"):
+        sweep._validate_age_floors(_Args(orphan_age_days=0))
+
+
+def test_a_zero_hold_period_is_rejected(sweep):
+    """A hold emptied immediately is not a hold."""
+    with pytest.raises(SystemExit, match="purge-hold-days"):
+        sweep._validate_age_floors(_Args(purge_hold_days=0))
+
+
+def test_the_documented_defaults_are_accepted(sweep):
+    sweep._validate_age_floors(_Args(orphan_age_days=30, purge_hold_days=90))
+
+
+# ---------------------------------------------------------------------------
+# Restore
+# ---------------------------------------------------------------------------
+
+
+def test_restoring_puts_a_held_object_back_at_its_key(db_session, sweep):
+    """The documented recovery for the race the reclaim cannot close."""
+    digest = _digest("restore-me")
+    client = _FakeBucket(
+        {f"reclaimed/{digest}": datetime.now(timezone.utc) - timedelta(days=1)}
+    )
+
+    assert sweep._restore_held(db_session, digest, client=client, bucket="b") is True
+    assert _cas_key(digest) in client.objects
+    assert f"reclaimed/{digest}" not in client.objects
+
+
+def test_restoring_refuses_when_the_key_is_already_occupied(db_session, sweep):
+    """A re-upload of the same bytes repopulates the key; that copy wins.
+
+    Content-addressing makes the two byte-identical, so overwriting would
+    at best be a no-op -- and at worst would erase a genuine corruption
+    that the custody record exists to preserve.
+    """
+    digest = _digest("restore-contested")
+    now = datetime.now(timezone.utc)
+    client = _FakeBucket({_cas_key(digest): now, f"reclaimed/{digest}": now})
+
+    assert sweep._restore_held(db_session, digest, client=client, bucket="b") is False
+    assert client.copied == []
+    assert client.deleted == []
+    assert f"reclaimed/{digest}" in client.objects

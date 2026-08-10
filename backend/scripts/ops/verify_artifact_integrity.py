@@ -37,6 +37,9 @@ Usage::
     # Finally delete what has sat in the hold for a quarter. Irreversible.
     python backend/scripts/ops/verify_artifact_integrity.py --all --purge-hold-days 90
 
+    # Undo a reclaim: put one held object back at its content-addressed key.
+    python backend/scripts/ops/verify_artifact_integrity.py --restore abc123...
+
     # See what would be read without reading it.
     python backend/scripts/ops/verify_artifact_integrity.py --all --dry-run
 
@@ -50,9 +53,20 @@ may be an upload in flight rather than garbage; nothing in a single pass
 can tell those apart with certainty, because there is no lock spanning
 the database and the object store. So the first step only *moves* the
 object, out of the content-addressed namespace and into a hold where it
-can be put back, and the second step -- which is the one that destroys
-bytes -- can only reach objects that have been unreachable for as long as
-the operator says.
+can be put back, and the second step -- the one that destroys bytes --
+re-reads the references and refuses any digest a row points at.
+
+**The move can lose a race, and what that costs is a key, not bytes.**
+``store_artifact`` deduplicates: an upload of bytes already at the
+content-addressed key verifies and returns without writing, transaction
+still open. So a genuine month-old orphan can be deduplicated against
+mid-sweep and moved anyway, leaving a committed row pointing at a held
+digest. The window is seconds and the recovery is ``--restore <sha256>``;
+until someone runs it, the next read of that artifact records
+``object_missing`` and hard-fails a legitimate calculation. Both age
+gates have enforced floors for this reason -- at zero they stop being
+guards -- and an object the store will not date is left alone rather than
+assumed ancient.
 """
 
 from __future__ import annotations
@@ -66,7 +80,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from sqlalchemy import select  # noqa: E402
+from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.db.models.calculation import Calculation, CalculationArtifact  # noqa: E402
@@ -86,9 +100,11 @@ from app.services.artifact_storage import (  # noqa: E402
     ArtifactStorageUnavailable,
     _get_s3_client,
     content_addressed_key,
+    head_artifact_object,
     hold_artifact_object,
     load_artifact_bytes,
     purge_held_object,
+    restore_held_object,
 )
 
 
@@ -318,11 +334,23 @@ def _find_orphans(
             digest = key.rsplit("/", 1)[-1]
             if len(digest) != 64 or digest in referenced:
                 continue
-            modified = obj.get("LastModified")
-            if modified is not None and modified > cutoff:
+            if not _older_than(obj.get("LastModified"), cutoff):
                 continue
             orphans.append(digest)
     return orphans
+
+
+def _older_than(modified, cutoff) -> bool:
+    """Is the store willing to say this object predates ``cutoff``?
+
+    ``None`` is **not** old enough. A store that will not date an object
+    has told us its age is unknown, and the age floor is the only thing
+    standing between a reclaim and an upload still in flight -- so
+    treating an undated object as ancient would quietly delete the guard
+    for exactly the objects we know least about. Unknown age means leave
+    it alone; an operator who wants it gone can say so by digest.
+    """
+    return modified is not None and modified <= cutoff
 
 
 def _reclaim_orphans(
@@ -365,13 +393,20 @@ def _purge_hold(
     """Delete held objects that have sat in the hold long enough.
 
     This is the only irreversible operation in this script, and it is
-    reachable only for objects that have already been out of the
-    content-addressed namespace for ``min_age_days``. That is what makes
-    it safe: nothing can have deduplicated against a held object, so
-    nothing can have started referencing it since it was held. A digest
-    that somehow *is* referenced again is skipped anyway, because a
-    surprise here would mean the reasoning above is wrong and the right
-    response to that is to keep the bytes.
+    reachable only for objects that have been out of the
+    content-addressed namespace for ``min_age_days``. Being held is most
+    of the argument: an object that is not at its content-addressed key
+    cannot be deduplicated against, so an upload of the same bytes
+    repopulates the key rather than pointing at this copy.
+
+    The reference re-check is the rest of it, and it is not decoration.
+    A row *can* end up referencing a held digest -- an upload that
+    deduplicated against the object moments before it was moved commits
+    afterwards -- and this is the last thing standing between that row
+    and the permanent loss of its bytes. If a held digest turns out to be
+    referenced, the reasoning above has failed somewhere, and the right
+    response to a failure of reasoning about an irreversible operation is
+    to keep the bytes and let a human look.
     """
     referenced = set(session.scalars(select(CalculationArtifact.sha256)).all())
     cutoff = datetime.now(timezone.utc) - timedelta(days=min_age_days)
@@ -380,14 +415,76 @@ def _purge_hold(
     for page in paginator.paginate(Bucket=bucket, Prefix=RECLAIM_HOLD_PREFIX):
         for obj in page.get("Contents", []):
             digest = str(obj["Key"]).rsplit("/", 1)[-1]
-            if len(digest) != 64 or digest in referenced:
+            if len(digest) != 64:
                 continue
-            modified = obj.get("LastModified")
-            if modified is not None and modified > cutoff:
+            if digest in referenced:
+                print(
+                    f"  ! NOT purging {digest}: a row references it. Restore it "
+                    f"with --restore {digest}"
+                )
+                continue
+            if not _older_than(obj.get("LastModified"), cutoff):
                 continue
             purge_held_object(digest, client=client, bucket=bucket)
             purged.append(digest)
     return purged
+
+
+def _restore_held(session: Session, digest: str, *, client, bucket: str) -> bool:
+    """Put a held object back at its content-addressed key.
+
+    The documented recovery for the one race the reclaim cannot close.
+    Refuses when the key is already occupied: that is the ordinary
+    outcome of somebody re-uploading the same bytes, and the copy sitting
+    there is the one every row is reading. Overwriting it would either be
+    a no-op or would destroy the evidence of a genuine corruption, and
+    ADR 0014 does not let this script do the second one.
+    """
+    if head_artifact_object(digest, client=client, bucket=bucket):
+        print(
+            f"  ! {digest} is already at its content-addressed key; leaving both "
+            "copies alone"
+        )
+        return False
+    if not restore_held_object(digest, client=client, bucket=bucket):
+        print(f"  ! nothing held under {digest}")
+        return False
+    referenced = session.scalar(
+        select(func.count())
+        .select_from(CalculationArtifact)
+        .where(CalculationArtifact.sha256 == digest)
+    )
+    print(f"  restored {digest} ({referenced or 0} row(s) reference it)")
+    return True
+
+
+#: Floors on the two age gates, enforced rather than merely defaulted.
+#:
+#: The gates are the whole safety argument, and both degenerate at zero:
+#: ``--orphan-age-days 0`` reclaims objects an upload wrote a second ago
+#: and has not yet committed a row for, and ``--purge-hold-days 0``
+#: deletes a held object before an operator could plausibly notice it was
+#: held. A default nobody is required to keep is not a guard, so these
+#: are rejected rather than warned about. A week is longer than any
+#: upload transaction this system can hold open and short enough that an
+#: operator clearing a full bucket is not blocked for a month.
+MIN_ORPHAN_AGE_DAYS = 7
+MIN_HOLD_DAYS = 7
+
+
+def _validate_age_floors(args) -> None:
+    if args.orphan_age_days < MIN_ORPHAN_AGE_DAYS:
+        raise SystemExit(
+            f"--orphan-age-days must be at least {MIN_ORPHAN_AGE_DAYS}: an "
+            "object younger than that may belong to an upload that has not "
+            "committed its row yet"
+        )
+    if args.purge_hold_days is not None and args.purge_hold_days < MIN_HOLD_DAYS:
+        raise SystemExit(
+            f"--purge-hold-days must be at least {MIN_HOLD_DAYS}: the hold "
+            "exists so a mistaken reclaim can be noticed and undone, and it "
+            "cannot do that if it is emptied immediately"
+        )
 
 
 def main() -> int:
@@ -397,6 +494,11 @@ def main() -> int:
     scope.add_argument("--sha256", help="one content-addressed digest")
     scope.add_argument("--calculation-ref", help="artifacts of one calculation")
     scope.add_argument("--release", help="artifacts cited by one dataset release")
+    scope.add_argument(
+        "--restore",
+        metavar="SHA256",
+        help="copy one held object back to its content-addressed key and stop",
+    )
     parser.add_argument("--limit", type=int, default=None, help="cap digests read")
     parser.add_argument(
         "--sample",
@@ -424,7 +526,8 @@ def main() -> int:
         default=30,
         help=(
             "only treat an unreferenced object as an orphan once it is this "
-            "old, so an upload still in flight is never mistaken for garbage"
+            "old, so an upload still in flight is never mistaken for garbage "
+            f"(minimum {MIN_ORPHAN_AGE_DAYS})"
         ),
     )
     parser.add_argument(
@@ -433,7 +536,7 @@ def main() -> int:
         default=None,
         help=(
             "DELETE held objects that have been in the reclaim hold for at "
-            "least this many days. Irreversible."
+            f"least this many days (minimum {MIN_HOLD_DAYS}). Irreversible."
         ),
     )
     parser.add_argument(
@@ -442,11 +545,18 @@ def main() -> int:
         help="list what would be read without reading or recording",
     )
     args = parser.parse_args()
+    _validate_age_floors(args)
 
     from app.api.deps import SessionLocal
 
     client = _get_s3_client()
     bucket = S3_BUCKET
+
+    if args.restore:
+        with SessionLocal() as session:
+            return 0 if _restore_held(
+                session, args.restore, client=client, bucket=bucket
+            ) else 1
 
     with SessionLocal() as session:
         artifacts = _distinct_artifacts(
@@ -526,7 +636,7 @@ def main() -> int:
         held = _reclaim_orphans(SessionLocal, orphans, client=client, bucket=bucket)
         print(
             f"moved to the reclaim hold ({RECLAIM_HOLD_PREFIX}): {len(held)} "
-            "- bytes retained, restore by copying the key back"
+            "- bytes retained; undo any one of them with --restore <sha256>"
         )
     if purged:
         print(f"purged from the reclaim hold (DELETED): {len(purged)}")

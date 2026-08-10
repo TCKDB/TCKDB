@@ -578,8 +578,12 @@ def hold_artifact_object(
     row committed a moment later, an upload that deduplicated against the
     key between the check and the move -- the object is still there, under
     a name an operator can put back. What the move *does* accomplish is
-    that the digest stops being deduplicable, which is what makes a later
-    purge of the hold safe rather than racy.
+    that the digest stops being deduplicable, so a later upload of the same
+    bytes repopulates the content-addressed key rather than pointing at
+    this copy. It does not make the move atomic with respect to an upload
+    already in flight: one that deduplicated against the object seconds
+    ago can still commit its row afterwards, which is what
+    :func:`restore_held_object` exists to undo.
 
     Returns ``False`` when the object was not there to move, which is the
     normal outcome of two sweeps racing each other.
@@ -611,6 +615,53 @@ def hold_artifact_object(
     return True
 
 
+def restore_held_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> bool:
+    """Put a held object back at its content-addressed key.
+
+    The inverse of :func:`hold_artifact_object`, and the reason that one
+    is a move rather than a delete. The reclaim sweep cannot see an
+    upload that deduplicated against an object seconds before it was
+    held, so a committed row can end up pointing at a digest whose object
+    is in the hold; this is how that is undone, and it is why the cost of
+    that race is a manual step rather than lost bytes.
+
+    Callers must check that the content-addressed key is free first --
+    an occupied key means somebody re-uploaded the same bytes, and that
+    copy is the one every row is reading.
+
+    Returns ``False`` when nothing is held under the digest.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    try:
+        client.copy_object(
+            Bucket=bucket,
+            Key=content_addressed_key(sha256),
+            CopySource={"Bucket": bucket, "Key": reclaim_hold_key(sha256)},
+        )
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        if code in _MISSING_OBJECT_CODES:
+            return False
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage restore failed for sha={sha256}: "
+            f"{code or type(exc).__name__}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage restore failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    purge_held_object(sha256, client=client, bucket=bucket)
+    return True
+
+
 def purge_held_object(
     sha256: str,
     *,
@@ -619,11 +670,15 @@ def purge_held_object(
 ) -> None:
     """Delete an object from the reclaim hold. This is irreversible.
 
-    Safe in a way that deleting a content-addressed object is not: a held
-    object is not at its content-addressed key, so no upload can have
-    deduplicated against it and no row can have started pointing at it
-    since it was held. The only thing a purge can destroy is bytes that
-    were already unreachable.
+    Safer than deleting a content-addressed object, but not unconditionally
+    safe, and the caller carries the rest. A held object is not at its
+    content-addressed key, so no upload can deduplicate against it *now*.
+    What that does not rule out is an upload that deduplicated against it
+    shortly before it was held and committed its row afterwards. The
+    caller must therefore re-read the references and refuse any digest a
+    row points at -- see ``_purge_hold`` in
+    ``backend/scripts/ops/verify_artifact_integrity.py``, the only caller,
+    where that check is load-bearing rather than defensive.
     """
     if client is None:
         client = _get_s3_client()
