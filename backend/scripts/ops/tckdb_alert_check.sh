@@ -122,18 +122,37 @@ elif [[ "$http_code" != "200" ]]; then
     priority="high"
     tags="warning"
 else
-    # Prefer jq; fall back to grep so a host without jq still alerts.
+    # Prefer jq; fall back to grep/sed so a host without jq still alerts.
+    #
+    # `degraded` is parsed on BOTH paths, because it is now part of the
+    # decision and not just of the message. The old fallback put a literal
+    # "(install jq for detail)" here, which was harmless while only `status`
+    # decided anything and would have been a permanent false alarm now.
     if command -v jq >/dev/null 2>&1; then
         status="$(jq -r '.status // "unparseable"' <<<"$response")"
         degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$response")"
         reasons="$(jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "\(.key): \(.value.reason // "unhealthy")"] | join("; ")' <<<"$response")"
     else
         status="$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$response" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
-        degraded="(install jq for detail)"
-        reasons="(install jq for detail)"
+        # `degraded` is an ARRAY. A string-shaped grep returns empty for every
+        # value including a non-empty one -- i.e. it would report a degraded
+        # deployment as clean, which is the failure this whole file exists to
+        # prevent. Match the array, as tckdb_deploy.sh does.
+        degraded="$(sed -n 's/.*"degraded"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' <<<"$response" | head -1 | tr -d '" ')"
+        reasons="(install jq for per-component reasons)"
     fi
 
-    if [[ "$status" == "ok" ]]; then
+    # BOTH fields decide, not just `status`.
+    #
+    # They are derived from the same set of unhealthy components today, so a
+    # divergence would be a bug rather than a state -- which is exactly the
+    # point. If that derivation ever changes, or a future component reports
+    # itself degraded without flipping the summary field, this checker must
+    # alert rather than pass on a field that happened to stay "ok". The whole
+    # class of incident here is monitoring that vouches against an outage;
+    # reading one of two fields is how that happens. The deploy script's
+    # verification loop already reads both.
+    if [[ "$status" == "ok" && -z "$degraded" ]]; then
         current="ok"
         title="TCKDB recovered"
         detail="All components healthy again."
@@ -145,6 +164,11 @@ else
         detail="Degraded: ${degraded:-unknown}. ${reasons}"
         priority="high"
         tags="warning"
+        if [[ "$status" == "ok" && -n "$degraded" ]]; then
+            # Worth its own sentence in the push: the endpoint is contradicting
+            # itself, which is a different bug from a component being down.
+            detail="/status reported status=ok while listing degraded components (${degraded}). Treat the components as authoritative and fix the endpoint's summary field. ${reasons}"
+        fi
     fi
 fi
 

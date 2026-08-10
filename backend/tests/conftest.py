@@ -664,6 +664,23 @@ def _api_other_user(db_session) -> int:
     )
 
 
+@pytest.fixture(autouse=True, scope="session")
+def _disable_startup_storage_probe():
+    """Keep the boot-time object-store probe out of the suite.
+
+    ``create_app()`` runs once per ``client`` fixture, i.e. hundreds of
+    times, and the probe is a real network round trip with a 4-second
+    ceiling. On a machine with no MinIO that is hours; with MinIO it is
+    hundreds of pointless ``head_bucket`` calls. The probe's own
+    behaviour — that it runs by default, logs loudly, and never fails
+    startup — is covered directly in
+    ``tests/api/test_startup_storage_probe.py``.
+    """
+    os.environ["TCKDB_STARTUP_STORAGE_PROBE"] = "false"
+    yield
+    os.environ.pop("TCKDB_STARTUP_STORAGE_PROBE", None)
+
+
 @pytest.fixture
 def client(db_engine, _api_test_user) -> Iterator[TestClient]:
     """TestClient with per-test transaction rollback.

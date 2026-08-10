@@ -72,14 +72,27 @@ jobs:
             detail="The deployment answered but could not report its own health. A 404 usually means a build without /status; a 5xx means the API is failing before it can respond."
           else
             state="$(jq -r '.status // "unparseable"' <<<"$body")"
-            if [ "$state" = "ok" ]; then
+            degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$body")"
+            reasons="$(jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "\(.key): \(.value.reason // "unhealthy")"] | join("; ")' <<<"$body")"
+
+            # Both fields decide. They derive from the same set of unhealthy
+            # components today, so reading only `status` works today -- and
+            # would keep "working", silently, the moment that stops being
+            # true. A monitor that passes on a summary field while the
+            # components below it say otherwise is the exact failure mode
+            # this deployment has already had once.
+            if [ "$state" = "ok" ] && [ -z "$degraded" ]; then
               echo "TCKDB ok"
               exit 0
             fi
-            degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$body")"
-            reasons="$(jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "\(.key): \(.value.reason // "unhealthy")"] | join("; ")' <<<"$body")"
-            summary="TCKDB is degraded (${degraded:-unknown})."
-            detail="${reasons:-no reason reported}"
+
+            if [ "$state" = "ok" ]; then
+              summary="TCKDB reports status=ok while listing degraded components (${degraded})."
+              detail="The endpoint is contradicting itself. Treat the components as authoritative: ${reasons:-no reason reported}"
+            else
+              summary="TCKDB is degraded (${degraded:-unknown})."
+              detail="${reasons:-no reason reported}"
+            fi
           fi
 
           echo "::error::${summary}"

@@ -23,8 +23,11 @@ import pytest
 OPS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "ops"
 ALERT_CHECK = OPS_DIR / "tckdb_alert_check.sh"
 
-#: Every external binary tckdb_alert_check.sh invokes, minus jq. Used to build
-#: a PATH on which jq genuinely does not exist.
+#: Every external binary tckdb_alert_check.sh requires, minus jq. Used to build
+#: a PATH on which jq genuinely does not exist. ``hostname`` is deliberately
+#: absent: the script already guards it (``hostname || echo "this host"``), and
+#: including it would turn a cosmetic gap into a skipped test -- which is how
+#: the jq-free path would quietly stop being covered.
 _SCRIPT_TOOLS = (
     "bash",
     "cat",
@@ -33,10 +36,10 @@ _SCRIPT_TOOLS = (
     "dirname",
     "grep",
     "head",
-    "hostname",
     "mkdir",
     "sed",
     "tail",
+    "tr",
 )
 
 
@@ -157,7 +160,13 @@ def run_alert_check(fake_host, tmp_path):
             for tool in _SCRIPT_TOOLS:
                 found = shutil.which(tool)
                 if found is None:
-                    pytest.skip(f"{tool} is not installed; cannot build a jq-free PATH")
+                    # Not a skip. A skipped test is silence, and silence
+                    # reading as success is the entire subject of this
+                    # directory.
+                    pytest.fail(
+                        f"{tool} is not installed, so the jq-free decision "
+                        f"path cannot be exercised on this host"
+                    )
                 target = shim / tool
                 if not target.exists():
                     target.symlink_to(found)

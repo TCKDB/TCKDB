@@ -15,21 +15,37 @@ from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
 from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
-from app.api.startup_checks import validate_deployment_safety
+from app.api.startup_checks import (
+    report_artifact_storage_at_startup,
+    validate_deployment_safety,
+)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Start the inline upload worker thread when opted in via env var.
+    """Start the inline upload worker, and report on hard dependencies.
 
     Set ``TCKDB_INLINE_WORKER=true`` to run a worker inside the API process.
     The default is ``false`` — run the worker as a separate process instead
     (``python -m app.workers.upload_worker``), which is recommended for
     production.
+
+    The artifact-storage probe writes one line into the container log at
+    boot. A misconfigured object store is invisible until someone tries an
+    artifact-bearing upload and gets a 503, and it is fully detectable from
+    the first second of the process's life. It never blocks or fails
+    startup — see :func:`report_artifact_storage_at_startup`.
     """
     if os.getenv("TCKDB_INLINE_WORKER", "false").lower() == "true":
         from app.workers.upload_worker import run_worker_thread
         run_worker_thread()
+
+    # Opt-out for test fixtures and offline dev, which build the app hundreds
+    # of times and have no object store to reach. Defaults to on, because the
+    # deployment that needs this most is the one nobody remembered to
+    # configure.
+    if os.getenv("TCKDB_STARTUP_STORAGE_PROBE", "true").lower() == "true":
+        report_artifact_storage_at_startup()
 
     yield
 

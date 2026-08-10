@@ -88,7 +88,16 @@ script never gets far enough to ping anything). Neither alone is enough.
 
 `status` is `"ok"` only when `degraded` is empty; both are derived from the
 same set of unhealthy components, so anything consuming this should check
-both rather than rely on that derivation staying true.
+both rather than rely on that derivation staying true. All three consumers
+now do: `tckdb_deploy.sh`'s verification loop, `tckdb_alert_check.sh` (on both
+its `jq` and its `jq`-free parse paths), and `.github/workflows/uptime-check.yml`.
+A `status: "ok"` accompanied by a non-empty `degraded` is reported as its own
+kind of fault — the endpoint contradicting itself has a different fix from a
+component being down.
+
+Reading one of two fields is exactly how monitoring comes to vouch against an
+outage, which has happened here once already. It is cheap to read both, and
+the cost of not doing so is paid in a way you cannot see.
 
 The worker block carries two independent signals because neither is sufficient:
 
@@ -152,6 +161,28 @@ Two lessons, both now enforced in code:
 2. Report **what was reached for**, not only the verdict. Every value in that
    deployment's configuration was individually valid; the only way to see the
    fault was to see the address in use.
+
+### The same probe, at boot
+
+`/status` answers on demand. That fault was answerable from the first second
+of the process's life, and no one asked for hours. So the API now probes the
+object store once during startup and writes a single line into the container
+log, naming the endpoint and bucket it tried:
+
+```text
+startup: ARTIFACT STORAGE UNAVAILABLE - endpoint=http://127.0.0.1:9000 bucket=tckdb-artifacts reachable=False reason=...
+```
+
+That is where the deploy script already sends you (`docker logs tckdb-api |
+tail -50`), so the diagnosis is waiting before anyone looks for it.
+
+It **never fails startup.** With the object store down, reads, queries and
+uploads without attached files all still work; exiting would replace a partial
+outage with a total one — the same reasoning that keeps artifact storage out of
+`/readyz`. It reuses `/status`'s probe, and therefore its wall-clock deadline,
+so an unreachable endpoint costs a bounded few seconds of boot and can never
+hang it. Set `TCKDB_STARTUP_STORAGE_PROBE=false` to opt out; the test suite
+does, because it builds the app hundreds of times.
 
 ## Setting it up on a fresh host
 
