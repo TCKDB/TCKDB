@@ -634,13 +634,13 @@ def _refuse_committed_rows(request) -> Iterator[None]:
         previous = _committed_baseline_owner
         _record_committed_baseline(before, request.node.nodeid)
         raise AssertionError(
-            "rows were committed into the shared test database between "
+            "the shared test database changed between "
             f"{previous} and {request.node.nodeid}, outside either test body: "
             + ", ".join(f"{t} {was}->{now}" for t, (was, now) in sorted(drifted.items()))
             + ". Nothing between those two tests runs inside the per-test "
             "rollback, so the writer is a session- or module-scoped fixture, a "
-            "subprocess, or a background thread. Give it a teardown that "
-            "removes exactly what it wrote."
+            "subprocess, or a background thread. Give it a teardown that undoes "
+            "exactly what it did."
         )
 
     yield
