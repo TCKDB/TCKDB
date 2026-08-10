@@ -29,8 +29,7 @@
 #
 #   TCKDB_TEST_SEED=random bash backend/scripts/test-full.sh
 #
-# drops --randomly-seed entirely and lets pytest-randomly seed itself from the
-# clock. It prints the seed it drew in its header, so a failure found that way
+# draws a fresh seed per invocation and echoes it, so a failure found that way
 # is still reproducible with TCKDB_TEST_SEED=<that value>. That is the mode a
 # scheduled full-suite run should use: a nightly that draws the same order
 # every night re-tests one ordering 365 times a year.
@@ -81,12 +80,20 @@ tckdb_pytest_run_args() {
     # is the *operator's* override and outranks it.
     local workers="${TCKDB_TEST_WORKERS:-${TCKDB_DEFAULT_WORKERS:-8}}"
 
-    # ``random`` is not a value pytest-randomly accepts; the way to ask for an
-    # unpinned order is to pass no seed at all, which is what it already does
-    # by default. Handled here rather than by asking every caller to know that.
-    if [[ "$seed" != "random" \
-          && "$caller_args" != *" -p no:randomly "* \
+    # ``random`` draws a seed here rather than letting pytest-randomly draw its
+    # own from the clock. Both give an unpinned order; only this one is
+    # reproducible afterwards. pytest-randomly announces the seed it picked in
+    # ``pytest_report_header``, which ``-q`` -- what every gate script passes --
+    # suppresses, so an unpinned failure would arrive with no way to replay the
+    # order that produced it. Drawing it here and echoing it puts the seed in
+    # the job log unconditionally, whatever the verbosity.
+    if [[ "$caller_args" != *" -p no:randomly "* \
           && "$caller_args" != *"--randomly-seed"* ]]; then
+        if [[ "$seed" == "random" ]]; then
+            seed=$(( (RANDOM << 15 | RANDOM) + 1 ))
+            echo "tckdb: unpinned order, drew --randomly-seed=${seed}" \
+                 "(replay with TCKDB_TEST_SEED=${seed})" >&2
+        fi
         TCKDB_PYTEST_ARGS+=("--randomly-seed=${seed}")
     fi
 

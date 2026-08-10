@@ -277,12 +277,18 @@ full suite is verified green at seeds **1, 2, 3, 4, 5, 7, 11, 90210 and
 since it puts all ~6,770 tests in one process against one database and so
 exercises every cross-file adjacency the sharded runs hide.
 
-**Set `TCKDB_TEST_SEED=random` for an unpinned order.** It drops
-`--randomly-seed` and lets `pytest-randomly` seed itself from the clock;
-the seed it drew is printed in the pytest header, so anything that falls over
-in that order is reproducible with `TCKDB_TEST_SEED=<that value>`. Use it for
-scheduled full-suite runs: a nightly pinned to one seed re-tests one ordering
-365 times a year, which is not what a nightly is for.
+**Set `TCKDB_TEST_SEED=random` for an unpinned order.** The script draws a
+fresh seed per invocation and echoes it:
+
+```
+tckdb: unpinned order, drew --randomly-seed=636985447 (replay with TCKDB_TEST_SEED=636985447)
+```
+
+It draws the seed itself rather than letting `pytest-randomly` pick one from
+the clock because the plugin announces its choice in `pytest_report_header`,
+which the `-q` every gate script passes suppresses — so a failure in an
+unpinned order would arrive with no way to replay the order that produced it.
+`backend-nightly.yml` runs this way; the PR gates stay pinned.
 
 **Workers default to 8**, not to core count. Each xdist worker creates its own
 database and runs `alembic upgrade head` into it (~6 s), so every extra worker
