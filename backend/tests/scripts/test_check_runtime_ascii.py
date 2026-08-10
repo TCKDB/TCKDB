@@ -58,6 +58,35 @@ def test_emission_sites_are_reported(source):
     assert len(findings(source)) == 1
 
 
+def test_an_accumulated_warning_is_an_emission_site():
+    """``warnings.append`` was missed once, and then miscategorised.
+
+    ``app/importers/cccbdb/builders/statmech_payload.py`` appends to a
+    local named ``warnings`` that becomes ``PayloadBundle.warnings`` and
+    travels out through the upload path. The first version of this
+    checker did not see it, and the omission was written up as "a parser
+    token matched against HTML" -- which it is not, and which would have
+    left a real emission site permanently excused.
+    """
+    source = (
+        "warnings.append(\n"
+        '    "converted GHz→cm⁻¹; raw values preserved"\n'
+        ")\n"
+    )
+    found = findings(source)
+    assert len(found) == 1
+    assert found[0].kind == "accumulated warning"
+
+
+def test_an_ordinary_list_append_is_not_an_emission_site():
+    """The receiver name is what distinguishes an accumulator."""
+    assert findings('rows.append("a — b")') == []
+
+
+def test_attribute_accumulators_count_too():
+    assert len(findings('result.warnings.append("a — b")')) == 1
+
+
 def test_the_upload_warning_case_that_caused_the_incident():
     """An em dash in an UploadWarning message rolled back a whole upload."""
     source = (

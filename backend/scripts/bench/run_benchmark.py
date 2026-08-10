@@ -318,7 +318,7 @@ def measure_shape(
     if result.records_returned == 0:
         result.empty = True
         result.warnings.append(
-            "shape matched ZERO records — its timing measures an empty result "
+            "shape matched ZERO records -- its timing measures an empty result "
             "and must not be quoted as evidence that the shape is fast"
         )
 

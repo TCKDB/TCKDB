@@ -181,8 +181,9 @@ uploads without attached files all still work; exiting would replace a partial
 outage with a total one — the same reasoning that keeps artifact storage out of
 `/readyz`. It reuses `/status`'s probe, and therefore its wall-clock deadline,
 so an unreachable endpoint costs a bounded few seconds of boot and can never
-hang it. Set `TCKDB_STARTUP_STORAGE_PROBE=false` to opt out; the test suite
-does, because it builds the app hundreds of times.
+hang it. Set `TCKDB_STARTUP_PROBES=false` to opt out of this and the database
+encoding probe together; the test suite does, because it builds the app
+hundreds of times.
 
 ## Setting it up on a fresh host
 

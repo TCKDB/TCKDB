@@ -473,7 +473,7 @@ def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
                 message=(
                     "Collisional energy transfer was declared once for the "
                     f"whole network and applied to {wells} and to the bath "
-                    "gas as a whole. <dE>down is a property of a (well, "
+                    "gas as a whole. <DeltaE>down is a property of a (well, "
                     "collider) pair, so this record does not resolve how it "
                     "varies between wells; that variation was not determined "
                     "by the run. Per-well declarations are preferred where "

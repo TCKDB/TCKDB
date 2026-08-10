@@ -86,6 +86,15 @@ _LOG_RECEIVERS = frozenset({"logger", "log", "logging", "_logger", "warnings", "
 #: ``logging.getLogger(__name__).warning(...)`` shape.
 _LOG_FACTORIES = frozenset({"getLogger"})
 
+#: Local accumulators that are returned to a caller and end up in a payload
+#: or a response. ``warnings.append("...")`` in the cccbdb builders flows into
+#: ``PayloadBundle.warnings`` and out through the upload path, which is an
+#: emission site by any reading -- it was missed once, and the miss was then
+#: written up as "a parser token matched against HTML", which it is not.
+#: Matched on the receiver name because that is what distinguishes an
+#: accumulator from ``some_list.append``.
+_ACCUMULATOR_RECEIVERS = frozenset({"warnings", "errors", "messages", "notes"})
+
 #: Keyword arguments carrying human-readable text that gets stored or
 #: returned. ``message`` is the one that mattered: ``UploadWarning(message=...)``
 #: rows are written to the database and served back to clients, and an
@@ -142,6 +151,19 @@ def _is_log_call(call: ast.Call) -> bool:
     return name in _LOG_RECEIVERS
 
 
+def _is_accumulator_append(call: ast.Call) -> bool:
+    """``warnings.append("...")`` and friends."""
+    func = call.func
+    if not isinstance(func, ast.Attribute) or func.attr != "append":
+        return False
+    receiver = func.value
+    if isinstance(receiver, ast.Name):
+        return receiver.id in _ACCUMULATOR_RECEIVERS
+    if isinstance(receiver, ast.Attribute):
+        return receiver.attr in _ACCUMULATOR_RECEIVERS
+    return False
+
+
 class _Visitor(ast.NodeVisitor):
     """Collect string constants sitting at an emission site.
 
@@ -157,9 +179,20 @@ class _Visitor(ast.NodeVisitor):
         #: *first fragment*, several lines below the `raise`.
         self.hits: dict[int, tuple[ast.Constant, str, int]] = {}
 
-    def _record(self, node: ast.AST, kind: str, anchor: int) -> None:
+    def _record(self, node: ast.AST, kind: str, anchor: int, *, specific: bool = False) -> None:
+        """Record every literal under *node* as sitting at an emission site.
+
+        A literal is often reachable two ways -- ``warnings.append(
+        UploadWarning(message="..."))`` is an accumulator *and* a
+        ``message=`` keyword -- and it must be reported once. The
+        keyword attribution is the more useful of the two in the output,
+        so *specific* records are allowed to replace a container-level
+        one; nothing else overwrites.
+        """
         for constant in _string_constants(node):
-            self.hits.setdefault(id(constant), (constant, kind, anchor))
+            key = id(constant)
+            if key not in self.hits or specific:
+                self.hits[key] = (constant, kind, anchor)
 
     def visit_Raise(self, node: ast.Raise) -> None:
         if node.exc is not None:
@@ -169,9 +202,16 @@ class _Visitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         if _is_log_call(node):
             self._record(node, "log message", node.lineno)
+        if _is_accumulator_append(node):
+            self._record(node, "accumulated warning", node.lineno)
         for keyword in node.keywords:
             if keyword.arg in _TEXT_KEYWORDS:
-                self._record(keyword.value, f"{keyword.arg}= argument", node.lineno)
+                self._record(
+                    keyword.value,
+                    f"{keyword.arg}= argument",
+                    node.lineno,
+                    specific=True,
+                )
         self.generic_visit(node)
 
 

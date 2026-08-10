@@ -219,17 +219,7 @@ def test_the_encoding_probe_runs_at_startup(monkeypatch):
     assert seen == [True]
 
 
-def test_status_reports_the_server_encoding(client):
-    """Answerable from outside, which is what makes it a five-second fix.
-
-    It is reported and not judged: a non-UTF8 cluster is a permanent
-    property that only a dump and restore can change, so degrading
-    /status on it would nag every five minutes about something no
-    restart can address.
-    """
-    body = client.get("/api/v1/status").json()
-    database = body["components"]["database"]
-    assert "server_encoding" in database
-    assert database["server_encoding"], "a reachable database must report one"
-    assert body["status"] == "ok"
-    assert body["degraded"] == []
+# `/status` reporting server_encoding is asserted in tests/api/test_api_status.py,
+# beside the other component-shape tests and on top of that module's stubbed
+# object store. Asserting the whole body here would have made this module's
+# result depend on whether a real MinIO bucket happened to exist yet.

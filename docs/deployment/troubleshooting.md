@@ -225,14 +225,37 @@ docker compose down -v      # destroys the volume
 docker compose up -d
 ```
 
-On a database with anything worth keeping, dump first, recreate the
-volume, and restore:
+On a database with anything worth keeping, dump first, **verify the dump
+while the volume still exists**, then recreate and restore. Substitute
+your own `DB_USER` / `DB_NAME` if they differ from the compose defaults.
 
 ```bash
-docker compose exec db pg_dump -U tckdb -d tckdb -Fc > tckdb.dump
+# 1. Dump. -T is not optional: without it `docker compose exec` allocates
+#    a pseudo-TTY, whose line discipline rewrites LF to CRLF *inside the
+#    binary -Fc stream*. The dump looks fine and is silently corrupt.
+docker compose exec -T db \
+    pg_dump -U "${DB_USER:-tckdb}" -d "${DB_NAME:-tckdb_dev}" -Fc > tckdb.dump
+
+# 2. Verify BEFORE destroying anything. `down -v` is irreversible, so a
+#    dump that cannot be read must be discovered while the original is
+#    still there. Expect a table of contents; `did not find magic string`
+#    means the dump is corrupt -- stop, and do not run step 3.
+pg_restore --list tckdb.dump | head
+
+# 3. Only now destroy the volume and recreate it with UTF8.
 docker compose down -v
 docker compose up -d
-docker compose exec -T db pg_restore -U tckdb -d tckdb < tckdb.dump
+
+# 4. Restore.
+docker compose exec -T db \
+    pg_restore -U "${DB_USER:-tckdb}" -d "${DB_NAME:-tckdb_dev}" < tckdb.dump
+```
+
+If `pg_restore` is not installed on the host, run step 2 inside the
+container instead — it must still happen before step 3:
+
+```bash
+docker compose exec -T db pg_restore --list /dev/stdin < tckdb.dump | head
 ```
 
 `DB_CLIENT_ENCODING=utf8` in the env templates, `?client_encoding=utf8`
