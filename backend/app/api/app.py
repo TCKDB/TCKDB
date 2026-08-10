@@ -15,21 +15,42 @@ from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
 from app.api.request_id import RequestIDMiddleware
 from app.api.router import api_router
-from app.api.startup_checks import validate_deployment_safety
+from app.api.startup_checks import (
+    report_artifact_storage_at_startup,
+    report_database_encoding_at_startup,
+    validate_deployment_safety,
+)
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
-    """Start the inline upload worker thread when opted in via env var.
+    """Start the inline upload worker, and report on hard dependencies.
 
     Set ``TCKDB_INLINE_WORKER=true`` to run a worker inside the API process.
     The default is ``false`` — run the worker as a separate process instead
     (``python -m app.workers.upload_worker``), which is recommended for
     production.
+
+    Two boot-time probes write one line each into the container log. Both
+    describe faults that are fully detectable from the process's first
+    second and were previously invisible until something downstream broke:
+    an object store that cannot be reached (503 on the first
+    artifact-bearing upload) and a database cluster that is not UTF-8 (an
+    aborted transaction on the first non-ASCII character). Neither blocks
+    or fails startup — see :mod:`app.api.startup_checks`.
     """
     if os.getenv("TCKDB_INLINE_WORKER", "false").lower() == "true":
         from app.workers.upload_worker import run_worker_thread
         run_worker_thread()
+
+    # Opt-out for test fixtures and offline dev, which build the app hundreds
+    # of times and have neither an object store to reach nor a reason to
+    # re-check one cluster's encoding per test. Defaults to on, because the
+    # deployment that needs this most is the one nobody remembered to
+    # configure.
+    if os.getenv("TCKDB_STARTUP_PROBES", "true").lower() == "true":
+        report_artifact_storage_at_startup()
+        report_database_encoding_at_startup()
 
     yield
 

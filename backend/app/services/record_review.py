@@ -141,7 +141,7 @@ def _check_transition_allowed(
     allowed = _ALLOWED_TRANSITIONS.get(from_status, frozenset())
     if to_status not in allowed:
         raise DomainError(
-            f"Disallowed record-review transition: {from_status.value} → "
+            f"Disallowed record-review transition: {from_status.value} -> "
             f"{to_status.value} (route through 'under_review' instead)."
         )
 

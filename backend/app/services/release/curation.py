@@ -205,7 +205,7 @@ def _assert_standing_selections_still_approved(
         except ReleaseCurationError as exc:
             raise ReleaseCurationError(
                 f"selection_no_longer_approved: selection {row.public_ref} can no "
-                f"longer be published — {exc}"
+                f"longer be published -- {exc}"
             ) from exc
 
 
@@ -463,7 +463,7 @@ def add_selection(
         raise ReleaseCurationError(
             "selection_already_stands: this subject already has a standing "
             "selection in this release. Supersede it rather than adding a "
-            "second one — selections are append-only, not additive."
+            "second one -- selections are append-only, not additive."
         )
 
     selection = ReleaseSelection(

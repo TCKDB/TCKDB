@@ -45,6 +45,23 @@ services:
       POSTGRES_USER: ${DB_ADMIN_USER:-${DB_USER:-tckdb}}
       POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD must be set (copy .env.example to .env or pass --env-file)}}
       POSTGRES_DB: ${DB_NAME:-tckdb_dev}
+      # Pin the cluster's encoding at initdb time.
+      #
+      # Without this, the encoding a new deployment gets is whatever the base
+      # image's locale happens to imply -- and with no locale set that is
+      # SQL_ASCII, a cluster that stores bytes and validates nothing. This
+      # deployment has already lost an upload to exactly that (see
+      # docs/deployment/troubleshooting.md), and the failure is delayed
+      # arbitrarily: everything works until the first non-ASCII character
+      # arrives, which may be months after the volume was created and long
+      # after anyone would connect the two.
+      #
+      # LANG is what initdb reads for its default locale; --encoding=UTF8 is
+      # then consistent with it and the two cannot disagree. This applies at
+      # volume creation ONLY -- an existing cluster is untouched, by design,
+      # because changing a live cluster's encoding is a dump and restore.
+      LANG: C.UTF-8
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8"
     # Loopback-only publication. NEVER change to "${DB_PORT}:5432" or
     # "0.0.0.0:5432" - that exposes Postgres on the LAN.
     ports:

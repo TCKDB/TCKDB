@@ -191,7 +191,7 @@ def read_manifest(path: Path) -> list[Candidate]:
         oid_text, datname, size_text = parts
         if not _is_droppable_name(datname):
             raise SystemExit(
-                f"{path}:{lineno}: refusing to accept manifest — '{datname}' is not an "
+                f"{path}:{lineno}: refusing to accept manifest -- '{datname}' is not an "
                 "isolated test-database name."
             )
         entries.append(Candidate(int(oid_text), datname, int(size_text)))

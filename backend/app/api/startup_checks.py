@@ -19,7 +19,11 @@ upstream" — those remain in the pre-flight checklist.
 
 from __future__ import annotations
 
+import logging
+
 from app.api.config import Settings
+
+logger = logging.getLogger(__name__)
 
 
 class UnsafeDeploymentConfigError(RuntimeError):
@@ -93,3 +97,135 @@ def validate_deployment_safety(settings: Settings) -> None:
     violations = _collect_violations(settings)
     if violations:
         raise UnsafeDeploymentConfigError(mode, violations)
+
+
+#: The only encoding this deployment is designed for. Anything else stores
+#: bytes without validating them (``SQL_ASCII``) or silently transcodes.
+EXPECTED_SERVER_ENCODING = "UTF8"
+
+
+def server_encoding(session) -> str | None:
+    """Return the connected cluster's ``server_encoding``, or None."""
+    from sqlalchemy import text
+    from sqlalchemy.exc import SQLAlchemyError
+
+    try:
+        return session.execute(text("SHOW server_encoding")).scalar_one_or_none()
+    except SQLAlchemyError:
+        return None
+
+
+def report_database_encoding_at_startup() -> str | None:
+    """Check the cluster's encoding at boot and say so if it is wrong.
+
+    The encoding a deployment gets is fixed at ``initdb`` and cannot be
+    changed afterwards without a dump and restore, so it is not something
+    the application can fix — but it is something it can refuse to be
+    quiet about. ``docker-compose.yml`` now pins ``--encoding=UTF8``; a
+    pin that nothing verifies is a wish, and clusters created before it,
+    or by hand, or by a different compose file, are still out there.
+
+    A ``SQL_ASCII`` cluster stores whatever bytes it is handed and
+    validates nothing, so the damage is delayed and arbitrary: everything
+    works until the first non-ASCII character arrives, which is how one
+    em dash came to roll back an entire upload on 2026-08-04, months
+    after the volume was created.
+
+    Does not raise. The database being unreachable at boot is normal --
+    the API may legitimately start before Postgres accepts connections --
+    and is reported at ``debug``, not as a fault.
+    """
+    from app.api.deps import SessionLocal
+
+    session = SessionLocal()
+    try:
+        encoding = server_encoding(session)
+    finally:
+        session.close()
+
+    if encoding is None:
+        logger.debug(
+            "startup: database not reachable yet; server_encoding unchecked"
+        )
+        return None
+    if encoding.upper() == EXPECTED_SERVER_ENCODING:
+        logger.info("startup: database server_encoding=%s", encoding)
+    else:
+        logger.error(
+            "startup: DATABASE SERVER_ENCODING IS %s, EXPECTED %s. This "
+            "cluster does not validate the bytes it stores, and any "
+            "non-ASCII character in any value -- including one in an error "
+            "or warning message -- can abort the transaction that carries "
+            "it. The encoding is fixed at initdb and cannot be altered in "
+            "place: it needs a dump, a cluster created with "
+            "--encoding=UTF8, and a restore. See "
+            "docs/deployment/troubleshooting.md.",
+            encoding,
+            EXPECTED_SERVER_ENCODING,
+        )
+    return encoding
+
+
+def report_artifact_storage_at_startup() -> dict:
+    """Probe the object store once at boot and say so in the log.
+
+    **Why at startup and not only on ``/status``.** On 2026-08-05 the
+    containerised API ran with ``S3_ENDPOINT_URL=http://127.0.0.1:9000``
+    inherited from the earlier host deployment, where inside a container
+    that is the container's own loopback. Every artifact-bearing upload
+    returned 503 for as long as it took someone to try one. The
+    misconfiguration was present and detectable from the first second of
+    the process's life, and nothing looked.
+
+    The first place an operator looks after a deploy is ``docker logs
+    tckdb-api`` — the deploy script's own failure message says exactly
+    that — so this writes one unmissable line there, naming the endpoint
+    and bucket that were tried. ``/status`` still answers the same
+    question on demand; this answers it before anyone asks.
+
+    **It does not refuse to boot.** With the object store down, reads,
+    queries, and uploads without attached files all still work, so
+    exiting would replace a partial outage with a total one — the same
+    reasoning that keeps artifact storage out of ``/readyz``. The probe
+    inherits ``/status``'s hard wall-clock deadline, so an unreachable
+    endpoint delays startup by a bounded few seconds and never hangs it.
+
+    Returns the same block ``/status`` reports, so a caller (and a test)
+    can assert on it rather than scrape the log.
+    """
+    # Imported here rather than at module scope: this module is imported by
+    # the application factory before the router exists, and the routes
+    # package pulls in the whole dependency graph.
+    from app.api.routes.health import _artifact_storage_status
+
+    try:
+        block = _artifact_storage_status()
+    except Exception as exc:  # pragma: no cover - defensive
+        # A probe that raises must not take the process with it. Boot-time
+        # diagnostics exist to make failures visible, not to create one.
+        logger.error(
+            "startup: artifact storage probe raised %s; continuing to boot",
+            type(exc).__name__,
+        )
+        return {"healthy": None, "reason": f"probe raised {type(exc).__name__}"}
+
+    if block.get("healthy") is True:
+        logger.info(
+            "startup: artifact storage ok (endpoint=%s bucket=%s)",
+            block.get("endpoint"),
+            block.get("bucket"),
+        )
+    else:
+        logger.error(
+            "startup: ARTIFACT STORAGE UNAVAILABLE - endpoint=%s bucket=%s "
+            "reachable=%s reason=%s. Artifact-bearing uploads will fail with "
+            "503 until this is fixed; reads and queries are unaffected. This "
+            "is usually S3_ENDPOINT_URL in the deployment's env file - note "
+            "that 127.0.0.1 inside a container is the container's own "
+            "loopback, not the host's.",
+            block.get("endpoint"),
+            block.get("bucket"),
+            block.get("reachable"),
+            block.get("reason"),
+        )
+    return block

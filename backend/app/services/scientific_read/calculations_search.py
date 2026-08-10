@@ -422,8 +422,8 @@ def _enforce_parameter_value_pairs(
     """
     if request.parameter_value is not None and request.parameter_key is None:
         raise ValueError(
-            "parameter_value_requires_key: parameter_value=… requires "
-            "parameter_key=… on the same request."
+            "parameter_value_requires_key: parameter_value=... requires "
+            "parameter_key=... on the same request."
         )
     if (
         request.canonical_parameter_value is not None
@@ -431,8 +431,8 @@ def _enforce_parameter_value_pairs(
     ):
         raise ValueError(
             "canonical_parameter_value_requires_key: "
-            "canonical_parameter_value=… requires "
-            "canonical_parameter_key=… on the same request."
+            "canonical_parameter_value=... requires "
+            "canonical_parameter_key=... on the same request."
         )
 
 

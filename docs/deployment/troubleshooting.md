@@ -194,27 +194,83 @@ sequence for encoding "SQL_ASCII"`. `psql -l` shows the database with
 
 **Cause**
 
-A pre-existing Postgres data volume created with `SQL_ASCII`
-encoding. Docker won't recreate the DB on subsequent starts.
+A Postgres data volume created before the encoding was pinned. The
+`db` image sets no locale of its own, so `initdb` fell back to
+`SQL_ASCII` — a cluster that stores whatever bytes it is handed and
+validates none of them. Docker will not re-run `initdb` on an existing
+volume, so the encoding a deployment gets is decided once, at volume
+creation, and is permanent.
+
+`docker-compose.yml` now pins `LANG=C.UTF-8` and
+`POSTGRES_INITDB_ARGS=--encoding=UTF8` on the `db` service, so volumes
+created from this repo are `UTF8`. That fixes new deployments; it
+cannot fix an existing volume.
+
+**Why it bites so late.** `SQL_ASCII` works perfectly until the first
+non-ASCII byte arrives. On 2026-08-04 that byte was an em dash in a
+warning message, months after the volume was created, and it rolled
+back the whole upload carrying it. Nothing connected the two. The API
+now logs its cluster's `server_encoding` at startup and reports it in
+`/api/v1/status`, so the question is answerable before something
+strange happens rather than after.
 
 **Fix**
 
-This is a clean-slate operation — back up first if you have anything
-worth keeping:
+Changing a cluster's encoding needs a dump and restore; there is no
+in-place conversion. On a **dev** database, where the data is
+disposable, that reduces to a clean slate:
 
 ```bash
-docker compose down -v
+docker compose down -v      # destroys the volume
 docker compose up -d
 ```
 
-The new volume initializes with `UTF8`. The `DB_CLIENT_ENCODING=utf8`
-in the env templates is belt-and-braces on top of that.
+On a database with anything worth keeping, dump first, **verify the dump
+while the volume still exists**, then recreate and restore. Substitute
+your own `DB_USER` / `DB_NAME` if they differ from the compose defaults.
+
+```bash
+# 1. Dump. -T is not optional: without it `docker compose exec` allocates
+#    a pseudo-TTY, whose line discipline rewrites LF to CRLF *inside the
+#    binary -Fc stream*. The dump looks fine and is silently corrupt.
+docker compose exec -T db \
+    pg_dump -U "${DB_USER:-tckdb}" -d "${DB_NAME:-tckdb_dev}" -Fc > tckdb.dump
+
+# 2. Verify BEFORE destroying anything. `down -v` is irreversible, so a
+#    dump that cannot be read must be discovered while the original is
+#    still there. Expect a table of contents; `did not find magic string`
+#    means the dump is corrupt -- stop, and do not run step 3.
+pg_restore --list tckdb.dump | head
+
+# 3. Only now destroy the volume and recreate it with UTF8.
+docker compose down -v
+docker compose up -d
+
+# 4. Restore.
+docker compose exec -T db \
+    pg_restore -U "${DB_USER:-tckdb}" -d "${DB_NAME:-tckdb_dev}" < tckdb.dump
+```
+
+If `pg_restore` is not installed on the host, run step 2 inside the
+container instead — it must still happen before step 3:
+
+```bash
+docker compose exec -T db pg_restore --list /dev/stdin < tckdb.dump | head
+```
+
+`DB_CLIENT_ENCODING=utf8` in the env templates, `?client_encoding=utf8`
+in the URL both `app/api/config.py` and `alembic/env.py` build, and
+`PGCLIENTENCODING=UTF8` in `backend/Dockerfile` are all belt-and-braces
+on the *client* side. None of them can rescue a `SQL_ASCII` server.
 
 **Verify**
 
 ```bash
 docker compose exec db psql -U tckdb -l
 # expect: Encoding | UTF8
+
+curl -s localhost:8010/api/v1/status | jq '.components.database.server_encoding'
+# expect: "UTF8"
 ```
 
 ---

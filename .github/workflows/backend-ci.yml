@@ -43,6 +43,14 @@ jobs:
           POSTGRES_USER: tckdb
           POSTGRES_PASSWORD: tckdb
           POSTGRES_DB: tckdb_${{ matrix.gate }}_ci
+          # Same pin as docker-compose.yml, for the same reason. This image
+          # sets no locale, so initdb falls back to SQL_ASCII -- which is what
+          # CI has silently been running on. A cluster that validates nothing
+          # cannot fail on a byte it should reject, so the entire suite was
+          # structurally incapable of catching an encoding bug, and every test
+          # databases the harness creates inherits the cluster's encoding.
+          LANG: C.UTF-8
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8"
         ports:
           - 5432:5432
         options: >-
@@ -123,6 +131,16 @@ jobs:
         working-directory: backend
         run: conda run -n tckdb_env ruff check app tests scripts
 
+      - name: Lint (non-ASCII in runtime strings)
+        if: matrix.gate == 'api'
+        working-directory: backend
+        # Narrower than ruff's RUF001-003, which this repo disables on
+        # purpose because scientific notation is legitimate prose. This one
+        # looks only at strings that leave the process -- raises, log calls,
+        # message=/detail=/reason= -- and covers app/ and scripts/ but not
+        # tests/, where non-ASCII data is the point. See the script's header.
+        run: conda run -n tckdb_env python scripts/check_runtime_ascii.py
+
       - name: Type check (mypy, scoped)
         if: matrix.gate == 'api'
         working-directory: backend
@@ -139,6 +157,8 @@ jobs:
           bash -n backend/scripts/test-full.sh
           bash -n backend/scripts/test-profile.sh
           bash -n backend/scripts/update-openapi-golden.sh
+          bash -n backend/scripts/ops/tckdb_alert_check.sh
+          bash -n backend/scripts/ops/tckdb_deploy.sh
           make help
 
       - name: Alembic upgrade head
@@ -191,6 +211,21 @@ jobs:
         if: matrix.gate == 'api'
         working-directory: backend
         run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
+
+      - name: Ops and repo-check gate
+        if: matrix.gate == 'api'
+        working-directory: backend
+        # Neither of these lives under tests/api/, so neither test-api.sh nor
+        # test-scientific.sh reaches them and they would otherwise only run
+        # nightly. tests/ops/ covers the alerting path -- the one part of the
+        # deployment whose failure produces silence rather than an error --
+        # and the ASCII test pins the lint's boundary, which is the part that
+        # decides whether anyone leaves it switched on. Both need to gate the
+        # PR that breaks them, not the night after.
+        run: >-
+          conda run -n tckdb_env pytest -q
+          tests/ops/
+          tests/scripts/test_check_runtime_ascii.py
 
       - name: API test gate
         if: matrix.gate == 'api'

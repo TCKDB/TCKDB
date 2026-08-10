@@ -38,6 +38,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import SessionLocal
+from app.api.startup_checks import server_encoding
 from app.services import artifact_storage
 
 router = APIRouter()
@@ -430,6 +431,7 @@ def status():
             components["database"] = {
                 "healthy": False,
                 "alembic_revision": None,
+                "server_encoding": None,
                 "reason": "database unreachable",
             }
         else:
@@ -440,9 +442,18 @@ def status():
             except SQLAlchemyError as exc:
                 logger.warning("status: alembic_version lookup failed: %r", exc)
                 revision = None
+            # Reported, not judged. A non-UTF8 cluster is a real hazard --
+            # SQL_ASCII validates nothing and aborts on the first byte it
+            # cannot handle -- but it is a permanent property of the cluster
+            # that only a dump and restore can change, so degrading /status
+            # on it would nag every five minutes about something no restart
+            # can fix. Startup logs it as an error once, which is the right
+            # loudness; this makes it answerable from outside, which is what
+            # turns "uploads sometimes fail" into a five-second diagnosis.
             components["database"] = {
                 "healthy": revision is not None,
                 "alembic_revision": revision,
+                "server_encoding": server_encoding(session),
                 "reason": (
                     None
                     if revision is not None

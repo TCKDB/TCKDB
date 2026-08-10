@@ -571,7 +571,7 @@ def _process_one_cycle() -> bool:
                                 )
                                 submission.status = SubmissionStatus.failed
                             logger.warning(
-                                "job %s exhausted %d attempts — marked failed",
+                                "job %s exhausted %d attempts -- marked failed",
                                 job_id, job.max_attempts,
                             )
                         else:
@@ -593,7 +593,7 @@ def worker_loop(poll_interval: float = _IDLE_SLEEP) -> None:
         try:
             did_work = _process_one_cycle()
         except Exception:
-            logger.exception("Unexpected error in worker cycle — sleeping before retry")
+            logger.exception("Unexpected error in worker cycle -- sleeping before retry")
             did_work = False
 
         if not did_work:

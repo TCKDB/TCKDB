@@ -100,7 +100,7 @@ def build_statmech_payload(
         warnings.append(
             "statmech: rotational constants mapped to "
             "statmech.rotational_constant_{a,b,c}_cm1 (converted "
-            "GHz→cm⁻¹); raw GHz values and reference preserved in "
+            "GHz to cm-1); raw GHz values and reference preserved in "
             "external_source.unparsed.statmech_rotational_constants"
         )
 

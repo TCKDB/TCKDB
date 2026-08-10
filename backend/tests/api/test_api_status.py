@@ -86,6 +86,32 @@ def test_status_reports_ok_when_every_component_is_healthy(
     assert body["components"]["database"]["alembic_revision"]
 
 
+def test_status_reports_the_database_server_encoding(
+    client, healthy_storage
+) -> None:
+    """Answerable from outside, which is what makes it a five-second fix.
+
+    A SQL_ASCII cluster stores bytes and validates nothing, and the
+    damage is delayed arbitrarily -- everything works until the first
+    non-ASCII character arrives. One em dash in a warning message rolled
+    back an entire upload on 2026-08-04, months after the volume was
+    created, and nothing anywhere said "your database is SQL_ASCII".
+
+    It is reported and not judged. ``healthy`` stays ``revision is not
+    None``, so the encoding can never flip the deployment to degraded:
+    it is a permanent property of the cluster that only a dump and
+    restore can change, and alerting on it would nag every five minutes
+    about something no restart can address.
+    """
+    body = client.get("/api/v1/status").json()
+    database = body["components"]["database"]
+    assert database["server_encoding"], "a reachable database must report one"
+    assert body["status"] == "ok"
+    assert body["degraded"] == [], (
+        "the encoding is reported, never a reason to degrade"
+    )
+
+
 def test_status_returns_200_even_when_degraded(
     client, monkeypatch, healthy_storage
 ) -> None:
