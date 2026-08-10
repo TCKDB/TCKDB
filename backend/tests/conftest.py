@@ -157,6 +157,28 @@ def _resolve_test_db_name() -> str:
     return f"tckdb_test_{os.getpid()}"
 
 
+# Keep the boot-time dependency probes out of the suite.
+#
+# ``create_app()`` runs once per ``client`` fixture, i.e. hundreds of times.
+# The storage probe is a real network round trip with a 4-second ceiling --
+# on a machine with no MinIO that is hours, and with MinIO it is hundreds of
+# pointless ``head_bucket`` calls -- and the encoding probe would re-answer
+# one unchanging question about one cluster on every one of them. The probes'
+# own behaviour, including that they are on by default, is covered directly
+# in ``tests/api/test_startup_probes.py``.
+#
+# Set at import rather than by an autouse session fixture. A session-scoped
+# autouse fixture in the root conftest joins the session fixture graph ahead
+# of ``db_engine`` without depending on it, and under xdist that reordering
+# was enough to have the per-worker database torn down while tests were still
+# using it: 2000+ errors, all of them `terminating connection due to
+# administrator command`, none of them near this line. An env var wants no
+# fixture, so it should not have one.
+#
+# ``setdefault`` so a developer can still force the probes on from the
+# environment when working on them.
+os.environ.setdefault("TCKDB_STARTUP_PROBES", "false")
+
 _TEST_DATABASE_NAME = re.compile(r"^tckdb_test(?:_[A-Za-z0-9_]+)?$")
 
 
@@ -662,24 +684,6 @@ def _api_other_user(db_session) -> int:
     return _create_user_in_session(
         db_session, username="testother", role=AppUserRole.user
     )
-
-
-@pytest.fixture(autouse=True, scope="session")
-def _disable_startup_probes():
-    """Keep the boot-time dependency probes out of the suite.
-
-    ``create_app()`` runs once per ``client`` fixture, i.e. hundreds of
-    times. The storage probe is a real network round trip with a
-    4-second ceiling — on a machine with no MinIO that is hours, and with
-    MinIO it is hundreds of pointless ``head_bucket`` calls — and the
-    encoding probe would re-answer one unchanging question about one
-    cluster on every one of them. Their own behaviour, including that
-    they are on by default, is covered directly in
-    ``tests/api/test_startup_probes.py``.
-    """
-    os.environ["TCKDB_STARTUP_PROBES"] = "false"
-    yield
-    os.environ.pop("TCKDB_STARTUP_PROBES", None)
 
 
 @pytest.fixture
