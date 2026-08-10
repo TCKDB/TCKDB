@@ -39,6 +39,37 @@ RUN micromamba install -y -n base -f /tmp/environment.yml \
 ARG MAMBA_DOCKERFILE_ACTIVATE=1
 
 # ---------------------------------------------------------------------------
+# Text encoding, pinned in the image rather than per deployment.
+#
+# On 2026-08-04 an em dash in a warning message rolled back an entire upload
+# against a SQL_ASCII database. The database has since been converted, but the
+# encoding a deployment ends up with was a property of whoever created the
+# volume and whatever the base image happened to set -- i.e. not a property of
+# this repository at all, and so not one anybody could verify.
+#
+# This is the only place that covers every consumer at once: the API and the
+# migration container started by scripts/ops/tckdb_deploy.sh, the compose
+# `worker` service, and the smoke runs in .github/workflows/build-api-image.yml.
+# Setting it per docker-run invocation instead would mean four places to keep
+# in step, and the one that drifts is the one nobody notices.
+#
+#   LANG / LC_ALL     debian-slim ships no locale, so Python's filesystem and
+#                     stdio encodings would otherwise be derived from a POSIX
+#                     default. C.UTF-8 is built into glibc and needs no
+#                     locale-gen.
+#   PYTHONIOENCODING  a non-ASCII character reaching a log line must not raise
+#                     UnicodeEncodeError. Crashing on the way to *reporting* a
+#                     problem is the worst available failure.
+#   PGCLIENTENCODING  belt to the braces of ?client_encoding=utf8 in the URL
+#                     that app/api/config.py and alembic/env.py both build; it
+#                     also covers psql and pg_dump run inside this image.
+# ---------------------------------------------------------------------------
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    PYTHONIOENCODING=utf-8 \
+    PGCLIENTENCODING=UTF8
+
+# ---------------------------------------------------------------------------
 # 2. The shared schemas package and the backend package. Installed with
 #    --no-deps because conda already provides every runtime dependency; this
 #    is the recommended conda-then-pip pattern (avoids pip clobbering conda

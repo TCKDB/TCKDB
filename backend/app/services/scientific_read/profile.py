@@ -209,7 +209,7 @@ def resolve_read_profile(
     if release_ref is not None:
         raise UnknownReleaseError(
             "release_scoping_not_implemented: ?release= is not supported on the "
-            "general read surface — it would silently do nothing here. Use "
+            "general read surface -- it would silently do nothing here. Use "
             "GET /api/v1/scientific/releases/{tag}/selections, or the release's "
             "selected_records.ndjson artifact, to read exactly what a release "
             "selected."

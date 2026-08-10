@@ -188,7 +188,7 @@ def _resolve_input_geometry_id(
     if geometry.natoms != parsed.natoms:
         logger.info(
             "hessian extraction skipped: input geometry has %d atoms but the "
-            "parsed matrix implies %d — refusing to bind a mismatched Hessian",
+            "parsed matrix implies %d -- refusing to bind a mismatched Hessian",
             geometry.natoms,
             parsed.natoms,
         )
@@ -202,7 +202,7 @@ def _resolve_input_geometry_id(
         if not _frame_matches(session, geometry_id, parsed.reference_coords_angstrom):
             logger.info(
                 "hessian extraction skipped: the artifact's atomic frame does "
-                "not match the bound input geometry — refusing to bind a "
+                "not match the bound input geometry -- refusing to bind a "
                 "Hessian computed at a different geometry/orientation"
             )
             return None

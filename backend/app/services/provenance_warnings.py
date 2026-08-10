@@ -424,9 +424,9 @@ def collect_network_solve_kind_warnings(solve) -> list[UploadWarning]:
             code=W_REPORTED_NETWORK_SOLVE,
             message=(
                 "These k(T,P) were transcribed from a publication, not "
-                "derived here. The master-equation inputs behind them — state "
+                "derived here. The master-equation inputs behind them -- state "
                 "energies, channel barriers and the collisional "
-                "energy-transfer model — are not in this database, so the "
+                "energy-transfer model -- are not in this database, so the "
                 "rates cannot be re-derived, the fit cannot be checked, and "
                 "the network cannot be re-solved outside the reported "
                 "temperature and pressure range. The values are as "
@@ -473,7 +473,7 @@ def collect_network_energy_transfer_warnings(solve) -> list[UploadWarning]:
                 message=(
                     "Collisional energy transfer was declared once for the "
                     f"whole network and applied to {wells} and to the bath "
-                    "gas as a whole. ⟨ΔE⟩down is a property of a (well, "
+                    "gas as a whole. <dE>down is a property of a (well, "
                     "collider) pair, so this record does not resolve how it "
                     "varies between wells; that variation was not determined "
                     "by the run. Per-well declarations are preferred where "

@@ -361,7 +361,10 @@ def assert_geometry_composition_matches_identity(
     geometry_formula = format_element_counts(from_geometry) or "empty"
     identity_formula = (
         format_element_counts(from_smiles)
-        or "nothing at all — a free electron has no atoms"
+        # Not reported by scripts/check_runtime_ascii.py: the literal is bound
+        # to a local and only later interpolated into the raise below, which
+        # is past what a no-dataflow checker can follow. Fixed by hand.
+        or "nothing at all -- a free electron has no atoms"
     )
     raise CodedValueError(
         W_SPECIES_GEOMETRY_COMPOSITION_MISMATCH,
@@ -372,8 +375,8 @@ def assert_geometry_composition_matches_identity(
         "be made of the atoms its own identifier declares, or every number "
         "computed from it describes a different molecule. Hydrogens are "
         "counted explicitly on both sides, and isotope labels are counted as "
-        "their element — SMILES [2H] and the XYZ symbols D and T all count as "
-        "H — so an isotopologue is not a mismatch.",
+        "their element -- SMILES [2H] and the XYZ symbols D and T all count as "
+        "H -- so an isotopologue is not a mismatch.",
         context={
             "geometry_formula": geometry_formula,
             "identity_formula": identity_formula,

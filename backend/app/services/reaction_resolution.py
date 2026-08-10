@@ -359,9 +359,9 @@ def validate_reaction_charge_conservation(
             "is conserved across a reaction, so the two sides describe "
             "different numbers of electrons and cannot be the same reaction. "
             "A net charge is fine as long as both sides carry the same one. If "
-            "the process genuinely releases or consumes a free electron — "
+            "the process genuinely releases or consumes a free electron -- "
             "associative or dissociative attachment, photoionization, "
-            "photodetachment — declare the electron as a participant: "
+            "photodetachment -- declare the electron as a participant: "
             '{"molecule_kind": "electron", "smiles": "[e-]", "charge": -1, '
             '"multiplicity": 2}. It balances the charge and still leaves the '
             "elemental balance to be satisfied on its own terms.",
