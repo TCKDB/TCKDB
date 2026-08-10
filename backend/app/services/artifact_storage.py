@@ -506,9 +506,11 @@ def delete_artifact_object(
 ) -> None:
     """Delete an object previously written by :func:`store_artifact`.
 
-    Reserved for a future reference-aware garbage collector. Upload failure
-    paths must never call this directly: content-addressed keys may already be
-    shared by committed rows or concurrent transactions.
+    The second half of :func:`hold_artifact_object`, and nothing else may
+    call it. Upload failure paths in particular must not: a
+    content-addressed key can already be shared by committed rows or by a
+    concurrent transaction, so "the upload I was doing failed" is not
+    evidence that the object is unreferenced.
     """
     if client is None:
         client = _get_s3_client()
@@ -516,5 +518,87 @@ def delete_artifact_object(
     key = content_addressed_key(sha256)
     try:
         client.delete_object(Bucket=bucket, Key=key)
+    except ClientError:
+        pass
+
+
+#: Where reclaimed objects wait. Deliberately outside the two-hex-character
+#: content-addressed layout, so a held object can never be found by
+#: :func:`content_addressed_key` and therefore can never be deduplicated
+#: against or served.
+RECLAIM_HOLD_PREFIX = "reclaimed/"
+
+
+def reclaim_hold_key(sha256: str) -> str:
+    """The key an unreferenced object is moved to, never deleted from."""
+    return f"{RECLAIM_HOLD_PREFIX}{sha256}"
+
+
+def hold_artifact_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> bool:
+    """Move an unreferenced object out of the content-addressed namespace.
+
+    Copy first, delete second, and never the other way round. The point is
+    that reclaiming an orphan must not be able to destroy bytes: if the
+    caller's "nothing references this" turns out to have been wrong -- a
+    row committed a moment later, an upload that deduplicated against the
+    key between the check and the move -- the object is still there, under
+    a name an operator can put back. What the move *does* accomplish is
+    that the digest stops being deduplicable, which is what makes a later
+    purge of the hold safe rather than racy.
+
+    Returns ``False`` when the object was not there to move, which is the
+    normal outcome of two sweeps racing each other.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    source = content_addressed_key(sha256)
+    try:
+        client.copy_object(
+            Bucket=bucket,
+            Key=reclaim_hold_key(sha256),
+            CopySource={"Bucket": bucket, "Key": source},
+        )
+    except ClientError as exc:
+        code = str(exc.response.get("Error", {}).get("Code", ""))
+        if code in _MISSING_OBJECT_CODES:
+            return False
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage copy failed for sha={sha256}: "
+            f"{code or type(exc).__name__}"
+        ) from exc
+    except BotoCoreError as exc:
+        raise ArtifactStorageUnavailable(
+            f"Artifact storage copy failed for sha={sha256}: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+    delete_artifact_object(sha256, client=client, bucket=bucket)
+    return True
+
+
+def purge_held_object(
+    sha256: str,
+    *,
+    client=None,
+    bucket: str | None = None,
+) -> None:
+    """Delete an object from the reclaim hold. This is irreversible.
+
+    Safe in a way that deleting a content-addressed object is not: a held
+    object is not at its content-addressed key, so no upload can have
+    deduplicated against it and no row can have started pointing at it
+    since it was held. The only thing a purge can destroy is bytes that
+    were already unreachable.
+    """
+    if client is None:
+        client = _get_s3_client()
+    bucket = bucket or S3_BUCKET
+    try:
+        client.delete_object(Bucket=bucket, Key=reclaim_hold_key(sha256))
     except ClientError:
         pass

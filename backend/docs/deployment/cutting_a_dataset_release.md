@@ -159,10 +159,18 @@ publishing rather than shipping a release whose evidence TCKDB cannot produce.
 See `docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md` for
 how to read the row and tell the three causes apart.
 
-Note the current scope limit: `--release` covers the calculations a release
-selects **directly**, not the ones its selected thermo/kinetics/statmech rows
-cite as sources. Until that traversal exists, pair it with `--all --sample` for
-background coverage.
+`--release` covers what the release actually rests on: for every selection that
+still stands, the calculations that record cites through its
+`*_source_calculation` table — the same list the published release artifact
+prints as cited provenance — plus everything those calculations depend on,
+transitively. A release cannot select a calculation directly (the selectable
+record types are the six product/entry types), so that traversal is the whole
+of the scope; the command exits non-zero with `cites no calculations` rather
+than reporting a clean sweep over an empty set.
+
+Objects outside any release are still covered by nothing in particular. Pair
+this with `--all --sample 0.02` on a schedule if you want a detection-time
+distribution between releases.
 
 ---
 

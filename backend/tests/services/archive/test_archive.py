@@ -54,6 +54,7 @@ from tests.services.scientific_read._factories import (
     make_thermo_scalar,
     next_inchi_key,
 )
+from tests.services.test_artifact_integrity import _SessionProxy
 
 
 def _empty_archive_tables(session) -> None:
@@ -768,3 +769,69 @@ def test_release_artifact_content_is_archived_not_silently_dropped() -> None:
     table = Base.metadata.tables["release_artifact"]
     assert "content" in included_column_names(table)
     assert archive_core._supports_type(table.c.content.type)
+
+
+def test_restore_records_a_corrupt_twin_in_the_destination_store(
+    db_session, monkeypatch
+) -> None:
+    """The one moment TCKDB looks inside a store it is migrating *into*.
+
+    ``store_artifact`` re-reads an object already sitting at the
+    content-addressed key before attaching anything else to it, so an
+    ``ArtifactIntegrityError`` during restore means the *destination*
+    store holds a corrupt twin of a blob this archive carries. Aborting
+    is right -- restoring on top of it would bless bytes we cannot vouch
+    for -- but aborting alone threw the finding away, and this is the
+    only occasion on which TCKDB inspects that store's contents at all.
+    """
+    from app.db.models.calculation import ArtifactIntegrityEvent
+    from app.db.models.common import (
+        ArtifactIntegrityDetectionContext,
+        ArtifactIntegrityFinding,
+    )
+    from app.services.artifact_storage import ArtifactIntegrityError
+
+    content = b"blob whose twin in the destination has rotted"
+    sha = hashlib.sha256(content).hexdigest()
+    species = make_species(db_session, smiles="[Ne]", inchi_key=next_inchi_key("TWIN"))
+    entry = make_species_entry(db_session, species=species)
+    calculation = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id
+    )
+    attach_artifact(
+        db_session, calculation=calculation, sha256=sha, bytes_=len(content)
+    )
+    db_session.flush()
+
+    monkeypatch.setattr(
+        archive_core,
+        "load_artifact_bytes",
+        lambda sha256, *, expected_bytes=None: content,
+    )
+    archive_file = io.BytesIO()
+    write_archive(db_session, archive_file)
+
+    def _corrupt_twin(_content, sha256):
+        raise ArtifactIntegrityError(
+            f"Artifact digest verification failed for sha={sha256}",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=sha256,
+            observed_sha256="b" * 64,
+            observed_bytes=7,
+        )
+
+    monkeypatch.setattr(archive_core, "store_artifact", _corrupt_twin)
+    monkeypatch.setattr(
+        "app.services.artifact_integrity.head_artifact_object", lambda *a, **k: None
+    )
+    monkeypatch.setattr("app.api.deps.SessionLocal", _SessionProxy(db_session))
+    _empty_archive_tables(db_session)
+
+    with pytest.raises(ArtifactIntegrityError):
+        restore_archive(db_session, io.BytesIO(archive_file.getvalue()))
+
+    event = db_session.scalars(
+        select(ArtifactIntegrityEvent).where(ArtifactIntegrityEvent.sha256 == sha)
+    ).one()
+    assert event.detected_during is ArtifactIntegrityDetectionContext.archive
+    assert event.finding is ArtifactIntegrityFinding.digest_mismatch

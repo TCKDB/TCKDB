@@ -716,7 +716,23 @@ def restore_archive(
 
     artifact_uris: dict[str, str] = {}
     for sha256, content in sorted(blobs.items()):
-        artifact_uris[sha256] = store_artifact(content, sha256)
+        try:
+            artifact_uris[sha256] = store_artifact(content, sha256)
+        except ArtifactIntegrityError as exc:
+            # ``store_artifact`` verifies an object that is already in the
+            # destination store before attaching anything else to the
+            # shared content-addressed key. Reaching here means the store
+            # being restored *into* holds a corrupt twin of a blob this
+            # archive carries. Aborting is right — restoring on top of it
+            # would bless bytes we cannot vouch for — but the abort alone
+            # threw away the one moment TCKDB discovered corruption in
+            # that store. Record it, then fail as loudly as before
+            # (ADR 0014).
+            record_from_error(
+                exc,
+                detected_during=ArtifactIntegrityDetectionContext.archive,
+            )
+            raise
 
     transaction = session.begin_nested() if session.in_transaction() else session.begin()
     with transaction:
