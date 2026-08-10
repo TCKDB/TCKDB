@@ -963,8 +963,9 @@ CHECK_STORED_ARTIFACT_BYTES_MATCH_THEIR_DIGEST = ScientificCheck(
                 "against the content-addressed key, in constant time. This "
                 "is the detection; it is reached by the approved-byte "
                 "download, the ESS-parameter backfill, archive streaming, "
-                "and the operator verification pass, and by nothing else — "
-                "an object none of those touch is never checked."
+                "the reproducibility rubric's re-read of a graded output "
+                "log, and the operator verification pass, and by nothing "
+                "else — an object none of those touch is never checked."
             ),
         ),
         PythonCheck(
