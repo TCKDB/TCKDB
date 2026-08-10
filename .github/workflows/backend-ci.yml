@@ -203,6 +203,17 @@ jobs:
         if: matrix.gate == 'scientific'
         run: conda run -n tckdb_env bash backend/scripts/test-scientific.sh --maxfail=5
 
+      # The MCP integration is a consumer of the backend's error contract
+      # and had no CI job at all, so nothing stopped a change here from
+      # silently flattening every scientific refusal back into one code.
+      # It needs no database and no extra install -- httpx and pytest are
+      # already in the environment, and `pythonpath = ["src"]` in the
+      # package's own pyproject puts the sources on the path.
+      - name: MCP integration gate
+        if: matrix.gate == 'api'
+        working-directory: integrations/mcp
+        run: conda run -n tckdb_env pytest -q
+
   backend-ci:
     name: Backend CI
     needs: backend-gate
