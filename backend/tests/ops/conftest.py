@@ -22,6 +22,8 @@ import pytest
 
 OPS_DIR = Path(__file__).resolve().parents[2] / "scripts" / "ops"
 ALERT_CHECK = OPS_DIR / "tckdb_alert_check.sh"
+CI_WATCHDOG = OPS_DIR / "tckdb_ci_watchdog.sh"
+WORKFLOWS_DIR = Path(__file__).resolve().parents[3] / ".github" / "workflows"
 
 #: Every external binary tckdb_alert_check.sh requires, minus jq. Used to build
 #: a PATH on which jq genuinely does not exist. ``hostname`` is deliberately
@@ -65,6 +67,9 @@ class FakeHost:
     status_response: tuple[int, str] = (200, "")
     #: Paths that answer 500, used to prove failed publishes are retried.
     failing_paths: set[str] = field(default_factory=set)
+    #: Canned JSON answers keyed by path prefix, for the GitHub API stand-in.
+    #: Longest prefix wins, and the query string is ignored when matching.
+    json_routes: dict[str, tuple[int, str]] = field(default_factory=dict)
 
     @property
     def base(self) -> str:
@@ -72,6 +77,9 @@ class FakeHost:
 
     def set_status(self, payload: dict, code: int = 200) -> None:
         self.status_response = (code, json.dumps(payload))
+
+    def set_json(self, prefix: str, payload: object, code: int = 200) -> None:
+        self.json_routes[prefix] = (code, json.dumps(payload))
 
     def paths(self, prefix: str) -> list[Request]:
         return [r for r in self.requests if r.path.startswith(prefix)]
@@ -98,6 +106,15 @@ def fake_host():
                 self.end_headers()
                 self.wfile.write(b"nope")
                 return
+            bare = self.path.split("?", 1)[0]
+            for prefix in sorted(host.json_routes, key=len, reverse=True):
+                if bare.startswith(prefix):
+                    code, body = host.json_routes[prefix]
+                    self.send_response(code)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(body.encode("utf-8"))
+                    return
             if self.path.startswith("/status"):
                 code, body = host.status_response
                 self.send_response(code)
@@ -182,4 +199,40 @@ def run_alert_check(fake_host, tmp_path):
         return proc
 
     _run.state_file = state_file
+    return _run
+
+
+@pytest.fixture
+def run_ci_watchdog(fake_host, tmp_path):
+    """Run tckdb_ci_watchdog.sh against the fake host and return the result.
+
+    The GitHub API is a stand-in served by the same socket as ntfy and the
+    dead man, so a test can assert on exactly what the watchdog sent and to
+    where -- which is the only claim about a notifier worth making.
+    """
+
+    state_dir = tmp_path / "watchdog-state"
+
+    def _run(*, env_overrides: dict | None = None):
+        env = {
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": str(tmp_path),
+            "TCKDB_GH_API_BASE": f"{fake_host.base}/gh",
+            "TCKDB_NTFY_SERVER": f"{fake_host.base}/ntfy",
+            "TCKDB_NTFY_TOPIC": "test-topic",
+            "TCKDB_WATCH_REPO": "TCKDB/TCKDB",
+            "TCKDB_WATCH_BRANCH": "main",
+            "TCKDB_WATCHDOG_STATE_DIR": str(state_dir),
+            "TCKDB_WATCHED_WORKFLOWS": "backend-nightly.yml:30",
+        }
+        env.update(env_overrides or {})
+        return subprocess.run(
+            ["bash", str(CI_WATCHDOG)],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=120,
+        )
+
+    _run.state_dir = state_dir
     return _run

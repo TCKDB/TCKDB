@@ -1,0 +1,117 @@
+name: ci-watchdog
+
+# Makes a scheduled workflow's failure -- and its SILENCE -- reach a phone.
+#
+# THE HOLE THIS FILLS
+#   backend-nightly.yml is the only job that runs the third of the test suite
+#   the two PR gates never touch. On 2026-08-10 it was found to have failed on
+#   every run back to 2026-07-31: eleven consecutive nights, conclusion
+#   `failure` each time, and nothing anywhere said so. GitHub does not email
+#   about a red scheduled run, the Actions tab is not a place anyone passes
+#   daily, and a red nightly leaves no mark on any PR. The suite was still
+#   being paid for; it had simply stopped being read.
+#
+#   The second, worse case is a workflow that stops running at all. GitHub
+#   disables scheduled workflows in a repository with 60 days of no commit
+#   activity, and uptime-check.yml -- the dead man's switch for the deployed
+#   instance -- carries exactly the same exposure. A workflow that has stopped
+#   firing produces no failures, so anything that only watches for failures
+#   reports it as healthy. Both watched workflows are therefore checked for
+#   FRESHNESS as well as for verdict.
+#
+# WHAT WATCHES THE WATCHDOG
+#   Nothing in GitHub. This job is itself scheduled, so the 60-day disable
+#   takes it down alongside the workflows it watches -- the same failure
+#   domain, which is the one thing monitoring must not share. That is closed
+#   the same way the Pi-side checker closes it: an external dead man's switch
+#   (TCKDB_DEADMAN_URL, a healthchecks.io ping URL) which alerts when the
+#   pings STOP. Until that secret exists this job says so in its own log every
+#   run, and the gap is real. See backend/docs/deployment/monitoring.md.
+#
+# SETUP
+#   gh secret set TCKDB_NTFY_TOPIC --repo TCKDB/TCKDB       # already present
+#   gh secret set TCKDB_DEADMAN_URL --repo TCKDB/TCKDB      # optional, recommended
+#   The topic is password-equivalent and this repository is public: it lives
+#   only in the secret, is read into the environment rather than interpolated
+#   into a command line, and must never be written into a file here.
+
+on:
+  schedule:
+    # Late enough that a nightly which started at 02:17 UTC, drifted by three
+    # hours and then ran for its full two-hour timeout has still finished and
+    # been given a conclusion before this job looks at it.
+    - cron: "23 9 * * *"
+  workflow_dispatch:
+
+# Never two at once: overlapping runs would both see the same edge and both
+# push, and the second would then write the state the first had already
+# advanced.
+concurrency:
+  group: ci-watchdog
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  watch:
+    if: github.repository == 'TCKDB/TCKDB'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      # The edge-trigger state. A hosted runner has no disk that survives, so
+      # the "what have I already said" marker rides in the Actions cache.
+      # Losing it is benign by construction: an empty state makes the next bad
+      # verdict look like a fresh edge, so the worst case is one duplicate
+      # push -- never a missed one.
+      - name: Restore watchdog state
+        id: state
+        uses: actions/cache/restore@v4
+        with:
+          path: .watchdog-state
+          key: ci-watchdog-state-${{ github.run_id }}
+          restore-keys: |
+            ci-watchdog-state-
+
+      - name: Check the watched workflows and alert on failure or silence
+        id: watch
+        env:
+          # Read into the environment rather than interpolated into a command,
+          # so the topic never appears in a rendered command line. This
+          # repository is public; GitHub masks secret values in logs, but the
+          # safe habit is not to put them anywhere that gets echoed.
+          TCKDB_NTFY_TOPIC: ${{ secrets.TCKDB_NTFY_TOPIC }}
+          TCKDB_DEADMAN_URL: ${{ secrets.TCKDB_DEADMAN_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TCKDB_WATCH_REPO: ${{ github.repository }}
+          TCKDB_WATCH_BRANCH: main
+          TCKDB_WATCHDOG_STATE_DIR: .watchdog-state
+          # backend-nightly.yml is daily; GitHub's cron has been observed to
+          # drift by three hours, so 30h is silence rather than lateness.
+          # uptime-check.yml is every 15 minutes; high-frequency schedules are
+          # dropped under load often enough that a short threshold would page
+          # on GitHub's queue rather than on a real fault, so it gets 6h of
+          # total silence before it counts.
+          TCKDB_WATCHED_WORKFLOWS: "backend-nightly.yml:30 uptime-check.yml:6"
+        run: |
+          if [ -z "${TCKDB_NTFY_TOPIC}" ]; then
+            echo "::error::TCKDB_NTFY_TOPIC is not set, so this watchdog cannot alert anyone."
+            exit 1
+          fi
+          bash backend/scripts/ops/tckdb_ci_watchdog.sh
+
+      # always(): the state must be kept even when the run ends red, which is
+      # the normal outcome while a watched workflow is broken. Skipping the
+      # save on failure would re-announce the same breakage every single day,
+      # which is the noise this design exists to avoid.
+      - name: Save watchdog state
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .watchdog-state
+          key: ci-watchdog-state-${{ github.run_id }}

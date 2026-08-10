@@ -298,6 +298,91 @@ which runs the real script as a subprocess against a fake host and asserts what
 reaches the outside world on each broken path — including that a checker which
 refuses to start sends nothing.
 
+## The same problem, one level out: monitoring CI
+
+Everything above watches the deployment. The *tests* have the identical hole,
+and it went unnoticed for longer.
+
+`.github/workflows/backend-nightly.yml` runs the full suite at 02:17 UTC. It is
+the only job covering the third of the suite the two PR gates never touch, so
+it is the only thing standing between that third and silent rot. On 2026-08-10
+it was found to have failed on **every run back to 2026-07-31** — eleven
+consecutive nights, conclusion `failure` each time — and nobody knew. GitHub
+does not email about a red scheduled run, a red nightly leaves no mark on any
+PR, and the Actions tab is not somewhere anyone passes daily. The suite was
+still being paid for; it had simply stopped being read.
+
+`.github/workflows/ci-watchdog.yml` closes that, and it is shaped by the same
+three rules as the deployment alerting:
+
+**It watches for silence as well as for failure.** A workflow that stops
+running produces no failures, so anything that only watches for failures
+reports it as healthy — the same shape as a dead checker looking like a healthy
+Pi. GitHub disables scheduled workflows in a repository with 60 days of no
+commit activity, and `uptime-check.yml` — the dead man's switch for the
+deployment itself — carries exactly that exposure. So each watched workflow
+gets an expected cadence, and a run older than it is a fault in its own right:
+
+| Watched | Expected | Silent after |
+|---|---|---|
+| `backend-nightly.yml` | daily | 30h (GitHub's cron has drifted 3h here) |
+| `uptime-check.yml` | every 15 min | 6h (high-frequency crons are dropped under load) |
+
+**It is edge triggered.** Eleven identical failures must not become eleven
+identical pushes. A notification goes out when the verdict *changes* —
+green→red, red→green, running→silent — plus one reminder per seven further
+consecutive failures so a long breakage does not fade back into silence. The
+marker rides in the Actions cache, since a hosted runner keeps no disk; losing
+it is benign by construction, because an empty state makes the next bad verdict
+look like a fresh edge, so the worst case is one duplicate push and never a
+missed one.
+
+**It advances that marker only after ntfy accepts the push,** for the same
+reason the Pi-side checker does.
+
+The push names the workflow, the branch, the consecutive-failure count, the
+commit, the failing job and step, and links the run — because "nightly failed"
+with nothing to act on is how people learn to ignore an alert, which is the
+thing being fixed.
+
+### What watches the watchdog
+
+Nothing in GitHub. `ci-watchdog.yml` is itself a scheduled workflow, so the
+60-day disable takes it down alongside the workflows it watches: the same
+failure domain, which is the one thing monitoring must not share. Close it the
+way the Pi-side checker closes it — an external dead man's switch:
+
+```bash
+# healthchecks.io check, period 1 day, grace 6 hours
+gh secret set TCKDB_DEADMAN_URL --repo TCKDB/TCKDB
+```
+
+Until that secret exists the job says so in its own log on every run, and the
+gap is real rather than covered. (GitHub does email the repository owner before
+disabling scheduled workflows for inactivity, which is a backstop, not a
+monitor.)
+
+### Proving it, rather than assuming
+
+The same ten minutes as everything else on this page. The script takes its
+GitHub API base, its ntfy server and its state directory from the environment,
+so it can be pointed anywhere:
+
+```bash
+export TCKDB_NTFY_TOPIC="tckdb-scratch-$(head -c 6 /dev/urandom | base32 | tr '[:upper:]' '[:lower:]')"
+export GH_TOKEN="$(gh auth token)"
+export TCKDB_WATCHDOG_STATE_DIR=/tmp/watchdog-state
+bash backend/scripts/ops/tckdb_ci_watchdog.sh          # expect a push
+curl -s "https://ntfy.sh/${TCKDB_NTFY_TOPIC}/json?poll=1" | jq -r .message
+bash backend/scripts/ops/tckdb_ci_watchdog.sh          # expect silence
+```
+
+`backend/tests/ops/test_ci_watchdog.py` runs the real script as a subprocess
+against a fake GitHub API and a fake ntfy, and asserts what leaves the machine
+on each path — including that an unreadable or wrong-shaped run history is
+reported loudly rather than read as green, which is the one way this watchdog
+could quietly vouch against the outage it exists to find.
+
 ## Redeploying elsewhere
 
 Everything above is three files in the repo — the script and the two units —
