@@ -34,9 +34,13 @@ __all__ = [
 #: ``D`` is deuterium and ``T`` is tritium.
 #:
 #: They are legal, common XYZ tokens — Gaussian, ORCA, Molpro and CFOUR all
-#: emit or accept them — and ``geometry_atom.element`` stores whatever the
-#: depositor's XYZ said, verbatim (see :func:`app.chemistry.geometry.parse_xyz`).
-#: Anything that *counts elements* must therefore resolve them to ``H`` first
+#: emit or accept them — and ``geometry_atom.element`` keeps them. Ingestion
+#: canonicalises the *case* of every symbol it stores
+#: (:func:`app.chemistry.geometry.normalize_element_symbol`, applied in
+#: :func:`app.chemistry.geometry.parse_xyz`) and deliberately stops there: a
+#: ``D`` collapsed to ``H`` at deposit time would destroy the depositor's own
+#: isotope labelling, which is a fact about the deposit rather than a spelling
+#: of one. Anything that *counts elements* must therefore resolve them to ``H``
 #: (:func:`app.chemistry.geometry.resolve_element_symbol`), or it refuses a
 #: correctly deposited isotopologue for spelling its hydrogens the way its ESS
 #: did — which ADR 0008 puts out of bounds for a blocking check.
@@ -51,6 +55,15 @@ HYDROGEN_ISOTOPE_SYMBOLS: dict[str, int] = {"D": 2, "T": 3}
 
 def _periodic_table() -> Chem.PeriodicTable:
     return Chem.GetPeriodicTable()
+
+
+# The `.capitalize()` calls below survive the move of case canonicalisation into
+# `parse_xyz`. They are not comparison-time patches over a verbatim column: they
+# adapt an arbitrary caller-supplied symbol to RDKit's periodic table, which is
+# case-sensitive and raises on `CL`. These are exported helpers that take
+# `element: str` from SMILES, from geometry payloads and from callers that have
+# not been through `parse_xyz`, so RDKit is the "other side" that
+# `normalize_element_symbol` exists to line up with.
 
 
 def most_common_isotope(element: str) -> int | None:

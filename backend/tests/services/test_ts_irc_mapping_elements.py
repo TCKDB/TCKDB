@@ -351,8 +351,11 @@ def test_an_isotopologue_written_with_D_is_not_a_mismatch(db_session) -> None:
     """``D`` in an XYZ is hydrogen, and a blocking check may not say otherwise.
 
     Gaussian, ORCA, Molpro and CFOUR all emit or accept ``D``/``T`` for
-    hydrogen's isotopes, and ``geometry_atom.element`` stores them verbatim by
-    design. The SMILES side spells the same nucleus ``[2H]``. Both sides are
+    hydrogen's isotopes, and ``geometry_atom.element`` keeps them by design:
+    ingestion canonicalises the *case* of a symbol and stops there, because a
+    ``D`` collapsed to ``H`` at deposit time would destroy the depositor's own
+    isotope labelling. The SMILES side spells the same nucleus ``[2H]``. Both
+    sides are
     counted through ``resolve_element_symbol``, so the two agree; comparing raw
     symbols would read a perfectly ordinary deuterated saddle point as
     containing an element its participants never mention.

@@ -483,12 +483,17 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
     escape_hatch=(
         "Case is not load-bearing. The comparison is deliberately "
         "case-insensitive because the two ends quote two different "
-        "geometries, and a geometry stores the symbol its depositor's XYZ "
-        "wrote — carbon becoming nitrogen is a contradiction, while ``Cl`` "
+        "geometries and nothing guarantees they spell an element the same "
+        "way — carbon becoming nitrogen is a contradiction, while ``Cl`` "
         "becoming ``CL`` is one program shouting where another did not. "
-        "Isotope mass number is deliberately *not* carried across the same "
-        "way, because a NULL disables a MATCH SIMPLE foreign key; isotope "
-        "consistency is checked in the service layer instead."
+        "``b4e7c1d20f83`` canonicalises the symbol on the way into "
+        "``geometry_atom.element``, which makes disagreement rare on rows "
+        "written through the API; it is a convention rather than a "
+        "constraint, so both the database check and the Python check still "
+        "normalise instead of assuming it. Isotope mass number is "
+        "deliberately *not* carried across the same way, because a NULL "
+        "disables a MATCH SIMPLE foreign key; isotope consistency is checked "
+        "in the service layer instead."
     ),
 )
 

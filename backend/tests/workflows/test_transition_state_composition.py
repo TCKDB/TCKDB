@@ -290,12 +290,17 @@ def test_a_saddle_point_whose_xyz_shouts_its_elements_is_accepted(
 ) -> None:
     """``CL`` and ``c`` are ``Cl`` and ``C``, and this check must know it.
 
-    ``geometry_atom.element`` holds the depositor's XYZ symbol verbatim, while
+    The deposit is what an ESS that shouts its halogens actually writes, and
     the reactant side of the comparison comes from RDKit's title-case
-    ``GetSymbol()``. Comparing the two raw makes a correct saddle point read as
-    ``CCLHHH`` against a reaction of ``CH3Cl`` and refuses it — rejecting
+    ``GetSymbol()``. Comparing the two raw made a correct saddle point read as
+    ``CCLHHH`` against a reaction of ``CH3Cl`` and refused it — rejecting
     correct chemistry over capitalisation, which ADR 0008 disqualifies a
     blocking check from doing.
+
+    Since ``b4e7c1d20f83`` the shouting is settled before the comparison rather
+    than inside it: ``parse_xyz`` canonicalises the case on the way into
+    ``geometry_atom.element``. The deposit under test is unchanged, and so is
+    what it must be allowed to do.
     """
     with _isolated_session(db_conn) as session:
         result = _upload(session, _chlorine_bundle(ts_xyz=_XYZ_TS_MIXED_CASE))

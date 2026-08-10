@@ -903,12 +903,15 @@ def _transition_state_element_counts(
     Both branches are resolved through
     :func:`~app.chemistry.geometry.resolve_element_symbol` before they are
     counted, and so is the reactant side, because the two sources spell
-    elements differently by construction: ``geometry_atom.element`` holds
-    whatever the depositor's XYZ said, while ``_element_counts_for_species``
-    reads RDKit's title-case ``GetSymbol()``. Comparing them raw makes a saddle
-    point written ``CL``, ``c`` or ``D`` contradict a reaction it is in fact
-    made of, which refuses correct chemistry over a string — the failure ADR
-    0008 puts out of bounds for a blocking check.
+    elements differently by construction: ``geometry_atom.element`` holds the
+    depositor's isotope labelling, while ``_element_counts_for_species`` reads
+    RDKit's title-case ``GetSymbol()``. Comparing them raw makes a saddle point
+    written ``CL``, ``c`` or ``D`` contradict a reaction it is in fact made of,
+    which refuses correct chemistry over a string — the failure ADR 0008 puts
+    out of bounds for a blocking check. ``b4e7c1d20f83`` canonicalises the case
+    at ingestion, which makes ``CL`` and ``c`` rare here rather than absent;
+    ``D`` and ``T`` are preserved on purpose and are never absent. Both halves
+    of the resolution therefore stay.
     """
 
     if transition_state_geometry_id is not None:

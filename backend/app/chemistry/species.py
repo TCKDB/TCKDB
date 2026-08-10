@@ -201,12 +201,15 @@ def element_counts_from_smiles(smiles: str) -> Counter[str]:
       (:func:`app.services.species_resolution.assert_geometry_isotopes_match_identity`).
     * **Symbols are resolved to elements** through
       :func:`~app.chemistry.geometry.resolve_element_symbol`, because the other
-      side of every comparison is an XYZ element stored verbatim: ESS codes
-      disagree about capitalisation (``CL``, ``cl``) and write hydrogen's
-      isotopes as elements (``D``, ``T``). RDKit's ``GetSymbol()`` produces
-      neither spelling, so this call is a no-op on this side — it is here so
-      that both sides of every comparison are counted by one rule rather than
-      two that must be remembered to agree.
+      side of every comparison is an XYZ element column that ESS codes fill in
+      their own spelling: they disagree about capitalisation (``CL``, ``cl``)
+      and write hydrogen's isotopes as elements (``D``, ``T``).
+      ``b4e7c1d20f83`` canonicalises the case on the way in, which makes the
+      first of those rare rather than impossible — it is a convention, not a
+      constraint — and deliberately preserves the second. RDKit's
+      ``GetSymbol()`` produces neither spelling, so this call is a no-op on
+      this side — it is here so that both sides of every comparison are counted
+      by one rule rather than two that must be remembered to agree.
 
     :param smiles: SMILES string to count.
     :returns: Mapping of element symbol to atom count.

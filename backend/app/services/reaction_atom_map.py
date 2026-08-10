@@ -265,13 +265,24 @@ def persist_reaction_atom_map(
                     context={"ts_atom_index": ts_atom_index},
                     message_prefix=False,
                 )
-            # Compared normalised, stored raw. The two ends quote two
-            # geometries, each of which stores the element symbol its own XYZ
-            # wrote: ``Cl`` and ``CL`` are one element written by two
-            # programs, and refusing that map would reject correct chemistry
-            # over a capital letter, which ADR 0008 puts out of bounds for a
-            # blocking check. Carbon becoming nitrogen still cannot be what it
-            # says it is, and still blocks.
+            # Compared normalised, and it stays that way even though
+            # `parse_xyz` now canonicalises the case at ingestion.
+            #
+            # Ingestion canonicalisation is a *convention held by application
+            # code*, not an invariant the database enforces: no CHECK
+            # constraint requires `geometry_atom.element` to be canonical, so
+            # anything that writes the table without going through `parse_xyz`
+            # -- a restore from a backup older than ``b4e7c1d20f83``, a bulk
+            # import, a future write path -- can put `CL` back. This is a
+            # blocking check, so it has to be correct on rows this process
+            # never wrote. Dropping the normalisation would make it refuse a
+            # perfectly correct map over a capital letter on exactly those
+            # rows, which is what ADR 0008 disqualifies a blocking check from
+            # doing.
+            #
+            # On canonical input it is a no-op, so correctness here costs
+            # nothing. Carbon becoming nitrogen still cannot be what it says it
+            # is, and still blocks.
             if normalize_element_symbol(element) != normalize_element_symbol(
                 ts_element
             ):
@@ -301,7 +312,10 @@ def persist_reaction_atom_map(
                     ts_atom_index=ts_atom_index,
                     # Each end stores what its own geometry stores, so both
                     # composite foreign keys into ``geometry_atom`` resolve
-                    # even when the two geometries disagree about case.
+                    # even where the two geometries disagree about case. On a
+                    # deposit that came through `parse_xyz` they now agree, but
+                    # the write path must not assume it any more than the
+                    # comparison above does.
                     element=element,
                     ts_element=ts_element,
                 )
@@ -583,7 +597,10 @@ def _element_index(
     geometry's foreign key exactly as that geometry spells it; callers
     normalise through
     :func:`~app.chemistry.geometry.normalize_element_symbol` when they
-    *compare*.
+    *compare*. :func:`~app.chemistry.geometry.parse_xyz` canonicalises the case
+    on the way in, so in practice the stored value is already canonical — but
+    nothing in the schema requires it to be, so a caller that compares must
+    still normalise.
     """
 
     rows = session.execute(

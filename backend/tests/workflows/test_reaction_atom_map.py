@@ -23,11 +23,18 @@ from typing import Iterator
 
 import pytest
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.reaction_atom_map import (
+    W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
+    ReactionAtomMapIn,
+)
 
+from app.api.error_contract import CodedValueError
 from app.db.models.app_user import AppUser
 from app.db.models.common import AtomMapSource, ReactionRole
+from app.db.models.geometry import Geometry, GeometryAtom
+from app.db.models.reaction import ReactionEntryStructureParticipant
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
 from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionUploadRequest,
@@ -36,6 +43,8 @@ from app.services.reaction_atom_map import (
     W_ATOM_MAP_ATOMS_INCOMPLETE,
     W_ATOM_MAP_PARTICIPANTS_INCOMPLETE,
     W_MISSING_REACTION_ATOM_MAP,
+    ResolvedAtomMapParticipant,
+    persist_reaction_atom_map,
 )
 from app.workflows.computed_reaction import persist_computed_reaction_upload
 
@@ -787,9 +796,9 @@ def test_same_participant_mapped_twice_is_refused(db_conn) -> None:
 # ---------------------------------------------------------------------------
 
 #: Methyl and the saddle point, with the same atoms written in different case.
-#: ``geometry_atom.element`` stores the depositor's symbol verbatim, so this is
-#: what a reactant optimised in one program and a saddle point located in
-#: another actually looks like once both are in the database.
+#: This is what a reactant optimised in one program and a saddle point located
+#: in another look like as *deposited*; ``geometry.xyz_text`` keeps both
+#: spellings, and ``geometry_atom.element`` canonicalises them.
 _XYZ_CH3_LOWER = (
     "4\nmethyl, elements whispered\n"
     "c  0.000  0.000  0.000\n"
@@ -804,12 +813,23 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
 ) -> None:
     """``c`` and ``C`` are one element, and a map across them is one map.
 
-    Both ends of a pair quote a *different* geometry, and each geometry stores
-    the element symbol its own XYZ wrote. If the two ends are compared raw, or
-    forced through one shared column, then a depositor whose reactant came out
-    of a program that writes ``c`` and whose saddle point came out of one that
-    writes ``C`` cannot record a correct map at all — refused for a capital
-    letter, which is the failure ADR 0008 puts out of bounds.
+    Both ends of a pair quote a *different* geometry. A depositor whose
+    reactant came out of a program that writes ``c`` and whose saddle point
+    came out of one that writes ``C`` must be able to record a correct map;
+    refusing it for a capital letter is the failure ADR 0008 puts out of
+    bounds.
+
+    On the *deposit* path the two spellings no longer reach the comparison:
+    ``parse_xyz`` canonicalises the symbol before it becomes a
+    ``geometry_atom`` row, so both ends of the pair store ``C``. The deposited
+    ``c`` is still readable — it survives in ``geometry.xyz_text``, which is
+    asserted here too, because that column is what ``geom_hash`` is taken over
+    and rewriting a symbol in it would re-key a published geometry.
+
+    That is the *common* case, not a guarantee. See
+    :func:`test_a_map_across_a_stored_symbol_that_is_not_canonical_is_accepted`
+    for the same rule holding on a row that did not come through ``parse_xyz``,
+    which is what the comparison-time normalisation is for.
 
     The map here is the same map as everywhere else in this module; only the
     methyl geometry's capitalisation differs.
@@ -832,7 +852,8 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
         assert len(pairs) == 10
 
         # Each end kept the spelling of the geometry it points at, which is
-        # what lets both composite foreign keys into ``geometry_atom`` resolve.
+        # what lets both composite foreign keys into ``geometry_atom`` resolve
+        # -- and both geometries now spell it the same canonical way.
         methyl_carbon = next(
             pair
             for pair in pairs
@@ -841,8 +862,247 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
             and pair.atom_index == 1
             and pair.ts_atom_index == 1
         )
+        assert methyl_carbon.element.strip() == "C"
+        assert methyl_carbon.ts_element.strip() == "C"
+
+        # The stored atom is canonical...
+        methyl_atoms = session.execute(
+            select(GeometryAtom.atom_index, GeometryAtom.element)
+            .where(GeometryAtom.geometry_id == methyl_carbon.geometry_id)
+            .order_by(GeometryAtom.atom_index)
+        ).all()
+        assert [element.strip() for _index, element in methyl_atoms] == [
+            "C",
+            "H",
+            "H",
+            "H",
+        ]
+
+        # ...and the deposit still reads back as it was written.
+        methyl_geometry = session.get(Geometry, methyl_carbon.geometry_id)
+        assert methyl_geometry is not None
+        assert methyl_geometry.xyz_text is not None
+        assert [
+            line.split()[0] for line in methyl_geometry.xyz_text.splitlines()[2:]
+        ] == ["c", "h", "h", "h"]
+
+
+#: Which bundle-local species key sits in which ``(side, participant_index)``
+#: slot of :func:`_complete_map`. Needed to rebuild the resolved participants
+#: that :func:`persist_reaction_atom_map` takes, when calling it directly.
+_SPECIES_KEY_BY_SLOT = {
+    (ReactionRole.reactant, 1): "ch3",
+    (ReactionRole.reactant, 2): "h",
+    (ReactionRole.product, 1): "ch4",
+}
+
+
+def test_a_map_across_a_stored_symbol_that_is_not_canonical_is_accepted(
+    db_conn,
+) -> None:
+    """The blocking rule must hold on rows this process did not write.
+
+    ``parse_xyz`` canonicalises the element on the way into ``geometry_atom``,
+    and ``b4e7c1d20f83`` brought the older rows into line — but that is a
+    convention held by application code, not an invariant. **No CHECK
+    constraint requires the column to be canonical**, so a restore from a
+    backup older than that revision, a bulk import, or any future write path
+    that does not call ``parse_xyz`` can leave ``CL`` in the table. A blocking
+    check has to be correct on those rows too: refusing a correct map because
+    one geometry shouts its carbon is refusing correct chemistry over a capital
+    letter, which ADR 0008 puts out of bounds.
+
+    The non-canonical row is written **directly**, bypassing ``parse_xyz``,
+    because that is the only way such a row can exist now — which is exactly
+    the point. The map is then persisted against it through the real service
+    entry point.
+
+    This test is the one that fails if the comparison-time normalisation is
+    ever removed on the strength of ingestion canonicalising.
+    """
+    payload = _payload()
+    payload["atom_map"] = _complete_map()
+
+    with _isolated_session(db_conn) as session:
+        result = _upload(session, payload)
+
+        atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
+        assert atom_map is not None
+        pairs = session.scalars(
+            select(ReactionAtomMapPair).where(
+                ReactionAtomMapPair.atom_map_id == atom_map.id
+            )
+        ).all()
+        geometry_id_by_participant = {
+            pair.structure_participant_id: pair.geometry_id for pair in pairs
+        }
+        ts_geometry_id = atom_map.transition_state_geometry_id
+
+        participant_rows = session.scalars(
+            select(ReactionEntryStructureParticipant).where(
+                ReactionEntryStructureParticipant.reaction_entry_id
+                == result["reaction_entry_id"]
+            )
+        ).all()
+        participants = [
+            ResolvedAtomMapParticipant(
+                side=row.role,
+                species_key=_SPECIES_KEY_BY_SLOT[(row.role, row.participant_index)],
+                participant_index=row.participant_index,
+                structure_participant_id=row.id,
+            )
+            for row in participant_rows
+        ]
+        geometry_id_by_key = {
+            f"{participant.species_key}-geom": geometry_id_by_participant[
+                participant.structure_participant_id
+            ]
+            for participant in participants
+        }
+        geometry_id_by_key["ts-geom"] = ts_geometry_id
+
+        methyl_geometry_id = geometry_id_by_key["ch3-geom"]
+
+        # Clear the map so the same one can be written again; the composite
+        # foreign keys read `geometry_atom.element`, so the pairs have to go
+        # before the atom rows can be rewritten.
+        for pair in pairs:
+            session.delete(pair)
+        session.delete(atom_map)
+        session.flush()
+
+        # The row `parse_xyz` can no longer produce, written the only way it
+        # can now arrive: directly.
+        session.execute(
+            update(GeometryAtom)
+            .where(
+                GeometryAtom.geometry_id == methyl_geometry_id,
+                GeometryAtom.atom_index == 1,
+            )
+            .values(element="c")
+        )
+        session.flush()
+        assert session.scalar(
+            select(GeometryAtom.element).where(
+                GeometryAtom.geometry_id == methyl_geometry_id,
+                GeometryAtom.atom_index == 1,
+            )
+        ).strip() == "c"
+
+        # The saddle point still spells it `C`. Nothing may refuse this.
+        rewritten = persist_reaction_atom_map(
+            session,
+            ReactionAtomMapIn(**_complete_map()),
+            reaction_entry_id=result["reaction_entry_id"],
+            transition_state_entry_id=result["transition_state_entry_id"],
+            transition_state_geometry_id=ts_geometry_id,
+            participants=participants,
+            geometry_id_by_key=geometry_id_by_key,
+            created_by=_USER_ID,
+        )
+        session.flush()
+
+        assert rewritten is not None
+        rewritten_pairs = session.scalars(
+            select(ReactionAtomMapPair).where(
+                ReactionAtomMapPair.atom_map_id == rewritten.id
+            )
+        ).all()
+        assert len(rewritten_pairs) == 10
+
+        # Each end still stores its own geometry's spelling, which is what
+        # keeps both composite foreign keys resolvable across the disagreement.
+        methyl_carbon = next(
+            pair
+            for pair in rewritten_pairs
+            if pair.side is ReactionRole.reactant
+            and pair.geometry_id == methyl_geometry_id
+            and pair.atom_index == 1
+        )
         assert methyl_carbon.element.strip() == "c"
         assert methyl_carbon.ts_element.strip() == "C"
+
+
+def test_a_non_canonical_stored_symbol_does_not_blunt_the_element_rule(
+    db_conn,
+) -> None:
+    """Normalising a stored symbol must not stop carbon-to-nitrogen blocking.
+
+    The companion to the test above: tolerating case must buy tolerance of
+    case and nothing else. Here the saddle point really is a different element
+    from the reactant atom mapped onto it, spelled in the awkward case, and it
+    still blocks.
+    """
+    payload = _payload()
+    payload["atom_map"] = _complete_map()
+
+    with _isolated_session(db_conn) as session:
+        result = _upload(session, payload)
+
+        atom_map = session.get(ReactionAtomMap, result["atom_map_id"])
+        assert atom_map is not None
+        pairs = session.scalars(
+            select(ReactionAtomMapPair).where(
+                ReactionAtomMapPair.atom_map_id == atom_map.id
+            )
+        ).all()
+        geometry_id_by_participant = {
+            pair.structure_participant_id: pair.geometry_id for pair in pairs
+        }
+        ts_geometry_id = atom_map.transition_state_geometry_id
+
+        participant_rows = session.scalars(
+            select(ReactionEntryStructureParticipant).where(
+                ReactionEntryStructureParticipant.reaction_entry_id
+                == result["reaction_entry_id"]
+            )
+        ).all()
+        participants = [
+            ResolvedAtomMapParticipant(
+                side=row.role,
+                species_key=_SPECIES_KEY_BY_SLOT[(row.role, row.participant_index)],
+                participant_index=row.participant_index,
+                structure_participant_id=row.id,
+            )
+            for row in participant_rows
+        ]
+        geometry_id_by_key = {
+            f"{participant.species_key}-geom": geometry_id_by_participant[
+                participant.structure_participant_id
+            ]
+            for participant in participants
+        }
+        geometry_id_by_key["ts-geom"] = ts_geometry_id
+        methyl_geometry_id = geometry_id_by_key["ch3-geom"]
+
+        for pair in pairs:
+            session.delete(pair)
+        session.delete(atom_map)
+        session.flush()
+
+        # ``n`` is nitrogen however it is spelled, and nitrogen is not carbon.
+        session.execute(
+            update(GeometryAtom)
+            .where(
+                GeometryAtom.geometry_id == methyl_geometry_id,
+                GeometryAtom.atom_index == 1,
+            )
+            .values(element="n")
+        )
+        session.flush()
+
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_reaction_atom_map(
+                session,
+                ReactionAtomMapIn(**_complete_map()),
+                reaction_entry_id=result["reaction_entry_id"],
+                transition_state_entry_id=result["transition_state_entry_id"],
+                transition_state_geometry_id=ts_geometry_id,
+                participants=participants,
+                geometry_id_by_key=geometry_id_by_key,
+                created_by=_USER_ID,
+            )
+        assert excinfo.value.code == W_ATOM_MAP_ELEMENT_NOT_CONSERVED
 
 
 def test_an_element_really_changing_across_the_map_is_still_refused(
