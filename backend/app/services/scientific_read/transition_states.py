@@ -20,7 +20,7 @@ from __future__ import annotations
 from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
@@ -268,10 +268,7 @@ def get_transition_state(
     ts_id = resolve_transition_state_handle(session, transition_state_handle)
     ts = session.get(TransitionState, ts_id)
     if ts is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"transition_state not found (transition_state_id={ts_id})",
-            code="handle_not_found",
-        )
+        raise not_found("transition_state", row_id=ts_id, code="handle_not_found")
 
     ts_badge = _load_review_badge(
         session, SubmissionRecordType.transition_state, ts.id
@@ -396,17 +393,13 @@ def get_transition_state_entry(
     else:
         tse = session.get(TransitionStateEntry, tse_id)
     if tse is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            "transition_state_entry not found "
-            f"(transition_state_entry_id={tse_id})",
-            code="handle_not_found",
-        )
+        raise not_found("transition_state_entry", row_id=tse_id, code="handle_not_found")
 
     ts = session.get(TransitionState, tse.transition_state_id)
     if ts is None:  # pragma: no cover — FK guarantees existence
-        raise NotFoundError(
-            "transition_state not found for entry "
-            f"(transition_state_entry_id={tse.id})",
+        raise not_found(
+            "transition_state for the requested transition_state_entry",
+            row_id=tse.transition_state_id,
             code="handle_not_found",
         )
 

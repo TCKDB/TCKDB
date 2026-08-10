@@ -423,15 +423,22 @@ def reconcile_id_ref(
         # The ref points at no row; that contradicts the supplied id by
         # definition, which is a 422 conflict (not silent empty results).
         raise ValueError(
-            f"{conflict_code}: {kind_label}_id={id_value} and "
+            f"{conflict_code}: the supplied {kind_label}_id and "
             f"{kind_label}_ref={ref_value!r} do not refer to the same row "
-            f"(ref does not exist)"
+            f"(the ref does not exist)"
         )
     if resolved != int(id_value):
+        # The row id the ref resolves to is deliberately absent. Echoing
+        # it made this endpoint an oracle for the whole ref-to-id
+        # mapping: supply a public ref and any wrong id, and the 422 hands
+        # back the real one. That mapping is exactly what
+        # ``internal_ids`` exists to withhold, so the one place in the
+        # read layer that gave it away was a 422 nobody thought of as a
+        # disclosure. The caller supplied both inputs and is told which
+        # two disagreed, which is all it needs to fix the request.
         raise ValueError(
-            f"{conflict_code}: {kind_label}_id={id_value} and "
-            f"{kind_label}_ref={ref_value!r} resolve to different rows "
-            f"(ref → id={resolved})"
+            f"{conflict_code}: the supplied {kind_label}_id and "
+            f"{kind_label}_ref={ref_value!r} resolve to different rows"
         )
     return resolved
 

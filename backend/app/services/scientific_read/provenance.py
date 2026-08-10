@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
@@ -159,9 +159,7 @@ def get_reaction_full(
 
     entry = session.get(ReactionEntry, reaction_entry_id)
     if entry is None:
-        raise NotFoundError(
-            f"reaction_entry not found (reaction_entry_id={reaction_entry_id})"
-        )
+        raise not_found("reaction_entry", row_id=reaction_entry_id)
 
     chem = session.get(ChemReaction, entry.reaction_id)
     family_name: str | None = None

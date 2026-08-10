@@ -802,12 +802,17 @@ def test_registry_covers_all_addressable_assessment_types() -> None:
 
 
 def test_missing_record_fails_closed(db_session) -> None:
-    with pytest.raises(ValueError, match="calculation record 999999999 does not exist"):
+    with pytest.raises(ValueError, match="calculation record does not exist") as caught:
         evaluate_reproducibility(
             db_session,
             record_type="calculation",
             record_id=999_999_999,
         )
+    # The refusal names the record *type*, which is what the caller needs,
+    # and not the row id it asked about, which is an implementation detail
+    # of one database. Asserted rather than assumed: this message used to
+    # echo the id, and the id in it is what a regression would restore.
+    assert "999999999" not in str(caught.value)
 
 
 def test_insufficient_grade_migration_layers_on_current_head() -> None:

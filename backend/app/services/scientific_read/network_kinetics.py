@@ -25,7 +25,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
-from app.api.errors import DataIntegrityError, NotFoundError
+from app.api.errors import DataIntegrityError, not_found
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -140,10 +140,7 @@ def get_network_kinetics(
     nk_id = resolve_network_kinetics_handle(session, network_kinetics_handle)
     nk = session.get(NetworkKinetics, nk_id)
     if nk is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"network_kinetics not found (network_kinetics_id={nk_id})",
-            code="handle_not_found",
-        )
+        raise not_found("network_kinetics", row_id=nk_id, code="handle_not_found")
 
     # ``NetworkKinetics`` itself is not a reviewable record type; the
     # parent solve carries the badge. Falls back to ``not_reviewed`` when

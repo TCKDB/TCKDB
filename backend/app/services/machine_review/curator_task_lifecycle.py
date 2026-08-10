@@ -39,7 +39,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError, NotFoundError
+from app.api.errors import DomainError, not_found
 from app.db.models.common import MachineReviewCuratorTaskState
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 
@@ -65,8 +65,8 @@ def _now_naive_utc() -> datetime:
 def _get_task_or_404(session: Session, task_id: int) -> MachineReviewCuratorTask:
     task = session.get(MachineReviewCuratorTask, task_id)
     if task is None:
-        raise NotFoundError(
-            f"Curator task {task_id} not found", code="curator_task_not_found"
+        raise not_found(
+            "Curator task", row_id=task_id, code="curator_task_not_found"
         )
     return task
 
@@ -176,7 +176,7 @@ def resolve_curator_task(
             # original resolver/note/timestamp intact.
             return task
         raise DomainError(
-            f"Curator task {task_id} is already resolved as "
+            "Curator task is already resolved as "
             f"{task.workflow_state.value!r}; cannot re-resolve as "
             f"{resolution.value!r}. Reopen it first to change the resolution."
         )

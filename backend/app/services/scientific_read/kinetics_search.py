@@ -193,7 +193,7 @@ def search_kinetics(
 
         kinetics_records = collect_bounded_pages(
             fetch_kinetics_page,
-            resource_name=f"kinetics candidates for reaction_entry {entry_id}",
+            resource_name="kinetics candidates for one reaction entry",
         )
         for kinetics_record in kinetics_records:
             flat.append(

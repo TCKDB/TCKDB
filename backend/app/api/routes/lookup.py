@@ -348,7 +348,7 @@ def _apply_selection(
 
         calcs = sorted(calcs, key=_energy_sort_key)
         winner = calcs[0]
-        mb.add(SELECTION_APPLIED, f"selection=lowest_energy chose calculation {winner.id}")
+        mb.add(SELECTION_APPLIED, f"selection=lowest_energy chose calculation {winner.public_ref}")
         return [winner]
 
     if selection == "latest":
@@ -357,7 +357,7 @@ def _apply_selection(
             key=lambda c: (-(c.created_at.timestamp() if c.created_at else 0), c.id),
         )
         winner = calcs[0]
-        mb.add(SELECTION_APPLIED, f"selection=latest chose calculation {winner.id}")
+        mb.add(SELECTION_APPLIED, f"selection=latest chose calculation {winner.public_ref}")
         return [winner]
 
     if selection == "earliest":
@@ -366,7 +366,7 @@ def _apply_selection(
             key=lambda c: (c.created_at.timestamp() if c.created_at else float("inf"), c.id),
         )
         winner = calcs[0]
-        mb.add(SELECTION_APPLIED, f"selection=earliest chose calculation {winner.id}")
+        mb.add(SELECTION_APPLIED, f"selection=earliest chose calculation {winner.public_ref}")
         return [winner]
 
     return calcs
@@ -505,7 +505,7 @@ def _resolve_species_list(
             mb.add(code, f"{role}[{i}] '{smi}' not found in database")
             return None
         code = REACTANT_RESOLVED if role == "reactant" else PRODUCT_RESOLVED
-        mb.add(code, f"{role}[{i}] '{smi}' resolved to species {sp.id}")
+        mb.add(code, f"{role}[{i}] '{smi}' resolved to species {sp.public_ref}")
         species_rows.append(sp)
     return species_rows
 

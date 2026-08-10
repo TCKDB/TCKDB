@@ -28,7 +28,7 @@ from sqlalchemy import and_, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     NetworkKineticsModelKind,
@@ -148,10 +148,7 @@ def get_network(
     network_id = resolve_network_handle(session, network_handle)
     n = session.get(Network, network_id)
     if n is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"network not found (network_id={network_id})",
-            code="handle_not_found",
-        )
+        raise not_found("network", row_id=network_id, code="handle_not_found")
 
     badge = _load_review_badge(session, n.id)
     record = build_network_record(
@@ -1113,10 +1110,7 @@ def get_network_solve(
     solve_id = resolve_network_solve_handle(session, network_solve_handle)
     s = session.get(NetworkSolve, solve_id)
     if s is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"network_solve not found (network_solve_id={solve_id})",
-            code="handle_not_found",
-        )
+        raise not_found("network_solve", row_id=solve_id, code="handle_not_found")
 
     badge = _load_solve_review_badge(session, s.id)
     record = build_network_solve_record(

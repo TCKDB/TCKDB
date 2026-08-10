@@ -49,6 +49,44 @@ class NotFoundError(Exception):
         self.code = code
 
 
+def not_found(
+    kind: str,
+    *,
+    row_id: object = None,
+    ref: str | None = None,
+    code: str | None = None,
+) -> NotFoundError:
+    """Build a 404 that names the resource without disclosing its row id.
+
+    The obvious way to write a 404 is ``f"{kind} not found ({kind}_id=
+    {row_id})"``, which is why roughly thirty of them were written that
+    way. It reads helpfully and it is wrong twice over. A row id is an
+    implementation detail of one database instance -- it does not survive
+    a restore, it does not agree across the hosted deployment and a lab
+    self-host, and no public surface is keyed on it -- so a client that
+    learns to read it builds against something TCKDB never promised to
+    keep stable. And the id is useless to the caller anyway: the whole
+    point of a 404 is that the row is not there.
+
+    Whoever actually needs the id is the operator reading the log, so it
+    goes there. A public ref *is* echoed, because the caller supplied it
+    and quoting it back is what makes a 404 diagnosable at all.
+
+    :param kind: The resource, in the vocabulary the API uses for it
+        (``"calculation"``, ``"species_entry"``).
+    :param row_id: The internal id that was looked up. Logged, never
+        returned.
+    :param ref: A public ref the caller supplied, echoed into the body.
+    :param code: Stable application code for the envelope.
+    """
+    if row_id is not None:
+        logger.info("404 %s not found: row_id=%s ref=%s", kind, row_id, ref)
+    detail = f"{kind} not found"
+    if ref is not None:
+        detail += f" ({kind}_ref={ref!r})"
+    return NotFoundError(detail, code=code)
+
+
 class DataIntegrityError(Exception):
     """Persisted data violates a scientific invariant assumed by the API.
 

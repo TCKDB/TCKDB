@@ -32,7 +32,7 @@ from typing import TYPE_CHECKING, Any, Iterable, Optional
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import DomainError, NotFoundError
+from app.api.errors import DomainError, not_found
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
@@ -86,7 +86,7 @@ def _resolve_actor_kind(user: AppUser) -> SubmissionActorKind:
 def _require_submission(session: Session, submission_id: int) -> Submission:
     submission = session.get(Submission, submission_id)
     if submission is None:
-        raise NotFoundError(f"Submission {submission_id} not found")
+        raise not_found("Submission", row_id=submission_id)
     return submission
 
 
@@ -133,7 +133,7 @@ def create_submission(
         not resolve to an existing submission.
     """
     if session.get(AppUser, created_by) is None:
-        raise NotFoundError(f"AppUser {created_by} not found")
+        raise not_found("AppUser", row_id=created_by)
 
     if supersedes_submission_id is not None:
         _require_submission(session, supersedes_submission_id)

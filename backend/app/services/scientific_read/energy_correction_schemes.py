@@ -17,7 +17,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     EnergyCorrectionScheme,
@@ -89,10 +89,7 @@ def get_energy_correction_scheme(
     )
     ecs = session.get(EnergyCorrectionScheme, ecs_id)
     if ecs is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"energy_correction_scheme not found (energy_correction_scheme_id={ecs_id})",
-            code="handle_not_found",
-        )
+        raise not_found("energy_correction_scheme", row_id=ecs_id, code="handle_not_found")
 
     record = build_energy_correction_scheme_record(
         session, ecs=ecs, includes=includes

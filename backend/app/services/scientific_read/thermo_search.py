@@ -211,7 +211,7 @@ def search_thermo(
 
         thermo_records = collect_bounded_pages(
             fetch_thermo_page,
-            resource_name=f"thermo candidates for species_entry {entry_id}",
+            resource_name="thermo candidates for one species entry",
         )
         for thermo_record in thermo_records:
             flat.append(ThermoSearchRecord(species=ctx, thermo=thermo_record))

@@ -583,7 +583,7 @@ def resolve_species_entry_reference(
     if species_entry_id is not None:
         species_entry = session.get(SpeciesEntry, species_entry_id)
         if species_entry is None:
-            raise ValueError(f"Unknown species_entry_id={species_entry_id}")
+            raise ValueError("Unknown species_entry")
         return species_entry
 
     assert payload is not None

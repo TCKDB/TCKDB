@@ -19,7 +19,7 @@ from __future__ import annotations
 from sqlalchemy import and_, exists, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     RecordReviewStatus,
@@ -216,10 +216,7 @@ def get_statmech(
     else:
         sm = session.get(Statmech, sm_id)
     if sm is None:  # pragma: no cover — defended by resolver 404
-        raise NotFoundError(
-            f"statmech not found (statmech_id={sm_id})",
-            code="handle_not_found",
-        )
+        raise not_found("statmech", row_id=sm_id, code="handle_not_found")
 
     badge = _load_review_badge(session, sm.id)
     record = build_statmech_record(

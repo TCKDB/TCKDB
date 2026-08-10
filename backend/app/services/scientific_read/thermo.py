@@ -8,7 +8,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationGeometryValidation,
@@ -199,9 +199,7 @@ def get_species_thermo(
 
     species_entry = session.get(SpeciesEntry, species_entry_id)
     if species_entry is None:
-        raise NotFoundError(
-            f"species_entry not found (species_entry_id={species_entry_id})"
-        )
+        raise not_found("species_entry", row_id=species_entry_id)
     species_entry_ref = species_entry.public_ref
 
     # Phase C: reconcile level_of_theory_id + level_of_theory_ref into a

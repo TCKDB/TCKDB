@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError
+from app.api.errors import not_found
 from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.llm_precheck.schemas import LLMPrecheckContext, LLMRecordRef
 
@@ -17,7 +17,7 @@ def build_llm_precheck_context(
     """Build a compact structured context for optional AI Review Assistant precheck."""
     submission = session.get(Submission, submission_id)
     if submission is None:
-        raise NotFoundError(f"Submission {submission_id} not found")
+        raise not_found("Submission", row_id=submission_id)
 
     links = session.scalars(
         select(SubmissionRecordLink)
