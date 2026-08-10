@@ -2099,30 +2099,36 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_conn) -> Non
         assert network.id is not None
 
         # Resolve the O2 scan calc and a species entry that is NOT its owner.
+        #
+        # Both queries are ordered, and the foreign entry is chosen *from the
+        # freq calculations* rather than from all of them. Picking any foreign
+        # calc first and then demanding its entry own exactly one freq is two
+        # unordered assumptions: the payload's other species entries do not all
+        # carry a freq, so an unordered ``first()`` could land on one with none
+        # and the following ``one()`` would raise ``NoResultFound`` -- which it
+        # did, at seed 5 under two workers, having passed at every other seed
+        # tried. Row order is not a property this test is entitled to.
         o2_scan = session.scalars(
-            select(Calculation).where(
+            select(Calculation)
+            .where(
                 Calculation.id > baseline_calc_id,
                 Calculation.type == CalculationType.scan,
             )
+            .order_by(Calculation.id)
         ).one()
-        foreign_calc = session.scalars(
-            select(Calculation).where(
+        foreign_freq = session.scalars(
+            select(Calculation)
+            .where(
                 Calculation.id > baseline_calc_id,
+                Calculation.type == CalculationType.freq,
                 Calculation.species_entry_id.isnot(None),
                 Calculation.species_entry_id != o2_scan.species_entry_id,
             )
+            .order_by(Calculation.id)
         ).first()
-        assert foreign_calc is not None
-        foreign_entry_id = foreign_calc.species_entry_id
+        assert foreign_freq is not None
+        foreign_entry_id = foreign_freq.species_entry_id
         assert foreign_entry_id != o2_scan.species_entry_id
-
-        foreign_freq = session.scalars(
-            select(Calculation).where(
-                Calculation.id > baseline_calc_id,
-                Calculation.type == CalculationType.freq,
-                Calculation.species_entry_id == foreign_entry_id,
-            )
-        ).one()
         statmech = StatmechInBundle(
             statmech_treatment="rrho_1d",
             source_calculations=[{"calculation_key": "foreign_freq", "role": "freq"}],
