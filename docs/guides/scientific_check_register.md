@@ -252,7 +252,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Enforced at.**
 
-- `canonical_species_identity` — `backend/app/chemistry/species.py:538`
+- `canonical_species_identity` — `backend/app/chemistry/species.py:540`
   *Charge is compared against `formal_charge` of the sanitized identity molecule — the sum of RDKit per-atom formal charges, which is a notation convention rather than an electron count. A referee may object that formal-charge assignment on hypervalent, zwitterionic or dative-bonded SMILES is notation-dependent.*
 
 **Escape hatch.** A free electron short-circuits before the comparison, returning a pinned identity pair. Multiplicity is deliberately **not** validated against the SMILES at all: standard SMILES does not encode spin state, so RDKit's inferred radical count is only a hint and the uploaded multiplicity is authoritative — which is what lets singlet CH2 (whose SMILES `[CH2]` implies a triplet) and the singlet and triplet states of O2 be represented.
@@ -462,7 +462,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `ck_reaction_atom_map_pair_element_matches` (check on `reaction_atom_map_pair`)
   `upper(element) = upper(ts_element)`
 
-**Escape hatch.** Case is not load-bearing. The comparison is deliberately case-insensitive because the two ends quote two different geometries, and a geometry stores the symbol its depositor's XYZ wrote — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
+**Escape hatch.** Case is not load-bearing, and since `b4e7c1d20f83` it cannot be: `geometry_atom.element` is canonicalised on the way in, so both ends of a pair spell an element the same way. The constraint stays case-insensitive anyway — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not, and a check wider than it needs to be refuses nothing correct. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
 
 ### 18. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
 

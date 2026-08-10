@@ -84,8 +84,8 @@ _XYZ_CH3 = (
 )
 #: Chloromethane, CH3Cl. Five atoms: C (index 1), Cl (index 2), three H
 #: (indices 3-5). Written the way plenty of electronic-structure output writes
-#: it — chlorine shouted, carbon and hydrogen whispered — because
-#: ``geometry_atom.element`` stores whatever the XYZ said, verbatim.
+#: it — chlorine shouted, carbon and hydrogen whispered. ``geometry.xyz_text``
+#: keeps that spelling; ``geometry_atom.element`` canonicalises it.
 _XYZ_CH3CL_MIXED_CASE = (
     "5\nchloromethane, elements as an ESS wrote them\n"
     "c  0.000  0.000  0.000\n"
@@ -96,7 +96,8 @@ _XYZ_CH3CL_MIXED_CASE = (
 )
 #: Heavy water, written the way an ESS is entitled to write it: ``D`` in the
 #: element column. Gaussian, ORCA, Molpro and CFOUR all emit or accept the
-#: token, and ``geometry_atom.element`` stores it verbatim by design.
+#: token, and ``geometry_atom.element`` keeps it by design — ingestion
+#: canonicalises case and deliberately leaves nuclide labelling alone.
 _XYZ_D2O = (
     "3\nheavy water, hydrogens written as D\n"
     "O  0.000  0.000  0.117\n"
@@ -331,7 +332,7 @@ def test_deuterium_written_as_the_element_D_is_accepted(db_conn) -> None:
     """``D`` is hydrogen, and this check must know it.
 
     ``D`` is a legal, common XYZ token — Gaussian, ORCA, Molpro and CFOUR all
-    emit or accept it — and ``geometry_atom.element`` stores it verbatim. A raw
+    emit or accept it — and ``geometry_atom.element`` keeps it. A raw
     comparison reads this geometry as containing an element water's SMILES
     never mentions and refuses a deposit that was accepted before any
     composition check existed. That is a regression on correct chemistry, and
@@ -386,10 +387,12 @@ def test_a_D_geometry_with_the_wrong_atom_count_is_still_refused(
 def test_element_symbols_in_any_case_are_accepted(db_conn) -> None:
     """``CL`` is chlorine and ``c`` is carbon.
 
-    ``geometry_atom.element`` holds whatever the depositor's XYZ said, and
-    electronic-structure codes are not consistent about capitalisation.
-    Refusing correct chemistry over a string is what ADR 0008 puts out of
-    bounds for a blocking check; this exact bug shipped once already.
+    Electronic-structure codes are not consistent about capitalisation, and
+    refusing correct chemistry over a string is what ADR 0008 puts out of
+    bounds for a blocking check; this exact bug shipped once already. Since
+    ``b4e7c1d20f83`` the case is settled on the way into
+    ``geometry_atom.element`` rather than at each comparison, but the deposit
+    under test is unchanged and so is what it must be allowed to do.
 
     The upload succeeding is only half of it. ``validate_calculation_geometry``
     compares the very same symbols on the very same deposit, and it compared
