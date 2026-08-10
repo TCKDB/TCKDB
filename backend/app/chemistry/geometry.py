@@ -13,15 +13,10 @@ from app.schemas.fragments.geometry import GeometryPayload
 def normalize_element_symbol(symbol: str) -> str:
     """Return an element symbol in the one case every comparison agrees on.
 
-    ``geometry_atom.element`` is stored **verbatim** as the depositor's XYZ
-    wrote it (see :func:`parse_xyz`), and electronic-structure codes are not
-    consistent about capitalisation: ``Cl``, ``CL`` and ``cl`` are the same
-    element and different strings. Anything that compares a stored element
-    against a symbol from another source — RDKit's title-case ``GetSymbol()``,
-    a second geometry deposited from a different program, the wire schema's
-    :func:`tckdb_schemas.fragments.reaction_atom_map.parse_xyz_elements` — must
-    normalise both sides first, or it refuses correct chemistry over
-    capitalisation, which ADR 0008 disqualifies a blocking check from doing.
+    Electronic-structure codes are not consistent about capitalisation: ``Cl``,
+    ``CL`` and ``cl`` are one element written three ways. Comparing those
+    strings raw refuses correct chemistry over a capital letter, which ADR 0008
+    disqualifies a blocking check from doing.
 
     ``str.capitalize`` is the rule: it upper-cases the first character and
     lower-cases the rest, which is exactly the wire schema's
@@ -29,10 +24,27 @@ def normalize_element_symbol(symbol: str) -> str:
     the same rule :mod:`app.chemistry.isotopes` already applies before handing
     a symbol to RDKit's periodic table.
 
-    Normalising here, at comparison time, rather than at ingestion is
-    deliberate: it is correct for the rows already stored as well as for new
-    ones, where canonicalising ``parse_xyz`` would fix only the future and
-    leave a backfill question behind.
+    Where this is applied
+    ---------------------
+    At **ingestion**, since Alembic revision ``b4e7c1d20f83``. :func:`parse_xyz`
+    runs every parsed symbol through this function before it becomes a
+    ``geometry_atom.element`` row, and that revision backfilled the rows written
+    before it. A symbol read out of ``geometry_atom`` is therefore canonical by
+    construction, and two of them may be compared directly — see
+    :mod:`app.services.reaction_atom_map`, which used to normalise at
+    comparison time and no longer needs to.
+
+    It is still required wherever a symbol arrives from *outside* that column
+    and has to be lined up against it: RDKit's title-case ``GetSymbol()``, a
+    raw XYZ string that has not been through :func:`parse_xyz`, the wire
+    schema's
+    :func:`tckdb_schemas.fragments.reaction_atom_map.parse_xyz_elements`. Those
+    sides are canonicalised by their own rules, or not at all, and this
+    function is what makes the two rules one rule.
+
+    Note what it does **not** do: it does not touch ``geometry.xyz_text``. That
+    column keeps the symbol the depositor's file wrote, and :func:`parse_xyz`
+    explains why.
     """
 
     return symbol.strip().capitalize()
@@ -44,8 +56,9 @@ def resolve_element_symbol(symbol: str) -> str:
     :func:`normalize_element_symbol` settles capitalisation. This settles the
     other way an XYZ can spell an element that a comparison must not trip over:
     ``D`` and ``T`` are hydrogen. Both are legal, common tokens — Gaussian,
-    ORCA, Molpro and CFOUR all emit or accept them — and
-    ``geometry_atom.element`` stores them verbatim by design, so a check that
+    ORCA, Molpro and CFOUR all emit or accept them — and ingestion
+    canonicalisation deliberately leaves them alone, so
+    ``geometry_atom.element`` stores them as ``D`` and ``T``, and a check that
     compares raw symbols reads a perfectly ordinary deuterated geometry as
     containing an element its SMILES never mentions. That refuses correct
     chemistry, which ADR 0008 disqualifies a blocking check from doing.
@@ -114,13 +127,18 @@ class ParsedXYZ:
     def isotope_substitutions(self) -> dict[tuple[str, int], int]:
         """Count non-standard isotope substitutions by ``(element, mass_number)``.
 
+        The element is read straight out of :attr:`atoms`, which
+        :func:`parse_xyz` has already canonicalised, so the key lines up with
+        the title-case symbols RDKit produces for the SMILES side without a
+        second normalisation step here.
+
         :returns: Mapping used to cross-check the geometry against the
             isotope labels declared in the species-entry SMILES.
         """
 
         counts: dict[tuple[str, int], int] = {}
         for atom_index, mass_number in self.isotopes:
-            element = self.atoms[atom_index - 1][0].capitalize()
+            element = self.atoms[atom_index - 1][0]
             key = (element, mass_number)
             counts[key] = counts.get(key, 0) + 1
         return counts
@@ -128,6 +146,44 @@ class ParsedXYZ:
 
 def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     """Parse and canonicalize an uploaded XYZ payload.
+
+    Two products, two different rules
+    ---------------------------------
+    This function produces two things from one set of parsed atom lines, and
+    they deliberately do **not** spell the element the same way.
+
+    ``atoms`` becomes the ``geometry_atom`` rows. Element symbols there are
+    canonicalised through :func:`normalize_element_symbol`, so a file that
+    writes ``CL`` and a file that writes ``Cl`` both store ``Cl``. That column
+    is the *parsed index* the database computes on: it is the target of
+    ``reaction_atom_map_pair``'s two composite foreign keys, the ``character(2)``
+    value every element comparison in the service layer reads, and the thing
+    ADR 0008 forbids from refusing a correct deposit over a capital letter.
+    A column that is compared has to have one spelling.
+
+    ``canonical_xyz_text`` becomes ``geometry.xyz_text`` and, hashed, becomes
+    ``geom_hash``. Element symbols there are left **exactly as deposited**. Two
+    reasons, in order of weight:
+
+    * ``geom_hash`` is a public ref. :func:`app.services.public_refs` mints
+      ``geometry:geom_hash=<hash>`` as a citable identifier, and it is also the
+      dedupe key in :mod:`app.services.geometry_resolution`. Canonicalising the
+      symbol inside the hashed text would re-key every geometry already stored
+      whose XYZ shouted an element: published refs would dangle, and
+      re-uploading the very same file would fail to dedupe onto its own row.
+      This is the same constraint that keeps the isotope suffix off
+      :attr:`ParsedXYZ.hash_text` for unlabelled geometries.
+    * ``xyz_text`` is the deposited evidence. It is the block a depositor reads
+      back, and the symbol is the one part of an atom line this function does
+      not already reformat. ``D`` is what they wrote and what they should read
+      back, for the reason :func:`resolve_element_symbol` gives; the same is
+      true of ``CL``.
+
+    So ``geometry.xyz_text`` may read ``CL`` while ``geometry_atom.element``
+    reads ``Cl`` for the same atom. That is not drift: one is the record of what
+    was deposited, the other is the index the database joins and compares on,
+    and only the second one has to be canonical for the first one to stay
+    citable.
 
     :param payload: Upload-facing geometry payload.
     :returns: Parsed XYZ representation with canonicalized coordinate text.
@@ -152,22 +208,33 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
         )
 
     atoms: list[tuple[str, float, float, float]] = []
+    #: The element token exactly as the file wrote it, kept alongside the
+    #: canonicalised one so ``canonical_xyz_text`` — and therefore
+    #: ``geom_hash`` — is byte-for-byte what it was before this function
+    #: canonicalised anything. See the docstring.
+    deposited_symbols: list[str] = []
     for line in atom_lines:
         parts = line.split()
         if len(parts) != 4:
             raise ValueError("Each XYZ atom line must contain element x y z")
-        element = parts[0]
+        deposited = parts[0]
+        # `normalize_element_symbol`, not `resolve_element_symbol`: `D` and `T`
+        # must stay `D` and `T` in the stored column. Collapsing them to `H`
+        # here would destroy deposited isotope labelling, which is a fact about
+        # the deposit and not a spelling of one.
+        element = normalize_element_symbol(deposited)
         try:
             x = float(parts[1])
             y = float(parts[2])
             z = float(parts[3])
         except ValueError as exc:
             raise ValueError("XYZ coordinates must be numeric") from exc
+        deposited_symbols.append(deposited)
         atoms.append((element, x, y, z))
 
     canonical_lines = [str(natoms), ""]
-    for element, x, y, z in atoms:
-        canonical_lines.append(f"{element} {x:.12f} {y:.12f} {z:.12f}")
+    for deposited, (_element, x, y, z) in zip(deposited_symbols, atoms):
+        canonical_lines.append(f"{deposited} {x:.12f} {y:.12f} {z:.12f}")
 
     isotopes: list[tuple[int, int]] = []
     for atom_index, mass_number in sorted((payload.isotopes or {}).items()):

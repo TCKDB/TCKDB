@@ -31,6 +31,14 @@ class Geometry(Base, TimestampMixin, PublicRefMixin):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     natoms: Mapped[int] = mapped_column(Integer, nullable=False)
     geom_hash: Mapped[str] = mapped_column(CHAR(64), nullable=False, unique=True)
+
+    #: The deposited XYZ block, coordinates reformatted to a fixed precision
+    #: and **element symbols left exactly as the file wrote them**. This is the
+    #: text ``geom_hash`` is taken over, and ``geom_hash`` is both the dedupe
+    #: key and a citable public ref (``geometry:geom_hash=...``), so
+    #: canonicalising a symbol here would re-key every geometry already stored.
+    #: ``geometry_atom.element`` is canonical instead; see
+    #: :func:`app.chemistry.geometry.parse_xyz` for the full argument.
     xyz_text: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
     atoms: Mapped[list["GeometryAtom"]] = relationship(
@@ -59,6 +67,20 @@ class GeometryAtom(Base):
     )
 
     atom_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    #: Element symbol, **case-canonical**: first character upper, rest lower
+    #: (:func:`app.chemistry.geometry.normalize_element_symbol`, applied by
+    #: :func:`app.chemistry.geometry.parse_xyz` and backfilled onto older rows
+    #: by Alembic revision ``b4e7c1d20f83``). A file that writes ``CL`` stores
+    #: ``Cl`` here while ``geometry.xyz_text`` keeps the ``CL`` it deposited;
+    #: this column is the index the database joins and compares on, and a
+    #: column that is compared has to have one spelling.
+    #:
+    #: Case is the *only* thing canonicalised. ``D`` and ``T`` are stored as
+    #: ``D`` and ``T``: they are the depositor's isotope labelling, and code
+    #: that counts elements resolves them with
+    #: :func:`app.chemistry.geometry.resolve_element_symbol` at the point of
+    #: counting.
     element: Mapped[str] = mapped_column(CHAR(2), nullable=False)
     x: Mapped[float] = mapped_column(nullable=False)
     y: Mapped[float] = mapped_column(nullable=False)

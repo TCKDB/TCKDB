@@ -28,6 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models.app_user import AppUser
 from app.db.models.common import AtomMapSource, ReactionRole
+from app.db.models.geometry import Geometry, GeometryAtom
 from app.db.models.reaction_atom_map import ReactionAtomMap, ReactionAtomMapPair
 from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionUploadRequest,
@@ -787,9 +788,9 @@ def test_same_participant_mapped_twice_is_refused(db_conn) -> None:
 # ---------------------------------------------------------------------------
 
 #: Methyl and the saddle point, with the same atoms written in different case.
-#: ``geometry_atom.element`` stores the depositor's symbol verbatim, so this is
-#: what a reactant optimised in one program and a saddle point located in
-#: another actually looks like once both are in the database.
+#: This is what a reactant optimised in one program and a saddle point located
+#: in another look like as *deposited*; ``geometry.xyz_text`` keeps both
+#: spellings, and ``geometry_atom.element`` canonicalises them.
 _XYZ_CH3_LOWER = (
     "4\nmethyl, elements whispered\n"
     "c  0.000  0.000  0.000\n"
@@ -804,12 +805,19 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
 ) -> None:
     """``c`` and ``C`` are one element, and a map across them is one map.
 
-    Both ends of a pair quote a *different* geometry, and each geometry stores
-    the element symbol its own XYZ wrote. If the two ends are compared raw, or
-    forced through one shared column, then a depositor whose reactant came out
-    of a program that writes ``c`` and whose saddle point came out of one that
-    writes ``C`` cannot record a correct map at all — refused for a capital
-    letter, which is the failure ADR 0008 puts out of bounds.
+    Both ends of a pair quote a *different* geometry. A depositor whose
+    reactant came out of a program that writes ``c`` and whose saddle point
+    came out of one that writes ``C`` must be able to record a correct map;
+    refusing it for a capital letter is the failure ADR 0008 puts out of
+    bounds.
+
+    Since ``b4e7c1d20f83`` the two spellings never reach the comparison:
+    ``parse_xyz`` canonicalises the symbol before it becomes a
+    ``geometry_atom`` row, so both ends of the pair store ``C`` and the two
+    composite foreign keys resolve against one string rather than two. The
+    deposited ``c`` is still readable — it survives in ``geometry.xyz_text``,
+    which is asserted here too, because that column is what ``geom_hash`` is
+    taken over and rewriting a symbol in it would re-key a published geometry.
 
     The map here is the same map as everywhere else in this module; only the
     methyl geometry's capitalisation differs.
@@ -832,7 +840,8 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
         assert len(pairs) == 10
 
         # Each end kept the spelling of the geometry it points at, which is
-        # what lets both composite foreign keys into ``geometry_atom`` resolve.
+        # what lets both composite foreign keys into ``geometry_atom`` resolve
+        # -- and both geometries now spell it the same canonical way.
         methyl_carbon = next(
             pair
             for pair in pairs
@@ -841,8 +850,29 @@ def test_map_across_geometries_that_disagree_only_about_case_persists(
             and pair.atom_index == 1
             and pair.ts_atom_index == 1
         )
-        assert methyl_carbon.element.strip() == "c"
+        assert methyl_carbon.element.strip() == "C"
         assert methyl_carbon.ts_element.strip() == "C"
+
+        # The stored atom is canonical...
+        methyl_atoms = session.execute(
+            select(GeometryAtom.atom_index, GeometryAtom.element)
+            .where(GeometryAtom.geometry_id == methyl_carbon.geometry_id)
+            .order_by(GeometryAtom.atom_index)
+        ).all()
+        assert [element.strip() for _index, element in methyl_atoms] == [
+            "C",
+            "H",
+            "H",
+            "H",
+        ]
+
+        # ...and the deposit still reads back as it was written.
+        methyl_geometry = session.get(Geometry, methyl_carbon.geometry_id)
+        assert methyl_geometry is not None
+        assert methyl_geometry.xyz_text is not None
+        assert [
+            line.split()[0] for line in methyl_geometry.xyz_text.splitlines()[2:]
+        ] == ["c", "h", "h", "h"]
 
 
 def test_an_element_really_changing_across_the_map_is_still_refused(

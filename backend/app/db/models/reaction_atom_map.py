@@ -60,16 +60,25 @@ first one refuses.
   trigger.
 
   There are **two** of them, ``element`` and ``ts_element``, rather than one
-  column shared by both foreign keys, and the reason is that
-  ``geometry_atom.element`` is stored verbatim as the depositor's XYZ wrote it.
-  ``CL`` and ``Cl`` are the same element and different ``character(2)`` values,
-  so when a reactant geometry comes out of one program and the saddle point out
-  of another, *no single stored value satisfies both foreign keys* and a
-  perfectly correct map cannot be written at all. One column would therefore
-  have made capitalisation load-bearing — the same defect, one table over, that
-  made a ``CL`` saddle point contradict its own reaction. Each end now stores
+  column shared by both foreign keys. The reason was that
+  ``geometry_atom.element`` used to be stored verbatim as the depositor's XYZ
+  wrote it: ``CL`` and ``Cl`` are the same element and different
+  ``character(2)`` values, so when a reactant geometry came out of one program
+  and the saddle point out of another, *no single stored value satisfied both
+  foreign keys* and a perfectly correct map could not be written at all. One
+  column made capitalisation load-bearing — the same defect, one table over,
+  that made a ``CL`` saddle point contradict its own reaction. Each end stores
   what its own geometry stores, and the ``upper(...)`` check carries the
   scientific rule the shared column used to carry.
+
+  Alembic revision ``b4e7c1d20f83`` removed that reason at the source:
+  ``geometry_atom.element`` is now canonicalised at ingestion and was
+  backfilled, so both geometries spell an element the same way and the two
+  columns hold the same string on every valid row. The split is kept anyway —
+  collapsing it is a schema change with its own migration, its own backfill and
+  its own reconsideration of whether the case-insensitive ``upper(...)`` check
+  should become a plain equality, and none of that belongs in the revision that
+  merely made the two agree.
 
   ``isotope_mass_number`` is *not* carried the same way, because it is nullable
   and a NULL column silently disables a MATCH SIMPLE foreign key — isotope
@@ -284,9 +293,11 @@ class ReactionAtomMapPair(Base):
     #: The saddle-point atom's element, spelled as the *transition-state*
     #: geometry spells it. Held equal to ``element`` case-insensitively by
     #: ``ck_reaction_atom_map_pair_element_matches``, which is the rule "an
-    #: element does not change across a reaction"; kept as its own column
-    #: because the two geometries may capitalise the same element differently
-    #: and a shared column would refuse that correct map outright.
+    #: element does not change across a reaction". It has its own column
+    #: because the two geometries could capitalise the same element
+    #: differently and a shared column would have refused that correct map
+    #: outright; since ``b4e7c1d20f83`` they cannot, and the module docstring
+    #: says why the split is kept regardless.
     ts_element: Mapped[str] = mapped_column(CHAR(2), nullable=False)
 
     atom_map: Mapped["ReactionAtomMap"] = relationship(back_populates="pairs")
@@ -352,10 +363,15 @@ class ReactionAtomMapPair(Base):
         CheckConstraint("atom_index >= 1", name="atom_index_ge_1"),
         CheckConstraint("ts_atom_index >= 1", name="ts_atom_index_ge_1"),
         # "An element does not change across a reaction." Case-insensitive
-        # because the two ends quote two geometries, and a geometry stores the
-        # symbol its depositor's XYZ wrote: carbon becoming nitrogen is a
-        # record that cannot be what it says it is, while ``Cl`` becoming
-        # ``CL`` is one program shouting where another did not.
+        # because the two ends quote two geometries, and a geometry used to
+        # store the symbol its depositor's XYZ wrote: carbon becoming nitrogen
+        # is a record that cannot be what it says it is, while ``Cl`` becoming
+        # ``CL`` is one program shouting where another did not. Ingestion
+        # canonicalisation (``b4e7c1d20f83``) means both ends now arrive
+        # identical, so ``upper(...)`` no longer changes which rows pass; it is
+        # left in place because tightening it to plain equality is a separate
+        # constraint change, and a check that is merely wider than it needs to
+        # be refuses nothing correct.
         CheckConstraint(
             "upper(element) = upper(ts_element)",
             name="element_matches",
