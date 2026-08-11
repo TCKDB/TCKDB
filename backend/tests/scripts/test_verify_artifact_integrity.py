@@ -5,17 +5,30 @@ is checked by nothing", and its designated trigger is cutting a citable
 release. That makes ``--release`` the load-bearing scope: if it walks the
 wrong set, the release runbook records a green gate over evidence nobody
 looked at.
+
+The second half of this file is about the *other* way that gate goes
+green over nothing. A sweep can be wrong by reporting a clean result it
+did not earn, and it had three ways to do that after the ``--release``
+scope query was fixed: a scope that resolves to zero digests, a store
+that will not answer, and a digest recorded on the ``store_artifact``
+dedup path, which has no ``calculation_artifact`` row to be found
+through. Each exited 0. The invariant those tests hold is one sentence:
+**a verification job must distinguish "nothing was wrong" from "nothing
+was checked."**
 """
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from botocore.exceptions import ClientError
+from botocore.exceptions import ClientError, EndpointConnectionError
+from sqlalchemy import func, select
 
 from app.db.models.common import (
     ArtifactKind,
@@ -47,9 +60,18 @@ _SWEEP = Path(__file__).parents[2] / "scripts" / "ops" / "verify_artifact_integr
 
 
 def _load_sweep():
+    """Import the sweep from its path, as a module that knows its own name.
+
+    Registered in ``sys.modules`` before execution, which is not
+    ceremony: the script's ``from __future__ import annotations`` leaves
+    every annotation a string, and ``@dataclass`` resolves those by
+    looking its own module up by name. Without the registration the
+    lookup returns ``None`` and the module fails to import at all.
+    """
     spec = importlib.util.spec_from_file_location("verify_artifact_integrity", _SWEEP)
     module = importlib.util.module_from_spec(spec)
     assert spec.loader is not None
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
@@ -219,7 +241,7 @@ def test_release_scope_follows_the_dependency_chain_upward(
 def test_release_scope_covers_the_artifacts_of_those_calculations(
     db_session, sweep, released_thermo
 ):
-    artifacts = sweep._distinct_artifacts(
+    artifacts = sweep._scope_targets(
         db_session,
         sha256=None,
         calculation_ref=None,
@@ -246,7 +268,7 @@ def test_a_withdrawn_selection_is_not_part_of_the_release(
     db_session.flush()
 
     with pytest.raises(SystemExit, match="cites no calculations"):
-        sweep._distinct_artifacts(
+        sweep._scope_targets(
             db_session,
             sha256=None,
             calculation_ref=None,
@@ -571,3 +593,437 @@ def test_restoring_refuses_when_the_key_is_already_occupied(db_session, sweep):
     assert client.copied == []
     assert client.deleted == []
     assert f"reclaimed/{digest}" in client.objects
+
+
+# ---------------------------------------------------------------------------
+# A sweep that checked nothing is not a sweep that found nothing
+# ---------------------------------------------------------------------------
+
+
+class _SessionProxy:
+    """The test's own session, wearing the shape ``main`` expects.
+
+    ``main`` uses ``SessionLocal`` two ways: as a context manager for its
+    own reads, and as the ``session_factory`` the recorder opens a
+    separate transaction on. That separate transaction is deliberate and
+    has its own test elsewhere; here it would commit rows outside the
+    fixture's rollback, so ``begin`` is neutered.
+    """
+
+    def __init__(self, session) -> None:
+        self._session = session
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+    def __call__(self):
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def begin(self):
+        return contextlib.nullcontext()
+
+
+class _Body:
+    def __init__(self, content: bytes) -> None:
+        self._content = content
+
+    def read(self) -> bytes:
+        return self._content
+
+
+class _ReadableBucket:
+    """A store that serves bytes, so a sweep over it genuinely verifies."""
+
+    def __init__(self, objects: dict[str, bytes]) -> None:
+        self.objects = dict(objects)
+
+    def get_object(self, *, Bucket, Key):
+        digest = Key.rsplit("/", 1)[-1]
+        if digest not in self.objects:
+            raise ClientError(
+                {"Error": {"Code": "NoSuchKey", "Message": "gone"}}, "GetObject"
+            )
+        return {"Body": _Body(self.objects[digest])}
+
+    def head_object(self, *, Bucket, Key):
+        digest = Key.rsplit("/", 1)[-1]
+        if digest not in self.objects:
+            raise ClientError(
+                {"Error": {"Code": "404", "Message": "gone"}}, "HeadObject"
+            )
+        return {"ETag": '"etag"', "ContentLength": len(self.objects[digest])}
+
+
+class _UnreachableBucket:
+    """A store that does not answer at all.
+
+    ``EndpointConnectionError`` descends from ``BotoCoreError``, not
+    ``ClientError``, which is the arm ``load_artifact_bytes`` turns into
+    an ``ArtifactStorageUnavailable`` carrying no ``missing`` flag -- the
+    outcome that says nothing whatever about the object.
+    """
+
+    def get_object(self, *, Bucket, Key):
+        raise EndpointConnectionError(endpoint_url="http://store.invalid")
+
+    def head_object(self, *, Bucket, Key):
+        raise EndpointConnectionError(endpoint_url="http://store.invalid")
+
+
+def _run_main(sweep, monkeypatch, db_session, argv, client):
+    """Drive ``main`` end to end against a fake store and the test session."""
+    import app.api.deps as deps
+
+    monkeypatch.setattr(
+        "sys.argv", ["verify_artifact_integrity.py", *argv], raising=False
+    )
+    monkeypatch.setattr(deps, "SessionLocal", _SessionProxy(db_session))
+    monkeypatch.setattr(sweep, "_get_s3_client", lambda: client)
+    return sweep.main()
+
+
+@pytest.fixture
+def released_without_artifacts(db_session, curator):
+    """A release citing a calculation that retained no artifact rows.
+
+    The residue of the ``--release`` fix: the scope query now finds the
+    calculations, and those calculations have nothing stored. Before,
+    the sweep printed a clean summary over zero digests and exited 0 --
+    the same green gate the ``record_type`` bug produced, reached a
+    different way.
+    """
+    species = make_species(db_session, smiles="CC")
+    entry = make_species_entry(db_session, species=species)
+    lot = make_lot(db_session)
+    freq = make_calculation(
+        db_session,
+        type=CalculationType.freq,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+    thermo = make_thermo_scalar(db_session, species_entry=entry, h298_kj_mol=-1.5)
+    db_session.add(
+        ThermoSourceCalculation(
+            thermo_id=thermo.id,
+            calculation_id=freq.id,
+            role=ThermoCalculationRole.freq,
+        )
+    )
+    set_record_review_status(
+        db_session,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+        status=RecordReviewStatus.approved,
+        actor=curator,
+        note="approved for the empty-evidence fixture",
+    )
+    policy = resolve_curation_policy(
+        db_session,
+        name="empty-evidence-policy",
+        version="1.0",
+        description="Whatever survives review.",
+        criteria={"requires_review_status": "approved"},
+        created_by=curator.id,
+    )
+    release = create_release(
+        db_session,
+        tag="2026.08.1",
+        title="Cites a calculation that kept nothing",
+        curation_policy=policy,
+        data_license="CC-BY-4.0",
+        code_license="MIT",
+        citation_text="TCKDB empty-evidence fixture release.",
+        contact="tckdb-maintainers@example.org",
+        changelog_entry="Fixture.",
+        created_by=curator.id,
+    )
+    add_selection(
+        db_session,
+        release=release,
+        record_type=SubmissionRecordType.thermo,
+        record_id=thermo.id,
+        subject_type=SubmissionRecordType.species_entry,
+        subject_id=entry.id,
+        rationale="Selected before anyone noticed the logs were never uploaded.",
+        selected_by=curator.id,
+    )
+    db_session.flush()
+    return release
+
+
+def test_a_release_whose_calculations_kept_no_artifacts_is_not_a_pass(
+    db_session, sweep, monkeypatch, capsys, released_without_artifacts
+):
+    """The scope resolves, finds calculations, and they have no evidence.
+
+    ADR 0014 names this sweep as the gate standing between a citable
+    release and undetected corruption. Exiting 0 here would let the
+    runbook record a verification of a release whose evidence does not
+    exist -- a stronger claim than the one it made while the scope query
+    was broken, and just as false.
+    """
+    code = _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--release", released_without_artifacts.public_ref],
+        _ReadableBucket({}),
+    )
+
+    assert code == sweep.EXIT_NOT_VERIFIED
+    assert "NOT VERIFIED" in capsys.readouterr().out
+
+
+def test_a_scope_naming_nothing_is_not_a_pass(db_session, sweep, monkeypatch, capsys):
+    """A mistyped ref must not read as a clean bill of health."""
+    code = _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--calculation-ref", "calc_thisdoesnotexistanywhere"],
+        _ReadableBucket({}),
+    )
+
+    out = capsys.readouterr().out
+    assert code == sweep.EXIT_NOT_VERIFIED
+    assert "NOT VERIFIED" in out
+    # The refusal has to be actionable, which means echoing what was
+    # asked for rather than only saying that nothing was found.
+    assert "calc_thisdoesnotexistanywhere" in out
+
+
+def test_an_empty_scope_can_be_accepted_but_only_on_purpose(
+    db_session, sweep, monkeypatch, capsys
+):
+    """``--allow-empty`` is the opt-out, on the age floors' reasoning.
+
+    A fresh deployment legitimately has nothing to sweep. What must not
+    happen is that state being indistinguishable from a wrong ref, so
+    the operator says so in the invocation -- and the run still reports
+    that nothing was verified.
+    """
+    code = _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--calculation-ref", "calc_thisdoesnotexistanywhere", "--allow-empty"],
+        _ReadableBucket({}),
+    )
+
+    out = capsys.readouterr().out
+    assert code == sweep.EXIT_OK
+    assert "Nothing was verified" in out
+
+
+def test_a_storage_outage_is_not_a_pass(
+    db_session, sweep, monkeypatch, capsys, released_thermo
+):
+    """The store did not answer, so the objects are as unchecked as before.
+
+    The second silence: ``_verify_one`` returned ``unavailable`` and the
+    exit code counted only breaks, so a sweep run while the object store
+    was down verified nothing and exited 0. Recording a custody break
+    instead would be a lie in the opposite direction -- an unreachable
+    store says nothing about the bytes -- so the outcome is counted as
+    unchecked and the run refuses to call itself a pass.
+    """
+    code = _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--release", released_thermo["release"].public_ref],
+        _UnreachableBucket(),
+    )
+
+    out = capsys.readouterr().out
+    assert code == sweep.EXIT_NOT_VERIFIED
+    assert "unchecked=2" in out
+    assert "verified=0" in out
+
+
+def test_a_storage_outage_records_no_custody_break(
+    db_session, sweep, monkeypatch, released_thermo
+):
+    """Refusing to pass must not become manufacturing a finding.
+
+    The guard against overcorrecting: an unreachable store is not
+    evidence that an object is corrupt, and a row saying it is would
+    hard-fail a calculation on the strength of a network failure.
+    """
+    from app.db.models.calculation import ArtifactIntegrityEvent
+
+    before = db_session.scalar(
+        select(func.count()).select_from(ArtifactIntegrityEvent)
+    )
+
+    _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--release", released_thermo["release"].public_ref],
+        _UnreachableBucket(),
+    )
+
+    assert (
+        db_session.scalar(select(func.count()).select_from(ArtifactIntegrityEvent))
+        == before
+    )
+
+
+def _attach_real_bytes(session, calculation, content: bytes, filename: str) -> bytes:
+    """Attach an artifact row whose digest and size describe real bytes.
+
+    The verification is a hash, so a fixture that stores an arbitrary
+    digest beside arbitrary bytes can only ever produce a break. These
+    rows are consistent, which is what makes a *clean* sweep expressible
+    at all.
+    """
+    attach_artifact(
+        session,
+        calculation=calculation,
+        sha256=hashlib.sha256(content).hexdigest(),
+        bytes_=len(content),
+        filename=filename,
+    )
+    return content
+
+
+def test_a_clean_sweep_reports_how_many_it_actually_verified(
+    db_session, sweep, monkeypatch, capsys
+):
+    """The count is the whole difference between two clean-looking runs.
+
+    ``breaks=0`` is true of a sweep that read two objects and of a sweep
+    that read none. Only ``verified=N`` tells them apart, so it is
+    printed unconditionally and is what a runbook should record.
+    """
+    calculation = _owned_calculation(db_session)
+    first = _attach_real_bytes(db_session, calculation, b"an output log", "out.log")
+    second = _attach_real_bytes(db_session, calculation, b"an input deck", "in.inp")
+    db_session.flush()
+    store = {
+        hashlib.sha256(content).hexdigest(): content for content in (first, second)
+    }
+
+    code = _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--calculation-ref", calculation.public_ref],
+        _ReadableBucket(store),
+    )
+
+    out = capsys.readouterr().out
+    assert code == sweep.EXIT_OK
+    assert "verified=2" in out
+    assert "unchecked=0" in out
+    assert "breaks=0" in out
+
+
+# ---------------------------------------------------------------------------
+# The digest that no artifact row points at
+# ---------------------------------------------------------------------------
+
+
+def _dedup_recorded_event(session, digest: str):
+    """A break recorded with no ``calculation_artifact`` row behind it.
+
+    Exactly the ``store_dedup_verification`` shape: ``store_artifact``
+    HEADs an object already at its content-addressed key, verification
+    fails, and the upload that would have created the referencing row is
+    refused -- so the row never commits and the digest is known only to
+    the custody record.
+    """
+    from app.db.models.calculation import ArtifactIntegrityEvent
+    from app.db.models.common import (
+        ArtifactIntegrityDetectionContext,
+        ArtifactIntegrityFinding,
+    )
+
+    event = ArtifactIntegrityEvent(
+        sha256=digest,
+        artifact_id=None,
+        finding=ArtifactIntegrityFinding.digest_mismatch,
+        detected_during=ArtifactIntegrityDetectionContext.store_dedup_verification,
+        observed_sha256=_digest("what-was-actually-there"),
+        expected_bytes=11,
+        observed_bytes=13,
+        detail="dedup HEAD verification failed; the upload was refused",
+    )
+    session.add(event)
+    session.flush()
+    return event
+
+
+def test_a_dedup_recorded_digest_can_be_swept_by_digest(db_session, sweep):
+    """``--sha256`` must reach the one digest that has no artifact row.
+
+    The third silence. The scope resolved through ``calculation_artifact``
+    and a digest recorded on the dedup path has no row there by
+    construction -- so the single case that most needs a manual re-read,
+    the one an operator was just handed, produced an empty scope and an
+    exit 0.
+    """
+    digest = _digest("dedup-only-digest")
+    _dedup_recorded_event(db_session, digest)
+
+    targets = sweep._scope_targets(
+        db_session,
+        sha256=digest,
+        calculation_ref=None,
+        release_ref=None,
+        limit=None,
+    )
+
+    assert [target.sha256 for target in targets] == [digest]
+    assert targets[0].artifact_id is None
+    assert targets[0].expected_bytes == 11
+
+
+def test_an_artifact_row_still_wins_over_the_recorded_fallback(db_session, sweep):
+    """The fallback is a fallback; a real row carries better facts.
+
+    An artifact row has the byte count the database committed to and the
+    ``created_at`` that ``artifact_recorded_at`` is compared against to
+    separate "modified after write" from "never stored correctly". The
+    event's copies are used only when there is no row to prefer.
+    """
+    calculation = _owned_calculation(db_session)
+    digest = _digest("recorded-and-referenced")
+    attach_artifact(db_session, calculation=calculation, sha256=digest)
+    _dedup_recorded_event(db_session, digest)
+    db_session.flush()
+
+    targets = sweep._scope_targets(
+        db_session,
+        sha256=digest,
+        calculation_ref=None,
+        release_ref=None,
+        limit=None,
+    )
+
+    assert len(targets) == 1
+    assert targets[0].artifact_id is not None
+
+
+def test_a_digest_nothing_has_ever_recorded_is_still_an_empty_scope(db_session, sweep):
+    """The fallback must not invent a target out of an arbitrary string.
+
+    Otherwise every typo would produce a scope of one, an
+    ``object_missing`` row, and a hard fail on nothing.
+    """
+    targets = sweep._scope_targets(
+        db_session,
+        sha256=_digest("never-heard-of-it"),
+        calculation_ref=None,
+        release_ref=None,
+        limit=None,
+    )
+
+    assert targets == []
