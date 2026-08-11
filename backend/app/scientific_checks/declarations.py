@@ -388,7 +388,17 @@ CHECK_TRANSITION_STATE_EXTRA_IMAGINARY_MODES = ScientificCheck(
         "silently resolved. Under ADR 0008 a projection is an expectation "
         "about a record, so it informs this check and does not gate it. Where "
         "no Hessian is stored the projection reads 'not determinable', which "
-        "is not the same answer as 'no residue found'."
+        "is not the same answer as 'no residue found' — and is not a shrug "
+        "either: that block carries this check's own stored judgement beside "
+        "the refusal, being the tau applied, the row of the protocol table it "
+        "came from, the recorded parameters that chose that row, the "
+        "structural flag, and every imaginary mode ranked by magnitude "
+        "against the tau. It reports the comparison and stops there. "
+        "Magnitude cannot separate a spurious mode from a real one that is "
+        "not the reaction coordinate — a transition state can sit at a "
+        "maximum of a torsional profile while being a perfectly correct "
+        "reactive bottleneck — so no mode in that block is labelled, and the "
+        "only assignment on it is the one the depositor declared."
     ),
 )
 

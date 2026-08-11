@@ -85,11 +85,14 @@ from app.schemas.reads.scientific_calculation import (
     ExecutionEnvironmentManifestSummary,
     ImaginaryModeProjectionEntry,
     ImaginaryModeProjectionSummary,
+    ImaginaryModeTauContext,
     RequestEcho,
     ScanCoordinateSummary,
     ScientificCalculationDetailResponse,
     ScientificCalculationRecord,
     SpeciesEntryOwnerSummary,
+    TauProtocolParameterEntry,
+    TauRankedModeEntry,
     TransitionStateEntryOwnerSummary,
 )
 from app.schemas.reads.scientific_common import (
@@ -2000,6 +2003,35 @@ def _build_imaginary_mode_projections(session: Session, calculation_id: int) -> 
         rotatable_bonds=[list(bond) for bond in result.rotatable_bonds],
         rigid_body_overlap_threshold=result.rigid_body_overlap_threshold,
         torsion_overlap_threshold=result.torsion_overlap_threshold,
+        tau_context=(
+            None
+            if result.tau_context is None
+            else ImaginaryModeTauContext(
+                tau_cm1=result.tau_context.tau_cm1,
+                tau_basis=result.tau_context.tau_basis,
+                structural_flag=result.tau_context.structural_flag,
+                reaction_coordinate_mode_index=result.tau_context.reaction_coordinate_mode_index,
+                modes=[
+                    TauRankedModeEntry(
+                        mode_index=mode.mode_index,
+                        frequency_cm1=mode.frequency_cm1,
+                        magnitude_cm1=mode.magnitude_cm1,
+                        is_designated_reaction_coordinate=mode.is_designated_reaction_coordinate,
+                        declared_disposition=mode.declared_disposition,
+                        at_or_above_tau=mode.at_or_above_tau,
+                    )
+                    for mode in result.tau_context.modes
+                ],
+                protocol_parameters=[
+                    TauProtocolParameterEntry(
+                        canonical_key=parameter.canonical_key,
+                        canonical_value=parameter.canonical_value,
+                    )
+                    for parameter in result.tau_context.protocol_parameters
+                ],
+                interpretation_limit=result.tau_context.interpretation_limit,
+            )
+        ),
     )
 
 def _build_spin_diagnostic(

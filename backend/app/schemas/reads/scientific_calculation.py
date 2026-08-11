@@ -309,6 +309,71 @@ class ImaginaryModeProjectionEntry(BaseModel):
     agreement: DeclarationAgreementValue
 
 
+class TauProtocolParameterEntry(BaseModel):
+    """One recorded parameter ADR 0012's tau is resolved from.
+
+    All three canonical keys are always listed, in a fixed order, with
+    ``canonical_value = null`` for the ones this record does not carry.
+    An absent key is *why* a record takes a looser row of the protocol
+    table, so reporting only the present ones would hide the term that
+    decided the threshold.
+    """
+
+    canonical_key: str
+    canonical_value: str | None = None
+
+
+class TauRankedModeEntry(BaseModel):
+    """One stored imaginary mode, ranked by magnitude against tau.
+
+    ``at_or_above_tau`` compares two persisted numbers and claims
+    nothing further. It is **not** a classification: a mode below tau is
+    a mode whose sign is indeterminate at the protocol that produced it,
+    which is a statement about the numerics, not about what the mode is.
+    See ``ImaginaryModeTauContext.interpretation_limit``.
+    """
+
+    mode_index: int
+    frequency_cm1: float
+    magnitude_cm1: float
+    is_designated_reaction_coordinate: bool
+    declared_disposition: ImaginaryModeDisposition | None = None
+    at_or_above_tau: bool | None = None
+
+
+class ImaginaryModeTauContext(BaseModel):
+    """ADR 0012's stored magnitude judgement, returned beside a
+    projection that could not be taken.
+
+    Present only when ``ImaginaryModeProjectionSummary.status`` is one of
+    the not-determinable values and the record has imaginary modes.
+    Absent on a ``determined`` block, because ADR 0012's own rule is
+    that a determination beats a threshold and reporting both would
+    invite a reader to split the difference between a measurement and a
+    tolerance.
+
+    Everything here is read back from ``calc_freq_result`` and
+    ``calculation_parameter`` as the upload wrote them. Nothing is
+    re-resolved: ADR 0012 requires tau to be stored precisely so a later
+    parser improvement cannot silently re-label a historical record, and
+    recomputing it to fill this block would be that defect.
+
+    ``protocol_parameters`` sits beside ``tau_basis`` rather than
+    explaining it away. If a parser has since learned to read a key that
+    was absent when this record was judged, the reader sees a basis and
+    a parameter list that disagree -- which is the finding, not an error
+    for TCKDB to resolve in either direction.
+    """
+
+    tau_cm1: float | None = None
+    tau_basis: str | None = None
+    structural_flag: bool | None = None
+    reaction_coordinate_mode_index: int | None = None
+    modes: list[TauRankedModeEntry] = []
+    protocol_parameters: list[TauProtocolParameterEntry] = []
+    interpretation_limit: str
+
+
 class ImaginaryModeProjectionSummary(BaseModel):
     """The ``include=imaginary_mode_projections`` block for a calculation.
 
@@ -319,8 +384,18 @@ class ImaginaryModeProjectionSummary(BaseModel):
     bill of health -- it is the answer for every frequency calculation
     that carries no matrix to project.
 
-    Nothing in this block is stored. It is recomputed per request from
-    ``calc_hessian`` and the geometry it is bound to.
+    Nor is it a shrug. A record with no matrix was still judged by
+    magnitude at upload, and ``tau_context`` carries that judgement --
+    the tau applied, the row of ADR 0012's protocol table it came from,
+    the recorded provenance that chose that row, the persisted
+    structural flag, and every imaginary mode ranked by magnitude
+    against the tau. A reader gets "this could not be determined from
+    stored data, and here is where these modes sat relative to the noise
+    floor of the protocol that produced them" instead of silence.
+
+    Nothing in the projection is stored. It is recomputed per request
+    from ``calc_hessian`` and the geometry it is bound to. Everything in
+    ``tau_context``, by contrast, is read back rather than recomputed.
     """
 
     status: ProjectionStatusValue
@@ -333,6 +408,7 @@ class ImaginaryModeProjectionSummary(BaseModel):
     rotatable_bonds: list[list[int]] = []
     rigid_body_overlap_threshold: float
     torsion_overlap_threshold: float
+    tau_context: ImaginaryModeTauContext | None = None
 
 class CalculationScanResultSummary(BaseModel):
     """Summary projection of a ``calc_scan_result`` row.

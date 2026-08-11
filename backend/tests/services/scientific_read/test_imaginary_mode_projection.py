@@ -18,6 +18,7 @@ import pathlib
 import pytest
 
 from app.chemistry.normal_modes import ModeDetermination
+from app.db.models.calculation import CalculationParameter, CalculationParameterVocab
 from app.db.models.common import CalculationType, ImaginaryModeDisposition
 from app.services.hessian_parsing import parse_hessian_from_artifact
 from app.services.scientific_read.imaginary_mode_projection import (
@@ -428,3 +429,336 @@ def test_a_stored_frequency_the_matrix_does_not_reproduce_is_not_projected(
     assert mode.not_determined_reason == "not_matched_in_recovered_spectrum"
     assert mode.rigid_body_overlap is None
     assert mode.recovered_frequency_cm1 is not None
+
+
+# ---------------------------------------------------------------------------
+# What a refusal says instead of nothing (ADR 0012's stored tau)
+# ---------------------------------------------------------------------------
+#
+# The statuses above are honest and they are also a shrug: a reader who
+# asks about the corpus records with an imaginary mode and no Hessian
+# learns only that nothing was checked. TCKDB is not silent about those
+# modes -- ADR 0012 judged every one of them by magnitude at upload,
+# against a tau resolved from the protocol that produced them, and
+# persisted the tau, its basis and the resulting structural flag. These
+# tests are about returning that judgement beside the refusal, and about
+# the line it must not cross: reporting a magnitude is not assigning a
+# mode, and nothing here may call a mode spurious.
+
+
+def _seed_parameter(session, *, calculation, canonical_key, canonical_value):
+    """Insert one ``calculation_parameter`` row, seeding its vocab first.
+
+    ``calculation_parameter.canonical_key`` carries an FK to
+    ``calculation_parameter_vocab``, so a test that sets one must seed
+    the vocabulary row it points at.
+    """
+    if session.get(CalculationParameterVocab, canonical_key) is None:
+        session.add(CalculationParameterVocab(canonical_key=canonical_key))
+        session.flush()
+    session.add(
+        CalculationParameter(
+            calculation_id=calculation.id,
+            raw_key=canonical_key,
+            raw_value=canonical_value,
+            canonical_key=canonical_key,
+            canonical_value=canonical_value,
+        )
+    )
+    session.flush()
+
+
+def _judged_record_without_a_hessian(session, **freq_kwargs):
+    """ADR 0012's motivating record, judged and deposited without a matrix.
+
+    -1300, -42 and -13 cm-1 is the case ADR 0012 opens with. No live
+    record reaches this path: ``n_imag`` is only ever 0 or 1 across the
+    whole corpus, so ``imaginary_disposition`` is null everywhere and a
+    record with an extra imaginary mode has to be constructed.
+    """
+    calc = _calculation(session)
+    attach_freq_result(
+        session,
+        calculation=calc,
+        frequencies_cm1=[-1300.0, -42.0, -13.0, 620.0],
+        **freq_kwargs,
+    )
+    return calc
+
+
+def test_a_record_with_no_hessian_reports_the_tau_it_was_judged_against(db_session):
+    """"Not determinable" stops being a shrug.
+
+    The projection still refuses -- there is no matrix, and no amount of
+    stored provenance conjures one. What it now carries is the judgement
+    that *was* made: the tau applied, which row of ADR 0012's protocol
+    table chose it, and the structural flag that followed.
+    """
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=15.0,
+        imaginary_mode_tau_basis="analytic_tight",
+        imaginary_mode_structural_flag=True,
+        imaginary_dispositions=[None, ImaginaryModeDisposition.torsion, None, None],
+    )
+    result = build_imaginary_mode_projection(db_session, calc.id)
+
+    assert result.status is ProjectionStatus.hessian_not_stored
+    assert result.modes == ()
+
+    tau = result.tau_context
+    assert tau is not None
+    assert tau.tau_cm1 == 15.0
+    assert tau.tau_basis == "analytic_tight"
+    assert tau.structural_flag is True
+    assert tau.reaction_coordinate_mode_index == 1
+
+
+def test_the_tau_block_ranks_by_magnitude_and_names_only_the_designation(db_session):
+    """Ranked magnitudes, and one mode named -- by the depositor.
+
+    ADR 0012's tiers turn on the *ordering* of magnitudes against the
+    designated reaction coordinate, so the ordering is what the block
+    reports, and it is a re-ordering rather than a pass-through: the
+    modes are deliberately stored here in an order the frequency list
+    might genuinely produce, with the reaction coordinate second and the
+    smallest residue first. The only mode the block calls anything is
+    the one the depositor designated; the rest carry a magnitude and a
+    comparison and no label.
+    """
+    calc = _calculation(db_session)
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-13.0, -1300.0, -42.0, 620.0],
+        reaction_coordinate_mode_index=2,
+        imaginary_mode_tau_cm1=15.0,
+        imaginary_mode_tau_basis="analytic_tight",
+        imaginary_mode_structural_flag=True,
+    )
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+
+    assert [mode.magnitude_cm1 for mode in tau.modes] == [1300.0, 42.0, 13.0]
+    assert [mode.mode_index for mode in tau.modes] == [2, 3, 1]
+    assert [mode.frequency_cm1 for mode in tau.modes] == [-1300.0, -42.0, -13.0]
+
+    designated = [mode.is_designated_reaction_coordinate for mode in tau.modes]
+    assert designated == [True, False, False]
+
+    # -42 is 2.8x above the noise floor of a clean protocol and -13 is
+    # not; that comparison is the whole of what tau decides.
+    assert [mode.at_or_above_tau for mode in tau.modes] == [True, True, False]
+
+
+def test_the_tau_block_reports_a_magnitude_and_refuses_to_assign_a_mode(db_session):
+    """The line ADR 0012 draws, asserted as a property of the payload.
+
+    A torsion at -300 cm-1 and a genuine second reaction coordinate at
+    -300 cm-1 are the same number in a frequency list, which is the
+    entire gap the projection exists to close. So a block that could not
+    take a projection must not fill the hole with a verdict: no field
+    here names a mode spurious, an artefact, or noise, and the only
+    classification on the wire is the one the depositor declared.
+    """
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=50.0,
+        imaginary_mode_tau_basis="protocol_not_recorded",
+        imaginary_mode_structural_flag=False,
+        imaginary_dispositions=[None, ImaginaryModeDisposition.unassigned, None, None],
+    )
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+
+    # Every classification-shaped value is either the depositor's own
+    # declaration or absent. The ranked modes carry no determination
+    # field at all -- there was nothing to determine.
+    assert [mode.declared_disposition for mode in tau.modes] == [
+        None,
+        ImaginaryModeDisposition.unassigned,
+        None,
+    ]
+    assert not hasattr(tau.modes[0], "determination")
+
+    forbidden = ("spurious", "artefact", "artifact", "is_real", "is_noise")
+    rendered = repr(tau.modes).lower()
+    for word in forbidden:
+        assert word not in rendered, f"the ranked modes should not say {word!r}"
+
+    # And the block says so out loud, on every payload, because the
+    # inference a reader is most likely to draw is the one the data
+    # cannot support.
+    assert "cannot separate a spurious mode from a real one" in tau.interpretation_limit
+    assert tau.interpretation_limit.isascii()
+
+
+def test_the_recorded_protocol_that_set_tau_is_reported_absences_included(db_session):
+    """Which recorded provenance chose the threshold, including what was missing.
+
+    ADR 0012: an unrecorded Hessian method takes the conservative row
+    "whatever else is present", so the parameter that is *absent* is
+    frequently the one that decided tau. Listing only the recorded keys
+    would hide it.
+    """
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=50.0,
+        imaginary_mode_tau_basis="protocol_not_recorded",
+        imaginary_mode_structural_flag=False,
+    )
+    _seed_parameter(db_session, calculation=calc, canonical_key="grid.quality", canonical_value="ultrafine")
+    _seed_parameter(db_session, calculation=calc, canonical_key="opt.convergence", canonical_value="tight")
+
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+    assert [(p.canonical_key, p.canonical_value) for p in tau.protocol_parameters] == [
+        ("freq.hessian_method", None),
+        ("grid.quality", "ultrafine"),
+        ("opt.convergence", "tight"),
+    ]
+
+    # A tight grid and a tight optimisation did not buy the 15 cm-1 line,
+    # because the frequency job's own method was never recorded. The
+    # stored basis says so, and the block reports the stored basis rather
+    # than re-resolving one from these three rows.
+    assert tau.tau_basis == "protocol_not_recorded"
+    assert tau.tau_cm1 == 50.0
+
+
+def test_the_stored_basis_wins_over_the_parameters_and_the_disagreement_shows(db_session):
+    """tau is read back, never re-resolved.
+
+    ADR 0012 stores tau so that "a later parser improvement cannot
+    silently re-decide every historical record". A record judged at
+    50 cm-1 whose parameters now say analytic/tight is exactly that
+    case: the block reports the 50 it was judged at, alongside the
+    parameters that would now suggest 15, and leaves the reader to
+    notice. Re-resolving here would be the defect the storage
+    requirement exists to prevent.
+    """
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=50.0,
+        imaginary_mode_tau_basis="protocol_not_recorded",
+        imaginary_mode_structural_flag=False,
+    )
+    _seed_parameter(db_session, calculation=calc, canonical_key="freq.hessian_method", canonical_value="analytic")
+    _seed_parameter(db_session, calculation=calc, canonical_key="grid.quality", canonical_value="ultrafine")
+    _seed_parameter(db_session, calculation=calc, canonical_key="opt.convergence", canonical_value="tight")
+
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+    assert tau.tau_cm1 == 50.0
+    assert tau.tau_basis == "protocol_not_recorded"
+    assert [p.canonical_value for p in tau.protocol_parameters] == ["analytic", "ultrafine", "tight"]
+    # -42 was below the tau this record was judged at and would be above
+    # a re-resolved one. The stored judgement is what is reported.
+    assert [mode.at_or_above_tau for mode in tau.modes] == [True, False, False]
+
+
+def test_a_record_judged_before_adr_0012_reports_no_tau_rather_than_a_default(db_session):
+    """A missing tau is a missing tau, not 50.
+
+    ADR 0012's migration "backfills nothing, because there is nothing
+    true to backfill". The read surface has to hold the same line: a
+    record deposited before the decision was never judged under it, and
+    substituting the protocol-not-recorded row here would manufacture a
+    judgement that was never made.
+    """
+    calc = _judged_record_without_a_hessian(db_session)
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+
+    assert tau is not None
+    assert tau.tau_cm1 is None
+    assert tau.tau_basis is None
+    assert tau.structural_flag is None
+    assert tau.reaction_coordinate_mode_index is None
+    assert [mode.at_or_above_tau for mode in tau.modes] == [None, None, None]
+    assert [mode.is_designated_reaction_coordinate for mode in tau.modes] == [False, False, False]
+
+
+def test_every_way_of_failing_to_determine_carries_the_tau_judgement(db_session):
+    """Not just the no-Hessian case.
+
+    A matrix bound to the wrong frame is as undetermined as no matrix at
+    all, and the reader is owed the same answer.
+    """
+    parsed = _gaussian_hessian()
+    calc = _calculation(db_session)
+    geometry = make_geometry(db_session, natoms=parsed.natoms)
+    attach_geometry_atoms(
+        db_session,
+        geometry=geometry,
+        symbols=[row[0] for row in GAUSSIAN_STANDARD_ORIENTATION],
+        coords=[list(row[1:]) for row in GAUSSIAN_STANDARD_ORIENTATION],
+    )
+    attach_input_geometry(db_session, calculation=calc, geometry=geometry)
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-1300.0, -42.0, 620.0],
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=30.0,
+        imaginary_mode_tau_basis="analytic_default",
+        imaginary_mode_structural_flag=True,
+    )
+    attach_hessian(
+        db_session,
+        calculation=calc,
+        geometry=geometry,
+        natoms=parsed.natoms,
+        lower_triangle=parsed.lower_triangle_hartree_bohr2,
+    )
+
+    result = build_imaginary_mode_projection(db_session, calc.id)
+    assert result.status is ProjectionStatus.rigid_body_curvature_too_large
+    assert result.tau_context is not None
+    assert result.tau_context.tau_cm1 == 30.0
+    assert [mode.at_or_above_tau for mode in result.tau_context.modes] == [True, True]
+
+
+def test_a_determined_projection_carries_no_tau_block(db_session):
+    """A determination beats a threshold, so the threshold stands down.
+
+    ADR 0012 is explicit that the projections "should be implemented
+    before tau is tuned, because a determination beats a threshold
+    wherever one is available". Returning both would invite a reader to
+    average a measurement with a tolerance. The response for a record
+    that carries a Hessian is unchanged by this feature.
+    """
+    calc = _orca_record(
+        db_session,
+        dispositions=[ImaginaryModeDisposition.torsion, None, None, None],
+    )
+    result = build_imaginary_mode_projection(db_session, calc.id)
+
+    assert result.status is ProjectionStatus.determined
+    assert result.tau_context is None
+
+
+@pytest.mark.parametrize(
+    "frequencies",
+    [
+        pytest.param([331.2, 1074.8], id="no_imaginary_modes"),
+        pytest.param([], id="no_frequency_modes"),
+    ],
+)
+def test_a_record_with_nothing_to_judge_carries_no_tau_block(db_session, frequencies):
+    """tau judges imaginary modes. With none, there is nothing to say."""
+    calc = _calculation(db_session)
+    if frequencies:
+        attach_freq_result(
+            db_session,
+            calculation=calc,
+            frequencies_cm1=frequencies,
+            imaginary_mode_tau_cm1=15.0,
+            imaginary_mode_tau_basis="analytic_tight",
+        )
+    result = build_imaginary_mode_projection(db_session, calc.id)
+    assert result.status is not ProjectionStatus.determined
+    assert result.tau_context is None

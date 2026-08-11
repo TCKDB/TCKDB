@@ -7,6 +7,8 @@ badge, internal-id policy, available_sections, and include validation
 
 from __future__ import annotations
 
+import pathlib
+
 from app.db.models.calculation import (
     CalculationConstraint,
     CalculationDependency,
@@ -45,11 +47,15 @@ from app.db.models.software import Software, SoftwareRelease
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
 from app.services.calculation_resolution import resolve_execution_environment_manifest
+from app.services.hessian_parsing import parse_hessian_from_artifact
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_dependency,
     attach_freq_result,
+    attach_geometry_atoms,
     attach_geometry_validation,
+    attach_hessian,
+    attach_input_geometry,
     attach_opt_result,
     attach_output_geometry,
     attach_scf_stability,
@@ -2145,6 +2151,124 @@ def test_detail_include_imaginary_mode_projections_says_what_it_could_not_check(
     assert block["rigid_body_overlap_threshold"] == 0.90
     assert block["torsion_overlap_threshold"] == 0.70
     assert body["record"]["available_sections"]["has_hessian"] is False
+
+
+def test_detail_imaginary_mode_projections_no_hessian_still_carries_the_tau_judgement(
+    client, db_session
+):
+    """Not determinable, and not a shrug.
+
+    ADR 0012 judged this record's imaginary modes by magnitude at upload,
+    against a tau resolved from the protocol that produced them, and
+    persisted the tau, its basis and the structural flag on
+    ``calc_freq_result``. Where the projection cannot run, that judgement
+    is what the block carries instead of silence -- the ranked
+    magnitudes, the tau, the recorded protocol that set it, and the flag.
+
+    The corpus does not yet contain a record that reaches this shape with
+    an extra imaginary mode: ``n_imag`` is only ever 0 or 1 live, so the
+    -1300 / -42 / -13 record ADR 0012 opens with is constructed here.
+    """
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-1300.0, -42.0, -13.0, 620.0],
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=15.0,
+        imaginary_mode_tau_basis="analytic_tight",
+        imaginary_mode_structural_flag=True,
+    )
+    _ensure_param_vocab_local(db_session, "freq.hessian_method")
+    _attach_calc_parameter(
+        db_session,
+        calculation=calc,
+        raw_key="AnFreq",
+        raw_value="analytic",
+        canonical_key="freq.hessian_method",
+        canonical_value="analytic",
+    )
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=imaginary_mode_projections"
+    ).json()
+    block = body["record"]["imaginary_mode_projections"]
+
+    assert block["status"] == "hessian_not_stored"
+    assert block["modes"] == []
+
+    tau = block["tau_context"]
+    assert tau["tau_cm1"] == 15.0
+    assert tau["tau_basis"] == "analytic_tight"
+    assert tau["structural_flag"] is True
+    assert tau["reaction_coordinate_mode_index"] == 1
+    assert [mode["magnitude_cm1"] for mode in tau["modes"]] == [1300.0, 42.0, 13.0]
+    assert [mode["at_or_above_tau"] for mode in tau["modes"]] == [True, True, False]
+    assert [mode["is_designated_reaction_coordinate"] for mode in tau["modes"]] == [
+        True,
+        False,
+        False,
+    ]
+    assert tau["protocol_parameters"] == [
+        {"canonical_key": "freq.hessian_method", "canonical_value": "analytic"},
+        {"canonical_key": "grid.quality", "canonical_value": None},
+        {"canonical_key": "opt.convergence", "canonical_value": None},
+    ]
+    assert "spurious" in tau["interpretation_limit"]
+
+    # No row id reaches the wire: ``mode_index`` is scientific ordering
+    # metadata, and there is nothing else here to leak.
+    for mode in tau["modes"]:
+        assert "id" not in mode
+        assert "calculation_id" not in mode
+
+
+def test_detail_imaginary_mode_projections_with_a_hessian_carries_no_tau_context(
+    client, db_session
+):
+    """A determined projection is unchanged by the tau block.
+
+    ADR 0012 says a determination beats a threshold wherever one is
+    available, so where the projection ran, the threshold stands down
+    rather than sitting beside it inviting a reader to average the two.
+    """
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
+    fixtures = pathlib.Path(__file__).resolve().parents[2] / "fixtures"
+    parsed = parse_hessian_from_artifact(
+        (fixtures / "orca" / "Orca_TS_test.hess").read_text(), from_hess_file=True
+    )
+    geometry = make_geometry(db_session, natoms=parsed.natoms)
+    attach_geometry_atoms(
+        db_session,
+        geometry=geometry,
+        symbols=[row[0] for row in parsed.reference_coords_angstrom],
+        coords=[list(row[1:]) for row in parsed.reference_coords_angstrom],
+    )
+    attach_input_geometry(db_session, calculation=calc, geometry=geometry)
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-503.235928, 331.230278, 1074.813628, 3107.075736],
+        imaginary_mode_tau_cm1=15.0,
+        imaginary_mode_tau_basis="analytic_tight",
+    )
+    attach_hessian(
+        db_session,
+        calculation=calc,
+        geometry=geometry,
+        natoms=parsed.natoms,
+        lower_triangle=parsed.lower_triangle_hartree_bohr2,
+    )
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=imaginary_mode_projections"
+    ).json()
+    block = body["record"]["imaginary_mode_projections"]
+    assert block["status"] == "determined"
+    assert block["tau_context"] is None
+    assert block["modes"][0]["determination"] == "internal_vibration"
 
 
 def test_imaginary_mode_projections_is_detail_only_and_not_in_include_all(
