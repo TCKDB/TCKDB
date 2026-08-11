@@ -193,19 +193,21 @@ def test_the_nightly_ambient_database_is_outside_the_reclaimable_namespace() -> 
     rather than hardcoded, so renaming it again cannot make this vacuous.
     """
     workflow = _nightly_workflow_source()
-    match = re.search(r"^\s*DB_NAME:\s*(\S+)\s*$", workflow, re.MULTILINE)
-    assert match is not None, "backend-nightly.yml no longer declares a DB_NAME"
-    db_name = match.group(1)
+    # ``findall``, not ``search``: a later step-level override would otherwise
+    # be checked by nobody while the job-level name kept this passing.
+    declared = re.findall(r"^\s*(?:DB_NAME|POSTGRES_DB):\s*(\S+)\s*$", workflow, re.MULTILINE)
+    assert declared, "backend-nightly.yml no longer declares an ambient database name"
 
-    assert _reclaim_script_pattern().fullmatch(db_name) is None, (
-        f"the nightly job's ambient database {db_name!r} is inside the "
-        "harness's reclaimable namespace; rename it outside 'tckdb_test' "
-        "rather than adding it to PROTECTED"
-    )
-    assert conftest._TEST_DATABASE_NAME.fullmatch(db_name) is None, (
-        f"the nightly job's ambient database {db_name!r} is inside the "
-        "in-process sweep's namespace"
-    )
+    for db_name in declared:
+        assert _reclaim_script_pattern().fullmatch(db_name) is None, (
+            f"the nightly job's ambient database {db_name!r} is inside the "
+            "harness's reclaimable namespace; rename it outside 'tckdb_test' "
+            "rather than adding it to PROTECTED"
+        )
+        assert conftest._TEST_DATABASE_NAME.fullmatch(db_name) is None, (
+            f"the nightly job's ambient database {db_name!r} is inside the "
+            "in-process sweep's namespace"
+        )
 
 
 def test_protected_holds_only_names_the_pattern_cannot_match() -> None:
