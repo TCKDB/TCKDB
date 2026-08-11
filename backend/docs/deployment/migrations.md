@@ -315,6 +315,57 @@ SELECT count(*) FROM network_solve WHERE kind = 'reported' AND literature_id IS 
 
 ---
 
+## Repairing an accepted record (revision `e2c9a4f7b163`)
+
+Some migrations rewrite a value that carries no scientific content — the letter
+case of an element symbol in `geometry_atom.element` (`b4e7c1d20f83`) is the
+worked example. On a database holding a non-canonical row under an **accepted**
+calculation, such a migration fails with the accepted-science guard's own
+`accepted calculation record N is immutable`. That failure is correct: the
+decision to rewrite a value inside approved science belongs to the operator, not
+to a migration file.
+
+**Do not disable the trigger.** Declare the repair instead, in the same
+transaction as the rewrite:
+
+```sql
+BEGIN;
+INSERT INTO accepted_science_repair
+    (target_table, declared_columns, alembic_revision, reason)
+VALUES ('geometry_atom', ARRAY['element'], 'b4e7c1d20f83',
+        'canonicalise element symbol case; geom_hash, xyz_text and '
+        'coordinates are not touched');
+
+UPDATE geometry_atom
+   SET element = upper(substr(btrim(element), 1, 1)) || lower(substr(btrim(element), 2))
+ WHERE btrim(element) <> upper(substr(btrim(element), 1, 1)) || lower(substr(btrim(element), 2));
+
+-- Read back what was actually changed before committing.
+SELECT record_type, record_id, row_identity, before_json, after_json
+  FROM accepted_science_repair_change;
+COMMIT;
+```
+
+The declaration permits an UPDATE to that table **only** for the columns it
+names — an UPDATE that touches anything else is refused by name and the whole
+transaction rolls back — and every changed row is recorded against the accepted
+record it sits under. The declaration is dead the moment the transaction ends,
+so there is nothing to close. Run this as the migration owner (`DB_OWNER_USER`);
+the runtime account is refused. Full semantics and limits:
+[`../specs/accepted_science_immutability.md`](../specs/accepted_science_immutability.md)
+and [ADR 0015](../../../docs/adr/0015-a-repair-to-accepted-science-is-declared-before-it-is-made.md).
+
+Two things this cannot do, deliberately. It cannot INSERT or DELETE rows under
+an accepted record, and it cannot rewrite a primary key. Both are changes to
+*what* was accepted rather than to how it is spelled, and both need a
+replacement record and a `scientific_record_supersession` edge.
+
+The repair record is **not** carried by `tckdb.archive.v1` — it is keyed on this
+cluster's transaction id. Keep the `pg_dump` from the upgrade if the account of
+the repair matters to you.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
