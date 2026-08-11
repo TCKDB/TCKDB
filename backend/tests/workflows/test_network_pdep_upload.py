@@ -2366,6 +2366,30 @@ def test_pdep_ts_evidence_refuses_ethene_made_of_oxygens(db_engine) -> None:
     assert "C2H2O2" in message and "C2H4" in message
 
 
+def test_pdep_ts_evidence_refuses_an_empty_list_from_a_molecule() -> None:
+    """An empty atom list says "no atoms", which HO2 is not entitled to say.
+
+    ``product:1`` takes all nine saddle-point atoms and ``product:2`` is
+    declared empty, so every atom is still claimed exactly once and the
+    coverage rule sees nothing. What refuses it is the participant's declared
+    kind, read off the species this micro reaction names -- which is the wiring
+    this path has to get right, since its participants are species keys rather
+    than inline identities.
+    """
+    payload = _full_payload()
+    payload["transition_states"][0]["validation_evidence"][0].update(
+        {
+            "product_participant_mapping": {
+                "product:1": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+                "product:2": [],
+            }
+        }
+    )
+
+    with pytest.raises(ValueError, match="omit the mappings instead"):
+        NetworkPDepUploadRequest(**payload)
+
+
 def test_pdep_ts_evidence_accepts_the_correct_partition(db_engine) -> None:
     """The other half: the same saddle point, partitioned per atom, deposits.
 

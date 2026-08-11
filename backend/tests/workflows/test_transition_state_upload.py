@@ -799,3 +799,91 @@ def test_standalone_ts_evidence_enforces_full_atom_coverage() -> None:
         _ts_request_with_evidence(
             reactant_participant_mapping={"reactant:1": [1], "reactant:2": [2]}
         )
+
+
+def test_standalone_ts_evidence_refuses_an_empty_list_from_a_molecule() -> None:
+    """``reactant:1`` takes all three atoms and H2 is declared to have none.
+
+    Every atom is still claimed exactly once, so coverage is satisfied and only
+    the participant's declared kind refuses it. An empty list is the statement
+    "this participant has no atoms", and a hydrogen molecule has two.
+    """
+    with pytest.raises(ValueError, match="omit the mappings instead"):
+        _ts_request_with_evidence(
+            reactant_participant_mapping={"reactant:1": [1, 2, 3], "reactant:2": []}
+        )
+
+
+#: ``OH- + H -> H2O + e-``: three atoms at the saddle point and a product that
+#: has none of them.
+_XYZ_TS_AD = """\
+3
+TS for OH- + H -> H2O + e-
+O  0.000  0.000  0.000
+H  0.960  0.000  0.000
+H -0.400  1.400  0.000
+"""
+
+_AD_REACTION = {
+    "reversible": False,
+    "reactants": [
+        {"species_entry": {"smiles": "[OH-]", "charge": -1, "multiplicity": 1}},
+        {"species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2}},
+    ],
+    "products": [
+        {"species_entry": {"smiles": "O", "charge": 0, "multiplicity": 1}},
+        {
+            "species_entry": {
+                "molecule_kind": "electron",
+                "smiles": "[e-]",
+                "charge": -1,
+                "multiplicity": 2,
+            }
+        },
+    ],
+}
+
+
+def test_standalone_ts_evidence_partitions_a_released_electron() -> None:
+    """The third deposit path can say ``product:2: []`` too.
+
+    A free electron is a participant with no atoms, and this path describes its
+    participants by identity, so the kind is right there in the payload. The
+    mapping is complete -- water is the whole saddle point and the electron is
+    none of it -- and had this path passed its participants in the wrong order
+    the electron's kind would land on a reactant and the same rule would refuse
+    it.
+    """
+    request = TransitionStateUploadRequest(
+        reaction=_AD_REACTION,
+        charge=-1,
+        multiplicity=2,
+        geometry={"xyz_text": _XYZ_TS_AD},
+        primary_opt=CalculationWithResultsPayload(
+            type="opt", software_release=_SOFTWARE, level_of_theory=_LOT
+        ),
+        additional_calculations=[
+            CalculationWithResultsPayload(
+                type="irc", software_release=_SOFTWARE, level_of_theory=_LOT
+            )
+        ],
+        validation_evidence=[
+            {
+                "kind": "irc",
+                "passed": True,
+                "rationale": "IRC descends to OH- + H one way and H2O + e- the other.",
+                "reactant_participant_mapping": {
+                    "reactant:1": [1, 2],
+                    "reactant:2": [3],
+                },
+                "product_participant_mapping": {
+                    "product:1": [1, 2, 3],
+                    "product:2": [],
+                },
+            }
+        ],
+        label="associative detachment TS",
+    )
+
+    evidence = request.validation_evidence[0]
+    assert evidence.product_participant_mapping["product:2"] == []
