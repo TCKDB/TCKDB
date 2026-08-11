@@ -22,30 +22,63 @@ _REVISION = _VERSIONS / "c6f2a9d4e7b1_enforce_accepted_science_immutability.py"
 #: without being created fails as well.
 _ATOM_MAP_REVISION = _VERSIONS / "b6c1f4a8e703_freeze_declared_atom_maps.py"
 
+#: ``a1f6c3e9b527`` extends it again, to the five evidence tables that carry an
+#: ownership foreign key to an accepted root and had no guard — the IRC
+#: evidence backing the same claim ``b6c1f4a8e703``'s atom maps elaborate, the
+#: barriers and state energies a network solve ran with, and the interpretation
+#: and tunneling rows a rate constant was computed under. Checked here on the
+#: same terms.
+_EVIDENCE_REVISION = _VERSIONS / "a1f6c3e9b527_freeze_evidence_under_accepted_roots.py"
+
+#: The revisions that extend ``c6f2a9d4e7b1``'s regime by adding guards under
+#: their own ``_trigger_name``. Both halves of this test iterate this list, so
+#: a fourth such revision is wired in by adding it here once.
+_EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION)
+
 
 def _revision_namespace() -> dict:
     return runpy.run_path(str(_REVISION))
 
 
-def _atom_map_revision_namespace() -> dict:
-    return runpy.run_path(str(_ATOM_MAP_REVISION))
+def _extension_namespaces() -> list[dict]:
+    return [runpy.run_path(str(path)) for path in _EXTENSION_REVISIONS]
+
+
+def _referenced_tables(tables, table: str, column: str, *, hops: int) -> set[str]:
+    """Tables a column's value identifies, following foreign keys ``hops`` deep."""
+
+    reached: set[str] = set()
+    frontier = {(table, column)}
+    for _ in range(hops):
+        next_frontier: set[tuple[str, str]] = set()
+        for current_table, current_column in frontier:
+            for foreign_key in tables[current_table].c[current_column].foreign_keys:
+                referent = foreign_key.column
+                reached.add(referent.table.name)
+                next_frontier.add((referent.table.name, referent.name))
+        frontier = next_frontier
+    return reached
 
 
 def test_registry_references_real_metadata_and_short_identifiers() -> None:
     revision = _revision_namespace()
-    atom_map_revision = _atom_map_revision_namespace()
+    extensions = _extension_namespaces()
     tables = Base.metadata.tables
     root_types = revision["_ROOT_TYPES"]
+
+    direct_children = revision["_DIRECT_CHILDREN"]
+    via_children = revision["_VIA_CHILDREN"]
+    for extension in extensions:
+        direct_children = direct_children + extension["_DIRECT_CHILDREN"]
+        via_children = via_children + extension["_VIA_CHILDREN"]
 
     for table in root_types.values():
         assert table in tables
         assert "id" in tables[table].c
-    for table, _, column in revision["_DIRECT_CHILDREN"] + atom_map_revision["_DIRECT_CHILDREN"]:
+    for table, _, column in direct_children:
         assert table in tables
         assert column in tables[table].c
-    for table, _, child_column, parent, parent_pk, root_column in (
-        revision["_VIA_CHILDREN"] + atom_map_revision["_VIA_CHILDREN"]
-    ):
+    for table, _, child_column, parent, parent_pk, root_column in via_children:
         assert table in tables
         assert child_column in tables[table].c
         assert parent in tables
@@ -56,10 +89,39 @@ def test_registry_references_real_metadata_and_short_identifiers() -> None:
     # knows how to lock. One that does not raises 22023 at runtime rather than
     # protecting anything, and the failure would only surface the first time a
     # guarded row was written.
-    for _, record_type, *_rest in atom_map_revision["_DIRECT_CHILDREN"] + atom_map_revision["_VIA_CHILDREN"]:
-        assert record_type in root_types
-    for table in atom_map_revision["_TRUNCATE_TABLES"]:
-        assert table in tables
+    for extension in extensions:
+        for _, record_type, *_rest in extension["_DIRECT_CHILDREN"] + extension["_VIA_CHILDREN"]:
+            assert record_type in root_types
+        for table in extension["_TRUNCATE_TABLES"]:
+            assert table in tables
+
+    # Every guarded column must actually hold an id of the root table it
+    # claims. Without this, a guard naming a column of the wrong table would
+    # fail only at runtime, on the first write it was supposed to refuse.
+    #
+    # One hop is allowed because ``calc_scan_point_coordinate_value`` reaches
+    # ``calculation`` through the composite foreign keys into
+    # ``calc_scan_point`` and ``calc_scan_coordinate`` rather than declaring a
+    # second single-column one of its own. The column is still a calculation
+    # id; only the declaration is indirect.
+    for table, record_type, column in direct_children:
+        target = root_types[record_type]
+        assert target in _referenced_tables(tables, table, column, hops=2), (table, column, target)
+
+    # ``tckdb_guard_accepted_child`` reads each column it is given and does
+    # nothing where the value is NULL, so a group whose columns are *all*
+    # nullable yields a trigger that skips whole rows. At least one column per
+    # ``(table, record_type)`` group must therefore be NOT NULL. It is asserted
+    # per group rather than per column because a nullable column can be a
+    # deliberate second binding beside a NOT NULL one --
+    # ``calc_scf_stability`` is guarded on both its own ``calculation_id`` and
+    # the optional ``source_calculation_id`` it was derived from, and both
+    # land in one trigger.
+    grouped_columns: dict[tuple[str, str], list[str]] = {}
+    for table, record_type, column in direct_children:
+        grouped_columns.setdefault((table, record_type), []).append(column)
+    for (table, record_type), columns in grouped_columns.items():
+        assert any(not tables[table].c[column].nullable for column in columns), (table, record_type, columns)
 
     constraints = tables["scientific_record_supersession"].constraints
     assert all(constraint.name is None or len(constraint.name) <= 63 for constraint in constraints)
@@ -109,15 +171,13 @@ def test_database_trigger_set_matches_registry(db_session) -> None:
     )
     expected.update((table, f"trg_as_truncate_{index:02d}") for index, table in enumerate(truncate_tables))
 
-    atom_map_revision = _atom_map_revision_namespace()
-    atom_map_trigger_name = atom_map_revision["_trigger_name"]
-    expected.update(
-        (table, atom_map_trigger_name("as_child", table)) for table, _, _ in atom_map_revision["_child_groups"]()
-    )
-    expected.update((item[0], atom_map_trigger_name("as_via", item[0])) for item in atom_map_revision["_VIA_CHILDREN"])
-    expected.update(
-        (table, atom_map_trigger_name("as_truncate", table)) for table in atom_map_revision["_TRUNCATE_TABLES"]
-    )
+    for extension in _extension_namespaces():
+        extension_trigger_name = extension["_trigger_name"]
+        expected.update(
+            (table, extension_trigger_name("as_child", table)) for table, _, _ in extension["_child_groups"]()
+        )
+        expected.update((item[0], extension_trigger_name("as_via", item[0])) for item in extension["_VIA_CHILDREN"])
+        expected.update((table, extension_trigger_name("as_truncate", table)) for table in extension["_TRUNCATE_TABLES"])
 
     actual = {
         (row.table_name, row.trigger_name)

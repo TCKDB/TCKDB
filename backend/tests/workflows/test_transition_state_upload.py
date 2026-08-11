@@ -33,6 +33,7 @@ from app.db.models.common import (
     IRCDirection,
     PathSearchMethod,
 )
+from app.db.models.geometry import Geometry
 from app.db.models.transition_state import TransitionState
 from app.schemas.fragments.calculation import (
     CalculationWithResultsPayload,
@@ -656,8 +657,39 @@ def test_standalone_ts_upload_persists_irc_evidence(db_conn) -> None:
         linked = session.get(Calculation, rows[0].reconstruction_calculation_id)
         assert linked is not None
         assert linked.type == CalculationType.irc
-        # Passing evidence produces no absent-evidence warning...
-        assert warnings == []
+        # The mapping's atom indices count into the saddle-point geometry, and
+        # the row says so rather than leaving a reader to work out which of the
+        # entry's geometries was meant (ADR 0011, "indices relative to what").
+        # That geometry is the primary opt's output -- the saddle point itself,
+        # not the IRC's endpoints -- and it has exactly the atoms the two
+        # mappings partition, so the indices land on real atoms of it.
+        saddle_point_geometry_id = session.scalar(
+            select(CalculationOutputGeometry.geometry_id)
+            .join(Calculation, Calculation.id == CalculationOutputGeometry.calculation_id)
+            .where(
+                Calculation.transition_state_entry_id == ts_entry.id,
+                Calculation.type == CalculationType.opt,
+            )
+        )
+        assert saddle_point_geometry_id is not None
+        assert rows[0].transition_state_geometry_id == saddle_point_geometry_id
+        mapped_indices = {
+            index
+            for side in (
+                rows[0].reactant_participant_mapping,
+                rows[0].product_participant_mapping,
+            )
+            for indices in side.values()
+            for index in indices
+        }
+        assert mapped_indices == {1, 2, 3}
+        assert (
+            session.get(Geometry, saddle_point_geometry_id).natoms
+            == len(mapped_indices)
+        )
+        # Passing evidence produces no absent-evidence warning; the only gap
+        # this deposit has is the atom map, which this path cannot carry.
+        assert [w.code for w in warnings] == ["reaction_atom_map_absent"]
         # ... and the read surface now says "present" rather than "absent".
         assert _build_validation_descriptor(session, ts_entry.id).irc == "present"
 
@@ -697,13 +729,46 @@ def test_standalone_ts_upload_without_evidence_warns(db_conn) -> None:
         )
         session.flush()
         assert [w.code for w in warnings] == [
-            "transition_state_missing_irc_evidence"
+            "transition_state_missing_irc_evidence",
+            "reaction_atom_map_absent",
         ]
         from app.services.scientific_read.transition_states import (
             _build_validation_descriptor,
         )
 
         assert _build_validation_descriptor(session, ts_entry.id).irc == "absent"
+
+
+def test_standalone_ts_upload_reports_the_absent_atom_map(db_conn) -> None:
+    """ADR 0011's absence warning is a property of the record, not the route.
+
+    The computed-reaction bundle reported it and the PDep bundle reported it;
+    the standalone upload -- the third and last path that can carry a
+    transition state -- did not, so the same unmapped saddle point was
+    annotated or silent depending only on which endpoint deposited it. That is
+    exactly the split the ADR asks the warning to make visible.
+
+    This path cannot *carry* a map: it describes its reactants and products by
+    identity alone, and a map indexes into a geometry per participant. So the
+    remedy must not name an ``atom_map`` field this schema does not have.
+    """
+    with Session(db_conn) as session, session.begin():
+        warnings: list = []
+        persist_transition_state_upload(
+            session, _basic_ts_request(), warnings=warnings
+        )
+        session.flush()
+
+        absent = [w for w in warnings if w.code == "reaction_atom_map_absent"]
+        assert len(absent) == 1
+        # A field a client can actually highlight, and the object the map
+        # belongs to.
+        assert absent[0].field == "reaction"
+        assert "atom_map" not in absent[0].field
+        # The remedy sends the depositor to the path that accepts a map,
+        # rather than to a field that does not exist here.
+        assert "computed-reaction upload" in absent[0].message
+        assert "ADR 0011" in absent[0].message
 
 
 def test_standalone_ts_evidence_requires_exactly_one_irc_calculation() -> None:

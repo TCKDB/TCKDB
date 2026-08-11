@@ -30,6 +30,7 @@ enum ArtifactIntegrityDetectionContext {
   parameter_extraction
   archive
   reproducibility_verification
+  reclaim_restore
 }
 
 enum ArtifactIntegrityFinding {
@@ -3349,6 +3350,7 @@ Table transition_state_validation_evidence {
   reconstruction_calculation_id bigint [not null, ref: > calculation.id]
   reactant_participant_mapping jsonb
   product_participant_mapping jsonb
+  transition_state_geometry_id bigint [ref: > geometry.id]
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
 
@@ -3357,6 +3359,7 @@ Table transition_state_validation_evidence {
   }
 
   checks {
+    `(coalesce(jsonb_typeof(reactant_participant_mapping), 'null') = 'null' AND coalesce(jsonb_typeof(product_participant_mapping), 'null') = 'null') OR transition_state_geometry_id IS NOT NULL` [name: 'ck_transition_state_validation_evidence_mapping_names_geometry']
     `kind IN ('irc')` [name: 'ck_transition_state_validation_evidence_ts_validation_kind']
   }
 

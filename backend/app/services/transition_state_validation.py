@@ -69,7 +69,11 @@ def persist_transition_state_validation_evidence(
         than optional: it is what lets the element check below run on *every*
         path, and a default would let a new path silently opt out of it.
     :param transition_state_geometry_id: Saddle-point geometry the mappings'
-        atom indices count into. ``None`` where the path has no geometry, which
+        atom indices count into. It is both checked against and *recorded* on
+        every row that carries a mapping, so a reader can tell which ordering
+        the indices were counted in rather than having to guess at one; a
+        record with no mapping has no indices and stores no geometry. ``None``
+        is accepted only for a path with no geometry and no mappings, which
         skips the element check as an absence.
     :param warnings: Optional sink for the absent-evidence warning.
     :returns: The persisted rows.
@@ -105,6 +109,24 @@ def persist_transition_state_validation_evidence(
                 f"Transition state '{subject_label}' validation evidence could not "
                 "be linked to the irc calculation that produced it."
             )
+        # A mapping's values are ``geometry_atom.atom_index`` values counted
+        # into the saddle-point geometry, so a record carrying one must say
+        # which geometry that is. The database refuses the combination too
+        # (``ck_transition_state_validation_evidence_mapping_names_geometry``);
+        # raising here turns a caller's omission into a sentence naming the
+        # argument that is missing rather than a constraint name.
+        has_mapping = (
+            record.reactant_participant_mapping is not None
+            or record.product_participant_mapping is not None
+        )
+        if has_mapping and transition_state_geometry_id is None:
+            raise ValueError(
+                f"Transition state '{subject_label}' {field_path} carries "
+                "participant mappings but no transition_state_geometry_id. The "
+                "mappings' atom indices count into the saddle-point geometry, "
+                "and an index with no geometry named beside it does not "
+                "identify an atom."
+            )
         row = TransitionStateValidationEvidence(
             transition_state_entry_id=transition_state_entry_id,
             kind=record.kind,
@@ -113,6 +135,9 @@ def persist_transition_state_validation_evidence(
             reconstruction_calculation_id=calculation_id,
             reactant_participant_mapping=record.reactant_participant_mapping,
             product_participant_mapping=record.product_participant_mapping,
+            transition_state_geometry_id=(
+                transition_state_geometry_id if has_mapping else None
+            ),
             created_by=created_by,
         )
         session.add(row)

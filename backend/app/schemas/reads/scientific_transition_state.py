@@ -184,7 +184,17 @@ class TransitionStateCalculationEvidenceSummary(BaseModel):
 
 
 class TransitionStateValidationEvidenceSummary(BaseModel):
-    """Structured IRC validation evidence with a replayable source link."""
+    """Structured IRC validation evidence with a replayable source link.
+
+    The two participant mappings say which saddle-point atoms become which
+    declared participant, by index, and those indices count into
+    ``transition_state_geometry_ref`` -- not into "the transition state",
+    which has no atom order of its own. It is ``None`` exactly when both
+    mappings are, since a record that partitions no atoms binds no indices.
+    Named to match ``ReactionAtomMapDetail.transition_state_geometry_ref``,
+    which is the same geometry playing the same role for the other surface
+    that indexes the saddle point.
+    """
 
     kind: str
     passed: bool
@@ -192,6 +202,7 @@ class TransitionStateValidationEvidenceSummary(BaseModel):
     reconstruction_calculation_ref: str | None = None
     reactant_participant_mapping: dict[str, list[int]] | None = None
     product_participant_mapping: dict[str, list[int]] | None = None
+    transition_state_geometry_ref: str | None = None
 
 
 class TransitionStateValidationDescriptor(BaseModel):

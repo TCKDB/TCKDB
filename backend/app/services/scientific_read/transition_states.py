@@ -820,10 +820,20 @@ def _build_validation_evidence(
         select(
             TransitionStateValidationEvidence,
             Calculation.public_ref.label("calculation_ref"),
+            # The geometry the participant mappings' atom indices count into.
+            # Projected beside them rather than left in the database: an index
+            # a reader cannot resolve to a geometry does not identify an atom,
+            # so shipping the mappings without this would ship numbers
+            # relative to an ordering the caller has to guess at.
+            Geometry.public_ref.label("geometry_ref"),
         )
         .outerjoin(
             Calculation,
             Calculation.id == TransitionStateValidationEvidence.reconstruction_calculation_id,
+        )
+        .outerjoin(
+            Geometry,
+            Geometry.id == TransitionStateValidationEvidence.transition_state_geometry_id,
         )
         .where(TransitionStateValidationEvidence.transition_state_entry_id == entry_id)
         .order_by(TransitionStateValidationEvidence.id.asc())
@@ -836,6 +846,7 @@ def _build_validation_evidence(
             reconstruction_calculation_ref=row.calculation_ref,
             reactant_participant_mapping=row.TransitionStateValidationEvidence.reactant_participant_mapping,
             product_participant_mapping=row.TransitionStateValidationEvidence.product_participant_mapping,
+            transition_state_geometry_ref=row.geometry_ref,
         )
         for row in rows
     ]
