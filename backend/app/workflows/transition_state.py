@@ -19,6 +19,7 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.reaction_atom_map import persist_reaction_atom_map
 from app.services.reaction_resolution import (
     validate_transition_state_composition,
 )
@@ -35,6 +36,24 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.workflows.reaction import persist_reaction_upload
+
+#: Closing sentence of the atom-map absence warning on this path.
+#:
+#: A map indexes into a geometry per participant (ADR 0011: geometry-relative,
+#: with the geometries named explicitly), and this payload describes its
+#: reactants and products by *identity* alone -- a ``SpeciesEntryIdentityPayload``
+#: carries no coordinates. So there is nothing here for a participant leg to be
+#: written against, and the gap cannot be closed on this path, only reported.
+#: The wording follows ``network_pdep._PDEP_ABSENCE_REMEDY`` for the same
+#: reason it exists there: a remedy naming a field this schema does not have
+#: would send a depositor looking for somewhere to put the map that does not
+#: exist.
+_STANDALONE_TS_ABSENCE_REMEDY = (
+    "The standalone transition-state upload describes its reactants and "
+    "products by identity and carries no geometry for them, so it cannot "
+    "carry a map: to record one for this micro reaction, deposit it through "
+    "the computed-reaction upload, which accepts 'atom_map' (ADR 0011)."
+)
 
 
 def persist_transition_state_upload(
@@ -53,12 +72,15 @@ def persist_transition_state_upload(
     3. Resolve the saddle-point geometry.
     4. Persist the primary opt calculation and additional calculations,
        linking output geometries and dependency edges.
+    5. Persist structured IRC validation evidence, or report its absence.
+    6. Report the absence of an atom map, which this path cannot carry.
 
     :param session: Active SQLAlchemy session.
     :param request: Upload-facing transition-state payload.
     :param created_by: Optional application user id for newly created rows.
-    :param warnings: Optional sink for non-blocking upload warnings (a TS
-        deposited without passing IRC validation evidence).
+    :param warnings: Optional sink for non-blocking upload warnings: a TS
+        deposited without passing IRC validation evidence, and the atom map
+        this path can report the absence of but cannot carry.
     :returns: Newly created ``TransitionStateEntry`` row.
     """
 
@@ -146,6 +168,33 @@ def persist_transition_state_upload(
         field_path="validation_evidence",
         reaction_entry_id=reaction_entry.id,
         transition_state_geometry_id=geometry.id,
+        created_by=created_by,
+        warnings=warnings,
+    )
+
+    # 6. Atom map (ADR 0011). This path cannot carry one -- see
+    #    ``_STANDALONE_TS_ABSENCE_REMEDY`` -- so the call passes ``None``
+    #    unconditionally and exists to report the gap, exactly as the
+    #    pressure-dependent network bundle does. A saddle point deposited here
+    #    is as unmapped as one deposited anywhere else, and the ADR requires
+    #    the absence be loud enough that a depositor who *has* the mapping
+    #    notices they are being asked for it; reporting it on two of the three
+    #    paths that can carry a transition state would make the warning a
+    #    property of the route rather than of the record.
+    persist_reaction_atom_map(
+        session,
+        None,
+        reaction_entry_id=reaction_entry.id,
+        transition_state_entry_id=ts_entry.id,
+        transition_state_geometry_id=geometry.id,
+        participants=(),
+        geometry_id_by_key={},
+        # The map belongs to the micro reaction (ADR 0011), and ``reaction``
+        # is the field on this payload that describes it. Naming a real field
+        # matters for a client that highlights ``field``; there is no
+        # ``atom_map`` here to point at.
+        field_path="reaction",
+        absence_remedy=_STANDALONE_TS_ABSENCE_REMEDY,
         created_by=created_by,
         warnings=warnings,
     )

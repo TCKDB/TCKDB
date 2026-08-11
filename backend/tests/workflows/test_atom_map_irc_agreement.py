@@ -558,6 +558,13 @@ def test_the_verdict_does_not_depend_on_which_surface_is_written_first(
                 reconstruction_calculation_id=_irc_calculation_id(session, result),
                 reactant_participant_mapping=_IRC_METHYL_IS_1235,
                 product_participant_mapping=_IRC_PRODUCTS,
+                # Both surfaces index the same saddle point, so the evidence
+                # names the geometry the map already named. Comparing two sets
+                # of indices only means something once both say what they
+                # counted in, which is the whole reason this column exists.
+                transition_state_geometry_id=session.get(
+                    ReactionAtomMap, result["atom_map_id"]
+                ).transition_state_geometry_id,
             )
         )
         session.flush()
