@@ -18,12 +18,25 @@ Type=oneshot
 
 # Set these for your deployment. EnvironmentFile keeps the secret topic out of
 # the unit file, which is world-readable.
+#
+# No leading `-` here, and that asymmetry with tckdb-alert-failed.service is
+# deliberate. This unit cannot do its job without the topic, so a missing file
+# SHOULD stop it and fire OnFailure=; the OnFailure unit needs the `-` because
+# it is the thing that has to survive that exact failure in order to report it.
 EnvironmentFile=/home/calvin/.config/tckdb-alert.env
 ExecStart=/home/calvin/repos/tckdbv2/backend/scripts/ops/tckdb_alert_check.sh
 
 # The script exits 1 when the deployment is unhealthy. That is information,
 # not a unit failure -- without this, systemd marks the unit failed and the
 # journal fills with noise about the checker rather than about TCKDB.
+#
+# This is only safe because the script no longer lets 1 mean two things. bash
+# exits 1 when it dies on an unbound variable, so this line used to tell
+# systemd that an accidental death partway through the script was a success,
+# and OnFailure= never fired for it -- the one class of failure that produces
+# no push of its own. tckdb_alert_check.sh now reports 2 for any exit taken
+# before a verdict exists, and 2 is deliberately absent from this list.
+# Do not add it.
 SuccessExitStatus=0 1
 
 User=calvin

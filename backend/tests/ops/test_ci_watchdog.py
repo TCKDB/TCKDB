@@ -638,6 +638,9 @@ def _curl_invocations(text: str) -> list[str]:
         WORKFLOWS_DIR / "uptime-check.yml",
         OPS_DIR / "tckdb_alert_check.sh",
         OPS_DIR / "tckdb_ci_watchdog.sh",
+        # The systemd unit publishes too, and was the one place still
+        # missing --fail: a 5xx from ntfy left it green having told nobody.
+        OPS_DIR / "tckdb-alert-failed.service",
     ],
     ids=lambda p: p.name,
 )

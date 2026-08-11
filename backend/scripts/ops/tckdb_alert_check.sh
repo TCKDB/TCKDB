@@ -61,7 +61,41 @@
 #   TCKDB_DEADMAN_URL  optional but strongly recommended -- external URL pinged
 #                      after every completed run; its silence is what tells you
 #                      this checker died
+#
+# EXIT CODES
+#   0  the deployment is healthy
+#   1  a VERDICT of unhealthy: unreachable, bad endpoint, or degraded. The unit
+#      lists this in SuccessExitStatus, because a degraded deployment is
+#      information the script delivered successfully, not a failure of the
+#      script -- the push has already gone out and OnFailure= must not fire.
+#   2  no verdict was reached: no topic, or the script died before deciding.
+#      Never in SuccessExitStatus, so systemd marks the unit failed and
+#      tckdb-alert-failed.service pushes.
+#
+# WHY 1 IS NOT ALLOWED TO MEAN BOTH THINGS
+#   bash exits 1 when it dies on an unbound variable under `set -u`, and 1 is
+#   also this script's "the deployment is unhealthy". SuccessExitStatus=0 1
+#   therefore told systemd to call an accidental death a success, so OnFailure=
+#   never fired for the entire class of bug that kills the script partway
+#   through -- and a dead checker looks exactly like a healthy deployment.
+#   The trap below closes that: 1 keeps its meaning only once a verdict exists,
+#   and any other early exit is reported as 2.
 set -uo pipefail
+
+verdict_reached=0
+on_exit() {
+    local rc=$?
+    if [[ "$rc" -ne 0 && "$verdict_reached" -eq 0 ]]; then
+        # Quiet when the code is already 2 -- that is a deliberate refusal
+        # further down, which has said its own piece.
+        if [[ "$rc" -ne 2 ]]; then
+            echo "error: the checker exited ${rc} before reaching a verdict; reporting 2 so systemd does not read it as a completed check." >&2
+        fi
+        exit 2
+    fi
+    exit "$rc"
+}
+trap on_exit EXIT
 
 STATUS_URL="${TCKDB_STATUS_URL:-https://tckdb.homecalvin.com/api/v1/status}"
 NTFY_SERVER="${TCKDB_NTFY_SERVER:-https://ntfy.sh}"
@@ -171,6 +205,11 @@ else
         fi
     fi
 fi
+
+# A verdict exists from here on, so exit 1 now means "unhealthy deployment"
+# rather than "died on the way", and the unit may go on treating it as a
+# completed run. Everything above this line exits 2.
+verdict_reached=1
 
 # Only notify on a state change. Recovery is worth a push too -- otherwise you
 # are left wondering whether it is still broken.
