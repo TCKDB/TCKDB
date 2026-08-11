@@ -7,6 +7,7 @@ import secrets
 import socket
 import subprocess
 import warnings
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator
 from uuid import uuid4
@@ -428,6 +429,353 @@ def _refuse_foreign_test_database(connection, db_name: str) -> None:
         "this database; dropping it would destroy that run and produce "
         "thousands of unrelated-looking connection errors in both. Give this "
         "run its own DB_TEST_NAME, or wait for the other one to finish."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Concurrent pytest runs against one PostgreSQL server
+#
+# ``_refuse_foreign_test_database`` above solves the *name* collision: two runs
+# wanting the same database.  Run-unique names solved that so thoroughly that
+# the next failure mode had nothing left to name it.
+#
+# Four agents each running an 8-worker gate against one server with
+# ``max_connections = 100`` exhaust the pool.  Measured on this harness: one
+# 8-worker run peaks at about 35 client backends (~4 per worker plus the
+# admin connections), so three concurrent runs are already at the limit and
+# four are past it.  Two separate agents hit this within a day.  One measured
+# 59 connections already in use before its run started and reported 21 failures
+# and 243 errors; the other saw 87 / 1 / 23 / 0 failures across four runs of
+# *the same commit*, every one of which passed serially.
+#
+# The expensive part is not the failure, it is the diagnosis.  Both agents read
+# it as a defect in ``main``, and one nearly published a false baseline.  The
+# errors arrive as ``connection is bad``, ``server closed the connection`` and
+# ``sorry, too many clients already``, scattered across whichever tests
+# happened to be running -- which is indistinguishable from real breakage
+# unless you already know to look at the server.
+#
+# So the harness looks.  It cannot stop somebody else's run, and it does not
+# try; it converts "the suite is red for no visible reason" into a named
+# condition, at the two moments a reader is looking:
+#
+#   * at session start, before anything has been created, it refuses outright
+#     if the server does not have room for this run -- one message instead of
+#     hundreds;
+#   * in the terminal summary, if any foreign run was seen at either end of
+#     the session, it says so, so a red result is pre-attributed.
+#
+# The complement is ``docker-compose.yml``, which now starts Postgres with a
+# ``max_connections`` well above the default 100.  That is the actual fix for
+# the shared workstation; this is what makes the failure legible on any host
+# where it still happens.
+# ---------------------------------------------------------------------------
+
+#: Client backends one xdist worker is worth, measured rather than assumed:
+#: an 8-worker ``test-rest.sh`` run peaks at ~31 backends across its 8 test
+#: databases.  Rounded up, with the admin/alembic connections counted
+#: separately below.
+_BACKENDS_PER_WORKER = 5
+
+#: Connections a run needs beyond its workers: the session-start admin engine,
+#: the ``alembic upgrade head`` subprocess, and the sweep.
+_BACKENDS_PER_RUN = 6
+
+#: Turn the whole check off.  Present because a check that cannot be disabled
+#: is a check somebody deletes the first time it is wrong about their host.
+_CONCURRENCY_CHECK_ENV = "TCKDB_TEST_CONCURRENCY_CHECK"
+
+#: Override the computed requirement, in client backends.  Setting it high is
+#: how the refusal path is exercised on a quiet server (see
+#: ``tests/test_concurrent_run_detection.py``).
+_MIN_HEADROOM_ENV = "TCKDB_TEST_MIN_HEADROOM"
+
+
+class ConcurrentTestRunError(pytest.UsageError):
+    """Raised when the server has no room for this run.
+
+    Distinct from :class:`ForeignTestDatabaseError`, which is about a name.
+    This one is about capacity, and it is deliberately raised *before* the
+    first database is created so the message is the only thing in the log.
+
+    Deriving from :class:`pytest.UsageError` rather than ``RuntimeError`` is
+    not cosmetic. An exception out of ``pytest_sessionstart`` is rendered as
+    ``INTERNALERROR>`` followed by a pluggy traceback, and the message -- the
+    entire point of the exercise -- arrives at the bottom of a wall of frames
+    that reads as "pytest broke". ``UsageError`` is caught by pytest's own
+    entry point and printed as one line of ``ERROR:`` with exit code 4. The
+    failure this replaces was already illegible; replacing it with a different
+    kind of illegible would have been no gain.
+    """
+
+
+@dataclass
+class _ForeignRun:
+    """Another pytest run's harness databases on this server."""
+
+    token: str
+    host: str
+    pid: int
+    databases: list[str] = field(default_factory=list)
+    backends: int = 0
+
+    def describe(self) -> str:
+        return (
+            f"run {self.token} (pid {self.pid} on {self.host}): "
+            f"{len(self.databases)} database(s), {self.backends} connection(s)"
+        )
+
+
+@dataclass
+class _ServerLoad:
+    """What the server looks like right now, from this run's point of view."""
+
+    max_connections: int
+    in_use: int
+    foreign_runs: list[_ForeignRun]
+    #: Harness-looking databases carrying no parseable marker. Counted but
+    #: never attributed to a run, because guessing is how a sweep deletes
+    #: somebody's work.
+    unattributed: int
+
+    @property
+    def headroom(self) -> int:
+        return self.max_connections - self.in_use
+
+
+#: Set once by ``pytest_sessionstart`` from the controller's own options, which
+#: is the only place the real worker count is knowable before the workers exist.
+_RESOLVED_WORKERS: int | None = None
+
+
+def _worker_count(config=None) -> int:
+    """Workers this run will use.
+
+    Three sources, because no single one is available everywhere: the
+    controller knows ``-n`` from its own options and nothing else does;
+    ``PYTEST_XDIST_WORKER_COUNT`` exists only inside a worker; and
+    ``TCKDB_TEST_WORKERS`` is what the gate scripts set before invoking
+    pytest at all.
+    """
+    if config is not None:
+        numprocesses = getattr(config.option, "numprocesses", None)
+        if isinstance(numprocesses, int) and numprocesses > 0:
+            return numprocesses
+    if _RESOLVED_WORKERS:
+        return _RESOLVED_WORKERS
+    for name in ("PYTEST_XDIST_WORKER_COUNT", "TCKDB_TEST_WORKERS"):
+        raw = os.environ.get(name)
+        if raw and raw.isdigit() and int(raw) > 0:
+            return int(raw)
+    return 1
+
+
+def _required_backends(config=None) -> int:
+    override = os.environ.get(_MIN_HEADROOM_ENV)
+    if override and override.isdigit():
+        return int(override)
+    return _worker_count(config) * _BACKENDS_PER_WORKER + _BACKENDS_PER_RUN
+
+
+def _read_server_load(connection) -> _ServerLoad:
+    """Snapshot the server's connection usage and any foreign harness runs.
+
+    ``backend_type = 'client backend'`` matters: ``pg_stat_activity`` also
+    lists the checkpointer, the walwriter and the autovacuum launcher, and
+    none of those occupies a ``max_connections`` slot.  Counting them
+    overstates the load by five on an idle server, which on a small
+    ``max_connections`` is the difference between a refusal and a run.
+    """
+    limits = connection.execute(
+        text("""
+            SELECT (
+                       SELECT setting::int FROM pg_settings
+                       WHERE name = 'max_connections'
+                   ) AS max_connections,
+                   (
+                       SELECT count(*) FROM pg_stat_activity
+                       WHERE backend_type = 'client backend'
+                   ) AS in_use
+        """)
+    ).one()
+
+    rows = connection.execute(
+        text(r"""
+            SELECT d.datname,
+                   shobj_description(d.oid, 'pg_database') AS marker,
+                   (
+                       SELECT count(*) FROM pg_stat_activity a
+                       WHERE a.datname = d.datname
+                         AND a.backend_type = 'client backend'
+                   ) AS backends
+            FROM pg_database d
+            WHERE d.datname LIKE 'tckdb\_test%'
+              AND NOT d.datistemplate
+        """)
+    ).all()
+
+    return _attribute_databases(rows, int(limits.max_connections), int(limits.in_use))
+
+
+def _attribute_databases(rows, max_connections: int, in_use: int) -> _ServerLoad:
+    """Group harness databases by the run that stamped them.
+
+    Split out from the query so it can be tested without a second pytest run
+    to collide with -- the condition being detected is, by construction, hard
+    to arrange on demand.
+    """
+    runs: dict[str, _ForeignRun] = {}
+    unattributed = 0
+    for datname, marker, backends in rows:
+        match = _MARKER_PATTERN.match((marker or "").strip())
+        if match is None:
+            unattributed += 1
+            continue
+        host, pid, token = match.group(1), int(match.group(2)), match.group(3)
+        if token is None or token == RUN_TOKEN:
+            # Our own, or a pre-token marker we cannot attribute to a *run*.
+            continue
+        if host == _safe_host() and not _pid_is_running(pid):
+            # A dead run's leftovers. The sweep deals with those; they hold no
+            # connections and must not be reported as competition.
+            continue
+        run = runs.setdefault(token, _ForeignRun(token, host, pid))
+        run.databases.append(datname)
+        run.backends += int(backends or 0)
+
+    return _ServerLoad(
+        max_connections=max_connections,
+        in_use=in_use,
+        foreign_runs=sorted(runs.values(), key=lambda r: r.token),
+        unattributed=unattributed,
+    )
+
+
+def _describe_server_load(load: _ServerLoad, required: int) -> str:
+    lines = [
+        f"PostgreSQL max_connections={load.max_connections}, "
+        f"{load.in_use} client backend(s) in use, {load.headroom} free.",
+        f"This run wants about {required} "
+        f"({_worker_count()} worker(s) x {_BACKENDS_PER_WORKER}, "
+        f"+{_BACKENDS_PER_RUN} for admin and alembic).",
+    ]
+    if load.foreign_runs:
+        lines.append("Other pytest runs are using this server:")
+        lines.extend(f"  - {run.describe()}" for run in load.foreign_runs)
+    if load.unattributed:
+        lines.append(
+            f"{load.unattributed} harness-named database(s) carry no run marker "
+            "and were not attributed to anyone."
+        )
+    return "\n".join(lines)
+
+
+def _concurrency_refusal(load: _ServerLoad, required: int) -> str | None:
+    """The message to refuse with, or None if this run should proceed."""
+    if load.headroom >= required:
+        return None
+    return (
+        "refusing to start: this PostgreSQL server does not have room for this "
+        "test run.\n\n"
+        + _describe_server_load(load, required)
+        + "\n\n"
+        "Starting anyway produces tens to hundreds of failures reading "
+        "'connection is bad', 'server closed the connection unexpectedly' and "
+        "'sorry, too many clients already', scattered across unrelated tests. "
+        "That is indistinguishable from a real regression, and it has twice "
+        "been read as one.\n\n"
+        "Do one of:\n"
+        "  - wait for the other run(s) to finish;\n"
+        f"  - lower TCKDB_TEST_WORKERS (currently {_worker_count()});\n"
+        "  - raise the server's max_connections (docker-compose.yml sets it "
+        "from DB_MAX_CONNECTIONS; the service must be recreated for a change "
+        "to apply);\n"
+        f"  - set {_CONCURRENCY_CHECK_ENV}=0 to proceed and accept the noise."
+    )
+
+
+def _sample_server_load() -> _ServerLoad | None:
+    """Best-effort snapshot. Never fails a session on its own account."""
+    if os.environ.get(_CONCURRENCY_CHECK_ENV, "1") == "0":
+        return None
+    try:
+        engine = create_engine(
+            _database_url("postgres"), future=True, isolation_level="AUTOCOMMIT"
+        )
+    except Exception:
+        return None
+    try:
+        with engine.connect() as connection:
+            return _read_server_load(connection)
+    except Exception:
+        # No server, no permission, a Postgres too old for shobj_description --
+        # all of them mean "cannot advise", none of them means "fail the run".
+        return None
+    finally:
+        engine.dispose()
+
+
+def pytest_sessionstart(session) -> None:
+    """Refuse early, once, when the server cannot hold this run.
+
+    Only the controller (or a plain, non-xdist session) decides.  A worker
+    that re-ran this would be measuring its own siblings connecting and could
+    refuse halfway through a startup the controller already approved.
+    """
+    global _RESOLVED_WORKERS
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    _RESOLVED_WORKERS = _worker_count(session.config)
+    load = _sample_server_load()
+    session.config._tckdb_server_load_at_start = load  # type: ignore[attr-defined]
+    if load is None:
+        return
+    refusal = _concurrency_refusal(load, _required_backends(session.config))
+    if refusal is not None:
+        raise ConcurrentTestRunError(refusal)
+
+
+def pytest_terminal_summary(terminalreporter) -> None:
+    """Pre-attribute a red session to a concurrent run, if there was one.
+
+    The refusal above only covers the server being full *at session start*.
+    The case it cannot catch is the other run ramping up afterwards, which is
+    the more common one -- and it is exactly the case where the failures look
+    like code.  So the summary reports what was sharing the server, whether or
+    not this run was the one that ran out.
+    """
+    config = terminalreporter.config
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+    at_start = getattr(config, "_tckdb_server_load_at_start", None)
+    at_end = _sample_server_load()
+
+    tokens: dict[str, _ForeignRun] = {}
+    for load in (at_start, at_end):
+        if load is None:
+            continue
+        for run in load.foreign_runs:
+            tokens.setdefault(run.token, run)
+    if not tokens:
+        return
+
+    terminalreporter.write_sep("=", "concurrent pytest runs detected", yellow=True)
+    terminalreporter.write_line(
+        f"{len(tokens)} other pytest run(s) shared this PostgreSQL server "
+        "during this session:"
+    )
+    for run in sorted(tokens.values(), key=lambda r: r.token):
+        terminalreporter.write_line(f"  - {run.describe()}")
+    if at_end is not None:
+        terminalreporter.write_line(
+            f"max_connections={at_end.max_connections}, "
+            f"{at_end.in_use} client backend(s) in use at the end of this run."
+        )
+    terminalreporter.write_line(
+        "Failures reading 'connection is bad', 'server closed the connection "
+        "unexpectedly' or 'sorry, too many clients already' are that, not a "
+        "defect in the code under test. Re-run serially before believing a "
+        "red result."
     )
 
 

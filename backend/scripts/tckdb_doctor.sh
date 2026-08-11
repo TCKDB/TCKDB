@@ -48,7 +48,7 @@ warn_count=0
 ok()   { printf "  \033[32mOK\033[0m   %s\n" "$*"; }
 bad()  { printf "  \033[31mFAIL\033[0m %s\n" "$*" >&2; fail_count=$((fail_count + 1)); }
 warn() { printf "  \033[33mWARN\033[0m %s\n" "$*";  warn_count=$((warn_count + 1)); }
-hint() { printf "         \033[36m→\033[0m %s\n" "$*" >&2; }
+hint() { printf "         \033[36m->\033[0m %s\n" "$*" >&2; }
 section() { printf "\n== %s ==\n" "$*"; }
 
 # Build the docker-compose invocation once. COMPOSE_ENV_FILE is
@@ -82,7 +82,7 @@ fi
 
 if ! command -v curl >/dev/null 2>&1; then
     bad "curl not on PATH"
-    hint "install curl — the doctor and most TCKDB scripts use it for HTTP probing."
+    hint "install curl -- the doctor and most TCKDB scripts use it for HTTP probing."
 else
     ok "curl found"
 fi
@@ -124,7 +124,7 @@ if [[ -f "$TCKDB_ENV_FILE" ]]; then
     elif [[ "$env_db_host" == "127.0.0.1" || "$env_db_host" == "localhost" ]]; then
         ok "DB_HOST=$env_db_host (API expected to run on the host, via loopback)"
     elif [[ -n "$env_db_host" ]]; then
-        warn "DB_HOST=$env_db_host — unusual; double-check before debugging further"
+        warn "DB_HOST=$env_db_host -- unusual; double-check before debugging further"
     fi
 fi
 
@@ -139,7 +139,7 @@ fi
 section "2b. port mapping"
 
 cat <<'EOF' | sed 's/^/  /'
-Reminder — the two correct configurations for talking to Postgres:
+Reminder -- the two correct configurations for talking to Postgres:
 
   Host-run Alembic/Uvicorn (the default in local dev):
     DB_HOST=127.0.0.1
@@ -179,7 +179,7 @@ fi
 # API port: warn if env file (or shell) still uses the old default 8000
 # while the canonical local port is 8010.
 if [[ -n "$env_api_port" && "$env_api_port" == "8000" ]]; then
-    warn "TCKDB_API_PORT=8000 in $TCKDB_ENV_FILE — the canonical local/host-run API port is now 8010"
+    warn "TCKDB_API_PORT=8000 in $TCKDB_ENV_FILE -- the canonical local/host-run API port is now 8010"
     hint "update the env file, or override TCKDB_BASE_URL when launching tools."
 fi
 expected_api_port="$(echo "$TCKDB_BASE_URL" | sed -nE 's|^https?://[^/:]+:([0-9]+)/.*|\1|p')"
@@ -243,7 +243,7 @@ if rdkit_out="$(compose exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tA \
     else
         bad "rdkit extension NOT present in $DB_NAME"
         echo "         psql output: $rdkit_out" >&2
-        hint "the rdkit-cartridge image installs it automatically on first start —"
+        hint "the rdkit-cartridge image installs it automatically on first start --"
         hint "did the volume get mounted from an older Postgres image? try:"
         hint "  docker compose -f $COMPOSE_FILE down -v && docker compose -f $COMPOSE_FILE up -d"
     fi

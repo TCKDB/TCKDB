@@ -207,6 +207,83 @@ def test_marker_does_not_suppress_a_different_line():
 
 
 # ---------------------------------------------------------------------------
+# Shell scripts
+#
+# The rule here is cruder than the Python one -- any non-ASCII outside a
+# whole-line comment -- and that is the right trade for a language with no
+# AST to walk: a shell script's code is nearly all echo, printf and heredocs,
+# so "code versus comment" is very nearly "emitted versus prose".
+#
+# It was missing entirely until now, and the gap was concrete:
+# ``tckdb_auth.sh``'s ``mask_key`` built its output with U+2026 and nothing
+# had ever looked at it, because the checker only walked ``*.py``.
+# ---------------------------------------------------------------------------
+
+
+def shell_findings(source: str):
+    return checker.check_shell_source(source, Path("sample.sh"))
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("""printf '%s…%s' "${k:0:6}" "${k: -4}\"""", id="mask-ellipsis"),
+        pytest.param('echo "deploy failed — see the log"', id="echo-em-dash"),
+        pytest.param('hint "install curl → then retry"', id="printf-helper-arrow"),
+        pytest.param('die "no key — refusing"', id="die"),
+    ],
+)
+def test_shell_fires_on_emitted_text(source: str):
+    assert len(shell_findings(source)) == 1
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        pytest.param("# tckdb_auth.sh — small auth helper.", id="header-comment"),
+        pytest.param("    # best-effort parsing — a WARN here is fine.", id="indented"),
+        pytest.param("#!/usr/bin/env bash", id="shebang"),
+        pytest.param('echo "plain ascii only"', id="clean-code"),
+        pytest.param("", id="blank"),
+    ],
+)
+def test_shell_leaves_prose_and_clean_code_alone(source: str):
+    """Whole-line comments are prose.
+
+    This repo's shell headers are hundreds of lines of explanation written
+    with em dashes. A checker that fires on those is a checker somebody
+    deletes, and then it is not guarding the ``echo`` two lines down either.
+    """
+    assert shell_findings(source) == []
+
+
+def test_shell_honours_the_allow_marker():
+    source = 'echo "µ is the reduced mass"  # tckdb: allow-non-ascii'
+    assert shell_findings(source) == []
+
+
+def test_shell_reports_the_line_number_and_the_characters():
+    source = 'echo "ok"\necho "bad — worse …"\necho "ok"'
+    found = shell_findings(source)
+    assert len(found) == 1
+    assert found[0].line == 2
+    assert set(found[0].characters) == {"—", "…"}
+
+
+def test_shell_scripts_are_actually_collected():
+    """Guard the guard: the walk must reach ``*.sh``, not only ``*.py``.
+
+    Without this, every assertion above tests a function nothing calls.
+    """
+    scripts = checker.BACKEND_ROOT / "scripts"
+    walked = {*scripts.rglob("*.py"), *scripts.rglob("*.sh")}
+    assert any(p.suffix == ".sh" for p in walked)
+    # The real entry point, on the real tree, one file at a time.
+    for path in sorted(p for p in walked if p.suffix == ".sh"):
+        assert checker.check_file(path) == [], path
+
+
+# ---------------------------------------------------------------------------
 # The tree it actually guards
 # ---------------------------------------------------------------------------
 

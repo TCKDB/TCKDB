@@ -347,6 +347,61 @@ harness, its name has already been validated against the
 isolated-test-database pattern, and dropping it is the documented
 behaviour of an explicit `DB_TEST_NAME`.
 
+### The connections
+
+Run-unique names removed the collision over a *name* and left the
+collision over *connections* with nothing to name it.
+
+One 8-worker run peaks at about **35 client backends** (~4 per worker,
+plus the admin engine and the `alembic upgrade head` subprocess).
+PostgreSQL's default `max_connections` is 100, so three concurrent runs
+sit at the limit and four are past it. What that looks like from inside
+a run is tens to hundreds of failures reading `connection is bad`,
+`server closed the connection unexpectedly` and `sorry, too many
+clients already`, spread across whichever tests happened to be running:
+
+> One agent measured 59 connections already in use before its run
+> started and reported **21 failures / 243 errors**. Another saw
+> **87 / 1 / 23 / 0** failures across four runs of the same commit,
+> every one of which passed serially. Both initially read it as a
+> defect in `main`; one nearly published a false baseline from it.
+
+Two mechanisms now make that legible, and one makes it rarer.
+
+- **Refusal at session start.** Before anything is created, the
+  controller reads `max_connections`, the live *client backend* count
+  (not `count(*)` — the checkpointer, walwriter and autovacuum launcher
+  appear in `pg_stat_activity` and occupy no slot) and every
+  `tckdb_test%` database's ownership marker. If the free headroom is
+  below `workers x 5 + 6`, the session stops with a
+  `ConcurrentTestRunError` naming the other runs, their pids and their
+  connection counts. It derives from `pytest.UsageError`, so it prints
+  as one `ERROR:` line with exit code 4 rather than as an
+  `INTERNALERROR>` traceback.
+- **A terminal-summary banner.** The refusal cannot catch the other run
+  ramping up *after* this one started, which is the more common shape.
+  If any foreign run was seen at either end of the session, the summary
+  names it and says that connection-shaped failures are that, not a
+  regression.
+- **A bigger ceiling.** `docker-compose.yml` starts Postgres with
+  `max_connections=${DB_MAX_CONNECTIONS:-200}`. A limit is not an
+  allocation — the cost is per live connection — so this is safe on the
+  Raspberry Pi deployment that shares the file. **The container must be
+  recreated, not restarted,** for a change to apply:
+  `docker compose up -d --force-recreate db`.
+
+Knobs, both read by [`tests/conftest.py`](../tests/conftest.py):
+
+| Variable | Effect |
+|---|---|
+| `TCKDB_TEST_CONCURRENCY_CHECK=0` | Disable the check entirely. |
+| `TCKDB_TEST_MIN_HEADROOM=<n>` | Override the computed requirement. Setting it high is how the refusal is exercised on a quiet server. |
+
+Covered by
+[`tests/test_concurrent_run_detection.py`](../tests/test_concurrent_run_detection.py),
+which asserts the attribution arithmetic, that the refusal fires and
+that it reaches the terminal as one readable message.
+
 ### Scratch databases created by individual tests
 
 Migration tests create their own throwaway databases to drive Alembic
@@ -728,8 +783,10 @@ python -m pip install -e "backend[dev]"
 
 The gate runs:
 
-- shell/doc hygiene checks (`git diff --check`, `bash -n` for the test
-  ladder scripts, and `make help`)
+- shell/doc hygiene checks (`git diff --check`, `bash -n` over **every**
+  tracked `*.sh` — derived from `git ls-files`, not enumerated, because
+  the enumerated list had never included `dev_login.sh` or
+  `tckdb_auth.sh` — and `make help`)
 - `alembic upgrade head`, `alembic heads`, `alembic current` and
   `alembic check`, against a scratch database created by the step
 - the OpenAPI golden snapshot test at

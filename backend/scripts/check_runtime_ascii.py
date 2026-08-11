@@ -32,6 +32,30 @@ WHAT IS IN SCOPE, AND WHY IT IS DRAWN THIS NARROWLY
     seen. Extending to that needs dataflow, and the checker would start
     guessing. Every finding it reports is a certainty.
 
+SHELL SCRIPTS
+    ``*.sh`` under the same targets is checked too, by a much cruder
+    rule: **any non-ASCII character on a line that is not a whole-line
+    comment**. Shell has no AST to walk here, and the distinction the
+    Python rule draws -- emission site versus prose -- maps onto shell
+    almost exactly as "code versus comment", because a shell script's
+    code is nearly all `echo`, `printf` and heredocs. Comments are left
+    alone for the same reason docstrings are: this repo's shell headers
+    are long explanatory prose written with em dashes, and a checker
+    that fires on those gets switched off.
+
+    This was added because it was missing and the miss was concrete:
+    ``tckdb_auth.sh``'s ``mask_key`` built its output with U+2026, and
+    nothing had ever looked at it, because this script only ever walked
+    ``*.py``. The masked key goes to a terminal, so the character cost
+    nothing that time -- but ``tckdb_doctor.sh`` prints diagnostics that
+    get pasted into issues, and the deploy and alert scripts under
+    ``scripts/ops/`` write text that reaches a log.
+
+    Known limitation, stated rather than hidden: a line *inside a
+    heredoc* that begins with ``#`` is content, not a comment, and this
+    rule skips it. Recognising that needs heredoc tracking, which is the
+    point at which a shell "parser" starts guessing.
+
 ESCAPE HATCH
     ``# tckdb: allow-non-ascii`` on the offending line, or on the line
     the enclosing statement starts. Some emitted strings legitimately
@@ -260,11 +284,48 @@ def check_source(source: str, path: Path) -> list[Finding]:
     return sorted(findings, key=lambda f: (str(f.path), f.line))
 
 
+def check_shell_source(source: str, path: Path) -> list[Finding]:
+    """Return findings for one shell script's *source*.
+
+    One finding per offending line: shell has no literal to attribute a
+    character to, so the line is the unit.
+    """
+    findings: list[Finding] = []
+    for number, line in enumerate(source.splitlines(), start=1):
+        if line.lstrip().startswith("#"):
+            continue
+        if ALLOW_MARKER in line:
+            continue
+        offenders = sorted({c for c in line if ord(c) > 127})
+        if not offenders:
+            continue
+        findings.append(
+            Finding(
+                path=path,
+                line=number,
+                kind="shell line",
+                text=line.strip(),
+                characters="".join(offenders),
+            )
+        )
+    return findings
+
+
+def check_file(path: Path) -> list[Finding]:
+    source = path.read_text(encoding="utf-8")
+    if path.suffix == ".sh":
+        return check_shell_source(source, path)
+    return check_source(source, path)
+
+
 def check_path(path: Path) -> list[Finding]:
     findings: list[Finding] = []
-    files = sorted(path.rglob("*.py")) if path.is_dir() else [path]
+    if path.is_dir():
+        files = sorted({*path.rglob("*.py"), *path.rglob("*.sh")})
+    else:
+        files = [path]
     for file in files:
-        findings.extend(check_source(file.read_text(encoding="utf-8"), file))
+        findings.extend(check_file(file))
     return findings
 
 
