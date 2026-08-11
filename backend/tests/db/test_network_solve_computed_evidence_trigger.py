@@ -30,7 +30,6 @@ solve with four state energies out of five commits. That rule lives in
 
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -86,9 +85,9 @@ def trigger_engine():
     back, because a deferred constraint trigger fires at COMMIT and a rolled
     back transaction would prove nothing at all.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_test_computed_evidence_{uuid4().hex}"
+    db_name = scratch_database_name("computed_evidence")
     admin, admin_conn = _create_database(db_name)
     engine = None
     try:
@@ -636,9 +635,9 @@ def test_migration_round_trips_and_downgrade_removes_the_trigger():
     could not *say* what a reported solve is. Here the rule simply reverts to
     living in ``validate_mechanistic_channel_evidence``, where it still is.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_test_computed_evidence_roundtrip_{uuid4().hex}"
+    db_name = scratch_database_name("computed_evidence_roundtrip")
     admin, admin_conn = _create_database(db_name)
     engine = None
     try:
@@ -706,9 +705,9 @@ def test_upgrade_refuses_computed_solves_it_could_not_have_enforced():
     violates it would produce a rule true only of the future, so the upgrade
     asks, names the offenders and stops.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_test_computed_evidence_guard_{uuid4().hex}"
+    db_name = scratch_database_name("computed_evidence_guard")
     admin, admin_conn = _create_database(db_name)
     engine = None
     try:

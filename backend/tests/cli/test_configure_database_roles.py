@@ -9,6 +9,7 @@ import uuid
 
 import psycopg
 import pytest
+from conftest import scratch_database_name
 from psycopg import sql
 
 from scripts.configure_database_roles import (
@@ -63,7 +64,7 @@ def _admin_connection(database: str, *, autocommit: bool = False) -> psycopg.Con
 
 def test_configure_roles_enforces_runtime_boundary() -> None:
     suffix = uuid.uuid4().hex[:10]
-    database = f"tckdb_role_test_{suffix}"
+    database = scratch_database_name("role_test")
     owner = f"tckdb_owner_{suffix}"
     runtime = f"tckdb_app_{suffix}"
     owner_password = f"owner-{suffix}"
@@ -200,7 +201,7 @@ def test_configure_roles_enforces_runtime_boundary() -> None:
 
 def test_migration_owner_can_build_schema_and_runtime_receives_dml_privileges() -> None:
     suffix = uuid.uuid4().hex[:10]
-    database = f"tckdb_role_migration_{suffix}"
+    database = scratch_database_name("role_migration")
     owner = f"tckdb_owner_{suffix}"
     runtime = f"tckdb_app_{suffix}"
     owner_password = f"owner-{suffix}"

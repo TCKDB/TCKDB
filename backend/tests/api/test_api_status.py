@@ -43,18 +43,20 @@ def _bind_status_probes_to_test_database(db_engine, monkeypatch):
     to the ambient ``DB_NAME``, which is *not* the per-worker database this
     suite creates and migrates.
 
-    So without this binding these tests assert on a database no fixture
-    owns. Whether they pass depends on whether something outside the test
-    run happened to migrate it: a developer shell inherits ``tckdb_dev``
-    and passes; the PR gate runs ``alembic upgrade head`` against its
-    ``DB_NAME`` in an earlier workflow step and passes; the nightly has no
-    such step and fails five tests every night for a reason that is
-    nowhere in this file.
+    That binding is what made these five tests assert on a database no
+    fixture owned: a developer shell inherited ``tckdb_dev`` and passed, the
+    PR gate ran ``alembic upgrade head`` against its ``DB_NAME`` in an
+    earlier workflow step and passed, and the nightly -- which has no such
+    step -- failed five tests every night for a reason that was nowhere in
+    this file.
 
-    ``tests/api/test_api_health.py`` binds the same way for the same
-    reason. Tests below that want a *specific* probe outcome monkeypatch
-    ``health.SessionLocal`` again in their own body, which wins here and is
-    undone first.
+    **``tests/conftest.py`` now rebinds the ambient factory to the pytest
+    database for the whole session**, so this fixture is no longer load
+    bearing: these tests pass without it, including with ``DB_NAME`` naming a
+    database that has never been created. It stays because the tests below
+    that want a *specific* probe outcome monkeypatch ``health.SessionLocal``
+    again in their own body, and an explicit baseline is what makes "wins
+    here and is undone first" true rather than incidental.
     """
     monkeypatch.setattr(
         health, "SessionLocal", sessionmaker(bind=db_engine, expire_on_commit=False)

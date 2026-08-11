@@ -11,7 +11,6 @@ them silently reclassified as something a paper merely asserts.
 
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
@@ -143,9 +142,9 @@ def test_existing_solves_still_read_as_computed():
     row's meaning, or about the k(T,P) hanging off it, may change on the way
     through.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_test_solve_kind_migration_{uuid4().hex}"
+    db_name = scratch_database_name("solve_kind_migration")
     admin = create_engine(
         _database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
     )
@@ -344,9 +343,9 @@ def test_downgrade_refuses_to_relabel_reported_rates_as_derived():
     confusion the revision exists to prevent. The refusal has to name what is
     in the way and what the operator should do.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_test_solve_kind_downgrade_{uuid4().hex}"
+    db_name = scratch_database_name("solve_kind_downgrade")
     admin = create_engine(
         _database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
     )

@@ -31,13 +31,22 @@ from app.api.errors import register_exception_handlers
 # ---------------------------------------------------------------------------
 
 
-def _build_engine_with_listener(timeout_ms: int | None):
+def _build_engine_with_listener(db_engine, timeout_ms: int | None):
     """Create a one-shot engine and install the timeout listener.
 
-    Uses the test DB connection so the listener actually runs
-    against PostgreSQL.
+    Built from ``db_engine.url`` — the per-worker pytest database — rather
+    than from ``settings.database_url``, which names the ambient ``DB_NAME``
+    that no fixture creates. Reaching for the ambient database is how five
+    ``/status`` tests came to pass on the PR gate (which migrates ``DB_NAME``
+    in an earlier step) and fail every night on the nightly (which does not);
+    these two were the last place in ``tests/api/`` still doing it, and they
+    failed the same way against a ``DB_NAME`` that has never existed.
+
+    A *fresh* engine is still required: the listener is registered on
+    ``connect``, so it has to be installed before the engine hands out its
+    first connection. That is what makes this test real rather than a mock.
     """
-    eng = create_engine(settings.database_url, pool_pre_ping=True)
+    eng = create_engine(db_engine.url, pool_pre_ping=True)
     # Patch the module-level setting for the duration of the listener
     # registration; SQLAlchemy reads the closure value when ``connect``
     # fires.
@@ -50,8 +59,8 @@ def _build_engine_with_listener(timeout_ms: int | None):
         settings.db_statement_timeout_ms = previous
 
 
-def test_listener_applies_configured_timeout():
-    eng = _build_engine_with_listener(15_000)
+def test_listener_applies_configured_timeout(db_engine):
+    eng = _build_engine_with_listener(db_engine, 15_000)
     try:
         with Session(eng) as s:
             value = s.execute(text("SHOW statement_timeout")).scalar()
@@ -61,9 +70,9 @@ def test_listener_applies_configured_timeout():
         eng.dispose()
 
 
-def test_listener_zero_disables_app_level_setting():
+def test_listener_zero_disables_app_level_setting(db_engine):
     """``db_statement_timeout_ms = 0`` skips the SET; role default wins."""
-    eng = _build_engine_with_listener(0)
+    eng = _build_engine_with_listener(db_engine, 0)
     try:
         with Session(eng) as s:
             value = s.execute(text("SHOW statement_timeout")).scalar()

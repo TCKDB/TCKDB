@@ -26,6 +26,7 @@ import warnings
 
 import conftest
 import pytest
+from conftest import scratch_database_name
 from sqlalchemy import create_engine, text
 
 
@@ -109,6 +110,25 @@ def _name_the_database_exactly(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("PYTEST_XDIST_WORKER", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def _restore_ambient_session_binding():
+    """Undo the fixture body's rebinding of ``app.api.deps.SessionLocal``.
+
+    ``db_engine`` binds the ambient session factory to its engine and puts
+    the refusing engine back in its ``finally``. The tests below drive that
+    body directly, outside pytest's fixture runner, so its teardown would
+    leave the ambient factory refusing for every *later* test in this worker
+    — a session-scoped side effect escaping a function-scoped test.
+    """
+    from app.api import deps as api_deps
+
+    previous = api_deps.engine
+    try:
+        yield
+    finally:
+        api_deps.bind_ambient_session_factory(previous)
+
+
 # ---------------------------------------------------------------------------
 # 1. The leak itself
 # ---------------------------------------------------------------------------
@@ -124,8 +144,8 @@ def test_db_engine_drops_database_when_migrations_fail(monkeypatch: pytest.Monke
     Against the pre-fix fixture this test fails on the final assertion (the
     database survives); against the fixed fixture it passes.
     """
-    db_name = f"tckdb_test_regress_{os.getpid()}"
-    monkeypatch.setenv("DB_TEST_NAME", db_name)
+    monkeypatch.setenv("DB_TEST_NAME", scratch_database_name("regress"))
+    db_name = conftest._resolve_test_db_name()
     # Keep this unit test off the sweep path entirely.
     monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
 
@@ -156,8 +176,8 @@ def test_db_engine_drops_database_when_session_body_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """An exception thrown into the fixture must also drop the database."""
-    db_name = f"tckdb_test_regress_throw_{os.getpid()}"
-    monkeypatch.setenv("DB_TEST_NAME", db_name)
+    monkeypatch.setenv("DB_TEST_NAME", scratch_database_name("regress_throw"))
+    db_name = conftest._resolve_test_db_name()
     monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
 
     def _noop_migration(*args: object, **kwargs: object) -> None:
@@ -187,7 +207,7 @@ def test_db_engine_drops_database_when_session_body_raises(
 
 def test_sweep_reclaims_abandoned_marked_database() -> None:
     """A marked database whose creator pid is gone is reclaimed."""
-    db_name = f"tckdb_test_sweepdead_{os.getpid()}"
+    db_name = scratch_database_name("sweepdead")
     marker = f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} pid={_dead_pid()}"
     _create_marked(db_name, marker)
     try:
@@ -205,7 +225,7 @@ def test_sweep_ignores_unmarked_database() -> None:
     another tool that happens to match the name pattern) from being deleted
     without a human deciding to.
     """
-    db_name = f"tckdb_test_sweepunmarked_{os.getpid()}"
+    db_name = scratch_database_name("sweepunmarked")
     _create_marked(db_name, marker=None)
     try:
         conftest._sweep_stale_test_databases("tckdb_test_not_this_one")
@@ -217,7 +237,7 @@ def test_sweep_ignores_unmarked_database() -> None:
 def test_sweep_ignores_database_owned_by_a_live_process() -> None:
     """A concurrent pytest run that has created but not yet connected to its
     database must not have it swept out from under it."""
-    db_name = f"tckdb_test_sweeplive_{os.getpid()}"
+    db_name = scratch_database_name("sweeplive")
     _create_marked(db_name, conftest._ownership_marker())  # our own, very much alive
     try:
         conftest._sweep_stale_test_databases("tckdb_test_not_this_one")
@@ -228,7 +248,7 @@ def test_sweep_ignores_database_owned_by_a_live_process() -> None:
 
 def test_sweep_ignores_foreign_host_marker() -> None:
     """Markers written on another host carry pids we cannot reason about."""
-    db_name = f"tckdb_test_sweepforeign_{os.getpid()}"
+    db_name = scratch_database_name("sweepforeign")
     marker = f"{conftest._MARKER_PREFIX} host=some-other-box pid={_dead_pid()}"
     _create_marked(db_name, marker)
     try:
@@ -239,7 +259,7 @@ def test_sweep_ignores_foreign_host_marker() -> None:
 
 
 def test_sweep_never_targets_the_current_session_database() -> None:
-    db_name = f"tckdb_test_sweepcurrent_{os.getpid()}"
+    db_name = scratch_database_name("sweepcurrent")
     marker = f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} pid={_dead_pid()}"
     _create_marked(db_name, marker)
     try:
@@ -250,7 +270,7 @@ def test_sweep_never_targets_the_current_session_database() -> None:
 
 
 def test_sweep_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    db_name = f"tckdb_test_sweepoff_{os.getpid()}"
+    db_name = scratch_database_name("sweepoff")
     marker = f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} pid={_dead_pid()}"
     _create_marked(db_name, marker)
     monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
@@ -261,9 +281,173 @@ def test_sweep_can_be_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
         _force_drop(db_name)
 
 
+# ---------------------------------------------------------------------------
+# 3. Refusing another run's database
+#
+# Run tokens make two concurrent runs pick different names, so the refusal
+# below is a backstop rather than the primary defence. It exists because the
+# failure it replaces was unreadable: on 2026-08-10 two runs sharing eight
+# databases produced 2305 errors, every one of them reading `terminating
+# connection due to administrator command`, and nothing anywhere said "another
+# run is using your database".
+# ---------------------------------------------------------------------------
+
+
+def test_recreate_refuses_a_database_owned_by_another_live_run() -> None:
+    """A marker from a different, still-running run stops the drop."""
+    db_name = scratch_database_name("foreignrun")
+    marker = (
+        f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} "
+        f"pid={os.getpid()} run=deadbeef"
+    )
+    _create_marked(db_name, marker)
+    try:
+        with pytest.raises(conftest.ForeignTestDatabaseError) as excinfo:
+            conftest._recreate_test_database(db_name)
+
+        assert "deadbeef" in str(excinfo.value)
+        assert _database_exists(db_name), "refusal still dropped the database"
+    finally:
+        _force_drop(db_name)
+
+
+def test_recreate_refuses_a_database_with_a_live_backend() -> None:
+    """A connection already attached to the name is somebody else's.
+
+    Within one run each worker owns a distinct name and creates it exactly
+    once, so this can only be a foreign run — including one whose marker this
+    harness cannot read (an older harness, or a different host's).
+    """
+    db_name = scratch_database_name("foreignbackend")
+    _create_marked(db_name, marker=None)
+    engine = create_engine(conftest._database_url(db_name), future=True)
+    try:
+        with engine.connect() as held:
+            held.execute(text("SELECT 1"))
+            with pytest.raises(conftest.ForeignTestDatabaseError) as excinfo:
+                conftest._recreate_test_database(db_name)
+
+        assert "live backend" in str(excinfo.value)
+        assert _database_exists(db_name)
+    finally:
+        engine.dispose()
+        _force_drop(db_name)
+
+
+def test_drop_refuses_a_database_stamped_by_another_run() -> None:
+    """Refusing to overwrite something and then deleting it is not a refusal.
+
+    ``_drop_test_database`` terminates backends before it drops — it has to,
+    because pytest's pool may not have released every connection — so it is
+    the one statement in the harness that can destroy a *live* database.
+
+    Found by forcing the collision the run token normally prevents: two runs
+    pinned to one ``TCKDB_TEST_RUN_TOKEN``. The second refused to recreate,
+    exactly as designed, and its fixture ``finally`` then dropped the first
+    run's database anyway — 38 errors in a run that had done nothing wrong.
+    """
+    db_name = scratch_database_name("dropforeign")
+    marker = (
+        f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} "
+        f"pid={os.getpid()} run=deadbeef"
+    )
+    _create_marked(db_name, marker)
+    try:
+        with pytest.raises(conftest.ForeignTestDatabaseError):
+            conftest._drop_test_database(db_name)
+
+        assert _database_exists(db_name), "cleanup dropped another run's database"
+    finally:
+        _force_drop(db_name)
+
+
+def test_drop_accepts_this_runs_own_database() -> None:
+    """The refusal must not stop the harness cleaning up after itself."""
+    db_name = scratch_database_name("dropown")
+    try:
+        conftest._recreate_test_database(db_name)
+        assert _database_exists(db_name)
+
+        conftest._drop_test_database(db_name)
+
+        assert not _database_exists(db_name)
+    finally:
+        _force_drop(db_name)
+
+
+def test_a_refused_session_does_not_drop_the_database_it_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end: the fixture body refuses, and cleanup leaves it alone.
+
+    Drives the ``db_engine`` body directly against a database stamped by a
+    live foreign run, which is what the forced-collision experiment produced.
+    """
+    monkeypatch.setenv("DB_TEST_NAME", scratch_database_name("refusedsession"))
+    monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
+    db_name = conftest._resolve_test_db_name()
+    marker = (
+        f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} "
+        f"pid={os.getpid()} run=deadbeef"
+    )
+    _create_marked(db_name, marker)
+
+    try:
+        generator = _db_engine_generator()
+        with pytest.raises(conftest.ForeignTestDatabaseError):
+            next(generator)
+
+        assert _database_exists(db_name), (
+            "a refused session dropped the database it had just refused to touch"
+        )
+    finally:
+        _force_drop(db_name)
+
+
+def test_recreate_accepts_a_database_abandoned_by_a_dead_run() -> None:
+    """An orphan from a crashed run is reclaimed, not refused.
+
+    The refusal must not turn every leaked database into a permanent
+    blocker — the whole reason names carry a run token is that leaks are
+    expected and reclaimable.
+    """
+    db_name = scratch_database_name("deadrun")
+    marker = (
+        f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} "
+        f"pid={_dead_pid()} run=deadbeef"
+    )
+    _create_marked(db_name, marker)
+    try:
+        conftest._recreate_test_database(db_name)
+        assert _database_exists(db_name)
+    finally:
+        _force_drop(db_name)
+
+
+def test_two_runs_resolve_different_database_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The same DB_TEST_NAME in two runs must not name one database.
+
+    This is the shape that actually bit: two agents copy-pasting the same
+    ``DB_TEST_NAME=...`` out of the same document, on one host.
+    """
+    monkeypatch.setenv("DB_TEST_NAME", "tckdb_test_shared_label")
+    monkeypatch.setenv("PYTEST_XDIST_WORKER", "gw3")
+
+    monkeypatch.setattr(conftest, "RUN_TOKEN", "aaaa1111")
+    first = conftest._resolve_test_db_name()
+    monkeypatch.setattr(conftest, "RUN_TOKEN", "bbbb2222")
+    second = conftest._resolve_test_db_name()
+
+    assert first != second
+    assert first.endswith("_aaaa1111_gw3")
+    assert second.endswith("_bbbb2222_gw3")
+
+
 def test_recreate_stamps_ownership_marker() -> None:
     """The marker the sweep depends on is actually written at creation."""
-    db_name = f"tckdb_test_marker_{os.getpid()}"
+    db_name = scratch_database_name("marker")
     try:
         conftest._recreate_test_database(db_name)
         engine = _admin_engine()
@@ -299,7 +483,7 @@ def test_cleanup_failure_does_not_mask_the_body_error(
     Against a fixture whose ``finally`` calls cleanup unguarded, this test
     fails with ``RuntimeError`` instead of ``CalledProcessError``.
     """
-    db_name = f"tckdb_test_mask_{os.getpid()}"
+    db_name = scratch_database_name("mask")
     monkeypatch.setenv("DB_TEST_NAME", db_name)
     monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
 

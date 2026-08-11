@@ -6,6 +6,7 @@ from typing import Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
 from sqlalchemy import create_engine, event, select
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
@@ -60,6 +61,51 @@ def _install_statement_timeout_listener(target_engine) -> None:
 
 
 _install_statement_timeout_listener(engine)
+
+
+def bind_ambient_session_factory(new_engine) -> Engine:
+    """Re-point the module-level ``engine``/``SessionLocal`` at *new_engine*.
+
+    ``engine`` and :data:`SessionLocal` are created at import time from
+    ``settings.database_url``, i.e. from the ambient ``DB_NAME``. That is
+    right in a deployment, where the ambient database *is* the database,
+    and wrong under pytest, where the fixtures create and migrate a
+    per-worker database that ``DB_NAME`` does not name.
+
+    Several call sites cannot be handed a request-scoped session and so
+    cannot avoid this factory:
+
+    * ``app.services.upload_submission.record_failed_upload`` and
+      ``app.services.artifact_integrity.record_artifact_integrity_event``
+      must write in a transaction *independent* of the request's, which
+      has already rolled back by the time they run;
+    * ``app.workers.upload_worker`` and ``app.api.idempotency`` run
+      outside any request;
+    * ``app.api.startup_checks.check_server_encoding`` runs at boot;
+    * ``/health``, ``/readyz`` and ``/status`` deliberately probe the
+      process's *own* engine — routing them through an overridable
+      request dependency would let a test declare a deployment healthy
+      while the deployment's engine is broken.
+
+    For all of them the fix is to make this binding tell the truth rather
+    than to remove the binding. :func:`sessionmaker.configure` mutates
+    :data:`SessionLocal` in place, so modules that did
+    ``from app.api.deps import SessionLocal`` at import time follow the
+    rebind — rebinding only the module attribute would not reach them.
+
+    Returns the previous engine so a caller can restore it. The caller
+    owns *new_engine* entirely, including its pooling and any statement
+    timeout: no listener is installed here, because a rebinder that
+    silently imposed ``settings.db_statement_timeout_ms`` on someone
+    else's engine would be changing behaviour behind their back.
+
+    Called by ``backend/tests/conftest.py``; not used in deployment.
+    """
+    global engine
+    previous = engine
+    engine = new_engine
+    SessionLocal.configure(bind=new_engine)
+    return previous
 
 
 def get_db() -> Iterator[Session]:
