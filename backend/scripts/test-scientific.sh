@@ -6,6 +6,15 @@
 # ``app/api/routes/scientific/`` or ``app/services/scientific_read/``.
 # Extra pytest args (``-k``, ``-x``, ``--maxfail=...``) are forwarded.
 #
+# Excludes: everything except ``tests/api/scientific/`` and
+# ``tests/services/scientific_read/`` — including the rest of tests/api/
+# (scripts/test-api.sh) and every service package outside scientific_read
+# (scripts/test-rest.sh). Read the name precisely: this gate does not run
+# the scientific *domain* logic. The thermo, kinetics, statmech, conformer
+# and provenance tests under tests/services/, tests/workflows/ and
+# tests/invariants/ belong to the complement gate, and a green run here is
+# no evidence about any of them.
+#
 # Runs with a pinned random-order seed and parallel workers; see
 # scripts/lib/pytest_run_args.sh for why, and how to override either.
 #

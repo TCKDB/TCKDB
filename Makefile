@@ -29,7 +29,7 @@
 #                      rather than in `reset` so the rotation is an
 #                      explicit, visible step.
 
-.PHONY: up down migrate reset reset-login test test-fast test-scientific test-api test-full test-profile update-openapi-golden api admin doctor check help
+.PHONY: up down migrate reset reset-login test test-fast test-scientific test-api test-rest test-full test-profile update-openapi-golden api admin doctor check help
 
 # Print available targets.
 help:
@@ -48,6 +48,7 @@ help:
 	@echo "  make test-fast        Tier 0/1: ARGS='<path> [-k expr]' for fast inner-loop"
 	@echo "  make test-scientific  Tier 2/3: scientific API + scientific_read services"
 	@echo "  make test-api         Tier 3:   full tests/api/ regression gate"
+	@echo "  make test-rest        Tier 3:   everything the other two gates exclude"
 	@echo "  make test-full        Tier 4:   full backend suite (pre-push)"
 	@echo "  make test-profile     Surface the slowest tests in a target subset"
 	@echo ""
@@ -112,6 +113,12 @@ test-scientific:
 
 test-api:
 	conda run -n tckdb_env bash backend/scripts/test-api.sh $(ARGS)
+
+# The complement of test-api and test-scientific. Together the three are a
+# covering of backend/tests/, which is what makes `make test-api` green mean
+# something bounded rather than something vague.
+test-rest:
+	conda run -n tckdb_env bash backend/scripts/test-rest.sh $(ARGS)
 
 test-full:
 	conda run -n tckdb_env bash backend/scripts/test-full.sh $(ARGS)

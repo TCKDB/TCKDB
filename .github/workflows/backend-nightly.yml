@@ -1,10 +1,16 @@
 name: Backend Nightly (full suite)
 
-# The PR-gating workflow (backend-ci.yml) runs only the API and scientific
-# tiers for speed. This nightly run executes the complete test suite
-# (backend/scripts/test-full.sh, ~4,700 tests) so regressions in the
-# untier-gated areas (workflows, invariants, parsers, CLI, importers)
-# surface within a day instead of at the next manual pre-push run.
+# This runs the complete test suite (backend/scripts/test-full.sh, ~6,800
+# tests) in an order nobody chose.
+#
+# It is no longer the only job that runs the whole suite. backend-ci.yml's
+# three gates cover backend/tests/ between them, so a PR now runs every test
+# this job does; what this job adds is the *order*. The PR gates pin a seed so
+# a red gate means a regression rather than an unlucky draw, which is only
+# honestly reproducibility if something still draws -- hence TCKDB_TEST_SEED
+# below. A defect that depends on test order therefore still surfaces here
+# first, and a defect that does not now surfaces on the PR that causes it,
+# which is where it is attributable.
 #
 # A red run here notifies nobody by itself: GitHub does not email about a
 # failed scheduled workflow and it leaves no mark on any PR, which is how this
@@ -60,6 +66,15 @@ jobs:
       DB_PORT: "5432"
       DB_USER: tckdb
       DB_PASSWORD: tckdb
+      # Exists and is never migrated -- and since backend-ci.yml moved its
+      # `alembic upgrade head` onto a scratch database, that is now the same
+      # condition the PR gates present rather than a difference between the
+      # two workflows. It was the difference that mattered: five /status tests
+      # reached this database outside any fixture, found a migrated schema on
+      # CI and an empty one here, and so failed only at night, attached to no
+      # PR (#64 cause 2, #92). Nothing should migrate this name. If a test
+      # starts needing it migrated, that test is coupled to something no
+      # fixture owns, and the fix belongs in the test.
       DB_NAME: tckdb_test_ci
       DB_CLIENT_ENCODING: utf8
       DB_TEST_NAME: tckdb_test_${{ github.run_id }}_${{ github.run_attempt }}
@@ -109,8 +124,12 @@ jobs:
           conda run -n tckdb_env python -m pip install -e "backend[dev]"
 
       - name: Initialize artifact bucket
+        # See the twin step in backend-ci.yml: as `conda run python - <<'PY'`
+        # this provisioned nothing, because `conda run` does not forward stdin
+        # and a silent step is indistinguishable from a successful one. Written
+        # to a file, run by path, and made to print what it did.
         run: |
-          conda run -n tckdb_env python - <<'PY'
+          cat > "${RUNNER_TEMP}/init_artifact_bucket.py" <<'PY'
           import os
 
           import boto3
@@ -129,9 +148,12 @@ jobs:
 
           try:
               s3.head_bucket(Bucket=bucket)
+              print(f"artifact bucket already present: {bucket}")
           except ClientError:
               s3.create_bucket(Bucket=bucket)
+              print(f"created artifact bucket: {bucket}")
           PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/init_artifact_bucket.py"
 
       - name: Full test suite
         run: conda run -n tckdb_env bash backend/scripts/test-full.sh

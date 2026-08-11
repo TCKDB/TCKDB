@@ -35,6 +35,17 @@ jobs:
             name: Backend API gate
           - gate: scientific
             name: Scientific read and service gate
+          # The three gates cover backend/tests/ between them, not three
+          # samples of it. `rest` is defined as the complement of the other
+          # two (see scripts/test-rest.sh), so a directory added to tests/
+          # gates the pull request that adds it. Before this entry existed,
+          # 3,806 tests -- over half the suite -- ran on no PR at all, and
+          # `test-api.sh` read as "the API gate" while being "some of the
+          # API". The gate runs in parallel with the other two and finishes
+          # inside the scientific gate's wall clock, so it costs a runner,
+          # not PR latency.
+          - gate: rest
+            name: Backend complement gate
 
     services:
       postgres:
@@ -78,6 +89,18 @@ jobs:
       DB_PORT: "5432"
       DB_USER: tckdb
       DB_PASSWORD: tckdb
+      # The *ambient* database: it exists and is deliberately never migrated,
+      # which is exactly the condition backend-nightly.yml presents. Until
+      # #124, five /status tests reached this database through an engine bound
+      # at import to `settings.database_url` rather than through any fixture,
+      # and CI ran `alembic upgrade head` against this name in a step before
+      # the gates while the nightly did not. So the same five tests passed here
+      # and failed every night, and the divergence -- not the coupling -- is
+      # what made that invisible for eleven nights. The migration now runs
+      # against its own scratch database (see "Alembic upgrade head" below),
+      # leaving this one empty in both workflows: a test that acquires a
+      # dependency on a migrated ambient database now fails the pull request
+      # that introduces it.
       DB_NAME: tckdb_${{ matrix.gate }}_ci
       DB_CLIENT_ENCODING: utf8
       # Must match the isolated-test-database pattern enforced in
@@ -154,6 +177,7 @@ jobs:
           bash -n backend/scripts/test-fast.sh
           bash -n backend/scripts/test-api.sh
           bash -n backend/scripts/test-scientific.sh
+          bash -n backend/scripts/test-rest.sh
           bash -n backend/scripts/test-full.sh
           bash -n backend/scripts/test-profile.sh
           bash -n backend/scripts/update-openapi-golden.sh
@@ -163,8 +187,48 @@ jobs:
           make help
 
       - name: Alembic upgrade head
+        if: matrix.gate == 'api'
         working-directory: backend
+        # Runs against its own scratch database, not the ambient DB_NAME.
+        #
+        # These two steps are migration checks -- does the revision graph have
+        # one head, does it apply, do the models and the migrations describe
+        # the same schema. None of that is a property of the ambient database;
+        # it needs *a* migrated database, and it should not be the one the test
+        # process can see. Pointing them at DB_NAME made "CI happens to migrate
+        # the database the tests inherit" a load-bearing and undeclared part of
+        # the environment, which is the difference that let five /status tests
+        # pass here and fail nightly (#64 cause 2, #92).
+        #
+        # Scoped to one gate for the same reason the lint and mypy steps are:
+        # the answer cannot differ between matrix legs, so paying for it three
+        # times only buys three chances to flake.
+        env:
+          DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
         run: |
+          # Written to a file and run by path, NOT piped as `conda run python -
+          # <<'PY'`. `conda run` does not forward this shell's stdin to the
+          # process it spawns, so `python -` reads EOF, does nothing, and exits
+          # 0 -- a provisioning step that silently provisions nothing. The
+          # "Initialize artifact bucket" step below did exactly that on every
+          # green run until this commit. `cat` is a shell builtin path with no
+          # conda in it, so the heredoc lands intact.
+          cat > "${RUNNER_TEMP}/create_scratch_db.py" <<'PY'
+          import os
+
+          import psycopg
+
+          name = os.environ["DB_NAME"]
+          dsn = (
+              f"host={os.environ['DB_HOST']} port={os.environ['DB_PORT']} "
+              f"user={os.environ['DB_USER']} password={os.environ['DB_PASSWORD']} "
+              "dbname=postgres"
+          )
+          with psycopg.connect(dsn, autocommit=True) as conn:
+              conn.execute(f'CREATE DATABASE "{name}"')
+          print(f"created scratch migration database {name}")
+          PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/create_scratch_db.py"
           conda run -n tckdb_env alembic upgrade head
           heads_output="$(conda run -n tckdb_env alembic heads)"
           printf '%s\n' "$heads_output"
@@ -172,7 +236,10 @@ jobs:
           conda run -n tckdb_env alembic current
 
       - name: Alembic drift check
+        if: matrix.gate == 'api'
         working-directory: backend
+        env:
+          DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
         # The models and the migrations must describe the same schema. Until
         # now this could not be a gate: two migration-only RDKit indexes
         # (ix_species_entry_mol_gist, ix_species_formula_lookup) are absent
@@ -184,8 +251,15 @@ jobs:
         run: conda run -n tckdb_env alembic check
 
       - name: Initialize artifact bucket
+        # This step had never run. As `conda run -n tckdb_env python - <<'PY'`
+        # it provisioned nothing on every green run since it was added --
+        # `conda run` does not forward stdin, so `python -` read EOF and exited
+        # 0, and a step that prints nothing looks identical to one that
+        # succeeded quietly. Found while debugging the same mistake in the
+        # alembic step above. It now writes the script to a file, runs it by
+        # path, and prints what it did, so silence is no longer a valid state.
         run: |
-          conda run -n tckdb_env python - <<'PY'
+          cat > "${RUNNER_TEMP}/init_artifact_bucket.py" <<'PY'
           import os
 
           import boto3
@@ -204,29 +278,26 @@ jobs:
 
           try:
               s3.head_bucket(Bucket=bucket)
+              print(f"artifact bucket already present: {bucket}")
           except ClientError:
               s3.create_bucket(Bucket=bucket)
+              print(f"created artifact bucket: {bucket}")
           PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/init_artifact_bucket.py"
 
       - name: OpenAPI golden snapshot
         if: matrix.gate == 'api'
         working-directory: backend
         run: conda run -n tckdb_env pytest tests/api/test_openapi_snapshot.py -q
 
-      - name: Ops and repo-check gate
-        if: matrix.gate == 'api'
-        working-directory: backend
-        # Neither of these lives under tests/api/, so neither test-api.sh nor
-        # test-scientific.sh reaches them and they would otherwise only run
-        # nightly. tests/ops/ covers the alerting path -- the one part of the
-        # deployment whose failure produces silence rather than an error --
-        # and the ASCII test pins the lint's boundary, which is the part that
-        # decides whether anyone leaves it switched on. Both need to gate the
-        # PR that breaks them, not the night after.
-        run: >-
-          conda run -n tckdb_env pytest -q
-          tests/ops/
-          tests/scripts/test_check_runtime_ascii.py
+      # The "Ops and repo-check gate" step that used to sit here ran
+      # tests/ops/ and tests/scripts/test_check_runtime_ascii.py as their own
+      # invocation, because neither lives under tests/api/ and nothing else on
+      # a PR reached them. The complement gate below reaches both, so the step
+      # was deleted rather than left to duplicate it -- and running tests/ops/
+      # inside the large invocation is the stronger version: as its own
+      # process it was the only bare `conftest` on sys.path, which is precisely
+      # what hid the module collision #124 had to diagnose from a nightly.
 
       - name: API test gate
         if: matrix.gate == 'api'
@@ -238,6 +309,13 @@ jobs:
       - name: Scientific read and service gate
         if: matrix.gate == 'scientific'
         run: conda run -n tckdb_env bash backend/scripts/test-scientific.sh --maxfail=5
+
+      # Everything the two gates above do not run, defined as their complement
+      # rather than as a list, so it cannot fall behind tests/. See
+      # backend/scripts/test-rest.sh for what that buys and what it replaces.
+      - name: Backend complement gate
+        if: matrix.gate == 'rest'
+        run: conda run -n tckdb_env bash backend/scripts/test-rest.sh --maxfail=5
 
       # The MCP integration is a consumer of the backend's error contract
       # and had no CI job at all, so nothing stopped a change here from
