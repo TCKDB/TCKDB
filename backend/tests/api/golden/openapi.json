@@ -27876,20 +27876,26 @@
       },
       "ReactionAtomMapParticipantIn": {
         "additionalProperties": false,
-        "description": "One participant molecule's atoms, identified with transition-state atoms.\n\n:param side: Which leg this participant sits on.\n:param species_key: Bundle-local key of the species this participant is.\n:param participant_index: 1-based position of this participant on its side.\n    Required because the same species may appear twice on one side\n    (``2 CH3 → C2H6``) and the two copies map to different saddle-point\n    atoms.\n:param geometry_key: Bundle-local key of the geometry the atom indices\n    count into. Named explicitly; see the module docstring.\n:param atom_to_ts: ``{atom index in this participant's geometry: atom index\n    in the transition-state geometry}``. Both sides 1-based.",
+        "description": "One participant molecule's atoms, identified with transition-state atoms.\n\n:param side: Which leg this participant sits on.\n:param species_key: Bundle-local key of the species this participant is.\n:param participant_index: 1-based position of this participant on its side.\n    Required because the same species may appear twice on one side\n    (``2 CH3 → C2H6``) and the two copies map to different saddle-point\n    atoms.\n:param geometry_key: Bundle-local key of the geometry the atom indices\n    count into. Named explicitly; see the module docstring. Omitted, and\n    only omitted, by a participant with no atoms: there are no indices to\n    count, and naming a geometry a participant does not have would be the\n    implicit-indexing failure this fragment exists to prevent, written\n    explicitly.\n:param atom_to_ts: ``{atom index in this participant's geometry: atom index\n    in the transition-state geometry}``. Both sides 1-based. Empty **only**\n    for a participant that has no atoms — a free electron. That is a claim\n    (\"this participant is made of nothing\"), not an omission: a depositor\n    who mapped none of a molecule's atoms leaves the participant out of the\n    map entirely, and the incompleteness warning says so.",
         "properties": {
           "atom_to_ts": {
             "additionalProperties": {
               "type": "integer"
             },
-            "minProperties": 1,
             "title": "Atom To Ts",
             "type": "object"
           },
           "geometry_key": {
-            "minLength": 1,
-            "title": "Geometry Key",
-            "type": "string"
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geometry Key"
           },
           "participant_index": {
             "minimum": 1.0,
@@ -27909,7 +27915,6 @@
           "side",
           "species_key",
           "participant_index",
-          "geometry_key",
           "atom_to_ts"
         ],
         "title": "ReactionAtomMapParticipantIn",
@@ -42984,7 +42989,7 @@
       },
       "TransitionStateValidationEvidenceIn": {
         "additionalProperties": false,
-        "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.",
+        "description": "Producer-declared IRC validation evidence for one TS candidate.\n\n:param source_calculation_key: Local key of the ``irc`` calculation that\n    reconstructed the path, in the enclosing payload's calculation\n    namespace. Omitted on the standalone transition-state upload, which\n    has no key namespace and binds to its single ``irc`` calculation.\n\nParticipant→atom mappings are optional, but when supplied alongside\n``passed=true`` they must be *complete*: a partial map proves nothing\nabout the atoms it omits, so it is never accepted as passing evidence.\nSupply both sides or neither.\n\nA participant's atom list may be **empty**, and that is a claim rather than\nan omission: \"this participant is made of no saddle-point atoms\". It is\nwhat a reaction releasing a free electron has to be able to write —\n``{\"product:1\": [1, 2, 3], \"product:2\": []}`` for ``OH- + H -> H2O + e-``\n— and it is legitimate only for a participant that genuinely has no atoms.\nThis model cannot tell which participant that is, because a key such as\n``product:2`` means nothing without the reaction it counts into; the\nreaction's own participant kinds are checked by\n:func:`validate_ts_evidence_set`, and what the atoms actually **are** is\nchecked once more in the service layer against the resolved species.",
         "properties": {
           "kind": {
             "const": "irc",

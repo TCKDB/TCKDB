@@ -68,6 +68,33 @@ ELECTRON_SMILES = "[e-]"
 ELECTRON_CHARGE = -1
 ELECTRON_MULTIPLICITY = 2
 
+#: The participant kinds that are *known* to carry no atoms.
+#:
+#: ``pseudo`` is deliberately absent. A lumped construct's composition is
+#: **unknown**, not empty, so an empty atom list on a pseudo participant would
+#: not be the statement "this has no atoms" — it would be a real molecule's
+#: atoms going unaccounted for, and the service-layer element check skips a
+#: pseudo participant precisely because its composition is not an atom-resolved
+#: fact. ``electron`` is the opposite case: exactly known to be nothing. That
+#: is the same distinction ``MoleculeKind`` itself is written around, and the
+#: same one ``_element_counts_for_species`` makes in the backend, where an
+#: electron returns an empty count and a pseudo-species returns ``None``.
+ATOMLESS_MOLECULE_KINDS = frozenset({MoleculeKind.electron})
+
+
+def participant_has_no_atoms(molecule_kind: MoleculeKind) -> bool:
+    """Say whether a participant of this kind has no atoms at all.
+
+    The single place the rule is written, because two wire surfaces have to
+    agree about it: an IRC participant mapping says which saddle-point atoms
+    become which participant, and an atom map refines that partition into a
+    bijection. Both must accept "none, because there are none" from a free
+    electron and refuse it from anything else, and two surfaces enforcing
+    different standards on one claim is not a defensible position for either.
+    """
+
+    return molecule_kind in ATOMLESS_MOLECULE_KINDS
+
 
 class SpeciesIdentityPayload(SchemaBase):
     """Reusable upload fragment for graph identity resolution.

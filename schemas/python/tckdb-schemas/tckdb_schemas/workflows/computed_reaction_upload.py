@@ -13,6 +13,7 @@ Species and TS keys are unique within their own collections.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
@@ -26,6 +27,7 @@ from tckdb_schemas.enums import (
     KineticsDegeneracyConvention,
     KineticsModelKind,
     KineticsUncertaintyKind,
+    MoleculeKind,
     PressureContext,
     ReactionRole,
     TunnelingModel,
@@ -1005,6 +1007,7 @@ class ComputedReactionUploadRequest(SchemaBase):
                         participant_index=position,
                         geometry_keys=frozenset(xyz_by_key),
                         xyz_by_geometry_key=xyz_by_key,
+                        molecule_kind=species.species_entry.molecule_kind,
                     )
                 )
         return participants
@@ -1053,13 +1056,38 @@ class ComputedReactionUploadRequest(SchemaBase):
             findings.extend(self.transition_state.stationary_point_findings())
         return findings
 
+    def participant_molecule_kinds(
+        self, species_keys: Sequence[str]
+    ) -> list[MoleculeKind]:
+        """The declared ``molecule_kind`` of each named participant, in order.
+
+        Assembled here for the same reason ``atom_map_participants`` is: the
+        reaction's participant slots live on this model and the kinds live on
+        the nested species, and the evidence check needs them side by side to
+        tell a participant that legitimately has no atoms (a free electron)
+        from one whose atoms were simply left out.
+
+        A key naming no declared species is reported by
+        ``validate_species_key_refs``; it is treated as an ordinary molecule
+        here so that this validator does not pre-empt that message with a
+        harder-to-read one.
+        """
+
+        species_by_key = {species.key: species for species in self.species}
+        return [
+            species_by_key[key].species_entry.molecule_kind
+            if key in species_by_key
+            else MoleculeKind.molecule
+            for key in species_keys
+        ]
+
     @model_validator(mode="after")
     def validate_ts_validation_evidence(self) -> Self:
         """Check TS evidence against the bundle's reaction and TS geometry.
 
-        Participant/atom completeness needs both the reaction's participant
-        counts and the TS atom count, neither of which the nested TS model can
-        see.
+        Participant/atom completeness needs the reaction's participants, their
+        declared kinds and the TS atom count, none of which the nested TS model
+        can see.
         """
         if self.transition_state is None or not self.transition_state.validation_evidence:
             return self
@@ -1067,8 +1095,8 @@ class ComputedReactionUploadRequest(SchemaBase):
             self.transition_state.validation_evidence,
             subject_label=self.transition_state.label or "transition state",
             xyz_text=self.transition_state.geometry.xyz_text,
-            reactant_count=len(self.reactant_keys),
-            product_count=len(self.product_keys),
+            reactant_kinds=self.participant_molecule_kinds(self.reactant_keys),
+            product_kinds=self.participant_molecule_kinds(self.product_keys),
         )
         return self
 

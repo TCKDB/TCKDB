@@ -160,6 +160,16 @@ def persist_reaction_atom_map(
         agreement check below when it has to name what it refused.
     :param warnings: Optional sink for the absence and incompleteness warnings.
     :returns: The persisted map, or ``None`` when none was supplied.
+
+    A participant the map declares atomless -- a free electron -- writes no
+    ``reaction_atom_map_pair`` rows, because a pair row is one atom identified
+    with one saddle-point atom and it has none. It still counts as mapped here,
+    so the incompleteness warning does not report it as a participant the
+    depositor forgot. The stored map therefore cannot distinguish a
+    participant declared to have no atoms from one the map left out; the
+    distinction is only checkable where the payload states it, at the wire
+    boundary, and recording it would need a per-participant row this table does
+    not have.
     """
 
     if atom_map is None:
@@ -203,6 +213,11 @@ def persist_reaction_atom_map(
 
     geometry_ids = {transition_state_geometry_id}
     for mapping in atom_map.participants:
+        if mapping.geometry_key is None:
+            # A participant the map declares atomless. The wire boundary has
+            # already checked that the reaction agrees it has no atoms; here
+            # there is simply no geometry to read and no pair row to write.
+            continue
         geometry_id = geometry_id_by_key.get(mapping.geometry_key)
         if geometry_id is None:
             raise CodedValueError(
@@ -237,6 +252,13 @@ def persist_reaction_atom_map(
                 },
                 message_prefix=False,
             )
+        if mapping.geometry_key is None:
+            # Atomless, so it contributes no pair rows -- but it *is* mapped,
+            # and recording that is the whole point of letting it be named:
+            # the incompleteness warning below must not report a free electron
+            # as a participant the depositor forgot.
+            mapped_atom_counts[slot] = 0
+            continue
         geometry_id = geometry_id_by_key[mapping.geometry_key]
 
         for atom_index, ts_atom_index in sorted(mapping.atom_to_ts.items()):
@@ -350,6 +372,7 @@ def persist_reaction_atom_map(
                 m.geometry_key
             ]
             for m in atom_map.participants
+            if m.geometry_key is not None
         },
         transition_state_geometry_id=transition_state_geometry_id,
     )
@@ -393,12 +416,13 @@ def validate_atom_map_agrees_with_irc_evidence(
       as ``reaction_atom_map_participants_incomplete`` /
       ``reaction_atom_map_atoms_incomplete``. Absence is not disagreement.
     * **An absent IRC mapping is not a contradiction.** The mappings are
-      optional on every path. A reaction releasing a free electron *must* omit
-      them — ``TransitionStateValidationEvidenceIn`` refuses an empty atom list
-      and ``validate_ts_evidence_set`` requires every declared participant to be
-      named, so a zero-atom participant cannot be expressed at all (recorded as
-      the divergence on ``CHECK_TS_IRC_MAPPING_ELEMENTS``). Such a deposit
-      carries a map and no partition, and must still be accepted.
+      optional on every path, so a deposit carrying a map and no partition is
+      accepted with nothing said about it. A reaction releasing a free electron
+      no longer has to be one of those: a zero-atom participant is expressed on
+      both surfaces as an empty atom list, so such a deposit can carry a
+      complete partition and be compared like any other. What is compared is
+      still only the atoms both surfaces speak about, and a participant with no
+      atoms contributes none to either.
     * **A barrierless channel has neither.** Both legs of a map run toward the
       saddle point, so a reaction with no transition state has no map to compare
       and no evidence to compare it with.
@@ -702,7 +726,12 @@ def _warn_incomplete(
     for slot, mapped in sorted(
         mapped_atom_counts.items(), key=lambda item: (item[0][0].value, item[0][1])
     ):
-        total = atom_counts.get(geometry_id_by_slot[slot], mapped)
+        geometry_id = geometry_id_by_slot.get(slot)
+        if geometry_id is None:
+            # A participant the map declares atomless names no geometry. It
+            # maps none of its zero atoms, which is complete, not partial.
+            continue
+        total = atom_counts.get(geometry_id, mapped)
         if mapped < total:
             gaps.append(
                 f"{slot[0].value} {slot[1]} maps {mapped} of its {total} atoms"
@@ -791,20 +820,11 @@ CHECK_ATOM_MAP_AGREES_WITH_IRC_MAPPING = ScientificCheck(
         "Two participants on one side that are the same species entry are "
         "interchangeable, so a disagreement a permutation within that group "
         "would resolve is treated as arbitrary labelling rather than "
-        "contradiction."
-    ),
-    divergence=(
-        "A reaction releasing a free electron is compared over its atom map "
-        "alone, and silently. ``MoleculeKind.electron`` gives a participant "
-        "with no atoms, which neither surface can express — "
-        "``TransitionStateValidationEvidenceIn`` refuses an empty atom list "
-        "and ``atom_to_ts`` carries ``min_length=1`` — so the IRC mappings must "
-        "be omitted entirely and the atom map must skip that participant. "
-        "There is therefore nothing to compare and nothing said about it, "
-        "which is correct but weaker than for every other reaction. Widening "
-        "both wire schemas to accept a zero-atom participant is the fix and is "
-        "a wire-package change with its own version bump, tracked alongside "
-        "the identical gap recorded on ``CHECK_TS_IRC_MAPPING_ELEMENTS``."
+        "contradiction. A participant with no atoms is not an absence: both "
+        "surfaces can say it has none -- an empty atom list -- so a reaction "
+        "releasing a free electron carries a complete partition on both and is "
+        "compared like any other, with the electron contributing no atoms to "
+        "either side of the comparison."
     ),
 )
 
