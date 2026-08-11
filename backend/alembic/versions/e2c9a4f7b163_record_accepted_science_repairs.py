@@ -2,7 +2,7 @@
 
 ``c6f2a9d4e7b1`` made every accepted scientific record immutable in the
 database, and ``b6c1f4a8e703`` and ``a1f6c3e9b527`` extended that regime to
-twelve more tables. ADR 0003 is the position it enforces and it is the right
+seven more tables. ADR 0003 is the position it enforces and it is the right
 one: a corrected *number* forks identity, because a citation has to keep
 resolving to what was cited.
 

@@ -359,6 +359,42 @@ def test_only_an_owner_of_the_target_may_declare_a_repair(db_session) -> None:
         db_session.execute(text("RESET ROLE"))
 
 
+def test_only_an_owner_of_the_target_may_record_a_change(db_session) -> None:
+    """The third check on the record, behind the declaration and the transaction.
+
+    Contrived on purpose: a non-owner cannot make a declaration and cannot see
+    a live one from another transaction, so reaching this check at all takes an
+    owner declaring and then dropping to a lesser role inside the same
+    transaction. It is the arm that still holds if either of the first two is
+    ever relaxed, and a guard nothing exercises is the failure mode this file
+    exists to avoid.
+    """
+    repair_id = _declare(db_session)
+    role = f"tckdb_repair_change_{uuid4().hex[:8]}"
+    db_session.execute(text(f'CREATE ROLE "{role}" NOLOGIN'))
+    db_session.execute(text(f'GRANT USAGE ON SCHEMA public TO "{role}"'))
+    db_session.execute(text(f'GRANT SELECT, INSERT ON public.accepted_science_repair_change TO "{role}"'))
+    db_session.execute(
+        text(f'GRANT USAGE, SELECT ON SEQUENCE public.accepted_science_repair_change_id_seq TO "{role}"')
+    )
+    db_session.execute(text(f'GRANT SELECT ON public.accepted_science_repair TO "{role}"'))
+    try:
+        db_session.execute(text(f'SET LOCAL ROLE "{role}"'))
+        with pytest.raises(DBAPIError, match="may record a repair change"), db_session.begin_nested():
+            db_session.execute(
+                text(
+                    "INSERT INTO accepted_science_repair_change "
+                    "(repair_id, record_type, record_id, target_schema, target_table, "
+                    " row_identity, changed_columns, before_json, after_json) "
+                    "VALUES (:repair_id, 'calculation', 1, 'public', 'geometry_atom', "
+                    " '{\"geometry_id\": 1}'::jsonb, ARRAY['element'], '{}'::jsonb, '{}'::jsonb)"
+                ),
+                {"repair_id": repair_id},
+            )
+    finally:
+        db_session.execute(text("RESET ROLE"))
+
+
 def test_the_repair_record_is_append_only_and_untruncatable(db_session) -> None:
     _, geometry, atom = _accepted_atom(db_session, "APPENDONLY")
     _declare(db_session)
@@ -462,15 +498,14 @@ def test_the_declaration_records_who_made_it(db_session) -> None:
     assert row["mine"] is True
 
 
-def test_the_runtime_role_cannot_reach_the_guard_functions_by_name(db_session) -> None:
-    """``tckdb_repair_permits`` is not an escape hatch a caller can invoke.
+def test_the_permit_function_refuses_a_row_it_cannot_compare(db_session) -> None:
+    """INSERT and DELETE reach ``tckdb_repair_permits`` with a NULL row version.
 
-    It returns ``true`` only after appending a change row, and the change
-    row's own validation refuses a caller who does not own the target. Calling
-    it directly therefore cannot launder an update -- but the update it would
-    have to launder still has to pass the same function from inside the
-    trigger, so this pins that the direct call is not a shortcut around the
-    recording.
+    That is how the function tells them from an UPDATE, and it is the only
+    thing standing between a live declaration and an INSERT under an accepted
+    root. Called with either side missing it returns false -- the guard then
+    raises -- and it records nothing, because there is no before-and-after to
+    record.
     """
     _declare(db_session)
     permitted = db_session.execute(
