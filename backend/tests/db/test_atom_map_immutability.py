@@ -193,6 +193,12 @@ def _second_pair(bundle: _Bundle) -> ReactionAtomMapPair:
 def test_map_of_approved_transition_state_entry_cannot_be_rewritten(db_session) -> None:
     actor = _curator(db_session)
     bundle = _make_bundle(db_session, "AMFRZ")
+    # The pair goes before approval so every statement below reaches the map's
+    # own guard and nothing else. Deleting a map that still had pairs would
+    # cascade into them first and be refused by the *pair* guard, which would
+    # leave this test green with the map's trigger missing entirely.
+    db_session.delete(bundle.pair)
+    db_session.flush()
     _approve(db_session, bundle.transition_state_entry.id, actor)
 
     with pytest.raises(DBAPIError), db_session.begin_nested():
