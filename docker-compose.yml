@@ -62,6 +62,32 @@ services:
       # because changing a live cluster's encoding is a dump and restore.
       LANG: C.UTF-8
       POSTGRES_INITDB_ARGS: "--encoding=UTF8"
+    # Raise max_connections above Postgres's default of 100.
+    #
+    # A single 8-worker run of the test suite peaks at about 35 client
+    # backends: each xdist worker owns its own database, its own engine pool
+    # and an `alembic upgrade head`. Three concurrent runs therefore sit at
+    # the default limit and four are past it -- and this repository is worked
+    # on by several agents at once against one local server. What that looks
+    # like is not "the pool is full": it is tens to hundreds of failures
+    # reading `connection is bad` and `sorry, too many clients already`,
+    # scattered across unrelated tests, in a suite that passes serially. It
+    # has twice been read as a defect in `main`.
+    #
+    # 200 is a limit, not an allocation. Postgres reserves roughly 400 bytes
+    # of shared memory per connection *slot*; the real cost is per *live*
+    # connection, and a deployment that holds five connections holds five
+    # whether the ceiling is 100 or 200. So this is safe on the Raspberry Pi
+    # deployment that shares this file, and DB_MAX_CONNECTIONS lets a host
+    # with less memory pin it lower.
+    #
+    # Changing this on an existing deployment needs the container recreated
+    # (`docker compose up -d --force-recreate db`), not just restarted --
+    # max_connections is a postmaster-start parameter.
+    command:
+      - postgres
+      - -c
+      - max_connections=${DB_MAX_CONNECTIONS:-200}
     # Loopback-only publication. NEVER change to "${DB_PORT}:5432" or
     # "0.0.0.0:5432" - that exposes Postgres on the LAN.
     ports:

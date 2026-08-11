@@ -3,12 +3,31 @@
 
 Usage:
     conda run -n tckdb_env python -m scripts.generate_dbml
+    conda run -n tckdb_env python -m scripts.generate_dbml --check
 
-Writes schema.dbml to the repository root.
+Writes backend/schema.dbml. ``--check`` writes nothing and exits 1 if the
+committed file does not match what the models render, printing the diff.
+
+Why ``--check`` exists
+----------------------
+Nothing verified that the committed document described the live models.
+``tests/scripts/test_generate_dbml.py`` tested this generator's *rendering
+logic* -- given a table with these constraints, does it emit the right lines --
+which a stale file passes trivially, because it is never read. So
+``HessianDetectionContext.reclaim_restore`` was added to
+``app/db/models/common.py`` and was absent from ``backend/schema.dbml`` for a
+full day, and the document said, confidently, that the enum did not have that
+member. A schema document that can be wrong without anything noticing is worse
+than no document: people trust it.
+
+``tests/scripts/test_generate_dbml.py::test_committed_schema_dbml_is_in_sync``
+is what makes the check a gate rather than a habit.
 """
 
 from __future__ import annotations
 
+import argparse
+import difflib
 import sys
 from pathlib import Path
 
@@ -432,11 +451,83 @@ def generate_dbml() -> str:
     return "\n\n".join(parts) + "\n"
 
 
-def main():
+#: A DBML line that carries only prose. ``Note:`` lines are the first line of
+#: an ORM class docstring, so rewording a docstring moves this document without
+#: any schema having changed. They are still checked -- a stale note is a wrong
+#: note -- but they are reported *separately*, because a gate whose failures
+#: are indistinguishable from cosmetic churn is one people learn to satisfy by
+#: regenerating without reading the diff, and that is how a real drift lands
+#: unnoticed. Same lesson as the line-number anchors in the scientific check
+#: register.
+def _is_prose_line(line: str) -> bool:
+    return line.lstrip().startswith("Note:")
+
+
+def diff_against_committed(committed: str | None = None) -> tuple[str, bool]:
+    """Return (rendered diff, structural) for the committed file.
+
+    ``structural`` is False when every differing line is prose, which lets a
+    caller say "the schema is unchanged; only a description moved".
+
+    *committed* overrides the on-disk text. That exists so the test proving
+    this function can fail does not have to stale the real ``schema.dbml`` to
+    do it: writing to a tracked file from a test that eight xdist workers may
+    run at once is a way to corrupt a working tree, and a crash between the
+    write and the restore would leave the document wrong -- which is the
+    condition being guarded against.
+    """
+    generated = generate_dbml()
+    if committed is None:
+        committed = OUTPUT.read_text() if OUTPUT.exists() else ""
+    if generated == committed:
+        return "", False
+
+    diff_lines = list(
+        difflib.unified_diff(
+            committed.splitlines(keepends=True),
+            generated.splitlines(keepends=True),
+            fromfile=f"{OUTPUT.name} (committed)",
+            tofile=f"{OUTPUT.name} (rendered from app/db/models/)",
+            n=1,
+        )
+    )
+    changed = [
+        line
+        for line in diff_lines
+        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+    ]
+    structural = any(not _is_prose_line(line[1:]) for line in changed)
+    return "".join(diff_lines), structural
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="do not write; exit 1 if the committed file is out of date",
+    )
+    args = parser.parse_args(argv)
+
+    if args.check:
+        diff, structural = diff_against_committed()
+        if not diff:
+            print(f"{OUTPUT} is in sync with the models.")
+            return 0
+        kind = "schema" if structural else "table descriptions only"
+        print(f"{OUTPUT} is out of date ({kind}).", file=sys.stderr)
+        print(diff, file=sys.stderr)
+        print(
+            "Regenerate with: conda run -n tckdb_env python scripts/generate_dbml.py",
+            file=sys.stderr,
+        )
+        return 1
+
     dbml = generate_dbml()
     OUTPUT.write_text(dbml)
     print(f"Wrote {OUTPUT} ({len(dbml)} bytes)")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

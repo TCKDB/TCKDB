@@ -162,7 +162,9 @@ exclude = ["tests*", "alembic*", "scripts*"]
 testpaths = ["tests"]
 pythonpath = ["."]
 
-# Ruff configuration. Enforced in CI (see .github/workflows/backend-ci.yml).
+# Ruff configuration. `ruff check` is enforced in CI (see
+# .github/workflows/backend-ci.yml). `ruff format` is deliberately disabled --
+# see [tool.ruff.format] below before reaching for it.
 [tool.ruff]
 line-length = 120
 target-version = "py313"
@@ -173,6 +175,69 @@ target-version = "py313"
 # are data, not code; exclude the tree from linting.
 extend-exclude = ["tests/fixtures/pdep/**"]
 
+# ---------------------------------------------------------------------------
+# `ruff format` is switched off, on purpose. Do not re-enable it casually.
+# ---------------------------------------------------------------------------
+#
+# Ruff has no "there is no formatter here" switch, so this is the closest
+# thing: excluding every path makes `ruff format` and `ruff format --check`
+# no-ops that exit 0 and change nothing. That is the point. The tool was
+# installed, configured (`line-length` above is read by nothing else -- E501
+# is disabled), and gated by nothing, which is the worst of the three states:
+# it looks adopted, so somebody eventually runs it.
+#
+# Somebody did. An agent ran the formatter across five files it was already
+# editing and turned an ~800-line reviewable diff into ~4,000 lines, then had
+# to rebuild each file from main by hand. Nothing warned it, because nothing
+# could: `ruff format` on this tree is a no-op flag away from rewriting most
+# of the backend.
+#
+# WHY NOT JUST ADOPT IT
+#
+# Measured on main at 09bf0165, over `app tests scripts` (870 files):
+#
+#   line-length 120 (configured) ... 669 files would be reformatted
+#   line-length 100 ................ 667
+#   line-length  88 (ruff default) . 607
+#
+# No line length rescues it: this tree is hand-wrapped, not formatter-wrapped,
+# and the disagreement is structural rather than a width setting. The typical
+# diff is also an anti-improvement here --
+#
+#   -    reaction_entry: Mapped["ReactionEntry"] = relationship(
+#   -        back_populates="transition_states"
+#   -    )
+#   +    reaction_entry: Mapped["ReactionEntry"] = relationship(back_populates="transition_states")
+#
+#   -    __table_args__ = (
+#   -        CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),
+#   -    )
+#   +    __table_args__ = (CheckConstraint("multiplicity >= 1", name="multiplicity_ge_1"),)
+#
+# -- the formatter collapses deliberately exploded model and constraint
+# declarations into 120-column one-liners, in the files where a reader most
+# wants one fact per line.
+#
+# Adopting it means a ~600-file mechanical commit that rewrites `git blame`
+# for most of the backend and conflicts with every branch open at the time.
+# That is a decision with an owner and a schedule, not a side effect of
+# somebody tidying five files. If it is ever taken, the sequence is: land the
+# reformat as its own commit containing nothing else, add `ruff format
+# --check` to the Lint step in backend-ci.yml, and delete this block. The
+# guard in tests/scripts/test_ruff_format_is_not_a_trap.py accepts either
+# state -- formatter disabled, or tree already formatted -- and fails only on
+# the half-done middle.
+#
+# WHAT THIS COSTS
+#
+# Line length is now enforced by nothing, and the comment on the E501 ignore
+# below used to claim otherwise. 113 lines in app/tests/scripts exceed 120
+# columns today. The .editorconfig calls 120 a *soft* limit, which is what it
+# has always actually been; the honest fix is to enable E501 and fix those
+# 113 lines, which is its own change and touches files this one does not.
+[tool.ruff.format]
+exclude = ["**"]
+
 [tool.ruff.lint]
 # E/F/W/I: pycodestyle, pyflakes, import sorting.
 # B: bugbear correctness checks. C4: comprehension hygiene.
@@ -182,7 +247,12 @@ extend-exclude = ["tests/fixtures/pdep/**"]
 # simplifications), PTH (os.path -> pathlib), UP (pyupgrade rewrites).
 select = ["E", "F", "W", "I", "B", "C4", "RUF"]
 ignore = [
-    "E501",   # line-length handled by formatter, not lint
+    # Line length is currently enforced by NOTHING. This ignore used to be
+    # annotated "handled by the formatter, not lint", and no formatter runs
+    # (see [tool.ruff.format] above) -- so the note described an arrangement
+    # that did not exist, and 113 lines are over 120 columns. Turning E501 on
+    # is the honest fix and is a change of its own.
+    "E501",
     "B008",   # function call in default arg — FastAPI Depends() idiom
     "RUF002", # ambiguous unicode in docstrings — scientific notation (Å, ², ⟨S²⟩)
     "RUF003", # ambiguous unicode in comments — same reason

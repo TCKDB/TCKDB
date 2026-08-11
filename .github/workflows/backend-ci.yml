@@ -178,19 +178,24 @@ jobs:
 
       - name: Hygiene checks
         if: matrix.gate == 'api'
+        # The `bash -n` list used to be enumerated, and an enumerated list is
+        # a list somebody forgets to extend: `dev_login.sh` and
+        # `tckdb_auth.sh` -- the two scripts that mint a credential -- were
+        # never on it, so a syntax error in either shipped green. Same defect
+        # and same fix as the complement gate (scripts/test-rest.sh): derive
+        # the set instead of writing it down, and a script added tomorrow is
+        # checked by the pull request that adds it.
         run: |
           git diff --check
-          bash -n backend/scripts/lib/pytest_run_args.sh
-          bash -n backend/scripts/test-fast.sh
-          bash -n backend/scripts/test-api.sh
-          bash -n backend/scripts/test-scientific.sh
-          bash -n backend/scripts/test-rest.sh
-          bash -n backend/scripts/test-full.sh
-          bash -n backend/scripts/test-profile.sh
-          bash -n backend/scripts/update-openapi-golden.sh
-          bash -n backend/scripts/ops/tckdb_alert_check.sh
-          bash -n backend/scripts/ops/tckdb_ci_watchdog.sh
-          bash -n backend/scripts/ops/tckdb_deploy.sh
+          checked=0
+          while IFS= read -r script; do
+            bash -n "$script"
+            checked=$((checked + 1))
+          done < <(git ls-files '*.sh')
+          echo "bash -n: $checked shell script(s)"
+          # Guard the guard: an empty or truncated file list would make the
+          # loop above a no-op that prints "0" and passes.
+          test "$checked" -ge 15
           make help
 
       - name: Alembic upgrade head

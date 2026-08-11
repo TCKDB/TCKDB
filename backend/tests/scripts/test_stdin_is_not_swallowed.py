@@ -292,5 +292,10 @@ def test_create_key_still_refuses_a_response_that_carries_no_key(tmp_path: Path)
         proc = _run_create_key(stub, tmp_path)
 
     assert proc.returncode != 0
-    assert "could not find an API key field" in proc.stderr
+    # Wording moved when extract_api_key/require_api_key were lifted into
+    # scripts/lib/auth_key.sh so dev_login.sh could stop using `jq -r '.key'`
+    # (which prints "null" and exits 0). The claim is unchanged: refuse, say
+    # which fields were tried, and write nothing.
+    assert "no usable key" in proc.stderr
+    assert "tried fields:" in proc.stderr
     assert not (tmp_path / "auth.env").exists()
