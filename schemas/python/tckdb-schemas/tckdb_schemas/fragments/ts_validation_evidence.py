@@ -181,18 +181,18 @@ def validate_ts_evidence_set(
             ("reactant", record.reactant_participant_mapping),
             ("product", record.product_participant_mapping),
         ):
-            for participant_key, mapped in sorted(side.items()):
+            for participant_key, atom_indices in sorted(side.items()):
                 kind = kinds_by_participant_key[participant_key]
                 atomless = participant_has_no_atoms(kind)
-                if atomless and mapped:
+                if atomless and atom_indices:
                     raise ValueError(
                         f"Transition state '{subject_label}' evidence mapping "
-                        f"assigns saddle-point atom(s) {sorted(mapped)} to "
+                        f"assigns saddle-point atom(s) {sorted(atom_indices)} to "
                         f"{participant_key}, which is declared "
                         f"molecule_kind='{kind.value}' and has no atoms. Those "
                         "atoms belong to another participant."
                     )
-                if not atomless and not mapped:
+                if not atomless and not atom_indices:
                     raise ValueError(
                         f"Transition state '{subject_label}' evidence mapping "
                         f"gives {participant_key} no saddle-point atoms, but it "
