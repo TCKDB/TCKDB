@@ -37,6 +37,19 @@ geometry cannot be mass-weighted reads ``masses_unresolved``; one whose
 rigid-body curvature says the geometry is not the frame the matrix was
 computed in reads ``rigid_body_curvature_too_large``. None of them reads
 as a clean bill of health.
+
+**And none of them is the end of what TCKDB knows.** ADR 0012 already
+judged every one of those records by magnitude, against a tau resolved
+from the protocol that produced them, and persisted the tau, the row of
+the protocol table it came from and the resulting structural flag on
+``calc_freq_result``. Where a projection cannot be taken, that judgement
+is returned beside the refusal -- see :class:`TauContext` -- so that a
+reader gets "cannot be determined from stored data, and here is what the
+magnitude judgement said" rather than an unqualified shrug. It is not
+returned where a projection *was* taken, because ADR 0012's own rule is
+that a determination beats a threshold wherever one is available, and
+stacking the weaker answer next to the stronger one would only invite a
+reader to average them.
 """
 
 from __future__ import annotations
@@ -48,6 +61,7 @@ from enum import Enum
 import numpy as np
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.stationary_point import TAU_PARAMETER_KEYS
 
 from app.chemistry.normal_modes import (
     FRAME_CONSISTENCY_TOLERANCE_CM1,
@@ -65,19 +79,50 @@ from app.chemistry.normal_modes import (
     torsion_axes,
     unpack_lower_triangle,
 )
-from app.db.models.calculation import CalculationFreqMode, CalculationHessian
+from app.db.models.calculation import (
+    CalculationFreqMode,
+    CalculationFreqResult,
+    CalculationHessian,
+    CalculationParameter,
+)
 from app.db.models.common import ImaginaryModeDisposition
 from app.db.models.geometry import GeometryAtom
 
 logger = logging.getLogger(__name__)
 
 __all__ = [
+    "TAU_INTERPRETATION_LIMIT",
     "DeclarationAgreement",
     "ImaginaryModeProjection",
     "ImaginaryModeProjectionResult",
     "ProjectionStatus",
+    "TauContext",
+    "TauProtocolParameter",
+    "TauRankedMode",
     "build_imaginary_mode_projection",
 ]
+
+#: Stated on every :class:`TauContext`, because the one inference a
+#: reader is most likely to draw from a ranked magnitude list is the one
+#: the data cannot support.
+#:
+#: ADR 0012 §"The definition does not survive the translation to a
+#: database row": a transition state can sit at a maximum of a torsional
+#: profile while being a perfectly correct reactive bottleneck, so the
+#: extra negative eigenvalue is not an artefact but exactly right. A
+#: torsion at -300 cm-1 and a genuine second reaction coordinate at
+#: -300 cm-1 are the same number in a frequency list -- which is the
+#: entire gap the projection exists to close, and the reason the block
+#: reports the comparison and stops there.
+TAU_INTERPRETATION_LIMIT = (
+    "tau is the noise floor of the protocol that produced this record, "
+    "not a verdict on what these modes are. Magnitude cannot separate a "
+    "spurious mode from a real one that is not the reaction coordinate: "
+    "a torsion, a genuine second-order saddle and a flat barrier whose "
+    "reaction coordinate is not the largest imaginary mode are "
+    "indistinguishable in a frequency list. The ranked magnitudes and "
+    "the comparison against tau are reported; the assignment is not."
+)
 
 
 class ProjectionStatus(str, Enum):
@@ -175,6 +220,103 @@ class ImaginaryModeProjection:
 
 
 @dataclass(frozen=True)
+class TauProtocolParameter:
+    """One ``calculation_parameter`` row tau is resolved from.
+
+    All of :data:`~tckdb_schemas.stationary_point.TAU_PARAMETER_KEYS` are
+    reported, in that fixed order, whether or not the record carries
+    them. An absent key is the reason a record takes a looser row of the
+    protocol table, so listing only the present ones would hide the
+    thing most worth seeing.
+
+    :param canonical_key: The canonical parameter key.
+    :param canonical_value: What the record says, or ``None`` when the
+        parameter was never recorded for this calculation.
+    """
+
+    canonical_key: str
+    canonical_value: str | None
+
+
+@dataclass(frozen=True)
+class TauRankedMode:
+    """One stored imaginary mode, ranked by magnitude against tau.
+
+    :param mode_index: ``calc_freq_mode.mode_index``, 1-based.
+    :param frequency_cm1: The stored (negative) frequency.
+    :param magnitude_cm1: Its absolute value -- the quantity ADR 0012
+        judges, and the quantity this list is ordered by.
+    :param is_designated_reaction_coordinate: Whether the depositor
+        designated *this* mode the reaction coordinate. False on every
+        mode when nothing was designated.
+    :param declared_disposition: What the depositor said this mode is,
+        for the modes that are not the reaction coordinate.
+    :param at_or_above_tau: ``magnitude_cm1 >= tau``, or ``None`` when no
+        tau is stored. A bare comparison of two persisted numbers, and
+        deliberately not a classification: see
+        :data:`TAU_INTERPRETATION_LIMIT`.
+    """
+
+    mode_index: int
+    frequency_cm1: float
+    magnitude_cm1: float
+    is_designated_reaction_coordinate: bool
+    declared_disposition: ImaginaryModeDisposition | None
+    at_or_above_tau: bool | None
+
+
+@dataclass(frozen=True)
+class TauContext:
+    """What ADR 0012's magnitude judgement said, for a record no
+    projection could be taken on.
+
+    Every field here is **read back**, not recomputed. ADR 0012 §"What
+    implementation changed" is explicit that tau had to be stored rather
+    than re-resolved, "because a later parser improvement would silently
+    re-decide every historical record"; re-resolving it at read time to
+    fill this block would be the exact defect that requirement exists to
+    prevent. So ``tau_cm1``, ``tau_basis``, ``structural_flag`` and
+    ``reaction_coordinate_mode_index`` come off ``calc_freq_result`` as
+    the upload wrote them.
+
+    ``protocol_parameters`` is the one place a reader can see the
+    persisted parse the basis refers to. It is shown *beside* the stored
+    basis rather than used to re-derive it, so if a parser has since
+    learned to read a key that was absent when this record was judged,
+    the reader sees the discrepancy instead of TCKDB quietly resolving
+    it in either direction.
+
+    :param tau_cm1: The tolerance applied to this record, in cm-1.
+        ``None`` on a record deposited before ADR 0012 shipped.
+    :param tau_basis: Which row of ADR 0012's protocol table was
+        matched, as stored. Free text on the wire because the column is
+        free text: a value this deployment has not been taught about is
+        shown rather than rejected.
+    :param structural_flag: ADR 0012's persisted flag -- ``True`` when an
+        extra imaginary mode at or above tau excluded this record from
+        default transition-state consumption, ``False`` when the record
+        was judged and not flagged, ``None`` when it was never judged
+        under ADR 0012 (a minimum, a pre-ADR deposit, or a saddle with a
+        single imaginary mode and so nothing to disambiguate).
+    :param reaction_coordinate_mode_index: The designated reaction
+        coordinate, or ``None`` when none was designated.
+    :param modes: Every stored imaginary mode, ordered by descending
+        magnitude.
+    :param protocol_parameters: The recorded provenance tau keys on, in
+        :data:`~tckdb_schemas.stationary_point.TAU_PARAMETER_KEYS` order.
+    :param interpretation_limit: :data:`TAU_INTERPRETATION_LIMIT`.
+    """
+
+    tau_cm1: float | None
+    tau_basis: str | None
+    structural_flag: bool | None
+    reaction_coordinate_mode_index: int | None
+    modes: tuple[TauRankedMode, ...] = ()
+    protocol_parameters: tuple[TauProtocolParameter, ...] = ()
+    interpretation_limit: str = TAU_INTERPRETATION_LIMIT
+
+
+@dataclass(frozen=True)
 class ImaginaryModeProjectionResult:
     """The whole block for one calculation.
 
@@ -190,6 +332,11 @@ class ImaginaryModeProjectionResult:
     :param rigid_body_overlap_threshold: Threshold applied, echoed so a
         reader can re-decide from the overlaps without re-running anything.
     :param torsion_overlap_threshold: Likewise.
+    :param tau_context: ADR 0012's stored magnitude judgement, present
+        only when ``status`` is one of the not-determinable values *and*
+        the record has imaginary modes to judge. ``None`` on a
+        ``determined`` block on purpose: the determination is the
+        stronger answer and ADR 0012 says so.
     """
 
     status: ProjectionStatus
@@ -201,6 +348,7 @@ class ImaginaryModeProjectionResult:
     rotatable_bonds: tuple[tuple[int, int], ...] = ()
     rigid_body_overlap_threshold: float = RIGID_BODY_OVERLAP_THRESHOLD
     torsion_overlap_threshold: float = TORSION_OVERLAP_THRESHOLD
+    tau_context: TauContext | None = None
 
     @property
     def conflict_count(self) -> int:
@@ -243,6 +391,62 @@ def _agreement(
     return DeclarationAgreement.inconclusive
 
 
+def _tau_context(
+    session: Session,
+    calculation_id: int,
+    imaginary: list[CalculationFreqMode],
+) -> TauContext:
+    """Read back ADR 0012's magnitude judgement for one calculation.
+
+    Called only where a projection could not be taken. Nothing here is
+    derived from provenance: the tau, its basis and the flag are the
+    values persisted at upload, and the only arithmetic performed is
+    comparing each stored magnitude against the stored tau.
+
+    :param session: Open read session.
+    :param calculation_id: ``calculation.id``.
+    :param imaginary: The stored imaginary modes, in ``mode_index``
+        order.
+    :returns: The judgement, ranked by magnitude.
+    """
+
+    freq_result = session.get(CalculationFreqResult, calculation_id)
+    tau_cm1 = freq_result.imaginary_mode_tau_cm1 if freq_result is not None else None
+    designated = freq_result.reaction_coordinate_mode_index if freq_result is not None else None
+
+    recorded: dict[str, str | None] = {}
+    for key, value in session.execute(
+        select(CalculationParameter.canonical_key, CalculationParameter.canonical_value)
+        .where(CalculationParameter.calculation_id == calculation_id)
+        .where(CalculationParameter.canonical_key.in_(TAU_PARAMETER_KEYS))
+    ).all():
+        # Later rows win, matching ``resolve_tau_from_parameters``.
+        recorded[key] = value
+
+    ranked = sorted(imaginary, key=lambda mode: (-abs(mode.frequency_cm1), mode.mode_index))
+    return TauContext(
+        tau_cm1=tau_cm1,
+        tau_basis=freq_result.imaginary_mode_tau_basis if freq_result is not None else None,
+        structural_flag=(freq_result.imaginary_mode_structural_flag if freq_result is not None else None),
+        reaction_coordinate_mode_index=designated,
+        modes=tuple(
+            TauRankedMode(
+                mode_index=mode.mode_index,
+                frequency_cm1=mode.frequency_cm1,
+                magnitude_cm1=abs(mode.frequency_cm1),
+                is_designated_reaction_coordinate=(designated is not None and mode.mode_index == designated),
+                declared_disposition=mode.imaginary_disposition,
+                at_or_above_tau=(None if tau_cm1 is None else abs(mode.frequency_cm1) >= tau_cm1),
+            )
+            for mode in ranked
+        ),
+        protocol_parameters=tuple(
+            TauProtocolParameter(canonical_key=key, canonical_value=recorded.get(key))
+            for key in TAU_PARAMETER_KEYS
+        ),
+    )
+
+
 def build_imaginary_mode_projection(session: Session, calculation_id: int) -> ImaginaryModeProjectionResult:
     """Project the imaginary modes of one calculation, computing nothing else.
 
@@ -265,9 +469,18 @@ def build_imaginary_mode_projection(session: Session, calculation_id: int) -> Im
     if not imaginary:
         return ImaginaryModeProjectionResult(status=ProjectionStatus.no_imaginary_modes)
 
+    # From here on every exit is a refusal to determine, and each one
+    # carries ADR 0012's stored magnitude judgement so that the refusal
+    # is qualified rather than bare. Built once and reused: it is two
+    # reads and no arithmetic worth repeating.
+    tau_context = _tau_context(session, calculation_id, imaginary)
+
     hessian = session.scalar(select(CalculationHessian).where(CalculationHessian.calculation_id == calculation_id))
     if hessian is None:
-        return ImaginaryModeProjectionResult(status=ProjectionStatus.hessian_not_stored)
+        return ImaginaryModeProjectionResult(
+            status=ProjectionStatus.hessian_not_stored,
+            tau_context=tau_context,
+        )
 
     atoms = list(
         session.scalars(
@@ -277,13 +490,21 @@ def build_imaginary_mode_projection(session: Session, calculation_id: int) -> Im
         ).all()
     )
     if not atoms or len(atoms) != hessian.natoms:
-        return ImaginaryModeProjectionResult(status=ProjectionStatus.geometry_incomplete, natoms=hessian.natoms)
+        return ImaginaryModeProjectionResult(
+            status=ProjectionStatus.geometry_incomplete,
+            natoms=hessian.natoms,
+            tau_context=tau_context,
+        )
 
     masses: list[float] = []
     for atom in atoms:
         mass = atomic_mass(atom.element, atom.isotope_mass_number)
         if mass is None or mass <= 0.0:
-            return ImaginaryModeProjectionResult(status=ProjectionStatus.masses_unresolved, natoms=hessian.natoms)
+            return ImaginaryModeProjectionResult(
+                status=ProjectionStatus.masses_unresolved,
+                natoms=hessian.natoms,
+                tau_context=tau_context,
+            )
         masses.append(mass)
 
     elements = [atom.element.strip() for atom in atoms]
@@ -298,7 +519,11 @@ def build_imaginary_mode_projection(session: Session, calculation_id: int) -> Im
             "imaginary-mode projection: unusable Hessian or geometry for calculation row %s",
             calculation_id,
         )
-        return ImaginaryModeProjectionResult(status=ProjectionStatus.geometry_incomplete, natoms=hessian.natoms)
+        return ImaginaryModeProjectionResult(
+            status=ProjectionStatus.geometry_incomplete,
+            natoms=hessian.natoms,
+            tau_context=tau_context,
+        )
 
     max_curvature = max(curvatures, key=abs) if curvatures else 0.0
     if abs(max_curvature) > FRAME_CONSISTENCY_TOLERANCE_CM1:
@@ -308,6 +533,7 @@ def build_imaginary_mode_projection(session: Session, calculation_id: int) -> Im
             rigid_body_dimension=rigid_body.dimension,
             is_linear=rigid_body.is_linear,
             max_rigid_body_curvature_cm1=max_curvature,
+            tau_context=tau_context,
         )
 
     bonds = perceive_bonds(elements, coordinates)

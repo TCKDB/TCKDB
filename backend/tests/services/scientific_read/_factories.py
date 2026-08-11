@@ -961,6 +961,10 @@ def attach_freq_result(
     reduced_masses_amu: list[float | None] | None = None,
     force_constants_mdyne_angstrom: list[float | None] | None = None,
     imaginary_dispositions: list[ImaginaryModeDisposition | None] | None = None,
+    reaction_coordinate_mode_index: int | None = None,
+    imaginary_mode_tau_cm1: float | None = None,
+    imaginary_mode_tau_basis: str | None = None,
+    imaginary_mode_structural_flag: bool | None = None,
 ) -> CalculationFreqResult:
     """Attach a CalculationFreqResult plus its per-mode rows.
 
@@ -974,6 +978,14 @@ def attach_freq_result(
     columns surface through the read API; when omitted the columns stay
     ``NULL``. A disposition on a non-imaginary mode is refused by a CHECK
     constraint, so only supply one where the frequency is negative.
+
+    ADR 0012's persisted judgement -- ``reaction_coordinate_mode_index``,
+    ``imaginary_mode_tau_cm1``, ``imaginary_mode_tau_basis`` and
+    ``imaginary_mode_structural_flag`` -- defaults to NULL, matching a
+    record deposited before that decision shipped. Tests that exercise
+    the read-time tau block set them explicitly, because writing them
+    from the frequency list here would make the factory a second
+    implementation of the rule it is used to test.
     """
     imag = [f for f in frequencies_cm1 if f < 0]
     result = CalculationFreqResult(
@@ -981,6 +993,10 @@ def attach_freq_result(
         n_imag=len(imag),
         imag_freq_cm1=imag[0] if imag else None,
         zpe_hartree=zpe_hartree,
+        reaction_coordinate_mode_index=reaction_coordinate_mode_index,
+        imaginary_mode_tau_cm1=imaginary_mode_tau_cm1,
+        imaginary_mode_tau_basis=imaginary_mode_tau_basis,
+        imaginary_mode_structural_flag=imaginary_mode_structural_flag,
     )
     session.add(result)
     for i, freq in enumerate(frequencies_cm1, start=1):
