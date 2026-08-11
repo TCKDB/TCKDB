@@ -160,7 +160,7 @@ responses:
 |---|---|---|
 | `0` | Every digest in scope was read back and hashed correctly. | Publish. |
 | `1` | At least one break was recorded. | Investigate before publishing. |
-| `2` | **Nothing was verified.** Either the scope matched no digests, or the object store did not answer for at least one of them. | Fix the scope or the store, then re-run. Do not publish on the strength of this. |
+| `2` | **Nothing was verified.** The scope matched no digests, the release cites no calculations, the object store did not answer, or the invocation itself was refused. | Fix the invocation, the scope or the store, then re-run. Do not publish on the strength of this. |
 
 `breaks=0` is equally true of a sweep that read four hundred objects and one
 that read none, so the number that says whether this run is evidence of
@@ -192,7 +192,7 @@ still stands, the calculations that record cites through its
 prints as cited provenance — plus everything those calculations depend on,
 transitively. A release cannot select a calculation directly (the selectable
 record types are the six product/entry types), so that traversal is the whole
-of the scope; the command exits non-zero with `cites no calculations` rather
+of the scope; the command exits `2` with `cites no calculations` rather
 than reporting a clean sweep over an empty set.
 
 Objects outside any release are still covered by nothing in particular. Pair

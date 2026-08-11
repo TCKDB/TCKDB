@@ -192,7 +192,7 @@ def _scope_targets(
     if release_ref:
         ids = _release_calculation_ids(session, release_ref)
         if not ids:
-            raise SystemExit(
+            raise _not_verified(
                 f"dataset release {release_ref!r} cites no calculations; "
                 "nothing to verify"
             )
@@ -282,7 +282,7 @@ def _release_calculation_ids(session: Session, release_ref: str) -> set[int]:
         select(DatasetRelease).where(DatasetRelease.public_ref == release_ref)
     ).first()
     if release is None:
-        raise SystemExit(f"no dataset release with public_ref={release_ref!r}")
+        raise _not_verified(f"no dataset release with public_ref={release_ref!r}")
 
     by_type: dict[SubmissionRecordType, list[int]] = {}
     for selection in load_selection_state(session, release).active:
@@ -595,15 +595,29 @@ EXIT_BREAK = 1
 EXIT_NOT_VERIFIED = 2
 
 
+def _not_verified(message: str) -> SystemExit:
+    """Abort with the "nothing was checked" code, saying why.
+
+    ``raise SystemExit("text")`` exits ``1``, which under the codes above
+    would claim a break was recorded. Every precondition failure in this
+    script is the other thing -- the run did not verify what it was asked
+    to -- and that includes argparse's own usage errors, which already
+    exit ``2``. So ``2`` reads consistently as "fix the invocation, the
+    scope or the store, then run it again", whichever layer refused.
+    """
+    print(f"RESULT: NOT VERIFIED. {message}", file=sys.stderr)
+    return SystemExit(EXIT_NOT_VERIFIED)
+
+
 def _validate_age_floors(args) -> None:
     if args.orphan_age_days < MIN_ORPHAN_AGE_DAYS:
-        raise SystemExit(
+        raise _not_verified(
             f"--orphan-age-days must be at least {MIN_ORPHAN_AGE_DAYS}: an "
             "object younger than that may belong to an upload that has not "
             "committed its row yet"
         )
     if args.purge_hold_days is not None and args.purge_hold_days < MIN_HOLD_DAYS:
-        raise SystemExit(
+        raise _not_verified(
             f"--purge-hold-days must be at least {MIN_HOLD_DAYS}: the hold "
             "exists so a mistaken reclaim can be noticed and undone, and it "
             "cannot do that if it is emptied immediately"

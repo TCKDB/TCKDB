@@ -256,7 +256,7 @@ def test_release_scope_covers_the_artifacts_of_those_calculations(
 
 
 def test_a_withdrawn_selection_is_not_part_of_the_release(
-    db_session, sweep, released_thermo
+    db_session, sweep, released_thermo, capsys
 ):
     """Evidence a release no longer stands behind is not its evidence."""
     withdraw_selection(
@@ -267,7 +267,7 @@ def test_a_withdrawn_selection_is_not_part_of_the_release(
     )
     db_session.flush()
 
-    with pytest.raises(SystemExit, match="cites no calculations"):
+    with pytest.raises(SystemExit) as exit_info:
         sweep._scope_targets(
             db_session,
             sha256=None,
@@ -275,6 +275,11 @@ def test_a_withdrawn_selection_is_not_part_of_the_release(
             release_ref=released_thermo["release"].public_ref,
             limit=None,
         )
+
+    assert "cites no calculations" in capsys.readouterr().err
+    # Not exit 1: that code means a break was recorded, and nothing was
+    # read here at all.
+    assert exit_info.value.code == sweep.EXIT_NOT_VERIFIED
 
 
 # ---------------------------------------------------------------------------
@@ -545,16 +550,22 @@ class _Args:
         self.purge_hold_days = purge_hold_days
 
 
-def test_a_zero_orphan_age_is_rejected(sweep):
+def test_a_zero_orphan_age_is_rejected(sweep, capsys):
     """``--orphan-age-days 0`` reclaims uploads that are still in flight."""
-    with pytest.raises(SystemExit, match="orphan-age-days"):
+    with pytest.raises(SystemExit) as exit_info:
         sweep._validate_age_floors(_Args(orphan_age_days=0))
 
+    assert "orphan-age-days" in capsys.readouterr().err
+    assert exit_info.value.code == sweep.EXIT_NOT_VERIFIED
 
-def test_a_zero_hold_period_is_rejected(sweep):
+
+def test_a_zero_hold_period_is_rejected(sweep, capsys):
     """A hold emptied immediately is not a hold."""
-    with pytest.raises(SystemExit, match="purge-hold-days"):
+    with pytest.raises(SystemExit) as exit_info:
         sweep._validate_age_floors(_Args(purge_hold_days=0))
+
+    assert "purge-hold-days" in capsys.readouterr().err
+    assert exit_info.value.code == sweep.EXIT_NOT_VERIFIED
 
 
 def test_the_documented_defaults_are_accepted(sweep):
