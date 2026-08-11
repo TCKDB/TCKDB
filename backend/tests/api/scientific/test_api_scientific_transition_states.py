@@ -560,6 +560,10 @@ def test_tse_detail_includes_structured_irc_validation_evidence(
     _, _, _, entries = _make_reaction_with_ts(db_session)
     tse = entries[0]
     calc = _attach_calc(db_session, tse=tse, calc_type=CalculationType.irc)
+    # The saddle-point geometry those participant mappings index into. A
+    # mapping that does not name one is refused by the database, because an
+    # atom index counted into an unnamed ordering does not identify an atom.
+    ts_geometry = make_geometry(db_session, natoms=2)
     db_session.add(
         TransitionStateValidationEvidence(
             transition_state_entry_id=tse.id,
@@ -569,6 +573,7 @@ def test_tse_detail_includes_structured_irc_validation_evidence(
             reconstruction_calculation_id=calc.id,
             reactant_participant_mapping={"reactant:1": [1, 2]},
             product_participant_mapping={"product:1": [1, 2]},
+            transition_state_geometry_id=ts_geometry.id,
         )
     )
     db_session.flush()

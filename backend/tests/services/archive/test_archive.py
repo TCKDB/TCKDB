@@ -575,6 +575,10 @@ def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
     irc_calc = make_calculation(
         db_session, type=CalculationType.irc, transition_state_entry_id=ts_entry.id
     )
+    # The saddle-point geometry the IRC evidence's participant mappings index
+    # into. Named on the evidence row itself, because an atom index counted
+    # into an unnamed geometry survives the round trip meaning nothing.
+    ts_geometry = make_geometry(db_session, natoms=2)
     statmech = make_statmech(db_session, species_entry=reactant_entry)
     kinetics = make_kinetics(db_session, reaction_entry=reaction_entry)
 
@@ -659,6 +663,7 @@ def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
                 reconstruction_calculation_id=irc_calc.id,
                 reactant_participant_mapping={"reactant:1": [1, 2]},
                 product_participant_mapping={"product:1": [1, 2]},
+                transition_state_geometry_id=ts_geometry.id,
             ),
         ]
     )
@@ -669,6 +674,7 @@ def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
         "solve_id": solve.id,
         "channel_id": channel.id,
         "ts_entry_id": ts_entry.id,
+        "ts_geometry_id": ts_geometry.id,
         "reaction_entry_id": reaction_entry.id,
         "state_a_id": state_a.id,
         "forward_hex": (-8.125).hex(),
@@ -738,6 +744,9 @@ def test_archive_round_trip_preserves_stage2_pdep_and_kinetics_evidence(
     assert evidence.kind == "irc"
     assert evidence.passed is True
     assert evidence.reactant_participant_mapping == {"reactant:1": [1, 2]}
+    # The geometry those indices count into survives too. Restoring the
+    # mappings without it would restore atom indices relative to nothing.
+    assert evidence.transition_state_geometry_id == original["ts_geometry_id"]
 
 
 def test_binary_codec_round_trips_frozen_release_artifact_bytes() -> None:

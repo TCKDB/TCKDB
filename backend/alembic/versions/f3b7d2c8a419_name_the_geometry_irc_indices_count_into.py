@@ -124,11 +124,20 @@ def _has_mapping(prefix: str = "") -> str:
     The two sides are tested independently rather than assuming the wire
     schema's pairing, so a half-populated legacy row still counts as having
     indices and still needs a geometry.
+
+    This is the exact negation of the CHECK's "absent" arm, deliberately: the
+    two must partition every row between them. Were "present" written as
+    ``= 'object'`` instead, a mapping holding some other JSON type would be
+    absent to this predicate and present to the constraint, so it would be
+    neither backfilled nor counted as unresolved -- and ``VALIDATE CONSTRAINT``
+    would then run and abort the upgrade on it. Written as a negation, such a
+    row lands in the unresolved count and the constraint simply stays
+    ``NOT VALID``, which is the failure this revision is built to prefer.
     """
 
     return (
-        f"(jsonb_typeof({prefix}reactant_participant_mapping) = 'object' "
-        f"OR jsonb_typeof({prefix}product_participant_mapping) = 'object')"
+        f"(coalesce(jsonb_typeof({prefix}reactant_participant_mapping), 'null') <> 'null' "
+        f"OR coalesce(jsonb_typeof({prefix}product_participant_mapping), 'null') <> 'null')"
     )
 
 
