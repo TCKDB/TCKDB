@@ -396,6 +396,16 @@ class ArtifactIntegrityDetectionContext(str, Enum):
     #: now a detector that reports to this table like every other one.
     reproducibility_verification = "reproducibility_verification"
 
+    #: The orphan reclaim putting an object back at its content-addressed
+    #: key because a committed row turned out to reference it. Unlike
+    #: every other value here, the read that produced the observation was
+    #: not the point: the point is that TCKDB moved one of its own
+    #: objects out of the content-addressed namespace and then moved it
+    #: back, which is a change of custody and so is recorded rather than
+    #: logged. The observation is what the object read back as *after*
+    #: the restore, so the row still earns its finding by hashing bytes.
+    reclaim_restore = "reclaim_restore"
+
 
 class HessianSource(str, Enum):
     """Where a stored Cartesian Hessian matrix was obtained from.

@@ -38,6 +38,14 @@ async def _lifespan(app: FastAPI):
     artifact-bearing upload) and a database cluster that is not UTF-8 (an
     aborted transaction on the first non-ASCII character). Neither blocks
     or fails startup — see :mod:`app.api.startup_checks`.
+
+    "Neither blocks" is a bounded claim and both probes now enforce it.
+    Each runs against its dependency behind a hard wall-clock deadline of
+    a few seconds, so the worst case a dead dependency can impose on boot
+    is that pause and a log line. It was true of the storage probe and
+    merely asserted of the database one, which against a black-holed host
+    held the lifespan for the OS TCP timeout — around two minutes of a
+    process that was up, listening to nothing and answering nothing.
     """
     if os.getenv("TCKDB_INLINE_WORKER", "false").lower() == "true":
         from app.workers.upload_worker import run_worker_thread
