@@ -7,7 +7,7 @@
 #
 # Excludes: nothing. This selection is the union of the three required PR
 # gates -- test-api.sh, test-scientific.sh and test-rest.sh -- which since
-# those three became a partition of tests/ means the nightly and the pull
+# those three cover tests/ between them means the nightly and the pull
 # request now run the same set of tests, differing only in the order they
 # run it in (the nightly draws a seed, the gates pin one).
 #

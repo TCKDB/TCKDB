@@ -40,7 +40,7 @@ TESTS_ROOT = BACKEND_ROOT / "tests"
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
 
 #: The gate scripts the workflow is required to invoke. Their union is
-#: supposed to be a partition of ``tests/``; deleting one of these entries
+#: supposed to cover ``tests/`` between them; deleting one of these entries
 #: is exactly the regression this file is here to refuse.
 REQUIRED_GATE_SCRIPTS = (
     "backend/scripts/test-api.sh",

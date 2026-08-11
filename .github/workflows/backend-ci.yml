@@ -35,7 +35,7 @@ jobs:
             name: Backend API gate
           - gate: scientific
             name: Scientific read and service gate
-          # The three gates are a partition of backend/tests/, not three
+          # The three gates cover backend/tests/ between them, not three
           # samples of it. `rest` is defined as the complement of the other
           # two (see scripts/test-rest.sh), so a directory added to tests/
           # gates the pull request that adds it. Before this entry existed,

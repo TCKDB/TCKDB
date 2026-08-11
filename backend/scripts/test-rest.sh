@@ -31,7 +31,7 @@
 # subtraction cannot: a new directory joins a required gate the day it is
 # created. ``tests/scripts/test_gate_coverage.py`` pins the subtraction against
 # the scripts it subtracts and against the workflow that runs them, so the
-# three selections stay a partition of tests/ rather than drifting back into a
+# three selections keep covering tests/ rather than drifting back into a
 # gap nobody can see.
 #
 # ---------------------------------------------------------------------------

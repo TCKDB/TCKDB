@@ -115,7 +115,7 @@ test-api:
 	conda run -n tckdb_env bash backend/scripts/test-api.sh $(ARGS)
 
 # The complement of test-api and test-scientific. Together the three are a
-# partition of backend/tests/, which is what makes `make test-api` green mean
+# covering of backend/tests/, which is what makes `make test-api` green mean
 # something bounded rather than something vague.
 test-rest:
 	conda run -n tckdb_env bash backend/scripts/test-rest.sh $(ARGS)

@@ -657,7 +657,7 @@ container. `DB_TEST_NAME` is still set per job; `_resolve_test_db_name` appends
 the worker id to it, so each worker gets its own database instead of four
 workers racing on one recreated one.
 
-Since the three gates partition `backend/tests/`, a PR now runs every test
+Since the three gates cover `backend/tests/` between them, a PR now runs every test
 [`backend-nightly.yml`](../../.github/workflows/backend-nightly.yml) runs.
 What the nightly still adds is the **order**: the gates pin a seed so a red
 gate means a regression rather than an unlucky draw, and the nightly draws

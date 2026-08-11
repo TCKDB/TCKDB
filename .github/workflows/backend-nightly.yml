@@ -4,7 +4,7 @@ name: Backend Nightly (full suite)
 # tests) in an order nobody chose.
 #
 # It is no longer the only job that runs the whole suite. backend-ci.yml's
-# three gates are a partition of backend/tests/, so a PR now runs every test
+# three gates cover backend/tests/ between them, so a PR now runs every test
 # this job does; what this job adds is the *order*. The PR gates pin a seed so
 # a red gate means a regression rather than an unlucky draw, which is only
 # honestly reproducibility if something still draws -- hence TCKDB_TEST_SEED
