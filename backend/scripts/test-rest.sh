@@ -42,12 +42,13 @@
 # half the suite by count, and it costs less than the gate that was already
 # there -- which is why gating it was never the trade-off it looked like.
 #
-# On CI the job lands around 8m30s including container and conda setup, under
-# the scientific gate's 12m09s (measured, run 31431866497). The scientific gate
-# is and remains the critical path, so this one runs beside the other two
-# without moving how long a pull request waits. It costs a runner, not latency.
-# Folding the same tests into an existing gate instead would have put them in
-# series and moved that path out by about three minutes on every PR.
+# On CI the whole job takes 6m36s including container and conda setup, of which
+# 5m03s is this run (measured, run 31474580773) -- against the scientific gate's
+# 12m09s (run 31431866497). The scientific gate is and remains the critical
+# path, so this one runs beside the other two without moving how long a pull
+# request waits. It costs a runner, not latency. Folding the same tests into an
+# existing gate instead would have put them in series and moved that path out by
+# about five minutes on every PR.
 #
 # Runs with a pinned random-order seed and parallel workers; see
 # scripts/lib/pytest_run_args.sh for why, and how to override either.

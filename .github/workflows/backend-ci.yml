@@ -206,7 +206,14 @@ jobs:
         env:
           DB_NAME: tckdb_test_migrations_${{ github.run_id }}_${{ github.run_attempt }}
         run: |
-          conda run -n tckdb_env python - <<'PY'
+          # Written to a file and run by path, NOT piped as `conda run python -
+          # <<'PY'`. `conda run` does not forward this shell's stdin to the
+          # process it spawns, so `python -` reads EOF, does nothing, and exits
+          # 0 -- a provisioning step that silently provisions nothing. The
+          # "Initialize artifact bucket" step below did exactly that on every
+          # green run until this commit. `cat` is a shell builtin path with no
+          # conda in it, so the heredoc lands intact.
+          cat > "${RUNNER_TEMP}/create_scratch_db.py" <<'PY'
           import os
 
           import psycopg
@@ -219,7 +226,9 @@ jobs:
           )
           with psycopg.connect(dsn, autocommit=True) as conn:
               conn.execute(f'CREATE DATABASE "{name}"')
+          print(f"created scratch migration database {name}")
           PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/create_scratch_db.py"
           conda run -n tckdb_env alembic upgrade head
           heads_output="$(conda run -n tckdb_env alembic heads)"
           printf '%s\n' "$heads_output"
@@ -242,8 +251,15 @@ jobs:
         run: conda run -n tckdb_env alembic check
 
       - name: Initialize artifact bucket
+        # This step had never run. As `conda run -n tckdb_env python - <<'PY'`
+        # it provisioned nothing on every green run since it was added --
+        # `conda run` does not forward stdin, so `python -` read EOF and exited
+        # 0, and a step that prints nothing looks identical to one that
+        # succeeded quietly. Found while debugging the same mistake in the
+        # alembic step above. It now writes the script to a file, runs it by
+        # path, and prints what it did, so silence is no longer a valid state.
         run: |
-          conda run -n tckdb_env python - <<'PY'
+          cat > "${RUNNER_TEMP}/init_artifact_bucket.py" <<'PY'
           import os
 
           import boto3
@@ -262,9 +278,12 @@ jobs:
 
           try:
               s3.head_bucket(Bucket=bucket)
+              print(f"artifact bucket already present: {bucket}")
           except ClientError:
               s3.create_bucket(Bucket=bucket)
+              print(f"created artifact bucket: {bucket}")
           PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/init_artifact_bucket.py"
 
       - name: OpenAPI golden snapshot
         if: matrix.gate == 'api'

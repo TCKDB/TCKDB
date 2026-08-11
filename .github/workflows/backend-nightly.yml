@@ -124,8 +124,12 @@ jobs:
           conda run -n tckdb_env python -m pip install -e "backend[dev]"
 
       - name: Initialize artifact bucket
+        # See the twin step in backend-ci.yml: as `conda run python - <<'PY'`
+        # this provisioned nothing, because `conda run` does not forward stdin
+        # and a silent step is indistinguishable from a successful one. Written
+        # to a file, run by path, and made to print what it did.
         run: |
-          conda run -n tckdb_env python - <<'PY'
+          cat > "${RUNNER_TEMP}/init_artifact_bucket.py" <<'PY'
           import os
 
           import boto3
@@ -144,9 +148,12 @@ jobs:
 
           try:
               s3.head_bucket(Bucket=bucket)
+              print(f"artifact bucket already present: {bucket}")
           except ClientError:
               s3.create_bucket(Bucket=bucket)
+              print(f"created artifact bucket: {bucket}")
           PY
+          conda run -n tckdb_env python "${RUNNER_TEMP}/init_artifact_bucket.py"
 
       - name: Full test suite
         run: conda run -n tckdb_env bash backend/scripts/test-full.sh
