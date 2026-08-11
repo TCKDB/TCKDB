@@ -153,7 +153,7 @@ conda run -n tckdb_env python backend/scripts/ops/verify_artifact_integrity.py \
 ```
 
 **Gate on "not zero", and record the `verified=` count in the release notes.**
-There are two ways this stops being a clean gate and they need different
+There are three ways this stops being a clean gate and they need different
 responses:
 
 | Exit | Meaning | What to do |
@@ -161,6 +161,11 @@ responses:
 | `0` | Every digest in scope was read back and hashed correctly. | Publish. |
 | `1` | At least one break was recorded. | Investigate before publishing. |
 | `2` | **Nothing was verified.** The scope matched no digests, the release cites no calculations, the object store did not answer, or the invocation itself was refused. | Fix the invocation, the scope or the store, then re-run. Do not publish on the strength of this. |
+| `3` | **Something was repaired.** A held object a committed row references was put back at its content-addressed key and re-read. | Nothing is wrong with the evidence, but the orphan reclaim lost its documented race with `store_artifact` dedup against real data. Read the `reclaim_restore` observations before the next `--reclaim-orphans` run. |
+
+Exit `3` only appears on invocations that touch the reclaim hold
+(`--orphans`, `--reclaim-orphans`, `--purge-hold-days`), so a plain
+`--release` gate will not see it.
 
 `breaks=0` is equally true of a sweep that read four hundred objects and one
 that read none, so the number that says whether this run is evidence of

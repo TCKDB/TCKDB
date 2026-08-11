@@ -1305,7 +1305,8 @@
           "store_dedup_verification",
           "parameter_extraction",
           "archive",
-          "reproducibility_verification"
+          "reproducibility_verification",
+          "reclaim_restore"
         ],
         "title": "ArtifactIntegrityDetectionContext",
         "type": "string"

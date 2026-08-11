@@ -540,12 +540,15 @@ class _RestoreOutcome:
 
     #: Put back and re-read cleanly. The wrong state existed and is gone.
     restored: list[str]
-    #: Put back, and the bytes did not verify. A custody break is recorded
-    #: and the record now says so; this is not a repair.
+    #: Put back, and the bytes did not verify. A custody break **was
+    #: recorded**; this is not a repair. Only outcomes that wrote a break
+    #: row belong here, because this list is what raises the exit code to
+    #: ``EXIT_BREAK`` and that code promises a row exists to go and read.
     broken: list[str]
-    #: Referenced and held, and the restore could not proceed -- the
-    #: content-addressed key is occupied, or the store would not answer.
-    #: Reported, never silently retried away.
+    #: Needs a human and produced no row: the restore could not proceed
+    #: (the content-addressed key is occupied), or it did and the store
+    #: then would not serve the re-read, which says nothing about the
+    #: bytes either way. Reported, never silently retried away.
     blocked: list[str]
 
     def __bool__(self) -> bool:
@@ -676,6 +679,16 @@ def _restore_referenced_holds(
         if finding == REPAIRED:
             print(f"  RESTORED {digest}: put back and re-read cleanly")
             outcome.restored.append(digest)
+        elif finding == UNAVAILABLE:
+            # The object is back at its key and the store then declined to
+            # serve it. Nothing was recorded, so calling this a break would
+            # promise a row that does not exist -- the same lie the sweep
+            # already refuses to tell when an outage interrupts a read.
+            print(
+                f"  ! {digest} was put back, but the store would not serve "
+                "the re-read; nothing recorded"
+            )
+            outcome.blocked.append(digest)
         else:
             print(f"  BREAK after restoring {digest}: {finding}")
             outcome.broken.append(digest)

@@ -1216,6 +1216,38 @@ def test_a_restore_that_puts_back_wrong_bytes_records_the_break(db_session, swee
     assert event.finding is ArtifactIntegrityFinding.digest_mismatch
 
 
+def test_a_store_that_dies_mid_restore_is_not_reported_as_a_break(db_session, sweep):
+    """No row was written, so nothing may claim one was.
+
+    The object is back at its key and the store then declined to serve
+    the re-read. That says nothing about the bytes, which is why
+    ``_verify_one`` records nothing for it -- and an exit code promising
+    a recorded break would send an operator to a custody record with no
+    entry in it. Same refusal the sweep already makes for an outage
+    during an ordinary read.
+    """
+    digest, client = _held_but_referenced(db_session)
+    original_get = client.get_object
+
+    def dying_get(*, Bucket, Key):
+        if Key == _cas_key(digest):
+            raise EndpointConnectionError(endpoint_url="http://store.invalid")
+        return original_get(Bucket=Bucket, Key=Key)
+
+    client.get_object = dying_get
+
+    outcome = sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    assert outcome.broken == []
+    assert outcome.blocked == [digest]
+    assert _events_for(db_session, digest) == []
+
+
 def test_an_unreferenced_held_object_is_left_in_the_hold(db_session, sweep):
     """The hold is where reclaimed garbage is supposed to sit.
 
