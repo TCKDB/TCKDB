@@ -1157,6 +1157,17 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     #: indexed ``sha256 IN (...)`` per artifact-loading statement, which
     #: returns nothing in the normal case; verifying custody is not free
     #: and this is the bounded, constant version of the bill.
+    #:
+    #: ``order_by`` is ``id`` because the trust evaluator reads the last
+    #: element as *the latest observation*, and that definition is owned
+    #: by
+    #: :func:`app.services.artifact_integrity.latest_integrity_observations`.
+    #: This relationship exists rather than a call to the owner because
+    #: the evaluator has no session -- it grades already-loaded rows, and
+    #: making a hard-fail decision depend on a query would put custody
+    #: back behind a loader option someone has to remember. The two are
+    #: held equal by an equivalence test over a generated population
+    #: (``tests/services/test_artifact_integrity.py``), not by this note.
     integrity_events: Mapped[list["ArtifactIntegrityEvent"]] = relationship(
         primaryjoin=lambda: foreign(ArtifactIntegrityEvent.sha256)
         == CalculationArtifact.sha256,
@@ -1174,7 +1185,7 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     )
 
 
-class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
+class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """One observation about TCKDB's custody of a stored artifact.
 
     Append-only. A row here says: *at this moment, the bytes behind this
@@ -1234,6 +1245,18 @@ class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
     reads. Detection therefore has a read-time consequence for *every*
     reader of the owning calculation, not only for whoever requested the
     download. See ``docs/adr/0014-custody-of-stored-evidence.md``.
+
+    Citable
+    -------
+    ``public_ref`` (``aie_``) exists because the consequence is cited.
+    The reproducibility rubric copies this record's verdict for artifacts
+    it does not read itself and names the observation it copied, so a
+    curator holding that citation has to be able to resolve it -- and the
+    citation was a row id, which is not TCKDB's to hand out and which the
+    read surface strips by policy. Opaque rather than content-derived: an
+    observation is an event, and two identical-looking observations of
+    the same object months apart are the whole point of an append-only
+    log.
     """
 
     __tablename__ = "artifact_integrity_event"

@@ -23,6 +23,7 @@ from app.db.models.common import (
 )
 from app.services.artifact_integrity import (
     digests_with_recorded_breaks,
+    latest_integrity_observations,
     record_from_error,
     record_integrity_observation,
     record_integrity_verified,
@@ -385,7 +386,7 @@ def test_record_survives_the_transaction_that_discovered_it(
     would be the one thing that is discarded.
     """
     sha = hashlib.sha256(b"durability").hexdigest()
-    event_id = record_integrity_observation(
+    event_ref = record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -393,17 +394,20 @@ def test_record_survives_the_transaction_that_discovered_it(
         session_factory=lambda: Session(bind=db_engine),
         storage_client=_HeadClient(),
     )
-    assert event_id is not None
+    assert event_ref is not None
+    lookup = select(ArtifactIntegrityEvent).where(
+        ArtifactIntegrityEvent.public_ref == event_ref
+    )
     try:
         # A brand-new connection: nothing of the test's transaction is
         # visible here, so seeing the row proves it really committed.
         with Session(db_engine) as fresh:
-            event = fresh.get(ArtifactIntegrityEvent, event_id)
+            event = fresh.scalars(lookup).first()
             assert event is not None
             assert event.sha256 == sha
     finally:
         with Session(db_engine) as cleanup:
-            row = cleanup.get(ArtifactIntegrityEvent, event_id)
+            row = cleanup.scalars(lookup).first()
             if row is not None:
                 cleanup.delete(row)
                 cleanup.commit()
@@ -596,3 +600,251 @@ def test_endpoint_connection_error_is_wrapped_not_leaked() -> None:
 
     with pytest.raises(ArtifactStorageUnavailable, match="127.0.0.1:9000"):
         load_artifact_bytes("a" * 64, client=_UnreachableClient())
+
+
+# ---------------------------------------------------------------------------
+# One fact, three expressions of it
+# ---------------------------------------------------------------------------
+#
+# "The latest observation for this digest" is the fact that decides
+# whether a calculation hard-fails, and it is computed three ways that
+# cannot be collapsed into one:
+#
+#   1. :func:`latest_integrity_observations` -- the owner. One batched
+#      query returning whole rows, ordered by ``id``.
+#   2. ``CalculationArtifact.integrity_events[-1]`` -- what the trust
+#      evaluator reads. A ``lazy="selectin"`` relationship, so custody
+#      reaches every read path without a per-call-site loader option and
+#      without the evaluator needing a session.
+#   3. ``max(id)`` in the read surface's ``_summaries`` -- an aggregate,
+#      because a list endpoint over the whole custody record paginates
+#      and cannot load every observation to fold in Python.
+#
+# Each exists for a property the others do not have, so the honest
+# consolidation was to make the fourth (``digests_with_recorded_breaks``)
+# a projection of the first and to *prove* the remaining three agree
+# rather than assert it in three comments. These tests generate a
+# population containing every shape that could pull them apart --
+# multiple observations per digest, break-then-verified-then-break
+# sequences, one digest shared by artifact rows on unrelated
+# calculations, and observations with a null ``artifact_id`` -- and
+# compare the identity of the row each one selects, not merely the
+# boolean derived from it. An ordering divergence that happened to agree
+# on ``is_break`` would still be a divergence.
+
+
+def _observation_population(session):
+    """Build a custody record with every shape that could split the three.
+
+    Deterministic, not random: the interesting cases here are structural
+    (a shared digest, a rowless digest, a trailing ``verified``) and are
+    enumerated rather than sampled, so a failure names a shape instead of
+    a seed.
+    """
+    from app.db.models.calculation import ArtifactIntegrityEvent
+
+    _, _, calc_a = _make_species_owned_calc(db_session=session)
+    _, _, calc_b = _make_species_owned_calc(db_session=session)
+
+    def digest(token: str) -> str:
+        return hashlib.sha256(token.encode()).hexdigest()
+
+    #: ``(digest, [(finding, artifact_id_is_null)])``, oldest first.
+    sequences = {
+        # Broken once and never revisited.
+        digest("broken-once"): [(ArtifactIntegrityFinding.digest_mismatch, False)],
+        # Broken, then repaired: currently sound.
+        digest("repaired"): [
+            (ArtifactIntegrityFinding.digest_mismatch, False),
+            (ArtifactIntegrityFinding.verified, False),
+        ],
+        # Broken, repaired, broken again: currently broken, and no
+        # current-state summary can express the sequence.
+        digest("recurring"): [
+            (ArtifactIntegrityFinding.digest_mismatch, False),
+            (ArtifactIntegrityFinding.verified, False),
+            (ArtifactIntegrityFinding.size_mismatch, False),
+        ],
+        # The object was gone, then came back.
+        digest("returned"): [
+            (ArtifactIntegrityFinding.object_missing, False),
+            (ArtifactIntegrityFinding.verified, False),
+        ],
+        # Recorded on the dedup path: no artifact row will ever exist.
+        digest("rowless"): [(ArtifactIntegrityFinding.digest_mismatch, True)],
+        # A break discovered with no row, then a repair recorded with one.
+        digest("rowless-then-rowed"): [
+            (ArtifactIntegrityFinding.digest_mismatch, True),
+            (ArtifactIntegrityFinding.verified, False),
+        ],
+    }
+
+    # One digest shared by artifact rows on two unrelated calculations --
+    # the point of content addressing, and the case a per-row foreign key
+    # would have got wrong.
+    shared = digest("shared-by-two-calculations")
+    sequences[shared] = [
+        (ArtifactIntegrityFinding.digest_mismatch, False),
+        (ArtifactIntegrityFinding.verified, False),
+        (ArtifactIntegrityFinding.digest_mismatch, False),
+    ]
+
+    artifacts: dict[str, int] = {}
+    for token, calculation in (
+        ("broken-once", calc_a),
+        ("repaired", calc_a),
+        ("recurring", calc_a),
+        ("returned", calc_b),
+        ("rowless-then-rowed", calc_b),
+    ):
+        row = attach_artifact(
+            session,
+            calculation=calculation,
+            sha256=digest(token),
+            filename=f"{token}.log",
+        )
+        artifacts[digest(token)] = row.id
+    for calculation in (calc_a, calc_b):
+        row = attach_artifact(
+            session,
+            calculation=calculation,
+            sha256=shared,
+            filename="shared.log",
+        )
+        artifacts.setdefault(shared, row.id)
+
+    for sha, steps in sequences.items():
+        for finding, rowless in steps:
+            session.add(
+                ArtifactIntegrityEvent(
+                    sha256=sha,
+                    artifact_id=None if rowless else artifacts.get(sha),
+                    finding=finding,
+                    detected_during=(
+                        ArtifactIntegrityDetectionContext.store_dedup_verification
+                        if rowless
+                        else ArtifactIntegrityDetectionContext.verification_sweep
+                    ),
+                    observed_sha256=(
+                        sha
+                        if finding is ArtifactIntegrityFinding.verified
+                        else (
+                            None
+                            if finding is ArtifactIntegrityFinding.object_missing
+                            else digest(f"{sha}-observed")
+                        )
+                    ),
+                    expected_bytes=1,
+                    observed_bytes=(
+                        None
+                        if finding is ArtifactIntegrityFinding.object_missing
+                        else 2
+                    ),
+                    detail=f"{finding.value} on {sha[:8]}",
+                )
+            )
+            session.flush()
+    return list(sequences)
+
+
+def test_the_owner_and_the_relationship_select_the_same_observation(db_session):
+    """The trust evaluator's expression must agree with the owner.
+
+    This is the one that matters: ``integrity_events[-1]`` is what
+    decides ``HardFailReason.artifact_integrity_failed``. Compared by row
+    identity rather than by ``is_break``, because two orderings that
+    happen to agree on the boolean today are still two orderings.
+    """
+    from app.db.models.calculation import CalculationArtifact
+
+    digests = _observation_population(db_session)
+    owner = latest_integrity_observations(db_session, digests)
+
+    artifacts = db_session.scalars(
+        select(CalculationArtifact).where(CalculationArtifact.sha256.in_(digests))
+    ).all()
+    assert artifacts, "the population must include artifact rows to compare against"
+
+    for artifact in artifacts:
+        assert artifact.integrity_events, artifact.sha256
+        assert artifact.integrity_events[-1].id == owner[artifact.sha256].id
+
+
+def test_every_expression_agrees_on_which_digests_are_currently_broken(db_session):
+    """The boolean each surface publishes, from all four expressions."""
+    from app.db.models.calculation import CalculationArtifact
+    from app.services.scientific_read.artifact_integrity_reads import _summaries
+
+    digests = _observation_population(db_session)
+    owner = latest_integrity_observations(db_session, digests)
+
+    expected = frozenset(
+        sha for sha, event in owner.items() if event.finding.is_break
+    )
+    # The population must actually contain both answers, or "they agree"
+    # is satisfied by everything being sound.
+    assert expected
+    assert set(digests) - expected
+
+    assert digests_with_recorded_breaks(db_session, digests) == expected
+
+    records, _total = _summaries(
+        db_session,
+        sha256=None,
+        calculation_ref=None,
+        only_currently_broken=False,
+        offset=0,
+        limit=200,
+    )
+    summarised = {
+        record.sha256: record for record in records if record.sha256 in owner
+    }
+    assert set(summarised) == set(owner)
+    for sha, record in summarised.items():
+        assert record.currently_broken is owner[sha].finding.is_break, sha
+        # The read surface reports the latest observation's own contents,
+        # so it must be the same row and not merely the same verdict.
+        assert record.latest.detail == owner[sha].detail, sha
+
+    artifacts = db_session.scalars(
+        select(CalculationArtifact).where(CalculationArtifact.sha256.in_(digests))
+    ).all()
+    for artifact in artifacts:
+        broken = artifact.integrity_events[-1].finding.is_break
+        assert broken is (artifact.sha256 in expected), artifact.sha256
+
+
+def test_a_digest_with_no_artifact_row_is_still_the_records_own_business(db_session):
+    """The rowless digest is in the record and reachable, but condemns nothing.
+
+    ``store_dedup_verification`` records against an object whose
+    referencing row is being refused. The owner and the read surface must
+    both see it; the relationship cannot, and should not -- there is no
+    calculation to hard-fail.
+    """
+    from app.db.models.calculation import CalculationArtifact
+    from app.services.scientific_read.artifact_integrity_reads import _summaries
+
+    digests = _observation_population(db_session)
+    rowless = hashlib.sha256(b"rowless").hexdigest()
+    assert rowless in digests
+
+    assert rowless in latest_integrity_observations(db_session, digests)
+    assert rowless in digests_with_recorded_breaks(db_session, digests)
+
+    records, _total = _summaries(
+        db_session,
+        sha256=rowless,
+        calculation_ref=None,
+        only_currently_broken=False,
+        offset=0,
+        limit=10,
+    )
+    assert [record.sha256 for record in records] == [rowless]
+
+    assert (
+        db_session.scalars(
+            select(CalculationArtifact).where(CalculationArtifact.sha256 == rowless)
+        ).all()
+        == []
+    )

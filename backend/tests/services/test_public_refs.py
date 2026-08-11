@@ -157,6 +157,46 @@ class TestPrefixRegistry:
             assert ref.startswith("rpa_")
             assert re.fullmatch(r"rpa_[a-z2-7]{26}", ref)
 
+    def test_artifact_integrity_event_refs_are_opaque_and_independent(self):
+        """Custody observations are events, so their refs are opaque.
+
+        Two observations of one digest, minutes apart, are the append-only
+        log doing its job -- "broken, then verified, then broken again" is
+        the claim the sequence exists to make. A content-derived ref would
+        collapse them onto one handle and destroy exactly that.
+        """
+        from app.db.models.calculation import ArtifactIntegrityEvent
+
+        first = generate_ref_for(ArtifactIntegrityEvent())
+        second = generate_ref_for(ArtifactIntegrityEvent())
+        assert first != second
+        for ref in (first, second):
+            assert re.fullmatch(r"aie_[a-z2-7]{26}", ref)
+
+    def test_every_ref_bearing_model_has_a_registered_prefix(self):
+        """The registration and the column must not be able to drift apart.
+
+        Adding ``PublicRefMixin`` to a model without adding it to
+        ``PREFIXES`` produces a NOT NULL column nothing fills, which
+        surfaces as an insert failure in whichever unrelated test happens
+        to touch that table first. This turns it into one obvious failure
+        naming the class, and it is a sweep rather than an enumerated set
+        so that it covers the model added after this one.
+        """
+        from app.db.base import Base, PublicRefMixin
+
+        unregistered = sorted(
+            mapper.class_.__name__
+            for mapper in Base.registry.mappers
+            if issubclass(mapper.class_, PublicRefMixin)
+            and mapper.class_.__name__ not in PREFIXES
+        )
+        assert not unregistered, (
+            "These models carry PublicRefMixin but have no prefix in "
+            "app.services.public_refs.PREFIXES, so the before_insert "
+            f"listener cannot populate their public_ref: {unregistered}"
+        )
+
 
 # ---------------------------------------------------------------------------
 # ORM-level: the column is on the model, the listener populates new rows

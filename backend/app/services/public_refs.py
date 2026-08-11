@@ -82,6 +82,11 @@ PREFIXES: dict[str, str] = {
     "NetworkKinetics": "nkin",
     "Submission": "sub",
     "RecordReproducibilityAssessment": "rpa",
+    # Custody of stored evidence (ADR 0014). Opaque: an observation about
+    # an object at a moment is an event, and the log is deliberately
+    # append-only, so two observations of one digest must be separately
+    # citable rather than collapsing onto a content-derived ref.
+    "ArtifactIntegrityEvent": "aie",
     # Curation overlay / citable releases (Stage 3). Opaque: a curation
     # decision is an event, not a content-derived identity.
     "CurationPolicy": "cpol",

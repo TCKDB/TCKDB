@@ -45,6 +45,7 @@ _SORT = "last_observed_at:desc"
 
 def _observation(row: ArtifactIntegrityEvent) -> ArtifactIntegrityObservation:
     return ArtifactIntegrityObservation(
+        integrity_event_ref=row.public_ref,
         finding=row.finding,
         detected_during=row.detected_during,
         detected_at=row.created_at,
@@ -102,9 +103,16 @@ def _summaries(
         .group_by(ArtifactIntegrityEvent.sha256)
         .subquery()
     )
-    # ``max(id)`` is the latest observation. The ids are monotonic and the
-    # trust evaluator already reads "latest" the same way, so a second
-    # definition of recency here could only introduce a disagreement.
+    # ``max(id)`` is the latest observation, and it is deliberately the
+    # same recency key as
+    # :func:`app.services.artifact_integrity.latest_integrity_observations`,
+    # which owns that definition. Expressed as an aggregate here and not
+    # by calling the owner because this surface paginates summaries: the
+    # owner returns whole rows for a bounded set of digests, and a list
+    # endpoint over the whole custody record cannot bound the set. The
+    # two are held equal by an equivalence test over a generated
+    # population (``tests/services/test_artifact_integrity.py``) rather
+    # than by this comment.
     latest = ArtifactIntegrityEvent
     statement = select(stats, latest).join(latest, latest.id == stats.c.latest_id)
 

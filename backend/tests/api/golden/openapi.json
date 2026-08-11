@@ -1442,6 +1442,11 @@
           "finding": {
             "$ref": "#/components/schemas/ArtifactIntegrityFinding"
           },
+          "integrity_event_ref": {
+            "maxLength": 40,
+            "title": "Integrity Event Ref",
+            "type": "string"
+          },
           "is_break": {
             "title": "Is Break",
             "type": "boolean"
@@ -1505,6 +1510,7 @@
           }
         },
         "required": [
+          "integrity_event_ref",
           "finding",
           "detected_during",
           "detected_at",

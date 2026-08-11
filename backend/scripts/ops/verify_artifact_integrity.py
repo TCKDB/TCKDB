@@ -43,8 +43,28 @@ Usage::
     # See what would be read without reading it.
     python backend/scripts/ops/verify_artifact_integrity.py --all --dry-run
 
-Exit status is ``1`` when any break was found, so a release runbook can
-gate on it.
+    # Accept a scope that is legitimately empty (a fresh deployment).
+    python backend/scripts/ops/verify_artifact_integrity.py --all --allow-empty
+
+Exit status separates the two ways this stops being a clean gate: ``1``
+when a break was recorded, ``2`` when something in scope was **not
+checked at all** -- an empty population, or a store that would not
+answer. A runbook gates on "not zero"; an operator triaging needs to
+know which, because "the evidence is corrupt" and "we could not look"
+call for opposite responses. ``--allow-empty`` is the explicit opt-out
+for a scope that is legitimately empty.
+
+**A pass has to mean something was checked.** The defect this script
+carried was not a wrong answer but a confident one over an empty set:
+``--release`` filtered on a ``record_type`` the enum excludes, matched
+no digests, printed a clean summary and exited 0, and the release
+runbook cited that as a gate. Everything below that distinguishes
+"nothing was wrong" from "nothing was checked" is here because of it,
+and because the same silence had three further forms -- any scope
+resolving to zero digests, a storage outage counted as neither a break
+nor a verification, and a digest recorded on the ``store_artifact``
+dedup path, which by construction has no ``calculation_artifact`` row
+to be found through and so could not be swept by digest at all.
 
 Reclaiming orphans is deliberately two operators' decisions in sequence,
 not one. Objects accumulate because ``store_artifact`` writes bytes
@@ -74,6 +94,7 @@ from __future__ import annotations
 import argparse
 import random
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -83,7 +104,11 @@ sys.path.insert(0, str(REPO_ROOT))
 from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
-from app.db.models.calculation import Calculation, CalculationArtifact  # noqa: E402
+from app.db.models.calculation import (  # noqa: E402
+    ArtifactIntegrityEvent,
+    Calculation,
+    CalculationArtifact,
+)
 from app.db.models.common import (  # noqa: E402
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
@@ -108,15 +133,50 @@ from app.services.artifact_storage import (  # noqa: E402
 )
 
 
-def _distinct_artifacts(
+@dataclass(frozen=True)
+class _VerificationTarget:
+    """One object to re-read, and what the database says it should be.
+
+    Not a ``CalculationArtifact``, and the difference is the whole point
+    of ``--sha256``. The unit of verification is the *object*, and an
+    object can be in scope with no artifact row behind it: the
+    ``store_dedup_verification`` context records a break against a digest
+    whose referencing row is being refused, so it never commits. Making
+    the sweep's scope a list of artifact rows meant the one digest most
+    in need of a re-read by hand -- the one an operator was just told
+    about, that no row points at -- resolved to an empty scope and a
+    clean exit.
+
+    ``expected_bytes`` may be ``None`` for such a target; the digest
+    check still runs, and it is the digest that the key *is*.
+    """
+
+    sha256: str
+    expected_bytes: int | None
+    artifact_id: int | None
+    artifact_recorded_at: datetime | None
+    filename: str
+
+    @classmethod
+    def from_artifact(cls, row: CalculationArtifact) -> "_VerificationTarget":
+        return cls(
+            sha256=row.sha256,
+            expected_bytes=row.bytes,
+            artifact_id=row.id,
+            artifact_recorded_at=row.created_at,
+            filename=row.filename,
+        )
+
+
+def _scope_targets(
     session: Session,
     *,
     sha256: str | None,
     calculation_ref: str | None,
     release_ref: str | None,
     limit: int | None,
-) -> list[CalculationArtifact]:
-    """One representative artifact row per distinct digest in scope.
+) -> list[_VerificationTarget]:
+    """One target per distinct digest in scope.
 
     Per *digest*, not per row: the store is content-addressed, so reading
     the same object once for each of the twelve rows that share it would
@@ -132,18 +192,57 @@ def _distinct_artifacts(
     if release_ref:
         ids = _release_calculation_ids(session, release_ref)
         if not ids:
-            raise SystemExit(
+            raise _not_verified(
                 f"dataset release {release_ref!r} cites no calculations; "
                 "nothing to verify"
             )
         statement = statement.where(CalculationArtifact.calculation_id.in_(ids))
 
-    seen: dict[str, CalculationArtifact] = {}
+    seen: dict[str, _VerificationTarget] = {}
     for row in session.scalars(statement):
-        seen.setdefault(row.sha256, row)
+        seen.setdefault(row.sha256, _VerificationTarget.from_artifact(row))
         if limit is not None and len(seen) >= limit:
             break
+    if sha256 and not seen:
+        recorded = _recorded_only_target(session, sha256)
+        if recorded is not None:
+            seen[sha256] = recorded
     return list(seen.values())
+
+
+def _recorded_only_target(
+    session: Session, sha256: str
+) -> _VerificationTarget | None:
+    """A digest the custody record knows and ``calculation_artifact`` does not.
+
+    ``store_artifact`` deduplicates: an upload of bytes already at the
+    content-addressed key verifies before writing a row, so a break
+    detected there is recorded against a digest whose only referencing
+    row is in a transaction that is being rolled back. That digest is
+    exactly the one an operator has been handed and asked to re-check,
+    and routing ``--sha256`` solely through ``calculation_artifact``
+    turned it into an empty scope and an exit 0 -- the same shape as the
+    ``--release`` filter this script was fixed for.
+
+    The read surface already refuses to resolve an explicit digest
+    through the artifact table for this reason; see
+    ``app.services.scientific_read.artifact_integrity_reads``.
+    """
+    event = session.scalars(
+        select(ArtifactIntegrityEvent)
+        .where(ArtifactIntegrityEvent.sha256 == sha256)
+        .order_by(ArtifactIntegrityEvent.id.desc())
+        .limit(1)
+    ).first()
+    if event is None:
+        return None
+    return _VerificationTarget(
+        sha256=sha256,
+        expected_bytes=event.expected_bytes,
+        artifact_id=event.artifact_id,
+        artifact_recorded_at=event.artifact_recorded_at,
+        filename=f"(no artifact row; recorded during {event.detected_during.value})",
+    )
 
 
 def _release_calculation_ids(session: Session, release_ref: str) -> set[int]:
@@ -183,7 +282,7 @@ def _release_calculation_ids(session: Session, release_ref: str) -> set[int]:
         select(DatasetRelease).where(DatasetRelease.public_ref == release_ref)
     ).first()
     if release is None:
-        raise SystemExit(f"no dataset release with public_ref={release_ref!r}")
+        raise _not_verified(f"no dataset release with public_ref={release_ref!r}")
 
     by_type: dict[SubmissionRecordType, list[int]] = {}
     for selection in load_selection_state(session, release).active:
@@ -233,9 +332,18 @@ def _dependency_closure(session: Session, roots: set[int]) -> set[int]:
     return set(session.scalars(select(closure.c.id)).all())
 
 
+#: The outcome of a read that told us nothing about the object. Counted
+#: apart from both breaks and verifications, because it is neither: the
+#: store declined to answer, so the digest is exactly as unchecked as it
+#: was before the sweep ran. Naming it here rather than as a bare string
+#: is what lets :func:`main` refuse to call such a run a pass.
+UNAVAILABLE = "unavailable"
+REPAIRED = "repaired"
+
+
 def _verify_one(
     session_factory,
-    artifact: CalculationArtifact,
+    target: _VerificationTarget,
     *,
     client,
     bucket: str,
@@ -249,26 +357,26 @@ def _verify_one(
     """
     try:
         content = load_artifact_bytes(
-            artifact.sha256,
-            expected_bytes=artifact.bytes,
+            target.sha256,
+            expected_bytes=target.expected_bytes,
             client=client,
             bucket=bucket,
         )
-        if artifact.sha256 in previously_broken:
+        if target.sha256 in previously_broken:
             record_integrity_verified(
-                sha256=artifact.sha256,
+                sha256=target.sha256,
                 detected_during=(
                     ArtifactIntegrityDetectionContext.verification_sweep
                 ),
                 observed_bytes=len(content),
-                artifact_id=artifact.id,
-                artifact_recorded_at=artifact.created_at,
+                artifact_id=target.artifact_id,
+                artifact_recorded_at=target.artifact_recorded_at,
                 detail="re-read cleanly; supersedes the recorded break",
                 session_factory=session_factory,
                 storage_client=client,
                 bucket=bucket,
             )
-            return "repaired"
+            return REPAIRED
         return None
     except ArtifactIntegrityError as exc:
         record_integrity_observation(
@@ -278,8 +386,8 @@ def _verify_one(
             observed_sha256=exc.observed_sha256,
             expected_bytes=exc.expected_bytes,
             observed_bytes=exc.observed_bytes,
-            artifact_id=artifact.id,
-            artifact_recorded_at=artifact.created_at,
+            artifact_id=target.artifact_id,
+            artifact_recorded_at=target.artifact_recorded_at,
             detail=str(exc),
             session_factory=session_factory,
             storage_client=client,
@@ -289,16 +397,19 @@ def _verify_one(
     except ArtifactStorageUnavailable as exc:
         if not getattr(exc, "missing", False):
             # The store did not answer. That says nothing about the
-            # object, so recording a custody break would be a lie.
-            print(f"  ! storage unavailable for {artifact.sha256}: {exc}")
-            return "unavailable"
+            # object, so recording a custody break would be a lie -- and
+            # it says nothing about the object's soundness either, so
+            # calling the run a pass would be the opposite lie. It is
+            # returned as its own outcome and counted as unchecked.
+            print(f"  ! storage unavailable for {target.sha256}: {exc}")
+            return UNAVAILABLE
         record_integrity_observation(
-            sha256=artifact.sha256,
+            sha256=target.sha256,
             finding=ArtifactIntegrityFinding.object_missing,
             detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
-            expected_bytes=artifact.bytes,
-            artifact_id=artifact.id,
-            artifact_recorded_at=artifact.created_at,
+            expected_bytes=target.expected_bytes,
+            artifact_id=target.artifact_id,
+            artifact_recorded_at=target.artifact_recorded_at,
             detail=str(exc),
             session_factory=session_factory,
             storage_client=client,
@@ -472,19 +583,56 @@ MIN_ORPHAN_AGE_DAYS = 7
 MIN_HOLD_DAYS = 7
 
 
+#: Exit codes. ``1`` keeps its documented meaning -- a break was recorded
+#: -- so an existing runbook that gates on it is unaffected. ``2`` is the
+#: answer to the question this script could not previously express: the
+#: run is not a pass, and not because anything was found wrong, but
+#: because part of the scope was never read. A gate on "not zero" catches
+#: both; triage needs them apart, because a corrupt object and a store
+#: that would not answer call for opposite first moves.
+EXIT_OK = 0
+EXIT_BREAK = 1
+EXIT_NOT_VERIFIED = 2
+
+
+def _not_verified(message: str) -> SystemExit:
+    """Abort with the "nothing was checked" code, saying why.
+
+    ``raise SystemExit("text")`` exits ``1``, which under the codes above
+    would claim a break was recorded. Every precondition failure in this
+    script is the other thing -- the run did not verify what it was asked
+    to -- and that includes argparse's own usage errors, which already
+    exit ``2``. So ``2`` reads consistently as "fix the invocation, the
+    scope or the store, then run it again", whichever layer refused.
+    """
+    print(f"RESULT: NOT VERIFIED. {message}", file=sys.stderr)
+    return SystemExit(EXIT_NOT_VERIFIED)
+
+
 def _validate_age_floors(args) -> None:
     if args.orphan_age_days < MIN_ORPHAN_AGE_DAYS:
-        raise SystemExit(
+        raise _not_verified(
             f"--orphan-age-days must be at least {MIN_ORPHAN_AGE_DAYS}: an "
             "object younger than that may belong to an upload that has not "
             "committed its row yet"
         )
     if args.purge_hold_days is not None and args.purge_hold_days < MIN_HOLD_DAYS:
-        raise SystemExit(
+        raise _not_verified(
             f"--purge-hold-days must be at least {MIN_HOLD_DAYS}: the hold "
             "exists so a mistaken reclaim can be noticed and undone, and it "
             "cannot do that if it is emptied immediately"
         )
+
+
+def _scope_description(args) -> str:
+    """How the operator named this scope, for a refusal that can be acted on."""
+    if args.sha256:
+        return f"--sha256 {args.sha256}"
+    if args.calculation_ref:
+        return f"--calculation-ref {args.calculation_ref}"
+    if args.release:
+        return f"--release {args.release}"
+    return "--all"
 
 
 def main() -> int:
@@ -544,6 +692,16 @@ def main() -> int:
         action="store_true",
         help="list what would be read without reading or recording",
     )
+    parser.add_argument(
+        "--allow-empty",
+        action="store_true",
+        help=(
+            "accept a scope that resolves to zero digests. Without this an "
+            "empty scope exits "
+            f"{EXIT_NOT_VERIFIED}, because a sweep that checked nothing is "
+            "not a sweep that found nothing"
+        ),
+    )
     args = parser.parse_args()
     _validate_age_floors(args)
 
@@ -554,12 +712,12 @@ def main() -> int:
 
     if args.restore:
         with SessionLocal() as session:
-            return 0 if _restore_held(
+            return EXIT_OK if _restore_held(
                 session, args.restore, client=client, bucket=bucket
-            ) else 1
+            ) else EXIT_BREAK
 
     with SessionLocal() as session:
-        artifacts = _distinct_artifacts(
+        targets = _scope_targets(
             session,
             sha256=args.sha256,
             calculation_ref=args.calculation_ref,
@@ -568,8 +726,8 @@ def main() -> int:
         )
         if args.sample is not None:
             rng = random.Random(args.seed)
-            keep = max(1, round(len(artifacts) * args.sample)) if artifacts else 0
-            artifacts = rng.sample(artifacts, keep)
+            keep = max(1, round(len(targets) * args.sample)) if targets else 0
+            targets = rng.sample(targets, keep)
         want_orphans = (args.orphans or args.reclaim_orphans) and not args.dry_run
         orphans = (
             _find_orphans(
@@ -594,20 +752,22 @@ def main() -> int:
         # Which of these already carry a break, so a clean read of one
         # can be recorded as the observation that clears it.
         previously_broken = digests_with_recorded_breaks(
-            session, [artifact.sha256 for artifact in artifacts]
+            session, [target.sha256 for target in targets]
         )
 
-    print(f"bucket={bucket} digests_in_scope={len(artifacts)}")
+    print(f"bucket={bucket} digests_in_scope={len(targets)}")
     if args.dry_run:
-        for artifact in artifacts:
-            print(f"  would read {content_addressed_key(artifact.sha256)}")
-        return 0
+        for target in targets:
+            print(f"  would read {content_addressed_key(target.sha256)}")
+        # A dry run is a plan, and an empty plan for a named scope is the
+        # cheapest place to find out the name was wrong.
+        return EXIT_OK if targets else _refuse_empty_scope(args)
 
     findings: dict[str, int] = {}
-    for artifact in artifacts:
+    for target in targets:
         finding = _verify_one(
             SessionLocal,
-            artifact,
+            target,
             client=client,
             bucket=bucket,
             previously_broken=previously_broken,
@@ -615,14 +775,26 @@ def main() -> int:
         if finding is None:
             continue
         findings[finding] = findings.get(finding, 0) + 1
-        label = "REPAIRED" if finding == "repaired" else "BREAK"
-        print(f"  {label} {finding}: sha={artifact.sha256} file={artifact.filename}")
+        label = {REPAIRED: "REPAIRED", UNAVAILABLE: "UNCHECKED"}.get(finding, "BREAK")
+        print(f"  {label} {finding}: sha={target.sha256} file={target.filename}")
 
-    breaks = {k: v for k, v in findings.items() if k not in ("repaired", "unavailable")}
-    clean = len(artifacts) - sum(findings.values())
+    breaks = {
+        name: count
+        for name, count in findings.items()
+        if name not in (REPAIRED, UNAVAILABLE)
+    }
+    break_count = sum(breaks.values())
+    unchecked = findings.get(UNAVAILABLE, 0)
+    repaired = findings.get(REPAIRED, 0)
+    # ``verified`` counts objects whose bytes were actually read back and
+    # hashed correctly on this run: the silently-clean ones plus the ones
+    # whose clean read cleared a recorded break. It is printed first and
+    # unconditionally, because it is the number that says whether this
+    # run is evidence of anything at all.
+    verified = len(targets) - sum(findings.values()) + repaired
     print(
-        f"verified={clean + findings.get('repaired', 0)} "
-        f"breaks={sum(breaks.values())} repaired={findings.get('repaired', 0)}"
+        f"verified={verified} breaks={break_count} repaired={repaired} "
+        f"unchecked={unchecked} in_scope={len(targets)}"
     )
     for name, count in sorted(findings.items()):
         print(f"  {name}: {count}")
@@ -641,7 +813,55 @@ def main() -> int:
     if purged:
         print(f"purged from the reclaim hold (DELETED): {len(purged)}")
 
-    return 1 if breaks else 0
+    # After the orphan and purge reports, not before: those are useful
+    # findings in their own right and an empty verification scope is no
+    # reason to withhold them.
+    if not targets:
+        return _refuse_empty_scope(args)
+    if break_count:
+        print(
+            f"RESULT: {break_count} break(s) recorded. The owning "
+            "calculations now hard-fail; see /scientific/artifacts/integrity."
+        )
+        return EXIT_BREAK
+    if unchecked:
+        print(
+            f"RESULT: NOT VERIFIED. {unchecked} of {len(targets)} digest(s) "
+            "could not be read -- the store did not answer. Those objects are "
+            "exactly as unchecked as before this ran, and this is not a pass. "
+            "Re-run once the store is reachable."
+        )
+        return EXIT_NOT_VERIFIED
+    print(f"RESULT: {verified} digest(s) verified, no breaks.")
+    return EXIT_OK
+
+
+def _refuse_empty_scope(args) -> int:
+    """Nothing in scope is a scope error, never a clean bill of health.
+
+    The three ways to land here are a mistyped ref, a release whose cited
+    calculations retained no artifacts at all, and a corpus that really is
+    empty. The first two are the failure ADR 0014 names the sweep as the
+    guard against, and the third is indistinguishable from them without
+    the operator saying so -- which is what ``--allow-empty`` is for, on
+    the same reasoning as the age floors: a guard any invocation may
+    silently satisfy is not a guard.
+    """
+    scope = _scope_description(args)
+    if args.allow_empty:
+        print(
+            f"RESULT: {scope} matched no digests, accepted under "
+            "--allow-empty. Nothing was verified."
+        )
+        return EXIT_OK
+    print(
+        f"RESULT: NOT VERIFIED. {scope} matched no digests, so nothing was "
+        "checked. That is not the same as nothing being wrong. Confirm the "
+        "scope is right -- a release whose cited calculations retained no "
+        "artifacts has no evidence to verify, which is itself worth knowing "
+        "-- then pass --allow-empty to accept it."
+    )
+    return EXIT_NOT_VERIFIED
 
 
 if __name__ == "__main__":

@@ -101,7 +101,7 @@ def record_integrity_observation(
     session_factory: Optional[Callable[[], Session]] = None,
     storage_client=None,
     bucket: str | None = None,
-) -> Optional[int]:
+) -> Optional[str]:
     """Write one ``artifact_integrity_event`` in its own transaction.
 
     Records both breaks and the ``verified`` observation that clears
@@ -109,10 +109,16 @@ def record_integrity_observation(
     failures, which is what lets a repaired object be recorded without
     editing or deleting the break.
 
-    Returns the event id, or ``None`` if recording itself failed — in
-    which case the failure is logged and swallowed, because the caller's
-    job is to report the integrity break to its own caller and this must
-    not get in the way of that.
+    Returns the observation's ``public_ref``, or ``None`` if recording
+    itself failed — in which case the failure is logged and swallowed,
+    because the caller's job is to report the integrity break to its own
+    caller and this must not get in the way of that.
+
+    The ref and not the row id, because the one caller that uses this
+    return value puts it in a snapshot a curator reads. A row id is an
+    implementation detail of one database instance and is stripped from
+    every scientific read response by policy, so a citation shaped like
+    one named something the reader could not resolve.
 
     ``artifact_id`` and ``artifact_recorded_at`` are optional: the
     ``store_dedup_verification`` context detects a break on an object
@@ -160,18 +166,18 @@ def record_integrity_observation(
                 )
                 session.add(event)
                 session.flush()
-                event_id = event.id
+                event_ref = event.public_ref
             log = logger.error if finding.is_break else logger.warning
             log(
                 "artifact integrity observation recorded: sha=%s finding=%s "
-                "context=%s observed_sha=%s event_id=%s",
+                "context=%s observed_sha=%s event_ref=%s",
                 sha256,
                 finding.value,
                 detected_during.value,
                 observed_sha256,
-                event_id,
+                event_ref,
             )
-            return event_id
+            return event_ref
     except Exception:  # pragma: no cover - must never mask the real failure
         logger.exception(
             "FAILED to record an artifact integrity observation durably "
@@ -193,7 +199,7 @@ def record_from_error(
     session_factory: Optional[Callable[[], Session]] = None,
     storage_client=None,
     bucket: str | None = None,
-) -> Optional[int]:
+) -> Optional[str]:
     """Record the break described by an :class:`ArtifactIntegrityError`.
 
     The convenience form for the common case: a caller that already has
@@ -233,7 +239,7 @@ def record_integrity_verified(
     session_factory: Optional[Callable[[], Session]] = None,
     storage_client=None,
     bucket: str | None = None,
-) -> Optional[int]:
+) -> Optional[str]:
     """Record that a previously-broken object now reads back correctly.
 
     This is how a hard fail is cleared, and it is cleared by evidence:
@@ -267,14 +273,37 @@ def record_integrity_verified(
 def latest_integrity_observations(
     session: Session, sha256s: list[str]
 ) -> dict[str, ArtifactIntegrityEvent]:
-    """Return the *latest* observation row per digest, for callers that cite it.
+    """The *latest* observation row per digest. The owner of "latest".
 
-    :func:`digests_with_recorded_breaks` answers the yes/no question the
-    trust evaluator asks and deliberately reads two columns to do it.
-    This is for the callers that must point at the specific observation
-    they are relying on -- the reproducibility rubric quoting the event
-    it deferred to, a read surface reporting expected versus observed --
-    and it costs whole rows, so it is used on bounded sets of digests.
+    "Latest", not "any": the table is append-only and a repaired object
+    is recorded as a later ``verified`` observation, so a digest with a
+    break followed by a verification is not currently broken. Reading
+    "any" would leave a restored record condemned forever, which would
+    make every label derived from this a trap rather than a judgement.
+
+    Recency is ``id``, and this function is the only place that decides
+    so. ``id`` rather than ``created_at`` because two observations of the
+    same object recorded inside the same statement timestamp are ordered
+    by insertion and not by a clock, and a tie in the ordering key of the
+    fact that decides a hard fail is not a tie anyone should have to
+    reason about.
+
+    :func:`digests_with_recorded_breaks` is the boolean projection of
+    this and calls it rather than re-deriving it. Two other expressions
+    of the same fact necessarily remain, because each exists for a
+    property this shape cannot supply: the ``CalculationArtifact.
+    integrity_events`` relationship, which gives the trust evaluator
+    custody without a session or a per-call-site loader option, and the
+    ``max(id)`` aggregate in
+    :mod:`app.services.scientific_read.artifact_integrity_reads`, which
+    paginates summaries without loading every observation. Neither can
+    be replaced by this one; both are pinned to it by an equivalence
+    test over a generated population
+    (``tests/services/test_artifact_integrity.py``).
+
+    One query for a batch, so callers grading many calculations at once
+    do not fan out. It costs whole rows, so it is used on bounded sets of
+    digests.
     """
     if not sha256s:
         return {}
@@ -292,28 +321,28 @@ def latest_integrity_observations(
 def digests_with_recorded_breaks(
     session: Session, sha256s: list[str]
 ) -> frozenset[str]:
-    """Return the subset of ``sha256s`` whose *latest* observation is a break.
+    """Return the subset of ``sha256s`` whose latest observation is a break.
 
-    One query for a batch of digests, so read paths that grade many
-    calculations at once do not fan out. Kept here rather than in the
-    trust package because it is a question about storage custody, not
-    about the science.
+    The verification sweep's question: which of the digests I am about to
+    re-read already carry a break, so that a clean read of one can be
+    recorded as the observation that clears it. Writing a row for every
+    clean read would turn an incident log into a download log.
 
-    "Latest", not "any": the table is append-only and a repaired object
-    is recorded as a later ``verified`` observation, so a digest with a
-    break followed by a verification is *not* currently broken.
+    A projection of :func:`latest_integrity_observations` rather than a
+    second query. It used to be its own ``SELECT sha256, finding`` with
+    its own ``ORDER BY``, and its docstring described a batching caller
+    in the trust read paths that it does not have -- the evaluator reads
+    the ``integrity_events`` relationship instead. Two spellings of
+    "latest" agreed on every population anyone could construct, which is
+    the argument for collapsing them while they still do rather than
+    after they stop.
     """
     if not sha256s:
         return frozenset()
-    rows = session.execute(
-        select(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.finding)
-        .where(ArtifactIntegrityEvent.sha256.in_(sorted(set(sha256s))))
-        .order_by(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.id)
-    ).all()
-    latest: dict[str, ArtifactIntegrityFinding] = {}
-    for sha, finding in rows:
-        latest[sha] = finding
-    return frozenset(sha for sha, finding in latest.items() if finding.is_break)
+    latest = latest_integrity_observations(session, sha256s)
+    return frozenset(
+        sha for sha, event in latest.items() if event.finding.is_break
+    )
 
 
 __all__ = [

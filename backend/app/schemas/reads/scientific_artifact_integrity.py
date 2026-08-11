@@ -51,6 +51,21 @@ class ArtifactIntegrityObservation(BaseModel):
     will investigate the wrong one.
     """
 
+    #: The handle this observation is cited by. The reproducibility
+    #: rubric copies this record's verdict for artifacts it does not read
+    #: itself and names the observation it copied; without a ref on this
+    #: surface that citation named a row nobody could look up, and a
+    #: curator holding it was reduced to matching on timestamps.
+    #:
+    #: A ref and not the row id, which was the citation before. A row id
+    #: is an implementation detail of one database instance -- it does
+    #: not survive a restore and means nothing on another deployment --
+    #: and ``apply_internal_ids_visibility`` strips every ``*_id`` key
+    #: from this response by policy, so exposing it here could not have
+    #: worked: the hosted startup check refuses to boot with
+    #: ``ALLOW_PUBLIC_INTERNAL_IDS`` true, and these routes accept no
+    #: ``include`` token to opt in with.
+    integrity_event_ref: str = Field(max_length=40)
     finding: ArtifactIntegrityFinding
     detected_during: ArtifactIntegrityDetectionContext
     detected_at: datetime
