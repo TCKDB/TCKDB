@@ -235,7 +235,15 @@ def test_complement_gate_excludes_only_what_another_gate_runs() -> None:
         "include-list stops covering a directory the day somebody adds one."
     )
     for ignored in sorted(rest.ignored):
-        owned_by = [other.label for other in others if any(_is_under(path, ignored) or _is_under(ignored, path) for path in other.paths)]
+        owned_by = [
+            other.label
+            for other in others
+            # Either direction: the complement may subtract a subtree another
+            # gate selects wholesale (tests/services/scientific_read), or one
+            # that contains what another gate selects (tests/api, of which the
+            # scientific gate takes tests/api/scientific).
+            if any(_is_under(path, ignored) or _is_under(ignored, path) for path in other.paths)
+        ]
         assert owned_by, (
             f"test-rest.sh ignores {ignored!r}, which no other gate script "
             "selects, so nothing on a pull request runs it."
