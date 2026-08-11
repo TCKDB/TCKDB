@@ -73,9 +73,86 @@ provisions a restricted runtime account and a separate migration owner. The
 guarantee applies only after its read-only role-contract check passes on the
 target deployment.
 
-There is deliberately no bypass GUC or normal maintenance escape hatch. Data
-repair after acceptance must use replacement records and supersession. Schema
-migrations run as the separate owner role.
+There is deliberately no bypass GUC and no maintenance escape hatch. A change
+to what a record *says* — any corrected number — must use a replacement record
+and a supersession edge. Schema migrations run as the separate owner role.
+
+## Repairing what a record does not say (`e2c9a4f7b163`)
+
+Supersession is the right answer when the science changes, because forking
+identity is what keeps a citation resolving to what was cited. It is the wrong
+answer for a change that alters no scientific content — the letter case of an
+element symbol in the derived `geometry_atom.element` index column, with
+`geom_hash`, `xyz_text`, coordinates, isotopes and atom ordering untouched
+(`b4e7c1d20f83`). Forking identity there re-keys a citable public ref to fix a
+shift key.
+
+Before this, the only mechanical route was `ALTER TABLE … DISABLE TRIGGER`,
+which leaves nothing behind: no record that the guard was stood down, over
+which rows, or on what justification. A repair is now declared first, and the
+database checks the declaration.
+
+**Declare.** Insert one row into `accepted_science_repair` naming
+`target_table`, the exact `declared_columns` the repair may change, the
+`alembic_revision` doing it, and a nonblank `reason`:
+
+```sql
+INSERT INTO accepted_science_repair
+    (target_table, declared_columns, alembic_revision, reason)
+VALUES ('geometry_atom', ARRAY['element'], 'b4e7c1d20f83',
+        'canonicalise element symbol case; geom_hash, xyz_text and '
+        'coordinates are not touched');
+```
+
+**Then repair, in the same transaction.** While the declaration is in force,
+`tckdb_raise_if_accepted` permits an UPDATE to that table only if the columns
+that actually changed are a **subset** of the declared set. The comparison is
+`OLD` against `NEW` inside the existing `BEFORE UPDATE` guard, so a statement
+that also touches one undeclared column is refused by name and the whole
+transaction with it.
+
+**What is recorded.** Each changed row appends a row to
+`accepted_science_repair_change` per accepted root it sits under: the root's
+`record_type`/`record_id`, the changed row's primary key as `row_identity`,
+`changed_columns`, and `before_json`/`after_json`. Under an accepted root, a
+write that changes a **value** is either refused or recorded, so "the record
+did not change scientifically" is a query rather than a docstring.
+
+Precisely, because the absolute version of that sentence is not true: the
+comparison is `to_jsonb(OLD)` against `to_jsonb(NEW)`, and `to_jsonb` renders
+numbers as JSON numerics, which have no signed zero and ignore trailing scale.
+A write that changes only the *representation* of an equal value therefore
+passes with no change row — `SET x = -0.0` over a stored `0.0` under an
+`element`-only declaration succeeds and records nothing. Nothing a reader can
+observe moves; no genuinely different number can hide, since `float8` renders
+round-trip; and text, enum, timestamp, `mol` and `jsonb` serialise exactly.
+Normalising before comparison would cost every UPDATE to a guarded table more
+than the case is worth, so this is documented rather than closed.
+
+**What it cannot do.**
+
+- **INSERT and DELETE stay unconditionally refused**, declaration or not. The
+  row count under an accepted root is invariant under every repair.
+- **Primary-key columns cannot be declared.** The record names the row by its
+  key, and a row under a new identity is a different row.
+- **It cannot be left open.** The declaration is matched on
+  `pg_current_xact_id()`, so it is inert the moment its transaction ends —
+  there is no close step. A second bound, `expires_at` (default 1 hour, capped
+  at 24), raises rather than silently permitting, so a wedged transaction
+  cannot hold it open either. At most one declaration per table per
+  transaction.
+- **It confers no authority.** Only a role owning the target table may declare
+  a repair or record a change to it — exactly the roles that could already have
+  run `DISABLE TRIGGER`. The runtime role of
+  [`../deployment/database_roles.md`](../deployment/database_roles.md) owns
+  nothing and is refused, even holding the blanket `INSERT` its default
+  privileges grant. The guarantee is carried by triggers and depends on no
+  grant.
+- **The record cannot be edited.** Both tables are append-only and
+  un-truncatable, on the same terms as `record_review_event`.
+
+`record_review` is outside this mechanism entirely; approval history is not
+repairable.
 
 ## v1 limitation
 

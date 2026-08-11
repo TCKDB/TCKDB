@@ -19,6 +19,18 @@ every manifest. All other classified rows are preserved, including primary
 keys, foreign keys, public references, timestamps, submissions, review history,
 machine/reproducibility assessments, and supersession links.
 
+`accepted_science_repair` and `accepted_science_repair_change` (ADR 0015) are
+excluded as well, and for a different kind of reason than the four above. They
+are not ephemeral: they are the durable account of a declared repair to an
+accepted record. What they cannot survive is the *move*. A declaration's
+meaning is carried by `xact_id`, a transaction id from the source cluster's
+counter, and every check that decides whether one is live compares it against
+`pg_current_xact_id()` — so restored into a fresh cluster it names a
+transaction larger than any the new database has issued. The repaired *value*
+travels with the science; the account of who repaired it, under what
+declaration, stays with the deployment that performed it and with that
+deployment's `pg_dump`.
+
 Calculation artifacts are included once per content digest. Their bytes,
 SHA-256 digest, length, filename, and database metadata are preserved. On
 restore, `calculation_artifact.uri` is rewritten to the destination's

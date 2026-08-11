@@ -146,6 +146,29 @@ def test_database_trigger_set_matches_registry(db_session) -> None:
                 "scientific_record_supersession",
                 "trg_scientific_supersession_validate",
             ),
+            # ``e2c9a4f7b163``'s recorded repair path. The declaration and its
+            # change record are append-only and un-truncatable on the same
+            # terms as the review and supersession history, and each is
+            # validated on insert. Listed here so removing one of the four
+            # fails this test as well as the behavioural ones.
+            (
+                "accepted_science_repair",
+                "trg_accepted_science_repair_validate",
+            ),
+            (
+                "accepted_science_repair_change",
+                "trg_accepted_science_repair_change_validate",
+            ),
+            ("accepted_science_repair", "trg_append_only_accepted_science_repair"),
+            (
+                "accepted_science_repair_change",
+                "trg_append_only_accepted_science_repair_change",
+            ),
+            ("accepted_science_repair", "trg_as_truncate_accepted_science_repair"),
+            (
+                "accepted_science_repair_change",
+                "trg_as_truncate_accepted_science_repair_change",
+            ),
             (
                 "record_review_event",
                 trigger_name("append_only", "record_review_event"),
@@ -193,6 +216,7 @@ def test_database_trigger_set_matches_registry(db_session) -> None:
                       OR trigger.tgname LIKE 'trg_append_only_%'
                       OR trigger.tgname = 'trg_guard_record_review'
                       OR trigger.tgname = 'trg_scientific_supersession_validate'
+                      OR trigger.tgname LIKE 'trg_accepted_science_repair%'
                   )
                 """
             )
