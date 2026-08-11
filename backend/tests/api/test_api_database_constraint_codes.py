@@ -87,17 +87,26 @@ PROVOCATIONS: dict[str, tuple[str, dict[str, object], dict[str, object] | None]]
     # The two uniques share a table, so each first row differs from its
     # violating row in exactly the column the *other* unique covers --
     # otherwise which of the two fires would depend on index order.
+    #
+    # ``element``/``ts_element`` are overridden on all four rows because
+    # ``_dummy`` fills a ``character(2)`` with ``'x'``, which
+    # ``ck_reaction_atom_map_pair_element_canonical`` (``c5a1f8e3d074``) now
+    # refuses: an element symbol capitalises its first letter. Without the
+    # override the canonicality CHECK would fire first and these provocations
+    # would prove something about the wrong constraint.
     "uq_reaction_atom_map_pair_ts_atom_index": (
         "reaction_atom_map_pair",
-        {"atom_map_id": 1, "ts_atom_index": 7, "structure_participant_id": 2},
-        {"atom_map_id": 1, "ts_atom_index": 7, "structure_participant_id": 1},
+        {"atom_map_id": 1, "ts_atom_index": 7, "structure_participant_id": 2,
+         "element": "C", "ts_element": "C"},
+        {"atom_map_id": 1, "ts_atom_index": 7, "structure_participant_id": 1,
+         "element": "C", "ts_element": "C"},
     ),
     "uq_reaction_atom_map_pair_atom_map_id": (
         "reaction_atom_map_pair",
         {"atom_map_id": 1, "atom_index": 5, "structure_participant_id": 1,
-         "ts_atom_index": 9},
+         "ts_atom_index": 9, "element": "C", "ts_element": "C"},
         {"atom_map_id": 1, "atom_index": 5, "structure_participant_id": 1,
-         "ts_atom_index": 8},
+         "ts_atom_index": 8, "element": "C", "ts_element": "C"},
     ),
 }
 

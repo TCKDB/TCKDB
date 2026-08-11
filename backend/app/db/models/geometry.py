@@ -68,18 +68,22 @@ class GeometryAtom(Base):
 
     atom_index: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    #: Element symbol, **case-canonical by convention**: first character upper,
-    #: rest lower (:func:`app.chemistry.geometry.normalize_element_symbol`,
+    #: Element symbol, **case-canonical as an invariant**: first character
+    #: upper, rest lower (:func:`app.chemistry.geometry.normalize_element_symbol`,
     #: applied by :func:`app.chemistry.geometry.parse_xyz` and backfilled onto
     #: older rows by Alembic revision ``b4e7c1d20f83``). A file that writes
     #: ``CL`` stores ``Cl`` here while ``geometry.xyz_text`` keeps the ``CL`` it
     #: deposited; this column is the index the database joins and compares on.
     #:
-    #: "By convention" is load-bearing: there is deliberately **no** CHECK
-    #: constraint enforcing it, so a restore from a backup older than
-    #: ``b4e7c1d20f83`` or a write path that bypasses ``parse_xyz`` can hold a
-    #: non-canonical symbol. Readers that compare this column must normalise;
-    #: none of them may assume it.
+    #: ``ck_geometry_atom_element_canonical`` (``c5a1f8e3d074``) is what makes
+    #: that a fact about the column rather than a habit of one code path.
+    #: Until it existed, a restore from a backup older than ``b4e7c1d20f83``, a
+    #: bulk import, or any write path that skipped ``parse_xyz`` could put
+    #: ``CL`` back, so every reader that compared this column had to normalise
+    #: first and none of them could assume anything. A CHECK holds on all of
+    #: those paths -- unlike a foreign key or a trigger, it is not suspended by
+    #: ``session_replication_role = replica`` -- so readers may now compare the
+    #: stored value directly.
     #:
     #: Case is the *only* thing canonicalised. ``D`` and ``T`` are stored as
     #: ``D`` and ``T``: they are the depositor's isotope labelling, and code
@@ -110,6 +114,21 @@ class GeometryAtom(Base):
         CheckConstraint(
             "isotope_mass_number IS NULL OR isotope_mass_number >= 1",
             name="isotope_mass_number_ge_1",
+        ),
+        # An element symbol: one capital letter, optionally followed by one
+        # lower-case letter. Exactly the output shape of
+        # ``normalize_element_symbol``, so nothing ``parse_xyz`` can write is
+        # refused, and the reason readers of this column may compare it
+        # directly instead of normalising first.
+        #
+        # ``btrim`` is not decoration. The column is ``character(2)``, so a
+        # one-letter symbol is stored blank-padded as ``'C '``; comparison
+        # operators on ``bpchar`` ignore trailing blanks but the regex operator
+        # does not, and without the ``btrim`` this would refuse every
+        # single-letter element while reading as though it accepted them.
+        CheckConstraint(
+            "btrim(element) ~ '^[A-Z][a-z]?$'",
+            name="element_canonical",
         ),
         # Redundant with the primary key on its own terms — ``(geometry_id,
         # atom_index)`` already determines the row, so this adds no

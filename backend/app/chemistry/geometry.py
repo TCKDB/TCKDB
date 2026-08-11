@@ -32,16 +32,18 @@ def normalize_element_symbol(symbol: str) -> str:
     written before it into the same form. That is what makes the column one
     spelling per element in the ordinary case.
 
-    **And still at comparison time**, everywhere it already was. Ingestion
-    canonicalisation is a convention held by this module, not an invariant the
-    schema enforces: no CHECK constraint requires
-    ``geometry_atom.element`` to be canonical, so a restore from an older
-    backup, a bulk import, or any future write path that does not call
-    :func:`parse_xyz` can put ``CL`` back. Anything **blocking** has to be
-    correct on rows the running process never wrote, so it normalises both
-    sides rather than trusting the convention — see the element-conservation
-    check in :mod:`app.services.reaction_atom_map`. On canonical input that is
-    a no-op, so the correctness costs nothing.
+    **But no longer at comparison time on that column.** Ingestion
+    canonicalisation used to be a convention held by this module rather than an
+    invariant the schema enforced, so anything **blocking** normalised both
+    sides rather than trusting it: a restore from an older backup, a bulk
+    import, or a write path that did not call :func:`parse_xyz` could put
+    ``CL`` back, and a blocking check has to be correct on rows the running
+    process never wrote. ``ck_geometry_atom_element_canonical``
+    (``c5a1f8e3d074``) makes it an invariant, and a CHECK — unlike a foreign
+    key or a trigger — is not suspended by ``session_replication_role =
+    replica``, so it holds on precisely those paths. The element-conservation
+    check in :mod:`app.services.reaction_atom_map` therefore compares
+    ``geometry_atom.element`` values as stored.
 
     It is required outright wherever a symbol arrives from *outside* that
     column and has to be lined up against it: RDKit's title-case
@@ -171,10 +173,11 @@ def parse_xyz(payload: GeometryPayload) -> ParsedXYZ:
     ``character(2)`` value every element comparison in the service layer reads,
     and one spelling per element is what makes those reads say what they mean.
 
-    This is a *convention*, not an invariant: nothing in the schema requires the
-    column to be canonical, so the comparisons still normalise both sides and
-    stay correct on rows that arrived some other way. Canonicalising here makes
-    the common case clean; it does not license anything downstream to assume it.
+    This is an *invariant* rather than a convention, and only since
+    ``c5a1f8e3d074``: ``ck_geometry_atom_element_canonical`` requires the
+    column to hold exactly what this function produces. Canonicalising here is
+    what keeps the ingestion path inside that constraint; the constraint is
+    what lets a reader compare the column without normalising first.
 
     ``canonical_xyz_text`` becomes ``geometry.xyz_text`` and, hashed, becomes
     ``geom_hash``. Element symbols there are left **exactly as deposited**. Two

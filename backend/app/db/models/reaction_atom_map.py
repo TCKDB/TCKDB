@@ -53,32 +53,51 @@ first one refuses.
   point at ``geometry_atom``'s ``(geometry_id, atom_index)`` key.
 * **An element changing across the map** — each of those foreign keys carries
   an ``element`` column, and ``ck_reaction_atom_map_pair_element_matches``
-  holds the two equal *case-insensitively*, so a pair can only exist if the
-  source atom and the TS atom are the same element. The element columns are
-  therefore deliberately redundant with ``geometry_atom``: the redundancy is
-  what makes a definitional rule enforceable declaratively instead of in a
-  trigger.
+  holds the two equal, so a pair can only exist if the source atom and the TS
+  atom are the same element. The element columns are therefore deliberately
+  redundant with ``geometry_atom``: the redundancy is what makes a definitional
+  rule enforceable declaratively instead of in a trigger.
 
   There are **two** of them, ``element`` and ``ts_element``, rather than one
-  column shared by both foreign keys. The reason was that
+  column shared by both foreign keys. The reason *was* that
   ``geometry_atom.element`` used to be stored verbatim as the depositor's XYZ
   wrote it: ``CL`` and ``Cl`` are the same element and different
   ``character(2)`` values, so when a reactant geometry came out of one program
   and the saddle point out of another, *no single stored value satisfied both
   foreign keys* and a perfectly correct map could not be written at all. One
   column made capitalisation load-bearing — the same defect, one table over,
-  that made a ``CL`` saddle point contradict its own reaction. Each end stores
-  what its own geometry stores, and the ``upper(...)`` check carries the
-  scientific rule the shared column used to carry.
+  that made a ``CL`` saddle point contradict its own reaction.
 
-  Alembic revision ``b4e7c1d20f83`` made that rare rather than impossible:
-  ``geometry_atom.element`` is canonicalised at ingestion and older rows were
-  backfilled, so two geometries deposited through the API now spell an element
-  the same way. It is a convention and not a constraint — no CHECK enforces it,
-  and a restore or a bulk import can reintroduce ``CL`` — so the two columns and
-  the case-insensitive ``upper(...)`` check both remain load-bearing rather than
-  vestigial. Collapsing them would require canonicality to be structural first,
-  which is its own task.
+  **That reason is gone.** ``b4e7c1d20f83`` canonicalised the column at
+  ingestion and ``c5a1f8e3d074`` added ``ck_geometry_atom_element_canonical``,
+  so two geometries can no longer spell one element two ways in any state the
+  database can be in. A single shared column would now satisfy both foreign
+  keys for every correct map, and the split *could* be collapsed.
+
+  It is not collapsed, for a reason that did not exist when it was created.
+  Collapsing would delete ``ck_..._element_matches`` — with one column there is
+  nothing left to compare — and demote "an element does not change across a
+  reaction" from a CHECK to a consequence of two foreign keys. A foreign key in
+  PostgreSQL is a system trigger, and ``SET session_replication_role =
+  replica`` suspends system triggers while leaving CHECK constraints armed.
+  Measured at ``e2c9a4f7b163``: under ``replica`` a pair row naming an atom
+  that does not exist is **accepted**, and a pair row mapping ``C`` onto ``N``
+  is still refused by the CHECK. So on the bulk-load and restore path — the
+  exact path canonicality was made structural to defend — the foreign keys hold
+  nothing and the CHECK holds everything. Collapsing would trade a rule that
+  survives a bulk import for one that does not, and would additionally take the
+  rule's name off the error a client is handed: ``ck_..._element_matches``
+  carries ``atom_map_element_not_conserved`` in
+  :mod:`app.scientific_checks.declarations`, whereas the foreign key that would
+  replace it also fires for "that geometry has no such atom" and so can name
+  neither claim unambiguously.
+
+  What canonicality did change is the *check*: it was
+  ``upper(element) = upper(ts_element)``, and ``c5a1f8e3d074`` tightened it to
+  plain ``element = ts_element``. Both columns now carry their own canonicality
+  CHECK — not inherited through the foreign keys, which lapse under ``replica``
+  — so two atoms of the same element carry byte-identical values on every path,
+  and the case-blindness could only ever have been a no-op.
 
   ``isotope_mass_number`` is *not* carried the same way, because it is nullable
   and a NULL column silently disables a MATCH SIMPLE foreign key — isotope
@@ -285,19 +304,18 @@ class ReactionAtomMapPair(Base):
     )
     ts_atom_index: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    #: The participant atom's element, spelled as *its* geometry spells it.
-    #: Read by the foreign key into ``geometry_atom``, so it cannot disagree
-    #: with the stored atom.
+    #: The participant atom's element. Read by the foreign key into
+    #: ``geometry_atom``, so it cannot disagree with the stored atom.
     element: Mapped[str] = mapped_column(CHAR(2), nullable=False)
 
-    #: The saddle-point atom's element, spelled as the *transition-state*
-    #: geometry spells it. Held equal to ``element`` case-insensitively by
+    #: The saddle-point atom's element. Held equal to ``element`` by
     #: ``ck_reaction_atom_map_pair_element_matches``, which is the rule "an
-    #: element does not change across a reaction". It has its own column
-    #: because the two geometries may capitalise the same element differently
-    #: and a shared column would refuse that correct map outright. Ingestion
-    #: canonicalisation (``b4e7c1d20f83``) makes that rare, not impossible —
-    #: nothing enforces it — so the split stays; see the module docstring.
+    #: element does not change across a reaction".
+    #:
+    #: It keeps its own column now that both spellings are guaranteed
+    #: identical, because that CHECK is where the rule lives and a single
+    #: shared column would leave nothing to check — see the module docstring
+    #: for why a foreign key is not an acceptable substitute.
     ts_element: Mapped[str] = mapped_column(CHAR(2), nullable=False)
 
     atom_map: Mapped["ReactionAtomMap"] = relationship(back_populates="pairs")
@@ -362,16 +380,33 @@ class ReactionAtomMapPair(Base):
         ),
         CheckConstraint("atom_index >= 1", name="atom_index_ge_1"),
         CheckConstraint("ts_atom_index >= 1", name="ts_atom_index_ge_1"),
-        # "An element does not change across a reaction." Case-insensitive
-        # because the two ends quote two geometries, and nothing guarantees the
-        # two spell an element the same way: carbon becoming nitrogen is a
-        # record that cannot be what it says it is, while ``Cl`` becoming
-        # ``CL`` is one program shouting where another did not. Ingestion
-        # canonicalisation (``b4e7c1d20f83``) makes disagreement rare on rows
-        # written through the API, and does not make it impossible -- no
-        # constraint holds the column canonical -- so this stays case-blind.
+        # Each end canonical in its own right, rather than by way of its
+        # foreign key into ``geometry_atom``. The foreign key would imply it in
+        # a normal session and imply nothing under
+        # ``session_replication_role = replica``, which is the bulk-load path
+        # canonicality was made structural to defend. A CHECK holds on both.
         CheckConstraint(
-            "upper(element) = upper(ts_element)",
+            "btrim(element) ~ '^[A-Z][a-z]?$'",
+            name="element_canonical",
+        ),
+        CheckConstraint(
+            "btrim(ts_element) ~ '^[A-Z][a-z]?$'",
+            name="ts_element_canonical",
+        ),
+        # "An element does not change across a reaction." Carbon becoming
+        # nitrogen is a record that cannot be what it says it is.
+        #
+        # Plain equality since ``c5a1f8e3d074``. It was
+        # ``upper(element) = upper(ts_element)``, because the two ends quote
+        # two geometries and nothing guaranteed the two spelled an element the
+        # same way -- ``Cl`` becoming ``CL`` was one program shouting where
+        # another did not, and refusing that map would have refused correct
+        # chemistry. The two CHECKs above make that unrepresentable, so the
+        # case-blindness could only ever be a no-op, and dropping it means this
+        # constraint stops silently accepting a pair of non-canonical spellings
+        # if either of them is ever removed.
+        CheckConstraint(
+            "element = ts_element",
             name="element_matches",
         ),
     )

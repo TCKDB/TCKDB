@@ -484,7 +484,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `validate_reaction_atom_map` — `schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py::validate_reaction_atom_map`
   *Stated twice on purpose: once at the wire boundary, where the payload already holds every XYZ block the rule needs so the refusal arrives as a clean 422 before anything is written, and once as a database constraint, where a second write path cannot get around it.*
 - `ck_reaction_atom_map_pair_element_matches` (check on `reaction_atom_map_pair`)
-  `upper(element) = upper(ts_element)`
+  `element = ts_element`
   Violating this returns **409 `atom_map_element_not_conserved`** — An atom map pairs two atoms of different elements. An atom does not change element on the way across a reaction.
 
 **Escape hatch.** Case is not load-bearing. The comparison is deliberately case-insensitive because the two ends quote two different geometries and nothing guarantees they spell an element the same way — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not. `b4e7c1d20f83` canonicalises the symbol on the way into `geometry_atom.element`, which makes disagreement rare on rows written through the API; it is a convention rather than a constraint, so both the database check and the Python check still normalise instead of assuming it. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
