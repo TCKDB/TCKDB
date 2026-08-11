@@ -94,6 +94,13 @@ PROTECTED = frozenset(
         "tckdb",
         "tckdb_dev",
         "tckdb_prod",
+        # Not created by the harness and never carries its marker, so the
+        # in-process sweep leaves it alone -- but this script does not read
+        # markers, and the name is inside ``tckdb_test%``. It is the
+        # ``DB_NAME`` of the nightly CI job
+        # (``.github/workflows/backend-nightly.yml``), so on a self-hosted
+        # runner ``plan`` would otherwise offer up the job's own database.
+        "tckdb_test_ci",
     }
 )
 

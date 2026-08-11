@@ -171,6 +171,30 @@ def _reclaim_script_pattern() -> re.Pattern[str]:
     return re.compile(match.group(1))
 
 
+def test_the_nightly_job_database_is_protected_from_the_reclaim_script() -> None:
+    """``tckdb_test_ci`` is a CI ``DB_NAME``, not a harness database.
+
+    The in-process sweep is safe from it by construction — no harness marker,
+    no reclaim. This script reads no markers, and the name sits inside
+    ``tckdb_test%``, so on a self-hosted runner ``plan`` would list the
+    nightly job's own database as a candidate.
+    """
+    source = (
+        BACKEND_ROOT / "scripts" / "dev" / "reclaim_leaked_test_databases.py"
+    ).read_text(encoding="utf-8")
+    protected = re.search(r"PROTECTED = frozenset\((.*?)\n\)", source, re.DOTALL)
+
+    assert protected is not None
+    assert '"tckdb_test_ci"' in protected.group(1)
+
+    workflow = (
+        BACKEND_ROOT.parent / ".github" / "workflows" / "backend-nightly.yml"
+    ).read_text(encoding="utf-8")
+    # Non-vacuous: the protection is only worth anything while the nightly
+    # actually uses this name.
+    assert "DB_NAME: tckdb_test_ci" in workflow
+
+
 def test_both_reclaimers_use_the_same_name_pattern() -> None:
     """Widening one reclaimer without the other would be a silent half-fix.
 
