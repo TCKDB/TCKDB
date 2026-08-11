@@ -420,18 +420,24 @@ def channel_key(record: dict) -> tuple[str, str]:
 
 
 def channel_label(record: dict) -> str:
-    """A readable ``A + B -> C`` label for a channel."""
+    """A readable ``A + B -> C`` label for a channel.
 
-    def side(state: dict) -> str:
-        parts = []
-        for participant in state["participants"]:
-            stoich = participant["stoichiometry"]
-            prefix = f"{stoich} " if stoich != 1 else ""
-            parts.append(prefix + participant["canonical_smiles"])
-        return " + ".join(parts)
+    Both sides come from the server's own ``state_label``, which is not the
+    same thing as joining ``canonical_smiles`` with ``" + "``. That is what
+    this function used to do, and it was lossy in exactly the case this
+    network contains: two ``species_entry`` rows for diazene share one
+    ``species`` row and therefore one ``N=N``, so three genuinely different
+    channels rendered as two identical strings and one that appeared to run
+    from a state to itself. ``state_label`` carries each entry's
+    discriminator, so ``N=N (E) + [H][H] -> N=N (Z) + [H][H]`` says which
+    well is which. ``channel_key`` above remains the identity; this is the
+    prose.
+    """
 
     channel = record["network_channel"]
-    return f"{side(channel['source_state'])} -> {side(channel['sink_state'])}"
+    source = channel["source_state"]["state_label"]
+    sink = channel["sink_state"]["state_label"]
+    return f"{source} -> {sink}"
 
 
 def _chebyshev_basis(order: int, x: float) -> float:

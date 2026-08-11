@@ -345,6 +345,60 @@ def test_atom_map_expansion_is_capped_like_every_other_section(
     assert len(body["atom_map"][0]["pairs"]) == 10
 
 
+def test_the_badge_counts_pairs_without_reading_them(client):
+    """The unconditional badge must not cost a row per atom per leg.
+
+    ``atom_maps`` is on every ``/full`` response whether or not anyone asked
+    for the map, and the two counts it carries were being produced by loading
+    every pair and calling ``len``. That made a field nobody requested scale
+    with the size of the saddle point -- a large map is thousands of rows read,
+    turned into Pydantic models and thrown away -- on the one section that
+    cannot be turned off. Counts are what the badge needs, so counts are what
+    the database is asked for.
+
+    Asserted against the emitted SQL rather than a timing, because the
+    property is "no pair row is read", not "it is fast".
+    """
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    result = _upload(client, _map())
+    statements: list[str] = []
+
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        statements.append(statement)
+
+    def _pair_reads() -> list[str]:
+        return [
+            statement
+            for statement in statements
+            if "reaction_atom_map_pair" in statement
+            and "count(" not in statement.lower()
+        ]
+
+    event.listen(Engine, "before_cursor_execute", _record)
+    try:
+        body = _full(client, result["reaction_entry_id"])
+        badge_statements = _pair_reads()
+
+        statements.clear()
+        _full(client, result["reaction_entry_id"], "atom_map")
+        expanded_statements = _pair_reads()
+    finally:
+        event.remove(Engine, "before_cursor_execute", _record)
+
+    # The badge still says everything it said before.
+    badges = body["reaction_entry"]["atom_maps"]
+    assert len(badges) == 1
+    assert badges[0]["reactant_atoms_mapped"] == 5
+    assert badges[0]["product_atoms_mapped"] == 5
+
+    assert badge_statements == [], badge_statements
+    # Guard the guard: ``include=atom_map`` does read the pairs, so the
+    # assertion above is detecting something rather than passing vacuously.
+    assert expanded_statements != []
+
+
 def test_the_atom_map_badge_is_not_subject_to_the_pair_cap(client, monkeypatch):
     """The header badge carries no pairs, so it cannot be capped away.
 

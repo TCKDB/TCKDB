@@ -7,7 +7,7 @@ ORM-read configuration.
 from datetime import datetime
 from typing import Literal, Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, computed_field, model_validator
 from tckdb_schemas.fragments.scan import (
     CalculationScanCoordinateCreate,
     CalculationScanCoordinatePayload,
@@ -469,12 +469,20 @@ class CalculationParameterRead(TimestampedReadSchema):
 class CalculationGeometryValidationRead(ORMBaseSchema):
     """Read shape for geometry-identity validation evidence.
 
-    Reports whether a calculation's output geometry preserves the declared
-    molecular identity (graph isomorphism + RMSD diagnostics). This is a
+    Reports whether a calculation's output geometry still has the declared
+    species' **molecular formula**, plus an RMSD diagnostic. This is a
     structure-consistency check; it is **not** SCF/wavefunction stability
     (see :class:`CalculationSCFStabilityRead` /
     :class:`~app.db.models.calculation.CalculationSCFStability`) and it is
     not frequency/stationary-point validation.
+
+    ``formula_matches`` is the honest name for the verdict; ``is_isomorphic``
+    is the same boolean under the name the stored column carries, kept so no
+    consumer breaks. Despite that name, **no graph isomorphism is tested**:
+    atom mapping falls back to a formula comparison whenever bond perception
+    from the XYZ fails, which is the common case for radicals, ions and
+    stretched geometries, so dimethyl ether deposited under ethanol reads
+    ``true``. See :mod:`app.services.geometry_validation`.
 
     Inherits ORMBaseSchema (not TimestampedReadSchema) because the PK is
     ``calculation_id``, not a surrogate id column; TimestampedReadSchema
@@ -493,6 +501,13 @@ class CalculationGeometryValidationRead(ORMBaseSchema):
     validation_status: ValidationStatus
     validation_reason: str | None = None
     rmsd_warning_threshold: float | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def formula_matches(self) -> bool:
+        """Whether the output geometry has the declared species' formula."""
+
+        return self.is_isomorphic
 
 
 # ---------------------------------------------------------------------------

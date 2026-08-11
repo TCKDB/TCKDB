@@ -6,7 +6,7 @@ review summary into a single response. See docs/specs/read_api_mvp.md §Endpoint
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
@@ -184,11 +184,24 @@ def get_reaction_full(
     )
     entry_badge = entry_badges[reaction_entry_id]
 
-    # Read once, used twice: the header badge is unconditional (a consumer
-    # must be able to tell a mapped reaction from an unmapped one without a
-    # second request) and the per-atom legs are the opt-in ``atom_map``
-    # section built from the same rows.
-    atom_map_details = _build_atom_map_section(session, reaction_entry_id)
+    # The header badge is unconditional (a consumer must be able to tell a
+    # mapped reaction from an unmapped one without a second request); the
+    # per-atom legs are the opt-in ``atom_map`` section over the same maps.
+    # Read the map headers once and let the section decide how much of each
+    # map has to be loaded: the badge needs two counts per map, which the
+    # database can produce without shipping a row per atom.
+    atom_map_headers = _fetch_atom_map_headers(session, reaction_entry_id)
+    atom_map_details: list[ReactionAtomMapDetail] | None = None
+    if "atom_map" in includes:
+        atom_map_details = _build_atom_map_details(session, atom_map_headers)
+        atom_map_badges = [
+            ReactionAtomMapBadge(
+                **detail.model_dump(include=set(ReactionAtomMapBadge.model_fields))
+            )
+            for detail in atom_map_details
+        ]
+    else:
+        atom_map_badges = _build_atom_map_badges(session, atom_map_headers)
 
     reaction_entry_summary = ReactionEntrySummary(
         id=entry.id,
@@ -199,14 +212,7 @@ def get_reaction_full(
         reversible=chem.reversible if chem else True,
         family=family_name,
         review=entry_badge,
-        atom_maps=[
-            ReactionAtomMapBadge(
-                **detail.model_dump(
-                    include=set(ReactionAtomMapBadge.model_fields)
-                )
-            )
-            for detail in atom_map_details
-        ],
+        atom_maps=atom_map_badges,
     )
 
     # Build each requested sub-section.
@@ -260,9 +266,7 @@ def get_reaction_full(
     artifacts_block: list[ReactionFullCalculationArtifacts] | None = None
     if "artifacts" in includes:
         artifacts_block = _build_artifacts_section(session, reaction_entry_id)
-    atom_map_block: list[ReactionAtomMapDetail] | None = None
-    if "atom_map" in includes:
-        atom_map_block = atom_map_details
+    atom_map_block: list[ReactionAtomMapDetail] | None = atom_map_details
 
     # Hosted abuse-control caps: reject responses that would expand
     # beyond the configured public limits. ``include=all`` is what
@@ -345,11 +349,11 @@ def get_reaction_full(
 # ---------------------------------------------------------------------------
 
 
-def _build_atom_map_section(
+def _fetch_atom_map_headers(
     session: Session,
     reaction_entry_id: int,
-) -> list[ReactionAtomMapDetail]:
-    """Return every atom map on this micro reaction, both legs, atom by atom.
+) -> list:
+    """Return one row per atom map on this micro reaction, without its pairs.
 
     Not filtered by review status. The map is not a scientific *result* that
     could be rejected on its own; it is the correspondence the depositor
@@ -360,7 +364,7 @@ def _build_atom_map_section(
     An empty list therefore means the record genuinely carries no map.
     """
 
-    maps = session.execute(
+    return session.execute(
         select(
             ReactionAtomMap.id,
             ReactionAtomMap.transition_state_entry_id,
@@ -379,6 +383,69 @@ def _build_atom_map_section(
         .where(ReactionAtomMap.reaction_entry_id == reaction_entry_id)
         .order_by(ReactionAtomMap.transition_state_entry_id, ReactionAtomMap.id)
     ).all()
+
+
+def _build_atom_map_badges(
+    session: Session,
+    maps: list,
+) -> list[ReactionAtomMapBadge]:
+    """Return the header badge for each atom map, counting pairs in the database.
+
+    The badge says a map exists, on whose authority, and how many atoms of
+    each leg it accounts for. Those last two are the only thing it needs the
+    pairs for, and they are counts — so they are taken as counts. Building the
+    badge by loading a row per atom per leg made an unconditional field on
+    every ``/full`` response scale with the size of the saddle point, for a
+    consumer that asked for none of it; a large map is thousands of rows read
+    and discarded. ``include=atom_map`` still materialises the pairs, because
+    then the caller has asked for them.
+
+    An atom map with no pairs is not expected but is not refused either: it
+    reads back as a map that accounts for zero atoms on both legs, which is
+    what it is.
+    """
+
+    if not maps:
+        return []
+
+    map_ids = [row[0] for row in maps]
+    counts: dict[tuple[int, ReactionRole], int] = {
+        (atom_map_id, side): count
+        for atom_map_id, side, count in session.execute(
+            select(
+                ReactionAtomMapPair.atom_map_id,
+                ReactionAtomMapPair.side,
+                func.count(),
+            )
+            .where(ReactionAtomMapPair.atom_map_id.in_(map_ids))
+            .group_by(ReactionAtomMapPair.atom_map_id, ReactionAtomMapPair.side)
+        ).all()
+    }
+
+    return [
+        ReactionAtomMapBadge(
+            transition_state_entry_id=row[1],
+            transition_state_entry_ref=row[2],
+            source=row[5],
+            equivalent_map_count=row[6],
+            note=row[7],
+            reactant_atoms_mapped=counts.get((row[0], ReactionRole.reactant), 0),
+            product_atoms_mapped=counts.get((row[0], ReactionRole.product), 0),
+        )
+        for row in maps
+    ]
+
+
+def _build_atom_map_details(
+    session: Session,
+    maps: list,
+) -> list[ReactionAtomMapDetail]:
+    """Return every atom map on this micro reaction, both legs, atom by atom.
+
+    The opt-in ``include=atom_map`` expansion. Review-status filtering is
+    deliberately absent for the reason given on :func:`_fetch_atom_map_headers`.
+    """
+
     if not maps:
         return []
 

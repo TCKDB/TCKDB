@@ -179,7 +179,10 @@ class TestValidationService:
         assert result.is_isomorphic is False
         assert result.validation_status == ValidationStatus.fail
         assert result.validation_reason is not None
-        assert "not graph-isomorphic" in result.validation_reason
+        assert "does not match the declared species SMILES" in (
+            result.validation_reason
+        )
+        assert "molecular-formula check" in result.validation_reason
 
     def test_invalid_smiles_fails(self, opt_atoms):
         """Garbage SMILES → fail."""

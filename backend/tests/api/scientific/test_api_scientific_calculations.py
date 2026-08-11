@@ -1843,6 +1843,9 @@ def test_detail_include_geometry_validation_returns_summary(
     assert summary["validation_status"] == "passed"
     assert summary["species_smiles"] == "O"
     assert summary["is_isomorphic"] is True
+    # Published under its true name too: the check compares formulas, and a
+    # JSON key travels without the docstring that says so.
+    assert summary["formula_matches"] is True
     assert summary["rmsd"] == 0.012
     assert summary["n_mappings"] == 1
     assert summary["rmsd_warning_threshold"] == 0.5
@@ -1888,6 +1891,7 @@ def test_detail_geometry_validation_no_atom_mapping_field(client, db_session):
         "output_geometry_ref",
         "species_smiles",
         "is_isomorphic",
+        "formula_matches",
         "rmsd",
         "n_mappings",
         "validation_status",

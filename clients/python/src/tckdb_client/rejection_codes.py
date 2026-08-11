@@ -71,6 +71,7 @@ class RejectionCode(str, Enum):
     REACTION_MASS_BALANCE_FAILED = "reaction_mass_balance_failed"
     SPECIES_GEOMETRY_COMPOSITION_MISMATCH = "species_geometry_composition_mismatch"
     SPECIES_GEOMETRY_ISOTOPE_MISMATCH = "species_geometry_isotope_mismatch"
+    SPECIES_KIND_CONFLICT = "species_kind_conflict"
     SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
     STATMECH_SUBJECT_NOT_EXACTLY_ONE = "statmech_subject_not_exactly_one"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
@@ -98,6 +99,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.REACTION_MASS_BALANCE_FAILED,
         RejectionCode.SPECIES_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
+        RejectionCode.SPECIES_KIND_CONFLICT,
         RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,

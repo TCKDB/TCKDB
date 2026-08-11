@@ -75,7 +75,13 @@ def test_geometry_validation_flags_atom_count_mismatch_vs_smiles() -> None:
     )
     assert result.is_isomorphic is False
     assert result.validation_status == ValidationStatus.fail
-    assert "not graph-isomorphic" in (result.validation_reason or "")
+    # The reason names the check that ran -- a formula comparison -- rather
+    # than the graph isomorphism the old sentence claimed and the code has
+    # never performed.
+    assert "does not match the declared species SMILES" in (
+        result.validation_reason or ""
+    )
+    assert "molecular-formula check" in (result.validation_reason or "")
 
 
 def test_geometry_validation_flags_wrong_element_composition() -> None:
