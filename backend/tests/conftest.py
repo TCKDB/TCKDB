@@ -813,6 +813,70 @@ def _record_committed_baseline(counts: dict[str, int], nodeid: str) -> None:
 
 
 @pytest.fixture(autouse=True)
+def _isolate_out_of_request_sessions(request) -> Iterator[None]:
+    """Give out-of-request writers a connection that is rolled back at teardown.
+
+    Some app code cannot be handed the request's session and must open its
+    own — the durable failed-upload audit
+    (``app.services.upload_submission.record_failed_upload``) is the one that
+    fires most: every 4xx from a ``/uploads/*`` route records a ``submission``
+    plus two audit events **in a transaction deliberately independent of the
+    request's**, which has already rolled back by the time it runs. That
+    independence is the feature; it is also why the request's per-test
+    rollback cannot undo the write.
+
+    Until the ambient factory was rebound to the pytest database, none of
+    this landed anywhere the suite could see: it went to the ambient
+    ``DB_NAME``, where the ``created_by`` foreign key has no matching
+    ``app_user`` row, so every audit insert failed and was swallowed as
+    best-effort. Twenty-one API tests drove that path and asserted only their
+    status code. Once the binding tells the truth they commit for real, and
+    the tripwire below reports them — correctly, because a committed
+    ``submission`` row *is* visible to every later test.
+
+    So the ambient factory gets a connection of its own, with the same
+    outer-transaction-plus-SAVEPOINT shape ``db_conn`` uses:
+
+    * a **different connection** from the request's, so the request's
+      rollback does not reach it — the property the audit exists to have,
+      and the one ``tests/services/test_upload_audit_isolation.py`` pins;
+    * its own outer transaction, rolled back here, so nothing is ever
+      committed and the tripwire has nothing to report.
+
+    Autouse rather than part of ``client`` on purpose: bespoke client
+    fixtures exist (``committed_api_client`` in
+    ``tests/api/test_api_idempotency_receipt_isolation.py``), and one that
+    forgot this would reintroduce the leak silently. A test that reaches no
+    database fixture pays nothing, and a test that wants the write visible
+    from a third connection still binds its own factory, which wins.
+    """
+    if _DB_FIXTURE_NAMES.isdisjoint(request.fixturenames):
+        yield
+        return
+
+    engine = request.getfixturevalue("db_engine")
+    connection = engine.connect()
+    transaction = connection.begin()
+    # An open SAVEPOINT makes SQLAlchemy resolve each Session's
+    # ``join_transaction_mode`` to ``create_savepoint``, so a writer's commit
+    # stays inside this transaction instead of ending it.
+    connection.begin_nested()
+    # Hold the factory object, not the module attribute: a test that
+    # monkeypatches ``api_deps.SessionLocal`` outright must have its own
+    # object restored by monkeypatch, and this teardown must put the bind
+    # back on the object it took it from.
+    factory = api_deps.SessionLocal
+    previous_bind = factory.kw.get("bind")
+    factory.configure(bind=connection)
+    try:
+        yield
+    finally:
+        factory.configure(bind=previous_bind)
+        transaction.rollback()
+        connection.close()
+
+
+@pytest.fixture(autouse=True)
 def _refuse_committed_rows(request) -> Iterator[None]:
     """Fail the test that commits, not the test that trips over the residue.
 
@@ -972,6 +1036,9 @@ def client(db_engine, _api_test_user) -> Iterator[TestClient]:
 
     The session is bound to a connection with an open transaction that is
     rolled back after the test, so no data persists between tests.
+
+    Out-of-request writers (the failed-upload audit, above all) do not use
+    this session — see ``_isolate_out_of_request_sessions``.
     """
     app = create_app()
 

@@ -208,54 +208,110 @@ There is **no slow-test budget today**. When that lands, add a
 above the threshold and have CI deselect or quarantine it. Until
 then, treat `make test-profile` output as informational.
 
-## Concurrent runs and shared `DB_TEST_NAME`
+## Concurrent runs and `DB_TEST_NAME`
 
-Do not run multiple pytest processes against the same explicit
-`DB_TEST_NAME` on the same Postgres host. The session fixture in
-[`tests/conftest.py`](../tests/conftest.py) recreates the named test
-database during setup and terminates active connections on it — a
-second process pointed at the same name will see its DB dropped out
-from under it mid-run, with confusing `OperationalError`s as the
-visible symptom.
+**Two pytest runs on one host no longer interfere, whatever you pass
+as `DB_TEST_NAME`.** That was not true until 2026-08-11, and the way
+it failed is worth knowing, because the symptom named nothing:
 
-The session fixture derives a test-DB name with the following
-precedence (see `_resolve_test_db_name` in
-[`tests/conftest.py`](../tests/conftest.py)):
+> Three agents worked in parallel on one box. One reported **2305
+> errors** on a tree that, re-run alone, gave a clean pass at the same
+> commit. Every error read `terminating connection due to
+> administrator command` or `relation does not exist`. Nothing in the
+> output said "another run is using your database".
 
-1. **Explicit `DB_TEST_NAME` *and* `PYTEST_XDIST_WORKER`** — the
-   explicit name with the worker id appended, e.g.
-   `tckdb_test_api_991_gw3`. This case comes **first**, and that
-   ordering is load-bearing: every gate script and every CI job sets
-   `DB_TEST_NAME`, so while the explicit name won unconditionally,
-   turning on `-n` pointed all workers at one database. They raced to
-   drop and recreate it during session setup, and whichever survived
-   was then written concurrently by every worker — reintroducing
-   exactly the cross-test visibility the per-test rollback exists to
-   prevent. Asking for a specific database name *and* N workers is
-   asking for N databases. Over-long names have the base trimmed, not
-   the suffix, because Postgres truncates identifiers silently and
-   `…_gw10` / `…_gw11` must not collapse onto one name.
-2. **Explicit `DB_TEST_NAME`** alone — used verbatim. Backward-compatible
-   with existing CI configs that pin a job-specific name. Explicit
-   names are **single-tenant**: only one pytest process at a time may
-   use them. For CI runners that share one Postgres host, set
-   `DB_TEST_NAME` per job (e.g. include the runner / job id) so
-   parallel jobs do not collide.
-3. **`PYTEST_XDIST_WORKER`** alone — each worker exports its id
-   (`gw0`, `gw1`, …) and the fixture maps it to `tckdb_test_<worker>`
-   (e.g. `tckdb_test_gw0`, `tckdb_test_gw1`). Worker ids are sanitized
-   to safe identifier characters, so each worker owns its own database
-   and the drop-and-recreate sequence cannot race.
-4. **Fallback** — `tckdb_test_<pid>` so two ad-hoc pytest processes
-   on one host (e.g. two terminals running `make test-fast`) never
-   share a database, even without xdist.
+Names were derived from `PYTEST_XDIST_WORKER` alone, so they were
+unique *within* a run and identical *across* runs. Eight databases,
+shared by everybody, each run dropping and recreating the others'
+schemas mid-flight. CI escaped only because it sets `DB_TEST_NAME` per
+`github.run_id`; no gate script did.
+
+### The name
+
+The session fixture (`_resolve_test_db_name` in
+[`tests/conftest.py`](../tests/conftest.py)) builds:
+
+```
+<base>_<run token>[_<worker>]
+```
+
+- **base** — `DB_TEST_NAME` when set, otherwise `tckdb_test`. An
+  explicit `DB_TEST_NAME` is a **label**, not the final name.
+- **run token** — eight hex characters minted once per pytest run and
+  exported as `TCKDB_TEST_RUN_TOKEN`. The xdist controller imports the
+  root conftest before execnet spawns the workers, so all eight
+  databases of one run share one token; if a future pytest stops
+  importing it there, each worker mints its own, which is still
+  correct (the token only ever has to differ *between* runs).
+- **worker** — the sanitized `PYTEST_XDIST_WORKER` id. Asking for a
+  specific database name *and* N workers is asking for N databases:
+  when the explicit name won unconditionally, `-n` pointed every
+  worker at one database and they raced to drop, recreate and then
+  concurrently write it, reintroducing exactly the cross-test
+  visibility the per-test rollback exists to prevent.
+
+Over-long names have the **base** trimmed, never the suffix. Postgres
+truncates identifiers silently, so trimming the tail would eat the run
+token first — turning the cross-run guarantee off for precisely the
+operators who pin long, descriptive job names — and would collapse
+`…_gw10` and `…_gw11` onto one database.
+
+The run token is why the explicit name can no longer be used verbatim.
+Making only the *default* unique would have missed the collision shape
+that actually happens: two runs copy-pasting the same
+`DB_TEST_NAME=...` out of the same document. Set it for readability
+(`DB_TEST_NAME=tckdb_test_analytics` makes your databases obvious in
+`\l`); it is no longer load-bearing for isolation.
 
 The resolved name is exported back into `os.environ["DB_TEST_NAME"]`
 so subprocess-based tests (e.g. the contribution-bundle CLI smoke
-test) inherit the same database.
+test) inherit the same database. Re-resolving an already-resolved name
+is idempotent — a second token is never stacked on.
 
 The xdist controller process never creates a database: it collects but
 does not execute tests, and `PYTEST_XDIST_WORKER` is unset there.
+
+### The refusal
+
+Random tokens make a collision vanishingly unlikely, and "unlikely" is
+not the same as "reported". Before it drops anything,
+`_recreate_test_database` refuses when either holds:
+
+- a **live backend** is attached to the exact name. Within one run each
+  worker owns a distinct name and creates it once, so a connection
+  already there belongs to somebody else;
+- the database carries an **ownership marker from a different run** on
+  this host whose creator pid is still alive — a run that has created
+  its database but not yet connected, which the backend check misses.
+
+The refusal raises `ForeignTestDatabaseError` naming both run tokens
+and saying what to do. An orphan from a *dead* run is reclaimed, not
+refused: leaks are expected, and a permanent blocker would be worse
+than the leak.
+
+An unmarked database is not refused — it was not created by this
+harness, its name has already been validated against the
+isolated-test-database pattern, and dropping it is the documented
+behaviour of an explicit `DB_TEST_NAME`.
+
+### Scratch databases created by individual tests
+
+Migration tests create their own throwaway databases to drive Alembic
+against. **Every one of them must get its name from
+`conftest.scratch_database_name(label)`**, which returns
+`tckdb_test_<label>_<uuid>` — inside the `tckdb_test%` pattern both
+reclaimers below use, and trimmed so the unique part survives the
+63-byte identifier limit.
+
+Names built by hand (`tckdb_et_scope_migration_*`,
+`tckdb_stage2_legacy_*`, `tckdb_exec_env_migration_*`) matched neither
+reclaimer, so a run killed partway leaked them permanently; one was
+found and dropped by hand on 2026-08-10.
+[`tests/test_scratch_database_names.py`](../tests/test_scratch_database_names.py)
+fails any test file that issues `CREATE DATABASE` without going
+through the helper, so the next one cannot drift out silently, and
+asserts the sweep and the standalone reclaim script still agree on
+what "reclaimable" means.
 
 ### Pinned order and parallel workers
 
@@ -322,7 +378,7 @@ after the script's.
 
 ### Test-database cleanup and the startup sweep
 
-Because the fallback name embeds the pid, **no name is ever reused** —
+Because every name embeds a per-run token, **no name is ever reused** —
 so any run that fails to drop its database leaks it permanently. Two
 mechanisms keep that from accumulating:
 
@@ -336,8 +392,8 @@ mechanisms keep that from accumulating:
    OOM kill, or a power loss, so `_sweep_stale_test_databases` runs
    once at session start to reclaim that residue. Every database the
    fixture creates is stamped with a `COMMENT ON DATABASE` recording
-   the creating host and pid; the sweep drops a database **only** when
-   all of the following hold:
+   the creating host, pid and run token; the sweep drops a database
+   **only** when all of the following hold:
 
    - it carries this harness's marker (databases created by anything
      else — including orphans that predate the marker — are never
@@ -346,6 +402,10 @@ mechanisms keep that from accumulating:
      (this is what stops a concurrently-starting pytest run from
      having its freshly created database swept away before it
      connects);
+   - the marker's run token is **not this run's**. Under `-n` the
+     eight workers of one run share a token, so a worker whose creator
+     pid has been recycled must not have a sibling's live database
+     dropped underneath it;
    - `pg_stat_activity` reports no backend attached;
    - the name matches the isolated-test-database pattern and is not
      this session's own database.
@@ -415,6 +475,62 @@ psql -h 127.0.0.1 -U tckdb -d postgres -c "
   external storage (MinIO) skip themselves when MinIO is not
   reachable — that's expected on a workstation without the dev
   container running.
+
+### The ambient session factory
+
+`app.api.deps` builds `engine` / `SessionLocal` at **import time** from
+`settings.database_url` — the ambient `DB_NAME`, locally `tckdb_dev`.
+That is right in a deployment, where the ambient database *is* the
+database, and wrong under pytest, where nothing creates, migrates,
+inspects or rolls back it.
+
+It is not a theoretical hazard. It was root cause 2 of the
+seed-independence work: five `/status` tests probed through
+`health.SessionLocal`, passed in a dev shell and passed on the PR gate
+(which runs `alembic upgrade head` against `DB_NAME` in an earlier
+step), and failed only on the nightly, which does not. They were green
+for a reason unrelated to what they asserted. Worse than a false
+green: several of these call sites **commit**, and a commit into
+`tckdb_dev` is invisible to the committed-row tripwire and to every
+assertion in the suite.
+
+Several sites cannot be handed a request-scoped session, so "thread a
+session through" is not available to them:
+
+| Site | Why it needs an out-of-request session |
+|---|---|
+| `services/upload_submission.record_failed_upload` | writes the failed-upload audit in a transaction *independent* of the request's, which has already rolled back |
+| `services/artifact_integrity.record_artifact_integrity_event` | same shape — an append-only observation that must survive the caller's failure |
+| `workers/upload_worker` | runs outside any request |
+| `api/idempotency` | decorator; needs its own transaction for the idempotency record |
+| `api/startup_checks.check_server_encoding` | runs at boot; there is no request |
+| `routes/health` — `/health`, `/readyz`, `/status` | deliberately probe the process's **own** engine. Routing them through an overridable request dependency would let a test declare a deployment healthy while the deployment's engine is broken — the opposite of what the endpoint is for |
+
+So the binding is made truthful rather than removed. `tests/conftest.py`
+does two things, via `deps.bind_ambient_session_factory`:
+
+1. **At import**, before any fixture, it points the factory at an
+   engine that *refuses to connect*. A path that needs an
+   out-of-request session and never requested `db_engine` now says so,
+   instead of quietly writing to `tckdb_dev`.
+2. **`db_engine`** rebinds it to the real per-worker engine for the
+   session, and restores the refusing engine at teardown.
+
+`sessionmaker.configure` mutates the factory in place, so the modules
+that hold a `from app.api.deps import SessionLocal` reference — health,
+idempotency, the upload worker, the archive CLI — all follow. Rebinding
+only the module attribute would not have reached them, which is exactly
+how the `/status` probes stayed broken.
+
+Consequence for CI: **the suite no longer needs `DB_NAME` to exist, let
+alone be migrated.** `tests/api/` passes with `DB_NAME` pointing at a
+database that has never been created. Coverage lives in
+[`tests/test_ambient_session_binding.py`](../tests/test_ambient_session_binding.py).
+
+If you are writing a service that needs its own transaction, prefer an
+injectable `session_factory=` parameter (as both services above have)
+over reaching for `SessionLocal` directly — it lets a test pass the
+per-test connection without touching global state.
 
 ### Isolation contract: what a test may leave behind
 
@@ -577,12 +693,20 @@ the matrix result is `success`, while leaving both detailed gate checks visible.
 Each CI job owns an isolated Postgres service and MinIO service. Its
 `DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
 job role, so concurrent jobs and workflow runs do not share test resources.
+The run token now makes the `DB_TEST_NAME` half of that redundant for
+isolation — it stays because it makes a job's databases identifiable.
 
 The gates run under xdist, at `TCKDB_TEST_WORKERS=4` rather than the local
 default of 8, because a GitHub standard runner has 4 vCPUs and one Postgres
 container. `DB_TEST_NAME` is still set per job; `_resolve_test_db_name` appends
-the worker id to it, so each worker gets its own database instead of four
-workers racing on one recreated one.
+the run token and the worker id to it, so each worker gets its own database
+instead of four workers racing on one recreated one.
+
+Nothing in the suite depends on `DB_NAME` any more — see *The ambient
+session factory* above. A workflow step that runs `alembic upgrade head`
+against `DB_NAME` before the gate is no longer load-bearing for the
+tests, and the PR gate / nightly divergence it created (one migrated it,
+the other did not) can no longer hide a failure in one environment.
 
 The full Tier 4 suite is intentionally not part of this v0 PR workflow.
 Keep running `make test-full` locally before push/merge until a
@@ -672,10 +796,11 @@ Order-independence was the prerequisite, not a separate nicety: xdist
 distributes tests across workers in arbitrary groupings, so a suite that only
 passed in particular orders could not survive it. What made it safe:
 
-- **A database per worker.** `_resolve_test_db_name` appends the worker id even
-  when `DB_TEST_NAME` is set explicitly, which every gate script and CI job
-  does. Without that, all workers dropped, recreated and then wrote one
-  database concurrently.
+- **A database per worker, and per run.** `_resolve_test_db_name` appends the
+  run token and the worker id even when `DB_TEST_NAME` is set explicitly,
+  which every gate script and CI job does. Without the worker id, all workers
+  dropped, recreated and then wrote one database concurrently; without the run
+  token, two runs on one host did the same to each other.
 - **No test commits to the shared database.** ~50 tests across 16 files did;
   they now persist through `db_conn`, and the tripwire above keeps it that way.
 - **Advisory locks are per-database.** The only one in the app

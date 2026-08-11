@@ -16,6 +16,24 @@ carrying the harness's ownership marker, so the *pre-existing* orphans — which
 predate the marker — are invisible to it and must be removed deliberately, by
 a human, with this script.
 
+Coverage, and how it is kept
+----------------------------
+``TEST_DB_NAME`` below is the *only* thing this script will drop, and
+``_sweep_stale_test_databases`` in ``backend/tests/conftest.py`` uses the
+identical pattern.  Migration tests used to build scratch names outside it
+(``tckdb_et_scope_migration_*``, ``tckdb_stage2_legacy_*``,
+``tckdb_exec_env_migration_*``); a run killed partway leaked those permanently
+because neither reclaimer could see them.
+
+The fix was to bring the *names* inside the pattern rather than to widen the
+pattern: tests now build scratch names with ``conftest.scratch_database_name``,
+so a new migration test that follows the convention is covered automatically,
+whereas a widened pattern would have to be remembered.
+``backend/tests/test_scratch_database_names.py`` enforces both halves — that
+every test issuing ``CREATE DATABASE`` uses the helper, and that this script
+and the sweep still agree on the pattern.  If you change ``TEST_DB_NAME`` here,
+that test will tell you the sweep no longer matches.
+
 Safety model
 ------------
 This script never decides for itself what to delete.  It runs in two phases:
