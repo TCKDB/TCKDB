@@ -8,6 +8,7 @@ from app.services.public_refs import (
 )
 
 from . import (
+    accepted_science_repair,
     api_key,
     app_user,
     author,
@@ -48,6 +49,7 @@ _install_public_ref_listener()
 
 
 __all__ = [
+    "accepted_science_repair",
     "api_key",
     "app_user",
     "author",

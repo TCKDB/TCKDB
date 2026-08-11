@@ -719,6 +719,59 @@ enum ValidationStatus {
   fail
 }
 
+Table accepted_science_repair {
+  id bigint [pk, not null]
+  target_schema text [not null, default: 'public']
+  target_table text [not null]
+  declared_columns array [not null]
+  alembic_revision text [not null]
+  reason text [not null]
+  declared_by_role text [not null, default: 'CURRENT_USER']
+  declared_by_login text [not null, default: 'SESSION_USER']
+  xact_id bigint [not null, default: '((pg_current_xact_id())::text)::bigint']
+  created_at timestamp [not null, default: 'clock_timestamp()']
+  expires_at timestamp [not null, default: 'clock_timestamp() + interval '1 hour']
+
+  indexes {
+    (target_schema, target_table, xact_id) [name: 'ix_accepted_science_repair_target']
+  }
+
+  checks {
+    `cardinality(declared_columns) > 0 AND array_position(declared_columns, NULL) IS NULL` [name: 'ck_accepted_science_repair_columns_declared']
+    `expires_at > created_at AND expires_at <= created_at + interval '24 hours'` [name: 'ck_accepted_science_repair_expiry_window']
+    `length(btrim(reason)) > 0` [name: 'ck_accepted_science_repair_reason_nonblank']
+    `length(btrim(alembic_revision)) > 0` [name: 'ck_accepted_science_repair_revision_nonblank']
+    `length(btrim(target_schema)) > 0 AND length(btrim(target_table)) > 0` [name: 'ck_accepted_science_repair_target_nonblank']
+  }
+
+  Note: 'One declaration: which table, which columns, which revision, and why.'
+}
+
+Table accepted_science_repair_change {
+  id bigint [pk, not null]
+  repair_id bigint [not null, ref: > accepted_science_repair.id]
+  record_type SubmissionRecordType [not null]
+  record_id bigint [not null]
+  target_schema text [not null]
+  target_table text [not null]
+  row_identity jsonb [not null]
+  changed_columns array [not null]
+  before_json jsonb [not null]
+  after_json jsonb [not null]
+  recorded_at timestamp [not null, default: 'clock_timestamp()']
+
+  indexes {
+    (record_type, record_id) [name: 'ix_accepted_science_repair_change_record']
+    repair_id [name: 'ix_accepted_science_repair_change_repair_id']
+  }
+
+  checks {
+    `cardinality(changed_columns) > 0` [name: 'ck_accepted_science_repair_change_columns_changed']
+  }
+
+  Note: 'One accepted record\'s view of one row a repair rewrote.'
+}
+
 Table api_key {
   id bigint [pk, not null]
   user_id bigint [not null, ref: > app_user.id]
