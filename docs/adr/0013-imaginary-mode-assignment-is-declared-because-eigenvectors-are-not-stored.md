@@ -282,10 +282,54 @@ the diagonaliser rather than of the molecule. Those modes are reported with no
 determination and an explicit reason, rather than with a number that would
 change if LAPACK did.
 
+### The corpus, swept
+
+Every record the projections apply to was run through them on **2026-08-11**:
+18 calculations, being every record in the live deployment with an imaginary
+mode *and* a stored Hessian, from 6 to 27 atoms and 0 to 7 rotatable bonds.
+
+| | |
+|---|---|
+| determinations | **18 × `internal_vibration`**, 0 `torsion`, 0 `rigid_body_residue` |
+| records with a declared `imaginary_disposition` | **0** |
+| `rigid_body_overlap` of every reaction coordinate | **0.0000** |
+| reaction coordinate recovered to | **≤ 0.003 cm⁻¹** |
+| full spectrum (~600 modes) recovered to | **≤ 0.045 cm⁻¹**, plus one outlier below |
+| largest rigid-body curvature of any record | **12.24 cm⁻¹** (threshold 100) |
+
+**Every one of the 18 is a genuine reaction coordinate, and not one carries a
+declared disposition.** That is the honest summary and it has a consequence
+worth stating plainly: the corpus exercises the **determination** path in full
+and the **comparison** path not at all. Nothing here demonstrates that a
+conflict between a determination and a declaration is reported correctly on
+live data, because there is no declaration in the corpus to conflict with. That
+property is held by tests built on the fixtures instead, and it will stay that
+way until the first deposit carries an extra imaginary mode. This is the same
+fact ADR 0012 notes from the other end — `n_imag` is only ever 0 or 1 here, so
+`imaginary_disposition` has never been exercised.
+
+Two things the sweep found that the fixtures could not.
+
+**The single soft mode.** The whole-spectrum agreement is 0.045 cm⁻¹ everywhere
+except calculation 453's lowest real mode, stored at 20.26 cm⁻¹ and recovered
+at 22.14 — 9% out. In ω² that is 79.5 cm⁻², an eighth of the 625 cm⁻² ADR 0012
+takes as a representative noise level. It is a negligible disagreement magnified
+by taking a square root near zero, which is ADR 0012's own §"The noise floor is
+flat in ω², not in ω" appearing unprompted in real data. It also vindicates the
+matching tolerance's absolute floor: 1% of 20 cm⁻¹ is 0.2, so a purely relative
+rule would have refused to project exactly the mode it is least entitled to be
+confident about.
+
+**The degeneracy guard is not fixture-only.** It fired four times — calculation
+237's 1430.52/1430.95 pair and calculation 433's 1498.86/1499.38 pair, split by
+0.43 and 0.52 cm⁻¹ and each recovered to better than 0.003 cm⁻¹. Both are real
+modes rather than imaginary ones, so nothing a reader asked for was withheld;
+the guard simply behaved as designed on data that had never reached it before.
+
 ### On the thresholds
 
-ADR 0012 proposed ~90% for rigid-body residue and ~70% for a torsion, and both
-survive the measurement — the first emphatically, the second provisionally.
+ADR 0012 proposed ~90% for rigid-body residue and ~70% for a torsion. Both
+survive, and both now have measured room on either side.
 
 Across the three real ESS Hessians in the test tree, the eighteen rigid-body
 directions all score **≥ 0.9985** and no genuine vibration scores above
@@ -294,27 +338,41 @@ magnitude wide; anywhere between 0.01 and 0.99 would decide every one of those
 modes identically. That also settles ADR 0012's underlying claim in a way its
 own τ table cannot: those rigid-body directions come out anywhere from −10.8 to
 **+49.6** cm⁻¹, so a wavenumber threshold has to guess about them and the
-projection does not.
+projection does not. The corpus adds 18 confirmations from the other direction:
+`rigid_body_overlap` is 0.0000 on every reaction coordinate in it.
 
-The torsion figure rests on one molecule, because only one fixture has a
-rotatable bond at all. Its 110 cm⁻¹ mode projects onto a C–C rotation at 0.986;
-the next most torsional mode in the whole spectrum reaches 0.472. 0.70 separates
-them by a factor of two either way, which is enough to keep ADR 0012's number
-and not enough to justify inventing a different one. Every overlap is on the
-wire alongside the threshold that was applied to it, so a reader who disagrees
-can re-decide without re-running anything.
+The torsion figure was the weaker of the two when it was written, resting on the
+single fixture that has a rotatable bond at all — a 110 cm⁻¹ mode projecting
+onto a C–C rotation at **0.986**, against 0.472 for the next most torsional mode
+in that spectrum. One point cannot justify a threshold.
+
+The corpus supplies the missing side. All 18 records carry a genuine reaction
+coordinate, and they are the population most able to produce a false positive:
+a reaction coordinate in a floppy molecule has every opportunity to look like a
+torsion. The highest torsional overlap any of them reaches is **0.344**
+(calculation 219, 8 atoms, two rotatable bonds); the second is **0.245**
+(calculation 581); the other sixteen are at or below 0.020.
+
+**The measured gap is therefore [0.344, 0.986], and 0.70 sits 0.356 above the
+stiffest thing that is not a torsion and 0.286 below the one thing that is.**
+That is no longer a number kept on ADR 0012's authority. The two near misses are
+the useful data precisely because they are the cases most able to embarrass it,
+and they do not come close. Every overlap is still on the wire alongside the
+threshold applied to it, so a reader who disagrees can re-decide without
+re-running anything.
 
 ### What was deliberately not built
 
 **No trust-rubric check.** The obvious next step is a check on
 `COMPUTED_TRANSITION_STATE_V2` that warns when a determination contradicts a
 declaration. It was not added, because `imaginary_disposition` is null on every
-record in the corpus — `n_imag` is only ever 0 or 1, so no deposit has ever had
-an extra imaginary mode to declare — and adding a check to a rubric bumps its
-version, which restales every transition-state machine review. Restaling the
-corpus for a check that would evaluate `not_applicable` everywhere is a bad
-trade today and an obvious one the first time a record carries a declared
-disposition.
+record in the corpus — measured, not assumed: the 2026-08-11 sweep above found
+zero declared dispositions across all 18 records, `n_imag` being only ever 0 or
+1, so no deposit has ever had an extra imaginary mode to declare — and adding a
+check to a rubric bumps its version, which restales every transition-state
+machine review. Restaling the corpus for a check that would evaluate
+`not_applicable` on every record is a bad trade today and an obvious one the
+first time a record carries a declared disposition.
 
 **No stored τ was recomputed and no accepted record was re-decided.** The
 projections are additive: they say something new next to what was already there.

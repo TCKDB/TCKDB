@@ -539,6 +539,52 @@ def test_a_linear_molecule_has_five_rigid_body_degrees_of_freedom():
     assert rigid_body_subspace(bent, masses).dimension == 6
 
 
+# The extremes measured by sweeping every live record the projections apply
+# to -- 18 calculations with an imaginary mode and a stored Hessian, 6 to 27
+# atoms, 0 to 7 rotatable bonds, on 2026-08-11. All 18 carry a genuine
+# reaction coordinate, so they are the population most able to produce a
+# false torsion, and these are the two that came closest.
+CORPUS_HIGHEST_REACTION_COORDINATE_TORSION_OVERLAP = 0.344  # calculation 219
+CORPUS_LARGEST_RIGID_BODY_CURVATURE_CM1 = 12.24  # calculation 453
+
+
+def test_the_thresholds_sit_inside_the_gaps_that_were_measured():
+    """Changing a threshold should have to argue with the evidence for it.
+
+    Neither constant is free. ADR 0012 proposed both, and each is kept
+    because a measurement put empty space on either side of it -- so a
+    future edit that moves one into the occupied region is a change of
+    scientific claim, not of taste, and should fail here rather than
+    quietly re-decide every record in the corpus.
+
+    The numbers below are the *closest approaches from real data*, not
+    round figures: the stiffest non-torsion the live corpus produced, the
+    one unambiguous torsion in the fixtures, and the noisiest correctly
+    framed record. See ADR 0013 §"The corpus, swept".
+    """
+    # Torsion: measured gap [0.344, 0.986].
+    assert (
+        CORPUS_HIGHEST_REACTION_COORDINATE_TORSION_OVERLAP
+        < TORSION_OVERLAP_THRESHOLD
+        < 0.986
+    ), (
+        "the torsion threshold must separate the corpus's stiffest "
+        "non-torsion from freq_g09.log's genuine one"
+    )
+
+    # Rigid body: measured gap [0.0022, 0.9985], three orders of magnitude.
+    assert 0.0022 < RIGID_BODY_OVERLAP_THRESHOLD < 0.9985
+
+    # Frame: correct frames reach 49.4 (fixtures) and 12.24 (corpus);
+    # deliberately mis-framed ones start at 419.5.
+    assert (
+        CORPUS_LARGEST_RIGID_BODY_CURVATURE_CM1
+        < 49.4
+        < FRAME_CONSISTENCY_TOLERANCE_CM1
+        < 419.5
+    )
+
+
 def test_unpack_lower_triangle_rejects_a_wrong_length():
     with pytest.raises(ValueError):
         unpack_lower_triangle([1.0, 2.0, 3.0], 2)

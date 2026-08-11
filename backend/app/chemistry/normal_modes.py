@@ -131,6 +131,19 @@ LINEARITY_SINGULAR_VALUE_TOLERANCE = 1e-6
 #: isotopic-mass Gaussian and Molpro fixtures. 1% leaves room for the
 #: heavier halogens without being wide enough to reach a neighbouring
 #: fundamental.
+#:
+#: The **absolute** floor turns out to carry its own weight, for an
+#: unrelated reason that only real records showed. Across the 18
+#: imaginary-mode records in the live corpus (2026-08-11, ~600 modes) the
+#: whole spectrum reproduces to 0.045 cm-1 -- with one exception, the
+#: 20.26 cm-1 mode of calculation 453, which comes back at 22.14. That is
+#: 9% in omega and **79.5 cm-2 in omega squared**, an eighth of the
+#: 625 cm-2 ADR 0012 takes as a representative noise level: negligible
+#: error, magnified by taking a square root near zero, which is precisely
+#: ADR 0012's "the noise floor is flat in omega squared, not in omega".
+#: A purely relative tolerance would have refused that mode (1% of 20 is
+#: 0.2); the 2.0 floor accepts it, and it is the same mode a relative-only
+#: rule would be most wrong about.
 SPECTRUM_MATCH_ABSOLUTE_TOLERANCE_CM1 = 2.0
 SPECTRUM_MATCH_RELATIVE_TOLERANCE = 0.01
 
@@ -147,6 +160,17 @@ SPECTRUM_MATCH_RELATIVE_TOLERANCE = 0.01
 #: ``|cos| = 0.96`` and ``0.26``, and ``1.00`` and ``0.00`` respectively --
 #: not because either diagonalisation is wrong, but because the pair is
 #: degenerate and the split between its members is not determined.
+#:
+#: It is not a fixture-only concern. Sweeping the 18 live imaginary-mode
+#: records on 2026-08-11 tripped it four times -- calculation 237's
+#: 1430.52/1430.95 pair and calculation 433's 1498.86/1499.38 pair, split
+#: by 0.43 and 0.52 cm-1 and each recovered to better than 0.003 cm-1.
+#: Both are real modes rather than imaginary ones, so no projection was
+#: withheld from anything a reader asked for; the guard simply fired where
+#: it should. Near-degenerate rather than exactly degenerate is still the
+#: right side to refuse on: the eigenvectors of a pair split by half a
+#: wavenumber are formally determined and numerically at the mercy of the
+#: splitting.
 DEGENERACY_WINDOW_CM1 = 1.0
 
 #: Largest rigid-body curvature, as a signed wavenumber, that still allows
@@ -179,6 +203,13 @@ DEGENERACY_WINDOW_CM1 = 1.0
 #: 100 sits in an empty interval with a factor of two below it and four
 #: above. A correct frame at a badly unconverged geometry can also exceed
 #: it, and refusing there is right for the same reason.
+#:
+#: The live corpus widens the margin rather than narrowing it. Across all
+#: 18 imaginary-mode records (2026-08-11, 6 to 27 atoms) the largest
+#: rigid-body curvature of any record is **12.24 cm-1** -- every one
+#: clears the threshold by a factor of eight, and the worst real record is
+#: quieter than the worst correctly framed fixture (49.4). Nothing in the
+#: corpus sits near the line from either side.
 FRAME_CONSISTENCY_TOLERANCE_CM1 = 100.0
 
 #: ADR 0012: "more than about 90% overlap means the mode is projection
@@ -195,14 +226,30 @@ RIGID_BODY_OVERLAP_THRESHOLD = 0.90
 
 #: ADR 0012: "more than about 70% identifies a torsion".
 #:
-#: Also kept, on thinner evidence, and the thinness is the finding. Only
-#: one fixture has rotatable bonds at all (``freq_g09.log``, a 12-atom
-#: N-N-C-C-C chain): its 110 cm-1 mode is 0.986 a rotation about the C-C
-#: bond, the next most torsional mode is 0.472, and everything above
-#: 675 cm-1 is below 0.10. 0.70 separates them by a factor of two either
-#: way, which is enough to keep ADR 0012's number and not enough to
-#: justify replacing it with a different one. The overlap itself is
-#: reported alongside every determination so a reader can apply their own.
+#: Kept, and -- unlike when this constant was first written -- on evidence
+#: from both sides of the line.
+#:
+#: The positive case is still a single mode, because only one fixture has
+#: rotatable bonds at all: ``freq_g09.log``'s 110 cm-1 mode is **0.986** a
+#: rotation about its C-C bond, the next most torsional mode in that
+#: spectrum reaches 0.472, and everything above 675 cm-1 is below 0.10.
+#:
+#: The negative case is now the live corpus. All 18 imaginary-mode records
+#: (2026-08-11) carry a genuine reaction coordinate, between them spanning
+#: 6 to 27 atoms and 0 to 7 rotatable bonds -- exactly the population most
+#: able to produce a false torsion, since a reaction coordinate in a floppy
+#: molecule has every chance to look like one. The highest torsional
+#: overlap any of them reaches is **0.344** (calculation 219, 8 atoms, two
+#: rotatable bonds), the second highest **0.245** (calculation 581), and
+#: the remaining sixteen are at or below 0.020.
+#:
+#: So the measured gap is [0.344, 0.986]: 0.70 sits 0.356 above the
+#: stiffest thing that is not a torsion and 0.286 below the one thing that
+#: is. That is a threshold with room on both sides rather than a number
+#: taken on faith, and the two near misses are the useful data precisely
+#: because they are the cases most able to embarrass it. The overlap is
+#: still reported alongside every determination so a reader can apply
+#: their own.
 TORSION_OVERLAP_THRESHOLD = 0.70
 
 
@@ -300,6 +347,26 @@ class ModeProjection:
     :param best_torsion_bond: The bond that achieved ``torsion_overlap``,
         as 1-based atom indices, or ``None``.
     :param determination: The classification the overlaps support.
+
+    ``rigid_body_overlap`` is deliberately **not** split into separate
+    translational and rotational parts, and the reason is that the split is
+    less meaningful than it looks. The two contributions answer the same
+    question -- how much of this "vibration" is the molecule moving as a
+    rigid object -- and the remedy is identical either way. Worse, a split
+    would invite reading a cause into it that is not there: translational
+    residue comes from a Hessian that is not quite translationally
+    invariant, rotational residue from a geometry that is not quite
+    stationary, and a mode can carry both without the numbers telling you
+    which came first.
+
+    Where the distinction genuinely matters -- diagnosing *why* a record
+    fails the frame check -- the per-direction numbers are already
+    available and better suited: :func:`rigid_body_curvature_cm1` returns
+    one curvature per basis vector, and a frame mismatch shows up there as
+    large rotational curvatures beside near-zero translational ones,
+    because translations are null directions of a translationally
+    invariant Hessian in *any* frame. That is the diagnostic, and it is a
+    property of the record rather than of one mode.
     """
 
     rigid_body_overlap: float

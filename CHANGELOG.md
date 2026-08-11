@@ -73,8 +73,11 @@ wrapper over a contract that is itself still moving.
   "no residue found". Detail-only and opt-in by name, like `include=trust`.
   `available_sections.has_hessian` is new on every calculation record.
   `backend/scripts/ops/project_imaginary_modes.py` runs the same projections
-  over a whole corpus. ADR 0013 held that this was uncomputable because TCKDB
-  stores no displacement vectors; that claim is corrected in place.
+  over a whole corpus; run over all 18 live records carrying an imaginary mode
+  and a Hessian, every one determines as `internal_vibration` with
+  `rigid_body_overlap` 0.0000, and none carries a declared disposition. ADR 0013
+  held that this was uncomputable because TCKDB stores no displacement vectors;
+  that claim is corrected in place.
 
 - **Curated vs exploratory read profiles.** Every `/api/v1/scientific/*`
   endpoint accepts `?profile=exploratory|curated`. `exploratory` is the default
