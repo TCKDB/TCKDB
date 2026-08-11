@@ -52,6 +52,31 @@ from tests.services.scientific_read._factories import (
 _REVISION = "e2c9a4f7b163"
 
 
+@pytest.fixture(autouse=True)
+def _predating_the_canonicality_constraint(db_session):
+    """Reproduce a database whose stored rows predate ``c5a1f8e3d074``.
+
+    That revision added ``ck_geometry_atom_element_canonical``, so ``CL`` can
+    no longer be *written*. The rows this mechanism exists for are exactly the
+    rows a later rule would refuse -- a repair is needed because the data
+    predates the constraint, never because it was written under it -- so a test
+    that builds one has to build the state that came before. Dropped inside the
+    per-test transaction, which ``db_session`` rolls back, so nothing here
+    reaches another test or the schema.
+
+    Nothing below asserts anything about canonicality; the subject throughout
+    is ``c6f2a9d4e7b1``'s guard and the declaration that opens a route through
+    it, and both are indifferent to the constraint.
+    """
+    db_session.execute(
+        text(
+            "ALTER TABLE geometry_atom DROP CONSTRAINT "
+            "ck_geometry_atom_element_canonical"
+        )
+    )
+    yield
+
+
 def _curator(session, username: str) -> AppUser:
     actor = AppUser(username=username, role=AppUserRole.curator)
     session.add(actor)

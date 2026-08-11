@@ -53,6 +53,21 @@ def committed_engine() -> Iterator:
         )
         assert completed.returncode == 0, completed.stderr
         engine = create_engine(_database_url(db_name), pool_pre_ping=True)
+        # Reproduce a database whose stored rows predate ``c5a1f8e3d074``.
+        # That revision added ``ck_geometry_atom_element_canonical``, so ``CL``
+        # can no longer be written -- and the rows a repair exists for are
+        # exactly the rows a later rule would refuse, because a repair is
+        # needed when the data predates the constraint and never when it was
+        # written under it. This module commits for real, which is the point of
+        # it, so the drop cannot be transaction-local; it is confined to this
+        # module's own throwaway database, which is dropped below.
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "ALTER TABLE geometry_atom DROP CONSTRAINT "
+                    "ck_geometry_atom_element_canonical"
+                )
+            )
         yield engine
     finally:
         if engine is not None:
