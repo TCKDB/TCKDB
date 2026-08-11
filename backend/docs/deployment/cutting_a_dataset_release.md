@@ -152,12 +152,39 @@ conda run -n tckdb_env python backend/scripts/ops/verify_artifact_integrity.py \
   --release <release_public_ref>
 ```
 
-Exit status is `1` if any stored object no longer matches its digest, so this
-can gate the runbook. Every break is written to `artifact_integrity_event`,
-which hard-fails the owning calculation at read time; investigate before
-publishing rather than shipping a release whose evidence TCKDB cannot produce.
-See `docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md` for
-how to read the row and tell the three causes apart.
+**Gate on "not zero", and record the `verified=` count in the release notes.**
+There are two ways this stops being a clean gate and they need different
+responses:
+
+| Exit | Meaning | What to do |
+|---|---|---|
+| `0` | Every digest in scope was read back and hashed correctly. | Publish. |
+| `1` | At least one break was recorded. | Investigate before publishing. |
+| `2` | **Nothing was verified.** Either the scope matched no digests, or the object store did not answer for at least one of them. | Fix the scope or the store, then re-run. Do not publish on the strength of this. |
+
+`breaks=0` is equally true of a sweep that read four hundred objects and one
+that read none, so the number that says whether this run is evidence of
+anything is `verified=`. The summary line prints it first, beside `unchecked=`
+and `in_scope=`.
+
+Exit `2` on an empty scope is deliberate and can be overridden with
+`--allow-empty` when the emptiness is expected — a release whose cited
+calculations genuinely retained no artifacts, or a fresh deployment. Saying so
+in the invocation is the point: an empty scope and a mistyped ref are otherwise
+the same output.
+
+Every break is written to `artifact_integrity_event`, which hard-fails the
+owning calculation at read time; investigate before publishing rather than
+shipping a release whose evidence TCKDB cannot produce. The row carries a
+`public_ref` (`aie_…`) and is readable at
+`GET /scientific/artifacts/{sha256}/integrity` (curator or admin). See
+`docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md` for how to
+read it and tell the three causes apart.
+
+Re-check one digest by hand with `--sha256 <digest>`. This works even for a
+digest no `calculation_artifact` row references — the `store_artifact` dedup
+path records breaks against objects whose referencing row was refused, and
+those are the ones most likely to be handed to an operator to look at.
 
 `--release` covers what the release actually rests on: for every selection that
 still stands, the calculations that record cites through its
