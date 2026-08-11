@@ -16,7 +16,7 @@
 # CI narrows the selection further, and both narrowings are covered
 # elsewhere rather than dropped:
 #
-#   --ignore=tests/api/scientific/            -> scripts/test-scientific.sh
+#   --ignore=tests/api/scientific/              -> scripts/test-scientific.sh
 #   --ignore=tests/api/test_openapi_snapshot.py -> its own workflow step
 #
 # tests/scripts/test_gate_coverage.py checks that claim against the
