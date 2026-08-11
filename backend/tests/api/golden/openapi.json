@@ -4353,7 +4353,7 @@
         "type": "string"
       },
       "CalculationGeometryValidationRead": {
-        "description": "Read shape for geometry-identity validation evidence.\n\nReports whether a calculation's output geometry preserves the declared\nmolecular identity (graph isomorphism + RMSD diagnostics). This is a\nstructure-consistency check; it is **not** SCF/wavefunction stability\n(see :class:`CalculationSCFStabilityRead` /\n:class:`~app.db.models.calculation.CalculationSCFStability`) and it is\nnot frequency/stationary-point validation.\n\nInherits ORMBaseSchema (not TimestampedReadSchema) because the PK is\n``calculation_id``, not a surrogate id column; TimestampedReadSchema\nassumes ``id: int`` which does not exist on this table.",
+        "description": "Read shape for geometry-identity validation evidence.\n\nReports whether a calculation's output geometry still has the declared\nspecies' **molecular formula**, plus an RMSD diagnostic. This is a\nstructure-consistency check; it is **not** SCF/wavefunction stability\n(see :class:`CalculationSCFStabilityRead` /\n:class:`~app.db.models.calculation.CalculationSCFStability`) and it is\nnot frequency/stationary-point validation.\n\n``formula_matches`` is the honest name for the verdict; ``is_isomorphic``\nis the same boolean under the name the stored column carries, kept so no\nconsumer breaks. Despite that name, **no graph isomorphism is tested**:\natom mapping falls back to a formula comparison whenever bond perception\nfrom the XYZ fails, which is the common case for radicals, ions and\nstretched geometries, so dimethyl ether deposited under ethanol reads\n``true``. See :mod:`app.services.geometry_validation`.\n\nInherits ORMBaseSchema (not TimestampedReadSchema) because the PK is\n``calculation_id``, not a surrogate id column; TimestampedReadSchema\nassumes ``id: int`` which does not exist on this table.",
         "properties": {
           "atom_mapping": {
             "anyOf": [
@@ -4375,6 +4375,12 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "formula_matches": {
+            "description": "Whether the output geometry has the declared species' formula.",
+            "readOnly": true,
+            "title": "Formula Matches",
+            "type": "boolean"
           },
           "input_geometry_id": {
             "anyOf": [
@@ -4459,13 +4465,14 @@
           "created_at",
           "species_smiles",
           "is_isomorphic",
-          "validation_status"
+          "validation_status",
+          "formula_matches"
         ],
         "title": "CalculationGeometryValidationRead",
         "type": "object"
       },
       "CalculationGeometryValidationSummary": {
-        "description": "Geometry-validation evidence for the ``include=geometry_validation``\nheavy include.\n\nSurfaces the result of the structure-consistency check that\ncompares a calculation's output (and optionally input) geometry\nagainst the declared species identity. The full ``atom_mapping``\nJSONB column is **not** exposed in this MVP — atom indices in a\npublic scientific surface are a separate review.\n\nThe schema constrains at most one validation row per calculation\n(PK = ``calculation_id``); the wrapping field on\n``ScientificCalculationRecord`` is still a list for API symmetry\nwith other heavy includes — it will contain zero or one entry.\n\n``input_geometry_id`` / ``output_geometry_id`` are subject to the\nPhase D internal-ID visibility policy. Refs are always present\nwhen the underlying geometry exists.",
+        "description": "Geometry-validation evidence for the ``include=geometry_validation``\nheavy include.\n\nSurfaces the result of the structure-consistency check that\ncompares a calculation's output (and optionally input) geometry\nagainst the declared species identity. The full ``atom_mapping``\nJSONB column is **not** exposed in this MVP — atom indices in a\npublic scientific surface are a separate review.\n\nThe schema constrains at most one validation row per calculation\n(PK = ``calculation_id``); the wrapping field on\n``ScientificCalculationRecord`` is still a list for API symmetry\nwith other heavy includes — it will contain zero or one entry.\n\n``input_geometry_id`` / ``output_geometry_id`` are subject to the\nPhase D internal-ID visibility policy. Refs are always present\nwhen the underlying geometry exists.\n\nWhat the verdict actually means\n-------------------------------\n``formula_matches`` is the honest name for this verdict, and the one to\nread. **It is a molecular-formula comparison, not a graph isomorphism\ntest.** Atom mapping falls back to a SMILES-graph matcher whenever bond\nperception from the XYZ fails — the common case for the radicals, ions and\nstretched geometries this evidence mostly covers — and that fallback\nrejects on one condition only: the per-element atom counts disagree. So\nethanol declared with dimethyl ether deposited reads ``true``, and methane\nwith one hydrogen pulled out to 5 A reads ``true``. The rearrangement,\nbond-breaking, dissociation and proton-transfer cases this check was\nwritten to catch are not caught by it.\n\n``is_isomorphic`` is the same boolean under the name the stored column\ncarries. It is kept so that no consumer breaks, and it is the reason\n``formula_matches`` was added rather than the column being renamed: the\nname is what a machine consumer sees, a JSON key carries no docstring with\nit, and ``is_isomorphic`` claims a guarantee the code has never made.\nRenaming the column is a migration against a deployed table and would\nrename a published field; adding the true name costs a consumer nothing\nand stops the false one being the only one available. Prefer\n``formula_matches`` in new code.",
         "properties": {
           "created_at": {
             "anyOf": [
@@ -4478,6 +4485,12 @@
               }
             ],
             "title": "Created At"
+          },
+          "formula_matches": {
+            "description": "Whether the output geometry has the declared species' formula.",
+            "readOnly": true,
+            "title": "Formula Matches",
+            "type": "boolean"
           },
           "input_geometry_id": {
             "anyOf": [
@@ -4584,7 +4597,8 @@
         "required": [
           "species_smiles",
           "is_isomorphic",
-          "validation_status"
+          "validation_status",
+          "formula_matches"
         ],
         "title": "CalculationGeometryValidationSummary",
         "type": "object"
@@ -25572,7 +25586,7 @@
         "type": "object"
       },
       "NetworkStateComposition": {
-        "description": "Bounded, deterministically ordered composition of a network state.\n\n``participant_count_total`` describes the complete normalized state;\n``participants`` is its deterministic, capped public prefix.",
+        "description": "Bounded, deterministically ordered composition of a network state.\n\n``participant_count_total`` describes the complete normalized state;\n``participants`` is its deterministic, capped public prefix.\n\n``state_label`` is that prefix rendered as one string — ``\"N=N (E) +\n[H][H]\"`` — and is the spelling every consumer should use, so that a\nstate reads the same way in a plot title, a table and a paper. It carries\neach participant's ``species_entry_label`` for the reason given on the\nparticipant, and ends in ``\" + ...\"`` when ``participants_truncated`` is\nset, because a label that silently dropped a participant would assert a\nstate that is not the one stored. Empty for a state with no participants\nat all.\n\nIt is **not** ``network_state.label``, which is free text the depositor\nmay or may not have supplied and which the Arkane ingester never sets.\nThis one is derived, always present, and says what the state is made of.",
         "properties": {
           "participant_count_total": {
             "default": 0,
@@ -25590,17 +25604,33 @@
             "default": false,
             "title": "Participants Truncated",
             "type": "boolean"
+          },
+          "state_label": {
+            "default": "",
+            "title": "State Label",
+            "type": "string"
           }
         },
         "title": "NetworkStateComposition",
         "type": "object"
       },
       "NetworkStateCompositionParticipant": {
-        "description": "One public species participant in a network state.",
+        "description": "One public species participant in a network state.\n\n``canonical_smiles`` is the *species*-level graph identity and is\ndeliberately not unique among participants: two ``species_entry`` rows\nunder one ``species`` share it by construction. The hydrazine network has\nexactly that shape — two diazene entries, one ``species`` row, one\n``N=N`` — and a consumer that renders a state from ``canonical_smiles``\nalone collapses two distinct wells onto one string and can produce a\nchannel that appears to run from a state to itself.\n\n``species_entry_label`` is what tells them apart in prose.\n``uq_species_entry_species_id`` makes ``(stereo_label,\nelectronic_state_kind, electronic_state_label, term_symbol,\nisotope_key)`` unique within a species, and the label is built from\nexactly those five columns, so two participants of one species can never\ncarry the same label: if it is ``None`` on both, they are the same entry.\nIt is ``None`` when the entry is the plain ground-state, all-standard,\nstereo-unlabelled one — the common case, and the only entry of its\nspecies when it is the only one.\n\n``species_entry_ref`` remains the machine identity. The label is for\nreading; nothing should key on it.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",
             "type": "string"
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",

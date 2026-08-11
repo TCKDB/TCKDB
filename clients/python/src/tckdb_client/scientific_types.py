@@ -298,16 +298,27 @@ class CalculationDetailResponse(TypedDict):
 
 
 class NetworkStateCompositionParticipant(TypedDict):
+    #: ``canonical_smiles`` is species-level and is shared by every entry of
+    #: one species, so it does not identify a participant on its own.
+    #: ``species_entry_label`` is the discriminator that tells two entries of
+    #: one species apart in prose; it is ``None`` when there is nothing to
+    #: disambiguate. ``species_entry_ref`` remains the machine identity.
     species_entry_ref: str
     species_ref: str
     canonical_smiles: str
+    species_entry_label: str | None
     stoichiometry: int
 
 
 class NetworkStateComposition(TypedDict):
+    #: ``state_label`` is the server's rendering of ``participants`` --
+    #: ``"N=N (E) + [H][H]"`` -- and is what to print. Building a label from
+    #: ``canonical_smiles`` instead collapses two wells of one species onto
+    #: one string. It ends in ``" + ..."`` when ``participants_truncated``.
     participants: list[NetworkStateCompositionParticipant]
     participant_count_total: int
     participants_truncated: bool
+    state_label: str
 
 
 class NetworkStateSummary(TypedDict, total=False):

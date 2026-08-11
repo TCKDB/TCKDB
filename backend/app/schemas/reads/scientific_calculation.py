@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, computed_field
 
 from app.db.models.common import (
     ArtifactKind,
@@ -695,6 +695,29 @@ class CalculationGeometryValidationSummary(BaseModel):
     ``input_geometry_id`` / ``output_geometry_id`` are subject to the
     Phase D internal-ID visibility policy. Refs are always present
     when the underlying geometry exists.
+
+    What the verdict actually means
+    -------------------------------
+    ``formula_matches`` is the honest name for this verdict, and the one to
+    read. **It is a molecular-formula comparison, not a graph isomorphism
+    test.** Atom mapping falls back to a SMILES-graph matcher whenever bond
+    perception from the XYZ fails — the common case for the radicals, ions and
+    stretched geometries this evidence mostly covers — and that fallback
+    rejects on one condition only: the per-element atom counts disagree. So
+    ethanol declared with dimethyl ether deposited reads ``true``, and methane
+    with one hydrogen pulled out to 5 A reads ``true``. The rearrangement,
+    bond-breaking, dissociation and proton-transfer cases this check was
+    written to catch are not caught by it.
+
+    ``is_isomorphic`` is the same boolean under the name the stored column
+    carries. It is kept so that no consumer breaks, and it is the reason
+    ``formula_matches`` was added rather than the column being renamed: the
+    name is what a machine consumer sees, a JSON key carries no docstring with
+    it, and ``is_isomorphic`` claims a guarantee the code has never made.
+    Renaming the column is a migration against a deployed table and would
+    rename a published field; adding the true name costs a consumer nothing
+    and stops the false one being the only one available. Prefer
+    ``formula_matches`` in new code.
     """
 
     input_geometry_id: int | None = None
@@ -709,6 +732,13 @@ class CalculationGeometryValidationSummary(BaseModel):
     validation_reason: str | None = None
     rmsd_warning_threshold: float | None = None
     created_at: datetime | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def formula_matches(self) -> bool:
+        """Whether the output geometry has the declared species' formula."""
+
+        return self.is_isomorphic
 
 
 class CalculationSCFStabilitySummary(BaseModel):

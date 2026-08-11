@@ -240,9 +240,13 @@ def _assert_public_state_composition(state, composition_hash: str) -> None:
         "species_entry_ref",
         "species_ref",
         "canonical_smiles",
+        "species_entry_label",
         "stoichiometry",
     }
     assert all(set(item) == public_keys for item in composition["participants"])
+    # A truncated state must say so in its label too: a label that quietly
+    # dropped a participant would assert a state nobody stored.
+    assert composition["state_label"].endswith(" + ...")
 
 
 # ===========================================================================
@@ -2463,8 +2467,12 @@ def test_nkin_detail_channel_context_has_public_compositions(client, db_session)
         "species_entry_ref": extra_entry.public_ref,
         "species_ref": extra_species.public_ref,
         "canonical_smiles": "[OH]",
+        # The only entry of its species, so nothing to disambiguate against.
+        "species_entry_label": None,
         "stoichiometry": 2,
     }
+    # The rendered side carries the stoichiometry the participants declare.
+    assert "2 [OH]" in source["state_label"]
     assert sink["participant_count_total"] == 1
 
 

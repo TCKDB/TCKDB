@@ -8,10 +8,12 @@ identifiers and canonical chemistry without learning internal state ids.
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.db.models.common import SpeciesEntryStateKind
 from app.db.models.network_pdep import (
     NetworkChannel,
     NetworkKinetics,
@@ -50,6 +52,11 @@ def build_network_state_composition(
             SpeciesEntry.public_ref.label("species_entry_ref"),
             Species.public_ref.label("species_ref"),
             Species.smiles.label("canonical_smiles"),
+            SpeciesEntry.stereo_label,
+            SpeciesEntry.electronic_state_kind,
+            SpeciesEntry.electronic_state_label,
+            SpeciesEntry.term_symbol,
+            SpeciesEntry.isotope_key,
             NetworkStateParticipant.stoichiometry,
         )
         .join(
@@ -70,15 +77,101 @@ def build_network_state_composition(
             species_entry_ref=row.species_entry_ref,
             species_ref=row.species_ref,
             canonical_smiles=row.canonical_smiles,
+            species_entry_label=species_entry_label(
+                stereo_label=row.stereo_label,
+                electronic_state_kind=row.electronic_state_kind,
+                electronic_state_label=row.electronic_state_label,
+                term_symbol=row.term_symbol,
+                isotope_key=row.isotope_key,
+            ),
             stoichiometry=row.stoichiometry,
         )
         for row in rows
     ]
+    truncated = total > len(participants)
     return NetworkStateComposition(
         participants=participants,
         participant_count_total=int(total),
-        participants_truncated=total > len(participants),
+        participants_truncated=truncated,
+        state_label=render_state_label(participants, truncated=truncated),
     )
+
+
+def species_entry_label(
+    *,
+    stereo_label: str | None,
+    electronic_state_kind: SpeciesEntryStateKind | None,
+    electronic_state_label: str | None,
+    term_symbol: str | None,
+    isotope_key: str | None,
+) -> str | None:
+    """Return the short discriminator that tells two entries of one species apart.
+
+    Built from every column of ``uq_species_entry_species_id`` except the
+    species itself, which is what makes the result a real discriminator rather
+    than a hint: two entries of one species differ in at least one of these by
+    construction, so they cannot both render as ``None`` and cannot render the
+    same. Two entries that agree on all five are one row.
+
+    ``ground`` electronic state is omitted because it is the default and
+    saying so of every ordinary species would bury the one entry that is not
+    ground in noise. Everything else is spelled as stored: these are the
+    depositor's own labels (``E``, ``Z``, ``T1``, a term symbol, an isotope
+    key) and rewording them would put a spelling in a plot title that appears
+    nowhere else in the record.
+
+    :returns: A compact label, or ``None`` for the plain ground-state,
+        all-standard, stereo-unlabelled entry.
+    """
+
+    parts: list[str] = []
+    if stereo_label:
+        parts.append(stereo_label)
+    if (
+        electronic_state_kind is not None
+        and electronic_state_kind != SpeciesEntryStateKind.ground
+    ):
+        parts.append(electronic_state_kind.value)
+    if electronic_state_label:
+        parts.append(electronic_state_label)
+    if term_symbol:
+        parts.append(term_symbol)
+    if isotope_key:
+        parts.append(isotope_key)
+    return " ".join(parts) if parts else None
+
+
+def render_state_label(
+    participants: Sequence[NetworkStateCompositionParticipant],
+    *,
+    truncated: bool,
+) -> str:
+    """Render one network state as ``"N=N (E) + [H][H]"``.
+
+    The single spelling of a state, produced here so that a plot title, a
+    table row and a paper agree. Rendering from ``canonical_smiles`` alone —
+    which is what every consumer did while this function did not exist — makes
+    two distinct wells of one species read identically, and turns a real
+    isomerisation into a channel that appears to run from a state to itself.
+
+    :param participants: The state's public participant prefix, in the order
+        the projection produced.
+    :param truncated: Whether participants were dropped by the public cap. A
+        truncated label ends in ``" + ..."``: a state label that quietly
+        omitted a participant would assert a state nobody stored.
+    """
+
+    parts: list[str] = []
+    for participant in participants:
+        term = participant.canonical_smiles
+        if participant.species_entry_label:
+            term = f"{term} ({participant.species_entry_label})"
+        if participant.stoichiometry != 1:
+            term = f"{participant.stoichiometry} {term}"
+        parts.append(term)
+    if truncated:
+        parts.append("...")
+    return " + ".join(parts)
 
 
 def apply_channel_chemistry_filters(
@@ -155,4 +248,6 @@ def apply_channel_chemistry_filters(
 __all__ = [
     "apply_channel_chemistry_filters",
     "build_network_state_composition",
+    "render_state_label",
+    "species_entry_label",
 ]

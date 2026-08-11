@@ -187,6 +187,46 @@ class TestAStructureAgainstItsOwnLabel:
         body = _assert_code(response, "species_smiles_charge_mismatch")
         assert "does not match SMILES charge" in str(body["detail"])
 
+    def test_a_kind_the_stored_identity_denies_names_the_kind_check(
+        self, client, db_session
+    ):
+        """An ordinary deposit must not silently inherit ``pseudo``.
+
+        A pseudo-species carries a free-text ``smiles`` -- it has no
+        atom-resolved structure to canonicalise -- so nothing stops one from
+        being registered under a string that is also a real molecule's
+        canonical SMILES. Species identity is ``(smiles, charge,
+        multiplicity)`` and excludes ``kind``, so the next ordinary deposit of
+        that molecule resolves onto the pseudo row. Before the check it took
+        the stored kind without a word, and ``pseudo`` is what makes
+        ``validate_reaction_elemental_balance`` and its charge twin decline to
+        judge a reaction -- so mass balance switched itself off for methane and
+        no surface recorded it.
+        """
+        from app.db.models.common import MoleculeKind, StereoKind
+        from app.db.models.species import Species
+
+        db_session.add(
+            Species(
+                kind=MoleculeKind.pseudo,
+                smiles="C",
+                inchi_key="PSEUDOLUMPEDCH-UHFFFAOYSA-N",
+                charge=0,
+                multiplicity=1,
+                stereo_kind=StereoKind.achiral,
+            )
+        )
+        db_session.flush()
+
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_conformer_payload(
+                species_entry=_METHANE, xyz_text=_METHANE_XYZ
+            ),
+        )
+        body = _assert_code(response, "species_kind_conflict")
+        assert "already stored as molecule_kind" in str(body["detail"])
+
 
 # ---------------------------------------------------------------------------
 # Stationary points

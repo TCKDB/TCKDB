@@ -23,6 +23,15 @@ this module was written to catch are **not** caught. A ``pass`` here means
 "the output has the same atoms as the declared species", nothing more, and a
 ``fail`` here has only ever meant "the atom counts disagree".
 
+The read surfaces therefore publish the verdict as ``formula_matches``
+(:class:`app.schemas.reads.scientific_calculation.CalculationGeometryValidationSummary`,
+:class:`app.schemas.entities.calculation.CalculationGeometryValidationRead`),
+with ``is_isomorphic`` kept beside it as the stored column's name. A JSON key
+travels without its docstring, so the name a consumer reads had to stop
+claiming a guarantee this code does not make; renaming the column instead
+would be a migration against a deployed table and a breaking change to a
+published field, for no gain over publishing the true name alongside.
+
 Connectivity validation is not implemented. Implementing it needs a bond
 perception step that is trustworthy on exactly the strained, radical and
 stretched structures where a rearrangement would matter, which
@@ -155,8 +164,16 @@ def validate_calculation_geometry(
             atom_mapping=None,
             n_mappings=output_mapping.n_mappings,
             validation_status=ValidationStatus.fail,
-            validation_reason=f"Output geometry is not graph-isomorphic to species "
-            f"SMILES (mapping status: {output_mapping.status})",
+            # Says what was actually compared. The sentence this replaced
+            # claimed the output was "not graph-isomorphic to species SMILES",
+            # which named a test this function has never run: the mapping falls
+            # back to per-element counts whenever bond perception from the XYZ
+            # fails. A stored reason is read by curators and quoted in reviews,
+            # so it may not describe a stronger check than the one that ran.
+            validation_reason=f"Output geometry does not match the declared "
+            f"species SMILES (mapping status: {output_mapping.status}). The "
+            f"comparison is a molecular-formula check, not a connectivity one "
+            f"-- see app.services.geometry_validation.",
             rmsd_warning_threshold=rmsd_warning_threshold,
             input_geometry_id=input_geometry_id,
             output_geometry_id=output_geometry_id,
@@ -462,6 +479,16 @@ CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
         "proton-transfer cases the module was written to catch are not "
         "caught. Already self-documented in the module docstring rather than "
         "discovered here; recorded because the field name is what a consumer "
-        "sees and it still overstates the guarantee."
+        "sees and it still overstates the guarantee. **Partly closed:** the "
+        "read surfaces now publish the same boolean under its true name, "
+        "``formula_matches``, and the stored ``validation_reason`` no longer "
+        "says 'not graph-isomorphic'. ``is_isomorphic`` is kept beside it "
+        "because it is the stored column and a published field — renaming it "
+        "is a migration against a deployed table and a breaking API change, "
+        "and buys nothing that publishing the true name alongside does not. "
+        "What stays open is the check itself: connectivity is still not "
+        "tested, and cannot be until there is bond perception trustworthy on "
+        "the strained and radical structures where a rearrangement would "
+        "matter."
     ),
 )

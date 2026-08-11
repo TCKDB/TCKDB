@@ -41,6 +41,10 @@ W_SPECIES_GEOMETRY_COMPOSITION_MISMATCH = "species_geometry_composition_mismatch
 #: deposited under it are different multisets.
 W_SPECIES_GEOMETRY_ISOTOPE_MISMATCH = "species_geometry_isotope_mismatch"
 
+#: Raised when a deposit's ``molecule_kind`` contradicts the kind already
+#: stored for the species its identity resolves to.
+W_SPECIES_KIND_CONFLICT = "species_kind_conflict"
+
 
 def null_safe_equals(column: ColumnElement, value: str | None) -> ColumnElement[bool]:
     """Build a nullable equality predicate for identity lookups.
@@ -65,10 +69,31 @@ def resolve_species(
     exactly one electron, so every deposit that declares one converges on that
     single row.
 
+    ``kind`` is asserted, not inherited
+    ----------------------------------
+    ``molecule_kind`` is written when the row is created and is **not** part of
+    the identity, so a later deposit of the same
+    ``(smiles, charge, multiplicity)`` used to receive the stored row whatever
+    kind it declared, and its own claim was dropped without a word. That is not
+    a cosmetic loss: :func:`app.services.reaction_resolution.validate_reaction_elemental_balance`
+    and its charge-conservation twin decline to judge any reaction containing a
+    ``pseudo`` participant, and they read ``species.kind`` — the stored row —
+    not the payload. So a ``pseudo`` row whose free-text ``smiles`` happens to
+    collide with a real canonical SMILES silently switched mass balance and
+    charge conservation off for every subsequent deposit of that molecule, and
+    nothing on any surface said so. The reverse direction loses the exemption a
+    lumped construct was declared to need.
+
+    Both are contradictions rather than incompleteness — one identity cannot be
+    two kinds of thing — so the disagreement is refused here instead of being
+    resolved in favour of whichever deposit arrived first.
+
     :param session: Active SQLAlchemy session.
     :param payload: Upload-facing species-entry identity payload.
     :returns: Existing or newly created ``Species`` row.
-    :raises ValueError: If the payload cannot be canonicalized into a valid species identity.
+    :raises ValueError: If the payload cannot be canonicalized into a valid
+        species identity, or declares a ``molecule_kind`` that contradicts the
+        kind already stored for that identity.
     """
 
     canonical_smiles, inchi_key = canonical_species_identity(payload)
@@ -110,7 +135,104 @@ def resolve_species(
         except IntegrityError:
             species = session.scalar(select(Species).where(*identity_filter))
 
+    assert_declared_kind_matches_stored(payload, species)
     return species
+
+
+def assert_declared_kind_matches_stored(
+    payload: SpeciesEntryIdentityPayload,
+    species: Species,
+) -> None:
+    """Refuse a deposit whose ``molecule_kind`` contradicts the stored row.
+
+    Called on every path out of :func:`resolve_species`, including the one that
+    just created the row — where it is a no-op by construction, and cheap
+    enough that it is not worth a branch to skip.
+
+    :param payload: Upload-facing resolved identity payload.
+    :param species: The species row the identity resolved to.
+    :raises CodedValueError: If the two disagree about what kind of thing this
+        identity is.
+    """
+
+    if species.kind == payload.molecule_kind:
+        return
+
+    raise CodedValueError(
+        W_SPECIES_KIND_CONFLICT,
+        f"This deposit declares molecule_kind={payload.molecule_kind.value!r}, "
+        f"but the species identity it resolves to (smiles={species.smiles!r}, "
+        f"charge={species.charge}, multiplicity={species.multiplicity}) is "
+        f"already stored as molecule_kind={species.kind.value!r} "
+        "(species_kind_conflict). Species identity is "
+        "(smiles, charge, multiplicity), so both deposits address the same row "
+        "and only one kind can be true of it. Accepting the stored kind would "
+        "discard the declared one in silence, and the two are not "
+        "interchangeable: a pseudo-species excuses every reaction it appears "
+        "in from elemental balance and charge conservation, so inheriting "
+        "pseudo turns those checks off for a molecule nobody exempted, and "
+        "inheriting molecule denies a lumped construct the exemption it was "
+        "declared to need. Deposit the identity under the kind it really is, "
+        "or give the pseudo-species a smiles that no real structure "
+        "canonicalises to.",
+        context={
+            "declared_molecule_kind": payload.molecule_kind.value,
+            "stored_molecule_kind": species.kind.value,
+            "smiles": species.smiles,
+            "charge": species.charge,
+            "multiplicity": species.multiplicity,
+        },
+        message_prefix=False,
+    )
+
+
+CHECK_SPECIES_KIND_MATCHES_STORED_IDENTITY = ScientificCheck(
+    group="A structure against its own label",
+    sort_key=0,
+    code=W_SPECIES_KIND_CONFLICT,
+    asserts=(
+        "A deposit's ``molecule_kind`` agrees with the kind already stored for "
+        "the species identity it resolves to — one identity is one kind of "
+        "thing."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional, and load-bearing for two other blocking checks. Species "
+        "identity is ``(smiles, charge, multiplicity)`` and does not include "
+        "``kind``, so two deposits that disagree about kind address one row and "
+        "at most one of them can be right — that is a contradiction, not "
+        "incompleteness. It has to block rather than warn because "
+        "``validate_reaction_elemental_balance`` and "
+        "``validate_reaction_charge_conservation`` read ``species.kind`` from "
+        "the stored row: silently inheriting ``pseudo`` would switch mass "
+        "balance and charge conservation off for an ordinary molecule, on "
+        "every future reaction containing it, with nothing on any surface "
+        "recording that it had happened."
+    ),
+    adr="0008",
+    enforced_by=(
+        PythonCheck(
+            assert_declared_kind_matches_stored,
+            note=(
+                "Runs on every path through ``resolve_species``, which is the "
+                "sole creator of ``species`` rows on every upload route. A row "
+                "written directly to the database — the only way a ``pseudo`` "
+                "species exists today, since ``canonical_species_identity`` "
+                "refuses that kind — bypasses this, as it bypasses every "
+                "Python check; what the check guarantees is that no *upload* "
+                "silently adopts a kind it did not declare."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "None, and deliberately so: the escape hatch would be exactly the "
+        "silent inheritance the check exists to remove. A depositor who "
+        "genuinely means the stored kind declares it; one who means the other "
+        "kind needs a different identity, because the two claims are about the "
+        "same row."
+    ),
+)
 
 
 def assert_geometry_isotopes_match_identity(

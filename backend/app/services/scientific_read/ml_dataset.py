@@ -59,6 +59,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.chemistry.geometry import resolve_element_symbol
 from app.db.models.calculation import (
     Calculation,
     CalculationFreqMode,
@@ -144,7 +145,10 @@ class MLFilters:
                            energy at that LOT are dropped.
     ``elements``           element-subset allow-list: a species-geometry row
                            is kept only when every atom's element is in this
-                           set. ``None`` = no element filter.
+                           set. ``None`` = no element filter. Both sides of
+                           that comparison are canonicalised through
+                           :func:`app.chemistry.geometry.resolve_element_symbol`
+                           in :meth:`canonical_elements` — see it for why.
     ``include_hessian``    emit the Cartesian Hessian block when present.
     ``limit`` / ``offset`` deterministic window over the identity ids
                            (ordered by id).
@@ -157,7 +161,32 @@ class MLFilters:
     limit: int | None = None
     offset: int = 0
 
+    def canonical_elements(self) -> frozenset[str] | None:
+        """The allow-list as it is actually applied.
+
+        A filter is a *comparison*, which is where ADR 0008's rule about
+        element symbols bites: a blocking or dropping decision may not turn on
+        an unenforced spelling convention. ``geometry_atom.element`` is
+        canonicalised at ingestion and the stored corpus is canonical, but no
+        CHECK holds it so, and ``D`` and ``T`` are deliberately left alone
+        there — so a deuterated geometry stores ``D`` and would be dropped
+        from an ``element=H,C,O`` export without a word. The query string is
+        worse: nothing canonicalises what a caller types, so ``element=cl``
+        matched nothing at all.
+
+        Both ends go through :func:`resolve_element_symbol`, which settles
+        case and reads ``D``/``T`` as the hydrogen they are. On already-canonical
+        input it is a no-op.
+
+        :returns: The canonicalised allow-list, or ``None`` when unfiltered.
+        """
+
+        if self.elements is None:
+            return None
+        return frozenset(resolve_element_symbol(e) for e in self.elements)
+
     def to_manifest(self) -> dict:
+        canonical = self.canonical_elements()
         return {
             "min_review_status": (
                 self.min_review_status.value
@@ -165,7 +194,9 @@ class MLFilters:
                 else None
             ),
             "lot_ref": self.lot_ref,
-            "elements": sorted(self.elements) if self.elements is not None else None,
+            # The manifest states the filter that ran, not the one that was
+            # typed: a reader reproducing this export needs the former.
+            "elements": sorted(canonical) if canonical is not None else None,
             "include_hessian": self.include_hessian,
             "limit": self.limit,
             "offset": self.offset,
@@ -244,7 +275,13 @@ class _GeometryPayload:
     coords: list[list[float]]
 
     def element_set(self) -> frozenset[str]:
-        return frozenset(self.symbols)
+        """The elements present, canonicalised for comparison only.
+
+        ``symbols`` stays exactly as deposited — it is emitted in the record
+        and a depositor who wrote ``D`` should read ``D`` back. This is the
+        matching key; see :meth:`MLFilters.canonical_elements`.
+        """
+        return frozenset(resolve_element_symbol(s) for s in self.symbols)
 
     def to_dict(self) -> dict:
         return {
@@ -608,9 +645,10 @@ def _build_species_records(
         geometry = _geometry_payload(session, geometry_id, geom_cache)
         if geometry is None:  # pragma: no cover - FK guarantees presence
             continue
+        allowed_elements = filters.canonical_elements()
         if (
-            filters.elements is not None
-            and not geometry.element_set() <= filters.elements
+            allowed_elements is not None
+            and not geometry.element_set() <= allowed_elements
         ):
             continue
 

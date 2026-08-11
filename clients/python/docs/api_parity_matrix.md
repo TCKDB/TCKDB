@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 92 |
-| raw_only | 103 |
+| raw_only | 105 |
 | not_applicable | 37 |
-| **total** | **232** |
+| **total** | **234** |
 
 ## Typed coverage
 
@@ -215,6 +215,18 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | `GET /api/v1/lookup/statmech` | yes | — | — | — | — |
 | `GET /api/v1/lookup/thermo` | yes | — | — | — | — |
 | `GET /api/v1/lookup/transport` | yes | — | — | — | — |
+
+> Custody of the deployment's own stored objects: expected against observed digest and size, and the object store's ETag and paths at the moment of detection. Curator/admin only, and operational detail about a bucket rather than science about a record, so a typed method on a contributor client would be aimed at the wrong reader. Reachable via get_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/scientific/artifacts/integrity` | yes | — | — | — | — |
+
+> Full observation history for one stored object, oldest first, for an operator deciding whether to trust a bucket. Same audience and same reasoning as the integrity listing above. Reachable via get_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/scientific/artifacts/{sha256}/integrity` | yes | — | — | — | — |
 
 > Single-record read of a row already returned in full by search_network_kinetics(network_kinetics_ref=...). Reachable via get_json() when only the ref is known.
 
