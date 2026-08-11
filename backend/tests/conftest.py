@@ -552,12 +552,39 @@ def _recreate_test_database(db_name: str) -> None:
 
 
 def _drop_test_database(db_name: str) -> None:
-    """Remove the per-run database after pytest releases pooled connections."""
+    """Remove the per-run database after pytest releases pooled connections.
+
+    Refuses if the database carries another run's ownership marker. This
+    ``DROP`` terminates backends first — it has to, because pytest's pool may
+    not have released every connection — so it is the one statement in the
+    harness that can destroy a *live* database, and the refusal in
+    ``_recreate_test_database`` does not cover it.
+
+    Found by forcing the collision the run token normally prevents: two runs
+    pinned to one ``TCKDB_TEST_RUN_TOKEN``. The second refused to recreate,
+    exactly as designed — and then its fixture ``finally`` dropped the first
+    run's database anyway, taking the first run down with 38 errors. Refusing
+    to overwrite something and then deleting it is not a refusal.
+    """
     db_name = _validate_test_db_name(db_name)
     admin_url = _database_url("postgres")
     engine = create_engine(admin_url, future=True, isolation_level="AUTOCOMMIT")
     try:
         with engine.connect() as connection:
+            marker = connection.execute(
+                text(
+                    "SELECT shobj_description(oid, 'pg_database') "
+                    "FROM pg_database WHERE datname = :db_name"
+                ),
+                {"db_name": db_name},
+            ).scalar_one_or_none()
+            match = _MARKER_PATTERN.match((marker or "").strip())
+            if match is not None and match.group(3) not in (None, RUN_TOKEN):
+                raise ForeignTestDatabaseError(
+                    f"refusing to drop test database {db_name!r}: it is stamped "
+                    f"by pytest run {match.group(3)} (pid {match.group(2)} on "
+                    f"{match.group(1)}), not by this run ({RUN_TOKEN})."
+                )
             connection.execute(
                 text("""
                     SELECT pg_terminate_backend(pid)
@@ -589,8 +616,14 @@ def db_engine():
     # Previously these ran before the ``try`` and each one leaked a fully
     # migrated database under a name that is never reused.
     body_failed = False
+    # Only this session's own database is ever dropped. Without this flag, a
+    # run that *refused* to recreate a foreign run's database would go on to
+    # drop it in the ``finally`` below -- which is how the first version of
+    # the refusal still took the other run down.
+    created = False
     try:
         _recreate_test_database(db_name)
+        created = True
         subprocess.run(
             ["conda", "run", "-n", "tckdb_env", "alembic", "upgrade", "head"],
             cwd=REPO_ROOT,
@@ -626,7 +659,7 @@ def db_engine():
             # discover it through a dead connection.
             lambda: api_deps.bind_ambient_session_factory(_AMBIENT_REFUSING_ENGINE),
             lambda: engine.dispose() if engine is not None else None,
-            lambda: _drop_test_database(db_name),
+            lambda: _drop_test_database(db_name) if created else None,
         ):
             try:
                 cleanup()

@@ -334,6 +334,76 @@ def test_recreate_refuses_a_database_with_a_live_backend() -> None:
         _force_drop(db_name)
 
 
+def test_drop_refuses_a_database_stamped_by_another_run() -> None:
+    """Refusing to overwrite something and then deleting it is not a refusal.
+
+    ``_drop_test_database`` terminates backends before it drops — it has to,
+    because pytest's pool may not have released every connection — so it is
+    the one statement in the harness that can destroy a *live* database.
+
+    Found by forcing the collision the run token normally prevents: two runs
+    pinned to one ``TCKDB_TEST_RUN_TOKEN``. The second refused to recreate,
+    exactly as designed, and its fixture ``finally`` then dropped the first
+    run's database anyway — 38 errors in a run that had done nothing wrong.
+    """
+    db_name = scratch_database_name("dropforeign")
+    marker = (
+        f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} "
+        f"pid={os.getpid()} run=deadbeef"
+    )
+    _create_marked(db_name, marker)
+    try:
+        with pytest.raises(conftest.ForeignTestDatabaseError):
+            conftest._drop_test_database(db_name)
+
+        assert _database_exists(db_name), "cleanup dropped another run's database"
+    finally:
+        _force_drop(db_name)
+
+
+def test_drop_accepts_this_runs_own_database() -> None:
+    """The refusal must not stop the harness cleaning up after itself."""
+    db_name = scratch_database_name("dropown")
+    try:
+        conftest._recreate_test_database(db_name)
+        assert _database_exists(db_name)
+
+        conftest._drop_test_database(db_name)
+
+        assert not _database_exists(db_name)
+    finally:
+        _force_drop(db_name)
+
+
+def test_a_refused_session_does_not_drop_the_database_it_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """End-to-end: the fixture body refuses, and cleanup leaves it alone.
+
+    Drives the ``db_engine`` body directly against a database stamped by a
+    live foreign run, which is what the forced-collision experiment produced.
+    """
+    monkeypatch.setenv("DB_TEST_NAME", scratch_database_name("refusedsession"))
+    monkeypatch.setenv("TCKDB_TEST_DB_SWEEP", "0")
+    db_name = conftest._resolve_test_db_name()
+    marker = (
+        f"{conftest._MARKER_PREFIX} host={conftest._safe_host()} "
+        f"pid={os.getpid()} run=deadbeef"
+    )
+    _create_marked(db_name, marker)
+
+    try:
+        generator = _db_engine_generator()
+        with pytest.raises(conftest.ForeignTestDatabaseError):
+            next(generator)
+
+        assert _database_exists(db_name), (
+            "a refused session dropped the database it had just refused to touch"
+        )
+    finally:
+        _force_drop(db_name)
+
+
 def test_recreate_accepts_a_database_abandoned_by_a_dead_run() -> None:
     """An orphan from a crashed run is reclaimed, not refused.
 
