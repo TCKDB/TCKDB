@@ -514,19 +514,20 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "Case is not load-bearing. The comparison is deliberately "
-        "case-insensitive because the two ends quote two different "
-        "geometries and nothing guarantees they spell an element the same "
-        "way — carbon becoming nitrogen is a contradiction, while ``Cl`` "
-        "becoming ``CL`` is one program shouting where another did not. "
-        "``b4e7c1d20f83`` canonicalises the symbol on the way into "
-        "``geometry_atom.element``, which makes disagreement rare on rows "
-        "written through the API; it is a convention rather than a "
-        "constraint, so both the database check and the Python check still "
-        "normalise instead of assuming it. Isotope mass number is "
-        "deliberately *not* carried across the same way, because a NULL "
-        "disables a MATCH SIMPLE foreign key; isotope consistency is checked "
-        "in the service layer instead."
+        "Case is not load-bearing, and no longer needs a special provision to "
+        "stop it becoming so. The comparison used to be case-insensitive on "
+        "both sides, because the two ends quote two different geometries and "
+        "nothing guaranteed they spelled an element the same way — carbon "
+        "becoming nitrogen is a contradiction, while ``Cl`` becoming ``CL`` "
+        "is one program shouting where another did not, and refusing the "
+        "second would have refused correct chemistry. ``b4e7c1d20f83`` "
+        "canonicalised the symbol on the way into ``geometry_atom.element`` "
+        "and ``c5a1f8e3d074`` made that a CHECK, so one element now has one "
+        "spelling in every state the database can be in and both the "
+        "constraint and the service compare the stored values directly. "
+        "Isotope mass number is deliberately *not* carried across the same "
+        "way, because a NULL disables a MATCH SIMPLE foreign key; isotope "
+        "consistency is checked in the service layer instead."
     ),
 )
 
