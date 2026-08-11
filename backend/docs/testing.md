@@ -16,11 +16,31 @@ narrowest tier that proves the change you're making.
 | 1    | One affected module / feature                 | < 1 min if poss.  | `test-fast.sh <dir>` (`-k`)   |
 | 2    | Scientific read + service confidence          | 1–3 min           | `test-scientific.sh`          |
 | 3    | Full API surface regression gate              | several minutes   | `test-api.sh`                 |
+| 3    | Everything the other two gates exclude        | several minutes   | `test-rest.sh`                |
 | 4    | Full backend suite — pre-push / release       | ~6 min (`-n 8`)   | `test-full.sh`                |
 
 Tier 0 and Tier 1 use the same script with different arguments — the
 distinction is intent (single failure debug vs. validating a focused
 change), not a different command.
+
+The two Tier 3 gates and `test-scientific.sh` are a **partition** of
+`backend/tests/`: every test file is selected by exactly one of them, and
+`test-rest.sh` is defined as the complement of the other two rather than
+as a list of directories, so a directory added to `tests/` joins a gate
+the day it is created. That is enforced, not asserted — see
+[`tests/scripts/test_gate_coverage.py`](../tests/scripts/test_gate_coverage.py),
+which reads the scripts and `backend-ci.yml` and fails if any test file
+is run by no required CI job.
+
+It is enforced because it silently stopped being true. Until August 2026
+the two required PR jobs ran `tests/api/` and `tests/api/scientific/` +
+`tests/services/scientific_read/` and nothing else, so 3,806 tests — more
+than half the suite by count — gated no pull request. They ran nightly,
+which meant a defect merged green and surfaced the next morning attached
+to no PR; `tests/db/test_identifier_lengths.py` sat red on `main` for
+days that way. Nothing in the scripts said so, which is the part worth
+remembering: `test-api.sh` read as "the API gate" while being "some of
+the API".
 
 ## Scripts
 
@@ -34,6 +54,7 @@ work as you'd expect:
 | [`test-fast.sh`](../scripts/test-fast.sh)             | `pytest -v -x --tb=short "$@"`                                         | 0 |
 | [`test-scientific.sh`](../scripts/test-scientific.sh) | `pytest -q --tb=short tests/api/scientific/ tests/services/scientific_read/ "$@"` | 8 |
 | [`test-api.sh`](../scripts/test-api.sh)               | `pytest -q --tb=short tests/api/ "$@"`                                 | 8 |
+| [`test-rest.sh`](../scripts/test-rest.sh)             | `pytest -q --tb=short tests/ --ignore=tests/api --ignore=tests/services/scientific_read "$@"` | 8 |
 | [`test-full.sh`](../scripts/test-full.sh)             | `pytest -q --tb=short tests/ "$@"`                                     | 8 |
 | [`test-profile.sh`](../scripts/test-profile.sh)       | `pytest -v --durations=50 [<path>|tests/]`                             | 0 |
 
@@ -53,6 +74,7 @@ environment:
 make test-fast       ARGS="tests/api/test_api_health.py"
 make test-scientific
 make test-api        ARGS="-x"
+make test-rest
 make test-full
 make test-profile    ARGS="tests/api/scientific/"
 ```
@@ -113,6 +135,27 @@ This is the cross-surface regression gate.
 ```bash
 make test-api
 ```
+
+Green here means the HTTP surface is intact. It says nothing about the
+services, workflows, db constraints, schemas, parsers or importers
+underneath it — that is the next section, and the distinction is why
+this one is not called "the backend gate".
+
+### Tier 3 — everything else
+
+Run before committing changes to `app/services/` (outside
+`scientific_read`), `app/workflows/`, `app/db/`, `app/schemas/`,
+`app/importers/`, `app/parsers/`, `app/workers/` or `app/cli/` — which
+is to say most of the backend.
+
+```bash
+make test-rest
+```
+
+It is the complement of the two gates above, not a list, so it needs no
+maintenance when `tests/` grows. In practice these are the *cheap*
+tests: 3,813 of them in 3m50s at four workers, against 1,998 scientific
+tests in 4m21s on the same host.
 
 ### Tier 4 — full backend suite
 
@@ -521,12 +564,13 @@ fixture moved up.
   every save.
 - Land Tier 1 green at minimum before pushing. Land Tier 3 green
   before opening a PR. Tier 4 is required before merging.
-- The initial backend CI gate runs two independent jobs in parallel: the API
-  job runs Tier 3 with `tests/api/scientific/` ignored, while the scientific
-  job runs the scientific API directory plus `tests/services/scientific_read/`
-  through Tier 2. Together they cover every API test once and every
-  scientific-read service test once. Local Tier 4 remains the pre-push and
-  pre-merge insurance until full-suite CI runtime is known.
+- The backend CI gate runs three independent jobs in parallel: the API job
+  runs Tier 3 with `tests/api/scientific/` ignored; the scientific job runs
+  the scientific API directory plus `tests/services/scientific_read/`; and
+  the complement job runs everything neither of those selects. Together they
+  cover every test file in `backend/tests/` exactly once, which is checked
+  rather than claimed
+  ([`tests/scripts/test_gate_coverage.py`](../tests/scripts/test_gate_coverage.py)).
 
 ## CI gate
 
@@ -560,19 +604,38 @@ The gate runs:
 
 - shell/doc hygiene checks (`git diff --check`, `bash -n` for the test
   ladder scripts, and `make help`)
-- `alembic upgrade head`, `alembic heads`, and `alembic current`
-  against the RDKit Postgres service
+- `alembic upgrade head`, `alembic heads`, `alembic current` and
+  `alembic check`, against a scratch database created by the step
 - the OpenAPI golden snapshot test at
   [`tests/api/test_openapi_snapshot.py`](../tests/api/test_openapi_snapshot.py)
 - the API gate via [`../scripts/test-api.sh`](../scripts/test-api.sh)
 - the scientific read/service gate via
   [`../scripts/test-scientific.sh`](../scripts/test-scientific.sh)
+- the complement gate via [`../scripts/test-rest.sh`](../scripts/test-rest.sh)
 
 The API gate ignores both `tests/api/scientific/` (covered by the scientific
 job) and `tests/api/test_openapi_snapshot.py` (run once by its dedicated
 golden-snapshot step). The final `Backend CI` job is a stable aggregate status
 check: it runs even after an upstream failure or cancellation and fails unless
-the matrix result is `success`, while leaving both detailed gate checks visible.
+the matrix result is `success`, while leaving every detailed gate check visible.
+
+### The ambient database is never migrated
+
+`DB_NAME` — the database `settings.database_url` points at, as opposed to the
+per-worker `DB_TEST_NAME` databases the fixtures create and migrate — exists
+and is deliberately left empty in **both** `backend-ci.yml` and
+`backend-nightly.yml`. Nothing should migrate it, and no test should need it
+migrated: a test that reaches it is reaching past every fixture.
+
+The alembic steps run against their own scratch database for exactly this
+reason. They are migration checks (one head, applies cleanly, no model/schema
+drift) and none of that is a property of the ambient database. Pointing them
+at `DB_NAME` made "CI happens to migrate the database the tests inherit" an
+undeclared part of the environment — and since the nightly had no such step,
+five `/status` tests passed on every PR and failed every night for eleven
+nights, attached to no PR and explained by nothing in the file. Both workflows
+now present the same empty database, so that class of coupling fails the pull
+request that introduces it.
 
 Each CI job owns an isolated Postgres service and MinIO service. Its
 `DB_TEST_NAME` and `S3_BUCKET` include both the GitHub run id/attempt and the
@@ -584,9 +647,13 @@ container. `DB_TEST_NAME` is still set per job; `_resolve_test_db_name` appends
 the worker id to it, so each worker gets its own database instead of four
 workers racing on one recreated one.
 
-The full Tier 4 suite is intentionally not part of this v0 PR workflow.
-Keep running `make test-full` locally before push/merge until a
-separate full-suite or nightly CI gate is added.
+Since the three gates partition `backend/tests/`, a PR now runs every test
+[`backend-nightly.yml`](../../.github/workflows/backend-nightly.yml) runs.
+What the nightly still adds is the **order**: the gates pin a seed so a red
+gate means a regression rather than an unlucky draw, and the nightly draws
+`TCKDB_TEST_SEED=random` and echoes it, so an order-dependent defect surfaces
+somewhere. `make test-full` locally remains the cheapest way to get both at
+once before pushing.
 
 ## OpenAPI golden snapshot
 
