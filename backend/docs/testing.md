@@ -23,14 +23,24 @@ Tier 0 and Tier 1 use the same script with different arguments — the
 distinction is intent (single failure debug vs. validating a focused
 change), not a different command.
 
-The two Tier 3 gates and `test-scientific.sh` are a **partition** of
-`backend/tests/`: every test file is selected by exactly one of them, and
-`test-rest.sh` is defined as the complement of the other two rather than
-as a list of directories, so a directory added to `tests/` joins a gate
-the day it is created. That is enforced, not asserted — see
+Together the two Tier 3 gates and `test-scientific.sh` **cover
+`backend/tests/` completely**, and `test-rest.sh` is defined as the
+complement of the other two rather than as a list of directories, so a
+directory added to `tests/` joins a gate the day it is created.
+
+Covering is the guarantee; being disjoint is not. Run bare,
+`test-api.sh` selects all of `tests/api/` including
+`tests/api/scientific/`, which `test-scientific.sh` also selects — CI
+passes `--ignore=tests/api/scientific/` so each test runs once per PR,
+but locally the two overlap. Nothing depends on the overlap being
+absent; a test running twice costs seconds, a test running zero times
+cost this repo several days.
+
+The covering half is enforced, not asserted — see
 [`tests/scripts/test_gate_coverage.py`](../tests/scripts/test_gate_coverage.py),
-which reads the scripts and `backend-ci.yml` and fails if any test file
-is run by no required CI job.
+which reads the scripts and `backend-ci.yml`, resolves what each job
+selects and ignores, and fails if any test file is run by no required
+CI job.
 
 It is enforced because it silently stopped being true. Until August 2026
 the two required PR jobs ran `tests/api/` and `tests/api/scientific/` +
@@ -568,8 +578,8 @@ fixture moved up.
   runs Tier 3 with `tests/api/scientific/` ignored; the scientific job runs
   the scientific API directory plus `tests/services/scientific_read/`; and
   the complement job runs everything neither of those selects. Together they
-  cover every test file in `backend/tests/` exactly once, which is checked
-  rather than claimed
+  cover every test file in `backend/tests/`, which is checked rather than
+  claimed
   ([`tests/scripts/test_gate_coverage.py`](../tests/scripts/test_gate_coverage.py)).
 
 ## CI gate
