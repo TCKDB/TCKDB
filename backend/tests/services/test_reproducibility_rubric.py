@@ -525,7 +525,8 @@ def test_rubric_detection_is_recorded_as_a_custody_event(db_session, _api_test_u
     )
     assert events[0].artifact_id == artifact.id
     warning = next(w for w in result.warnings if w["code"] == "artifact_integrity_failed")
-    assert warning["evidence"]["integrity_event_id"] == events[0].id
+    assert warning["evidence"]["integrity_event_ref"] == events[0].public_ref
+    assert warning["evidence"]["integrity_event_ref"].startswith("aie_")
     assert warning["evidence"]["observed_by_this_evaluation"] is True
 
 
@@ -543,7 +544,7 @@ def test_rubric_cites_a_break_recorded_by_another_path(db_session, _api_test_use
         db_session, complete=True, created_by=_api_test_user, objects=objects
     )
     artifact = _input_artifact(calculation)
-    event_id = record_integrity_observation(
+    event_ref = record_integrity_observation(
         sha256=artifact.sha256,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -559,7 +560,7 @@ def test_rubric_cites_a_break_recorded_by_another_path(db_session, _api_test_use
     snapshot = _artifact_snapshot(result, artifact)
     assert snapshot["verification"] == "integrity_failed"
     warning = next(w for w in result.warnings if w["code"] == "artifact_integrity_failed")
-    assert warning["evidence"]["integrity_event_id"] == event_id
+    assert warning["evidence"]["integrity_event_ref"] == event_ref
     assert warning["evidence"]["detected_during"] == "download"
     assert warning["evidence"]["observed_by_this_evaluation"] is False
     # The two tiers now agree: evidence TCKDB cannot produce is not rerunnable.

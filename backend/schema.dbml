@@ -849,9 +849,11 @@ Table artifact_integrity_event {
   detail text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
+  public_ref string [not null]
 
   indexes {
     artifact_id [name: 'ix_artifact_integrity_event_artifact_id']
+    public_ref [unique, name: 'ix_artifact_integrity_event_public_ref']
     sha256 [name: 'ix_artifact_integrity_event_sha256']
     (sha256, created_at) [name: 'ix_artifact_integrity_event_sha256_created_at']
   }

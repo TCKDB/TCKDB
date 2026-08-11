@@ -386,7 +386,7 @@ def test_record_survives_the_transaction_that_discovered_it(
     would be the one thing that is discarded.
     """
     sha = hashlib.sha256(b"durability").hexdigest()
-    event_id = record_integrity_observation(
+    event_ref = record_integrity_observation(
         sha256=sha,
         finding=ArtifactIntegrityFinding.digest_mismatch,
         detected_during=ArtifactIntegrityDetectionContext.download,
@@ -394,17 +394,20 @@ def test_record_survives_the_transaction_that_discovered_it(
         session_factory=lambda: Session(bind=db_engine),
         storage_client=_HeadClient(),
     )
-    assert event_id is not None
+    assert event_ref is not None
+    lookup = select(ArtifactIntegrityEvent).where(
+        ArtifactIntegrityEvent.public_ref == event_ref
+    )
     try:
         # A brand-new connection: nothing of the test's transaction is
         # visible here, so seeing the row proves it really committed.
         with Session(db_engine) as fresh:
-            event = fresh.get(ArtifactIntegrityEvent, event_id)
+            event = fresh.scalars(lookup).first()
             assert event is not None
             assert event.sha256 == sha
     finally:
         with Session(db_engine) as cleanup:
-            row = cleanup.get(ArtifactIntegrityEvent, event_id)
+            row = cleanup.scalars(lookup).first()
             if row is not None:
                 cleanup.delete(row)
                 cleanup.commit()

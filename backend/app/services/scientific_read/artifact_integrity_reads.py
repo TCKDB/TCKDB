@@ -45,6 +45,7 @@ _SORT = "last_observed_at:desc"
 
 def _observation(row: ArtifactIntegrityEvent) -> ArtifactIntegrityObservation:
     return ArtifactIntegrityObservation(
+        integrity_event_ref=row.public_ref,
         finding=row.finding,
         detected_during=row.detected_during,
         detected_at=row.created_at,

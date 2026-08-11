@@ -185,7 +185,7 @@ class _Custody:
 
     def record_break(
         self, error: ArtifactIntegrityError, artifact: CalculationArtifact
-    ) -> int | None:
+    ) -> str | None:
         return record_from_error(
             error,
             detected_during=(
@@ -198,7 +198,7 @@ class _Custody:
 
     def record_repair(
         self, artifact: CalculationArtifact, *, observed_bytes: int
-    ) -> int | None:
+    ) -> str | None:
         return record_integrity_verified(
             sha256=artifact.sha256,
             detected_during=(
@@ -451,10 +451,19 @@ def _cited_break(
 
     The rubric is not entitled to a private opinion about custody, so
     when it has not read the bytes itself it repeats the custody record's
-    verdict and says which row it is repeating. ``integrity_event_id``
-    is the citation: a reader of the snapshot can go to the observation,
-    see expected versus observed and what discovered it, instead of
-    finding a second unexplained assertion of the same fact.
+    verdict and says which observation it is repeating.
+    ``integrity_event_ref`` is the citation: a reader of the snapshot can
+    go to ``GET /scientific/artifacts/{sha256}/integrity``, match the ref
+    exactly, and see expected versus observed and what discovered it,
+    instead of finding a second unexplained assertion of the same fact.
+
+    A ref rather than the row id it used to be. The snapshot is served
+    verbatim from ``GET /curation/reproducibility-assessments/...``, and
+    a row id there is both a thing this repo forbids on a user-facing
+    surface and, worse, unresolvable: the read surface that would have to
+    answer the lookup strips ``*_id`` keys by policy, so the citation
+    named something the reader was structurally unable to look up and a
+    curator was left matching on timestamps.
     """
     snapshot["verification"] = ArtifactVerificationStatus.integrity_failed.value
     return snapshot, ReproducibilityWarning(
@@ -462,7 +471,7 @@ def _cited_break(
         evidence={
             "artifact_id": artifact.id,
             "sha256": artifact.sha256,
-            "integrity_event_id": event.id,
+            "integrity_event_ref": event.public_ref,
             "finding": event.finding.value,
             "detected_during": event.detected_during.value,
             "observed_by_this_evaluation": False,
@@ -518,14 +527,14 @@ def _verify_artifact(
         # Detected here, owned there. The row is written in its own
         # transaction, so it outlives this evaluation whether or not the
         # assessment it feeds is ever committed.
-        event_id = custody.record_break(exc, artifact)
+        event_ref = custody.record_break(exc, artifact)
         snapshot["verification"] = ArtifactVerificationStatus.integrity_failed.value
         return snapshot, ReproducibilityWarning(
             code="artifact_integrity_failed",
             evidence={
                 "artifact_id": artifact.id,
                 "sha256": artifact.sha256,
-                "integrity_event_id": event_id,
+                "integrity_event_ref": event_ref,
                 "finding": exc.finding.value,
                 "detected_during": (
                     ArtifactIntegrityDetectionContext.reproducibility_verification.value

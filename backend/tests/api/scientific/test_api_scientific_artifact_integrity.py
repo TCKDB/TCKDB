@@ -357,3 +357,78 @@ def test_client_sort_is_rejected_like_every_other_scientific_read(
 
     assert response.status_code == 422
     assert "client_sort_not_supported" in response.text
+
+
+# ---------------------------------------------------------------------------
+# The citation resolves
+# ---------------------------------------------------------------------------
+
+
+def test_a_cited_observation_is_identifiable_in_the_history(
+    client, db_session, login_as, _api_curator_user
+):
+    """The whole point of the ref: an exact match, not a timestamp guess.
+
+    The reproducibility rubric copies this record's verdict and names the
+    observation it copied. That citation was the row's primary key, which
+    never appeared on this surface -- ``apply_internal_ids_visibility``
+    strips every ``*_id`` key and the hosted startup check refuses to
+    boot with the opt-in enabled -- so a curator holding one had no way
+    to find the row except by matching timestamps against a page of
+    near-identical observations.
+    """
+    _calculation, artifact, sha = _broken_artifact(db_session, "cited-observation")
+    first = _record(
+        db_session,
+        sha,
+        ArtifactIntegrityFinding.digest_mismatch,
+        ArtifactIntegrityDetectionContext.download,
+        artifact_id=artifact.id,
+    )
+    second = _record(
+        db_session,
+        sha,
+        ArtifactIntegrityFinding.digest_mismatch,
+        ArtifactIntegrityDetectionContext.verification_sweep,
+        artifact_id=artifact.id,
+    )
+    login_as(_api_curator_user)
+
+    body = client.get(f"/api/v1/scientific/artifacts/{sha}/integrity").json()
+
+    refs = [row["integrity_event_ref"] for row in body["observations"]]
+    assert refs == [first, second]
+    assert all(ref.startswith("aie_") for ref in refs)
+    # Two observations of the same digest, same finding, recorded back to
+    # back: the refs are what tells them apart, and nothing else on the
+    # row does.
+    assert first != second
+    assert body["summary"]["latest"]["integrity_event_ref"] == second
+
+
+def test_the_custody_surface_still_hands_out_no_row_ids(
+    client, db_session, login_as, _api_curator_user
+):
+    """A ref, and not the id under a new name.
+
+    The refusal this surface inherits is not about the *word* ``id`` but
+    about handing a client an implementation detail of one database
+    instance. A test that only checked for a ref would pass if the ref
+    were minted and the id kept beside it.
+    """
+    _calculation, artifact, sha = _broken_artifact(db_session, "no-ids-here")
+    _record(
+        db_session,
+        sha,
+        ArtifactIntegrityFinding.digest_mismatch,
+        ArtifactIntegrityDetectionContext.download,
+        artifact_id=artifact.id,
+    )
+    login_as(_api_curator_user)
+
+    observation = client.get(
+        f"/api/v1/scientific/artifacts/{sha}/integrity"
+    ).json()["observations"][0]
+
+    leaked = [key for key in observation if key == "id" or key.endswith("_id")]
+    assert leaked == []

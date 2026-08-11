@@ -1185,7 +1185,7 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     )
 
 
-class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
+class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     """One observation about TCKDB's custody of a stored artifact.
 
     Append-only. A row here says: *at this moment, the bytes behind this
@@ -1245,6 +1245,18 @@ class ArtifactIntegrityEvent(Base, TimestampMixin, CreatedByMixin):
     reads. Detection therefore has a read-time consequence for *every*
     reader of the owning calculation, not only for whoever requested the
     download. See ``docs/adr/0014-custody-of-stored-evidence.md``.
+
+    Citable
+    -------
+    ``public_ref`` (``aie_``) exists because the consequence is cited.
+    The reproducibility rubric copies this record's verdict for artifacts
+    it does not read itself and names the observation it copied, so a
+    curator holding that citation has to be able to resolve it -- and the
+    citation was a row id, which is not TCKDB's to hand out and which the
+    read surface strips by policy. Opaque rather than content-derived: an
+    observation is an event, and two identical-looking observations of
+    the same object months apart are the whole point of an append-only
+    log.
     """
 
     __tablename__ = "artifact_integrity_event"

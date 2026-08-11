@@ -101,7 +101,7 @@ def record_integrity_observation(
     session_factory: Optional[Callable[[], Session]] = None,
     storage_client=None,
     bucket: str | None = None,
-) -> Optional[int]:
+) -> Optional[str]:
     """Write one ``artifact_integrity_event`` in its own transaction.
 
     Records both breaks and the ``verified`` observation that clears
@@ -109,10 +109,16 @@ def record_integrity_observation(
     failures, which is what lets a repaired object be recorded without
     editing or deleting the break.
 
-    Returns the event id, or ``None`` if recording itself failed — in
-    which case the failure is logged and swallowed, because the caller's
-    job is to report the integrity break to its own caller and this must
-    not get in the way of that.
+    Returns the observation's ``public_ref``, or ``None`` if recording
+    itself failed — in which case the failure is logged and swallowed,
+    because the caller's job is to report the integrity break to its own
+    caller and this must not get in the way of that.
+
+    The ref and not the row id, because the one caller that uses this
+    return value puts it in a snapshot a curator reads. A row id is an
+    implementation detail of one database instance and is stripped from
+    every scientific read response by policy, so a citation shaped like
+    one named something the reader could not resolve.
 
     ``artifact_id`` and ``artifact_recorded_at`` are optional: the
     ``store_dedup_verification`` context detects a break on an object
@@ -160,18 +166,18 @@ def record_integrity_observation(
                 )
                 session.add(event)
                 session.flush()
-                event_id = event.id
+                event_ref = event.public_ref
             log = logger.error if finding.is_break else logger.warning
             log(
                 "artifact integrity observation recorded: sha=%s finding=%s "
-                "context=%s observed_sha=%s event_id=%s",
+                "context=%s observed_sha=%s event_ref=%s",
                 sha256,
                 finding.value,
                 detected_during.value,
                 observed_sha256,
-                event_id,
+                event_ref,
             )
-            return event_id
+            return event_ref
     except Exception:  # pragma: no cover - must never mask the real failure
         logger.exception(
             "FAILED to record an artifact integrity observation durably "
@@ -193,7 +199,7 @@ def record_from_error(
     session_factory: Optional[Callable[[], Session]] = None,
     storage_client=None,
     bucket: str | None = None,
-) -> Optional[int]:
+) -> Optional[str]:
     """Record the break described by an :class:`ArtifactIntegrityError`.
 
     The convenience form for the common case: a caller that already has
@@ -233,7 +239,7 @@ def record_integrity_verified(
     session_factory: Optional[Callable[[], Session]] = None,
     storage_client=None,
     bucket: str | None = None,
-) -> Optional[int]:
+) -> Optional[str]:
     """Record that a previously-broken object now reads back correctly.
 
     This is how a hard fail is cleared, and it is cleared by evidence:
