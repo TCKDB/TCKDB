@@ -356,12 +356,17 @@ def test_an_unreadable_run_history_is_loud_and_unpinged(fake_host, run_ci_watchd
     Reported as "has never run" that would be true-sounding, wrong, and
     point at the wrong fix -- so the API error is handled before the run
     list is believed, and no heartbeat is forged for a verdict never reached.
+
+    Exit 2, not 1: the only watched workflow was never looked at, which is
+    what this script's own header has always said 2 means and what
+    verify_artifact_integrity.py means by it. Nothing here is evidence that
+    a workflow is red.
     """
     fake_host.set_json(RUNS_PATH, {"message": "Not Found"}, code=404)
     proc = run_ci_watchdog(
         env_overrides={"TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman"}
     )
-    assert proc.returncode == 1
+    assert proc.returncode == 2
     assert pushes(fake_host) == []
     assert fake_host.paths("/deadman") == []
     assert "could not read run history" in proc.stderr
@@ -379,7 +384,7 @@ def test_an_unparseable_run_history_is_not_read_as_green(fake_host, run_ci_watch
     proc = run_ci_watchdog(
         env_overrides={"TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman"}
     )
-    assert proc.returncode == 1
+    assert proc.returncode == 2, "not checked, rather than checked and found red"
     assert pushes(fake_host) == []
     assert fake_host.paths("/deadman") == []
     assert "refusing to read it as green" in proc.stderr
@@ -406,6 +411,138 @@ def test_a_missing_deadman_is_named_as_a_gap(fake_host, run_ci_watchdog):
     serve_runs(fake_host, [run("success", hours_ago=2, run_id=200)])
     proc = run_ci_watchdog()
     assert "TCKDB_DEADMAN_URL is unset" in proc.stderr
+
+
+# ---------------------------------------------------------------------------
+# A watchdog that watched nothing is not a watchdog that found nothing
+# ---------------------------------------------------------------------------
+
+
+UPTIME_RUNS = "/gh/repos/TCKDB/TCKDB/actions/workflows/uptime-check.yml/runs"
+
+
+def test_a_watch_list_that_parses_to_nothing_is_not_a_pass(fake_host, run_ci_watchdog):
+    """The defect: every entry skipped, and the run still called clean.
+
+    ``backend-nightly.yml`` without ``:hours`` is malformed, so the loop
+    body never ran; nothing set the "no verdict" flag, so the dead man's
+    ping went out anyway and the external monitor vouched for a checker
+    that had checked nothing. A watchdog forging its own heartbeat is
+    worse than no watchdog, because it is believed.
+    """
+    serve_runs(fake_host, red_history(2))
+    proc = run_ci_watchdog(
+        env_overrides={
+            "TCKDB_WATCHED_WORKFLOWS": "backend-nightly.yml uptime-check.yml",
+            "TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman",
+        }
+    )
+    assert proc.returncode == 2, "nothing was checked; that is not a pass"
+    assert fake_host.paths("/deadman") == [], (
+        "the heartbeat asserts that a check happened, and none did"
+    )
+    assert pushes(fake_host) == []
+    assert "verdicts=0" in proc.stdout, "the count is reported, not implied"
+    assert "NOT CHECKED" in proc.stderr
+
+
+def test_a_watch_list_of_pure_whitespace_watches_nothing_and_says_so(
+    fake_host, run_ci_watchdog
+):
+    """The zero-iteration case in its purest form.
+
+    A list of one space is non-empty, so it does not reach the built-in
+    default, and it splits into no entries at all: the loop body never
+    runs, nothing is malformed, nothing errors, and every counter the
+    script keeps stays at its starting value. This is the case where only
+    the verdict count itself can tell the difference between a clean run
+    and a run that never began.
+    """
+    serve_runs(fake_host, red_history(2))
+    proc = run_ci_watchdog(
+        env_overrides={
+            "TCKDB_WATCHED_WORKFLOWS": "   ",
+            "TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman",
+        }
+    )
+    assert proc.returncode == 2
+    assert fake_host.paths("/deadman") == []
+    assert "watched=0 verdicts=0 unchecked=0" in proc.stdout
+    assert "NOT CHECKED" in proc.stderr
+
+
+def test_an_empty_watch_list_falls_back_to_the_built_in_default(
+    fake_host, run_ci_watchdog
+):
+    """An unset or empty list is not an empty list; it is the default one.
+
+    Worth pinning, because the obvious reading of the zero-verdict bug is
+    "empty input means watch nothing" -- and fixing that reading instead
+    of the real one would leave the malformed path exactly as it was.
+    """
+    serve_runs(fake_host, [run("success", hours_ago=2, run_id=200)])
+    fake_host.set_json(UPTIME_RUNS, {"workflow_runs": [run("success", hours_ago=0.2, run_id=300)]})
+
+    proc = run_ci_watchdog(
+        env_overrides={
+            "TCKDB_WATCHED_WORKFLOWS": "",
+            "TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman",
+        }
+    )
+    assert proc.returncode == 0
+    assert "verdicts=2" in proc.stdout, "both default workflows were watched"
+    assert len(fake_host.paths("/deadman")) == 1
+    assert (run_ci_watchdog.state_dir / "uptime-check.yml").read_text() == "green"
+
+
+def test_one_unwatchable_entry_does_not_pass_on_the_others(fake_host, run_ci_watchdog):
+    """A workflow the operator asked for and did not get is a fault.
+
+    A green nightly says nothing about the uptime check, so a run that
+    silently dropped the second entry must not exit 0 on the strength of
+    the first. It exits 2 -- part of the scope was not checked -- which is
+    the same sentence verify_artifact_integrity.py's exit 2 says.
+    """
+    serve_runs(fake_host, [run("success", hours_ago=2, run_id=200)])
+    proc = run_ci_watchdog(
+        env_overrides={
+            "TCKDB_WATCHED_WORKFLOWS": f"{WORKFLOW}:30 uptime-check.yml",
+            "TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman",
+        }
+    )
+    assert proc.returncode == 2
+    assert "watched=2 verdicts=1 unchecked=1" in proc.stdout
+    assert fake_host.paths("/deadman") == [], (
+        "half a check is not the completed run the heartbeat claims"
+    )
+
+
+def test_a_red_workflow_outranks_an_unchecked_one(fake_host, run_ci_watchdog):
+    """1 before 2 when both are true, as in verify_artifact_integrity.py.
+
+    "Something is red" is the more actionable of the two findings, and the
+    unchecked entry is still named on stderr for whoever triages it.
+    """
+    serve_runs(fake_host, red_history(2))
+    serve_jobs(fake_host)
+    fake_host.set_json(UPTIME_RUNS, {"message": "Not Found"}, code=404)
+
+    proc = run_ci_watchdog(
+        env_overrides={"TCKDB_WATCHED_WORKFLOWS": f"{WORKFLOW}:30 uptime-check.yml:6"}
+    )
+    assert proc.returncode == 1
+    assert "watched=2 verdicts=1 unchecked=1" in proc.stdout
+    assert "could not read run history for uptime-check.yml" in proc.stderr
+    assert len(pushes(fake_host)) == 1, "the workflow it could see is still reported"
+
+
+def test_the_verdict_count_is_reported_on_a_clean_run(fake_host, run_ci_watchdog):
+    """Reported unconditionally, so a pass carries its own evidence."""
+    serve_runs(fake_host, [run("success", hours_ago=2, run_id=200)])
+    proc = run_ci_watchdog()
+    assert proc.returncode == 0
+    assert "watched=1 verdicts=1 unchecked=0" in proc.stdout
+    assert "verdicts=1/1" in proc.stdout, "and again on the closing line"
 
 
 # ---------------------------------------------------------------------------

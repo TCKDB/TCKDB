@@ -62,13 +62,42 @@
 #   TCKDB_DEADMAN_URL            optional, strongly recommended -- external URL
 #                                pinged after every completed run
 #
+# A RUN THAT CHECKED NOTHING IS NOT A PASS
+#   The count of verdicts reached is reported unconditionally and before the
+#   result, because it is the number that says whether the run is evidence of
+#   anything at all. It exists because it was once possible for every entry in
+#   TCKDB_WATCHED_WORKFLOWS to be rejected as malformed -- each one warned
+#   about on stderr, none of them watched -- and for the script to then exit 0
+#   and send the dead man's ping, so the external monitor vouched for a checker
+#   that had checked nothing. Zero verdicts is now the loudest state this
+#   script has: no ping, and exit 2.
+#
+#   There is deliberately no --allow-empty equivalent, unlike
+#   verify_artifact_integrity.py, which has one because a fresh deployment can
+#   legitimately hold nothing to verify. Watching nothing is never legitimate
+#   here: an unset or empty TCKDB_WATCHED_WORKFLOWS falls back to the built-in
+#   list, so the only way to reach zero is to have written something the script
+#   could not read, and an opt-out for that is an opt-out from the whole point.
+#
 # EXIT CODES
 #   0  every watched workflow is green and running
 #   1  something is red, silent, or a push could not be delivered
-#   2  the watchdog could not run at all (no topic, no jq, API unreachable).
-#      Nothing is pinged in this case: a dead watchdog's only honest signal is
-#      its silence.
+#   2  something in scope was NOT CHECKED: no topic, no jq, a malformed entry
+#      in TCKDB_WATCHED_WORKFLOWS, an unreadable API, an unparseable run list
+#      -- or no verdict at all.
+#
+#   The split is the one backend/scripts/ops/verify_artifact_integrity.py uses,
+#   on purpose, so that two scripts in one directory do not need two schemes:
+#   1 means something is wrong, 2 means we did not find out, and a runbook that
+#   gates on "not zero" catches both. 1 wins when both are true, because a red
+#   nightly is the more actionable of the two. Nothing is pinged when no
+#   verdict was reached at all: a dead watchdog's only honest signal is its
+#   silence.
 set -uo pipefail
+
+EXIT_OK=0
+EXIT_ALERT=1
+EXIT_NOT_CHECKED=2
 
 GH_API_BASE="${TCKDB_GH_API_BASE:-https://api.github.com}"
 REPO="${TCKDB_WATCH_REPO:-${GITHUB_REPOSITORY:-TCKDB/TCKDB}}"
@@ -83,7 +112,7 @@ TOKEN="${GH_TOKEN:-${GITHUB_TOKEN:-}}"
 
 if [[ -z "${TCKDB_NTFY_TOPIC:-}" ]]; then
     echo "TCKDB_NTFY_TOPIC is not set; refusing to run." >&2
-    exit 2
+    exit "$EXIT_NOT_CHECKED"
 fi
 
 # No grep/sed fallback here, unlike the Pi-side checker. That script parses one
@@ -94,7 +123,7 @@ fi
 # wrong is a green one.
 if ! command -v jq >/dev/null 2>&1; then
     echo "jq is required by the CI watchdog; refusing to guess at the run list." >&2
-    exit 2
+    exit "$EXIT_NOT_CHECKED"
 fi
 
 mkdir -p "$STATE_DIR"
@@ -152,15 +181,34 @@ epoch_of() {
 }
 
 now_epoch="$(date -u +%s)"
-overall_rc=0
+alert_rc=0
 watchdog_usable=1
 notified_any=0
 
-for spec in $WATCHED; do
+# The three numbers the result is computed from, rather than a single rc that
+# cannot tell "nothing was wrong" from "nothing was looked at".
+#   watched_count   entries in TCKDB_WATCHED_WORKFLOWS
+#   verdicts_count  entries that produced an actual verdict this run
+#   unchecked_count entries that did not, for any reason
+# shellcheck disable=SC2086
+set -- $WATCHED
+watched_count=$#
+verdicts_count=0
+unchecked_count=0
+
+for spec in "$@"; do
     workflow="${spec%%:*}"
     max_age_hours="${spec##*:}"
     if [[ "$workflow" == "$spec" || -z "$max_age_hours" ]]; then
+        # An entry that cannot be parsed is a workflow the operator asked for
+        # and did not get. Warning about it and carrying on was how every
+        # entry could be dropped and the run still called clean, so it now
+        # counts as unchecked and takes the heartbeat with it -- the config is
+        # wrong until someone fixes it, and nothing here can fix it.
         echo "warning: ignoring malformed TCKDB_WATCHED_WORKFLOWS entry '${spec}' (want file.yml:hours)" >&2
+        annotate error "CI watchdog cannot parse the watch-list entry '${spec}'; that workflow is NOT being watched"
+        unchecked_count=$((unchecked_count + 1))
+        watchdog_usable=0
         continue
     fi
 
@@ -179,7 +227,7 @@ for spec in $WATCHED; do
         echo "error: could not read run history for ${workflow} from ${REPO}" >&2
         annotate error "CI watchdog could not read run history for ${workflow}"
         watchdog_usable=0
-        overall_rc=1
+        unchecked_count=$((unchecked_count + 1))
         continue
     fi
 
@@ -221,7 +269,7 @@ for spec in $WATCHED; do
         echo "error: could not parse the run history for ${workflow}; refusing to read it as green" >&2
         annotate error "CI watchdog could not parse the run history for ${workflow}"
         watchdog_usable=0
-        overall_rc=1
+        unchecked_count=$((unchecked_count + 1))
         continue
     fi
     eval "$parsed"
@@ -317,6 +365,12 @@ for spec in $WATCHED; do
             "${latest_url:-https://github.com/${REPO}/actions/workflows/${workflow}}")"
     fi
 
+    # A verdict, whatever it says. Counted here rather than at the top of the
+    # loop because reaching this line is the only thing that makes the run
+    # evidence of anything: every `continue` above got here without looking at
+    # a workflow, and a run of nothing but those must not be a pass.
+    verdicts_count=$((verdicts_count + 1))
+
     # ---------------------------------------------------------------
     # Edge trigger
     # ---------------------------------------------------------------
@@ -324,7 +378,7 @@ for spec in $WATCHED; do
     previous="$(cat "$state_file" 2>/dev/null || echo "unknown")"
 
     summary_line "${workflow}: ${state_key} (was ${previous})"
-    [[ "$state_key" == "green" ]] || overall_rc=1
+    [[ "$state_key" == "green" ]] || alert_rc=1
     if [[ "$state_key" != "green" ]]; then
         annotate error "${title}"
     fi
@@ -349,9 +403,36 @@ for spec in $WATCHED; do
         # the same edge and tries again.
         echo "warning: failed to publish ${workflow} alert to ntfy; state not advanced, will retry" >&2
         annotate error "CI watchdog could not deliver the ${workflow} alert to ntfy"
-        overall_rc=1
+        alert_rc=1
     fi
 done
+
+# THE COUNT, FIRST AND UNCONDITIONALLY, before any result line and before the
+# heartbeat. Same convention as verify_artifact_integrity.py's `verified=...`:
+# the reader should not have to infer from an absence of complaints that
+# anything was looked at.
+summary_line "watched=${watched_count} verdicts=${verdicts_count} unchecked=${unchecked_count}"
+
+if [[ "$verdicts_count" -eq 0 ]]; then
+    # Not a pass, and not a red workflow either: no workflow was looked at.
+    # Setting watchdog_usable here is what suppresses the dead man's ping --
+    # the existing, documented signal for "this run reached no verdict" --
+    # so an external monitor sees the silence instead of a forged heartbeat.
+    watchdog_usable=0
+    echo "error: NOT CHECKED. No watched workflow produced a verdict, so this run says nothing about CI. The watch list was '${WATCHED}' (entries must read file.yml:hours); the errors above say what happened to each one." >&2
+    annotate error "CI watchdog reached no verdict at all: it watched nothing this run"
+fi
+
+# 1 before 2, as in verify_artifact_integrity.py: a red workflow is the more
+# actionable finding, and "we did not manage to look at the others" is still
+# true of the same run.
+if [[ "$alert_rc" -ne 0 ]]; then
+    overall_rc=$EXIT_ALERT
+elif [[ "$verdicts_count" -eq 0 || "$unchecked_count" -gt 0 ]]; then
+    overall_rc=$EXIT_NOT_CHECKED
+else
+    overall_rc=$EXIT_OK
+fi
 
 # THE DEAD MAN'S PING. Sent for every completed run whatever the verdict: it
 # asserts that THIS WATCHDOG RAN, which is a different claim from "CI is well".
@@ -359,9 +440,12 @@ done
 # heartbeat, and the external service would page "the watchdog is gone" while
 # the watchdog was busy saying exactly which workflow had failed.
 #
-# It is skipped when the watchdog could not reach the API at all, because that
-# is a watchdog without a verdict, and its silence is the only honest signal it
-# has left.
+# It is skipped whenever any watched entry failed to reach a verdict -- an
+# unreachable API, an unparseable run list, an entry this script could not
+# read -- and in particular when NONE of them did, because that is a watchdog
+# without a verdict, and its silence is the only honest signal it has left.
+# The ping asserts that a check happened; a run that checked nothing may not
+# make that claim.
 if [[ -n "$DEADMAN_URL" ]]; then
     if [[ "$watchdog_usable" -eq 1 ]]; then
         curl -sS --fail --max-time 20 -o /dev/null "$DEADMAN_URL" || \
@@ -378,5 +462,5 @@ else
     annotate warning "TCKDB_DEADMAN_URL is unset: nothing will notice if this watchdog stops running. See backend/docs/deployment/monitoring.md"
 fi
 
-echo "$(date -Is) watchdog rc=${overall_rc} notified=${notified_any}"
+echo "$(date -Is) watchdog verdicts=${verdicts_count}/${watched_count} rc=${overall_rc} notified=${notified_any}"
 exit "$overall_rc"
