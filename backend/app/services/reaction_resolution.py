@@ -717,6 +717,14 @@ def validate_ts_evidence_participant_composition(
     because the other participants' compositions are still perfectly
     well-defined. Absent geometry means nothing is compared.
 
+    A participant carrying an *empty* atom list is checked like any other, and
+    that is the point of checking here rather than trusting the wire boundary.
+    The payload says a participant is a free electron; this says what the
+    species it resolved to is actually made of. An electron compares empty
+    against empty and passes; anything else compares empty against its own
+    atoms and is refused, so an empty list cannot become a way to hide a
+    molecule from the partition.
+
     :param evidence: Producer-declared evidence records, already shape-validated
         by ``validate_ts_evidence_set``.
     :param reaction_entry_id: The reaction whose participants the mapping names.
@@ -854,7 +862,14 @@ CHECK_TS_IRC_MAPPING_ELEMENTS = ScientificCheck(
                 "``tckdb_schemas`` is chemistry-free — RDKit is not available "
                 "where ``validate_ts_evidence_set`` runs. That function keeps "
                 "the *shape* half of the rule: keys name every declared "
-                "participant, indices partition the TS atoms exactly once."
+                "participant, indices partition the TS atoms exactly once, and "
+                "a participant's list is empty exactly when the payload "
+                "declares that participant to have no atoms. The last of those "
+                "is the shape half of the same claim this check makes about "
+                "composition: an empty list is refused for a molecule at the "
+                "wire boundary from the declared ``molecule_kind``, and refused "
+                "again here against the resolved species, whose SMILES is what "
+                "actually settles how many atoms it has."
             ),
         ),
     ),
@@ -867,20 +882,11 @@ CHECK_TS_IRC_MAPPING_ELEMENTS = ScientificCheck(
         "whole record, because the others' compositions are still well-defined. "
         "Isotopologues are safe by construction: both sides are compared "
         "through ``resolve_element_symbol``, so a geometry written ``D`` counts "
-        "as the hydrogen its SMILES spells ``[2H]``."
-    ),
-    divergence=(
-        "A zero-atom participant cannot be expressed. "
-        "``TransitionStateValidationEvidenceIn`` refuses an empty atom list, "
-        "and ``validate_ts_evidence_set`` requires every declared participant "
-        "to be named, so a reaction releasing a free electron — "
-        "``MoleculeKind.electron``, newly reachable — has no way to write "
-        "``product:2: []``. Before this check such a reaction could deposit a "
-        "*wrong* mapping that stole a real atom for the electron; it now "
-        "correctly cannot, but it also cannot deposit a right one, and must "
-        "omit the mappings instead. Widening the wire schema to accept an empty "
-        "list for a participant with no atoms is the fix, and is a wire-package "
-        "change with its own version bump."
+        "as the hydrogen its SMILES spells ``[2H]``. A free electron needs no "
+        "hatch either: it is written as an empty atom list, which this check "
+        "compares against the empty composition ``MoleculeKind.electron`` "
+        "actually has, so a reaction that releases one is held to the same "
+        "standard as every other rather than having to omit its mappings."
     ),
 )
 

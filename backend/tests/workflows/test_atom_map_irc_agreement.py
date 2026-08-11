@@ -32,15 +32,24 @@ from contextlib import contextmanager
 from typing import Iterator
 
 import pytest
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.fragments.reaction_atom_map import (
+    W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
+    W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+    W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+    ReactionAtomMapParticipantIn,
+)
 
 from app.db.models.app_user import AppUser
 from app.db.models.reaction_atom_map import ReactionAtomMap
+from app.db.models.transition_state import TransitionStateValidationEvidence
 from app.schemas.workflows.computed_reaction_upload import (
     ComputedReactionUploadRequest,
 )
 from app.services.reaction_atom_map import (
+    W_ATOM_MAP_ATOMS_INCOMPLETE,
     W_ATOM_MAP_CONTRADICTS_IRC_MAPPING,
     W_ATOM_MAP_PARTICIPANTS_INCOMPLETE,
 )
@@ -757,22 +766,16 @@ def _charged_species(
     return species
 
 
-def test_a_reaction_releasing_an_electron_deposits_its_map_unopposed(
-    db_engine,
-) -> None:
-    """``OH- + H -> H2O + e-``. An absence that must not read as disagreement.
+def _electron_payload() -> dict:
+    """``OH- + H -> H2O + e-`` (associative detachment) with its saddle point.
 
-    A free electron is a participant with no atoms, and *neither* surface can
-    express one: ``TransitionStateValidationEvidenceIn`` refuses an empty atom
-    list and ``validate_ts_evidence_set`` requires a passing mapping to name
-    every declared participant, so the IRC mappings have to be omitted
-    altogether; ``atom_to_ts`` carries ``min_length=1``, so the atom map has to
-    skip that participant. The deposit therefore carries a map and no partition,
-    and must still be accepted — with the incompleteness warning the electron
-    already earns it, and nothing from this rule.
+    Three saddle-point atoms, four declared participants, one of which has no
+    atoms at all. The electron is what makes this reaction worth a fixture: it
+    is the only participant either surface can describe as being made of
+    nothing.
     """
 
-    payload = {
+    return {
         "species": [
             _charged_species("oh", "[OH-]", -1, 1, _XYZ_OH),
             _species("h", "[H]", 2, _XYZ_H),
@@ -821,31 +824,67 @@ def test_a_reaction_releasing_an_electron_deposits_its_map_unopposed(
             "label": "associative detachment TS",
         },
     }
+
+
+#: The map of the atom-bearing participants. Complete over every atom of every
+#: molecule, and silent about the electron.
+_MAP_ELECTRON_OMITTED = [
+    {
+        "side": "reactant",
+        "species_key": "oh",
+        "participant_index": 1,
+        "geometry_key": "oh-geom",
+        "atom_to_ts": {1: 1, 2: 2},
+    },
+    {
+        "side": "reactant",
+        "species_key": "h",
+        "participant_index": 2,
+        "geometry_key": "h-geom",
+        "atom_to_ts": {1: 3},
+    },
+    {
+        "side": "product",
+        "species_key": "h2o",
+        "participant_index": 1,
+        "geometry_key": "h2o-geom",
+        "atom_to_ts": {1: 1, 2: 2, 3: 3},
+    },
+]
+
+#: The electron, said rather than skipped: no geometry to count into and no
+#: atoms to count. Appending it is what makes the map complete over every
+#: declared participant.
+_MAPPED_ELECTRON = {
+    "side": "product",
+    "species_key": "electron",
+    "participant_index": 2,
+    "atom_to_ts": {},
+}
+
+_IRC_AD_REACTANTS = {"reactant:1": [1, 2], "reactant:2": [3]}
+#: The partition an associative detachment actually has: water is the whole
+#: saddle point and the electron is none of it.
+_IRC_AD_PRODUCTS = {"product:1": [1, 2, 3], "product:2": []}
+
+
+def test_a_reaction_releasing_an_electron_deposits_its_map_unopposed(
+    db_engine,
+) -> None:
+    """``OH- + H -> H2O + e-``. An absence that must not read as disagreement.
+
+    The map skips the electron and the IRC mappings are omitted altogether,
+    which a depositor is entitled to do on any reaction: the mappings are
+    optional on every path and a partial map is always accepted. The deposit
+    therefore carries a map and no partition, and must still be accepted —
+    with the incompleteness warning the skipped participant earns it, and
+    nothing from this rule.
+    """
+
+    payload = _electron_payload()
     _with_map(
         payload,
-        [
-            {
-                "side": "reactant",
-                "species_key": "oh",
-                "participant_index": 1,
-                "geometry_key": "oh-geom",
-                "atom_to_ts": {1: 1, 2: 2},
-            },
-            {
-                "side": "reactant",
-                "species_key": "h",
-                "participant_index": 2,
-                "geometry_key": "h-geom",
-                "atom_to_ts": {1: 3},
-            },
-            {
-                "side": "product",
-                "species_key": "h2o",
-                "participant_index": 1,
-                "geometry_key": "h2o-geom",
-                "atom_to_ts": {1: 1, 2: 2, 3: 3},
-            },
-        ],
+        [dict(participant) for participant in _MAP_ELECTRON_OMITTED],
     )
     _with_evidence(payload, reactants=None, products=None)
 
@@ -853,7 +892,7 @@ def test_a_reaction_releasing_an_electron_deposits_its_map_unopposed(
         result = _upload(session, payload)
         assert result["atom_map_id"] is not None
     assert W_ATOM_MAP_CONTRADICTS_IRC_MAPPING not in _codes(result)
-    # The electron is the participant the map could not cover.
+    # The electron is the participant the map does not cover.
     assert W_ATOM_MAP_PARTICIPANTS_INCOMPLETE in _codes(result)
 
 
@@ -868,3 +907,254 @@ def _irc_calculation_id(session: Session, result: dict) -> int:
             Calculation.type == CalculationType.irc,
         )
     )
+
+
+# ---------------------------------------------------------------------------
+# A participant with no atoms, said rather than skipped
+# ---------------------------------------------------------------------------
+#
+# A free electron is the one participant that is made of nothing, and until
+# both wire surfaces could say so it had to be left out: the IRC mappings were
+# omitted altogether and the atom map skipped the participant. That was
+# accepted, and it was quietly weaker than for every other reaction -- the
+# completeness rules on both surfaces are gated on every declared participant
+# being covered, so a reaction with an electron in it could never reach the
+# state where they engage.
+#
+# What must not follow from letting an empty list mean "no atoms" is that an
+# empty list can mean "I did not work this one out". That is the wrong-mapping
+# failure in reverse: the coverage rule still demands every saddle-point atom
+# be claimed by somebody, so a molecule declared empty has its atoms attributed
+# to some other participant. Both directions are therefore refused, on both
+# surfaces, from the participant's declared kind.
+
+
+#: The saddle point of ``_electron_payload`` with one hydrogen too many. The
+#: reaction it belongs to still balances -- three atoms on each side -- so a
+#: complete map of it has a saddle-point atom that comes from nothing and
+#: becomes nothing.
+_XYZ_TS_AD_SPARE = (
+    "4\nTS for OH- + H -> H2O + e-, with a spare atom\n"
+    "O  0.000  0.000  0.000\n"
+    "H  0.960  0.000  0.000\n"
+    "H -0.400  1.400  0.000\n"
+    "H  0.000  0.000  3.000"
+)
+
+
+def _refusal_codes(error: ValidationError) -> set[str | None]:
+    """The codes a wire refusal carries, read where the contract puts them.
+
+    Not out of the message: ``CodedValidationError`` deliberately keeps the
+    code off the sentence so that improving the prose cannot change the
+    contract. Pydantic preserves the exception object itself, which is where
+    the backend's ``validation_detail_code`` reads it from too.
+    """
+
+    return {
+        getattr(detail.get("ctx", {}).get("error"), "code", None)
+        for detail in error.errors()
+    }
+
+
+def _electron_map(*, include_electron: bool) -> list[dict]:
+    participants = [dict(participant) for participant in _MAP_ELECTRON_OMITTED]
+    if include_electron:
+        participants.append(dict(_MAPPED_ELECTRON))
+    return participants
+
+
+def test_a_reaction_releasing_an_electron_can_partition_its_saddle_point(
+    db_engine,
+) -> None:
+    """The hole, closed: ``product:2: []`` on one surface, no atoms on the other.
+
+    Both surfaces now describe all four declared participants of
+    ``OH- + H -> H2O + e-``, and describing the electron costs nothing but
+    saying it: no geometry, no indices. The deposit is accepted, the two
+    partitions agree, and neither incompleteness warning fires, because
+    nothing is in fact incomplete.
+    """
+
+    payload = _with_evidence(
+        _with_map(_electron_payload(), _electron_map(include_electron=True)),
+        reactants=_IRC_AD_REACTANTS,
+        products=_IRC_AD_PRODUCTS,
+    )
+
+    with _isolated_session(db_engine) as session:
+        result = _upload(session, payload)
+        assert result["atom_map_id"] is not None
+        stored = session.scalar(
+            select(TransitionStateValidationEvidence).where(
+                TransitionStateValidationEvidence.transition_state_entry_id
+                == result["transition_state_entry_id"]
+            )
+        )
+        # The claim survives the round trip as a claim: an empty list, not a
+        # missing key and not a null mapping.
+        assert stored.product_participant_mapping == {
+            "product:1": [1, 2, 3],
+            "product:2": [],
+        }
+
+    codes = _codes(result)
+    assert W_ATOM_MAP_CONTRADICTS_IRC_MAPPING not in codes
+    assert W_ATOM_MAP_PARTICIPANTS_INCOMPLETE not in codes
+    assert W_ATOM_MAP_ATOMS_INCOMPLETE not in codes
+
+
+def test_the_irc_partition_may_not_hand_the_electron_a_real_atom() -> None:
+    """The original failure, on the surface that could once have deposited it.
+
+    Water gets two of the three saddle-point atoms and the electron gets the
+    third. It is a well-formed partition -- every atom claimed exactly once --
+    so the coverage rule sees nothing wrong, and only the participant's
+    declared kind says that an electron cannot be made of a hydrogen.
+    """
+
+    payload = _with_evidence(
+        _electron_payload(),
+        reactants=_IRC_AD_REACTANTS,
+        products={"product:1": [1, 2], "product:2": [3]},
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+
+    message = str(excinfo.value)
+    assert "product:2" in message
+    assert "has no atoms" in message
+
+
+def test_a_molecule_may_not_be_declared_atomless_on_the_irc_surface() -> None:
+    """An empty list is a claim, not a shrug.
+
+    The methyl is handed all five saddle-point atoms and the incoming hydrogen
+    is declared to have none. Every atom is still claimed exactly once, so this
+    is precisely the shape the completeness rule cannot see; what refuses it is
+    that ``reactant:2`` is a hydrogen atom, and a hydrogen atom has an atom.
+    """
+
+    payload = _with_evidence(
+        _payload(),
+        reactants={"reactant:1": [1, 2, 3, 4, 5], "reactant:2": []},
+        products=_IRC_PRODUCTS,
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+
+    message = str(excinfo.value)
+    assert "reactant:2" in message
+    assert "omit the mappings instead" in message
+
+
+def test_the_map_may_not_hand_the_electron_a_real_atom() -> None:
+    """The same refusal on the other surface, from the same declared kind."""
+
+    participants = _electron_map(include_electron=False)
+    participants.append(
+        {
+            **_MAPPED_ELECTRON,
+            "geometry_key": "h2o-geom",
+            "atom_to_ts": {1: 3},
+        }
+    )
+    payload = _with_map(_electron_payload(), participants)
+
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+
+    assert W_ATOM_MAP_PARTICIPANT_NOT_DECLARED in _refusal_codes(excinfo.value)
+    assert "has no atoms" in str(excinfo.value)
+
+
+def test_a_molecule_may_not_be_declared_atomless_on_the_map() -> None:
+    """To say nothing about a participant, leave it out; do not say "none"."""
+
+    participants = [dict(participant) for participant in _MAP_METHYL_IS_1234]
+    for participant in participants:
+        if participant["species_key"] == "h":
+            participant.pop("geometry_key")
+            participant["atom_to_ts"] = {}
+    payload = _with_map(_payload(), participants)
+
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+
+    assert W_ATOM_MAP_PARTICIPANT_NOT_DECLARED in _refusal_codes(excinfo.value)
+    assert "leave it out of the map" in str(excinfo.value)
+
+
+def test_atoms_need_a_geometry_and_a_geometry_needs_atoms() -> None:
+    """The two halves of geometry-relative indexing, both refused.
+
+    An index with no geometry beside it identifies a position in an ordering
+    the reader has to guess at. A geometry beside no indices is the reverse:
+    the participant has just said it has no atoms, and a participant with no
+    atoms has no geometry.
+    """
+
+    with pytest.raises(ValidationError) as excinfo:
+        ReactionAtomMapParticipantIn(
+            side="reactant",
+            species_key="ch3",
+            participant_index=1,
+            atom_to_ts={1: 1},
+        )
+    assert W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE in _refusal_codes(
+        excinfo.value
+    )
+
+    with pytest.raises(ValidationError) as excinfo:
+        ReactionAtomMapParticipantIn(
+            side="reactant",
+            species_key="ch3",
+            participant_index=1,
+            geometry_key="ch3-geom",
+            atom_to_ts={},
+        )
+    assert W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE in _refusal_codes(
+        excinfo.value
+    )
+
+
+def test_mapping_the_electron_lets_the_unaccounted_atom_rule_engage() -> None:
+    """What being able to say "no atoms" actually buys.
+
+    The saddle point here carries a fourth atom the reaction does not have.
+    The rule that refuses it engages only once the map is complete over every
+    declared participant, so it turns entirely on whether the electron can be
+    named -- and that is a state a reaction releasing one could not reach at
+    all while a zero-atom participant was inexpressible.
+    """
+
+    payload = _electron_payload()
+    payload["transition_state"]["geometry"]["xyz_text"] = _XYZ_TS_AD_SPARE
+    _with_map(payload, _electron_map(include_electron=True))
+
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+
+    assert W_ATOM_MAP_ATOMS_UNACCOUNTED_FOR in _refusal_codes(excinfo.value)
+    assert "atom(s) [4] are claimed by neither leg" in str(excinfo.value)
+
+
+def test_skipping_the_electron_still_gates_that_rule_off() -> None:
+    """The control, and the measure of what this closed.
+
+    The identical saddle point with the identical spare atom, mapped the only
+    way the schema used to allow. The map is incomplete over its participants,
+    so a missing species could explain the leftover atom, so the rule stays
+    silent and the payload is accepted. That is correct behaviour for an
+    incomplete map -- and it was, until the electron could be named, the *only*
+    behaviour available to this reaction.
+    """
+
+    payload = _electron_payload()
+    payload["transition_state"]["geometry"]["xyz_text"] = _XYZ_TS_AD_SPARE
+    _with_map(payload, _electron_map(include_electron=False))
+
+    request = ComputedReactionUploadRequest(**payload)
+    assert request.atom_map is not None

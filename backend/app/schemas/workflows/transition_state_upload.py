@@ -205,8 +205,18 @@ class TransitionStateUploadRequest(SchemaBase):
             self.validation_evidence,
             subject_label=self.label or "transition state",
             xyz_text=self.geometry.xyz_text,
-            reactant_count=len(self.reaction.reactants),
-            product_count=len(self.reaction.products),
+            # Kinds rather than counts: a participant that legitimately has no
+            # atoms maps to an empty list, and only the declared kind says
+            # which participant that is. This payload carries each
+            # participant's full identity inline, so the kinds are right here.
+            reactant_kinds=[
+                participant.species_entry.molecule_kind
+                for participant in self.reaction.reactants
+            ],
+            product_kinds=[
+                participant.species_entry.molecule_kind
+                for participant in self.reaction.products
+            ],
         )
         return self
 

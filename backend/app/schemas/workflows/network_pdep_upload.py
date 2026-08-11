@@ -1268,12 +1268,24 @@ class NetworkPDepUploadRequest(SchemaBase):
                         f"requires an irc calculation."
                     )
             micro_reaction = next(item for item in self.micro_reactions if item.key == ts.micro_reaction_key)
+            # Kinds rather than counts: a participant that legitimately has no
+            # atoms maps to an empty list, and only the declared kind says
+            # which participant that is. Here the participants are species
+            # keys, so the kind is read off the species they name; an undefined
+            # key was already reported above.
+            species_by_key = {species.key: species for species in self.species}
             validate_ts_evidence_set(
                 ts.validation_evidence,
                 subject_label=ts.key,
                 xyz_text=ts.geometry.xyz_text,
-                reactant_count=len(micro_reaction.reactants),
-                product_count=len(micro_reaction.products),
+                reactant_kinds=[
+                    species_by_key[rp.species_key].species_entry.molecule_kind
+                    for rp in micro_reaction.reactants
+                ],
+                product_kinds=[
+                    species_by_key[rp.species_key].species_entry.molecule_kind
+                    for rp in micro_reaction.products
+                ],
             )
 
         # Calculation geometry_key references must point to defined geometries

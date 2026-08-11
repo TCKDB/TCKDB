@@ -33,6 +33,17 @@ bundle there is only one it could be. That redundancy is the point — the
 failure mode of implicit indexing is a map that looks fine and refers to a
 different atom order than the depositor intended.
 
+A participant with no atoms
+---------------------------
+``OH- + H -> H2O + e-`` releases a free electron, and an electron is a
+participant with no atoms and no geometry. It is mapped by naming it with an
+empty ``atom_to_ts`` and no ``geometry_key`` — a claim, not an omission, and
+accepted only for a participant the reaction declares atomless. Until that was
+expressible the participant had to be skipped, which silently switched off the
+completeness rule for the whole map: rule 7 below only engages once every
+declared participant is mapped, and a reaction with an electron in it could
+never reach that state.
+
 Tiering (ADR 0008)
 ------------------
 Absence warns; contradiction blocks. An unmapped reaction is an *incomplete*
@@ -52,7 +63,8 @@ from pydantic import Field, model_validator
 
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
-from tckdb_schemas.enums import AtomMapSource, ReactionRole
+from tckdb_schemas.enums import AtomMapSource, MoleculeKind, ReactionRole
+from tckdb_schemas.fragments.identity import participant_has_no_atoms
 from tckdb_schemas.utils import normalize_optional_text
 
 __all__ = [
@@ -104,7 +116,11 @@ W_ATOM_MAP_INFERRED_REQUIRES_NOTE = "atom_map_inferred_requires_note"
 W_ATOM_MAP_WITHOUT_TRANSITION_STATE = "atom_map_without_transition_state"
 
 #: The map names a participant the reaction does not declare, names the
-#: wrong species for one, or names the same participant twice.
+#: wrong species for one, names the same participant twice, or describes one
+#: as a different sort of thing than the reaction declares it to be -- giving
+#: atoms to a participant declared atomless, or none to a participant declared
+#: a molecule. All four are the map and the reaction disagreeing about who a
+#: participant is, which is why they share a code.
 W_ATOM_MAP_PARTICIPANT_NOT_DECLARED = "atom_map_participant_not_declared"
 
 #: A geometry the map has to count into is not a readable XYZ block.
@@ -161,16 +177,72 @@ class ReactionAtomMapParticipantIn(SchemaBase):
         (``2 CH3 → C2H6``) and the two copies map to different saddle-point
         atoms.
     :param geometry_key: Bundle-local key of the geometry the atom indices
-        count into. Named explicitly; see the module docstring.
+        count into. Named explicitly; see the module docstring. Omitted, and
+        only omitted, by a participant with no atoms: there are no indices to
+        count, and naming a geometry a participant does not have would be the
+        implicit-indexing failure this fragment exists to prevent, written
+        explicitly.
     :param atom_to_ts: ``{atom index in this participant's geometry: atom index
-        in the transition-state geometry}``. Both sides 1-based.
+        in the transition-state geometry}``. Both sides 1-based. Empty **only**
+        for a participant that has no atoms — a free electron. That is a claim
+        ("this participant is made of nothing"), not an omission: a depositor
+        who mapped none of a molecule's atoms leaves the participant out of the
+        map entirely, and the incompleteness warning says so.
     """
 
     side: ReactionRole
     species_key: str = Field(min_length=1)
     participant_index: int = Field(ge=1)
-    geometry_key: str = Field(min_length=1)
-    atom_to_ts: dict[int, int] = Field(min_length=1)
+    geometry_key: str | None = Field(default=None, min_length=1)
+    # Required, and allowed to be empty. Writing ``{}`` is how a participant
+    # says it has no atoms; leaving the field out would let a serialiser that
+    # dropped it say the same thing by accident, and this is a claim, not a
+    # default.
+    atom_to_ts: dict[int, int]
+
+    @model_validator(mode="after")
+    def validate_geometry_is_named_exactly_when_indices_exist(self) -> Self:
+        """Indices need a geometry; a participant with none must not name one.
+
+        Both directions are refused because both are unreadable. An index with
+        no geometry beside it identifies a position in an ordering the reader
+        has to guess at, which is the whole reason ADR 0011 chose
+        geometry-relative indexing over canonical ordering. A geometry beside
+        no indices is the reverse claim, from a participant that by its own
+        account has no atoms in that geometry to point at -- a free electron
+        has no geometry anywhere in the deposit.
+        """
+
+        if self.atom_to_ts and self.geometry_key is None:
+            raise CodedValidationError(
+                W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+                f"atom_map participant '{self.species_key}' "
+                f"[{self.side.value} {self.participant_index}] maps atoms but "
+                "names no geometry_key. Atom indices are geometry-relative.",
+                context={
+                    "species_key": self.species_key,
+                    "side": self.side.value,
+                    "participant_index": self.participant_index,
+                },
+                message_prefix=False,
+            )
+        if not self.atom_to_ts and self.geometry_key is not None:
+            raise CodedValidationError(
+                W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
+                f"atom_map participant '{self.species_key}' "
+                f"[{self.side.value} {self.participant_index}] names geometry "
+                f"'{self.geometry_key}' but maps no atoms into it. An empty "
+                "atom_to_ts states that this participant has no atoms, and a "
+                "participant with no atoms has no geometry.",
+                context={
+                    "species_key": self.species_key,
+                    "side": self.side.value,
+                    "participant_index": self.participant_index,
+                    "geometry_key": self.geometry_key,
+                },
+                message_prefix=False,
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_indices_are_one_based(self) -> Self:
@@ -283,6 +355,13 @@ class AtomMapParticipantGeometry:
     :param geometry_keys: Every geometry key legitimately belonging to this
         participant's species. A map naming anything else is refused.
     :param xyz_by_geometry_key: XYZ text for each of those geometries.
+    :param molecule_kind: What the reaction declares this participant to be.
+        It decides one thing here: whether an empty ``atom_to_ts`` is the
+        legitimate statement "no atoms" or a molecule's atoms going missing.
+        Defaulted to ``molecule`` so that an assembler which does not set it
+        gets the strict reading -- an omission can only ever make this check
+        refuse a deposit it should have accepted, never accept one it should
+        have refused.
     """
 
     side: ReactionRole
@@ -290,6 +369,7 @@ class AtomMapParticipantGeometry:
     participant_index: int
     geometry_keys: frozenset[str]
     xyz_by_geometry_key: dict[str, str]
+    molecule_kind: MoleculeKind = MoleculeKind.molecule
 
 
 def _element_counts(elements: Sequence[str]) -> dict[str, int]:
@@ -326,7 +406,15 @@ def validate_reaction_atom_map(
     5. **An atom claimed twice** — one saddle-point atom claimed by two atoms of
        the same leg. A map is a bijection or it is not a map. (The reverse
        direction is structural: ``atom_to_ts`` is a dict.)
-    6. **A reactant atom unaccounted for in the products, where no species is
+    6. **A participant described as the wrong sort of thing** — an empty
+       ``atom_to_ts`` on a participant that has atoms, or a non-empty one on a
+       participant that has none. An empty map is the positive claim "this
+       participant is made of no atoms", which is true of a free electron and
+       of nothing else; saying it about a molecule would put that molecule's
+       atoms somewhere they do not belong, because rule 7 still requires every
+       saddle-point atom to be claimed. To say *nothing* about a participant,
+       leave it out of the map — that is incompleteness and it warns.
+    7. **A reactant atom unaccounted for in the products, where no species is
        missing.** Checked only when both legs are complete over every declared
        participant *and* the declared reaction is atom-balanced. When the
        reaction is not balanced a species genuinely is missing, and the same
@@ -412,6 +500,54 @@ def validate_reaction_atom_map(
                 },
                 message_prefix=False,
             )
+        # A participant with no atoms, declared as such. Refused for anything
+        # else: an empty list is a statement about the participant, and made
+        # about a molecule it would be that molecule's atoms disappearing --
+        # while the coverage rule below still demands every saddle-point atom
+        # be claimed, which means they would have to be attributed to some
+        # *other* participant. That is the same wrong-mapping failure the IRC
+        # surface refuses next door, and one surface must not accept what the
+        # other refuses.
+        if participant_has_no_atoms(declared.molecule_kind):
+            if mapping.atom_to_ts:
+                raise CodedValidationError(
+                    W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+                    f"{field_path} maps atoms onto {mapping.side.value} "
+                    f"{mapping.participant_index} ('{mapping.species_key}'), "
+                    f"which this reaction declares "
+                    f"molecule_kind='{declared.molecule_kind.value}' and which "
+                    "has no atoms. Those atoms belong to another participant.",
+                    context={
+                        "side": mapping.side.value,
+                        "participant_index": mapping.participant_index,
+                        "molecule_kind": declared.molecule_kind.value,
+                    },
+                    message_prefix=False,
+                )
+            # No geometry, no indices, no elements: it contributes nothing to
+            # the bijection and nothing to the elemental balance, which is
+            # exactly what a free electron contributes to the reaction.
+            elements_by_slot[slot] = []
+            fully_mapped_slots.add(slot)
+            continue
+        if not mapping.atom_to_ts:
+            raise CodedValidationError(
+                W_ATOM_MAP_PARTICIPANT_NOT_DECLARED,
+                f"{field_path} maps no atoms onto {mapping.side.value} "
+                f"{mapping.participant_index} ('{mapping.species_key}'), but "
+                f"this reaction declares it "
+                f"molecule_kind='{declared.molecule_kind.value}', which has "
+                "atoms of its own. An empty atom_to_ts states that a "
+                "participant has none; to say nothing about a participant, "
+                "leave it out of the map.",
+                context={
+                    "side": mapping.side.value,
+                    "participant_index": mapping.participant_index,
+                    "molecule_kind": declared.molecule_kind.value,
+                },
+                message_prefix=False,
+            )
+        assert mapping.geometry_key is not None  # paired with atom_to_ts above
         if mapping.geometry_key not in declared.geometry_keys:
             raise CodedValidationError(
                 W_ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
@@ -503,7 +639,7 @@ def validate_reaction_atom_map(
         if len(mapping.atom_to_ts) == natoms:
             fully_mapped_slots.add(slot)
 
-    # Rule 6. Only when nothing is missing: every declared participant mapped,
+    # Rule 7. Only when nothing is missing: every declared participant mapped,
     # every one of their atoms mapped, and the declared reaction balanced.
     if fully_mapped_slots != set(by_slot):
         return
