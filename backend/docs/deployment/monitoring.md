@@ -248,6 +248,14 @@ which expects a ping on a schedule and alerts when one does not arrive.
 4. Point healthchecks.io's notification at the **same ntfy topic**, so both
    classes of alarm land in one place.
 
+**Treat the ping URL exactly like the ntfy topic: it is a password.** Its path
+is the whole credential, and anyone holding it can forge this heartbeat and keep
+the alerts quiet for as long as they like — silencing the one channel that
+covers the host dying. It lives only in the env file (and, for the CI watchdog,
+in a repository secret), never in this repository, and neither script logs it:
+a failed ping names the host it could not reach and curl's exit code, and
+nothing that can be replayed.
+
 **The ping means "the checker ran", not "TCKDB is well",** and it is sent on
 every completed run including a degraded one. That distinction is the whole
 design. If the ping were conditional on a healthy verdict, an object-store

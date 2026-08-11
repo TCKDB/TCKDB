@@ -256,8 +256,29 @@ fi
 if [[ -n "$DEADMAN_URL" ]]; then
     # --fail so a typo'd ping URL (404) is reported rather than counted as a
     # heartbeat that went nowhere.
-    curl -sS --fail --max-time 20 -o /dev/null "$DEADMAN_URL" || \
-        echo "warning: dead man's switch ping to ${DEADMAN_URL} failed" >&2
+    #
+    # THE URL ITSELF IS NEVER LOGGED. A healthchecks.io ping URL is
+    # password-equivalent in the same way the ntfy topic is: the secret is the
+    # whole path, and anyone holding it can forge this heartbeat and keep the
+    # alerts quiet indefinitely -- silencing the one channel that covers the
+    # host dying. A failed ping is precisely the moment somebody reads this
+    # journal and pastes it into an issue, so the line says only what helps:
+    # the host that could not be reached, and curl's exit code, which
+    # separates DNS (6) from refused (7) from an HTTP error (22) from a
+    # timeout (28). curl's own stderr is dropped for the same reason rather
+    # than trusted to be discreet. The CI watchdog has always withheld this;
+    # the two scripts used to disagree about a rule one of them already kept.
+    curl -sS --fail --max-time 20 -o /dev/null "$DEADMAN_URL" 2>/dev/null
+    ping_rc=$?
+    if [[ $ping_rc -ne 0 ]]; then
+        # scheme, then any user:password@, then the path: what is left is the
+        # host (with its port), which is not a secret and is the only part
+        # worth naming.
+        deadman_host="${DEADMAN_URL#*://}"
+        deadman_host="${deadman_host##*@}"
+        deadman_host="${deadman_host%%/*}"
+        echo "warning: dead man's switch ping to ${deadman_host:-the configured host} failed (curl exit ${ping_rc}); the ping URL is password-equivalent and is not logged" >&2
+    fi
 fi
 
 echo "$(date -Is) status=${current} (was ${previous})"

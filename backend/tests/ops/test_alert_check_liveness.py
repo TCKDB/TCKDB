@@ -173,6 +173,37 @@ def test_ping_failure_is_reported_rather_than_swallowed(fake_host, run_alert_che
     assert "dead man's switch ping" in proc.stderr
 
 
+def test_a_failed_ping_does_not_put_the_ping_url_in_the_log(
+    fake_host, run_alert_check
+):
+    """The ping URL is password-equivalent, like the ntfy topic.
+
+    A healthchecks.io ping URL's whole path is the secret: anyone holding
+    it can forge this heartbeat and keep the alerts quiet for as long as
+    they like, which silences the one channel that covers the host dying.
+    And a failed ping is exactly the moment someone reads this journal and
+    pastes it into an issue -- so the failure path is the one that must not
+    quote it. The CI watchdog has always withheld it; this script used to
+    print it in full.
+    """
+    secret = "0e9f4a21-not-a-real-check-uuid"
+    url = f"{fake_host.base}/deadman/{secret}"
+    fake_host.set_status(HEALTHY)
+    fake_host.failing_paths.add(f"/deadman/{secret}")
+
+    proc = run_alert_check(env_overrides={"TCKDB_DEADMAN_URL": url})
+
+    assert proc.returncode == 0, "a failed heartbeat is not a failed check"
+    assert deadman_pings(fake_host), "it was attempted"
+    for stream_name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr)):
+        assert secret not in stream, f"the ping secret reached {stream_name}"
+        assert url not in stream, f"the ping URL reached {stream_name}"
+    # Still diagnosable: the host it could not reach, and why.
+    assert "dead man's switch ping" in proc.stderr
+    assert f"127.0.0.1:{fake_host.port}" in proc.stderr
+    assert "curl exit 22" in proc.stderr, "an HTTP error, not DNS or a timeout"
+
+
 # ---------------------------------------------------------------------------
 # An unmonitored monitor announces itself, once
 # ---------------------------------------------------------------------------
