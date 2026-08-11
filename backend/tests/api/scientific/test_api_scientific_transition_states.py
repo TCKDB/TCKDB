@@ -588,6 +588,9 @@ def test_tse_detail_includes_structured_irc_validation_evidence(
     assert evidence[0]["kind"] == "irc"
     assert evidence[0]["reconstruction_calculation_ref"] == calc.public_ref
     assert evidence[0]["reactant_participant_mapping"] == {"reactant:1": [1, 2]}
+    # The mappings' indices count into a named geometry, and the reader is
+    # told which one rather than having to pick among the entry's geometries.
+    assert evidence[0]["transition_state_geometry_ref"] == ts_geometry.public_ref
     # NMD evidence is not a TCKDB concept; no such field survives.
     assert "mode_index" not in evidence[0]
     assert "displacement_artifact_sha256" not in evidence[0]

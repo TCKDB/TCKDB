@@ -43056,7 +43056,7 @@
         "type": "object"
       },
       "TransitionStateValidationEvidenceSummary": {
-        "description": "Structured IRC validation evidence with a replayable source link.",
+        "description": "Structured IRC validation evidence with a replayable source link.\n\nThe two participant mappings say which saddle-point atoms become which\ndeclared participant, by index, and those indices count into\n``transition_state_geometry_ref`` -- not into \"the transition state\",\nwhich has no atom order of its own. It is ``None`` exactly when both\nmappings are, since a record that partitions no atoms binds no indices.\nNamed to match ``ReactionAtomMapDetail.transition_state_geometry_ref``,\nwhich is the same geometry playing the same role for the other surface\nthat indexes the saddle point.",
         "properties": {
           "kind": {
             "title": "Kind",
@@ -43114,6 +43114,17 @@
               }
             ],
             "title": "Reconstruction Calculation Ref"
+          },
+          "transition_state_geometry_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transition State Geometry Ref"
           }
         },
         "required": [

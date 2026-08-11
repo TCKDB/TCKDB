@@ -88,7 +88,7 @@ geometry bindings, which cannot be recovered from what remains — the same
 information loss the pre-upgrade schema had by construction.
 
 Revision ID: f3b7d2c8a419
-Revises: b6c1f4a8e703
+Revises: c8e2a7d41b96
 Create Date: 2026-08-11
 """
 
@@ -99,7 +99,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision: str = "f3b7d2c8a419"
-down_revision: Union[str, Sequence[str], None] = "b6c1f4a8e703"
+down_revision: Union[str, Sequence[str], None] = "c8e2a7d41b96"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

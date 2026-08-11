@@ -30,6 +30,7 @@ enum ArtifactIntegrityDetectionContext {
   parameter_extraction
   archive
   reproducibility_verification
+  reclaim_restore
 }
 
 enum ArtifactIntegrityFinding {

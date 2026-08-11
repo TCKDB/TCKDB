@@ -19,6 +19,7 @@ rows it could not.
 
 from __future__ import annotations
 
+import runpy
 import subprocess
 from pathlib import Path
 
@@ -41,10 +42,29 @@ from tests.services.scientific_read._factories import (
 
 _CONSTRAINT = "ck_transition_state_validation_evidence_mapping_names_geometry"
 
-#: The revision immediately before the one under test, so the fixture rows
-#: below can be written in the shape that predates the column.
-_BASE_REVISION = "b6c1f4a8e703"
 _GEOMETRY_REVISION = "f3b7d2c8a419"
+
+
+def _base_revision() -> str:
+    """The revision immediately before the one under test.
+
+    Read off the migration rather than written down here. A revision's
+    ``down_revision`` moves whenever the branch is rebased onto a head that
+    another migration reached first, and a hardcoded copy would then upgrade
+    to some earlier point and write the fixture rows below in whatever shape
+    that point happened to have -- or, if the column already existed there,
+    silently stop testing the backfill at all.
+    """
+
+    namespace = runpy.run_path(
+        str(
+            Path(__file__).resolve().parents[2]
+            / "alembic"
+            / "versions"
+            / "f3b7d2c8a419_name_the_geometry_irc_indices_count_into.py"
+        )
+    )
+    return namespace["down_revision"]
 
 _MAPPING = {"reactant:1": [1], "reactant:2": [2, 3]}
 _PRODUCT_MAPPING = {"product:1": [3], "product:2": [1, 2]}
@@ -244,7 +264,7 @@ def test_backfill_resolves_what_it_can_and_declines_to_guess() -> None:
         admin_conn.execute(text(f'CREATE DATABASE "{db_name}"'))
 
         env = _db_env(db_name)
-        engine = run_revision(_BASE_REVISION, engine)
+        engine = run_revision(_base_revision(), engine)
 
         with engine.begin() as conn:
             assert (
