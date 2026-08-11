@@ -37,12 +37,38 @@ cannot move an atom, and an UPDATE that rewrites `element` *and* nudges `x` in
 one statement is refused naming `x`. That case is the one that matters: the
 declared change is the alibi for the undeclared one.
 
+That check turns out to be enforced on two independent paths, which was not
+designed and is worth knowing before anyone simplifies either one: the change
+row carries its own `changed_columns`, and the trigger that writes it refuses a
+set the declaration does not cover. Removing the check inside the permit
+function alone still refuses the smuggling case, with a different message.
+
 The check is over columns rather than rows, deliberately. A repair of this kind
 is corpus-wide by nature, and a list of row keys written in advance would be a
 worse-founded claim than a list of columns. What makes that acceptable is that
-every row it reaches is recorded individually — the root it sits under, the
-row's primary key, the columns that changed, and the values on both sides. "The
-record did not change scientifically" becomes a join.
+every row whose value it changes is recorded individually — the root it sits
+under, the row's primary key, the columns that changed, and the values on both
+sides. "The record did not change scientifically" becomes a join.
+
+**The recording claim is narrower than "everything is recorded", and the
+narrowness belongs here** rather than in a follow-up, because this is the
+paragraph someone reads in two years before deciding whether to widen this
+door. What is enforced is that a write which changes a *value* is either
+refused or recorded. The comparison runs `to_jsonb(OLD)` against
+`to_jsonb(NEW)`, and JSON numerics have no signed zero and ignore trailing
+scale, so a write that changes only the representation of an equal value passes
+with no change row — `SET x = -0.0` over a stored `0.0` succeeds silently under
+an `element`-only declaration.
+
+Scientifically that is nothing, and the reasoning is worth keeping rather than
+just the conclusion. Only value-equal representations collapse; no genuinely
+different number can hide, because `float8` renders round-trip; and text, enum,
+timestamp, `mol` and `jsonb` all serialise exactly. Closing it would mean
+normalising every value before comparing, on the path *every* UPDATE to a
+guarded table takes, to catch a change that moves nothing a reader can observe.
+The absolute phrasing was written first, and is recorded as wrong rather than
+quietly corrected: an ADR that overstates a guarantee is exactly what lets the
+next reader skip the check.
 
 Only UPDATE. INSERT and DELETE under an accepted root stay unconditionally
 refused, because adding or removing a row changes what reviewers accepted rather

@@ -45,7 +45,8 @@ an atom.
 The check is column-level and not row-level, deliberately: a repair of this
 kind is corpus-wide by nature and enumerating rows in advance would be a
 worse-founded claim than enumerating columns. What makes that acceptable is
-that every row it reaches is recorded individually.
+that every row whose value it changes is recorded individually -- see "What an
+auditor can reconstruct" below for exactly how far that reaches.
 
 Only UPDATE. INSERT and DELETE under an accepted root stay unconditionally
 refused, because adding or removing a row changes what reviewers accepted
@@ -117,9 +118,27 @@ For any repair: the declaring role and login, the transaction, the revision,
 the stated reason, the declared columns -- and then, per accepted root and per
 row, the primary key of the row, the columns that changed, and their values on
 both sides. "The record did not change scientifically" stops being a docstring
-and becomes a join. The completeness property that makes it an audit rather
-than a sample: under an accepted root, an UPDATE either raises or appends a
-change row. There is no third outcome.
+and becomes a join.
+
+The property that makes that an audit rather than a sample, stated as narrowly
+as the code enforces it: under an accepted root, a write that changes a
+**value** is either refused or recorded. It is not true that *every* write is
+one or the other. The comparison is ``to_jsonb(OLD)`` against
+``to_jsonb(NEW)``, and ``to_jsonb`` renders numbers as JSON numerics, which
+carry no signed zero and compare without regard to trailing scale. So a write
+that changes only the *representation* of an equal value passes with no change
+row: ``UPDATE ... SET x = -0.0`` over a stored ``0.0`` succeeds silently under
+an ``element``-only declaration, because ``changed_columns`` comes back empty.
+
+That is nothing scientifically, which is why it is documented rather than
+closed. No genuinely different number can hide behind it -- ``float8`` renders
+round-trip, so ``0.1`` and the next representable double compare distinct --
+and text, enum, timestamp, ``mol`` and ``jsonb`` columns all serialise exactly.
+Normalising every value before comparing would put a cost on the path *every*
+UPDATE to a guarded table takes, to catch a class of change that moves nothing
+a reader can observe. The absolute version of this sentence was written first
+and is recorded here as wrong, because it is the kind of claim that lets a
+later reader skip checking.
 
 Not touched
 -----------

@@ -114,9 +114,20 @@ transaction with it.
 **What is recorded.** Each changed row appends a row to
 `accepted_science_repair_change` per accepted root it sits under: the root's
 `record_type`/`record_id`, the changed row's primary key as `row_identity`,
-`changed_columns`, and `before_json`/`after_json`. Under an accepted root an
-UPDATE either raises or appends a change row — there is no third outcome — so
-"the record did not change scientifically" is a query rather than a docstring.
+`changed_columns`, and `before_json`/`after_json`. Under an accepted root, a
+write that changes a **value** is either refused or recorded, so "the record
+did not change scientifically" is a query rather than a docstring.
+
+Precisely, because the absolute version of that sentence is not true: the
+comparison is `to_jsonb(OLD)` against `to_jsonb(NEW)`, and `to_jsonb` renders
+numbers as JSON numerics, which have no signed zero and ignore trailing scale.
+A write that changes only the *representation* of an equal value therefore
+passes with no change row — `SET x = -0.0` over a stored `0.0` under an
+`element`-only declaration succeeds and records nothing. Nothing a reader can
+observe moves; no genuinely different number can hide, since `float8` renders
+round-trip; and text, enum, timestamp, `mol` and `jsonb` serialise exactly.
+Normalising before comparison would cost every UPDATE to a guarded table more
+than the case is worth, so this is documented rather than closed.
 
 **What it cannot do.**
 
