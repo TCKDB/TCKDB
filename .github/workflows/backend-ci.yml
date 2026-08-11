@@ -8,6 +8,12 @@ on:
       - "docker-compose.yml"
       - "backend/**"
       - "schemas/python/tckdb-schemas/**"
+      # The MCP gate below runs integrations/mcp/tests/. Without this entry
+      # the job that runs them could not be reached by a change to them: a
+      # pull request touching only the MCP server matched no filter in any
+      # workflow and therefore started no job at all. Covered by a gate you
+      # cannot trigger is not covered.
+      - "integrations/mcp/**"
   push:
     branches:
       - main
@@ -17,6 +23,7 @@ on:
       - "docker-compose.yml"
       - "backend/**"
       - "schemas/python/tckdb-schemas/**"
+      - "integrations/mcp/**"
   workflow_dispatch:
 
 permissions:

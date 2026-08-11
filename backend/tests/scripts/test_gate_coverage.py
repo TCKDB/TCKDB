@@ -1,34 +1,62 @@
-"""Every test file must be run by at least one required CI job.
+"""Every test file in the repository must be run by a required CI job.
 
 This is a repo-check, not a backend test: it reads the gate scripts and
-``.github/workflows/backend-ci.yml`` and asserts that the union of what
-they select covers ``backend/tests/`` exactly.
+the workflows under ``.github/workflows/`` and asserts that the union of
+what the required jobs select covers every ``test_*.py`` in the tree --
+``backend/tests/``, ``clients/python/``, ``integrations/mcp/`` and
+``schemas/python/`` alike.
 
 It exists because that property silently stopped holding and nothing
-noticed. The two required jobs ran ``tests/api/`` and
-``tests/api/scientific/`` + ``tests/services/scientific_read/``. Everything
-else -- tests/db/, tests/workflows/, tests/invariants/, tests/services/
-outside scientific_read, tests/schemas/, tests/importers/, tests/parsers/,
-tests/cli/, tests/workers/, tests/integration/ -- 3,806 tests, more than
-half the suite by count, gated no pull request at all. It ran nightly, so a
-defect merged green and surfaced the next morning attached to no PR:
-``tests/db/test_identifier_lengths.py`` sat red on main for days that way.
+noticed. Twice.
 
-Nothing about that was visible. ``test-api.sh`` read as "the API gate"
-while being "some of the API", and a directory added to ``tests/`` joined
-no gate unless somebody remembered to add it. The gate scripts now state
-what they exclude, and this test is what makes the statement checkable --
-a comment claiming coverage is the failure mode, not the fix.
+The first time was inside ``backend/tests/``. The two required jobs ran
+``tests/api/`` and ``tests/api/scientific/`` + ``tests/services/
+scientific_read/``. Everything else -- tests/db/, tests/workflows/,
+tests/invariants/, tests/services/ outside scientific_read, tests/
+schemas/, tests/importers/, tests/parsers/, tests/cli/, tests/workers/,
+tests/integration/ -- 3,806 tests, more than half the suite by count,
+gated no pull request at all. It ran nightly, so a defect merged green
+and surfaced the next morning attached to no pull request:
+``tests/db/test_identifier_lengths.py`` sat red on main for days that
+way. The complement gate and the first version of this file closed that.
+
+The second time was everything this file could not see, because its walk
+stopped at ``backend/tests/``:
+
+  * ``clients/python/tests/test_openapi_parity.py`` sat red on main from
+    the moment #121 added two routes it did not classify until #133
+    noticed by hand. The "Python client tests" job exists -- it simply
+    was not consulted, because nothing made a red client suite block a
+    merge, and a job that exists is not a job that is read.
+  * ``clients/python/adapters/chemkin/tests/`` -- 54 tests -- ran in no
+    job at all. ``testpaths = ["tests"]`` in ``clients/python/
+    pyproject.toml`` means bare ``pytest`` there never sees the adapter,
+    and the workflow ran bare ``pytest``.
+  * ``schemas/python/tckdb-schemas/tests/`` -- 38 tests over the wire
+    contract every client and the backend share -- ran in no job at all.
+    Two workflows install the package; neither tests it.
+  * ``integrations/mcp/tests/`` ran in backend-ci, whose ``paths:``
+    filter does not mention ``integrations/**``. A pull request touching
+    only the MCP server therefore triggered no workflow whatsoever: the
+    job covered the files and could not be reached by a change to them.
+
+That last one is why coverage alone is not the property. A required job
+that runs a file but does not *trigger* on it is a gate the file can
+walk around, so ``test_every_test_file_is_run_by_a_job_that_triggers_on_it``
+matches each file against the ``paths:`` filter of the workflow that
+runs it.
 
 The check is deliberately mechanical about the *files*, not the
 directories: it enumerates the real ``test_*.py`` on disk and asks which
-job would run each one, so a new directory is caught the moment it exists
-rather than the next time somebody audits a list.
+job would run each one, so a new directory is caught the moment it
+exists rather than the next time somebody audits a list.
 """
 
 from __future__ import annotations
 
+import re
 import shlex
+import tomllib
 from pathlib import Path
 
 import pytest
@@ -36,31 +64,90 @@ import yaml
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
-TESTS_ROOT = BACKEND_ROOT / "tests"
-WORKFLOW = REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
+WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 
-#: The gate scripts the workflow is required to invoke. Their union is
-#: supposed to cover ``tests/`` between them; deleting one of these entries
-#: is exactly the regression this file is here to refuse.
+#: The workflows whose jobs gate a pull request. Everything else under
+#: ``.github/workflows/`` is a schedule, a deploy, or a docs build, and a
+#: test that only those run is a test that gates nothing.
+#:
+#: This is an include-list, and it is the only one here on purpose: there
+#: is no way to derive "required" from the repository -- GitHub keeps it
+#: in branch settings, not in the tree. Everything downstream of it (which
+#: files exist, which jobs run them, which paths reach those jobs) is
+#: derived rather than listed.
+REQUIRED_WORKFLOWS = (
+    ".github/workflows/repo-gate.yml",
+    ".github/workflows/backend-ci.yml",
+    ".github/workflows/python-client-ci.yml",
+)
+
+#: The gate scripts the backend workflow is required to invoke. Their union
+#: is supposed to cover ``backend/tests/`` between them; deleting one of
+#: these entries is exactly the regression this file is here to refuse.
 REQUIRED_GATE_SCRIPTS = (
     "backend/scripts/test-api.sh",
     "backend/scripts/test-scientific.sh",
     "backend/scripts/test-rest.sh",
 )
 
+#: Directory names the walk never descends into. ``.``-prefixed components
+#: are skipped wholesale, which matters more than it looks: this repository
+#: is developed in git worktrees under ``.claude/worktrees/``, each a full
+#: copy of the tree. Walking one would let a stale checkout decide whether
+#: this repository's CI is complete.
+SKIPPED_DIR_NAMES = frozenset(
+    {
+        "__pycache__",
+        "node_modules",
+        "site-packages",
+        "build",
+        "dist",
+        "venv",
+        "site",
+    }
+)
+
+#: pytest options that consume the following token, so that the value is
+#: not mistaken for a positional test path.
+OPTIONS_TAKING_A_VALUE = frozenset(
+    {
+        "-c",
+        "-k",
+        "-m",
+        "-n",
+        "-o",
+        "-p",
+        "-W",
+        "--deselect",
+        "--ignore",
+        "--ignore-glob",
+        "--import-mode",
+        "--junitxml",
+        "--maxfail",
+        "--rootdir",
+        "--tb",
+    }
+)
+
 
 class Selection:
     """A pytest invocation reduced to "which files would this run".
 
-    ``paths`` are the positional test paths; ``ignored`` are the
-    ``--ignore`` arguments. Both are stored relative to ``backend/`` with
-    any trailing slash removed, because the scripts and the workflow are
-    inconsistent about it (``tests/api/`` in one, ``tests/api`` in the
-    other) and that difference must not change the answer.
+    ``paths`` are the positional test paths and ``ignored`` the
+    ``--ignore`` arguments, both resolved to repository-relative POSIX
+    paths with any trailing slash removed -- the scripts and the
+    workflows are inconsistent about it (``tests/api/`` in one,
+    ``tests/api`` in the other) and that difference must not change the
+    answer.
+
+    ``workflow`` is the workflow file the invocation came from, which is
+    what lets the trigger check ask whether a change to a covered file
+    would actually start the job that covers it.
     """
 
-    def __init__(self, label: str) -> None:
+    def __init__(self, label: str, workflow: str | None = None) -> None:
         self.label = label
+        self.workflow = workflow
         self.paths: set[str] = set()
         self.ignored: set[str] = set()
 
@@ -73,33 +160,79 @@ class Selection:
         return f"Selection({self.label!r}, paths={sorted(self.paths)}, ignored={sorted(self.ignored)})"
 
 
-def _normalize(token: str) -> str:
-    return token.rstrip("/")
+# ---------------------------------------------------------------------------
+# Path helpers
+# ---------------------------------------------------------------------------
+
+
+def _resolve(base: str, token: str) -> str:
+    """Repository-relative POSIX form of ``token`` interpreted under ``base``."""
+    joined = Path(base) / token if base not in ("", ".") else Path(token)
+    normalized = Path(joined.as_posix().replace("./", "")).as_posix().rstrip("/")
+    return normalized
 
 
 def _is_under(rel_path: str, prefix: str) -> bool:
     """True when ``rel_path`` is ``prefix`` or lives inside it.
 
     Compared segment-wise rather than with ``str.startswith`` so that
-    ``tests/api`` does not appear to contain ``tests/api_extra/x.py``.
+    ``backend/tests/api`` does not appear to contain
+    ``backend/tests/api_extra/x.py``.
     """
     path_parts = Path(rel_path).parts
     prefix_parts = Path(prefix).parts
     return path_parts[: len(prefix_parts)] == prefix_parts
 
 
-def _absorb_args(selection: Selection, tokens: list[str]) -> None:
-    """Fold a pytest argument list into ``selection``."""
+# ---------------------------------------------------------------------------
+# Shell / pytest argument parsing
+# ---------------------------------------------------------------------------
+
+
+def _absorb_args(selection: Selection, tokens: list[str], base: str, *, after_pytest: bool = False) -> None:
+    """Fold one pytest argument list, interpreted under ``base``, into ``selection``.
+
+    Nothing is read as a pytest argument until the ``pytest`` token has
+    been seen, and this is load-bearing in both directions. Everything to
+    the left belongs to a launcher with its own flag vocabulary, in which
+    the same spellings mean other things: ``conda run -n tckdb_env
+    pytest`` would contribute the environment name as a test path if
+    positionals were taken from the start, and ``python -m pytest ...``
+    is worse -- ``-m`` is pytest's marker option, so consuming its value
+    swallows the word ``pytest`` itself, the invocation parses as having
+    no arguments at all, and the selection silently falls back to
+    ``testpaths``. Both of those were live defects in the first draft of
+    this parser, and the second made the whole check vacuous while every
+    assertion in this file passed.
+
+    ``after_pytest=True`` is for gate-script invocations, whose extra
+    arguments (``--ignore=...``, ``--maxfail=5``) are forwarded to pytest
+    by the script and so are pytest arguments despite no ``pytest`` token
+    appearing on the line.
+
+    Positional paths are taken only when they exist on disk. The
+    existence test rejects the unexpanded shell fragments the gate
+    scripts are written with (``"${TCKDB_PYTEST_ARGS[@]}"``, ``"$@"``);
+    the failure direction is safe, because a path this drops shows up as
+    an uncovered file rather than as silent coverage.
+    """
+    seen_pytest = after_pytest
     index = 0
     while index < len(tokens):
         token = tokens[index]
-        if token.startswith("--ignore="):
-            selection.ignored.add(_normalize(token.split("=", 1)[1]))
-        elif token == "--ignore" and index + 1 < len(tokens):
-            selection.ignored.add(_normalize(tokens[index + 1]))
+        if not seen_pytest:
+            seen_pytest = token == "pytest" or token.endswith("/pytest")
+        elif token.startswith("--ignore="):
+            selection.ignored.add(_resolve(base, token.split("=", 1)[1]))
+        elif token in ("--ignore", "--ignore-glob") and index + 1 < len(tokens):
+            selection.ignored.add(_resolve(base, tokens[index + 1]))
             index += 1
-        elif token.startswith("tests/") or token == "tests":
-            selection.paths.add(_normalize(token))
+        elif token in OPTIONS_TAKING_A_VALUE and index + 1 < len(tokens):
+            index += 1
+        elif token.startswith("-"):
+            pass
+        elif "$" not in token and (REPO_ROOT / _resolve(base, token)).exists():
+            selection.paths.add(_resolve(base, token))
         index += 1
 
 
@@ -134,71 +267,191 @@ def _join_continuations(text: str) -> list[str]:
     return lines
 
 
+def _testpaths(base: str) -> list[str]:
+    """``testpaths`` from the pyproject governing a bare ``pytest`` in ``base``.
+
+    A bare ``pytest`` is not "run everything under the working
+    directory": ``clients/python/pyproject.toml`` sets
+    ``testpaths = ["tests"]``, which is precisely why 54 CHEMKIN adapter
+    tests sitting one directory over ran in no job while the workflow
+    step looked like it ran the package.
+    """
+    pyproject = REPO_ROOT / base / "pyproject.toml" if base not in ("", ".") else REPO_ROOT / "pyproject.toml"
+    if not pyproject.is_file():
+        return [base]
+    config = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    paths = config.get("tool", {}).get("pytest", {}).get("ini_options", {}).get("testpaths")
+    if not paths:
+        return [base]
+    return [_resolve(base, path) for path in paths]
+
+
 def _script_selection(script_rel: str) -> Selection:
-    """The selection a gate script performs when run with no extra args."""
+    """The selection a gate script performs when run with no extra args.
+
+    The gate scripts ``cd`` to the directory above ``scripts/`` before
+    invoking pytest, so their ``tests/`` arguments are relative to
+    ``backend/`` rather than to wherever CI called them from.
+    """
     script = REPO_ROOT / script_rel
+    base = Path(script_rel).parent.parent.as_posix()
     selection = Selection(script_rel)
     for line in _join_continuations(script.read_text(encoding="utf-8")):
         if line.startswith("#") or "pytest" not in line:
             continue
-        _absorb_args(selection, shlex.split(line))
+        _absorb_args(selection, shlex.split(line), base)
     return selection
 
 
+# ---------------------------------------------------------------------------
+# Workflow parsing
+# ---------------------------------------------------------------------------
+
+
+def _workflow(workflow_rel: str) -> dict:
+    return yaml.safe_load((REPO_ROOT / workflow_rel).read_text(encoding="utf-8"))
+
+
+def _triggers(workflow: dict) -> dict:
+    """The ``on:`` block.
+
+    PyYAML is a YAML 1.1 parser, in which the bare key ``on`` is the
+    boolean ``True``. Reading ``workflow["on"]`` returns nothing and every
+    path filter silently reads as absent -- which would make the trigger
+    check pass unconditionally, the exact vacuity this file is built to
+    avoid.
+    """
+    block = workflow.get("on", workflow.get(True))
+    return block if isinstance(block, dict) else {}
+
+
+def _glob_to_regex(pattern: str) -> re.Pattern[str]:
+    """GitHub path-filter glob -> regex. ``**`` spans separators, ``*`` does not."""
+    out = []
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if pattern.startswith("**", index):
+            out.append(".*")
+            index += 2
+        elif char == "*":
+            out.append("[^/]*")
+            index += 1
+        elif char == "?":
+            out.append("[^/]")
+            index += 1
+        else:
+            out.append(re.escape(char))
+            index += 1
+    return re.compile("".join(out) + r"\Z")
+
+
+def _workflow_triggers_on(workflow_rel: str, rel_path: str) -> bool:
+    """Would editing ``rel_path`` start this workflow's pull_request run?"""
+    triggers = _triggers(_workflow(workflow_rel))
+    if "pull_request" not in triggers:
+        return False
+    pull_request = triggers["pull_request"]
+    if not isinstance(pull_request, dict):
+        # ``pull_request:`` with an empty body means every pull request.
+        return True
+    ignored = pull_request.get("paths-ignore")
+    if ignored and any(_glob_to_regex(pattern).match(rel_path) for pattern in ignored):
+        return False
+    included = pull_request.get("paths")
+    if not included:
+        return True
+    return any(_glob_to_regex(pattern).match(rel_path) for pattern in included)
+
+
+def _step_base(workflow: dict, job: dict, step: dict) -> str:
+    for source in (step, job.get("defaults", {}).get("run", {}), workflow.get("defaults", {}).get("run", {})):
+        directory = source.get("working-directory")
+        if directory:
+            return str(directory).rstrip("/")
+    return "."
+
+
 def _workflow_selections() -> list[Selection]:
-    """Every pytest selection reachable from a required backend-ci job.
+    """Every pytest selection reachable from a required job.
 
     All matrix legs are unioned because all of them are required: the
     ``backend-ci`` job needs ``backend-gate`` and asserts its result is
-    ``success``, so a test run by any leg is a test that gates the PR.
+    ``success``, so a test run by any leg is a test that gates the pull
+    request.
     """
-    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     selections: list[Selection] = []
-    for job_name, job in workflow["jobs"].items():
-        for step in job.get("steps", []):
-            run = step.get("run")
-            if not run:
-                continue
-            label = f"{job_name}:{step.get('name', '<unnamed>')}"
-            for line in _join_continuations(run):
-                if line.startswith("#"):
+    for workflow_rel in REQUIRED_WORKFLOWS:
+        workflow = _workflow(workflow_rel)
+        for job_name, job in workflow["jobs"].items():
+            for step in job.get("steps", []):
+                run = step.get("run")
+                if not run:
                     continue
-                try:
-                    tokens = shlex.split(line)
-                except ValueError:
-                    # Heredoc bodies and Python fragments are not shell
-                    # commands; nothing in them invokes pytest.
-                    continue
-                if _is_syntax_check(tokens):
-                    # ``bash -n backend/scripts/test-rest.sh`` parses the
-                    # script and runs nothing. Counting it would let the
-                    # complement gate be deleted from the matrix while the
-                    # hygiene step kept this file green -- the exact shape
-                    # of the defect being guarded against.
-                    continue
-                gate = next(
-                    (token for token in tokens if token in REQUIRED_GATE_SCRIPTS),
-                    None,
-                )
-                if gate is not None:
-                    selection = _script_selection(gate)
-                    selection.label = f"{label} -> {gate}"
-                    _absorb_args(selection, tokens)
-                    selections.append(selection)
-                elif "pytest" in tokens:
-                    selection = Selection(label)
-                    _absorb_args(selection, tokens)
-                    if selection.paths:
+                base = _step_base(workflow, job, step)
+                label = f"{workflow_rel}::{job_name}:{step.get('name', '<unnamed>')}"
+                for line in _join_continuations(run):
+                    if line.startswith("#"):
+                        continue
+                    try:
+                        tokens = shlex.split(line)
+                    except ValueError:
+                        # Heredoc bodies and Python fragments are not shell
+                        # commands; nothing in them invokes pytest.
+                        continue
+                    if _is_syntax_check(tokens):
+                        # ``bash -n backend/scripts/test-rest.sh`` parses the
+                        # script and runs nothing. Counting it would let the
+                        # complement gate be deleted from the matrix while the
+                        # hygiene step kept this file green -- the exact shape
+                        # of the defect being guarded against.
+                        continue
+                    gate = next((token for token in tokens if token in REQUIRED_GATE_SCRIPTS), None)
+                    if gate is not None:
+                        selection = _script_selection(gate)
+                        selection.label = f"{label} -> {gate}"
+                        selection.workflow = workflow_rel
+                        _absorb_args(
+                            selection,
+                            tokens,
+                            Path(gate).parent.parent.as_posix(),
+                            after_pytest=True,
+                        )
+                        selections.append(selection)
+                    elif "pytest" in tokens:
+                        selection = Selection(label, workflow_rel)
+                        _absorb_args(selection, tokens, base)
+                        if not selection.paths:
+                            selection.paths.update(_testpaths(base))
                         selections.append(selection)
     return selections
 
 
+def _is_test_file(name: str) -> bool:
+    """pytest's default ``python_files``, both spellings.
+
+    ``*_test.py`` is not used in this repository today. It is matched
+    anyway, because the first file written that way would otherwise be
+    collected by pytest and invisible to this check -- an uncovered test
+    that the coverage guard itself agrees is fine.
+    """
+    return name.endswith(".py") and (name.startswith("test_") or name.endswith("_test.py"))
+
+
 def _test_files() -> list[str]:
-    return sorted(
-        str(path.relative_to(BACKEND_ROOT).as_posix())
-        for path in TESTS_ROOT.rglob("test_*.py")
-        if "__pycache__" not in path.parts
-    )
+    """Every file pytest would collect as a test module, repository-relative."""
+    found: list[str] = []
+    stack = [REPO_ROOT]
+    while stack:
+        directory = stack.pop()
+        for entry in directory.iterdir():
+            if entry.is_dir():
+                if entry.name.startswith(".") or entry.name in SKIPPED_DIR_NAMES or entry.name.endswith(".egg-info"):
+                    continue
+                stack.append(entry)
+            elif _is_test_file(entry.name):
+                found.append(entry.relative_to(REPO_ROOT).as_posix())
+    return sorted(found)
 
 
 # ---------------------------------------------------------------------------
@@ -214,8 +467,33 @@ def test_every_test_file_is_run_by_a_required_ci_job() -> None:
     uncovered = [path for path in files if not any(sel.covers(path) for sel in selections)]
     assert not uncovered, (
         "these test files are run by no required CI job, so a defect in them "
-        "merges green and surfaces in the nightly attached to no pull "
+        "merges green and surfaces -- if at all -- attached to no pull "
         "request:\n  " + "\n  ".join(uncovered)
+    )
+
+
+def test_every_test_file_is_run_by_a_job_that_triggers_on_it() -> None:
+    """Coverage is not enough: the covering job has to start.
+
+    ``integrations/mcp/tests/`` was run by backend-ci, whose ``paths:``
+    filter listed ``backend/**`` and ``schemas/**`` and nothing else, so
+    a pull request that changed only the MCP server started no workflow
+    at all. The job covered the files; a change to them could not reach
+    the job.
+    """
+    selections = _workflow_selections()
+    unreachable = [
+        path
+        for path in _test_files()
+        if not any(
+            sel.covers(path) and sel.workflow is not None and _workflow_triggers_on(sel.workflow, path)
+            for sel in selections
+        )
+    ]
+    assert not unreachable, (
+        "these test files are run only by workflows whose paths: filter a "
+        "change to them does not match, so the pull request that breaks them "
+        "starts no job that would notice:\n  " + "\n  ".join(unreachable)
     )
 
 
@@ -230,7 +508,7 @@ def test_complement_gate_excludes_only_what_another_gate_runs() -> None:
         _script_selection("backend/scripts/test-api.sh"),
         _script_selection("backend/scripts/test-scientific.sh"),
     ]
-    assert rest.paths == {"tests"}, (
+    assert rest.paths == {"backend/tests"}, (
         "test-rest.sh must select the whole tree and subtract from it. An "
         "include-list stops covering a directory the day somebody adds one."
     )
@@ -264,25 +542,134 @@ def test_workflow_invokes_every_gate_script(script_rel: str) -> None:
         if " -> " in label
     }
     assert script_rel in invoked, (
-        f"{script_rel} is not invoked by backend-ci.yml. A gate script that "
-        "no workflow runs is documentation, not a gate."
+        f"{script_rel} is not invoked by a required workflow. A gate script "
+        "that no workflow runs is documentation, not a gate."
+    )
+
+
+@pytest.mark.parametrize("workflow_rel", REQUIRED_WORKFLOWS)
+def test_required_workflows_run_on_pull_requests(workflow_rel: str) -> None:
+    assert "pull_request" in _triggers(_workflow(workflow_rel)), (
+        f"{workflow_rel} is listed as a required gate but has no pull_request "
+        "trigger, so nothing it checks gates a merge."
+    )
+
+
+def test_repo_gate_is_not_path_filtered() -> None:
+    """The guard itself must run on every pull request.
+
+    If ``repo-gate.yml`` grew a ``paths:`` filter, a pull request that
+    added an ungated test directory outside that filter would not run
+    this file, and the check would go quiet in exactly the case it exists
+    for. It is cheap enough (no database, no conda, seconds) that there is
+    no reason to filter it.
+    """
+    pull_request = _triggers(_workflow(".github/workflows/repo-gate.yml")).get("pull_request")
+    assert not (isinstance(pull_request, dict) and pull_request.get("paths")), (
+        "repo-gate.yml must run on every pull request. A path filter here is "
+        "a hole shaped exactly like the ones this file exists to close."
     )
 
 
 # ---------------------------------------------------------------------------
 # Non-vacuity: the checks above pass trivially if the parser reports
-# everything as covered, so pin that ignores are actually honoured.
+# everything as covered, so pin that each mechanism actually discriminates.
 # ---------------------------------------------------------------------------
 
 
 def test_ignores_are_honoured_by_the_parser() -> None:
     rest = _script_selection("backend/scripts/test-rest.sh")
-    assert rest.covers("tests/db/test_identifier_lengths.py")
-    assert not rest.covers("tests/api/test_api_health.py")
-    assert not rest.covers("tests/services/scientific_read/test_species.py")
+    assert rest.covers("backend/tests/db/test_identifier_lengths.py")
+    assert not rest.covers("backend/tests/api/test_api_health.py")
+    assert not rest.covers("backend/tests/services/scientific_read/test_species.py")
 
 
 def test_prefix_matching_is_segment_wise() -> None:
-    assert _is_under("tests/api/test_x.py", "tests/api")
-    assert not _is_under("tests/api_extra/test_x.py", "tests/api")
-    assert _is_under("tests/api", "tests/api")
+    assert _is_under("backend/tests/api/test_x.py", "backend/tests/api")
+    assert not _is_under("backend/tests/api_extra/test_x.py", "backend/tests/api")
+    assert _is_under("backend/tests/api", "backend/tests/api")
+
+
+def test_bare_pytest_resolves_testpaths_rather_than_the_whole_directory() -> None:
+    """The bug that hid the CHEMKIN adapter, pinned as behaviour."""
+    assert _testpaths("clients/python") == ["clients/python/tests"]
+    assert "clients/python/adapters/chemkin/tests" not in _testpaths("clients/python")
+
+
+def test_positional_paths_are_taken_only_after_the_pytest_token() -> None:
+    selection = Selection("probe")
+    _absorb_args(selection, shlex.split("conda run -n tckdb_env pytest -q backend/tests/scripts"), ".")
+    assert selection.paths == {"backend/tests/scripts"}, (
+        "`-n tckdb_env` must not contribute a path, and the path after pytest must."
+    )
+
+
+def test_launcher_flags_do_not_swallow_the_pytest_token() -> None:
+    """``python -m pytest X`` selects X.
+
+    ``-m`` is also pytest's marker option. A parser that starts consuming
+    option values before it has seen ``pytest`` treats the word ``pytest``
+    as the value of ``-m``, finds no arguments, and falls back to
+    ``testpaths`` -- which is how the first draft of this file reported
+    the whole repository as covered by a step that runs one test module,
+    with all eighteen assertions green.
+    """
+    selection = Selection("probe")
+    _absorb_args(selection, shlex.split("python -m pytest --noconftest -q backend/tests/scripts"), ".")
+    assert selection.paths == {"backend/tests/scripts"}
+
+    adapter = Selection("probe")
+    _absorb_args(adapter, shlex.split("python -m pytest adapters/chemkin/tests"), "clients/python")
+    assert adapter.paths == {"clients/python/adapters/chemkin/tests"}
+
+
+def test_gate_script_arguments_are_pytest_arguments() -> None:
+    """No ``pytest`` token appears on a gate-script line; its flags are still pytest's."""
+    selection = Selection("probe")
+    _absorb_args(
+        selection,
+        shlex.split("conda run -n tckdb_env bash backend/scripts/test-api.sh --ignore=tests/api/scientific/"),
+        "backend",
+        after_pytest=True,
+    )
+    assert selection.ignored == {"backend/tests/api/scientific"}
+
+
+def test_unexpanded_shell_fragments_are_not_paths() -> None:
+    selection = Selection("probe")
+    _absorb_args(selection, shlex.split('pytest "${TCKDB_PYTEST_ARGS[@]}" tests/ "$@"'), "backend")
+    assert selection.paths == {"backend/tests"}
+
+
+def test_syntax_checks_are_not_counted_as_invocations() -> None:
+    assert _is_syntax_check(shlex.split("bash -n backend/scripts/test-rest.sh"))
+    assert not _is_syntax_check(shlex.split("conda run -n tckdb_env bash backend/scripts/test-rest.sh"))
+
+
+def test_path_filter_matching_discriminates() -> None:
+    assert _workflow_triggers_on(".github/workflows/backend-ci.yml", "backend/tests/db/test_x.py")
+    assert not _workflow_triggers_on(".github/workflows/backend-ci.yml", "clients/python/tests/test_x.py")
+    assert _workflow_triggers_on(".github/workflows/python-client-ci.yml", "clients/python/tests/test_x.py")
+    assert not _workflow_triggers_on(".github/workflows/python-client-ci.yml", "backend/tests/db/test_x.py")
+    # No filter at all means every pull request.
+    assert _workflow_triggers_on(".github/workflows/repo-gate.yml", "anywhere/test_x.py")
+
+
+def test_the_walk_reaches_beyond_the_backend() -> None:
+    """A walk that stopped at backend/tests/ is the defect, not the design."""
+    files = _test_files()
+    for expected in (
+        "backend/tests/scripts/test_gate_coverage.py",
+        "clients/python/tests/test_openapi_parity.py",
+        "clients/python/adapters/chemkin/tests/test_parser.py",
+        "integrations/mcp/tests/test_config.py",
+        "schemas/python/tckdb-schemas/tests/test_import_boundaries.py",
+    ):
+        assert expected in files, f"{expected} exists but the walk did not find it"
+
+
+def test_both_pytest_file_spellings_are_walked() -> None:
+    assert _is_test_file("test_thing.py")
+    assert _is_test_file("thing_test.py")
+    assert not _is_test_file("contest_helpers.py")
+    assert not _is_test_file("test_fixture.json")

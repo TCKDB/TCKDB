@@ -20,7 +20,13 @@ permissions:
 
 jobs:
   test:
-    name: Python client tests
+    # Renamed from "Python client tests", which is what it used to be and
+    # is no longer what it does. It now also gates the CHEMKIN adapter and
+    # the wire-contract schemas, and the lesson from scripts/test-api.sh --
+    # a job whose name claims more coverage than it has is read as the
+    # coverage it claims -- applies just as well to a name that claims
+    # less.
+    name: Client, adapter, and wire-contract tests
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -39,7 +45,39 @@ jobs:
         run: |
           python -m pip install -e schemas/python/tckdb-schemas
           python -m pip install -e "clients/python[test,notebook]"
+          # The CHEMKIN adapter's identity and payload tests import rdkit at
+          # module scope rather than behind a skip, so a job without it does
+          # not skip them quietly -- it fails collection. Development uses the
+          # conda rdkit; this job has no conda, hence the wheel.
+          python -m pip install rdkit
 
+      # Three invocations, not one, and the reason is not taste.
+      #
+      # `testpaths = ["tests"]` in clients/python/pyproject.toml means a bare
+      # `pytest` there sees only tests/ -- which is how 54 CHEMKIN adapter
+      # tests one directory over came to run in no CI job at all while this
+      # step looked like it tested the package.
+      #
+      # The obvious fix -- `pytest .`, selecting the tree and subtracting,
+      # the way backend/scripts/test-rest.sh does -- does not work here yet.
+      # clients/python/conftest.py and clients/python/adapters/chemkin/tests/
+      # conftest.py are both top-level modules named `conftest`, so in one
+      # process the second shadows the first and the ~30 client tests that do
+      # `from conftest import make_client` fail at import. Until that is
+      # fixed, the suites are separate processes and
+      # backend/tests/scripts/test_gate_coverage.py is what stops a fourth
+      # one from being added without a step to run it.
       - name: Run Python client tests
         working-directory: clients/python
+        run: python -m pytest
+
+      - name: Run CHEMKIN adapter tests
+        working-directory: clients/python
+        run: python -m pytest adapters/chemkin/tests
+
+      # The wire contract every client and the backend share. Two workflows
+      # installed this package; neither ran its tests, so 38 round-trip and
+      # import-boundary tests over the schemas gated nothing.
+      - name: Run wire-contract schema tests
+        working-directory: schemas/python/tckdb-schemas
         run: python -m pytest
