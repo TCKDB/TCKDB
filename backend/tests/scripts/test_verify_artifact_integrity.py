@@ -1038,3 +1038,353 @@ def test_a_digest_nothing_has_ever_recorded_is_still_an_empty_scope(db_session, 
     )
 
     assert targets == []
+
+
+# ---------------------------------------------------------------------------
+# Losing the reclaim's race is repaired, and the repair is recorded
+# ---------------------------------------------------------------------------
+#
+# The reclaim cannot see an upload that deduplicated against an object
+# seconds before it was held, so a committed ``calculation_artifact`` row
+# can end up pointing at a digest sitting under ``reclaimed/``. The bytes
+# always survive that. What did not survive it was the record's meaning:
+# every read of the artifact recorded ``object_missing``, the trust layer
+# hard-failed a perfectly good calculation, and the only thing that
+# noticed was a purge refusal months later that changed nothing.
+#
+# The invariant these tests hold: **a live wrong state gets repaired, and
+# the repair is a recorded change of custody, not a log line.**
+
+
+class _HoldBucket(_FakeBucket):
+    """A fake store that can also serve bytes, so a restore can be re-read.
+
+    ``_FakeBucket`` models keys and dates, which is all the reclaim needs.
+    The restore path ends in a real ``load_artifact_bytes`` call, because
+    a restore that recorded ``verified`` without hashing anything would be
+    the operator-asserts-a-repair move ADR 0014 forbids.
+    """
+
+    def __init__(self, contents: dict[str, bytes], modified=None) -> None:
+        when = modified or (datetime.now(timezone.utc) - timedelta(days=365))
+        super().__init__(dict.fromkeys(contents, when))
+        self.contents = dict(contents)
+
+    def copy_object(self, *, Bucket, Key, CopySource):
+        super().copy_object(Bucket=Bucket, Key=Key, CopySource=CopySource)
+        self.contents[Key] = self.contents[CopySource["Key"]]
+
+    def delete_object(self, *, Bucket, Key):
+        super().delete_object(Bucket=Bucket, Key=Key)
+        self.contents.pop(Key, None)
+
+    def get_object(self, *, Bucket, Key):
+        if Key not in self.contents:
+            raise ClientError(
+                {"Error": {"Code": "NoSuchKey", "Message": "gone"}}, "GetObject"
+            )
+        return {"Body": _Body(self.contents[Key])}
+
+    def head_object(self, *, Bucket, Key):
+        head = super().head_object(Bucket=Bucket, Key=Key)
+        head["ContentLength"] = len(self.contents.get(Key, b""))
+        return head
+
+
+def _held_but_referenced(session, content: bytes = b"a log that was mislaid"):
+    """The exact aftermath of the race: committed row, object in the hold."""
+    calculation = _owned_calculation(session)
+    digest = hashlib.sha256(content).hexdigest()
+    attach_artifact(
+        session,
+        calculation=calculation,
+        sha256=digest,
+        bytes_=len(content),
+        filename="mislaid.log",
+    )
+    session.flush()
+    return digest, _HoldBucket({f"reclaimed/{digest}": content})
+
+
+def _events_for(session, digest: str):
+    from app.db.models.calculation import ArtifactIntegrityEvent
+
+    return (
+        session.scalars(
+            select(ArtifactIntegrityEvent)
+            .where(ArtifactIntegrityEvent.sha256 == digest)
+            .order_by(ArtifactIntegrityEvent.id)
+        )
+        .unique()
+        .all()
+    )
+
+
+def test_a_held_object_a_row_references_is_put_back(db_session, sweep):
+    """The repair itself. Refusing left the row reading as corrupt."""
+    digest, client = _held_but_referenced(db_session)
+
+    outcome = sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    assert outcome.restored == [digest]
+    assert _cas_key(digest) in client.objects
+    assert f"reclaimed/{digest}" not in client.objects
+
+
+def test_the_restore_is_recorded_as_a_custody_event(db_session, sweep):
+    """ADR 0014's discipline: custody changes are recorded, not logged.
+
+    A repair that only prints is two of the three things the state needed
+    -- repaired and visible-if-you-were-watching -- and not the third,
+    auditable. The row is what makes "the reclaim's race fired against
+    real data on this date" answerable months later.
+    """
+    from app.db.models.common import ArtifactIntegrityDetectionContext
+
+    digest, client = _held_but_referenced(db_session)
+
+    sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    events = _events_for(db_session, digest)
+    assert len(events) == 1
+    assert (
+        events[0].detected_during
+        is ArtifactIntegrityDetectionContext.reclaim_restore
+    )
+    assert "reclaim hold" in events[0].detail
+
+
+def test_the_recorded_restore_is_a_real_re_read_not_an_assertion(db_session, sweep):
+    """``verified`` is earned by bytes that hash, never by a claim.
+
+    The check constraint requires ``observed_sha256 == sha256``, and the
+    only honest way to satisfy it is to read the object back after
+    putting it there. A restore that recorded a clean verdict without
+    reading would be exactly the operator-asserts-a-repair move this
+    table's constraint exists to forbid.
+    """
+    from app.db.models.common import ArtifactIntegrityFinding
+
+    content = b"bytes that must be hashed to be believed"
+    digest, client = _held_but_referenced(db_session, content)
+
+    sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    event = _events_for(db_session, digest)[0]
+    assert event.finding is ArtifactIntegrityFinding.verified
+    assert event.observed_sha256 == digest
+    assert event.observed_bytes == len(content)
+
+
+def test_a_restore_that_puts_back_wrong_bytes_records_the_break(db_session, sweep):
+    """The repair must be able to fail, and say so.
+
+    If the held copy does not hash to the key it was held under, putting
+    it back has not repaired anything -- and a ``verified`` row would
+    clear a hard fail on evidence that is genuinely bad.
+    """
+    from app.db.models.common import ArtifactIntegrityFinding
+
+    digest, client = _held_but_referenced(db_session)
+    client.contents[f"reclaimed/{digest}"] = b"not the bytes that were held"
+
+    outcome = sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    assert outcome.restored == []
+    assert outcome.broken == [digest]
+    event = _events_for(db_session, digest)[0]
+    assert event.finding is ArtifactIntegrityFinding.digest_mismatch
+
+
+def test_a_store_that_dies_mid_restore_is_not_reported_as_a_break(db_session, sweep):
+    """No row was written, so nothing may claim one was.
+
+    The object is back at its key and the store then declined to serve
+    the re-read. That says nothing about the bytes, which is why
+    ``_verify_one`` records nothing for it -- and an exit code promising
+    a recorded break would send an operator to a custody record with no
+    entry in it. Same refusal the sweep already makes for an outage
+    during an ordinary read.
+    """
+    digest, client = _held_but_referenced(db_session)
+    original_get = client.get_object
+
+    def dying_get(*, Bucket, Key):
+        if Key == _cas_key(digest):
+            raise EndpointConnectionError(endpoint_url="http://store.invalid")
+        return original_get(Bucket=Bucket, Key=Key)
+
+    client.get_object = dying_get
+
+    outcome = sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    assert outcome.broken == []
+    assert outcome.blocked == [digest]
+    assert _events_for(db_session, digest) == []
+
+
+def test_an_unreferenced_held_object_is_left_in_the_hold(db_session, sweep):
+    """The hold is where reclaimed garbage is supposed to sit.
+
+    Restoring everything would undo the reclaim on every run and make the
+    two-step design a no-op with extra copies.
+    """
+    content = b"genuinely unreferenced"
+    digest = hashlib.sha256(content).hexdigest()
+    client = _HoldBucket({f"reclaimed/{digest}": content})
+
+    outcome = sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    assert outcome.restored == []
+    assert f"reclaimed/{digest}" in client.objects
+    assert _events_for(db_session, digest) == []
+
+
+def test_a_restore_never_overwrites_an_occupied_key(db_session, sweep):
+    """Somebody re-uploaded the same bytes; that copy is what rows read.
+
+    There is no wrong state here, so there is nothing to repair and
+    nothing to record -- and overwriting would at best be a no-op and at
+    worst erase a genuine corruption the custody record exists to keep.
+    """
+    content = b"uploaded again while the first copy was held"
+    digest, client = _held_but_referenced(db_session, content)
+    client.objects[_cas_key(digest)] = datetime.now(timezone.utc)
+    client.contents[_cas_key(digest)] = content
+
+    outcome = sweep._restore_referenced_holds(
+        db_session,
+        client=client,
+        bucket="b",
+        session_factory=_SessionProxy(db_session),
+    )
+
+    assert outcome.restored == []
+    assert outcome.blocked == [digest]
+    assert client.copied == []
+    assert client.deleted == []
+    assert _events_for(db_session, digest) == []
+
+
+def test_the_purge_guard_is_still_the_purge_guard(db_session, sweep):
+    """The repair runs first; the irreversible operation keeps its own check.
+
+    A guard that trusts an earlier pass to have run is not a guard, and
+    this one sits in front of the only thing here that destroys bytes.
+    """
+    digest, client = _held_but_referenced(db_session)
+
+    purged = sweep._purge_hold(db_session, client=client, bucket="b", min_age_days=7)
+
+    assert purged == []
+    assert f"reclaimed/{digest}" in client.objects
+
+
+def test_a_run_that_restores_says_so_and_does_not_exit_clean(
+    db_session, sweep, monkeypatch, capsys
+):
+    """Repaired, visible and auditable -- the exit code is the visible part.
+
+    Exiting 0 would make a repair something only a log reader could ever
+    learn about, which is the shape of failure this script has been
+    corrected for twice already.
+    """
+    digest, client = _held_but_referenced(db_session)
+
+    code = _run_main(
+        sweep, monkeypatch, db_session, ["--all", "--purge-hold-days", "90"], client
+    )
+
+    out = capsys.readouterr().out
+    assert code == sweep.EXIT_REPAIRED
+    assert "REPAIRED" in out
+    assert digest in out
+
+
+def test_a_reclaim_run_repairs_without_waiting_for_the_next_purge(
+    db_session, sweep, monkeypatch, capsys
+):
+    """The run that creates this state is the cheapest place to catch it.
+
+    Leaving it to ``--purge-hold-days`` would mean the hard fail stands
+    for however long the operator's purge interval is -- a quarter, in
+    the documented invocation.
+    """
+    digest, client = _held_but_referenced(db_session)
+
+    code = _run_main(
+        sweep, monkeypatch, db_session, ["--all", "--reclaim-orphans"], client
+    )
+
+    assert code == sweep.EXIT_REPAIRED
+    assert _cas_key(digest) in client.objects
+    assert len(_events_for(db_session, digest)) == 1
+
+
+def test_a_dry_run_repairs_nothing(db_session, sweep, monkeypatch, capsys):
+    """``--dry-run`` is a plan. A plan that mutates the store is not one."""
+    digest, client = _held_but_referenced(db_session)
+
+    _run_main(
+        sweep,
+        monkeypatch,
+        db_session,
+        ["--all", "--reclaim-orphans", "--dry-run"],
+        client,
+    )
+
+    assert f"reclaimed/{digest}" in client.objects
+    assert _events_for(db_session, digest) == []
+
+
+def test_the_reclaim_itself_records_nothing(db_session, sweep):
+    """The asymmetry, held by a test because it is a decision and not an
+    oversight.
+
+    A reclaimed object is referenced by nothing, so a row about it would
+    name no evidence -- and the only honest finding for "not at its key"
+    is ``object_missing``, a break, whose latest-observation rule would
+    then hard-fail the next legitimate upload of those bytes on the
+    strength of a maintenance action. That is this same defect in a new
+    place, so the reclaim stays a report.
+    """
+    content = b"an orphan on its way to the hold"
+    digest = hashlib.sha256(content).hexdigest()
+    client = _HoldBucket({_cas_key(digest): content})
+
+    held = sweep._reclaim_orphans(
+        lambda: _NullSession(), [digest], client=client, bucket="b"
+    )
+
+    assert held == [digest]
+    assert _events_for(db_session, digest) == []

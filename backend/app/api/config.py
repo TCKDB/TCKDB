@@ -151,6 +151,25 @@ class Settings(BaseSettings):
     # ``docs/specs/public_read_abuse_controls.md``).
     db_statement_timeout_ms: int | None = 30_000
 
+    # Seconds libpq will spend trying to establish one connection before
+    # giving up. Distinct from ``db_statement_timeout_ms``, which is
+    # server-side and therefore bounds nothing until a server is on the
+    # other end of a socket.
+    #
+    # It exists because the two ways a database host can be absent fail
+    # very differently. A refused connection returns in milliseconds. A
+    # *black-holed* one -- packets dropped rather than rejected, which is
+    # what a firewall rule, a departed container or a stale DNS answer
+    # usually looks like -- returns when the kernel exhausts its SYN
+    # retries, measured at 130 s on this stack. Everything that opens a
+    # session on the ambient engine inherited that: the boot-time
+    # encoding probe blocked the lifespan for the whole of it, and
+    # ``/health``, ``/readyz`` and ``/status`` blocked a request each.
+    #
+    # ``0`` disables the parameter and restores the OS default. libpq
+    # silently raises any positive value below 2 to 2.
+    db_connect_timeout_seconds: int = 10
+
     # Minimum ``tckdb-client`` version accepted on write/upload routes.
     # Requests that identify themselves via ``X-TCKDB-Client-Name:
     # tckdb-client`` and a lower ``X-TCKDB-Client-Version`` are rejected
@@ -198,11 +217,18 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
-        return (
+        url = (
             f"postgresql+psycopg://{self.db_user}:{self.db_password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
             f"?client_encoding={self.db_client_encoding}"
         )
+        # Carried on the URL rather than passed to ``create_engine``
+        # because every engine built from this property should have it,
+        # including the ones built by scripts and workers that never
+        # touch ``app.api.deps``.
+        if self.db_connect_timeout_seconds > 0:
+            url += f"&connect_timeout={self.db_connect_timeout_seconds}"
+        return url
 
 
 settings = Settings()

@@ -675,10 +675,16 @@ def purge_held_object(
     content-addressed key, so no upload can deduplicate against it *now*.
     What that does not rule out is an upload that deduplicated against it
     shortly before it was held and committed its row afterwards. The
-    caller must therefore re-read the references and refuse any digest a
-    row points at -- see ``_purge_hold`` in
+    caller must therefore re-read the references and never delete a
+    digest a row points at -- see ``_purge_hold`` in
     ``backend/scripts/ops/verify_artifact_integrity.py``, the only caller,
     where that check is load-bearing rather than defensive.
+
+    Refusing to delete is where that caller's obligation begins, not
+    where it ends: a referenced held digest is a legitimate record
+    reading as corrupt, so the sweep restores it and records the restore
+    (``_restore_referenced_holds``, ADR 0014). This function stays the
+    unconditional deleter it was; the judgement lives in the caller.
     """
     if client is None:
         client = _get_s3_client()

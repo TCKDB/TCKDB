@@ -46,13 +46,16 @@ Usage::
     # Accept a scope that is legitimately empty (a fresh deployment).
     python backend/scripts/ops/verify_artifact_integrity.py --all --allow-empty
 
-Exit status separates the two ways this stops being a clean gate: ``1``
-when a break was recorded, ``2`` when something in scope was **not
+Exit status separates the three ways this stops being a clean gate:
+``1`` when a break was recorded, ``2`` when something in scope was **not
 checked at all** -- an empty population, or a store that would not
-answer. A runbook gates on "not zero"; an operator triaging needs to
-know which, because "the evidence is corrupt" and "we could not look"
-call for opposite responses. ``--allow-empty`` is the explicit opt-out
-for a scope that is legitimately empty.
+answer -- and ``3`` when the run **repaired** something, which today
+means it put a held object back because a committed row referenced it. A
+runbook gates on "not zero"; an operator triaging needs to know which,
+because "the evidence is corrupt", "we could not look" and "we mislaid
+your bytes and have put them back" call for entirely different
+responses. ``--allow-empty`` is the explicit opt-out for a scope that is
+legitimately empty.
 
 **A pass has to mean something was checked.** The defect this script
 carried was not a wrong answer but a confident one over an empty set:
@@ -81,12 +84,33 @@ re-reads the references and refuses any digest a row points at.
 content-addressed key verifies and returns without writing, transaction
 still open. So a genuine month-old orphan can be deduplicated against
 mid-sweep and moved anyway, leaving a committed row pointing at a held
-digest. The window is seconds and the recovery is ``--restore <sha256>``;
-until someone runs it, the next read of that artifact records
-``object_missing`` and hard-fails a legitimate calculation. Both age
+digest. The window is seconds and the bytes always survive it. Both age
 gates have enforced floors for this reason -- at zero they stop being
 guards -- and an object the store will not date is left alone rather than
 assumed ancient.
+
+**Losing that race is now repaired, and the repair is recorded.** Any
+invocation that touches the hold puts back every held object a committed
+row references, re-reads it, and appends an
+``artifact_integrity_event`` under the ``reclaim_restore`` detection
+context. Refusing and leaving it to ``--restore <sha256>`` was the older
+behaviour and it left a live wrong state: the row is legitimate, every
+read of it records ``object_missing``, the trust layer hard-fails a
+correct calculation, and nothing prompts anybody to look. The repair is
+unambiguous -- the object belongs at that key, and a restore refuses an
+occupied one, so it cannot clobber anything -- which is what separates it
+from the remediations ADR 0014 keeps in operators' hands. The objection
+that automatic repair hides a failed safety argument is answered by the
+recorded row and the ``3`` exit code, not by leaving the damage in place.
+
+The *reclaim* is reported and not recorded, which is a deliberate
+asymmetry. A reclaimed object is by construction referenced by nothing,
+so a row about it would name no evidence; and the only honest finding for
+"no longer at its content-addressed key" is ``object_missing``, a break,
+which would then hard-fail the next legitimate upload of those bytes on
+the strength of a maintenance action. The restore is recordable precisely
+because a committed row does point at the digest and the bytes are
+re-read at the end of it.
 """
 
 from __future__ import annotations
@@ -348,12 +372,22 @@ def _verify_one(
     client,
     bucket: str,
     previously_broken: frozenset[str] = frozenset(),
+    context: ArtifactIntegrityDetectionContext = (
+        ArtifactIntegrityDetectionContext.verification_sweep
+    ),
+    clean_read_detail: str | None = None,
 ) -> str | None:
     """Read one object and record what it shows. Returns the finding, or None.
 
     A clean read is recorded **only** when the digest already carries a
     break, because that read is what clears the hard fail. Writing a row
     for every clean read would turn an incident log into a read log.
+
+    ``clean_read_detail`` overrides that rule for the one caller with a
+    reason to: the restore in :func:`_restore_referenced_holds` is a
+    change of custody whether or not anybody had yet read the object and
+    found it gone, so its clean read is always recorded, under
+    ``context`` and with that prose as the row's ``detail``.
     """
     try:
         content = load_artifact_bytes(
@@ -362,16 +396,18 @@ def _verify_one(
             client=client,
             bucket=bucket,
         )
-        if target.sha256 in previously_broken:
+        if clean_read_detail is not None or target.sha256 in previously_broken:
             record_integrity_verified(
                 sha256=target.sha256,
-                detected_during=(
-                    ArtifactIntegrityDetectionContext.verification_sweep
-                ),
+                detected_during=context,
                 observed_bytes=len(content),
                 artifact_id=target.artifact_id,
                 artifact_recorded_at=target.artifact_recorded_at,
-                detail="re-read cleanly; supersedes the recorded break",
+                detail=(
+                    clean_read_detail
+                    if clean_read_detail is not None
+                    else "re-read cleanly; supersedes the recorded break"
+                ),
                 session_factory=session_factory,
                 storage_client=client,
                 bucket=bucket,
@@ -382,7 +418,7 @@ def _verify_one(
         record_integrity_observation(
             sha256=exc.sha256,
             finding=exc.finding,
-            detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
+            detected_during=context,
             observed_sha256=exc.observed_sha256,
             expected_bytes=exc.expected_bytes,
             observed_bytes=exc.observed_bytes,
@@ -406,7 +442,7 @@ def _verify_one(
         record_integrity_observation(
             sha256=target.sha256,
             finding=ArtifactIntegrityFinding.object_missing,
-            detected_during=ArtifactIntegrityDetectionContext.verification_sweep,
+            detected_during=context,
             expected_bytes=target.expected_bytes,
             artifact_id=target.artifact_id,
             artifact_recorded_at=target.artifact_recorded_at,
@@ -498,6 +534,167 @@ def _reclaim_orphans(
     return held
 
 
+@dataclass
+class _RestoreOutcome:
+    """What the hold-repair pass did, in the three shapes it can end in."""
+
+    #: Put back and re-read cleanly. The wrong state existed and is gone.
+    restored: list[str]
+    #: Put back, and the bytes did not verify. A custody break **was
+    #: recorded**; this is not a repair. Only outcomes that wrote a break
+    #: row belong here, because this list is what raises the exit code to
+    #: ``EXIT_BREAK`` and that code promises a row exists to go and read.
+    broken: list[str]
+    #: Needs a human and produced no row: the restore could not proceed
+    #: (the content-addressed key is occupied), or it did and the store
+    #: then would not serve the re-read, which says nothing about the
+    #: bytes either way. Reported, never silently retried away.
+    blocked: list[str]
+
+    def __bool__(self) -> bool:
+        return bool(self.restored or self.broken or self.blocked)
+
+
+def _held_digests(client, bucket: str) -> list[str]:
+    """Every digest currently sitting in the reclaim hold."""
+    digests: list[str] = []
+    paginator = client.get_paginator("list_objects_v2")
+    for page in paginator.paginate(Bucket=bucket, Prefix=RECLAIM_HOLD_PREFIX):
+        for obj in page.get("Contents", []):
+            digest = str(obj["Key"]).rsplit("/", 1)[-1]
+            if len(digest) == 64:
+                digests.append(digest)
+    return digests
+
+
+def _target_for_digest(session: Session, digest: str) -> _VerificationTarget:
+    """The committed row's account of an object, for the record about it."""
+    row = session.scalars(
+        select(CalculationArtifact)
+        .where(CalculationArtifact.sha256 == digest)
+        .order_by(CalculationArtifact.id)
+        .limit(1)
+    ).first()
+    if row is not None:
+        return _VerificationTarget.from_artifact(row)
+    return _VerificationTarget(  # pragma: no cover - caller filters on the row
+        sha256=digest,
+        expected_bytes=None,
+        artifact_id=None,
+        artifact_recorded_at=None,
+        filename="(no artifact row)",
+    )
+
+
+def _restore_referenced_holds(
+    session: Session,
+    *,
+    client,
+    bucket: str,
+    session_factory,
+) -> _RestoreOutcome:
+    """Put back any held object a committed row references, and record it.
+
+    This is the repair for the one race the reclaim cannot close.
+    ``store_artifact`` deduplicates -- an upload of bytes already at the
+    content-addressed key verifies and returns without writing, with its
+    transaction still open -- so a genuine month-old orphan can be
+    deduplicated against mid-sweep, moved to the hold while that
+    transaction is uncommitted, and then acquire a committed
+    ``calculation_artifact`` row pointing at a digest whose object is no
+    longer at its key.
+
+    **Why this repairs rather than refuses.** The purge already declined
+    to delete such a digest, which saved the bytes and nothing else: the
+    row is legitimate, every read of it records ``object_missing``, the
+    trust layer hard-fails a correct calculation, and that state persists
+    for as long as it takes somebody to notice and run ``--restore`` by
+    hand -- which nothing prompts them to do. Refusing leaves a live
+    wrong state; the repair is unambiguous, because the object belongs at
+    that key and :func:`restore_held_object` refuses an occupied one, so
+    it cannot clobber anything. This is not the class of remediation ADR
+    0014 keeps in operators' hands: nothing here deletes, quarantines or
+    overwrites evidence, and the corrupt-object case is untouched.
+
+    **Why it records.** The real objection to automatic repair is that it
+    hides a safety argument that lost its race. ADR 0014 answers that
+    objection everywhere else by *recording* rather than by refusing, and
+    an object moved out of the content-addressed namespace and back is a
+    change of custody. So each restore appends an observation under
+    ``reclaim_restore``, and the observation is a genuine re-read of the
+    restored bytes: if they do not hash to the key, this records the
+    break instead of a repair it did not earn.
+
+    Note the reference set is read here and not reused from the caller:
+    the point of the pass is to catch a row that committed *after* some
+    earlier check.
+    """
+    held = _held_digests(client, bucket)
+    if not held:
+        return _RestoreOutcome([], [], [])
+    referenced = set(
+        session.scalars(
+            select(CalculationArtifact.sha256).where(
+                CalculationArtifact.sha256.in_(sorted(set(held)))
+            )
+        ).all()
+    )
+    outcome = _RestoreOutcome([], [], [])
+    for digest in held:
+        if digest not in referenced:
+            continue
+        if head_artifact_object(digest, client=client, bucket=bucket):
+            # Somebody re-uploaded the same bytes, so the key is already
+            # populated and every row is reading a byte-identical copy.
+            # There is no wrong state to repair and nothing to record.
+            print(
+                f"  = {digest} is referenced and held, but the key is already "
+                "repopulated; leaving both copies alone"
+            )
+            outcome.blocked.append(digest)
+            continue
+        try:
+            moved = restore_held_object(digest, client=client, bucket=bucket)
+        except ArtifactStorageUnavailable as exc:
+            print(f"  ! could not restore {digest}: {exc}")
+            outcome.blocked.append(digest)
+            continue
+        if not moved:  # pragma: no cover - listed a moment ago
+            outcome.blocked.append(digest)
+            continue
+        finding = _verify_one(
+            session_factory,
+            _target_for_digest(session, digest),
+            client=client,
+            bucket=bucket,
+            context=ArtifactIntegrityDetectionContext.reclaim_restore,
+            clean_read_detail=(
+                "restored from the reclaim hold: a committed "
+                "calculation_artifact row referenced this digest while the "
+                "object was held, so the reclaim lost its documented race "
+                "with store_artifact dedup. Re-read at its content-addressed "
+                "key after the restore."
+            ),
+        )
+        if finding == REPAIRED:
+            print(f"  RESTORED {digest}: put back and re-read cleanly")
+            outcome.restored.append(digest)
+        elif finding == UNAVAILABLE:
+            # The object is back at its key and the store then declined to
+            # serve it. Nothing was recorded, so calling this a break would
+            # promise a row that does not exist -- the same lie the sweep
+            # already refuses to tell when an outage interrupts a read.
+            print(
+                f"  ! {digest} was put back, but the store would not serve "
+                "the re-read; nothing recorded"
+            )
+            outcome.blocked.append(digest)
+        else:
+            print(f"  BREAK after restoring {digest}: {finding}")
+            outcome.broken.append(digest)
+    return outcome
+
+
 def _purge_hold(
     session: Session, *, client, bucket: str, min_age_days: int
 ) -> list[str]:
@@ -514,10 +711,17 @@ def _purge_hold(
     A row *can* end up referencing a held digest -- an upload that
     deduplicated against the object moments before it was moved commits
     afterwards -- and this is the last thing standing between that row
-    and the permanent loss of its bytes. If a held digest turns out to be
-    referenced, the reasoning above has failed somewhere, and the right
+    and the permanent loss of its bytes.
+
+    :func:`_restore_referenced_holds` runs first and should have put any
+    such object back already, which is what makes the wrong state get
+    repaired instead of merely surviving. This check stays exactly as it
+    was regardless, and deliberately: it is the guard on the only
+    irreversible operation here, and a guard that trusts an earlier pass
+    to have run is not a guard. Reaching it means the repair could not
+    proceed -- an occupied key, an unreachable store -- and the right
     response to a failure of reasoning about an irreversible operation is
-    to keep the bytes and let a human look.
+    still to keep the bytes and let a human look.
     """
     referenced = set(session.scalars(select(CalculationArtifact.sha256)).all())
     cutoff = datetime.now(timezone.utc) - timedelta(days=min_age_days)
@@ -590,9 +794,20 @@ MIN_HOLD_DAYS = 7
 #: because part of the scope was never read. A gate on "not zero" catches
 #: both; triage needs them apart, because a corrupt object and a store
 #: that would not answer call for opposite first moves.
+#:
+#: ``3`` is the third of those: the run *changed* something. A held
+#: object a committed row referenced was put back, which means the
+#: reclaim's documented race fired, and the state it left behind was a
+#: legitimate calculation reading as corrupt. It is not ``0`` because a
+#: repair that exits clean is a repair nobody reads about, and it is not
+#: ``1`` because nothing is wrong with the evidence -- the difference
+#: between "your bytes are bad" and "we mislaid your bytes and have put
+#: them back" is exactly the kind of distinction the other two codes
+#: exist to draw. Still non-zero, so a gate on "not zero" is unaffected.
 EXIT_OK = 0
 EXIT_BREAK = 1
 EXIT_NOT_VERIFIED = 2
+EXIT_REPAIRED = 3
 
 
 def _not_verified(message: str) -> SystemExit:
@@ -739,6 +954,22 @@ def main() -> int:
             if want_orphans
             else []
         )
+        # Before the purge, and on any invocation that touches the hold at
+        # all: the run that *creates* this state is a --reclaim-orphans
+        # run, so that is the cheapest place to catch it, and waiting for
+        # the next purge would leave a legitimate calculation hard-failing
+        # for a quarter.
+        restores = (
+            _restore_referenced_holds(
+                session,
+                client=client,
+                bucket=bucket,
+                session_factory=SessionLocal,
+            )
+            if (want_orphans or args.purge_hold_days is not None)
+            and not args.dry_run
+            else _RestoreOutcome([], [], [])
+        )
         purged = (
             _purge_hold(
                 session,
@@ -812,18 +1043,41 @@ def main() -> int:
         )
     if purged:
         print(f"purged from the reclaim hold (DELETED): {len(purged)}")
+    if restores:
+        print(
+            f"restored from the reclaim hold: {len(restores.restored)} "
+            f"(broken on re-read: {len(restores.broken)}, "
+            f"could not restore: {len(restores.blocked)})"
+        )
 
     # After the orphan and purge reports, not before: those are useful
     # findings in their own right and an empty verification scope is no
     # reason to withhold them.
-    if not targets:
+    if not targets and not restores:
         return _refuse_empty_scope(args)
-    if break_count:
+    if break_count or restores.broken:
         print(
-            f"RESULT: {break_count} break(s) recorded. The owning "
-            "calculations now hard-fail; see /scientific/artifacts/integrity."
+            f"RESULT: {break_count + len(restores.broken)} break(s) recorded. "
+            "The owning calculations now hard-fail; see "
+            "/scientific/artifacts/integrity."
         )
         return EXIT_BREAK
+    if restores.restored or restores.blocked:
+        # Reported ahead of ``unchecked`` on purpose. An unreadable store
+        # is a reason to run the sweep again; this is a statement that
+        # the reclaim's race fired against real data, which is a thing to
+        # go and read about whether or not the rest of the run was clean.
+        verdict = "REPAIRED" if restores.restored else "NOT REPAIRED"
+        print(
+            f"RESULT: {verdict}. {len(restores.restored)} held object(s) a "
+            "committed row references were put back at their "
+            f"content-addressed key and re-read; {len(restores.blocked)} "
+            "could not be. The reclaim lost its documented race with "
+            "store_artifact dedup; each restore is recorded under the "
+            "reclaim_restore detection context. Review before the next "
+            "--reclaim-orphans run."
+        )
+        return EXIT_REPAIRED
     if unchecked:
         print(
             f"RESULT: NOT VERIFIED. {unchecked} of {len(targets)} digest(s) "

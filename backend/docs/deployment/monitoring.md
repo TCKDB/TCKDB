@@ -404,6 +404,12 @@ two. There is no `--allow-empty` equivalent, unlike the integrity sweep: an
 empty corpus is a legitimate state for a fresh deployment, while watching
 nothing is never a legitimate state for a watchdog.
 
+The integrity sweep has a fourth code, `3`, that this watchdog will never emit:
+it means the run *repaired* something — it put a held object back because a
+committed row referenced it. A watchdog reads state and changes none, so it has
+nothing to report under that code. The shared meanings of `0`, `1` and `2` are
+unaffected.
+
 The push names the workflow, the branch, the consecutive-failure count, the
 commit, the failing job and step, and links the run — because "nightly failed"
 with nothing to act on is how people learn to ignore an alert, which is the

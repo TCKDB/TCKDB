@@ -20,6 +20,7 @@ upstream" — those remain in the pre-flight checklist.
 from __future__ import annotations
 
 import logging
+import threading
 
 from app.api.config import Settings
 
@@ -115,6 +116,30 @@ def server_encoding(session) -> str | None:
         return None
 
 
+#: Hard wall-clock ceiling for the boot-time encoding probe, mirroring
+#: ``_STORAGE_PROBE_DEADLINE_SECONDS`` in :mod:`app.api.routes.health` and
+#: for the same reason. ``connect_timeout`` on the engine URL
+#: (``Settings.db_connect_timeout_seconds``) bounds the socket connect,
+#: which is the common case, but it does not bound everything: libpq
+#: applies it per host attempt and around the connect poll loop, so a
+#: blocking DNS lookup and a server that completes a handshake and then
+#: never answers ``SHOW server_encoding`` both escape it. The deadline is
+#: what makes "neither blocks startup" a property of this module rather
+#: than of the network.
+_ENCODING_PROBE_DEADLINE_SECONDS = 4.0
+
+
+def _read_server_encoding() -> str | None:
+    """Open a session on the ambient engine, ask, and close it."""
+    from app.api.deps import SessionLocal
+
+    session = SessionLocal()
+    try:
+        return server_encoding(session)
+    finally:
+        session.close()
+
+
 def report_database_encoding_at_startup() -> str | None:
     """Check the cluster's encoding at boot and say so if it is wrong.
 
@@ -134,15 +159,52 @@ def report_database_encoding_at_startup() -> str | None:
     Does not raise. The database being unreachable at boot is normal --
     the API may legitimately start before Postgres accepts connections --
     and is reported at ``debug``, not as a fault.
+
+    **It also does not wait.** The query runs on a daemon thread and the
+    lifespan stops waiting after
+    :data:`_ENCODING_PROBE_DEADLINE_SECONDS`, which is what the storage
+    probe already did and this one did not. A *refused* connection has
+    always returned in milliseconds; a black-holed host -- packets
+    dropped rather than rejected -- returned after the kernel exhausted
+    its SYN retries, measured at 130 s, and the whole of that was spent
+    inside the lifespan with the API accepting nothing. A diagnostic that
+    can convert a degraded deployment into an outage is not worth its
+    diagnosis.
+
+    The abandoned thread is a daemon and holds only its own session, so
+    it neither delays process exit nor is joined at interpreter shutdown;
+    it unwinds on its own once ``connect_timeout`` fires.
     """
-    from app.api.deps import SessionLocal
+    outcome: dict[str, str | None] = {}
+    finished = threading.Event()
 
-    session = SessionLocal()
-    try:
-        encoding = server_encoding(session)
-    finally:
-        session.close()
+    def _probe() -> None:
+        try:
+            outcome["encoding"] = _read_server_encoding()
+        except BaseException:  # pragma: no cover - defensive
+            # Same contract as the storage probe: a boot diagnostic that
+            # raises must not become the fault it exists to report.
+            logger.exception("startup: server_encoding probe raised; continuing")
+        finally:
+            finished.set()
 
+    threading.Thread(
+        target=_probe, name="db-encoding-probe", daemon=True
+    ).start()
+
+    if not finished.wait(_ENCODING_PROBE_DEADLINE_SECONDS):
+        logger.warning(
+            "startup: database did not answer within %ss; server_encoding "
+            "unchecked and boot continuing. A refused connection returns "
+            "at once, so this is the other shape: the host is accepting "
+            "the packets and dropping them, or resolving and not "
+            "answering. Check DB_HOST/DB_PORT and anything filtering "
+            "between here and the cluster.",
+            _ENCODING_PROBE_DEADLINE_SECONDS,
+        )
+        return None
+
+    encoding = outcome.get("encoding")
     if encoding is None:
         logger.debug(
             "startup: database not reachable yet; server_encoding unchecked"
