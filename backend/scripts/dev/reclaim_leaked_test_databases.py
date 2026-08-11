@@ -86,6 +86,17 @@ import psycopg
 
 # Databases that must never be dropped, whatever a manifest says.  Belt and
 # braces on top of the name pattern below.
+#
+# Every entry here is a name the pattern *cannot* match, which is the only
+# shape an exception list should ever have.  It briefly held one that could:
+# ``tckdb_test_ci``, the nightly job's ambient ``DB_NAME``, which sat inside
+# ``tckdb_test%`` and so was a genuine reclaim candidate on a self-hosted
+# runner.  Naming it here made that one database safe and left the class
+# behind -- the next long-lived database someone parks in the harness's
+# namespace is reclaimable again, and nothing says so until it is gone.  The
+# nightly's database was renamed to ``tckdb_nightly_ci`` instead, putting it
+# outside the namespace the reclaimers own, and the entry was removed.
+# ``backend/tests/test_scratch_database_names.py`` asserts that it stays out.
 PROTECTED = frozenset(
     {
         "postgres",
@@ -94,13 +105,6 @@ PROTECTED = frozenset(
         "tckdb",
         "tckdb_dev",
         "tckdb_prod",
-        # Not created by the harness and never carries its marker, so the
-        # in-process sweep leaves it alone -- but this script does not read
-        # markers, and the name is inside ``tckdb_test%``. It is the
-        # ``DB_NAME`` of the nightly CI job
-        # (``.github/workflows/backend-nightly.yml``), so on a self-hosted
-        # runner ``plan`` would otherwise offer up the job's own database.
-        "tckdb_test_ci",
     }
 )
 

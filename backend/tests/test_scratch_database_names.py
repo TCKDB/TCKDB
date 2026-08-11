@@ -171,28 +171,67 @@ def _reclaim_script_pattern() -> re.Pattern[str]:
     return re.compile(match.group(1))
 
 
-def test_the_nightly_job_database_is_protected_from_the_reclaim_script() -> None:
-    """``tckdb_test_ci`` is a CI ``DB_NAME``, not a harness database.
+def _nightly_workflow_source() -> str:
+    return (
+        BACKEND_ROOT.parent / ".github" / "workflows" / "backend-nightly.yml"
+    ).read_text(encoding="utf-8")
 
-    The in-process sweep is safe from it by construction — no harness marker,
-    no reclaim. This script reads no markers, and the name sits inside
-    ``tckdb_test%``, so on a self-hosted runner ``plan`` would list the
-    nightly job's own database as a candidate.
+
+def test_the_nightly_ambient_database_is_outside_the_reclaimable_namespace() -> None:
+    """``tckdb_test%`` is the harness's namespace; nothing long-lived may sit in it.
+
+    The nightly job's ambient ``DB_NAME`` used to be ``tckdb_test_ci``, which
+    the reclaim script's pattern matches — so on a self-hosted runner ``plan``
+    would list the running job's own database as a candidate. That was first
+    fixed by naming it in ``PROTECTED``, which makes one name safe and leaves
+    the class: the next database parked in the namespace is reclaimable again,
+    and nothing complains until it is gone.
+
+    This asserts the class is closed instead: whatever the nightly calls its
+    ambient database, the reclaimers must be unable to see it *by pattern*,
+    with no exception entry involved. The name is read out of the workflow
+    rather than hardcoded, so renaming it again cannot make this vacuous.
+    """
+    workflow = _nightly_workflow_source()
+    # ``findall``, not ``search``: a later step-level override would otherwise
+    # be checked by nobody while the job-level name kept this passing.
+    declared = re.findall(r"^\s*(?:DB_NAME|POSTGRES_DB):\s*(\S+)\s*$", workflow, re.MULTILINE)
+    assert declared, "backend-nightly.yml no longer declares an ambient database name"
+
+    for db_name in declared:
+        assert _reclaim_script_pattern().fullmatch(db_name) is None, (
+            f"the nightly job's ambient database {db_name!r} is inside the "
+            "harness's reclaimable namespace; rename it outside 'tckdb_test' "
+            "rather than adding it to PROTECTED"
+        )
+        assert conftest._TEST_DATABASE_NAME.fullmatch(db_name) is None, (
+            f"the nightly job's ambient database {db_name!r} is inside the "
+            "in-process sweep's namespace"
+        )
+
+
+def test_protected_holds_only_names_the_pattern_cannot_match() -> None:
+    """``PROTECTED`` is belt-and-braces, not a place to park exceptions.
+
+    An entry the pattern *can* match means some database is safe only because
+    someone remembered to write it down — the failure mode #96 came from. Such
+    an entry is a signal to rename the database, not to lengthen this list.
     """
     source = (
         BACKEND_ROOT / "scripts" / "dev" / "reclaim_leaked_test_databases.py"
     ).read_text(encoding="utf-8")
-    protected = re.search(r"PROTECTED = frozenset\((.*?)\n\)", source, re.DOTALL)
+    protected = re.search(r"^PROTECTED = frozenset\((.*?)^\)", source, re.DOTALL | re.MULTILINE)
+    assert protected is not None, "could not locate PROTECTED in the reclaim script"
 
-    assert protected is not None
-    assert '"tckdb_test_ci"' in protected.group(1)
+    names = re.findall(r'"([^"]+)"', protected.group(1))
+    assert names, "PROTECTED parsed as empty; the regex above has drifted"
 
-    workflow = (
-        BACKEND_ROOT.parent / ".github" / "workflows" / "backend-nightly.yml"
-    ).read_text(encoding="utf-8")
-    # Non-vacuous: the protection is only worth anything while the nightly
-    # actually uses this name.
-    assert "DB_NAME: tckdb_test_ci" in workflow
+    pattern = _reclaim_script_pattern()
+    parked = [name for name in names if pattern.fullmatch(name) is not None]
+    assert parked == [], (
+        f"PROTECTED entries {parked} are inside the reclaimable name pattern. "
+        "Rename those databases outside 'tckdb_test' instead of excepting them."
+    )
 
 
 def test_both_reclaimers_use_the_same_name_pattern() -> None:
