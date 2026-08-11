@@ -354,9 +354,10 @@ def test_the_onfailure_push_actually_leaves_the_host(fake_host):
     assert sent[0].path == "/ntfy/test-topic"
     assert "FAILED" in sent[0].headers.get("title", "")
     assert "tckdb-alert.service" in sent[0].body, "name the unit that died"
-    assert "test-topic" not in proc.stdout, (
-        "ntfy echoes the topic back in its response body, and stdout here is "
-        "the journal; the topic is password-equivalent"
+    assert proc.stdout == "", (
+        "ntfy's publish response echoes the topic back, and this command's "
+        "stdout is the journal; the topic is password-equivalent, so the "
+        "response body is discarded rather than logged"
     )
 
 
