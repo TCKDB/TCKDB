@@ -695,6 +695,24 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         "search_transport(transport_ref=...). Reachable via get_json() when "
         "only the ref is known.",
     ),
+    (
+        "GET",
+        "/api/v1/scientific/artifacts/integrity",
+        "Custody of the deployment's own stored objects: expected against "
+        "observed digest and size, and the object store's ETag and paths at "
+        "the moment of detection. Curator/admin only, and operational detail "
+        "about a bucket rather than science about a record, so a typed method "
+        "on a contributor client would be aimed at the wrong reader. "
+        "Reachable via get_json().",
+    ),
+    (
+        "GET",
+        "/api/v1/scientific/artifacts/{sha256}/integrity",
+        "Full observation history for one stored object, oldest first, for "
+        "an operator deciding whether to trust a bucket. Same audience and "
+        "same reasoning as the integrity listing above. Reachable via "
+        "get_json().",
+    ),
 )
 
 # ---------------------------------------------------------------------------
