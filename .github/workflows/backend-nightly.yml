@@ -38,11 +38,11 @@ jobs:
         env:
           POSTGRES_USER: tckdb
           POSTGRES_PASSWORD: tckdb
-          POSTGRES_DB: tckdb_test_ci
+          POSTGRES_DB: tckdb_nightly_ci
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U tckdb -d tckdb_test_ci"
+          --health-cmd "pg_isready -U tckdb -d tckdb_nightly_ci"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 10
@@ -75,7 +75,18 @@ jobs:
       # PR (#64 cause 2, #92). Nothing should migrate this name. If a test
       # starts needing it migrated, that test is coupled to something no
       # fixture owns, and the fix belongs in the test.
-      DB_NAME: tckdb_test_ci
+      #
+      # `tckdb_nightly_ci`, not `tckdb_test_ci`: the `tckdb_test%` namespace
+      # belongs to the harness, and everything in it is by definition something
+      # a reclaimer may drop. This job's ambient database was inside it and was
+      # therefore reclaimable -- defended by naming it in the reclaim script's
+      # PROTECTED set (#126), which fixes this one name and leaves the class.
+      # A long-lived database that no fixture owns has no business in the
+      # harness's namespace at all, so it left, and PROTECTED lost its only
+      # non-obvious entry. See backend/scripts/dev/reclaim_leaked_test_databases.py.
+      # DB_TEST_NAME below stays inside `tckdb_test` on purpose: that one *is*
+      # the harness's, and must be reclaimable.
+      DB_NAME: tckdb_nightly_ci
       DB_CLIENT_ENCODING: utf8
       DB_TEST_NAME: tckdb_test_${{ github.run_id }}_${{ github.run_attempt }}
       # See the note in backend-ci.yml: 4 vCPUs on a standard runner, and each

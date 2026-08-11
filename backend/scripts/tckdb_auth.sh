@@ -71,13 +71,27 @@ print_json() {
     fi
 }
 
-# Extract a string field from JSON on stdin, trying several common names.
-# Prints the first non-empty value found, or nothing if none match.
+# Extract a string field from the JSON document in $1, trying several common
+# names. Prints the first non-empty value found, or nothing if none match.
+#
+# The document arrives as an *argument*, never on stdin. This used to be
+#
+#     extract_api_key() { python3 - <<'PY' ... PY ; }
+#     api_key="$(printf '%s' "$response" | extract_api_key)"
+#
+# and a heredoc *is* the process's stdin, so the pipe was discarded outright:
+# `json.load(sys.stdin)` read EOF, raised, and the function returned empty for
+# every input. `create-key` therefore could not succeed on any response at all,
+# and reported "could not find an API key field" -- a diagnosis pointing at the
+# server for a bug in this file. Same shape as the CI heredocs in #93, where
+# `conda run` ate stdin instead of a heredoc: something upstream consumes the
+# stream, the program runs on nothing, and the failure names the wrong culprit.
+# Passing the payload by argv leaves no stdin for anything to eat.
 extract_api_key() {
-    python3 - <<'PY'
+    python3 -c '
 import json, sys
 try:
-    data = json.load(sys.stdin)
+    data = json.loads(sys.argv[1])
 except Exception:
     sys.exit(0)
 if not isinstance(data, dict):
@@ -87,7 +101,7 @@ for field in ("key", "api_key", "token", "plain_key", "secret"):
     if isinstance(value, str) and value:
         print(value)
         break
-PY
+' "$1"
 }
 
 # Mask "abcdef…wxyz" — never log the full key.
@@ -180,7 +194,7 @@ cmd_create_key() {
     }
 
     local api_key
-    api_key="$(printf '%s' "$response" | extract_api_key)"
+    api_key="$(extract_api_key "$response")"
     if [[ -z "$api_key" ]]; then
         echo "error: could not find an API key field in the response." >&2
         echo "tried fields: key, api_key, token, plain_key, secret" >&2
