@@ -1782,6 +1782,7 @@ Table geometry_atom {
 
   checks {
     `atom_index >= 1` [name: 'ck_geometry_atom_atom_index_ge_1']
+    `btrim(element) ~ '^[A-Z][a-z]?$'` [name: 'ck_geometry_atom_element_canonical']
     `isotope_mass_number IS NULL OR isotope_mass_number >= 1` [name: 'ck_geometry_atom_isotope_mass_number_ge_1']
   }
 
@@ -2559,8 +2560,10 @@ Table reaction_atom_map_pair {
 
   checks {
     `atom_index >= 1` [name: 'ck_reaction_atom_map_pair_atom_index_ge_1']
-    `upper(element) = upper(ts_element)` [name: 'ck_reaction_atom_map_pair_element_matches']
+    `btrim(element) ~ '^[A-Z][a-z]?$'` [name: 'ck_reaction_atom_map_pair_element_canonical']
+    `element = ts_element` [name: 'ck_reaction_atom_map_pair_element_matches']
     `ts_atom_index >= 1` [name: 'ck_reaction_atom_map_pair_ts_atom_index_ge_1']
+    `btrim(ts_element) ~ '^[A-Z][a-z]?$'` [name: 'ck_reaction_atom_map_pair_ts_element_canonical']
   }
 
   Note: 'One atom of one participant identified with one transition-state atom.'

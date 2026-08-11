@@ -24,6 +24,7 @@ from typing import Iterator
 import pytest
 from pydantic import ValidationError
 from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from tckdb_schemas.fragments.reaction_atom_map import (
     W_ATOM_MAP_ELEMENT_NOT_CONSERVED,
@@ -897,28 +898,36 @@ _SPECIES_KEY_BY_SLOT = {
 }
 
 
-def test_a_map_across_a_stored_symbol_that_is_not_canonical_is_accepted(
+def test_a_stored_symbol_that_is_not_canonical_cannot_exist(
     db_conn,
 ) -> None:
-    """The blocking rule must hold on rows this process did not write.
+    """The precondition that licenses comparing ``element`` as stored.
 
-    ``parse_xyz`` canonicalises the element on the way into ``geometry_atom``,
-    and ``b4e7c1d20f83`` brought the older rows into line — but that is a
-    convention held by application code, not an invariant. **No CHECK
-    constraint requires the column to be canonical**, so a restore from a
-    backup older than that revision, a bulk import, or any future write path
-    that does not call ``parse_xyz`` can leave ``CL`` in the table. A blocking
-    check has to be correct on those rows too: refusing a correct map because
-    one geometry shouts its carbon is refusing correct chemistry over a capital
-    letter, which ADR 0008 puts out of bounds.
+    This test used to assert the opposite conclusion from the same setup, and
+    it was right to. ``parse_xyz`` canonicalised the element on the way into
+    ``geometry_atom`` and ``b4e7c1d20f83`` brought the older rows into line,
+    but no CHECK required the column to be canonical, so a restore from an
+    older backup, a bulk import, or any write path that skipped ``parse_xyz``
+    could leave ``CL`` in the table. The service's element-conservation check
+    is **blocking**, and a blocking check has to be correct on rows the running
+    process never wrote: refusing a correct map because one geometry shouted
+    its carbon would have been refusing correct chemistry over a capital
+    letter, which ADR 0008 puts out of bounds. So the comparison normalised
+    both sides, and this test proved it had to.
 
-    The non-canonical row is written **directly**, bypassing ``parse_xyz``,
-    because that is the only way such a row can exist now — which is exactly
-    the point. The map is then persisted against it through the real service
-    entry point.
+    ``ck_geometry_atom_element_canonical`` (``c5a1f8e3d074``) removes the
+    premise rather than the concern. The row this test used to write can no
+    longer exist on **any** path — a CHECK, unlike a foreign key or a trigger,
+    is not suspended by ``session_replication_role = replica``, which is the
+    bulk-load and restore path the normalisation existed to survive. So the
+    same provocation is made and the database is required to refuse it.
 
-    This test is the one that fails if the comparison-time normalisation is
-    ever removed on the strength of ingestion canonicalising.
+    Written **directly**, bypassing ``parse_xyz``, because a write path that
+    does not canonicalise is the entire class of writer the constraint is for.
+
+    This is now the test that fails if the constraint is ever dropped —
+    which is what would make removing the comparison-time normalisation wrong
+    again.
     """
     payload = _payload()
     payload["atom_map"] = _complete_map()
@@ -971,67 +980,44 @@ def test_a_map_across_a_stored_symbol_that_is_not_canonical_is_accepted(
         session.delete(atom_map)
         session.flush()
 
-        # The row `parse_xyz` can no longer produce, written the only way it
-        # can now arrive: directly.
-        session.execute(
-            update(GeometryAtom)
-            .where(
-                GeometryAtom.geometry_id == methyl_geometry_id,
-                GeometryAtom.atom_index == 1,
+        # `participants` and `geometry_id_by_key` are built above and go
+        # deliberately unused from here: the map can never be re-persisted,
+        # because the row it would have had to read cannot be written.
+        assert geometry_id_by_key["ts-geom"] == ts_geometry_id
+        assert len(participants) == 3
+
+        # The row `parse_xyz` can no longer produce, attempted the only way it
+        # could ever have arrived: directly, around the canonicalising path.
+        with pytest.raises(IntegrityError) as excinfo:
+            session.execute(
+                update(GeometryAtom)
+                .where(
+                    GeometryAtom.geometry_id == methyl_geometry_id,
+                    GeometryAtom.atom_index == 1,
+                )
+                .values(element="c")
             )
-            .values(element="c")
-        )
-        session.flush()
-        assert session.scalar(
-            select(GeometryAtom.element).where(
-                GeometryAtom.geometry_id == methyl_geometry_id,
-                GeometryAtom.atom_index == 1,
-            )
-        ).strip() == "c"
-
-        # The saddle point still spells it `C`. Nothing may refuse this.
-        rewritten = persist_reaction_atom_map(
-            session,
-            ReactionAtomMapIn(**_complete_map()),
-            reaction_entry_id=result["reaction_entry_id"],
-            transition_state_entry_id=result["transition_state_entry_id"],
-            transition_state_geometry_id=ts_geometry_id,
-            participants=participants,
-            geometry_id_by_key=geometry_id_by_key,
-            created_by=_USER_ID,
-        )
-        session.flush()
-
-        assert rewritten is not None
-        rewritten_pairs = session.scalars(
-            select(ReactionAtomMapPair).where(
-                ReactionAtomMapPair.atom_map_id == rewritten.id
-            )
-        ).all()
-        assert len(rewritten_pairs) == 10
-
-        # Each end still stores its own geometry's spelling, which is what
-        # keeps both composite foreign keys resolvable across the disagreement.
-        methyl_carbon = next(
-            pair
-            for pair in rewritten_pairs
-            if pair.side is ReactionRole.reactant
-            and pair.geometry_id == methyl_geometry_id
-            and pair.atom_index == 1
-        )
-        assert methyl_carbon.element.strip() == "c"
-        assert methyl_carbon.ts_element.strip() == "C"
+            session.flush()
+        assert "ck_geometry_atom_element_canonical" in str(excinfo.value)
 
 
-def test_a_non_canonical_stored_symbol_does_not_blunt_the_element_rule(
+def test_a_stored_symbol_disagreeing_with_the_saddle_point_still_blocks(
     db_conn,
 ) -> None:
-    """Normalising a stored symbol must not stop carbon-to-nitrogen blocking.
+    """Comparing as stored must not cost the rule the normalisation protected.
 
-    The companion to the test above: tolerating case must buy tolerance of
-    case and nothing else. Here the saddle point really is a different element
-    from the reactant atom mapped onto it, spelled in the awkward case, and it
-    still blocks.
+    The companion to the test above. That one proves the comparison's inputs
+    are canonical on every path; this one proves the comparison itself still
+    refuses a genuine element change when it reads them raw. The reactant atom
+    is rewritten to nitrogen behind the service's back, so the disagreement is
+    between two *stored* geometries rather than inside a payload — the seam the
+    wire validator cannot see.
+
+    It used to spell that nitrogen ``n``, to prove that tolerating case bought
+    tolerance of case and nothing else. ``ck_geometry_atom_element_canonical``
+    makes ``n`` unwritable, so the element is spelled canonically and the
+    assertion — nitrogen is not carbon, and the service says so with
+    ``W_ATOM_MAP_ELEMENT_NOT_CONSERVED`` — is unchanged.
     """
     payload = _payload()
     payload["atom_map"] = _complete_map()
@@ -1080,14 +1066,14 @@ def test_a_non_canonical_stored_symbol_does_not_blunt_the_element_rule(
         session.delete(atom_map)
         session.flush()
 
-        # ``n`` is nitrogen however it is spelled, and nitrogen is not carbon.
+        # Nitrogen is not carbon.
         session.execute(
             update(GeometryAtom)
             .where(
                 GeometryAtom.geometry_id == methyl_geometry_id,
                 GeometryAtom.atom_index == 1,
             )
-            .values(element="n")
+            .values(element="N")
         )
         session.flush()
 

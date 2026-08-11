@@ -495,7 +495,21 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
             table="reaction_atom_map_pair",
             name="ck_reaction_atom_map_pair_element_matches",
             kind="check",
-            definition="upper(element) = upper(ts_element)",
+            # Plain equality since ``c5a1f8e3d074``. It was
+            # ``upper(element) = upper(ts_element)``, because the two ends
+            # quote two geometries and nothing held them to one spelling of an
+            # element. ``ck_geometry_atom_element_canonical`` and the matching
+            # CHECK on each of this table's own element columns now do, so the
+            # case-blindness could only be a no-op.
+            #
+            # It stays a CHECK rather than collapsing into the foreign keys,
+            # which would enforce the same rule by leaving an element change
+            # unrepresentable. A foreign key is a system trigger and lapses
+            # under ``session_replication_role = replica``; a CHECK does not.
+            # That is also what keeps this refusal *named*: the foreign key
+            # fires for "that geometry has no such atom" as well, so it could
+            # carry neither code unambiguously.
+            definition="element = ts_element",
             # Deliberately the *same* code the wire check raises. The two
             # sites enforce one claim, so a client that learned to handle
             # ``atom_map_element_not_conserved`` from a 422 handles it
@@ -510,19 +524,20 @@ CHECK_ATOM_MAP_ELEMENT_CONSERVED = ScientificCheck(
         ),
     ),
     escape_hatch=(
-        "Case is not load-bearing. The comparison is deliberately "
-        "case-insensitive because the two ends quote two different "
-        "geometries and nothing guarantees they spell an element the same "
-        "way — carbon becoming nitrogen is a contradiction, while ``Cl`` "
-        "becoming ``CL`` is one program shouting where another did not. "
-        "``b4e7c1d20f83`` canonicalises the symbol on the way into "
-        "``geometry_atom.element``, which makes disagreement rare on rows "
-        "written through the API; it is a convention rather than a "
-        "constraint, so both the database check and the Python check still "
-        "normalise instead of assuming it. Isotope mass number is "
-        "deliberately *not* carried across the same way, because a NULL "
-        "disables a MATCH SIMPLE foreign key; isotope consistency is checked "
-        "in the service layer instead."
+        "Case is not load-bearing, and no longer needs a special provision to "
+        "stop it becoming so. The comparison used to be case-insensitive on "
+        "both sides, because the two ends quote two different geometries and "
+        "nothing guaranteed they spelled an element the same way — carbon "
+        "becoming nitrogen is a contradiction, while ``Cl`` becoming ``CL`` "
+        "is one program shouting where another did not, and refusing the "
+        "second would have refused correct chemistry. ``b4e7c1d20f83`` "
+        "canonicalised the symbol on the way into ``geometry_atom.element`` "
+        "and ``c5a1f8e3d074`` made that a CHECK, so one element now has one "
+        "spelling in every state the database can be in and both the "
+        "constraint and the service compare the stored values directly. "
+        "Isotope mass number is deliberately *not* carried across the same "
+        "way, because a NULL disables a MATCH SIMPLE foreign key; isotope "
+        "consistency is checked in the service layer instead."
     ),
 )
 
