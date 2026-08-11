@@ -422,17 +422,30 @@ def _build_atom_map_badges(
         ).all()
     }
 
+    # Unpacked rather than indexed, so the header select's column order is
+    # named in both consumers and a reordering breaks loudly.
     return [
         ReactionAtomMapBadge(
-            transition_state_entry_id=row[1],
-            transition_state_entry_ref=row[2],
-            source=row[5],
-            equivalent_map_count=row[6],
-            note=row[7],
-            reactant_atoms_mapped=counts.get((row[0], ReactionRole.reactant), 0),
-            product_atoms_mapped=counts.get((row[0], ReactionRole.product), 0),
+            transition_state_entry_id=ts_entry_id,
+            transition_state_entry_ref=ts_entry_ref,
+            source=source,
+            equivalent_map_count=equivalent_map_count,
+            note=note,
+            reactant_atoms_mapped=counts.get(
+                (atom_map_id, ReactionRole.reactant), 0
+            ),
+            product_atoms_mapped=counts.get((atom_map_id, ReactionRole.product), 0),
         )
-        for row in maps
+        for (
+            atom_map_id,
+            ts_entry_id,
+            ts_entry_ref,
+            _ts_geometry_id,
+            _ts_geometry_ref,
+            source,
+            equivalent_map_count,
+            note,
+        ) in maps
     ]
 
 
