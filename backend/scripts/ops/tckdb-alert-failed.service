@@ -13,10 +13,44 @@ Description=Push an alert when the TCKDB health checker itself fails
 
 [Service]
 Type=oneshot
-EnvironmentFile=/home/calvin/.config/tckdb-alert.env
+
+# The leading `-` is mandatory, and its absence was a hole in exactly the shape
+# this unit exists to close. Without it systemd REFUSES TO START the unit when
+# the file is missing -- and "the EnvironmentFile is missing" is one of the
+# listed reasons tckdb-alert.service fails in the first place. So the one
+# failure this unit named first was the one it could not report: both units
+# died of the same cause, systemd logged `resources` for this one, and no push
+# was sent. Verified, not assumed: `systemd-run --wait -p EnvironmentFile=/no
+# /bin/sh -c 'echo ran'` never runs the command, and the same with `-/no` does.
+EnvironmentFile=-/home/calvin/.config/tckdb-alert.env
+
 # %i is not available on a non-templated OnFailure unit, so the failing unit is
 # named literally. If you rename tckdb-alert.service, rename it here too.
-ExecStart=/bin/sh -c 'curl -sS --max-time 20 \
+#
+# Two guards on the push itself, because an alerting unit that exits 0 without
+# alerting anyone is worse than one that is obviously broken:
+#
+#   1. An unset TCKDB_NTFY_TOPIC used to POST to `https://ntfy.sh/` -- ntfy
+#      answers that URL, curl was happy, the unit went green and nobody was
+#      told. There is no fallback topic to use instead (the topic IS the
+#      address, and it is a secret), so this refuses and says so in the
+#      journal. The unit then stays failed, which is visible in
+#      `systemctl --failed`, and the external dead man's switch is what
+#      actually converts this case into a page.
+#   2. --fail, so a 401 from a protected topic or a 5xx from ntfy is a failed
+#      unit rather than a delivered alert. curl exits 0 on an HTTP error
+#      unless told otherwise; that same bug has been fixed twice already, in
+#      tckdb_alert_check.sh and in uptime-check.yml.
+#
+# -o /dev/null because ntfy's publish response is a JSON message object that
+# repeats the topic back, and curl's stdout here goes to the journal. The topic
+# is password-equivalent; it does not belong in a log any more than it belongs
+# in this file.
+ExecStart=/bin/sh -c 'if [ -z "${TCKDB_NTFY_TOPIC:-}" ]; then \
+  echo "TCKDB_NTFY_TOPIC is unset (missing or incomplete /home/calvin/.config/tckdb-alert.env), so the health checker failed AND this alert cannot be delivered to anyone. Nothing was pushed." >&2; \
+  exit 78; \
+fi; \
+curl -sS --fail --max-time 20 -o /dev/null \
   -H "Title: TCKDB health checker FAILED" \
   -H "Priority: urgent" \
   -H "Tags: rotating_light" \

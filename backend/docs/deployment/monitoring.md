@@ -248,6 +248,14 @@ which expects a ping on a schedule and alerts when one does not arrive.
 4. Point healthchecks.io's notification at the **same ntfy topic**, so both
    classes of alarm land in one place.
 
+**Treat the ping URL exactly like the ntfy topic: it is a password.** Its path
+is the whole credential, and anyone holding it can forge this heartbeat and keep
+the alerts quiet for as long as they like — silencing the one channel that
+covers the host dying. It lives only in the env file (and, for the CI watchdog,
+in a repository secret), never in this repository, and neither script logs it:
+a failed ping names the host it could not reach and curl's exit code, and
+nothing that can be replayed.
+
 **The ping means "the checker ran", not "TCKDB is well",** and it is sent on
 every completed run including a degraded one. That distinction is the whole
 design. If the ping were conditional on a healthy verdict, an object-store
@@ -284,6 +292,27 @@ breaks, systemd tells you when the checker breaks, and healthchecks.io tells
 you when the Pi stops talking at all. No one of them depends on another
 surviving.
 
+**What it can and cannot report.** Three things had to be fixed before the
+sentence above was true of the shipped units, and each had failed silently:
+
+- The alert unit's `EnvironmentFile=` had no leading `-`. Without it systemd
+  refuses to *start* the unit when the file is missing — and a missing
+  `EnvironmentFile` is one of the reasons `tckdb-alert.service` fails, so both
+  units died of the same cause and nothing was pushed. It now carries the `-`.
+  The main unit deliberately does not: it cannot check anything without the
+  topic, so a missing file *should* fail it and fire `OnFailure=`.
+- With the file present but `TCKDB_NTFY_TOPIC` unset, the push went to
+  `https://ntfy.sh/` — a valid URL, answered, `curl` happy, unit green, nobody
+  told. It now refuses with exit 78 and says so in the journal. **There is no
+  push in this case and there cannot be**, because the topic is the address;
+  what covers it is the dead man's switch and a unit visible in
+  `systemctl --failed`.
+- `SuccessExitStatus=0 1` told systemd that exit 1 was fine, so that an
+  accidental death — bash exits 1 on an unbound variable — was recorded as a
+  successful check and `OnFailure=` never fired. `tckdb_alert_check.sh` now
+  exits **2** for any exit taken before it reaches a verdict, and 2 is not in
+  `SuccessExitStatus`. Do not add it.
+
 Prove it, rather than assuming — the same ten minutes that is the only way to
 know anything about monitoring:
 
@@ -291,12 +320,22 @@ know anything about monitoring:
 sudo systemctl stop tckdb-alert.timer     # then wait past the deadman period
 # expect: a healthchecks.io alert, and no ntfy traffic at all
 sudo systemctl start tckdb-alert.timer
+
+sudo systemctl start tckdb-alert-failed.service   # expect one push, unit green
+sudo mv ~/.config/tckdb-alert.env{,.bak}
+sudo systemctl start tckdb-alert-failed.service   # expect 78/CONFIG and a
+sudo mv ~/.config/tckdb-alert.env{.bak,}          # journal line, not silence
 ```
 
 The behaviour above is covered by `backend/tests/ops/test_alert_check_liveness.py`,
 which runs the real script as a subprocess against a fake host and asserts what
 reaches the outside world on each broken path — including that a checker which
-refuses to start sends nothing.
+refuses to start sends nothing, that the alert unit's `ExecStart` really does
+deliver a push when run, and that it refuses rather than posting to an empty
+topic. Systemd itself is not available to the test suite, so the `-` on
+`EnvironmentFile=` and the `SuccessExitStatus=` list are asserted by reading the
+units; both were verified by hand with `systemd-run --user` against the shipped
+files.
 
 ## The same problem, one level out: monitoring CI
 
@@ -339,6 +378,31 @@ missed one.
 
 **It advances that marker only after ntfy accepts the push,** for the same
 reason the Pi-side checker does.
+
+**It counts what it checked, and a run that checked nothing is not a pass.**
+Every entry of `TCKDB_WATCHED_WORKFLOWS` that is not `file.yml:hours` used to be
+warned about and skipped, so a whole list of typos left the loop with nothing to
+do — and the script then exited 0 *and pinged the dead man's switch*, so the
+external monitor vouched for a checker that had checked nothing. The verdict
+count is now printed before the result (`watched=2 verdicts=2 unchecked=0`), and
+zero verdicts suppresses the heartbeat and exits 2. Note that an *empty* or
+unset `TCKDB_WATCHED_WORKFLOWS` is not this case: it falls back to the built-in
+list, which is correct and stays that way.
+
+Its exit codes are the ones
+[`verify_artifact_integrity.py`](../../scripts/ops/verify_artifact_integrity.py)
+uses, deliberately, so two scripts in one directory need one scheme:
+
+| Code | Means | Runbook |
+|---|---|---|
+| 0 | every watched workflow is green and running | nothing to do |
+| 1 | something is red or silent, or a push could not be delivered | read the push; fix the workflow |
+| 2 | something in scope was **not checked** — a malformed watch-list entry, an unreadable API, an unparseable run list, or no verdict at all | fix the invocation or the token, then re-run; this run is not evidence of anything |
+
+1 wins when both are true, because a red nightly is the more actionable of the
+two. There is no `--allow-empty` equivalent, unlike the integrity sweep: an
+empty corpus is a legitimate state for a fresh deployment, while watching
+nothing is never a legitimate state for a watchdog.
 
 The push names the workflow, the branch, the consecutive-failure count, the
 commit, the failing job and step, and links the run — because "nightly failed"

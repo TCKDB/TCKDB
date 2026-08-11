@@ -20,6 +20,11 @@ looks alive, which is the defect these tests exist to prevent.
 
 from __future__ import annotations
 
+import os
+import re
+import shlex
+import subprocess
+
 import pytest
 
 from tests.ops.conftest import OPS_DIR
@@ -168,6 +173,37 @@ def test_ping_failure_is_reported_rather_than_swallowed(fake_host, run_alert_che
     assert "dead man's switch ping" in proc.stderr
 
 
+def test_a_failed_ping_does_not_put_the_ping_url_in_the_log(
+    fake_host, run_alert_check
+):
+    """The ping URL is password-equivalent, like the ntfy topic.
+
+    A healthchecks.io ping URL's whole path is the secret: anyone holding
+    it can forge this heartbeat and keep the alerts quiet for as long as
+    they like, which silences the one channel that covers the host dying.
+    And a failed ping is exactly the moment someone reads this journal and
+    pastes it into an issue -- so the failure path is the one that must not
+    quote it. The CI watchdog has always withheld it; this script used to
+    print it in full.
+    """
+    secret = "0e9f4a21-not-a-real-check-uuid"
+    url = f"{fake_host.base}/deadman/{secret}"
+    fake_host.set_status(HEALTHY)
+    fake_host.failing_paths.add(f"/deadman/{secret}")
+
+    proc = run_alert_check(env_overrides={"TCKDB_DEADMAN_URL": url})
+
+    assert proc.returncode == 0, "a failed heartbeat is not a failed check"
+    assert deadman_pings(fake_host), "it was attempted"
+    for stream_name, stream in (("stdout", proc.stdout), ("stderr", proc.stderr)):
+        assert secret not in stream, f"the ping secret reached {stream_name}"
+        assert url not in stream, f"the ping URL reached {stream_name}"
+    # Still diagnosable: the host it could not reach, and why.
+    assert "dead man's switch ping" in proc.stderr
+    assert f"127.0.0.1:{fake_host.port}" in proc.stderr
+    assert "curl exit 22" in proc.stderr, "an HTTP error, not DNS or a timeout"
+
+
 # ---------------------------------------------------------------------------
 # An unmonitored monitor announces itself, once
 # ---------------------------------------------------------------------------
@@ -244,6 +280,11 @@ def test_the_unit_alerts_when_the_checker_itself_fails():
     A moved repo, a missing EnvironmentFile, a syntax error: the script
     never runs, so no ping is even attempted, and only systemd knows.
     OnFailure= turns that red unit into a push.
+
+    Reading the unit is all this test does, which is exactly how three
+    separate silent failures survived in it. The tests below run its
+    ExecStart as a process instead; this one only pins the wiring that no
+    process can show.
     """
     unit = (OPS_DIR / "tckdb-alert.service").read_text()
     assert "OnFailure=tckdb-alert-failed.service" in unit
@@ -252,6 +293,190 @@ def test_the_unit_alerts_when_the_checker_itself_fails():
     body = failure_unit.read_text()
     assert "TCKDB_NTFY_TOPIC" in body
     assert "ExecStart=" in body
+
+
+def test_the_onfailure_unit_survives_a_missing_environment_file():
+    """The leading `-` is not decoration; systemd requires it.
+
+    Without it systemd refuses to START the unit when the file is absent,
+    and "the EnvironmentFile is missing" is one of the failures of
+    tckdb-alert.service this unit is supposed to report. Both units then
+    die of the same cause and nothing is pushed -- the alerting path
+    failing for precisely the reason it was needed.
+
+    This is asserted by reading, because systemd is not available to the
+    test suite. It was verified by running the shipped unit under
+    `systemd-run --user`: with `EnvironmentFile=/absent` the command never
+    executes (Result=resources), with `EnvironmentFile=-/absent` it runs
+    and exits 78/CONFIG with the reason in the journal.
+    """
+    body = (OPS_DIR / "tckdb-alert-failed.service").read_text()
+    line = next(
+        stripped
+        for raw in body.splitlines()
+        if (stripped := raw.strip()).startswith("EnvironmentFile=")
+    )
+    assert line.startswith("EnvironmentFile=-"), (
+        "an OnFailure unit that cannot start without its env file cannot "
+        "report a missing env file"
+    )
+
+
+def test_the_checker_unit_requires_its_environment_file():
+    """And the main unit deliberately does not carry the `-`.
+
+    It cannot check anything without the topic, so a missing file should
+    stop it and fire OnFailure=. The asymmetry between the two units is
+    the mechanism, not an oversight, so it is pinned in both directions.
+    """
+    body = (OPS_DIR / "tckdb-alert.service").read_text()
+    line = next(
+        stripped
+        for raw in body.splitlines()
+        if (stripped := raw.strip()).startswith("EnvironmentFile=")
+    )
+    assert not line.startswith("EnvironmentFile=-")
+
+
+def _exec_start(unit_name: str) -> list[str]:
+    """The unit's ExecStart as an argv, with systemd's line folding applied.
+
+    systemd joins `\\`-continued lines with whitespace and then splits the
+    result the way a shell would; shlex is close enough for a command line
+    that is one program and one single-quoted argument.
+    """
+    text = (OPS_DIR / unit_name).read_text()
+    text = re.sub(r"\\\n\s*", " ", text)
+    line = next(
+        stripped
+        for raw in text.splitlines()
+        if (stripped := raw.strip()).startswith("ExecStart=")
+    )
+    return shlex.split(line.split("=", 1)[1])
+
+
+def _run_exec_start(unit_name: str, env: dict[str, str]) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        _exec_start(unit_name),
+        env={"PATH": os.environ.get("PATH", "/usr/bin:/bin"), **env},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+
+def test_the_onfailure_push_actually_leaves_the_host(fake_host):
+    """The happy path of the alerting path, executed rather than read.
+
+    Nobody had ever seen this command run. It is the only thing that
+    speaks when the checker cannot, so it is run here against a socket
+    that records what arrived.
+    """
+    proc = _run_exec_start(
+        "tckdb-alert-failed.service",
+        {
+            "TCKDB_NTFY_SERVER": f"{fake_host.base}/ntfy",
+            "TCKDB_NTFY_TOPIC": "test-topic",
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    sent = fake_host.paths("/ntfy")
+    assert len(sent) == 1
+    assert sent[0].path == "/ntfy/test-topic"
+    assert "FAILED" in sent[0].headers.get("title", "")
+    assert "tckdb-alert.service" in sent[0].body, "name the unit that died"
+    assert proc.stdout == "", (
+        "ntfy's publish response echoes the topic back, and this command's "
+        "stdout is the journal; the topic is password-equivalent, so the "
+        "response body is discarded rather than logged"
+    )
+
+
+def test_an_unset_topic_alerts_nobody_and_says_so(fake_host):
+    """The second silent failure: a push to ntfy.sh/ with no topic.
+
+    An empty TCKDB_NTFY_TOPIC left the URL ending in a slash. ntfy answers
+    it, curl was satisfied, the unit went green, and the alert reached
+    nobody -- the alerting path reporting success for a delivery it had
+    not made. There is no fallback topic to use instead, so the only
+    honest outcome is to refuse loudly.
+    """
+    proc = _run_exec_start(
+        "tckdb-alert-failed.service",
+        {"TCKDB_NTFY_SERVER": f"{fake_host.base}/ntfy", "TCKDB_NTFY_TOPIC": ""},
+    )
+    assert proc.returncode != 0, "a push that reached nobody is not a success"
+    assert fake_host.paths("/ntfy") == [], "and nothing was posted to no topic"
+    assert "TCKDB_NTFY_TOPIC" in proc.stderr, "the journal has to say why"
+
+
+def test_the_onfailure_push_fails_loudly_on_an_http_error(fake_host):
+    """A 5xx from ntfy is not a delivered alert.
+
+    curl exits 0 on an HTTP error unless told otherwise; the same bug has
+    been fixed in tckdb_alert_check.sh and in uptime-check.yml, and this
+    is the third place it lived.
+    """
+    fake_host.failing_paths.add("/ntfy/test-topic")
+    proc = _run_exec_start(
+        "tckdb-alert-failed.service",
+        {
+            "TCKDB_NTFY_SERVER": f"{fake_host.base}/ntfy",
+            "TCKDB_NTFY_TOPIC": "test-topic",
+        },
+    )
+    assert proc.returncode != 0
+    assert fake_host.paths("/ntfy"), "it was attempted"
+
+
+def test_a_checker_that_dies_before_a_verdict_does_not_exit_one(tmp_path, fake_host):
+    """The third silent failure: SuccessExitStatus=0 1 masking a crash.
+
+    bash exits 1 on an unbound variable under `set -u`, which is the same
+    code this script uses for "the deployment is unhealthy" -- and the
+    unit tells systemd that 1 is a success, so OnFailure= never fired for
+    a checker that died partway through. A dead checker and a healthy
+    deployment are the same observation from a phone.
+
+    The bug is injected into a copy rather than waited for: a real one
+    would be a line somebody adds later, and the guard has to hold for a
+    line nobody has written yet.
+    """
+    mutated = tmp_path / "crashing_alert_check.sh"
+    original = (OPS_DIR / "tckdb_alert_check.sh").read_text()
+    marker = 'raw="$(curl'
+    assert marker in original, "the script no longer has the line this test cuts at"
+    mutated.write_text(original.replace(marker, 'echo "${a_typo_nobody_caught}"\n' + marker, 1))
+
+    proc = subprocess.run(
+        ["bash", str(mutated)],
+        env={
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "HOME": str(tmp_path),
+            "TCKDB_STATUS_URL": f"{fake_host.base}/status",
+            "TCKDB_NTFY_SERVER": f"{fake_host.base}/ntfy",
+            "TCKDB_NTFY_TOPIC": "test-topic",
+            "TCKDB_STATE_FILE": str(tmp_path / "state"),
+            "TCKDB_DEADMAN_URL": f"{fake_host.base}/deadman",
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert proc.returncode == 2, (
+        "an exit the unit lists as a success is how a dead checker stays "
+        "invisible; a death before a verdict must not be reported as one"
+    )
+    assert deadman_pings(fake_host) == [], "and it did not reach a verdict to ping for"
+    unit = (OPS_DIR / "tckdb-alert.service").read_text()
+    success_line = next(
+        stripped
+        for raw in unit.splitlines()
+        if (stripped := raw.strip()).startswith("SuccessExitStatus=")
+    )
+    assert str(proc.returncode) not in success_line.split("=", 1)[1].split(), (
+        "the code the checker dies with must not be one systemd calls success"
+    )
 
 
 @pytest.mark.parametrize(
