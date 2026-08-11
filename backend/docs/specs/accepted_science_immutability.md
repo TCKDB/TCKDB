@@ -19,6 +19,14 @@ reproducibility assessments. Calculation input/output geometries and their atom
 coordinates are protected when referenced by an ever-approved calculation.
 Multi-root child changes lock affected roots in sorted order.
 
+`reaction_atom_map` and `reaction_atom_map_pair` (ADR 0011) are owned children
+of `transition_state_entry`. A declared atom map is the content of the claim
+that a saddle point connects the reaction's declared reactants and products, so
+approving the entry freezes the map; correcting one means depositing a new
+transition-state entry that carries the corrected map, approving it, and
+recording a `transition_state_entry` supersession. They joined the regime in
+`b6c1f4a8e703`, after `d3a7f1c9b284` introduced them outside it.
+
 The migration conservatively backfills `first_approved_at` from the earliest
 event that touches `approved`. Current approved or deprecated rows without such
 an event use `reviewed_at`, then `created_at`.
