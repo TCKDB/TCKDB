@@ -267,14 +267,37 @@ def record_integrity_verified(
 def latest_integrity_observations(
     session: Session, sha256s: list[str]
 ) -> dict[str, ArtifactIntegrityEvent]:
-    """Return the *latest* observation row per digest, for callers that cite it.
+    """The *latest* observation row per digest. The owner of "latest".
 
-    :func:`digests_with_recorded_breaks` answers the yes/no question the
-    trust evaluator asks and deliberately reads two columns to do it.
-    This is for the callers that must point at the specific observation
-    they are relying on -- the reproducibility rubric quoting the event
-    it deferred to, a read surface reporting expected versus observed --
-    and it costs whole rows, so it is used on bounded sets of digests.
+    "Latest", not "any": the table is append-only and a repaired object
+    is recorded as a later ``verified`` observation, so a digest with a
+    break followed by a verification is not currently broken. Reading
+    "any" would leave a restored record condemned forever, which would
+    make every label derived from this a trap rather than a judgement.
+
+    Recency is ``id``, and this function is the only place that decides
+    so. ``id`` rather than ``created_at`` because two observations of the
+    same object recorded inside the same statement timestamp are ordered
+    by insertion and not by a clock, and a tie in the ordering key of the
+    fact that decides a hard fail is not a tie anyone should have to
+    reason about.
+
+    :func:`digests_with_recorded_breaks` is the boolean projection of
+    this and calls it rather than re-deriving it. Two other expressions
+    of the same fact necessarily remain, because each exists for a
+    property this shape cannot supply: the ``CalculationArtifact.
+    integrity_events`` relationship, which gives the trust evaluator
+    custody without a session or a per-call-site loader option, and the
+    ``max(id)`` aggregate in
+    :mod:`app.services.scientific_read.artifact_integrity_reads`, which
+    paginates summaries without loading every observation. Neither can
+    be replaced by this one; both are pinned to it by an equivalence
+    test over a generated population
+    (``tests/services/test_artifact_integrity.py``).
+
+    One query for a batch, so callers grading many calculations at once
+    do not fan out. It costs whole rows, so it is used on bounded sets of
+    digests.
     """
     if not sha256s:
         return {}
@@ -292,28 +315,28 @@ def latest_integrity_observations(
 def digests_with_recorded_breaks(
     session: Session, sha256s: list[str]
 ) -> frozenset[str]:
-    """Return the subset of ``sha256s`` whose *latest* observation is a break.
+    """Return the subset of ``sha256s`` whose latest observation is a break.
 
-    One query for a batch of digests, so read paths that grade many
-    calculations at once do not fan out. Kept here rather than in the
-    trust package because it is a question about storage custody, not
-    about the science.
+    The verification sweep's question: which of the digests I am about to
+    re-read already carry a break, so that a clean read of one can be
+    recorded as the observation that clears it. Writing a row for every
+    clean read would turn an incident log into a download log.
 
-    "Latest", not "any": the table is append-only and a repaired object
-    is recorded as a later ``verified`` observation, so a digest with a
-    break followed by a verification is *not* currently broken.
+    A projection of :func:`latest_integrity_observations` rather than a
+    second query. It used to be its own ``SELECT sha256, finding`` with
+    its own ``ORDER BY``, and its docstring described a batching caller
+    in the trust read paths that it does not have -- the evaluator reads
+    the ``integrity_events`` relationship instead. Two spellings of
+    "latest" agreed on every population anyone could construct, which is
+    the argument for collapsing them while they still do rather than
+    after they stop.
     """
     if not sha256s:
         return frozenset()
-    rows = session.execute(
-        select(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.finding)
-        .where(ArtifactIntegrityEvent.sha256.in_(sorted(set(sha256s))))
-        .order_by(ArtifactIntegrityEvent.sha256, ArtifactIntegrityEvent.id)
-    ).all()
-    latest: dict[str, ArtifactIntegrityFinding] = {}
-    for sha, finding in rows:
-        latest[sha] = finding
-    return frozenset(sha for sha, finding in latest.items() if finding.is_break)
+    latest = latest_integrity_observations(session, sha256s)
+    return frozenset(
+        sha for sha, event in latest.items() if event.finding.is_break
+    )
 
 
 __all__ = [

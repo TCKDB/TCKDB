@@ -1157,6 +1157,17 @@ class CalculationArtifact(Base, TimestampMixin, CreatedByMixin):
     #: indexed ``sha256 IN (...)`` per artifact-loading statement, which
     #: returns nothing in the normal case; verifying custody is not free
     #: and this is the bounded, constant version of the bill.
+    #:
+    #: ``order_by`` is ``id`` because the trust evaluator reads the last
+    #: element as *the latest observation*, and that definition is owned
+    #: by
+    #: :func:`app.services.artifact_integrity.latest_integrity_observations`.
+    #: This relationship exists rather than a call to the owner because
+    #: the evaluator has no session -- it grades already-loaded rows, and
+    #: making a hard-fail decision depend on a query would put custody
+    #: back behind a loader option someone has to remember. The two are
+    #: held equal by an equivalence test over a generated population
+    #: (``tests/services/test_artifact_integrity.py``), not by this note.
     integrity_events: Mapped[list["ArtifactIntegrityEvent"]] = relationship(
         primaryjoin=lambda: foreign(ArtifactIntegrityEvent.sha256)
         == CalculationArtifact.sha256,
