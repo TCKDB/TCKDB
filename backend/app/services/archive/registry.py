@@ -146,7 +146,22 @@ INCLUDED_TABLES: frozenset[str] = frozenset(
 )
 
 
+# ``accepted_science_repair`` and its change record are the account of a
+# declared repair to an accepted record (ADR 0015). They are excluded not
+# because that account is unimportant but because the row cannot be
+# transplanted: its meaning is carried by ``xact_id``, a transaction id from
+# *this* cluster's counter, and every check deciding whether a declaration is
+# live compares it against ``pg_current_xact_id()``. Restored into a fresh
+# cluster whose counter starts near zero, an archived declaration names a
+# transaction larger than any the new database has issued -- inert by
+# construction and misleading by shape. The repaired *value* travels with the
+# science, which is what a restored database has to get right; the operational
+# account of how it got there stays with the deployment that performed it and
+# with that deployment's backup, which ADR 0001 already separates from this
+# projection.
 EXCLUDED_TABLES: Mapping[str, str] = {
+    "accepted_science_repair": "deployment-local repair record keyed on a cluster transaction id",
+    "accepted_science_repair_change": "deployment-local repair record keyed on a cluster transaction id",
     "api_key": "authentication credential state",
     "idempotency_record": "ephemeral HTTP retry state",
     "upload_job": "ephemeral worker queue state",

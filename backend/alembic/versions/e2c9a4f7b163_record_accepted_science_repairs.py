@@ -287,6 +287,29 @@ def _create_tables() -> None:
 
 def _create_functions() -> None:
     guard_functions = ", ".join(f"'{name}'" for name in _GUARD_FUNCTIONS)
+
+    # Split out of ``tckdb_raise_if_accepted`` so the guards can ask the cheap
+    # question first. ``to_jsonb(OLD)`` and ``to_jsonb(NEW)`` are function
+    # arguments, which PL/pgSQL evaluates eagerly, so passing them
+    # unconditionally would serialise both row versions on *every* update to
+    # every guarded table -- including ``calc_hessian``'s packed matrix -- to
+    # answer a question that is almost always "no".
+    op.execute(
+        """
+        CREATE FUNCTION public.tckdb_record_is_accepted(
+            p_type public.submission_record_type, p_record_id bigint
+        ) RETURNS boolean
+        LANGUAGE sql STABLE
+        SET search_path = pg_catalog, public
+        AS $$
+            SELECT EXISTS (
+                SELECT 1 FROM public.record_review
+                WHERE record_type = p_type AND record_id = p_record_id
+                  AND first_approved_at IS NOT NULL
+            )
+        $$
+        """
+    )
     op.execute(
         f"""
         CREATE FUNCTION public.tckdb_validate_accepted_science_repair()
@@ -609,11 +632,7 @@ def _create_functions() -> None:
         SET search_path = pg_catalog, public
         AS $$
         BEGIN
-            IF NOT EXISTS (
-                SELECT 1 FROM public.record_review
-                WHERE record_type = p_type AND record_id = p_record_id
-                  AND first_approved_at IS NOT NULL
-            ) THEN
+            IF NOT public.tckdb_record_is_accepted(p_type, p_record_id) THEN
                 RETURN;
             END IF;
             IF public.tckdb_repair_permits(
@@ -656,12 +675,16 @@ def _replace_guards() -> None:
             PERFORM public.tckdb_lock_scientific_record(
                 TG_ARGV[0]::public.submission_record_type, record_id
             );
-            PERFORM public.tckdb_raise_if_accepted(
-                TG_ARGV[0]::public.submission_record_type, record_id,
-                TG_TABLE_SCHEMA, TG_TABLE_NAME,
-                CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
-                CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
-            );
+            IF public.tckdb_record_is_accepted(
+                TG_ARGV[0]::public.submission_record_type, record_id
+            ) THEN
+                PERFORM public.tckdb_raise_if_accepted(
+                    TG_ARGV[0]::public.submission_record_type, record_id,
+                    TG_TABLE_SCHEMA, TG_TABLE_NAME,
+                    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
+                    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
+                );
+            END IF;
             IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
         END;
         $$
@@ -707,12 +730,14 @@ def _replace_guards() -> None:
                 PERFORM public.tckdb_lock_scientific_record(
                     'calculation', calculation_id
                 );
-                PERFORM public.tckdb_raise_if_accepted(
-                    'calculation', calculation_id,
-                    TG_TABLE_SCHEMA, TG_TABLE_NAME,
-                    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
-                    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
-                );
+                IF public.tckdb_record_is_accepted('calculation', calculation_id) THEN
+                    PERFORM public.tckdb_raise_if_accepted(
+                        'calculation', calculation_id,
+                        TG_TABLE_SCHEMA, TG_TABLE_NAME,
+                        CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
+                        CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
+                    );
+                END IF;
             END LOOP;
             IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
         END;
@@ -752,12 +777,16 @@ def _replace_guards() -> None:
                 PERFORM public.tckdb_lock_scientific_record(
                     TG_ARGV[0]::public.submission_record_type, record_id
                 );
-                PERFORM public.tckdb_raise_if_accepted(
-                    TG_ARGV[0]::public.submission_record_type, record_id,
-                    TG_TABLE_SCHEMA, TG_TABLE_NAME,
-                    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
-                    CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
-                );
+                IF public.tckdb_record_is_accepted(
+                    TG_ARGV[0]::public.submission_record_type, record_id
+                ) THEN
+                    PERFORM public.tckdb_raise_if_accepted(
+                        TG_ARGV[0]::public.submission_record_type, record_id,
+                        TG_TABLE_SCHEMA, TG_TABLE_NAME,
+                        CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
+                        CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
+                    );
+                END IF;
             END LOOP;
             IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
         END;
@@ -790,12 +819,16 @@ def _replace_guards() -> None:
                     PERFORM public.tckdb_lock_scientific_record(
                         TG_ARGV[0]::public.submission_record_type, record_id
                     );
-                    PERFORM public.tckdb_raise_if_accepted(
-                        TG_ARGV[0]::public.submission_record_type, record_id,
-                        TG_TABLE_SCHEMA, TG_TABLE_NAME,
-                        CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
-                        CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
-                    );
+                    IF public.tckdb_record_is_accepted(
+                        TG_ARGV[0]::public.submission_record_type, record_id
+                    ) THEN
+                        PERFORM public.tckdb_raise_if_accepted(
+                            TG_ARGV[0]::public.submission_record_type, record_id,
+                            TG_TABLE_SCHEMA, TG_TABLE_NAME,
+                            CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(OLD) END,
+                            CASE WHEN TG_OP = 'UPDATE' THEN to_jsonb(NEW) END
+                        );
+                    END IF;
                 END IF;
             END LOOP;
             IF TG_OP = 'DELETE' THEN RETURN OLD; ELSE RETURN NEW; END IF;
@@ -1045,6 +1078,7 @@ def downgrade() -> None:
         "DROP FUNCTION IF EXISTS public.tckdb_repair_permits("
         "public.submission_record_type, bigint, text, text, jsonb, jsonb)"
     )
+    op.execute("DROP FUNCTION IF EXISTS public.tckdb_record_is_accepted(public.submission_record_type, bigint)")
     op.execute("DROP FUNCTION IF EXISTS public.tckdb_validate_accepted_science_repair_change()")
     op.execute("DROP FUNCTION IF EXISTS public.tckdb_validate_accepted_science_repair()")
     op.drop_table("accepted_science_repair_change", schema="public")

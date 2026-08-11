@@ -512,25 +512,45 @@ def test_every_guarded_table_is_declarable(db_session) -> None:
     }
     assert len(guarded) > 40
 
+    columns = text(
+        "SELECT attribute.attname, EXISTS ("
+        "  SELECT 1 FROM pg_index AS index_ "
+        "   WHERE index_.indrelid = attribute.attrelid AND index_.indisprimary "
+        "     AND attribute.attnum = ANY (index_.indkey)) AS in_key "
+        "FROM pg_attribute AS attribute "
+        "WHERE attribute.attrelid = format('public.%I', cast(:table as text))::regclass "
+        "AND attribute.attnum > 0 AND NOT attribute.attisdropped "
+        "ORDER BY attribute.attnum"
+    )
+    all_key_tables: list[str] = []
     for table in sorted(guarded):
-        # Any non-key column will do; the key itself is deliberately not
-        # declarable, which the test above pins.
-        column = db_session.execute(
-            text(
-                "SELECT attribute.attname FROM pg_attribute AS attribute "
-                "WHERE attribute.attrelid = format('public.%I', cast(:table as text))::regclass "
-                "AND attribute.attnum > 0 AND NOT attribute.attisdropped "
-                "AND NOT EXISTS ("
-                "  SELECT 1 FROM pg_index AS index_ "
-                "   WHERE index_.indrelid = attribute.attrelid AND index_.indisprimary "
-                "     AND attribute.attnum = ANY (index_.indkey)) "
-                "ORDER BY attribute.attnum LIMIT 1"
-            ),
-            {"table": table},
-        ).scalar_one()
+        rows = db_session.execute(columns, {"table": table}).all()
+        repairable = [name for name, in_key in rows if not in_key]
+        if not repairable:
+            # A pure junction row -- every column is part of its own key, so
+            # there is nothing about it to respell. It is guarded, and by
+            # construction it is not repairable; the declaration is refused
+            # for naming a key column rather than for naming this table.
+            all_key_tables.append(table)
+            with pytest.raises(DBAPIError, match="primary-key column"), db_session.begin_nested():
+                _declare(db_session, table=table, columns=(rows[0][0],))
+            continue
         with db_session.begin_nested() as nested:
-            _declare(db_session, table=table, columns=(column,))
+            _declare(db_session, table=table, columns=(repairable[0],))
             nested.rollback()
+
+    # Named rather than merely tolerated: these are the guarded tables that no
+    # repair can ever touch, and a table leaving or joining that set is a fact
+    # about the regime worth failing on.
+    assert all_key_tables == [
+        "kinetics_source_calculation",
+        "network_reaction",
+        "network_solve_source_calculation",
+        "network_species",
+        "statmech_source_calculation",
+        "thermo_source_calculation",
+        "transport_source_calculation",
+    ]
 
 
 def test_a_role_without_insert_cannot_declare(db_session) -> None:
