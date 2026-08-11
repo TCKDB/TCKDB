@@ -160,6 +160,16 @@ def persist_reaction_atom_map(
         agreement check below when it has to name what it refused.
     :param warnings: Optional sink for the absence and incompleteness warnings.
     :returns: The persisted map, or ``None`` when none was supplied.
+
+    A participant the map declares atomless -- a free electron -- writes no
+    ``reaction_atom_map_pair`` rows, because a pair row is one atom identified
+    with one saddle-point atom and it has none. It still counts as mapped here,
+    so the incompleteness warning does not report it as a participant the
+    depositor forgot. The stored map therefore cannot distinguish a
+    participant declared to have no atoms from one the map left out; the
+    distinction is only checkable where the payload states it, at the wire
+    boundary, and recording it would need a per-participant row this table does
+    not have.
     """
 
     if atom_map is None:
