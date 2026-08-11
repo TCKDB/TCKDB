@@ -59,6 +59,23 @@ wrapper over a contract that is itself still moving.
 
 ### Added
 
+- **Imaginary modes get a determination, not just a threshold.**
+  `GET /api/v1/scientific/calculations/{ref}?include=imaginary_mode_projections`
+  projects each imaginary mode onto rigid-body motion and onto a dihedral
+  rotation about each rotatable bond, as ADR 0012 asked for. The eigenvectors
+  are recovered from the Hessian already stored in `calc_hessian`, so **nothing
+  new is stored**: no table, no column, no migration, and the block is
+  recomputed per request. The depositor's declared `imaginary_disposition` is
+  reported *beside* the computed determination with the raw overlaps and the
+  thresholds applied; a disagreement is surfaced as `agreement: conflicts` and
+  never silently resolved. Where no Hessian is stored the block reads
+  `hessian_not_stored` -- not determinable, which is a different answer from
+  "no residue found". Detail-only and opt-in by name, like `include=trust`.
+  `available_sections.has_hessian` is new on every calculation record.
+  `backend/scripts/ops/project_imaginary_modes.py` runs the same projections
+  over a whole corpus. ADR 0013 held that this was uncomputable because TCKDB
+  stores no displacement vectors; that claim is corrected in place.
+
 - **Curated vs exploratory read profiles.** Every `/api/v1/scientific/*`
   endpoint accepts `?profile=exploratory|curated`. `exploratory` is the default
   and is explicitly labelled as carrying **no TCKDB recommendation**; `curated`
