@@ -5,7 +5,6 @@ from __future__ import annotations
 import re
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 from sqlalchemy import create_engine, text
@@ -45,9 +44,9 @@ def test_raw_sql_fallback_has_standard_base32_shape(db_session):
 
 def test_legacy_upgrade_backfills_refs_and_restores_append_only():
     """Exercise the real revision against a UUID-named disposable database."""
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_rpa_migration_{uuid4().hex}"
+    db_name = scratch_database_name("rpa_migration")
     admin = create_engine(_database_url("postgres"), isolation_level="AUTOCOMMIT")
     engine = None
     try:

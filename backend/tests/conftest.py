@@ -3,17 +3,21 @@ from __future__ import annotations
 import hashlib
 import os
 import re
+import secrets
 import socket
 import subprocess
 import warnings
 from pathlib import Path
 from typing import Iterator
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Connection, create_engine, text
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import NullPool
 
+from app.api import deps as api_deps
 from app.api.app import create_app
 from app.api.config import settings
 from app.api.deps import get_current_user, get_db, get_write_db
@@ -99,62 +103,102 @@ def _sanitize_identifier(value: str) -> str:
     return re.sub(r"[^A-Za-z0-9_]+", "_", value)
 
 
-def _with_worker_suffix(base: str, safe_worker: str) -> str:
-    """Append the xdist worker id to ``base``, keeping the result distinct.
+#: Environment variable carrying this pytest *run*'s identity.
+#:
+#: Set once, at conftest import, by whichever process gets there first.  With
+#: ``-n``, that is the xdist controller: it imports the rootdir conftest before
+#: execnet spawns the workers, and the workers inherit ``os.environ``, so all
+#: eight databases of one run share one token.  If a future pytest or xdist
+#: stops importing this file in the controller, each worker mints its own token
+#: instead — which is still correct, because the token only ever has to differ
+#: *between runs*; sharing it within a run buys diagnosis ("these eight
+#: databases are one run"), not safety.
+_RUN_TOKEN_ENV = "TCKDB_TEST_RUN_TOKEN"
+
+
+def _mint_run_token() -> str:
+    """A short token unique to this pytest run on this host.
+
+    Not a pid: two runs a week apart can share a pid, and — more to the
+    point — the pid of the *controller* is not available to a worker that
+    mints its own.  Eight random hex characters is 2**32 values; combined
+    with the refusal check in :func:`_recreate_test_database`, a collision
+    is reported rather than acted on.
+    """
+    return secrets.token_hex(4)
+
+
+RUN_TOKEN = os.environ.setdefault(_RUN_TOKEN_ENV, _mint_run_token())
+
+
+def _with_run_suffix(base: str, suffix: str) -> str:
+    """Append ``suffix`` to ``base``, keeping the result distinct.
 
     Postgres truncates over-long identifiers rather than rejecting them, so
     naively concatenating could hand ``gw10`` and ``gw11`` the same database.
     The base is trimmed instead — the suffix, which is what makes the name
     unique, is always preserved intact.
     """
-    suffix = f"_{safe_worker}"
     budget = _MAX_IDENTIFIER_BYTES - len(suffix)
     if budget < 1:
-        # Pathologically long worker id: the suffix alone is the identity.
+        # Pathologically long suffix: the suffix alone is the identity.
         return f"tckdb_test{suffix}"[:_MAX_IDENTIFIER_BYTES]
     return f"{base[:budget]}{suffix}"
 
 
 def _resolve_test_db_name() -> str:
-    """Derive a test-DB name that won't collide across concurrent runners.
+    """Derive a test-DB name unique to this *run*, this worker and this host.
 
-    Precedence:
+    The name is ``<base>_<run token>[_<worker>]``:
 
-    1. ``DB_TEST_NAME`` **plus** ``PYTEST_XDIST_WORKER`` — the explicit name
-       with the worker id appended, e.g. ``tckdb_test_api_991_gw3``. This case
-       comes first deliberately. Every gate script and CI job sets
-       ``DB_TEST_NAME`` (see ``.github/workflows/backend-ci.yml``), and while
-       the explicit name won unconditionally, turning on ``-n`` pointed all
-       workers at one database: they raced to ``DROP``/``CREATE`` it during
-       session setup, and whichever survived was then written concurrently by
-       every worker — reintroducing exactly the cross-test visibility the
-       per-test rollback exists to prevent. An operator asking for a specific
-       database name and asking for N workers is asking for N databases.
-    2. Explicit ``DB_TEST_NAME`` alone — used verbatim. Single-tenant: do not
-       point two concurrent pytest runs at the same value on one Postgres host
-       (see ``docs/testing.md``).
-    3. ``PYTEST_XDIST_WORKER`` alone — pytest-xdist worker id (e.g. ``gw0``),
-       producing ``tckdb_test_<worker>``. Sanitized so any value Postgres
-       would reject becomes safe identifier characters.
-    4. Fallback — ``tckdb_test_<pid>`` so two ad-hoc pytest processes on
-       one host never share a database, even without xdist.
+    * **base** is ``DB_TEST_NAME`` when set, otherwise ``tckdb_test``.  An
+      explicit ``DB_TEST_NAME`` is a *label*, not the final name — see below.
+    * **run token** is :data:`RUN_TOKEN`, minted once per pytest run.
+    * **worker** is the sanitized ``PYTEST_XDIST_WORKER`` id when running
+      under ``-n``.  Every gate script and CI job sets ``DB_TEST_NAME``, and
+      while the explicit name won unconditionally, turning on ``-n`` pointed
+      all workers at one database: they raced to ``DROP``/``CREATE`` it during
+      session setup, and whichever survived was then written concurrently by
+      every worker — reintroducing exactly the cross-test visibility the
+      per-test rollback exists to prevent.  Asking for a specific database
+      name and for N workers is asking for N databases.
 
-    The xdist controller process has ``PYTEST_XDIST_WORKER`` unset and never
-    creates a database (it collects but does not run tests), so only the
-    workers reach cases 1 and 3.
+    The run token is why ``DB_TEST_NAME`` can no longer be the whole name.
+    Before it, names were unique *within* a run and identical *across* runs:
+    two pytest processes on one host — two agents in two worktrees, a
+    developer alongside a self-hosted runner — shared eight databases and
+    dropped each other's schemas mid-run.  On 2026-08-10 that produced 2305
+    errors on a tree that passed alone, and none of them said "another run is
+    using your database"; they said ``terminating connection due to
+    administrator command``.  Making the *default* unique would not have
+    helped, because the collision shape that actually happens is two runs
+    copy-pasting the same ``DB_TEST_NAME=...`` out of the same document.
+
+    Over-long names have the base trimmed, never the suffix: Postgres
+    truncates identifiers silently, and ``…_gw10``/``…_gw11`` must not
+    collapse onto one name.
+
+    The resolved name is exported back to ``DB_TEST_NAME`` by the
+    ``db_engine`` fixture, so subprocess-based tests still inherit the exact
+    database this session created.
+
+    The xdist controller has ``PYTEST_XDIST_WORKER`` unset and never creates a
+    database (it collects but does not run tests).
     """
-    explicit = os.environ.get("DB_TEST_NAME")
+    base = os.environ.get("DB_TEST_NAME") or "tckdb_test"
     worker = os.environ.get("PYTEST_XDIST_WORKER")
     safe_worker = _sanitize_identifier(worker) if worker else None
 
-    if explicit and safe_worker:
-        return _with_worker_suffix(explicit, safe_worker)
-    if explicit:
-        return explicit
+    suffix = f"_{RUN_TOKEN}"
     if safe_worker:
-        return f"tckdb_test_{safe_worker}"
-
-    return f"tckdb_test_{os.getpid()}"
+        suffix = f"{suffix}_{safe_worker}"
+    if base.endswith(suffix):
+        # Idempotent: ``db_engine`` exports the resolved name back into
+        # ``DB_TEST_NAME``, so a second resolution in the same process (a
+        # subprocess test, a fixture driven directly) must not stack a
+        # second token onto a name that already carries one.
+        return base
+    return _with_run_suffix(base, suffix)
 
 
 # Keep the boot-time dependency probes out of the suite.
@@ -193,6 +237,63 @@ def _validate_test_db_name(db_name: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# The ambient session factory
+#
+# ``app.api.deps`` builds ``engine``/``SessionLocal`` at import time from
+# ``settings.database_url``, i.e. from the ambient ``DB_NAME`` -- locally
+# ``tckdb_dev``, and never the per-worker database this file creates.  Code
+# that reaches for that factory during a test is therefore talking to a
+# different database than every fixture and every assertion.
+#
+# That is not hypothetical.  It was root cause 2 of the seed-independence work
+# (#64): five ``/status`` tests probed through ``health.SessionLocal``, passed
+# in a dev shell and on the PR gate -- which runs ``alembic upgrade head``
+# against ``DB_NAME`` in an earlier step -- and failed only on the nightly,
+# which does not.  They were green for a reason unrelated to what they
+# asserted.  The live hazard is worse than a false green: several of these call
+# sites *commit*, and a commit into ``tckdb_dev`` is invisible to the
+# committed-row tripwire below and to every assertion in the suite.
+#
+# Two bindings, in order:
+#
+# 1. At import, before any fixture runs, the factory is pointed at an engine
+#    that refuses to connect.  A code path that needs an out-of-request session
+#    and does not go through ``db_engine`` then *says so*, instead of quietly
+#    writing somewhere nobody is looking.
+# 2. ``db_engine`` rebinds it to the real per-worker engine for the duration of
+#    the session, and puts the refusing engine back at teardown.
+#
+# ``sessionmaker.configure`` mutates the factory in place, so the modules that
+# hold a ``from app.api.deps import SessionLocal`` reference -- health,
+# idempotency, the upload worker, the archive CLI -- all follow.
+# ---------------------------------------------------------------------------
+
+_AMBIENT_REFUSAL_MESSAGE = (
+    "app.api.deps.SessionLocal was used during a test while it is not bound "
+    "to the pytest database. It binds at import to the ambient DB_NAME "
+    "(locally tckdb_dev), which no fixture creates, migrates or inspects -- a "
+    "write through it would be invisible to every assertion in the suite. "
+    "Take the db_engine fixture (directly or via client/db_conn/db_session), "
+    "or pass an explicit session_factory= to the service being tested."
+)
+
+
+def _refusing_ambient_engine():
+    """An Engine that raises instead of connecting to the ambient database."""
+
+    def _refuse():
+        raise RuntimeError(_AMBIENT_REFUSAL_MESSAGE)
+
+    return create_engine(
+        "postgresql+psycopg://", creator=_refuse, poolclass=NullPool, future=True
+    )
+
+
+_AMBIENT_REFUSING_ENGINE = _refusing_ambient_engine()
+api_deps.bind_ambient_session_factory(_AMBIENT_REFUSING_ENGINE)
+
+
+# ---------------------------------------------------------------------------
 # Ownership marker
 #
 # Every database this fixture creates is stamped with a comment recording the
@@ -204,7 +305,11 @@ def _validate_test_db_name(db_name: str) -> str:
 # ---------------------------------------------------------------------------
 
 _MARKER_PREFIX = "tckdb-test-harness"
-_MARKER_PATTERN = re.compile(rf"^{re.escape(_MARKER_PREFIX)} host=(\S+) pid=(\d+)$")
+#: ``run=`` is optional so markers written before run tokens existed still
+#: parse, and so the sweep keeps recognising them as its own.
+_MARKER_PATTERN = re.compile(
+    rf"^{re.escape(_MARKER_PREFIX)} host=(\S+) pid=(\d+)(?: run=([A-Za-z0-9]+))?$"
+)
 
 
 def _safe_host() -> str:
@@ -213,7 +318,7 @@ def _safe_host() -> str:
 
 
 def _ownership_marker() -> str:
-    return f"{_MARKER_PREFIX} host={_safe_host()} pid={os.getpid()}"
+    return f"{_MARKER_PREFIX} host={_safe_host()} pid={os.getpid()} run={RUN_TOKEN}"
 
 
 def _pid_is_running(pid: int) -> bool:
@@ -237,16 +342,126 @@ def _marker_is_reclaimable(marker: str | None) -> bool:
     A missing or foreign marker means the database was not created by this
     harness (or was created on a different host, where we cannot reason about
     pids at all) — in both cases the conservative answer is "leave it alone".
+
+    A marker carrying *this run's* token is never reclaimable, whatever its
+    pid says.  Under ``-n`` the eight workers of one run share a token, and a
+    worker whose creator pid has somehow been recycled must not have a sibling
+    worker's live database dropped underneath it.
     """
     if not marker:
         return False
     match = _MARKER_PATTERN.match(marker.strip())
     if match is None:
         return False
-    host, pid = match.group(1), match.group(2)
+    host, pid, run = match.group(1), match.group(2), match.group(3)
     if host != _safe_host():
         return False
+    if run is not None and run == RUN_TOKEN:
+        return False
     return not _pid_is_running(int(pid))
+
+
+class ForeignTestDatabaseError(RuntimeError):
+    """Raised when the database this run wants is owned by another run.
+
+    Loud refusal is the whole point.  The failure this replaces was 2305
+    errors reading ``terminating connection due to administrator command``,
+    with nothing anywhere naming the real cause.
+    """
+
+
+def _refuse_foreign_test_database(connection, db_name: str) -> None:
+    """Refuse to drop a database another pytest run is using.
+
+    Run tokens make a collision vanishingly unlikely; this is the backstop
+    that turns "unlikely" into "reported".  Two signals, either sufficient:
+
+    * a **live backend** on the exact name we are about to recreate.  Within
+      one run each worker owns a distinct name and creates it once, so a
+      connection already attached to it belongs to somebody else;
+    * an **ownership marker from a different run** on this host whose creator
+      pid is still running — a run that has created its database but not yet
+      connected to it, which the live-backend check alone would miss.
+
+    An unmarked database is *not* refused: it was not created by this harness,
+    the name pattern has already been validated, and dropping it is the
+    documented behaviour of an explicit ``DB_TEST_NAME``.
+    """
+    row = connection.execute(
+        text("""
+            SELECT shobj_description(d.oid, 'pg_database') AS marker,
+                   (
+                       SELECT count(*) FROM pg_stat_activity a
+                       WHERE a.datname = d.datname
+                   ) AS backends
+            FROM pg_database d
+            WHERE d.datname = :db_name
+        """),
+        {"db_name": db_name},
+    ).one_or_none()
+    if row is None:
+        return
+
+    marker, backends = row.marker, int(row.backends or 0)
+    reason: str | None = None
+    if backends > 0:
+        reason = f"{backends} live backend(s) are attached to it"
+    else:
+        match = _MARKER_PATTERN.match((marker or "").strip())
+        if (
+            match is not None
+            and match.group(1) == _safe_host()
+            and match.group(3) is not None
+            and match.group(3) != RUN_TOKEN
+            and _pid_is_running(int(match.group(2)))
+        ):
+            reason = (
+                f"it is owned by pytest run {match.group(3)} "
+                f"(pid {match.group(2)}), which is still running"
+            )
+    if reason is None:
+        return
+
+    raise ForeignTestDatabaseError(
+        f"refusing to drop and recreate test database {db_name!r}: {reason}. "
+        f"This run is {RUN_TOKEN}. Another pytest run on this host is using "
+        "this database; dropping it would destroy that run and produce "
+        "thousands of unrelated-looking connection errors in both. Give this "
+        "run its own DB_TEST_NAME, or wait for the other one to finish."
+    )
+
+
+#: Scratch-database names built by individual tests must be reclaimable by
+#: ``_sweep_stale_test_databases`` and by
+#: ``backend/scripts/dev/reclaim_leaked_test_databases.py``, both of which only
+#: ever look at ``tckdb_test%``.  Migration tests that named their scratch
+#: databases ``tckdb_et_scope_*`` / ``tckdb_stage2_*`` leaked them permanently
+#: whenever a run was killed partway.
+_SCRATCH_PREFIX = "tckdb_test_"
+
+
+def scratch_database_name(label: str) -> str:
+    """Return a unique, reclaimable name for a test-owned scratch database.
+
+    Every test that issues ``CREATE DATABASE`` must get its name from here.
+    That is enforced by ``tests/test_scratch_database_names.py``, so a new
+    migration test cannot quietly drift back outside the reclaimers' reach.
+
+    ``label`` is a short human tag (``stage2_legacy``, ``et_scope_downgrade``)
+    that survives into the name for diagnosis.  The uniqueness comes from a
+    uuid4 hex, and the whole thing is trimmed to Postgres's 63-byte identifier
+    limit **from the label end**, so the random part is never the thing
+    truncation eats.
+    """
+    safe_label = _sanitize_identifier(label).strip("_")
+    if not safe_label:
+        raise ValueError("scratch database label must contain identifier characters")
+    unique = uuid4().hex
+    budget = _MAX_IDENTIFIER_BYTES - len(_SCRATCH_PREFIX) - len(unique) - 1
+    if budget < 1:  # pragma: no cover - constant arithmetic, kept honest
+        raise ValueError("scratch database name budget exhausted")
+    name = f"{_SCRATCH_PREFIX}{safe_label[:budget]}_{unique}"
+    return _validate_test_db_name(name)
 
 
 def _sweep_stale_test_databases(current_db_name: str) -> None:
@@ -313,6 +528,9 @@ def _recreate_test_database(db_name: str) -> None:
 
     try:
         with engine.connect() as connection:
+            # Before the first destructive statement, not after: the whole
+            # point is that another run's schema is never dropped.
+            _refuse_foreign_test_database(connection, db_name)
             connection.execute(
                 text("""
                     SELECT pg_terminate_backend(pid)
@@ -382,6 +600,11 @@ def db_engine():
             text=True,
         )
         engine = create_engine(_database_url(db_name), future=True)
+        # Everything that cannot be handed a request-scoped session -- the
+        # commit-time upload audit, the artifact-integrity event writer, the
+        # upload worker, the idempotency decorator, the health probes -- now
+        # reaches *this* database instead of the ambient one.
+        api_deps.bind_ambient_session_factory(engine)
         yield engine
     except BaseException:
         body_failed = True
@@ -397,6 +620,11 @@ def db_engine():
         # silently: when the body succeeded it propagates as before, and when
         # the body failed it is downgraded to a warning so both survive.
         for cleanup in (
+            # Put the refusing engine back first: the disposal and the drop
+            # below both make this engine unusable, and anything reaching for
+            # the ambient factory afterwards should hear why rather than
+            # discover it through a dead connection.
+            lambda: api_deps.bind_ambient_session_factory(_AMBIENT_REFUSING_ENGINE),
             lambda: engine.dispose() if engine is not None else None,
             lambda: _drop_test_database(db_name),
         ):

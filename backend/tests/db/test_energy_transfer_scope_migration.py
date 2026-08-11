@@ -10,7 +10,6 @@ collider, and now a token that says so.
 
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import IntegrityError
@@ -81,9 +80,9 @@ def test_existing_energy_transfer_rows_still_read_as_per_well():
     fact about them, not a guess — and nothing about the row's meaning may
     change on the way through.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_et_scope_migration_{uuid4().hex}"
+    db_name = scratch_database_name("et_scope_migration")
     admin = create_engine(
         _database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
     )
@@ -263,9 +262,9 @@ def test_downgrade_refuses_to_destroy_a_network_wide_declaration():
     declaration or silently re-present it as per-well data it never was. The
     refusal has to name what is in the way and what the operator should do.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_et_scope_downgrade_{uuid4().hex}"
+    db_name = scratch_database_name("et_scope_downgrade")
     admin = create_engine(
         _database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
     )

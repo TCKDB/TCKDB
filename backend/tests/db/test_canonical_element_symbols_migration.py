@@ -57,9 +57,9 @@ class _MigrationHarness:
     """Create a throwaway database and drive alembic against it."""
 
     def __init__(self, name_prefix: str):
-        from conftest import _database_url, _db_env
+        from conftest import _database_url, _db_env, scratch_database_name
 
-        self.db_name = f"{name_prefix}_{uuid4().hex}"
+        self.db_name = scratch_database_name(name_prefix)
         self.env = _db_env(self.db_name)
         self._database_url = _database_url
         self._admin = create_engine(
@@ -104,7 +104,7 @@ class _MigrationHarness:
 
 @pytest.fixture
 def harness():
-    created = _MigrationHarness("tckdb_test_element_migration")
+    created = _MigrationHarness("element_migration")
     yield created
     created.close()
 

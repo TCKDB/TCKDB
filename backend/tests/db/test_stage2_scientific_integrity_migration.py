@@ -2,7 +2,6 @@
 
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy import create_engine, text
 
@@ -12,9 +11,9 @@ STAGE2_REVISION = "c1d2e3f4a5b6"
 
 def test_stage2_scientific_integrity_upgrade_downgrade_contract():
     """Exercise c1's additive science graph and its reversible legacy shape."""
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_stage2_migration_{uuid4().hex}"
+    db_name = scratch_database_name("stage2_migration")
     admin_url = _database_url("postgres")
     admin = create_engine(admin_url, isolation_level="AUTOCOMMIT", pool_pre_ping=True)
     admin_conn = None
@@ -241,9 +240,9 @@ def test_stage2_upgrade_refuses_pre_v2_pdep_rows():
     DDL. The deployed database really does hold such rows — this is the
     reproduction, not a hypothetical.
     """
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_stage2_legacy_{uuid4().hex}"
+    db_name = scratch_database_name("stage2_legacy")
     admin = create_engine(
         _database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
     )
@@ -341,9 +340,9 @@ def test_stage2_upgrade_refuses_pre_v2_pdep_rows():
 
 def test_stage2_downgrade_refuses_parallel_channels():
     """Parallel channels cannot be re-expressed under the old unique triple."""
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_stage2_parallel_{uuid4().hex}"
+    db_name = scratch_database_name("stage2_parallel")
     admin = create_engine(
         _database_url("postgres"), isolation_level="AUTOCOMMIT", pool_pre_ping=True
     )

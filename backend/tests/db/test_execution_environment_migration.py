@@ -2,7 +2,6 @@
 
 import subprocess
 from pathlib import Path
-from uuid import uuid4
 
 from sqlalchemy import create_engine, text
 
@@ -33,9 +32,9 @@ def test_execution_environment_migration_creates_and_reverses_complete_graph():
 
 def test_execution_environment_real_upgrade_and_downgrade_contract():
     """Exercise the revision on a disposable database, including nullable legacy rows."""
-    from conftest import _database_url, _db_env
+    from conftest import _database_url, _db_env, scratch_database_name
 
-    db_name = f"tckdb_exec_env_migration_{uuid4().hex}"
+    db_name = scratch_database_name("exec_env_migration")
     admin = create_engine(_database_url("postgres"), isolation_level="AUTOCOMMIT")
     engine = None
     try:
