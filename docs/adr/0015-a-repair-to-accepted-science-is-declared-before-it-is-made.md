@@ -81,9 +81,36 @@ by hand to make a repair look narrower than it was.
 Both tables are append-only and un-truncatable, on 0003's own terms: a record of
 a repair that the repairer can edit afterwards is not a record.
 
+## The record does not travel, and that is a consequence rather than an omission
+
+`tckdb.archive.v1` excludes both tables. Not because the account is
+unimportant — [0014](0014-custody-of-stored-evidence-is-recorded-not-logged.md)
+made the opposite call for `artifact_integrity_event` on the grounds that a
+restore dropping it would resurrect condemned records as sound, and that
+reasoning is right. It does not transfer here, and the difference is
+structural. A custody observation is a fact about an *object*, and objects move
+with the archive. A declaration's meaning is carried by `xact_id`, a
+transaction id from the source cluster's counter, and every check deciding
+whether it is live compares that against `pg_current_xact_id()`. Restored into
+a fresh cluster whose counter starts near zero, an archived declaration names a
+transaction larger than any the new database has issued: a row that is inert by
+construction and misleading by shape. Relaxing the comparison to make it
+transplantable would relax the one check that stops a declaration being minted
+for a transaction that has not happened yet.
+
+The repaired *value* travels with the science, which is what a restored
+database has to get right. The account of how it got there stays with the
+deployment that performed it and with that deployment's `pg_dump`, which
+[0001](0001-separate-archive-projection-and-backup.md) already separates from
+this projection.
+
 ## What this does not cover
 
 `record_review` is outside the mechanism; approval history is not repairable.
+Seven guarded tables are pure junction rows whose every column is part of their
+own primary key — the `*_source_calculation` links, `network_reaction` and
+`network_species` — so nothing about them can be respelled and no repair can
+name them. That falls out of the key rule rather than being a separate one.
 `b4e7c1d20f83` is **not** retrofitted — it is deployed, and its decision to
 leave the guard standing and fail loudly on a non-canonical accepted row remains
 the correct outcome for a migration that cannot ask anybody. What changes is
