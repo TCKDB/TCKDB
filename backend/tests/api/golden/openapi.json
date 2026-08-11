@@ -1646,6 +1646,10 @@
             "title": "Has Geometry Validation",
             "type": "boolean"
           },
+          "has_hessian": {
+            "title": "Has Hessian",
+            "type": "boolean"
+          },
           "has_input_geometries": {
             "title": "Has Input Geometries",
             "type": "boolean"
@@ -1700,6 +1704,7 @@
           "has_wavefunction_diagnostic",
           "has_spin_diagnostic",
           "has_freq_modes",
+          "has_hessian",
           "has_scan",
           "has_irc",
           "has_path_search",
@@ -16071,6 +16076,236 @@
         ],
         "title": "ImaginaryModeDisposition",
         "type": "string"
+      },
+      "ImaginaryModeProjectionEntry": {
+        "description": "One imaginary mode's ADR 0012 projections, next to its declaration.\n\n``declared_disposition`` is what the **depositor** said the mode is.\n``determination`` is what projecting the eigenvector recovered from\n``calc_hessian`` says it is. They are different kinds of claim and\nboth are reported: TCKDB prefers neither, and ``agreement`` names\ntheir relationship rather than resolving it.\n\n``determination`` uses a deliberately narrower vocabulary than\n``imaginary_disposition``. The projections can positively identify\nrigid-body residue and torsion; everything else they can only place in\n``internal_vibration``, which is what a genuine reaction coordinate\nlooks like but is not a claim about which internal coordinate it is.\n\nThe raw overlaps and the thresholds applied to them are both on the\npayload, so a reader who disagrees with ADR 0012's 90% and 70% can\nreach their own verdict without re-running anything.",
+        "properties": {
+          "agreement": {
+            "enum": [
+              "not_declared",
+              "agrees",
+              "conflicts",
+              "inconclusive"
+            ],
+            "title": "Agreement",
+            "type": "string"
+          },
+          "best_torsion_bond_atom_indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Torsion Bond Atom Indices"
+          },
+          "declared_disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImaginaryModeDisposition"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "determination": {
+            "anyOf": [
+              {
+                "enum": [
+                  "rigid_body_residue",
+                  "torsion",
+                  "internal_vibration"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Determination"
+          },
+          "frequency_cm1": {
+            "title": "Frequency Cm1",
+            "type": "number"
+          },
+          "mode_index": {
+            "title": "Mode Index",
+            "type": "integer"
+          },
+          "not_determined_reason": {
+            "anyOf": [
+              {
+                "enum": [
+                  "not_matched_in_recovered_spectrum",
+                  "degenerate_eigenvector"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Not Determined Reason"
+          },
+          "recovered_frequency_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recovered Frequency Cm1"
+          },
+          "rigid_body_overlap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rigid Body Overlap"
+          },
+          "torsion_overlap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Torsion Overlap"
+          },
+          "torsion_subspace_overlap": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Torsion Subspace Overlap"
+          }
+        },
+        "required": [
+          "mode_index",
+          "frequency_cm1",
+          "agreement"
+        ],
+        "title": "ImaginaryModeProjectionEntry",
+        "type": "object"
+      },
+      "ImaginaryModeProjectionSummary": {
+        "description": "The ``include=imaginary_mode_projections`` block for a calculation.\n\nAlways present when the include is requested, even when no projection\nwas possible: ``status`` distinguishes \"no residue was found\" from\n\"nothing was checked\", which are opposite findings that an empty list\nwould merge. ``hessian_not_stored`` in particular is *not* a clean\nbill of health -- it is the answer for every frequency calculation\nthat carries no matrix to project.\n\nNothing in this block is stored. It is recomputed per request from\n``calc_hessian`` and the geometry it is bound to.",
+        "properties": {
+          "conflict_count": {
+            "default": 0,
+            "title": "Conflict Count",
+            "type": "integer"
+          },
+          "is_linear": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Linear"
+          },
+          "max_rigid_body_curvature_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Rigid Body Curvature Cm1"
+          },
+          "modes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ImaginaryModeProjectionEntry"
+            },
+            "title": "Modes",
+            "type": "array"
+          },
+          "natoms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Natoms"
+          },
+          "rigid_body_dimension": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rigid Body Dimension"
+          },
+          "rigid_body_overlap_threshold": {
+            "title": "Rigid Body Overlap Threshold",
+            "type": "number"
+          },
+          "rotatable_bonds": {
+            "default": [],
+            "items": {
+              "items": {
+                "type": "integer"
+              },
+              "type": "array"
+            },
+            "title": "Rotatable Bonds",
+            "type": "array"
+          },
+          "status": {
+            "enum": [
+              "determined",
+              "no_imaginary_modes",
+              "no_frequency_modes",
+              "hessian_not_stored",
+              "geometry_incomplete",
+              "masses_unresolved",
+              "rigid_body_curvature_too_large"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "torsion_overlap_threshold": {
+            "title": "Torsion Overlap Threshold",
+            "type": "number"
+          }
+        },
+        "required": [
+          "status",
+          "rigid_body_overlap_threshold",
+          "torsion_overlap_threshold"
+        ],
+        "title": "ImaginaryModeProjectionSummary",
+        "type": "object"
       },
       "IntegrityRequestEcho": {
         "description": "Echo of the parsed request, surfaced in the response envelope.",
@@ -30711,6 +30946,16 @@
               }
             ],
             "title": "Geometry Validation"
+          },
+          "imaginary_mode_projections": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImaginaryModeProjectionSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "input_geometries": {
             "anyOf": [

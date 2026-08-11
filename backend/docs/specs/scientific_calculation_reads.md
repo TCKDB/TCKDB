@@ -60,6 +60,7 @@ Heavy include tokens land one at a time. Current state:
 | `constraints` | implemented | All four atom-index slots plus an `atom_indices` convenience list in arity order. |
 | `review` | implemented | Surfaced as `record.review_history` (zero-or-one list because the schema enforces `UNIQUE (record_type, record_id)`). Carries `note`, `submission_ref`, plus policy-gated `review_id`/`reviewer_id`/`submission_id`. The compact `RecordReviewBadge` on the calculation block is unaffected — it remains the always-present trust signal. |
 | `freq_modes` | implemented | The full ordered per-mode harmonic frequency array from `calc_freq_mode` (`mode_index`, `frequency_cm1`, `is_imaginary`, `reduced_mass_amu`, `force_constant_mdyne_angstrom`). Unlike `scan`/`irc`/`path_search`, the array **is** inlined in full (not deferred to a specialized endpoint) because it is bounded by the molecule's `3N-6`/`3N-5` degrees of freedom. Imaginary modes carry a negative `frequency_cm1` with `is_imaginary = True`. Empty list when no modes are parsed. This is the per-mode data a statmech consumer needs to regenerate a vibrational analysis; the statmech record's `include=frequencies` only points back at the source freq calc(s). No DB surrogate ids are exposed (`mode_index` is the row's scientific order key). |
+| `imaginary_mode_projections` | implemented | **A read-time determination, not a stored record.** For each imaginary mode in `calc_freq_mode`, projects the eigenvector recovered from `calc_hessian` onto the rigid-body subspace (translations + rotations about the centre of mass) and onto a dihedral rotation about each perceived rotatable bond, per ADR 0012. Nothing is persisted: the block is recomputed per request from the stored matrix and the geometry it is bound to. Carries the depositor's declared `imaginary_disposition` **beside** the computed `determination`, with the raw overlaps and the thresholds applied, plus an `agreement` field (`not_declared` / `agrees` / `conflicts` / `inconclusive`) — a disagreement is surfaced, never resolved. The determination vocabulary is deliberately narrower than the declared enum (`rigid_body_residue`, `torsion`, `internal_vibration`). Unlike every other optional block this one is **never empty and never null once requested**: `status` distinguishes `determined` from `hessian_not_stored` / `no_imaginary_modes` / `no_frequency_modes` / `geometry_incomplete` / `masses_unresolved` / `rigid_body_curvature_too_large`, because "nothing was checked" and "nothing was wrong" are opposite findings. Cost is one small dense eigendecomposition (3N × 3N, N ≤ 30 in practice), which is why it is **detail-only and opt-in by name**: like `trust`, it stays out of search and out of `include=all`'s expansion. Measured at 0.45 ms for a 12-atom molecule and growing as N^3. |
 | `internal_ids` | implemented | Phase D policy-gated; explicit opt-in via the include token, only effective when `settings.allow_public_internal_ids = True`. |
 | `scan` | implemented (summary) | Bounded scan summary: result-row fields, ordered coordinate list, `coordinate_count`, `point_count`, energy MIN/MAX aggregates. **Per-point arrays and coordinate-value rows are intentionally NOT exposed by this include** — full scan trajectory data is available via the specialized endpoint `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/scan` (paginated by point; see `scientific_calculation_path_includes.md` §8). The summary block returned by `include=scan` is byte-for-byte the same shape as `response.scan` from the specialized endpoint, so a caller can use the summary for cheap inventory and follow up with `/scan` only when they need the per-point trajectory. |
 | `irc` | implemented (summary) | Bounded IRC summary: result-row fields, directional point counts (`forward_point_count`, `reverse_point_count`, `ts_point_count`), energy and reaction-coordinate MIN/MAX aggregates. **Per-point arrays are intentionally NOT exposed by this include** — full IRC trajectory data is available via the specialized endpoint `GET /api/v1/scientific/calculations/{calculation_ref_or_id}/irc` (paginated by point; see `scientific_calculation_path_includes.md` §8). The summary block returned by `include=irc` is byte-for-byte the same shape as `response.irc` from the specialized endpoint. Direction-counting policy: `direction=both` and `direction IS NULL` rows (e.g. ORCA TS markers) do not count toward forward/reverse. |
@@ -322,7 +323,11 @@ _LEGAL_INCLUDE_TOKENS = {
 ```
 
 Validation goes through the existing `validate_includes()` helper. `all`
-expands to every token **except** `internal_ids`. Unknown tokens → 422
+expands to every token **except** `internal_ids`, `trust` and
+`imaginary_mode_projections` — the latter two are detail-only and
+opt-in-by-name, because both are *computed* at read time rather than
+projected from stored rows and neither belongs on a 200-record search
+page a caller reached with `include=all`. Unknown tokens → 422
 `unknown_include_token` listing the legal set.
 
 ### 4.5 What each include adds
@@ -339,6 +344,7 @@ expands to every token **except** `internal_ids`. Unknown tokens → 422
 | `geometry_validation` | `geometry_validation: list[CalculationGeometryValidationSummary]` | `calc_geometry_validation` |
 | `scf_stability` | `scf_stability: list[CalculationSCFStabilitySummary]` | `calc_scf_stability` |
 | `freq_modes` | `freq_modes: list[CalculationFreqModeSummary]` (full per-mode array; empty list when none) | `calc_freq_mode` |
+| `imaginary_mode_projections` | `imaginary_mode_projections: ImaginaryModeProjectionSummary` (always present once requested; `status` says whether a projection was taken and, if not, what stopped it) | `calc_hessian` + `geometry_atom` + `calc_freq_mode`, computed at read time |
 | `scan` | `scan: CalculationScanSummary \| None` | `calc_scan_result` (+ children) |
 | `irc` | `irc: CalculationIRCSummary \| None` | `calc_irc_result` (+ points) |
 | `path_search` | `path_search: CalculationPathSearchSummary \| None` | `calc_path_search_result` (+ points) |
@@ -680,6 +686,7 @@ class AvailableCalculationSections(BaseModel):
     has_geometry_validation: bool
     has_scf_stability: bool
     has_freq_modes: bool
+    has_hessian: bool
     has_scan: bool
     has_irc: bool
     has_path_search: bool
