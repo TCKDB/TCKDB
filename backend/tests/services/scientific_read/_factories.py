@@ -41,6 +41,7 @@ from app.db.models.common import (
     EnergyUnit,
     FrequencyScaleKind,
     HessianSource,
+    ImaginaryModeDisposition,
     KineticsModelKind,
     MeliusBacComponentKind,
     MoleculeKind,
@@ -959,6 +960,7 @@ def attach_freq_result(
     zpe_hartree: float | None = None,
     reduced_masses_amu: list[float | None] | None = None,
     force_constants_mdyne_angstrom: list[float | None] | None = None,
+    imaginary_dispositions: list[ImaginaryModeDisposition | None] | None = None,
 ) -> CalculationFreqResult:
     """Attach a CalculationFreqResult plus its per-mode rows.
 
@@ -966,10 +968,12 @@ def attach_freq_result(
     ``imag_freq_cm1`` are derived from the sign, matching the schema's
     signed-frequency convention.
 
-    Optional ``reduced_masses_amu`` / ``force_constants_mdyne_angstrom``
-    are positional-aligned with ``frequencies_cm1`` (same length) so
-    tests can assert those per-mode columns surface through the read
-    API; when omitted the columns stay ``NULL``.
+    Optional ``reduced_masses_amu`` / ``force_constants_mdyne_angstrom`` /
+    ``imaginary_dispositions`` are positional-aligned with
+    ``frequencies_cm1`` (same length) so tests can assert those per-mode
+    columns surface through the read API; when omitted the columns stay
+    ``NULL``. A disposition on a non-imaginary mode is refused by a CHECK
+    constraint, so only supply one where the frequency is negative.
     """
     imag = [f for f in frequencies_cm1 if f < 0]
     result = CalculationFreqResult(
@@ -996,6 +1000,11 @@ def attach_freq_result(
                     if force_constants_mdyne_angstrom is not None
                     else None
                 ),
+                imaginary_disposition=(
+                    imaginary_dispositions[i - 1]
+                    if imaginary_dispositions is not None
+                    else None
+                ),
             )
         )
     session.flush()
@@ -1009,10 +1018,19 @@ def attach_hessian(
     geometry: Geometry,
     natoms: int,
     source: HessianSource = HessianSource.parsed_log,
+    lower_triangle: list[float] | None = None,
 ) -> CalculationHessian:
-    """Attach a CalculationHessian with a correctly-sized zero lower triangle."""
-    n = 3 * natoms
-    lower_triangle = [0.0] * (n * (n + 1) // 2)
+    """Attach a CalculationHessian.
+
+    The default lower triangle is all zeros, which is the right shape and
+    no physics -- fine for tests that only assert the row's presence.
+    Anything that reads the *numbers* (the ADR 0012 imaginary-mode
+    projections do) must pass a real matrix through ``lower_triangle``,
+    because a zero Hessian has no normal modes to recover.
+    """
+    if lower_triangle is None:
+        n = 3 * natoms
+        lower_triangle = [0.0] * (n * (n + 1) // 2)
     row = CalculationHessian(
         calculation_id=calculation.id,
         geometry_id=geometry.id,

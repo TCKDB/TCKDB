@@ -570,8 +570,21 @@ class CalculationFreqMode(Base):
     #: What this imaginary mode is, when it is not the reaction
     #: coordinate — declared by the depositor, never inferred. ADR 0012
     #: accepts extra imaginary modes on a transition state only because
-    #: the record says what they are; see ADR 0012's conflict note about
-    #: why TCKDB cannot compute the assignment itself.
+    #: the record says what they are.
+    #:
+    #: Declared, and — since 2026-08-11 — *checkable*. ADR 0013 held that
+    #: TCKDB could not compute the assignment itself because it stores no
+    #: displacement vectors; that was wrong, because ``calc_hessian``
+    #: stores the matrix whose eigenvectors they are. The ADR 0012
+    #: projections run at read time from that matrix
+    #: (``include=imaginary_mode_projections``) and report a determination
+    #: *beside* this column, never in place of it. A conflict between the
+    #: two is surfaced and left for a curator: this column keeps saying
+    #: exactly what the depositor deposited.
+    #:
+    #: The determination is available only where a Hessian is. Elsewhere
+    #: it reads "not determinable", which is a different answer from
+    #: "the declaration checks out".
     imaginary_disposition: Mapped[Optional[ImaginaryModeDisposition]] = mapped_column(
         SAEnum(ImaginaryModeDisposition, name="imaginary_mode_disposition"),
         nullable=True,

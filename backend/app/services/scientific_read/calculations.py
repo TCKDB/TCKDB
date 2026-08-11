@@ -22,6 +22,7 @@ from app.db.models.calculation import (
     CalculationFreqMode,
     CalculationFreqResult,
     CalculationGeometryValidation,
+    CalculationHessian,
     CalculationInputGeometry,
     CalculationIRCPoint,
     CalculationIRCResult,
@@ -82,6 +83,8 @@ from app.schemas.reads.scientific_calculation import (
     CalculationSPResultSummary,
     CalculationWavefunctionDiagnosticSummary,
     ExecutionEnvironmentManifestSummary,
+    ImaginaryModeProjectionEntry,
+    ImaginaryModeProjectionSummary,
     RequestEcho,
     ScanCoordinateSummary,
     ScientificCalculationDetailResponse,
@@ -103,6 +106,9 @@ from app.services.scientific_read.common import (
     validate_includes,
 )
 from app.services.scientific_read.handles import resolve_calculation_handle
+from app.services.scientific_read.imaginary_mode_projection import (
+    build_imaginary_mode_projection,
+)
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
@@ -146,9 +152,29 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
 }
+# Detail-only tokens. Both are *computed* at read time rather than
+# projected from stored rows, and both are therefore kept out of
+# ``_HEAVY_INCLUDE_TOKENS`` — which means out of search, and out of
+# ``include=all``'s deterministic expansion.
+#
+# ``imaginary_mode_projections`` costs one dense 3N x 3N eigendecomposition
+# plus a connectivity analysis per record: 0.45 ms for a 12-atom molecule,
+# growing as N^3. That is nothing on a detail read the caller asked for and
+# is a cost the caller did not choose on a search page of up to 200
+# records, where ``include=all`` would otherwise reach it by default.
+# ``trust`` is detail-only for the same reason and set the precedent.
 _DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = {
     *_LEGAL_INCLUDE_TOKENS,
     "trust",
+    "imaginary_mode_projections",
+}
+#: Detail-only tokens that also stay out of ``include=all``'s expansion:
+#: a caller must name them. Not internal — they are public, documented
+#: and unrestricted — merely expensive enough that arriving at them by
+#: default is the wrong outcome.
+_OPT_IN_ONLY_INCLUDE_TOKENS: set[str] = {
+    "trust",
+    "imaginary_mode_projections",
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 _TRUST_EAGER_LOADS = (
@@ -213,7 +239,7 @@ def get_calculation(
         request.include,
         _DETAIL_LEGAL_INCLUDE_TOKENS,
         "/scientific/calculations/{calculation_ref_or_id}",
-        internal_tokens=_INTERNAL_INCLUDE_TOKENS | {"trust"},
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS | _OPT_IN_ONLY_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
 
@@ -360,6 +386,12 @@ def build_record(
     if "freq_modes" in includes:
         freq_modes_block = _build_freq_modes(session, calc.id)
 
+    imaginary_projection_block: ImaginaryModeProjectionSummary | None = None
+    if "imaginary_mode_projections" in includes:
+        imaginary_projection_block = _build_imaginary_mode_projections(
+            session, calc.id
+        )
+
     scan_block: CalculationScanSummary | None = None
     if "scan" in includes:
         scan_block = _build_scan_include_summary(session, calc.id)
@@ -411,6 +443,7 @@ def build_record(
         constraints=constraints_block,
         review_history=review_history_block,
         freq_modes=freq_modes_block,
+        imaginary_mode_projections=imaginary_projection_block,
         scan=scan_block,
         irc=irc_block,
         path_search=path_search_block,
@@ -744,6 +777,9 @@ def _build_provenance_and_sections(
             _exists_for_calc(CalculationFreqMode, calculation_id).label(
                 "has_freq_modes"
             ),
+            _exists_for_calc(CalculationHessian, calculation_id).label(
+                "has_hessian"
+            ),
             # ``calculation_id`` is the primary key of both of these
             # tables, so each subquery returns at most one row and is
             # scalar by construction — no ``LIMIT`` needed to make it so.
@@ -773,6 +809,7 @@ def _build_provenance_and_sections(
     has_wavefunction_diagnostic = probes.has_wavefunction_diagnostic
     has_spin_diagnostic = probes.has_spin_diagnostic
     has_freq_modes = probes.has_freq_modes
+    has_hessian = probes.has_hessian
 
     validation_row = probes.validation_status
     validation_status = (
@@ -813,6 +850,7 @@ def _build_provenance_and_sections(
         has_wavefunction_diagnostic=has_wavefunction_diagnostic,
         has_spin_diagnostic=has_spin_diagnostic,
         has_freq_modes=has_freq_modes,
+        has_hessian=has_hessian,
         has_scan=has_scan,
         has_irc=has_irc,
         has_path_search=has_path_search,
@@ -1918,6 +1956,51 @@ def _build_wavefunction_diagnostic(
         )
     ]
 
+
+def _build_imaginary_mode_projections(session: Session, calculation_id: int) -> ImaginaryModeProjectionSummary:
+    """Project this calculation's imaginary modes from its stored Hessian.
+
+    Unlike every other optional block here, this one is **never** empty
+    and never ``None`` once requested. The other loaders can encode "no
+    row" as ``[]`` because absence of a row is itself the finding; here
+    the interesting cases are all different from each other -- no matrix
+    to project, a matrix whose frame disagrees with the geometry, a mode
+    the recovered spectrum does not reproduce -- and collapsing them into
+    an empty list would let "nothing was checked" read as "nothing was
+    wrong". ``status`` carries which, and it is always populated.
+
+    Nothing is persisted: the projections are recomputed per request.
+    """
+    result = build_imaginary_mode_projection(session, calculation_id)
+    return ImaginaryModeProjectionSummary(
+        status=result.status.value,
+        modes=[
+            ImaginaryModeProjectionEntry(
+                mode_index=mode.mode_index,
+                frequency_cm1=mode.frequency_cm1,
+                declared_disposition=mode.declared_disposition,
+                recovered_frequency_cm1=mode.recovered_frequency_cm1,
+                rigid_body_overlap=mode.rigid_body_overlap,
+                torsion_overlap=mode.torsion_overlap,
+                torsion_subspace_overlap=mode.torsion_subspace_overlap,
+                best_torsion_bond_atom_indices=(
+                    list(mode.best_torsion_bond) if mode.best_torsion_bond is not None else None
+                ),
+                determination=(mode.determination.value if mode.determination is not None else None),
+                not_determined_reason=mode.not_determined_reason,
+                agreement=mode.agreement.value,
+            )
+            for mode in result.modes
+        ],
+        conflict_count=result.conflict_count,
+        natoms=result.natoms,
+        rigid_body_dimension=result.rigid_body_dimension,
+        is_linear=result.is_linear,
+        max_rigid_body_curvature_cm1=result.max_rigid_body_curvature_cm1,
+        rotatable_bonds=[list(bond) for bond in result.rotatable_bonds],
+        rigid_body_overlap_threshold=result.rigid_body_overlap_threshold,
+        torsion_overlap_threshold=result.torsion_overlap_threshold,
+    )
 
 def _build_spin_diagnostic(
     session: Session, calculation_id: int

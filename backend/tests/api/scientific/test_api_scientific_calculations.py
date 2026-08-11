@@ -839,6 +839,7 @@ def test_available_sections_all_false_for_bare_calculation(
         "has_wavefunction_diagnostic": False,
         "has_spin_diagnostic": False,
         "has_freq_modes": False,
+        "has_hessian": False,
         "has_scan": False,
         "has_irc": False,
         "has_path_search": False,
@@ -2102,6 +2103,82 @@ def test_detail_include_freq_modes_does_not_expose_internal_ids(
     for mode in body["record"]["freq_modes"]:
         assert "calculation_id" not in mode
         assert "id" not in mode
+
+
+# ---------------------------------------------------------------------------
+# include=imaginary_mode_projections
+# ---------------------------------------------------------------------------
+
+
+def test_detail_imaginary_mode_projections_omitted_when_not_requested(client, db_session):
+    """Recomputing a diagonalisation on every calculation read would be
+    absurd, so the block is strictly opt-in and its key is ABSENT (not
+    ``null``) from a default read -- even on a calculation that has an
+    imaginary mode to project."""
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
+    attach_freq_result(db_session, calculation=calc, frequencies_cm1=[-1200.0, 800.0])
+    body = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}").json()
+    assert "imaginary_mode_projections" not in body["record"]
+
+
+def test_detail_include_imaginary_mode_projections_says_what_it_could_not_check(client, db_session):
+    """Asked and unable to answer is not the same as asked and clean.
+
+    This calculation has an imaginary mode and no Hessian, which is the
+    majority case in the corpus. The block comes back present, with the
+    reason, and with no modes -- so a client cannot read it as "no
+    residue found". ``available_sections.has_hessian`` says the same
+    thing on the default record, without the heavy include.
+    """
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
+    attach_freq_result(db_session, calculation=calc, frequencies_cm1=[-1200.0, 800.0])
+    body = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=imaginary_mode_projections").json()
+    block = body["record"]["imaginary_mode_projections"]
+    assert block["status"] == "hessian_not_stored"
+    assert block["modes"] == []
+    assert block["conflict_count"] == 0
+    # The thresholds are on the wire whether or not anything was measured.
+    assert block["rigid_body_overlap_threshold"] == 0.90
+    assert block["torsion_overlap_threshold"] == 0.70
+    assert body["record"]["available_sections"]["has_hessian"] is False
+
+
+def test_imaginary_mode_projections_is_detail_only_and_not_in_include_all(
+    client, db_session
+):
+    """A diagonalisation per record is not something a search page should
+    do by default.
+
+    The block is computed rather than projected from stored rows, so it is
+    kept out of ``_HEAVY_INCLUDE_TOKENS`` -- which keeps it out of
+    ``include=all``'s expansion and out of search entirely, exactly as
+    ``trust`` is. A caller who wants it on a detail read asks for it by
+    name.
+    """
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
+    attach_freq_result(db_session, calculation=calc, frequencies_cm1=[-1200.0, 800.0])
+
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=all"
+    ).json()
+    assert "imaginary_mode_projections" not in body["record"]
+
+    response = client.get(
+        "/api/v1/scientific/calculations/search"
+        "?calculation_type=freq&include=imaginary_mode_projections"
+    )
+    assert response.status_code == 422
+    assert "unknown_include_token" in response.json()["detail"]
+
+
+def test_detail_include_imaginary_mode_projections_on_a_minimum(client, db_session):
+    """A frequency job with no imaginary mode has nothing to project, and
+    says so in its own words rather than by falling back to the
+    no-Hessian answer."""
+    _, _, calc = _make_species_owned_calc(db_session, calc_type=CalculationType.freq)
+    attach_freq_result(db_session, calculation=calc, frequencies_cm1=[800.0, 1600.0])
+    body = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}?include=imaginary_mode_projections").json()
+    assert body["record"]["imaginary_mode_projections"]["status"] == "no_imaginary_modes"
 
 
 def test_detail_include_scf_stability_returns_summary(client, db_session):

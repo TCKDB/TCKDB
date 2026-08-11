@@ -160,6 +160,15 @@ class TransitionStateValidationEvidence(Base, TimestampMixin, CreatedByMixin):
     an imaginary mode's displacement vectors is a producer-side heuristic, not
     a database record, and TCKDB stores only the reconstructed-path evidence
     an IRC calculation actually produces.
+
+    That decision is unchanged, and it is narrower than it has been read to
+    be. ADR 0013 took it to mean the ADR 0012 eigenvector projections were
+    uncomputable; they are not, because ``calc_hessian`` stores the matrix
+    those vectors diagonalise. The projections now run at *read* time
+    (``include=imaginary_mode_projections``) and write nothing — which is
+    exactly what this docstring forbids storing. What stays out of the
+    database is a producer's *conclusion* about a mode, not the arithmetic
+    anyone can redo from the matrix.
     """
 
     __tablename__ = "transition_state_validation_evidence"

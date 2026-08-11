@@ -22,6 +22,7 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    ImaginaryModeDisposition,
     IRCDirection,
     PathSearchMethod,
     RecordReviewStatus,
@@ -45,6 +46,50 @@ from app.schemas.reads.scientific_common import (
     WorkflowToolReleaseSummary,
 )
 from app.services.trust.models import TrustFragment
+
+# ---------------------------------------------------------------------------
+# Imaginary-mode projection vocabulary (ADR 0012 / ADR 0013)
+# ---------------------------------------------------------------------------
+
+# Spelled as literals rather than reused from
+# ``app.services.scientific_read.imaginary_mode_projection`` so the wire
+# contract is visible in the schema module and cannot drift silently when
+# the service's internal enums are refactored.
+
+#: Whether a projection was taken, and when it was not, exactly what
+#: stopped it. Only ``determined`` means something was measured.
+ProjectionStatusValue = Literal[
+    "determined",
+    "no_imaginary_modes",
+    "no_frequency_modes",
+    "hessian_not_stored",
+    "geometry_incomplete",
+    "masses_unresolved",
+    "rigid_body_curvature_too_large",
+]
+
+#: What the projections say a mode is. Narrower than
+#: :class:`~app.db.models.common.ImaginaryModeDisposition` on purpose --
+#: see :class:`ImaginaryModeProjectionEntry`.
+ModeDeterminationValue = Literal[
+    "rigid_body_residue",
+    "torsion",
+    "internal_vibration",
+]
+
+#: Why one mode inside an otherwise-determined block has no determination.
+NotDeterminedReason = Literal[
+    "not_matched_in_recovered_spectrum",
+    "degenerate_eigenvector",
+]
+
+#: How a determination stands relative to the depositor's declaration.
+DeclarationAgreementValue = Literal[
+    "not_declared",
+    "agrees",
+    "conflicts",
+    "inconclusive",
+]
 
 # ---------------------------------------------------------------------------
 # Request
@@ -230,6 +275,64 @@ class CalculationFreqModeSummary(BaseModel):
     reduced_mass_amu: float | None = None
     force_constant_mdyne_angstrom: float | None = None
 
+
+class ImaginaryModeProjectionEntry(BaseModel):
+    """One imaginary mode's ADR 0012 projections, next to its declaration.
+
+    ``declared_disposition`` is what the **depositor** said the mode is.
+    ``determination`` is what projecting the eigenvector recovered from
+    ``calc_hessian`` says it is. They are different kinds of claim and
+    both are reported: TCKDB prefers neither, and ``agreement`` names
+    their relationship rather than resolving it.
+
+    ``determination`` uses a deliberately narrower vocabulary than
+    ``imaginary_disposition``. The projections can positively identify
+    rigid-body residue and torsion; everything else they can only place in
+    ``internal_vibration``, which is what a genuine reaction coordinate
+    looks like but is not a claim about which internal coordinate it is.
+
+    The raw overlaps and the thresholds applied to them are both on the
+    payload, so a reader who disagrees with ADR 0012's 90% and 70% can
+    reach their own verdict without re-running anything.
+    """
+
+    mode_index: int
+    frequency_cm1: float
+    declared_disposition: ImaginaryModeDisposition | None = None
+    recovered_frequency_cm1: float | None = None
+    rigid_body_overlap: float | None = None
+    torsion_overlap: float | None = None
+    torsion_subspace_overlap: float | None = None
+    best_torsion_bond_atom_indices: list[int] | None = None
+    determination: ModeDeterminationValue | None = None
+    not_determined_reason: NotDeterminedReason | None = None
+    agreement: DeclarationAgreementValue
+
+
+class ImaginaryModeProjectionSummary(BaseModel):
+    """The ``include=imaginary_mode_projections`` block for a calculation.
+
+    Always present when the include is requested, even when no projection
+    was possible: ``status`` distinguishes "no residue was found" from
+    "nothing was checked", which are opposite findings that an empty list
+    would merge. ``hessian_not_stored`` in particular is *not* a clean
+    bill of health -- it is the answer for every frequency calculation
+    that carries no matrix to project.
+
+    Nothing in this block is stored. It is recomputed per request from
+    ``calc_hessian`` and the geometry it is bound to.
+    """
+
+    status: ProjectionStatusValue
+    modes: list[ImaginaryModeProjectionEntry] = []
+    conflict_count: int = 0
+    natoms: int | None = None
+    rigid_body_dimension: int | None = None
+    is_linear: bool | None = None
+    max_rigid_body_curvature_cm1: float | None = None
+    rotatable_bonds: list[list[int]] = []
+    rigid_body_overlap_threshold: float
+    torsion_overlap_threshold: float
 
 class CalculationScanResultSummary(BaseModel):
     """Summary projection of a ``calc_scan_result`` row.
@@ -761,6 +864,12 @@ class AvailableCalculationSections(BaseModel):
     has_wavefunction_diagnostic: bool
     has_spin_diagnostic: bool
     has_freq_modes: bool
+    #: Whether a ``calc_hessian`` row exists. Load-bearing for the
+    #: imaginary-mode projections: without a matrix they are not
+    #: unavailable, they are *not determinable*, and a caller can see
+    #: which from the default record rather than by asking for the heavy
+    #: include and reading a status.
+    has_hessian: bool
     has_scan: bool
     has_irc: bool
     has_path_search: bool
@@ -808,6 +917,7 @@ class ScientificCalculationRecord(BaseModel):
     constraints: list[CalculationConstraintSummary] | None = None
     review_history: list[CalculationReviewEntry] | None = None
     freq_modes: list[CalculationFreqModeSummary] | None = None
+    imaginary_mode_projections: ImaginaryModeProjectionSummary | None = None
     scan: CalculationScanSummary | None = None
     irc: CalculationIRCSummary | None = None
     path_search: CalculationPathSearchSummary | None = None
@@ -849,7 +959,13 @@ __all__ = [
     "CalculationScanSummary",
     "CalculationSpinDiagnosticSummary",
     "CalculationWavefunctionDiagnosticSummary",
+    "DeclarationAgreementValue",
     "ExecutionEnvironmentManifestSummary",
+    "ImaginaryModeProjectionEntry",
+    "ImaginaryModeProjectionSummary",
+    "ModeDeterminationValue",
+    "NotDeterminedReason",
+    "ProjectionStatusValue",
     "RequestEcho",
     "ScanCoordinateSummary",
     "ScientificCalculationDetailResponse",
