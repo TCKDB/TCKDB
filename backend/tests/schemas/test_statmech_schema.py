@@ -162,3 +162,50 @@ def test_statmech_create_rejects_duplicate_source_calculation_pairs() -> None:
                 ),
             ],
         )
+
+
+# ---------------------------------------------------------------------------
+# One concept, one component (#119)
+# ---------------------------------------------------------------------------
+
+
+def test_torsion_coordinate_has_exactly_one_definition() -> None:
+    """The atom quartet is defined once and inherited everywhere.
+
+    ``StatmechTorsionCoordinateIn``, ``StatmechTorsionCoordinateBase`` and
+    ``StatmechTorsionCoordinateCreate`` used to be field-for-field and
+    validator-for-validator identical, which a client generator turned
+    into two classes for one concept. The read schema now inherits the
+    one class instead of restating its fields.
+    """
+    from app.schemas.entities.statmech import StatmechTorsionCoordinateRead
+
+    assert StatmechTorsionCoordinateIn in StatmechTorsionCoordinateRead.__mro__
+    quartet = {
+        "coordinate_index",
+        "atom1_index",
+        "atom2_index",
+        "atom3_index",
+        "atom4_index",
+    }
+    assert quartet <= set(StatmechTorsionCoordinateIn.model_fields)
+    # The read schema adds only the parent link on top of the quartet.
+    assert set(StatmechTorsionCoordinateRead.model_fields) == quartet | {"torsion_id"}
+    # And declares none of the quartet itself -- inheriting it is the point.
+    assert quartet.isdisjoint(
+        StatmechTorsionCoordinateRead.__annotations__.keys()
+    )
+
+
+def test_retired_torsion_coordinate_spellings_are_gone() -> None:
+    """The duplicate names must not come back as import aliases either."""
+    import tckdb_schemas.statmech_bits as wire_bits
+
+    from app.schemas.entities import statmech as entity_statmech
+
+    for retired in (
+        "StatmechTorsionCoordinateBase",
+        "StatmechTorsionCoordinateCreate",
+    ):
+        assert not hasattr(wire_bits, retired), retired
+        assert not hasattr(entity_statmech, retired), retired
