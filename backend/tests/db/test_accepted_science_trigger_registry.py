@@ -35,6 +35,14 @@ _EVIDENCE_REVISION = _VERSIONS / "a1f6c3e9b527_freeze_evidence_under_accepted_ro
 #: a fourth such revision is wired in by adding it here once.
 _EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION)
 
+#: ``d4e9b1c7a253`` narrows the regime instead of extending it: it removes one
+#: registered column from ``c6f2a9d4e7b1``'s ``calc_scf_stability`` guard. It
+#: is read separately from ``_EXTENSION_REVISIONS`` because it adds no trigger
+#: -- it rewrites an existing one's arguments under the same name -- so it
+#: subtracts from the registry the assertions below reason about rather than
+#: adding to it. A second narrowing revision joins by being added here.
+_CORRECTION_REVISIONS = (_VERSIONS / "d4e9b1c7a253_scf_stability_provenance_is_not_ownership.py",)
+
 
 def _revision_namespace() -> dict:
     return runpy.run_path(str(_REVISION))
@@ -42,6 +50,15 @@ def _revision_namespace() -> dict:
 
 def _extension_namespaces() -> list[dict]:
     return [runpy.run_path(str(path)) for path in _EXTENSION_REVISIONS]
+
+
+def _removed_children() -> set[tuple[str, str, str]]:
+    """``(table, record_type, column)`` entries the corrections took back out."""
+
+    removed: set[tuple[str, str, str]] = set()
+    for path in _CORRECTION_REVISIONS:
+        removed.update(runpy.run_path(str(path))["_REMOVED_CHILDREN"])
+    return removed
 
 
 def _referenced_tables(tables, table: str, column: str, *, hops: int) -> set[str]:
@@ -66,11 +83,17 @@ def test_registry_references_real_metadata_and_short_identifiers() -> None:
     tables = Base.metadata.tables
     root_types = revision["_ROOT_TYPES"]
 
-    direct_children = revision["_DIRECT_CHILDREN"]
+    removed = _removed_children()
+    direct_children = tuple(entry for entry in revision["_DIRECT_CHILDREN"] if entry not in removed)
     via_children = revision["_VIA_CHILDREN"]
     for extension in extensions:
         direct_children = direct_children + extension["_DIRECT_CHILDREN"]
         via_children = via_children + extension["_VIA_CHILDREN"]
+
+    # A correction may only take back out something that was in. An entry that
+    # matches nothing is a typo that would silently narrow no guard while
+    # reading as though it had.
+    assert removed <= set(revision["_DIRECT_CHILDREN"])
 
     for table in root_types.values():
         assert table in tables
@@ -108,20 +131,38 @@ def test_registry_references_real_metadata_and_short_identifiers() -> None:
         target = root_types[record_type]
         assert target in _referenced_tables(tables, table, column, hops=2), (table, column, target)
 
-    # ``tckdb_guard_accepted_child`` reads each column it is given and does
-    # nothing where the value is NULL, so a group whose columns are *all*
-    # nullable yields a trigger that skips whole rows. At least one column per
-    # ``(table, record_type)`` group must therefore be NOT NULL. It is asserted
-    # per group rather than per column because a nullable column can be a
-    # deliberate second binding beside a NOT NULL one --
+    # Every guarded column must be NOT NULL, and the rule is now stated that
+    # way rather than per ``(table, record_type)`` group.
+    #
+    # This comment previously recorded the opposite. It read: a nullable
+    # column can be a deliberate second binding beside a NOT NULL one --
     # ``calc_scf_stability`` is guarded on both its own ``calculation_id`` and
-    # the optional ``source_calculation_id`` it was derived from, and both
-    # land in one trigger.
-    grouped_columns: dict[tuple[str, str], list[str]] = {}
+    # the optional ``source_calculation_id`` it was derived from -- and so the
+    # NOT NULL requirement was asserted per group, which the pair satisfied
+    # through ``calculation_id`` alone. That reading was wrong, and writing it
+    # down here is what kept it from being questioned for three revisions.
+    #
+    # ``source_calculation_id`` is not a second way of naming the row's owner.
+    # It names a *different* calculation: the one the stability analysis was
+    # read out of. Because ``tckdb_guard_accepted_child`` treats every argument
+    # column alike, registering it meant an unapproved calculation could not
+    # record SCF-stability evidence citing an approved one, while the identical
+    # row citing nothing was accepted -- the database refusing provenance that
+    # points at accepted science. ``c6f2a9d4e7b1`` had excluded cross-domain
+    # provenance FKs from the regime in the sentence directly above its own
+    # registry, and ``a1f6c3e9b527`` excluded the identically shaped
+    # ``network_solve_state_energy.source_calculation_id`` by name;
+    # ``d4e9b1c7a253`` removes the entry, and
+    # ``tests/db/test_scf_stability_provenance_guard.py`` holds the behaviour
+    # that a registry-derived assertion cannot.
+    #
+    # Nullability now carries the distinction the prose used to: an ownership
+    # FK is the column without which the row has no subject, so it is NOT
+    # NULL, and a guarded column that is nullable is a provenance pointer
+    # miscategorised. Asserted per column, so a repeat needs this comment
+    # rewritten again rather than merely being absorbed by a group.
     for table, record_type, column in direct_children:
-        grouped_columns.setdefault((table, record_type), []).append(column)
-    for (table, record_type), columns in grouped_columns.items():
-        assert any(not tables[table].c[column].nullable for column in columns), (table, record_type, columns)
+        assert not tables[table].c[column].nullable, (table, record_type, column)
 
     constraints = tables["scientific_record_supersession"].constraints
     assert all(constraint.name is None or len(constraint.name) <= 63 for constraint in constraints)
