@@ -239,7 +239,9 @@ if rdkit_out="$(compose exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tA \
     elif echo "$rdkit_out" | grep -qi "does not exist"; then
         bad "database $DB_NAME does not exist"
         hint "create + migrate: docker compose -f $COMPOSE_FILE up -d db && make migrate"
-        hint "or (one-off):    docker compose -f $COMPOSE_FILE exec db createdb -U $DB_USER $DB_NAME"
+        hint "or (one-off):    docker compose -f $COMPOSE_FILE exec db createdb -U $DB_USER -E UTF8 -T template0 $DB_NAME"
+        hint "  -E UTF8 -T template0 is required: a bare createdb copies template1,"
+        hint "  which is SQL_ASCII on many clusters and silently stores invalid bytes."
     else
         bad "rdkit extension NOT present in $DB_NAME"
         echo "         psql output: $rdkit_out" >&2
@@ -251,6 +253,42 @@ else
     bad "psql query failed"
     echo "         output: $rdkit_out" >&2
     hint "is the db container running? see section 3 above."
+fi
+
+# --- 4b. Encoding of the database AND of the template it will be copied from
+#
+# Two questions, not one. server_encoding answers "is the database I have
+# right"; template1's encoding answers "is the next database created here
+# going to be right" -- and a restore drill recreates the database, so the
+# template's answer becomes the production answer at the worst moment.
+# The live deployment held a UTF8 tckdb beside a SQL_ASCII template1 for
+# eight days after the 2026-08-04 incident, which is how this check exists.
+
+enc_out=""
+if enc_out="$(compose exec -T db psql -U "$DB_USER" -d "$DB_NAME" -tA \
+        -c "select current_database() || ' ' || pg_encoding_to_char(encoding) from pg_database where datname = current_database()
+            union all
+            select datname || ' ' || pg_encoding_to_char(encoding) from pg_database where datname = 'template1';" 2>&1)"; then
+    while read -r enc_db enc_val; do
+        [[ -z "$enc_db" ]] && continue
+        if [[ "$enc_val" == "UTF8" ]]; then
+            ok "$enc_db encoding is UTF8"
+        else
+            bad "$enc_db encoding is $enc_val, expected UTF8"
+            if [[ "$enc_db" == "template1" ]]; then
+                hint "this cluster hands $enc_val to every CREATE DATABASE that names no template,"
+                hint "including the one a restore runbook recreates. Always create databases with:"
+                hint "  CREATE DATABASE <name> ENCODING 'UTF8' TEMPLATE template0;"
+                hint "see docs/deployment/troubleshooting.md (cluster template disagrees)"
+            else
+                hint "SQL_ASCII validates nothing it stores; fixing it needs a dump and restore."
+                hint "see docs/deployment/troubleshooting.md (SQL_ASCII instead of UTF8)"
+            fi
+        fi
+    done <<< "$enc_out"
+else
+    bad "encoding query failed"
+    echo "         output: $enc_out" >&2
 fi
 
 # --- 5. Alembic revision ---------------------------------------------------

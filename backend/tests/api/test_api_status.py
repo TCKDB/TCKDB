@@ -143,6 +143,36 @@ def test_status_reports_the_database_server_encoding(
     )
 
 
+def test_status_reports_the_cluster_template_encoding(
+    client, healthy_storage
+) -> None:
+    """The same hazard one step earlier than ``server_encoding``.
+
+    ``server_encoding`` describes the database that exists. ``template1``
+    describes the one the next ``CREATE DATABASE`` produces, and the two can
+    disagree: converting an application database in place fixes it and leaves
+    the cluster's templates alone. The live deployment held a ``UTF8``
+    ``tckdb`` beside a ``SQL_ASCII`` ``template1`` when checked on 2026-08-12,
+    eight days after the conversion.
+
+    That matters because every restore runbook drops and recreates the
+    database before loading the dump, so the template's encoding becomes the
+    production encoding at exactly the moment nobody is looking -- and a
+    ``SQL_ASCII`` database accepts a ``UTF8`` dump without a single error.
+
+    Reported, never judged, on the same reasoning as ``server_encoding``.
+    """
+    body = client.get("/api/v1/status").json()
+    database = body["components"]["database"]
+    assert database["template_encoding"], (
+        "a reachable cluster must report its template1 encoding"
+    )
+    assert body["status"] == "ok"
+    assert body["degraded"] == [], (
+        "a divergent template is reported, never a reason to degrade"
+    )
+
+
 def test_status_returns_200_even_when_degraded(
     client, monkeypatch, healthy_storage
 ) -> None:

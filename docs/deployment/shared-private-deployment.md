@@ -382,6 +382,14 @@ pg_dump "$DATABASE_URL" > tckdb-backup-$(date +%F).sql
 Schedule it via cron / systemd timer; rotate older copies; verify the
 output is non-empty.
 
+**When you restore**, create the target database explicitly —
+`createdb -E UTF8 -T template0 <name>`, or
+`CREATE DATABASE <name> ENCODING 'UTF8' TEMPLATE template0;`. A bare
+`createdb` copies `template1`, which is `SQL_ASCII` on many clusters, and a
+`SQL_ASCII` database accepts a `UTF8` dump without error while silently
+mis-counting every non-ASCII character. See
+[troubleshooting.md](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+
 ### Artifacts / object store
 
 If you use the bundled MinIO container, mirror the `/data` volume to a

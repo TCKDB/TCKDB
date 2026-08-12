@@ -621,11 +621,20 @@ docker compose exec -T minio \
 
 ### Restore drill
 
+`ENCODING 'UTF8' TEMPLATE template0` is not optional. `CREATE DATABASE` with
+no `TEMPLATE` copies `template1`, whose encoding is whatever `initdb` chose
+for the cluster — often `SQL_ASCII`. A `SQL_ASCII` database accepts every
+byte a `UTF8` dump contains and only mis-counts them afterwards, so the
+restore succeeds, exits 0, and leaves every non-ASCII string silently wrong.
+Recreating the database is exactly the moment the template's encoding becomes
+the production database's encoding. See
+[troubleshooting.md](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+
 ```bash
 # Drop and recreate the DB (destructive)
 docker compose --env-file .env.selfhosted --env-file .env.db-admin exec -T db \
     psql -U "$DB_ADMIN_USER" -d postgres \
-    -c "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER;"
+    -c "DROP DATABASE IF EXISTS $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER ENCODING 'UTF8' TEMPLATE template0;"
 
 # Restore from a dump
 gunzip -c /var/backups/tckdb/tckdb-2026-05-12.sql.gz | \
@@ -913,8 +922,11 @@ checked-out code, restore the previous nightly:
 ```bash
 # from /var/backups/tckdb/
 sudo systemctl stop tckdb-api
+# ENCODING/TEMPLATE as in the restore drill above -- without them the
+# recreated database inherits template1's encoding and the restore is
+# silently corrupt for every non-ASCII value.
 docker compose ... exec db psql -U $DB_ADMIN_USER -d postgres \
-    -c "DROP DATABASE $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER;"
+    -c "DROP DATABASE $DB_NAME; CREATE DATABASE $DB_NAME OWNER $DB_OWNER_USER ENCODING 'UTF8' TEMPLATE template0;"
 gunzip -c tckdb-YYYY-MM-DD.sql.gz | docker compose ... exec -T db \
     psql -U $DB_ADMIN_USER -d $DB_NAME
 sudo systemctl start tckdb-api

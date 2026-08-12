@@ -116,6 +116,52 @@ def server_encoding(session) -> str | None:
         return None
 
 
+#: The template every ``CREATE DATABASE`` on a cluster copies when the
+#: statement names no other one. Its encoding is therefore the encoding a
+#: new database gets by default, whatever the *current* database is.
+TEMPLATE_DATABASE = "template1"
+
+
+def template_encoding(session) -> str | None:
+    """Return ``template1``'s encoding on the connected cluster, or None.
+
+    :func:`server_encoding` answers "is the database I am connected to
+    right", which is not the same question as "is the next database created
+    here going to be right". ``CREATE DATABASE`` with no ``TEMPLATE`` clause
+    copies ``template1``, so a cluster can hold a correct ``UTF8`` production
+    database and still hand ``SQL_ASCII`` to everything created next to it.
+
+    That is not hypothetical: the live deployment's ``tckdb`` was converted
+    to ``UTF8`` by hand after the 2026-08-04 incident and its ``template1``
+    was not, so on 2026-08-12 the two disagreed. The restore runbooks drop
+    and recreate the database, which is exactly the moment the template's
+    encoding becomes the production database's encoding -- silently, because
+    a ``SQL_ASCII`` database accepts every byte a ``UTF8`` dump contains and
+    only mis-counts them afterwards.
+
+    Reported rather than judged, on the same reasoning as ``server_encoding``:
+    a divergent template is a real hazard and no restart fixes it, so it is
+    made answerable from outside rather than made to degrade ``/status``.
+
+    Reads ``pg_database``, a catalog table, on a session whose statement
+    timeout is already installed by :mod:`app.api.deps`, and only after
+    connectivity has been proven -- so it needs no deadline of its own.
+    """
+    from sqlalchemy import text
+    from sqlalchemy.exc import SQLAlchemyError
+
+    try:
+        return session.execute(
+            text(
+                "SELECT pg_encoding_to_char(encoding) FROM pg_database "
+                "WHERE datname = :name"
+            ),
+            {"name": TEMPLATE_DATABASE},
+        ).scalar_one_or_none()
+    except SQLAlchemyError:
+        return None
+
+
 #: Hard wall-clock ceiling for the boot-time encoding probe, mirroring
 #: ``_STORAGE_PROBE_DEADLINE_SECONDS`` in :mod:`app.api.routes.health` and
 #: for the same reason. ``connect_timeout`` on the engine URL

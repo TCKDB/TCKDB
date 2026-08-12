@@ -171,7 +171,10 @@ def setup_db(fresh: bool = False):
         )
         _run_checked(
             ["psql", "-h", "127.0.0.1", "-p", "5432", "-U", "tckdb", "-d", "postgres",
-             "-c", "CREATE DATABASE tckdb_dev;"],
+             # ENCODING/TEMPLATE explicit: a bare CREATE DATABASE copies
+             # template1, which is SQL_ASCII on clusters whose initdb set no
+             # encoding, and such a database stores invalid bytes silently.
+             "-c", "CREATE DATABASE tckdb_dev ENCODING 'UTF8' TEMPLATE template0;"],
             "Creating tckdb_dev", db_env,
         )
 
