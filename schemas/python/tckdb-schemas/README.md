@@ -61,14 +61,23 @@ shape of the bundle paths is unchanged):
 
 - `StatmechSourceCalculationCreate`, `StatmechSourceCalcInBundle` and the
   server-side `StatmechSourceCalculationIn` collapse into one component,
-  `StatmechSourceCalcIn`. The old names remain importable as aliases.
-- `StatmechTorsionCreate` collapses into `StatmechTorsionIn`.
+  `StatmechSourceCalcIn`. `StatmechSourceCalcInBundle` stays importable as
+  an alias — from `tckdb_schemas.statmech_bits` and from both bundle
+  modules — and is the same class object, so there is one component, not
+  two. `StatmechSourceCalculationCreate` is **removed** from this package.
+- `StatmechTorsionCreate` collapses into `StatmechTorsionIn` and is
+  **removed** from this package.
 - `StatmechTorsionCoordinateCreate` and `StatmechTorsionCoordinateBase`
-  are gone; `StatmechTorsionCoordinateIn` is the only spelling of an atom
-  quartet. They were field-for-field and validator-for-validator
+  are removed; `StatmechTorsionCoordinateIn` is the only spelling of an
+  atom quartet. They were field-for-field and validator-for-validator
   identical, so a generator emitted two classes for one concept.
 - New: `ConformerCalculationIn` — a `CalculationWithResultsPayload` plus
   the optional `key`.
+
+The two removed `*Create` names still exist inside the TCKDB server, in
+`app.schemas.entities.statmech`, where they mean something different: the
+row-shaped create payload that speaks `calculation_id`. They are not part
+of any wire contract and never were importable from here for that purpose.
 
 Also tightened, matching what the sibling upload paths already enforce:
 `statmech.source_calculations` must be unique by

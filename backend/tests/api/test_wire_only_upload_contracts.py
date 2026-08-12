@@ -323,7 +323,7 @@ def test_live_conformer_route_links_statmech_by_key_not_id(
     the "uploaded calculation" shortcut would have linked.
     """
     from app.db.models.calculation import Calculation
-    from app.db.models.common import CalculationType
+    from app.db.models.common import CalculationType, StatmechCalculationRole
     from app.db.models.statmech import Statmech, StatmechSourceCalculation
 
     resp = client.post(
@@ -343,12 +343,16 @@ def test_live_conformer_route_links_statmech_by_key_not_id(
         .filter(StatmechSourceCalculation.statmech_id == statmech.id)
         .all()
     )
-    linked_types = {
-        session.get(Calculation, link.calculation_id).type for link in links
+    linked = {
+        (session.get(Calculation, link.calculation_id).type, link.role)
+        for link in links
     }
-    assert CalculationType.freq in linked_types, (
+    # Exactly one link, to the freq calc, with the declared role. The
+    # payload sets no ``uploaded_calculation_role``, so the primary sp
+    # calculation must not appear.
+    assert linked == {(CalculationType.freq, StatmechCalculationRole.freq)}, (
         "statmech.source_calculations[0].calculation_key='h_freq' did not "
-        "resolve to the freq calculation declared in the same upload"
+        f"resolve to the freq calculation declared in the same upload: {linked}"
     )
 
 
