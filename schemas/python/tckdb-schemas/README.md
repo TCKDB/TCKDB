@@ -79,11 +79,16 @@ The two removed `*Create` names still exist inside the TCKDB server, in
 row-shaped create payload that speaks `calculation_id`. They are not part
 of any wire contract and never were importable from here for that purpose.
 
-Also tightened, matching what the sibling upload paths already enforce:
-`statmech.source_calculations` must be unique by
-`(calculation_key, role)` (it is the row's primary key, so a duplicate
-used to surface as a 500), and `statmech.torsions[].torsion_index` must
-be unique.
+Also tightened, matching what the sibling upload paths already enforce.
+Each of these used to surface as a 500 rather than a 422:
+
+- `statmech.source_calculations` must be unique by
+  `(calculation_key, role)` — it is the row's primary key.
+- `statmech.torsions[].torsion_index` must be unique.
+- The primary calculation may not be linked twice: once implicitly via
+  `statmech.uploaded_calculation_role` and again in
+  `source_calculations` under the same role. A *different* role is a
+  different row and stays allowed.
 
 ### 0.23.0
 
