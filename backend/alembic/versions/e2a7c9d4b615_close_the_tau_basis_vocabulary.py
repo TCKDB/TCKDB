@@ -78,8 +78,10 @@ _COLUMN = "imaginary_mode_tau_basis"
 #: wrong name; this one is spelled so the database agrees with the model.
 _CONSTRAINT = "imaginary_mode_tau_basis_known"
 
-#: What the database ends up calling it, for the error messages and the
-#: tests that read ``pg_constraint``.
+#: What the database ends up calling it, once the convention has expanded
+#: the short name. Named in the refusal below so an operator reading the
+#: failure knows which constraint is *not* installed, and read back by
+#: ``tests/db/test_imaginary_mode_tau_basis_constraint.py``.
 _CONSTRAINT_IN_DB = f"ck_{_TABLE}_{_CONSTRAINT}"
 
 #: ``tckdb_schemas.stationary_point.TauBasis``, spelled out rather than
@@ -127,8 +129,9 @@ def _refuse_unclassifiable_values() -> None:
             "will not guess what they meant: coercing them to "
             "'protocol_not_recorded' would assert that those records were "
             "judged at the conservative tolerance, which is a claim about "
-            "their science that only whatever wrote them can make. Repair "
-            "the rows (or add the value to _TAU_BASIS_VALUES in this "
+            "their science that only whatever wrote them can make. "
+            f"{_CONSTRAINT_IN_DB} was not installed and nothing was changed. "
+            "Repair the rows (or add the value to _TAU_BASIS_VALUES in this "
             "revision, if it is a legitimate basis this branch predates) and "
             "re-run."
         )
