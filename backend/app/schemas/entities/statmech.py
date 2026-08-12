@@ -1,6 +1,25 @@
+"""Statmech entity schemas.
+
+The create-side payloads (``StatmechSourceCalculationCreate``,
+``StatmechTorsionCreate``, ``StatmechTorsionCoordinateCreate``) and the
+``*Base`` field definitions they share now live in
+``tckdb_schemas.statmech_bits``: they are nested inside
+``ConformerUploadRequest.statmech``, which is a published contract. The
+``*Read`` / ``*Update`` schemas stay here — they carry ORM ids and
+``from_attributes=True`` and have no place on the wire.
+"""
+
 from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
+from tckdb_schemas.statmech_bits import (
+    StatmechSourceCalculationBase,
+    StatmechSourceCalculationCreate,
+    StatmechTorsionBase,
+    StatmechTorsionCoordinateBase,
+    StatmechTorsionCoordinateCreate,
+    StatmechTorsionCreate,
+)
 
 from app.db.models.common import (
     RigidRotorKind,
@@ -11,20 +30,26 @@ from app.db.models.common import (
 )
 from app.schemas.common import ORMBaseSchema, SchemaBase, TimestampedCreatedByReadSchema
 
-
-class StatmechSourceCalculationBase(BaseModel):
-    """Shared fields for statmech source-calculation links.
-
-    :param calculation_id: Referenced calculation row.
-    :param role: Semantic role of the source calculation.
-    """
-
-    calculation_id: int
-    role: StatmechCalculationRole
-
-
-class StatmechSourceCalculationCreate(StatmechSourceCalculationBase, SchemaBase):
-    """Nested create payload for a statmech source-calculation link."""
+__all__ = [
+    "StatmechBase",
+    "StatmechCreate",
+    "StatmechElectronicLevelBase",
+    "StatmechElectronicLevelRead",
+    "StatmechRead",
+    "StatmechSourceCalculationBase",
+    "StatmechSourceCalculationCreate",
+    "StatmechSourceCalculationRead",
+    "StatmechSourceCalculationUpdate",
+    "StatmechTorsionBase",
+    "StatmechTorsionCoordinateBase",
+    "StatmechTorsionCoordinateCreate",
+    "StatmechTorsionCoordinateRead",
+    "StatmechTorsionCoordinateUpdate",
+    "StatmechTorsionCreate",
+    "StatmechTorsionRead",
+    "StatmechTorsionUpdate",
+    "StatmechUpdate",
+]
 
 
 class StatmechSourceCalculationRead(StatmechSourceCalculationBase, ORMBaseSchema):
@@ -42,42 +67,6 @@ class StatmechSourceCalculationUpdate(SchemaBase):
     """
 
     role: StatmechCalculationRole | None = None
-
-
-class StatmechTorsionCoordinateBase(BaseModel):
-    """Shared fields for one torsional coordinate definition.
-
-    :param coordinate_index: One-based coordinate number within the coupled rotor.
-    :param atom1_index: First atom index in the torsion definition.
-    :param atom2_index: Second atom index in the torsion definition.
-    :param atom3_index: Third atom index in the torsion definition.
-    :param atom4_index: Fourth atom index in the torsion definition.
-    """
-
-    coordinate_index: int = Field(ge=1)
-    atom1_index: int = Field(ge=1)
-    atom2_index: int = Field(ge=1)
-    atom3_index: int = Field(ge=1)
-    atom4_index: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def validate_distinct_atoms(self) -> Self:
-        atom_indices = {
-            self.atom1_index,
-            self.atom2_index,
-            self.atom3_index,
-            self.atom4_index,
-        }
-        if len(atom_indices) != 4:
-            raise ValueError("Torsion coordinate atom indices must be distinct.")
-        return self
-
-
-class StatmechTorsionCoordinateCreate(
-    StatmechTorsionCoordinateBase,
-    SchemaBase,
-):
-    """Nested create payload for one torsional coordinate."""
 
 
 class StatmechTorsionCoordinateRead(StatmechTorsionCoordinateBase, ORMBaseSchema):
@@ -116,57 +105,6 @@ class StatmechTorsionCoordinateUpdate(SchemaBase):
         if all(value is not None for value in atom_indices):
             if len(set(atom_indices)) != 4:
                 raise ValueError("Torsion coordinate atom indices must be distinct.")
-        return self
-
-
-class StatmechTorsionBase(BaseModel):
-    """Shared fields for one statmech torsion.
-
-    :param torsion_index: One-based torsion number within the statmech record.
-    :param symmetry_number: Optional torsional symmetry number.
-    :param treatment_kind: Optional torsion treatment kind.
-    :param dimension: Number of coupled torsional coordinates in this rotor.
-    :param top_description: Optional description of the rotating top.
-    :param invalidated_reason: Optional reason why the torsion was invalidated.
-    :param note: Optional free-text note.
-    :param source_scan_calculation_id: Optional principal scan calculation for this torsion.
-    """
-
-    torsion_index: int = Field(ge=1)
-    symmetry_number: int | None = Field(default=None, ge=1)
-    treatment_kind: TorsionTreatmentKind | None = None
-
-    dimension: int = Field(default=1, ge=1)
-    top_description: str | None = None
-    invalidated_reason: str | None = None
-    note: str | None = None
-
-    source_scan_calculation_id: int | None = None
-
-
-class StatmechTorsionCreate(StatmechTorsionBase, SchemaBase):
-    """Nested create payload for one statmech torsion.
-
-    :param coordinates: Ordered torsional coordinate definitions. The number of
-        coordinates must equal ``dimension``, and ``coordinate_index`` values
-        must run contiguously from ``1..dimension``.
-    """
-
-    coordinates: list[StatmechTorsionCoordinateCreate] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_coordinates(self) -> Self:
-        if len(self.coordinates) != self.dimension:
-            raise ValueError("Number of torsion coordinates must equal dimension.")
-
-        coordinate_indices = [
-            coordinate.coordinate_index for coordinate in self.coordinates
-        ]
-        expected_indices = list(range(1, self.dimension + 1))
-        if sorted(coordinate_indices) != expected_indices:
-            raise ValueError(
-                "Torsion coordinate_index values must run contiguously from 1..dimension."
-            )
         return self
 
 

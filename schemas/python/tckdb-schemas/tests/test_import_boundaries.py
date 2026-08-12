@@ -59,8 +59,12 @@ def test_no_forbidden_runtime_imports() -> None:
     code = (
         "import sys\n"
         "import tckdb_schemas\n"
+        "import tckdb_schemas.workflows\n"
         "import tckdb_schemas.workflows.computed_species_upload\n"
         "import tckdb_schemas.workflows.computed_reaction_upload\n"
+        "import tckdb_schemas.workflows.conformer_upload\n"
+        "import tckdb_schemas.workflows.transition_state_upload\n"
+        "import tckdb_schemas.workflows.transport_upload\n"
         "forbidden = (\n"
         "    'app', 'backend', 'fastapi', 'sqlalchemy', 'alembic',\n"
         "    'rdkit', 'requests', 'httpx', 'boto3', 'minio',\n"
