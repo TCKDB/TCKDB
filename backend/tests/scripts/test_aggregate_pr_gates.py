@@ -403,6 +403,22 @@ def test_a_listing_that_never_settles_fails_on_the_deadline():
     assert not ok
 
 
+def test_aggregating_nothing_is_refused_rather_than_folded_to_success():
+    """A fold over an empty list returns success. That must not be reachable."""
+    api = FakeApi(["backend/app/x.py"], [[own_run()]])
+    with pytest.raises(ValueError, match="not a check"):
+        gates.aggregate(
+            fetch=api,
+            repo="o/r",
+            pr_number=1,
+            head_sha="deadbeef",
+            own_run_id=OWN_RUN_ID,
+            workflows=(),
+            repo_root=REPO_ROOT,
+            log=lambda _message: None,
+        )
+
+
 def test_a_red_gate_short_circuits_the_wait():
     """Failure is reported without waiting out a sibling that is still running."""
     api = FakeApi(

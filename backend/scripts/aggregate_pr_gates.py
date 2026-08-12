@@ -340,6 +340,13 @@ def aggregate(
     log: Callable[[str], None] = print,
 ) -> tuple[bool, dict[str, tuple[str, str]]]:
     """Poll until every aggregated workflow is decided. (ok, per-workflow states)."""
+    if not workflows:
+        # An empty list folds to success over nothing, which is the purest
+        # form of the defect this whole file is built against: a required
+        # check that passes because it checked nothing. The guard in
+        # test_gate_coverage.py would catch the tuple being emptied, but a
+        # gate should not depend on a test elsewhere to refuse to be vacuous.
+        raise ValueError("no workflows to aggregate; a check over nothing is not a check")
     parsed = {rel: load_workflow(rel, repo_root) for rel in workflows}
 
     changed_files, files_truncated = fetch_changed_files(fetch, repo, pr_number)
