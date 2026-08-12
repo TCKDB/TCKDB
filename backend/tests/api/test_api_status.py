@@ -149,11 +149,11 @@ def test_status_reports_the_cluster_template_encoding(
     """The same hazard one step earlier than ``server_encoding``.
 
     ``server_encoding`` describes the database that exists. ``template1``
-    describes the one the next ``CREATE DATABASE`` produces, and the two can
-    disagree: converting an application database in place fixes it and leaves
-    the cluster's templates alone. The live deployment held a ``UTF8``
-    ``tckdb`` beside a ``SQL_ASCII`` ``template1`` when checked on 2026-08-12,
-    eight days after the conversion.
+    describes the one the next database created on this cluster inherits
+    from, and the two can disagree: converting an application database in
+    place fixes it and leaves the cluster's templates alone. The live
+    deployment held a ``UTF8`` ``tckdb`` beside a ``SQL_ASCII`` ``template1``
+    when checked on 2026-08-12, eight days after the conversion.
 
     That matters because every restore runbook drops and recreates the
     database before loading the dump, so the template's encoding becomes the
