@@ -273,6 +273,31 @@ class ConformerUploadRequest(SchemaBase):
         return self
 
     @model_validator(mode="after")
+    def validate_primary_calculation_not_linked_twice(self) -> Self:
+        """One link per (calculation, role), counting the implicit one.
+
+        ``uploaded_calculation_role`` already links the primary
+        calculation. Naming that same calculation again with the same role
+        in ``source_calculations`` asks for two rows with one primary key,
+        which the database refuses — better said here, where the message
+        can name the field, than as a 500 mid-transaction.
+        """
+        if self.statmech is None:
+            return self
+        role = self.statmech.uploaded_calculation_role
+        primary_key = self.calculation.key
+        if role is None or primary_key is None:
+            return self
+        for index, source in enumerate(self.statmech.source_calculations):
+            if source.calculation_key == primary_key and source.role == role:
+                raise ValueError(
+                    f"statmech.source_calculations[{index}] links the primary "
+                    f"calculation '{primary_key}' with role '{role.value}', "
+                    f"which uploaded_calculation_role already links. Drop one."
+                )
+        return self
+
+    @model_validator(mode="after")
     def validate_additional_calculation_types(self) -> Self:
         for calc in self.additional_calculations:
             if calc.type not in _ALLOWED_ADDITIONAL_TYPES:

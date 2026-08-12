@@ -241,6 +241,29 @@ def test_duplicate_source_calculation_pairs_rejected() -> None:
     assert "unique by (calculation_key, role)" in str(exc_info.value)
 
 
+def test_primary_calculation_cannot_be_linked_twice() -> None:
+    """``uploaded_calculation_role`` plus the same key/role is one PK, twice."""
+    payload = _keyed_conformer_request(
+        uploaded_calculation_role="sp",
+        source_calculations=[{"calculation_key": "h_sp", "role": "sp"}],
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        ConformerUploadRequest(**payload)
+    assert "uploaded_calculation_role already links" in str(exc_info.value)
+
+
+def test_primary_calculation_may_be_linked_under_a_different_role() -> None:
+    """A distinct role is a distinct row, so it is allowed."""
+    request = ConformerUploadRequest(
+        **_keyed_conformer_request(
+            uploaded_calculation_role="sp",
+            source_calculations=[{"calculation_key": "h_sp", "role": "composite"}],
+        )
+    )
+    assert request.statmech is not None
+    assert len(request.statmech.source_calculations) == 1
+
+
 def test_duplicate_torsion_indices_rejected() -> None:
     coordinates = [
         {

@@ -119,7 +119,12 @@ def test_statmech_torsion_coordinate_in_shim_identity() -> None:
         StatmechTorsionCoordinateIn as ExtractedStatmechTorsionCoordinateIn,
     )
 
-    from app.schemas.workflows.statmech_upload import StatmechTorsionCoordinateIn
+    # The backend home for the coordinate class is the statmech entity
+    # module: it is now the single field definition behind both the create
+    # payload and ``StatmechTorsionCoordinateRead``. The standalone
+    # statmech upload no longer names it directly -- it takes the whole
+    # ``StatmechTorsionIn`` from the wire package instead.
+    from app.schemas.entities.statmech import StatmechTorsionCoordinateIn
 
     assert StatmechTorsionCoordinateIn is ExtractedStatmechTorsionCoordinateIn
 
