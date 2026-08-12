@@ -13,7 +13,7 @@ the same key-based reference components from
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Self, TypeAlias
 
 from pydantic import Field, model_validator
 from tckdb_schemas.stationary_point import (
@@ -61,8 +61,10 @@ class StatmechCalculationIn(SchemaBase):
 
 #: Statmech → calculation link by local key. Was a class of its own here;
 #: it is now the shared wire component, because the conformer, bundle and
-#: standalone paths all express this link identically.
-StatmechSourceCalculationIn = StatmechSourceCalcIn
+#: standalone paths all express this link identically. Spelled as an
+#: explicit ``TypeAlias``: a bare ``X = SomeClass`` assignment is a
+#: *variable* to mypy, and annotating with it is an error.
+StatmechSourceCalculationIn: TypeAlias = StatmechSourceCalcIn
 
 
 class StatmechUploadRequest(SchemaBase):

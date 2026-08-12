@@ -33,7 +33,7 @@ schemas stay backend-side too, in ``app.schemas.entities.statmech`` —
 they describe persisted rows, which is not what a wire contract is for.
 """
 
-from typing import Self
+from typing import Self, TypeAlias
 
 from pydantic import Field, model_validator
 
@@ -140,4 +140,8 @@ class StatmechTorsionIn(SchemaBase):
 #: Historical name for :class:`StatmechSourceCalcIn`, kept importable so
 #: bundle-facing code and docs that spell it this way keep working. It is
 #: the same class object, so there is one OpenAPI component, not two.
-StatmechSourceCalcInBundle = StatmechSourceCalcIn
+#:
+#: Declared as an explicit ``TypeAlias`` because a bare ``X = SomeClass``
+#: assignment is a *variable* as far as a type checker is concerned, and
+#: annotating a field with it is an error rather than a synonym.
+StatmechSourceCalcInBundle: TypeAlias = StatmechSourceCalcIn

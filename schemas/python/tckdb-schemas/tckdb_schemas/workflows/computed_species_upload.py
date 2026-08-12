@@ -9,7 +9,7 @@ database FK ids are accepted anywhere** (DR-0029 Requirement 1).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, TypeAlias
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -404,8 +404,10 @@ class ThermoInBundle(SchemaBase):
 #: namespace. This used to be a bundle-only class; it is now an alias for
 #: the shared :class:`~tckdb_schemas.statmech_bits.StatmechSourceCalcIn`,
 #: because the conformer and standalone-statmech paths express the same
-#: link the same way and one concept should be one wire component.
-StatmechSourceCalcInBundle = StatmechSourceCalcIn
+#: link the same way and one concept should be one wire component. A bare
+#: ``X = SomeClass`` assignment is a variable, not a type, to a type
+#: checker -- hence the explicit ``TypeAlias``.
+StatmechSourceCalcInBundle: TypeAlias = StatmechSourceCalcIn
 
 
 class StatmechTorsionInBundle(SchemaBase):
