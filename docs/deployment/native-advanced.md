@@ -100,8 +100,14 @@ Options, roughly in increasing order of operational pain:
 
 After the cartridge is installed:
 
+`ENCODING 'UTF8' TEMPLATE template0` is required, not cosmetic: a bare
+`CREATE DATABASE` copies `template1`, whose encoding is whatever `initdb`
+chose for the cluster, and a `SQL_ASCII` database stores invalid bytes without
+complaint. See
+[troubleshooting.md](troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+
 ```sql
-CREATE DATABASE tckdb_dev;
+CREATE DATABASE tckdb_dev ENCODING 'UTF8' TEMPLATE template0;
 \c tckdb_dev
 CREATE EXTENSION IF NOT EXISTS rdkit;
 CREATE USER tckdb WITH PASSWORD '…';

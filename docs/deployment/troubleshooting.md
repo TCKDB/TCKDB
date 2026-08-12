@@ -168,11 +168,14 @@ cd backend
 conda run -n tckdb_env alembic upgrade head
 ```
 
-Or, less destructive, create the DB by hand:
+Or, less destructive, create the DB by hand. **Pass `-E UTF8 -T
+template0`** — a bare `createdb` copies `template1`, which on many clusters
+is `SQL_ASCII`, and you would be creating the exact problem the next section
+describes:
 
 ```bash
 docker compose exec db \
-    createdb -U tckdb tckdb_dev
+    createdb -U tckdb -E UTF8 -T template0 tckdb_dev
 ```
 
 **Verify**
@@ -267,10 +270,102 @@ on the *client* side. None of them can rescue a `SQL_ASCII` server.
 
 ```bash
 docker compose exec db psql -U tckdb -l
-# expect: Encoding | UTF8
+# expect: Encoding | UTF8   -- for tckdb AND for template1
 
-curl -s localhost:8010/api/v1/status | jq '.components.database.server_encoding'
-# expect: "UTF8"
+curl -s localhost:8010/api/v1/status | jq '.components.database'
+# expect: server_encoding "UTF8" AND template_encoding "UTF8"
+```
+
+---
+
+### The cluster template disagrees with the production database
+
+**Symptom**
+
+`psql -l` shows the application database as `UTF8` but `template1` (and
+usually `template0` and `postgres`) as `SQL_ASCII`. `/api/v1/status` reports
+`server_encoding: "UTF8"` and `template_encoding: "SQL_ASCII"`.
+
+**Why it matters**
+
+`CREATE DATABASE` with no `TEMPLATE` clause copies `template1`. So a cluster
+in this state hands `SQL_ASCII` to every database created next to a correct
+one — including the database a **restore** recreates. Every restore runbook
+in this repo drops and recreates before loading the dump, which makes this
+the single most likely way a cluster that was fixed reverts to broken.
+
+The reversion is silent. A `SQL_ASCII` database accepts every byte a `UTF8`
+dump contains — there is no validation to fail — so `psql -f dump.sql` exits
+0 and the data looks present. What changes is that multi-byte characters stop
+being characters. Measured on a `SQL_ASCII` cluster (PostgreSQL 17):
+
+```
+UTF8 source db:   'em dash: —'  length() = 10   octet_length() = 12
+naive restore:    'em dash: —'  length() = 12   octet_length() = 12
+```
+
+Nothing errors. `length()`, `substring()`, `LIKE`, and every index built on
+them are now wrong for every non-ASCII value, and the damage is only
+discovered when something downstream cares.
+
+**How a cluster gets here**
+
+By having its application database converted in place — dumped, dropped,
+recreated with an explicit encoding, restored — without anyone touching the
+cluster's templates. That is precisely what happened to the live deployment
+after the 2026-08-04 incident: `tckdb` was corrected, `template1` was not,
+and the two still disagreed when checked on 2026-08-12.
+
+**Fix**
+
+Do **not** rebuild the cluster for this. The templates only matter at
+`CREATE DATABASE` time, so the durable fix is to make every `CREATE DATABASE`
+explicit — which the runbooks in this repo now are:
+
+```sql
+CREATE DATABASE tckdb ENCODING 'UTF8' TEMPLATE template0;
+```
+
+```bash
+createdb -E UTF8 -T template0 tckdb
+```
+
+`TEMPLATE template0` is load-bearing and is **not** made wrong by `template0`
+itself being `SQL_ASCII`. `template0` exists precisely to be copied into a
+database with a different encoding; specifying an encoding without it is
+refused outright:
+
+```
+ERROR:  new encoding (UTF8) is incompatible with the encoding of the
+        template database (SQL_ASCII)
+HINT:  Use the same encoding as in the template database, or use
+       template0 as template.
+```
+
+That refusal is safe — it fails loudly rather than producing the wrong
+thing. The dangerous form is the bare `CREATE DATABASE`, which succeeds and
+inherits `SQL_ASCII` without comment.
+
+Do not add `LC_COLLATE`/`LC_CTYPE` unless you specifically want them. Omitted,
+they are inherited from `template0`, which is `C` on these clusters, and `C`
+is compatible with any encoding. Naming a non-`C` locale that disagrees with
+`UTF8` is how this incantation actually goes wrong.
+
+Correcting `template1` itself is possible but is deliberately **not**
+recommended here. There is no in-place encoding change for a template any
+more than for an ordinary database, so it means dropping `template1` and
+recreating it from `template0` with an explicit encoding — a cluster-level
+operation, with an outage, that wants a rehearsed runbook and buys nothing
+that explicit `CREATE DATABASE` statements do not already buy. It also does
+nothing for any database that already exists.
+
+**Verify**
+
+```bash
+docker compose exec db psql -U tckdb -d postgres \
+    -c "SELECT datname, pg_encoding_to_char(encoding) FROM pg_database ORDER BY datname;"
+
+curl -s localhost:8010/api/v1/status | jq '.components.database.template_encoding'
 ```
 
 ---

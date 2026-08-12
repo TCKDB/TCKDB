@@ -176,7 +176,9 @@ The script does not provide an unload command. Two options:
 1. **Drop the database** (development only):
    ```bash
    PGPASSWORD=tckdb dropdb -h 127.0.0.1 -U tckdb tckdb_demo
-   PGPASSWORD=tckdb createdb -h 127.0.0.1 -U tckdb tckdb_demo
+   # -E UTF8 -T template0: a bare createdb copies template1, which is
+   # SQL_ASCII on clusters whose initdb set no encoding.
+   PGPASSWORD=tckdb createdb -h 127.0.0.1 -U tckdb -E UTF8 -T template0 tckdb_demo
    DB_NAME=tckdb_demo conda run -n tckdb_env alembic upgrade head
    ```
 

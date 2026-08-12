@@ -38,7 +38,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import SessionLocal
-from app.api.startup_checks import server_encoding
+from app.api.startup_checks import server_encoding, template_encoding
 from app.services import artifact_storage
 
 router = APIRouter()
@@ -432,6 +432,7 @@ def status():
                 "healthy": False,
                 "alembic_revision": None,
                 "server_encoding": None,
+                "template_encoding": None,
                 "reason": "database unreachable",
             }
         else:
@@ -450,10 +451,20 @@ def status():
             # can fix. Startup logs it as an error once, which is the right
             # loudness; this makes it answerable from outside, which is what
             # turns "uploads sometimes fail" into a five-second diagnosis.
+            #
+            # ``template_encoding`` is the same hazard one step earlier.
+            # ``server_encoding`` describes the database that exists;
+            # ``template1`` describes the one the next ``CREATE DATABASE``
+            # will produce, and the two can disagree -- on the live
+            # deployment, on 2026-08-12, they did. A restore drill drops and
+            # recreates the database, so a divergent template is how a
+            # correctly-converted cluster quietly reverts. Both are reported
+            # so an operator can see the drift before the drill, not after.
             components["database"] = {
                 "healthy": revision is not None,
                 "alembic_revision": revision,
                 "server_encoding": server_encoding(session),
+                "template_encoding": template_encoding(session),
                 "reason": (
                     None
                     if revision is not None

@@ -30,9 +30,26 @@ when `DEPLOYMENT_MODE` is `shared_private` or `hosted_public`.
 
 For a brand-new database (local dev, a fresh shared host, a CI run, a restored backup that landed an empty DB):
 
+If the database does not exist yet, create it **explicitly**. A bare
+`CREATE DATABASE` / `createdb` copies `template1`, whose encoding is whatever
+`initdb` chose for the cluster; on a cluster whose application database was
+converted to `UTF8` by hand the template is usually still `SQL_ASCII`, so this
+is exactly how a corrected deployment silently reverts. See
+[troubleshooting.md](../../../docs/deployment/troubleshooting.md#the-cluster-template-disagrees-with-the-production-database).
+
+```bash
+PGPASSWORD=$DB_PASSWORD createdb -h $DB_HOST -U $DB_USER -E UTF8 -T template0 $DB_NAME
+```
+
 ```bash
 # 1. Confirm the database exists and is reachable.
 PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -c '\conninfo'
+
+#    While you are here, confirm the cluster template agrees. If this prints
+#    anything other than UTF8, every database created on this host from now
+#    on -- including one a restore recreates -- will be wrong.
+PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -U $DB_USER -d $DB_NAME -tAc \
+    "SELECT pg_encoding_to_char(encoding) FROM pg_database WHERE datname='template1'"
 
 # 2. Hosted only: provision the role split. This installs RDKit with the
 #    bootstrap administrator and transfers application ownership.

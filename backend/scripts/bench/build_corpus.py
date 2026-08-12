@@ -309,7 +309,10 @@ def create_database(db_name: str) -> None:
     _validate_db_name(db_name)
     drop_database(db_name)
     with _admin_connection() as conn:
-        conn.execute(f'CREATE DATABASE "{db_name}"')
+        # ENCODING/TEMPLATE explicit so a benchmark corpus measures the same
+        # encoding production runs on. A bare CREATE DATABASE copies
+        # template1, which is SQL_ASCII wherever initdb chose no encoding.
+        conn.execute(f'CREATE DATABASE "{db_name}" ENCODING \'UTF8\' TEMPLATE template0')
 
     env = os.environ.copy()
     env.update(_env())
