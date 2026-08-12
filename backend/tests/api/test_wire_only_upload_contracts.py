@@ -29,21 +29,37 @@ import tckdb_schemas
 
 WIRE_PACKAGE_ROOT = str(Path(tckdb_schemas.__file__).resolve().parents[1])
 
-#: The subprocess runs with ``-S``, which skips ``site`` and therefore every
-#: ``.pth`` file. That is the only way to get a backend-free interpreter out of
-#: a dev environment: ``tckdb-backend`` is editable-installed here, and an
-#: editable install is reachable through a ``.pth`` finder no ``PYTHONPATH``
-#: setting can hide. Skipping ``site`` also drops the real ``site-packages``,
-#: so it is put back explicitly — third-party distributions stay importable,
-#: the ``.pth`` hooks do not come back.
-_SITE_DIRS = [
-    path
-    for path in dict.fromkeys(
-        (sysconfig.get_paths()["purelib"], sysconfig.get_paths()["platlib"])
-    )
-    if path
-]
-_SUBPROCESS_PYTHONPATH = os.pathsep.join([WIRE_PACKAGE_ROOT, *_SITE_DIRS])
+def _hosts_the_backend(path: str) -> bool:
+    """True if importing from ``path`` would resolve ``app``."""
+    return (Path(path) / "app" / "__init__.py").is_file()
+
+
+def _subprocess_pythonpath() -> str:
+    """Everything this interpreter can import, minus the backend.
+
+    The subprocess runs with ``-S``, which skips ``site`` and therefore
+    every ``.pth`` file. That is the only way to get a backend-free
+    interpreter out of a dev environment: ``tckdb-backend`` is
+    editable-installed here, and an editable install is reachable through a
+    ``.pth`` finder that no ``PYTHONPATH`` setting can hide. Skipping
+    ``site`` also drops ``site-packages``, so the search path is rebuilt
+    from this process's own ``sys.path`` — third-party distributions stay
+    importable wherever CI happens to put them, the ``.pth`` hooks do not
+    come back, and any entry that would resolve ``app`` is dropped.
+    """
+    candidates = [WIRE_PACKAGE_ROOT, *sysconfig.get_paths().values(), *sys.path]
+    keep: list[str] = []
+    for entry in candidates:
+        # "" means the subprocess's own cwd, which is a temp dir it must not
+        # inherit a meaning for; drop it rather than reinterpret it.
+        if not entry or entry in keep or _hosts_the_backend(entry):
+            continue
+        keep.append(entry)
+    assert WIRE_PACKAGE_ROOT in keep
+    return os.pathsep.join(keep)
+
+
+_SUBPROCESS_PYTHONPATH = _subprocess_pythonpath()
 
 #: Built entirely from ``tckdb_schemas``. The only backend-side knowledge is
 #: the chemistry: H + CH4 -> H2 + CH3 saddles on CH5, so the TS geometry has
