@@ -54,17 +54,42 @@ exists rather than the next time somebody audits a list.
 
 from __future__ import annotations
 
-import re
+import importlib.util
 import shlex
 import tomllib
 from pathlib import Path
 
 import pytest
-import yaml
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
 REPO_ROOT = BACKEND_ROOT.parent
 WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
+
+
+def _load_module(name: str, path: Path):
+    """Import by path, without putting ``backend/scripts`` on ``sys.path``.
+
+    This file is run by the repo gate with ``--noconftest`` and no backend
+    rootdir, so the usual ``from scripts import ...`` is unavailable; and
+    ``backend/scripts`` contains ``lib``, ``dev``, ``ops`` and
+    ``validation``, which have no business shadowing anything.
+    """
+    spec = importlib.util.spec_from_file_location(name, path)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+#: The path-filter reader lives with the aggregate gate that depends on it
+#: at runtime (``backend/scripts/aggregate_pr_gates.py``) and is imported
+#: here rather than reimplemented. Two answers to "would this workflow
+#: trigger on this file" is one answer too many: the aggregate excuses an
+#: absent run when the filter says it could not have started, and this
+#: file asserts a covered file can reach the job that covers it. If those
+#: two disagreed, a file could be declared reachable here and excused
+#: there.
+gates = _load_module("aggregate_pr_gates", BACKEND_ROOT / "scripts" / "aggregate_pr_gates.py")
 
 #: The workflows whose jobs gate a pull request. Everything else under
 #: ``.github/workflows/`` is a schedule, a deploy, or a docs build, and a
@@ -75,11 +100,30 @@ WORKFLOW_DIR = REPO_ROOT / ".github" / "workflows"
 #: in branch settings, not in the tree. Everything downstream of it (which
 #: files exist, which jobs run them, which paths reach those jobs) is
 #: derived rather than listed.
+#:
+#: Two of these three are required *indirectly*. Both are path-filtered,
+#: and a path-filtered check cannot be listed in branch protection: it
+#: never reports on a pull request outside its paths and GitHub waits for
+#: it forever, so listing ``Backend CI`` would make every ``paper/`` typo
+#: permanently unmergeable. They gate a merge through the "Required gates"
+#: job in ``repo-gate.yml``, which always runs and reports their
+#: conclusions. ``test_every_required_workflow_is_actually_required``
+#: below is what keeps this list and that job's list the same list.
 REQUIRED_WORKFLOWS = (
     ".github/workflows/repo-gate.yml",
     ".github/workflows/backend-ci.yml",
     ".github/workflows/python-client-ci.yml",
 )
+
+#: The workflow holding the checks branch protection lists by name. Every
+#: other required workflow reaches branch protection through it.
+DIRECTLY_REQUIRED_WORKFLOW = ".github/workflows/repo-gate.yml"
+
+#: The job names branch protection lists as required contexts. Renaming a
+#: job silently un-requires whatever it gates, because a context that
+#: never reports is a context GitHub stops waiting for only if an admin
+#: removes it -- and an admin who removes it removes the gate.
+REQUIRED_CONTEXTS = ("CI gate coverage", "Required gates")
 
 #: The gate scripts the backend workflow is required to invoke. Their union
 #: is supposed to cover ``backend/tests/`` between them; deleting one of
@@ -309,59 +353,19 @@ def _script_selection(script_rel: str) -> Selection:
 
 
 def _workflow(workflow_rel: str) -> dict:
-    return yaml.safe_load((REPO_ROOT / workflow_rel).read_text(encoding="utf-8"))
+    return gates.load_workflow(workflow_rel, REPO_ROOT)
 
 
-def _triggers(workflow: dict) -> dict:
-    """The ``on:`` block.
-
-    PyYAML is a YAML 1.1 parser, in which the bare key ``on`` is the
-    boolean ``True``. Reading ``workflow["on"]`` returns nothing and every
-    path filter silently reads as absent -- which would make the trigger
-    check pass unconditionally, the exact vacuity this file is built to
-    avoid.
-    """
-    block = workflow.get("on", workflow.get(True))
-    return block if isinstance(block, dict) else {}
-
-
-def _glob_to_regex(pattern: str) -> re.Pattern[str]:
-    """GitHub path-filter glob -> regex. ``**`` spans separators, ``*`` does not."""
-    out = []
-    index = 0
-    while index < len(pattern):
-        char = pattern[index]
-        if pattern.startswith("**", index):
-            out.append(".*")
-            index += 2
-        elif char == "*":
-            out.append("[^/]*")
-            index += 1
-        elif char == "?":
-            out.append("[^/]")
-            index += 1
-        else:
-            out.append(re.escape(char))
-            index += 1
-    return re.compile("".join(out) + r"\Z")
+#: The ``on:`` block. PyYAML is a YAML 1.1 parser, in which the bare key
+#: ``on`` is the boolean ``True``; reading ``workflow["on"]`` returns
+#: nothing and every path filter silently reads as absent, which would
+#: make the trigger check below pass unconditionally.
+_triggers = gates.workflow_triggers
 
 
 def _workflow_triggers_on(workflow_rel: str, rel_path: str) -> bool:
     """Would editing ``rel_path`` start this workflow's pull_request run?"""
-    triggers = _triggers(_workflow(workflow_rel))
-    if "pull_request" not in triggers:
-        return False
-    pull_request = triggers["pull_request"]
-    if not isinstance(pull_request, dict):
-        # ``pull_request:`` with an empty body means every pull request.
-        return True
-    ignored = pull_request.get("paths-ignore")
-    if ignored and any(_glob_to_regex(pattern).match(rel_path) for pattern in ignored):
-        return False
-    included = pull_request.get("paths")
-    if not included:
-        return True
-    return any(_glob_to_regex(pattern).match(rel_path) for pattern in included)
+    return gates.workflow_triggers_on(_workflow(workflow_rel), rel_path)
 
 
 def _step_base(workflow: dict, job: dict, step: dict) -> str:
@@ -569,6 +573,107 @@ def test_repo_gate_is_not_path_filtered() -> None:
         "repo-gate.yml must run on every pull request. A path filter here is "
         "a hole shaped exactly like the ones this file exists to close."
     )
+
+
+# ---------------------------------------------------------------------------
+# The bridge from "required" (a GitHub setting) to "runs" (this tree)
+#
+# REQUIRED_WORKFLOWS above is an include-list because GitHub keeps
+# "required" in branch settings. Two of its three entries are path-filtered
+# and therefore cannot be listed there at all; they gate a merge only
+# because the "Required gates" job in repo-gate.yml waits for them. These
+# checks are what stop that sentence from quietly becoming false.
+# ---------------------------------------------------------------------------
+
+
+def _repo_gate_jobs() -> dict:
+    return _workflow(DIRECTLY_REQUIRED_WORKFLOW)["jobs"]
+
+
+def _job_named(name: str) -> dict:
+    jobs = [job for job in _repo_gate_jobs().values() if job.get("name") == name]
+    assert len(jobs) == 1, f"expected exactly one job named {name!r} in {DIRECTLY_REQUIRED_WORKFLOW}, found {len(jobs)}"
+    return jobs[0]
+
+
+@pytest.mark.parametrize("context", REQUIRED_CONTEXTS)
+def test_the_required_contexts_exist_as_job_names(context: str) -> None:
+    """Branch protection lists job names. A renamed job is an un-required gate.
+
+    GitHub matches a required status check by its context string. Rename
+    the job and the context stops reporting; the pull request then blocks
+    on a check that will never arrive, and the fix somebody reaches for
+    under pressure is to delete the requirement.
+    """
+    _job_named(context)
+
+
+def test_every_required_workflow_is_actually_required() -> None:
+    """The two lists have to be one list.
+
+    ``REQUIRED_WORKFLOWS`` says which workflows gate a merge; the
+    aggregate job's ``AGGREGATED_WORKFLOWS`` says which ones it waits for.
+    A workflow in the first and not the second is a suite this file
+    reports as gating a pull request while nothing blocks the merge on it
+    -- which is the state the whole repository was in until the aggregate
+    existed. A workflow in the second and not the first is a gate that
+    blocks merges without being declared.
+    """
+    aggregated = set(gates.AGGREGATED_WORKFLOWS)
+    declared = set(REQUIRED_WORKFLOWS) - {DIRECTLY_REQUIRED_WORKFLOW}
+    assert aggregated == declared, (
+        "backend/scripts/aggregate_pr_gates.py waits for "
+        f"{sorted(aggregated)} but REQUIRED_WORKFLOWS declares {sorted(declared)} "
+        "as gating a pull request indirectly."
+    )
+    assert DIRECTLY_REQUIRED_WORKFLOW not in aggregated, (
+        "the aggregate must not wait for its own workflow; it would never finish."
+    )
+
+
+def test_required_gates_job_is_named_and_unconditional() -> None:
+    """No ``needs:``, no ``if:``, on purpose.
+
+    A job GitHub skips reports the conclusion ``skipped``, and branch
+    protection accepts a skipped required check as satisfied. So any
+    condition on this job -- including a ``needs:`` on a sibling that
+    failed -- is a way for the gate to be satisfied without running. The
+    single event test the script does need lives in Python, where it is a
+    code path with a test against it rather than an expression nothing
+    evaluates.
+    """
+    job = _job_named("Required gates")
+    assert "needs" not in job, (
+        "a `needs:` here means a failed dependency skips this job, and a skipped "
+        "required check counts as satisfied."
+    )
+    assert "if" not in job, "an `if:` here is a way for the required check to pass by being skipped."
+
+
+def test_required_gates_job_can_read_what_it_reports_on() -> None:
+    permissions = _job_named("Required gates").get("permissions", {})
+    assert permissions.get("actions") == "read", "without actions: read it cannot see the gate conclusions"
+    assert permissions.get("pull-requests") == "read", (
+        "without pull-requests: read it cannot see the changed files, which is "
+        "what decides whether an absent run is legitimate"
+    )
+
+
+def test_the_aggregate_and_its_tests_both_run_in_the_unfiltered_workflow() -> None:
+    """The aggregate's own tests must not be gated by the aggregate.
+
+    ``backend/tests/scripts/`` is covered by the complement gate, which is
+    path-filtered on ``backend/**`` -- so a pull request that broke the
+    aggregator while touching backend/ would be reported on by the very
+    mechanism it broke. Running these two in the unfiltered workflow makes
+    the report independent of its subject.
+    """
+    text = (REPO_ROOT / DIRECTLY_REQUIRED_WORKFLOW).read_text(encoding="utf-8")
+    assert "backend/scripts/aggregate_pr_gates.py" in text, (
+        "repo-gate.yml must invoke the aggregate script; a required context "
+        "whose job runs nothing is the defect this repository keeps shipping."
+    )
+    assert "backend/tests/scripts/test_aggregate_pr_gates.py" in text
 
 
 # ---------------------------------------------------------------------------

@@ -58,3 +58,63 @@ jobs:
 
       - name: Every test file is run by a required job
         run: python -m pytest --noconftest -q backend/tests/scripts/test_gate_coverage.py
+
+      # Runs here too, and not only in the backend complement gate, because
+      # this file is the mechanism by which the *other* workflows become
+      # requireable. A defect in it is a defect in the gate that reports
+      # them, and the complement gate is one of the things it reports on --
+      # so a change that breaks the aggregator must not depend on the
+      # aggregator's own subject running to be noticed.
+      - name: The aggregate gate can still tell the three states apart
+        run: python -m pytest --noconftest -q backend/tests/scripts/test_aggregate_pr_gates.py
+
+  required-gates:
+    # THE REQUIRED CHECK. This job's name is the context listed in branch
+    # protection, so renaming it silently un-requires every test suite in
+    # the repository -- test_required_gates_job_is_named_and_unconditional
+    # in backend/tests/scripts/test_gate_coverage.py pins the name.
+    #
+    # It deliberately has no `needs:` and no `if:`. A job that GitHub skips
+    # reports the conclusion "skipped", which branch protection accepts as
+    # satisfying a required check -- so any condition here is a way for the
+    # gate to pass without running. The one event test lives inside the
+    # script, where it is a code path with a test rather than an
+    # expression nothing evaluates.
+    name: Required gates
+    runs-on: ubuntu-latest
+    # The backend gates cap at 90 minutes each; the script gives up at 95
+    # and reports failure, so this outer cap only fires if the script
+    # itself wedges -- in which case GitHub fails the job, which is the
+    # direction we want.
+    timeout-minutes: 100
+
+    permissions:
+      contents: read
+      # Read the conclusions of the path-filtered workflow runs.
+      actions: read
+      # Read the pull request's changed-file list, which is what decides
+      # whether an absent run is legitimate.
+      pull-requests: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install check dependencies
+        run: python -m pip install "PyYAML>=6"
+
+      - name: Report the path-filtered gates
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          python backend/scripts/aggregate_pr_gates.py
+          --repo "${{ github.repository }}"
+          --pr-number "${{ github.event.pull_request.number || 0 }}"
+          --head-sha "${{ github.event.pull_request.head.sha || github.sha }}"
+          --run-id "${{ github.run_id }}"
+          --event-name "${{ github.event_name }}"
