@@ -2,9 +2,17 @@
 
 Statmech is a result table — every upload creates a new row.
 No deduplication against existing records.
+
+Upload payloads name their supporting calculations by **local key**, never
+by row id. Turning a key into a real ``calculation.id`` happens here, from
+the ``calculations_by_key`` map the calling workflow builds after it has
+persisted the request's own calculations. That is the whole reason the
+schema layer never needs to know a primary key.
 """
 
 from __future__ import annotations
+
+from collections.abc import Mapping
 
 from sqlalchemy.orm import Session
 
@@ -22,12 +30,37 @@ from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software_release_ref
 
 
+def _resolve_calculation_key(
+    key: str,
+    calculations_by_key: Mapping[str, int],
+    *,
+    context: str,
+) -> int:
+    """Translate one local calculation key into a persisted row id.
+
+    The schema layer of every upload path already refuses a key it cannot
+    match, so reaching this error means a workflow built an incomplete
+    map. It is still raised rather than allowed to ``KeyError``: a missing
+    provenance link must be a named failure, not a 500.
+
+    :raises ValueError: if the key is absent from ``calculations_by_key``.
+    """
+    calculation_id = calculations_by_key.get(key)
+    if calculation_id is None:
+        raise ValueError(
+            f"{context}: calculation_key '{key}' does not name a calculation "
+            f"declared in this upload."
+        )
+    return calculation_id
+
+
 def resolve_or_create_statmech(
     session: Session,
     payload: ConformerUploadStatmechPayload,
     *,
     species_entry_id: int,
     uploaded_calculation_id: int | None = None,
+    calculations_by_key: Mapping[str, int] | None = None,
     created_by: int | None = None,
 ) -> Statmech:
     """Create a statmech record and attach nested provenance.
@@ -46,11 +79,17 @@ def resolve_or_create_statmech(
     :param uploaded_calculation_id: Optional calculation id produced by
         the caller workflow; linked as a source calculation only when
         ``payload.uploaded_calculation_role`` is also set.
+    :param calculations_by_key: Local calculation key → persisted
+        ``calculation.id``, for the request's own calculations. Required
+        whenever the payload carries ``source_calculations`` or a torsion
+        ``source_scan_calculation_key``.
     :param created_by: Optional application user id for newly created rows.
     :returns: Newly created ``Statmech`` row with linked sources/torsions.
     :raises ValueError: If ``uploaded_calculation_role`` is set but
-        ``uploaded_calculation_id`` is not supplied.
+        ``uploaded_calculation_id`` is not supplied, or if a local
+        calculation key does not resolve.
     """
+    key_map: Mapping[str, int] = calculations_by_key or {}
 
     literature = (
         resolve_or_create_literature(session, payload.literature)
@@ -122,17 +161,31 @@ def resolve_or_create_statmech(
             )
         )
 
-    for source in payload.source_calculations:
+    for index, source in enumerate(payload.source_calculations):
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,
-                calculation_id=source.calculation_id,
+                calculation_id=_resolve_calculation_key(
+                    source.calculation_key,
+                    key_map,
+                    context=f"statmech.source_calculations[{index}]",
+                ),
                 role=source.role,
             )
         )
 
     # Attach torsions and coordinates
-    for torsion_payload in payload.torsions:
+    for torsion_index, torsion_payload in enumerate(payload.torsions):
+        scan_calculation_id: int | None = None
+        if torsion_payload.source_scan_calculation_key is not None:
+            scan_calculation_id = _resolve_calculation_key(
+                torsion_payload.source_scan_calculation_key,
+                key_map,
+                context=(
+                    f"statmech.torsions[{torsion_index}]"
+                    f".source_scan_calculation_key"
+                ),
+            )
         torsion = StatmechTorsion(
             statmech_id=statmech.id,
             torsion_index=torsion_payload.torsion_index,
@@ -142,7 +195,7 @@ def resolve_or_create_statmech(
             top_description=torsion_payload.top_description,
             invalidated_reason=torsion_payload.invalidated_reason,
             note=torsion_payload.note,
-            source_scan_calculation_id=torsion_payload.source_scan_calculation_id,
+            source_scan_calculation_id=scan_calculation_id,
         )
         session.add(torsion)
         session.flush()

@@ -167,6 +167,18 @@ def persist_conformer_upload(
     for child_calc in additional_calcs:
         child_calc.conformer_observation_id = observation.id
 
+    # The nested statmech block names its supporting calculations by the
+    # local ``key`` this request put on them, so build that namespace from
+    # the rows just persisted. The schema layer has already refused any
+    # key that was never declared.
+    calculations_by_key: dict[str, int] = {}
+    for payload_calc, calc_row in [
+        (request.calculation, calculation),
+        *zip(request.additional_calculations, additional_calcs, strict=True),
+    ]:
+        if payload_calc.key is not None:
+            calculations_by_key[payload_calc.key] = calc_row.id
+
     statmech_row = None
     if request.statmech is not None:
         statmech_row = resolve_or_create_statmech(
@@ -174,6 +186,7 @@ def persist_conformer_upload(
             request.statmech,
             species_entry_id=species_entry.id,
             uploaded_calculation_id=calculation.id,
+            calculations_by_key=calculations_by_key,
             created_by=created_by,
         )
 

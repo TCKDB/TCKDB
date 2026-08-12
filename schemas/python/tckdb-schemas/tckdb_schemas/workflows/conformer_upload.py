@@ -23,8 +23,8 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.statmech_bits import (
-    StatmechSourceCalculationCreate,
-    StatmechTorsionCreate,
+    StatmechSourceCalcIn,
+    StatmechTorsionIn,
 )
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
@@ -54,6 +54,13 @@ class ConformerUploadStatmechPayload(SchemaBase):
     The backend resolves referenced software/workflow provenance, creates or
     reuses the owning ``Statmech`` row for the resolved species entry, and links
     the newly created upload calculation as a source calculation when requested.
+
+    ``source_calculations`` and ``torsions[*].source_scan_calculation_key``
+    address calculations by the local ``key`` the enclosing
+    ``ConformerUploadRequest`` put on its own primary/additional
+    calculations — never by row id. ``ConformerUploadRequest`` validates
+    that every such key was declared, so an unresolvable reference is a
+    422 rather than a silently dropped provenance link.
     """
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
@@ -75,10 +82,8 @@ class ConformerUploadStatmechPayload(SchemaBase):
     note: str | None = None
 
     uploaded_calculation_role: StatmechCalculationRole | None = None
-    source_calculations: list[StatmechSourceCalculationCreate] = Field(
-        default_factory=list
-    )
-    torsions: list[StatmechTorsionCreate] = Field(default_factory=list)
+    source_calculations: list[StatmechSourceCalcIn] = Field(default_factory=list)
+    torsions: list[StatmechTorsionIn] = Field(default_factory=list)
     electronic_levels: list[ElectronicLevelIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
@@ -93,6 +98,34 @@ class ConformerUploadStatmechPayload(SchemaBase):
         if len(set(indices)) != len(indices):
             raise ValueError(
                 "electronic_levels level_index values must be unique."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        """Reject duplicate links the way the sibling paths already do.
+
+        ``statmech_source_calculation`` is keyed on
+        ``(statmech_id, calculation_id, role)``, so a repeated pair was a
+        primary-key violation surfacing as a 500. The bundle and
+        standalone statmech uploads validate this; the conformer path
+        did not.
+        """
+        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        if len(set(pairs)) != len(pairs):
+            raise ValueError(
+                "statmech.source_calculations must be unique by "
+                "(calculation_key, role)."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_unique_torsion_indices(self) -> Self:
+        """One rotor per index, as the sibling upload paths already require."""
+        indices = [torsion.torsion_index for torsion in self.torsions]
+        if len(set(indices)) != len(indices):
+            raise ValueError(
+                "statmech.torsions torsion_index values must be unique."
             )
         return self
 
@@ -137,6 +170,26 @@ _ALLOWED_ADDITIONAL_TYPES = frozenset(
 )
 
 
+class ConformerCalculationIn(CalculationWithResultsPayload):
+    """A conformer-upload calculation that can be named by a local key.
+
+    The key is what the nested statmech block points at. It exists so a
+    depositor can say "the statmech's vibrational basis is *that* freq
+    job" using a name they chose, rather than a calculation row id they
+    would have to query for (DR-0029 Requirement 1).
+
+    Optional by design: a payload with no statmech cross-references never
+    needs one, and every payload written before keys existed stays valid.
+
+    :param key: Optional local name for this calculation, unique within
+        the request. Referenced from
+        ``statmech.source_calculations[*].calculation_key`` and
+        ``statmech.torsions[*].source_scan_calculation_key``.
+    """
+
+    key: str | None = Field(default=None, min_length=1)
+
+
 class ConformerUploadRequest(SchemaBase):
     """Workflow-facing conformer upload payload.
 
@@ -151,8 +204,8 @@ class ConformerUploadRequest(SchemaBase):
 
     species_entry: SpeciesEntryIdentityPayload
     geometry: GeometryPayload
-    calculation: CalculationWithResultsPayload
-    additional_calculations: list[CalculationWithResultsPayload] = Field(
+    calculation: ConformerCalculationIn
+    additional_calculations: list[ConformerCalculationIn] = Field(
         default_factory=list
     )
     statmech: ConformerUploadStatmechPayload | None = None
@@ -169,6 +222,79 @@ class ConformerUploadRequest(SchemaBase):
     def normalize_optional_text_fields(self) -> Self:
         self.note = normalize_optional_text(self.note)
         self.label = normalize_optional_text(self.label)
+        return self
+
+    def declared_calculation_keys(self) -> list[str]:
+        """Local keys this request put on its own calculations, in order."""
+        return [
+            calc.key
+            for calc in [self.calculation, *self.additional_calculations]
+            if calc.key is not None
+        ]
+
+    @model_validator(mode="after")
+    def validate_unique_calculation_keys(self) -> Self:
+        keys = self.declared_calculation_keys()
+        if len(set(keys)) != len(keys):
+            raise ValueError(
+                "Conformer upload calculation keys must be unique within "
+                "the request."
+            )
+        return self
+
+    @model_validator(mode="after")
+    def validate_statmech_calculation_keys_resolve(self) -> Self:
+        """Every statmech calc reference must name a calculation declared here.
+
+        The conformer upload has no other calc-key namespace to fall back
+        on, so an unrecognised key can only be a mistake. Refusing it is
+        the difference between a 422 the depositor can fix and a
+        provenance link that silently never existed.
+        """
+        if self.statmech is None:
+            return self
+        declared = set(self.declared_calculation_keys())
+        for index, source in enumerate(self.statmech.source_calculations):
+            if source.calculation_key not in declared:
+                raise ValueError(
+                    f"statmech.source_calculations[{index}].calculation_key "
+                    f"'{source.calculation_key}' does not name a calculation "
+                    f"declared in this upload. Put a matching 'key' on "
+                    f"'calculation' or on one of 'additional_calculations'."
+                )
+        for index, torsion in enumerate(self.statmech.torsions):
+            key = torsion.source_scan_calculation_key
+            if key is not None and key not in declared:
+                raise ValueError(
+                    f"statmech.torsions[{index}].source_scan_calculation_key "
+                    f"'{key}' does not name a calculation declared in this "
+                    f"upload."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_primary_calculation_not_linked_twice(self) -> Self:
+        """One link per (calculation, role), counting the implicit one.
+
+        ``uploaded_calculation_role`` already links the primary
+        calculation. Naming that same calculation again with the same role
+        in ``source_calculations`` asks for two rows with one primary key,
+        which the database refuses — better said here, where the message
+        can name the field, than as a 500 mid-transaction.
+        """
+        if self.statmech is None:
+            return self
+        role = self.statmech.uploaded_calculation_role
+        primary_key = self.calculation.key
+        if role is None or primary_key is None:
+            return self
+        for index, source in enumerate(self.statmech.source_calculations):
+            if source.calculation_key == primary_key and source.role == role:
+                raise ValueError(
+                    f"statmech.source_calculations[{index}] links the primary "
+                    f"calculation '{primary_key}' with role '{role.value}', "
+                    f"which uploaded_calculation_role already links. Drop one."
+                )
         return self
 
     @model_validator(mode="after")

@@ -9,7 +9,7 @@ database FK ids are accepted anywhere** (DR-0029 Requirement 1).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal, Self
+from typing import Any, Literal, Self, TypeAlias
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -21,7 +21,6 @@ from tckdb_schemas.enums import (
     CalculationType,
     RigidRotorKind,
     ScientificOriginKind,
-    StatmechCalculationRole,
     StatmechTreatmentKind,
     ThermoCalculationRole,
     TorsionTreatmentKind,
@@ -51,7 +50,10 @@ from tckdb_schemas.fragments.refs import (
 )
 from tckdb_schemas.fragments.scan import CalculationScanResultCreate
 from tckdb_schemas.literature import LiteratureUploadRequest
-from tckdb_schemas.statmech_bits import StatmechTorsionCoordinateIn
+from tckdb_schemas.statmech_bits import (
+    StatmechSourceCalcIn,
+    StatmechTorsionCoordinateIn,
+)
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_species_entry_frequency,
@@ -396,18 +398,16 @@ class ThermoInBundle(SchemaBase):
 # ---------------------------------------------------------------------------
 
 
-class StatmechSourceCalcInBundle(SchemaBase):
-    """Statmech → calc link by local key.
-
-    Mirrors ``ThermoSourceCalcInBundle``: only ``calculation_key`` is
-    accepted inside the bundle (DR-0029 Requirement 1). The key resolves
-    against the bundle's global calc-key namespace and is then attached
-    to the persisted statmech row as a ``StatmechSourceCalculation`` row
-    with the supplied scientific role.
-    """
-
-    calculation_key: str = Field(min_length=1)
-    role: StatmechCalculationRole
+#: Statmech → calc link by local key. Mirrors ``ThermoSourceCalcInBundle``:
+#: only ``calculation_key`` is accepted inside the bundle (DR-0029
+#: Requirement 1), resolving against the bundle's global calc-key
+#: namespace. This used to be a bundle-only class; it is now an alias for
+#: the shared :class:`~tckdb_schemas.statmech_bits.StatmechSourceCalcIn`,
+#: because the conformer and standalone-statmech paths express the same
+#: link the same way and one concept should be one wire component. A bare
+#: ``X = SomeClass`` assignment is a variable, not a type, to a type
+#: checker -- hence the explicit ``TypeAlias``.
+StatmechSourceCalcInBundle: TypeAlias = StatmechSourceCalcIn
 
 
 class StatmechTorsionInBundle(SchemaBase):

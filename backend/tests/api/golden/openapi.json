@@ -2748,7 +2748,7 @@
           },
           "source_calculations": {
             "items": {
-              "$ref": "#/components/schemas/StatmechSourceCalcInBundle"
+              "$ref": "#/components/schemas/StatmechSourceCalcIn"
             },
             "title": "Source Calculations",
             "type": "array"
@@ -10214,6 +10214,238 @@
         "title": "ConformerCalculationEvidenceSummary",
         "type": "object"
       },
+      "ConformerCalculationIn": {
+        "additionalProperties": false,
+        "description": "A conformer-upload calculation that can be named by a local key.\n\nThe key is what the nested statmech block points at. It exists so a\ndepositor can say \"the statmech's vibrational basis is *that* freq\njob\" using a name they chose, rather than a calculation row id they\nwould have to query for (DR-0029 Requirement 1).\n\nOptional by design: a payload with no statmech cross-references never\nneeds one, and every payload written before keys existed stays valid.\n\n:param key: Optional local name for this calculation, unique within\n    the request. Referenced from\n    ``statmech.source_calculations[*].calculation_key`` and\n    ``statmech.torsions[*].source_scan_calculation_key``.",
+        "properties": {
+          "constraints": {
+            "description": "Coordinate constraints held fixed during this calculation. Generic across opt, freq, sp, irc, path_search, scan, and any other constrained run — these are input/provenance metadata and do not require a result block. For scan calculations, frozen coordinates may be declared here while the stepped coordinate is declared on the scan_result.coordinates list.",
+            "items": {
+              "$ref": "#/components/schemas/CalculationConstraintCreate"
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "execution_environment": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExecutionEnvironmentManifestPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freq_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FreqResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hessian": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HessianPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "input_geometries": {
+            "description": "Geometries this calculation was run on. When empty, the workflow falls back to the conformer's reference geometry for calculation types in {freq, sp}; opt skips. List order maps to input_order = 1, 2, 3, ... in the database.",
+            "items": {
+              "$ref": "#/components/schemas/GeometryPayload"
+            },
+            "title": "Input Geometries",
+            "type": "array"
+          },
+          "irc_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IRCResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Key"
+          },
+          "level_of_theory": {
+            "$ref": "#/components/schemas/LevelOfTheoryRef"
+          },
+          "literature_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Literature Id"
+          },
+          "opt_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OptResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "output_geometries": {
+            "description": "Geometries this calculation produced or reported. When empty, the workflow falls back to the conformer's reference geometry as a single (role=final, output_order=1) row for calc types in the narrow set {opt}. Freq, sp, and all other types get zero rows when the producer leaves this empty. List order maps to output_order = 1, 2, 3, ... in the database.",
+            "items": {
+              "$ref": "#/components/schemas/OutputGeometryEntry"
+            },
+            "title": "Output Geometries",
+            "type": "array"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationParameterObservation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters"
+          },
+          "parameters_extracted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters Extracted At"
+          },
+          "parameters_json": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters Json"
+          },
+          "parameters_parser_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters Parser Version"
+          },
+          "path_search_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PathSearchResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "quality": {
+            "$ref": "#/components/schemas/CalculationQuality",
+            "default": "raw"
+          },
+          "scf_stability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SCFStabilityPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "software_release": {
+            "$ref": "#/components/schemas/SoftwareReleaseRef"
+          },
+          "sp_result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SPResultPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "spin_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SpinDiagnosticPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "$ref": "#/components/schemas/CalculationType"
+          },
+          "wavefunction_diagnostic": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WavefunctionDiagnosticPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "type",
+          "software_release",
+          "level_of_theory"
+        ],
+        "title": "ConformerCalculationIn",
+        "type": "object"
+      },
       "ConformerCalculationSummary": {
         "description": "Compact calculation projection embedded under conformer records.\n\nSame shape conventions as the per-calc summary on the TS surface\n(``calculation_ref`` + type + quality + review + LoT / software /\nworkflow). Heavy include sections (results, parameters, geometry\nvalidation, scan/IRC/path-search points) remain available on the\ncalculation detail endpoint and are not surfaced here.",
         "properties": {
@@ -11332,7 +11564,7 @@
         "properties": {
           "additional_calculations": {
             "items": {
-              "$ref": "#/components/schemas/CalculationWithResultsPayload"
+              "$ref": "#/components/schemas/ConformerCalculationIn"
             },
             "title": "Additional Calculations",
             "type": "array"
@@ -11345,7 +11577,7 @@
             "type": "array"
           },
           "calculation": {
-            "$ref": "#/components/schemas/CalculationWithResultsPayload"
+            "$ref": "#/components/schemas/ConformerCalculationIn"
           },
           "geometry": {
             "$ref": "#/components/schemas/GeometryPayload"
@@ -11470,7 +11702,7 @@
       },
       "ConformerUploadStatmechPayload": {
         "additionalProperties": false,
-        "description": "Workflow-facing statmech payload nested under conformer upload.\n\nThe backend resolves referenced software/workflow provenance, creates or\nreuses the owning ``Statmech`` row for the resolved species entry, and links\nthe newly created upload calculation as a source calculation when requested.",
+        "description": "Workflow-facing statmech payload nested under conformer upload.\n\nThe backend resolves referenced software/workflow provenance, creates or\nreuses the owning ``Statmech`` row for the resolved species entry, and links\nthe newly created upload calculation as a source calculation when requested.\n\n``source_calculations`` and ``torsions[*].source_scan_calculation_key``\naddress calculations by the local ``key`` the enclosing\n``ConformerUploadRequest`` put on its own primary/additional\ncalculations — never by row id. ``ConformerUploadRequest`` validates\nthat every such key was declared, so an unresolvable reference is a\n422 rather than a silently dropped provenance link.",
         "properties": {
           "electronic_levels": {
             "items": {
@@ -11582,7 +11814,7 @@
           },
           "source_calculations": {
             "items": {
-              "$ref": "#/components/schemas/StatmechSourceCalculationCreate"
+              "$ref": "#/components/schemas/StatmechSourceCalcIn"
             },
             "title": "Source Calculations",
             "type": "array"
@@ -11599,7 +11831,7 @@
           },
           "torsions": {
             "items": {
-              "$ref": "#/components/schemas/StatmechTorsionCreate"
+              "$ref": "#/components/schemas/StatmechTorsionIn"
             },
             "title": "Torsions",
             "type": "array"
@@ -36602,7 +36834,7 @@
           },
           "source_calculations": {
             "items": {
-              "$ref": "#/components/schemas/StatmechSourceCalcInBundle"
+              "$ref": "#/components/schemas/StatmechSourceCalcIn"
             },
             "title": "Source Calculations",
             "type": "array"
@@ -37131,9 +37363,9 @@
         "title": "StatmechSearchRequest",
         "type": "object"
       },
-      "StatmechSourceCalcInBundle": {
+      "StatmechSourceCalcIn": {
         "additionalProperties": false,
-        "description": "Statmech → calc link by local key.\n\nMirrors ``ThermoSourceCalcInBundle``: only ``calculation_key`` is\naccepted inside the bundle (DR-0029 Requirement 1). The key resolves\nagainst the bundle's global calc-key namespace and is then attached\nto the persisted statmech row as a ``StatmechSourceCalculation`` row\nwith the supplied scientific role.",
+        "description": "Statmech → calculation link, by local calculation key.\n\nOnly a key is accepted (DR-0029 Requirement 1). The key resolves\nagainst whichever calc-key namespace the enclosing request defines —\nthe bundle's global namespace, the standalone statmech upload's\ninline ``calculations`` list, or the keys a conformer upload put on\nits own primary/additional calculations — and the resolved row is\nattached as a ``statmech_source_calculation`` row with this role.\n\n:param calculation_key: Local key of a calculation declared in the\n    same request.\n:param role: Scientific role the calculation plays for this statmech.",
         "properties": {
           "calculation_key": {
             "minLength": 1,
@@ -37148,46 +37380,7 @@
           "calculation_key",
           "role"
         ],
-        "title": "StatmechSourceCalcInBundle",
-        "type": "object"
-      },
-      "StatmechSourceCalculationCreate": {
-        "additionalProperties": false,
-        "description": "Nested create payload for a statmech source-calculation link.",
-        "properties": {
-          "calculation_id": {
-            "title": "Calculation Id",
-            "type": "integer"
-          },
-          "role": {
-            "$ref": "#/components/schemas/StatmechCalculationRole"
-          }
-        },
-        "required": [
-          "calculation_id",
-          "role"
-        ],
-        "title": "StatmechSourceCalculationCreate",
-        "type": "object"
-      },
-      "StatmechSourceCalculationIn": {
-        "additionalProperties": false,
-        "description": "Link between a statmech upload and a supporting calculation by key.\n\n:param calculation_key: Local key of a calculation declared in\n    ``StatmechUploadRequest.calculations``.\n:param role: Scientific role the calculation plays for this statmech.",
-        "properties": {
-          "calculation_key": {
-            "minLength": 1,
-            "title": "Calculation Key",
-            "type": "string"
-          },
-          "role": {
-            "$ref": "#/components/schemas/StatmechCalculationRole"
-          }
-        },
-        "required": [
-          "calculation_key",
-          "role"
-        ],
-        "title": "StatmechSourceCalculationIn",
+        "title": "StatmechSourceCalcIn",
         "type": "object"
       },
       "StatmechSourceCalculationRead": {
@@ -37379,49 +37572,9 @@
         "title": "StatmechSpeciesContext",
         "type": "object"
       },
-      "StatmechTorsionCoordinateCreate": {
-        "additionalProperties": false,
-        "description": "Nested create payload for one torsional coordinate.",
-        "properties": {
-          "atom1_index": {
-            "minimum": 1.0,
-            "title": "Atom1 Index",
-            "type": "integer"
-          },
-          "atom2_index": {
-            "minimum": 1.0,
-            "title": "Atom2 Index",
-            "type": "integer"
-          },
-          "atom3_index": {
-            "minimum": 1.0,
-            "title": "Atom3 Index",
-            "type": "integer"
-          },
-          "atom4_index": {
-            "minimum": 1.0,
-            "title": "Atom4 Index",
-            "type": "integer"
-          },
-          "coordinate_index": {
-            "minimum": 1.0,
-            "title": "Coordinate Index",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "coordinate_index",
-          "atom1_index",
-          "atom2_index",
-          "atom3_index",
-          "atom4_index"
-        ],
-        "title": "StatmechTorsionCoordinateCreate",
-        "type": "object"
-      },
       "StatmechTorsionCoordinateIn": {
         "additionalProperties": false,
-        "description": "Atom indices for one torsional coordinate in a standalone upload.\n\n:param coordinate_index: One-based coordinate number within the rotor.\n:param atom1_index: First atom index.\n:param atom2_index: Second atom index.\n:param atom3_index: Third atom index.\n:param atom4_index: Fourth atom index.",
+        "description": "Atom indices for one torsional coordinate.\n\n:param coordinate_index: One-based coordinate number within the rotor.\n:param atom1_index: First atom index.\n:param atom2_index: Second atom index.\n:param atom3_index: Third atom index.\n:param atom4_index: Fourth atom index.",
         "properties": {
           "atom1_index": {
             "minimum": 1.0,
@@ -37460,7 +37613,8 @@
         "type": "object"
       },
       "StatmechTorsionCoordinateRead": {
-        "description": "Read schema for one torsional coordinate.",
+        "additionalProperties": false,
+        "description": "Read schema for one torsional coordinate.\n\nInherits the five atom indices from the single coordinate class rather\nthan restating them; the only thing a read adds is the parent id.",
         "properties": {
           "atom1_index": {
             "minimum": 1.0,
@@ -37537,104 +37691,9 @@
         "title": "StatmechTorsionCoordinateSummary",
         "type": "object"
       },
-      "StatmechTorsionCreate": {
-        "additionalProperties": false,
-        "description": "Nested create payload for one statmech torsion.\n\n:param coordinates: Ordered torsional coordinate definitions. The number of\n    coordinates must equal ``dimension``, and ``coordinate_index`` values\n    must run contiguously from ``1..dimension``.",
-        "properties": {
-          "coordinates": {
-            "items": {
-              "$ref": "#/components/schemas/StatmechTorsionCoordinateCreate"
-            },
-            "title": "Coordinates",
-            "type": "array"
-          },
-          "dimension": {
-            "default": 1,
-            "minimum": 1.0,
-            "title": "Dimension",
-            "type": "integer"
-          },
-          "invalidated_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Invalidated Reason"
-          },
-          "note": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Note"
-          },
-          "source_scan_calculation_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Source Scan Calculation Id"
-          },
-          "symmetry_number": {
-            "anyOf": [
-              {
-                "minimum": 1.0,
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Symmetry Number"
-          },
-          "top_description": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top Description"
-          },
-          "torsion_index": {
-            "minimum": 1.0,
-            "title": "Torsion Index",
-            "type": "integer"
-          },
-          "treatment_kind": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/TorsionTreatmentKind"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "torsion_index"
-        ],
-        "title": "StatmechTorsionCreate",
-        "type": "object"
-      },
       "StatmechTorsionIn": {
         "additionalProperties": false,
-        "description": "Torsion definition for a standalone statmech upload.\n\nUnlike the nested-create schema, the principal scan calculation is\naddressed by a local string key rather than a raw calculation id.\n\n:param torsion_index: One-based torsion number within the record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment classification.\n:param dimension: Number of coupled torsional coordinates.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional invalidation reason.\n:param note: Optional free-text note.\n:param source_scan_calculation_key: Optional local key referencing an\n    inline calculation declared in ``StatmechUploadRequest.calculations``.\n:param coordinates: Ordered torsional coordinate definitions.",
+        "description": "One statmech torsion, with its rotor scan addressed by local key.\n\n:param torsion_index: One-based torsion number within the statmech record.\n:param symmetry_number: Optional torsional symmetry number.\n:param treatment_kind: Optional torsion treatment kind.\n:param dimension: Number of coupled torsional coordinates in this rotor.\n:param top_description: Optional description of the rotating top.\n:param invalidated_reason: Optional reason why the torsion was invalidated.\n:param note: Optional free-text note.\n:param source_scan_calculation_key: Optional local key of the\n    calculation that produced this rotor's scan. Resolves against the\n    same calc-key namespace as ``StatmechSourceCalcIn``.\n:param coordinates: Ordered torsional coordinate definitions. The\n    number of coordinates must equal ``dimension``, and\n    ``coordinate_index`` values must run contiguously from\n    ``1..dimension``.",
         "properties": {
           "coordinates": {
             "items": {
@@ -37674,6 +37733,7 @@
           "source_scan_calculation_key": {
             "anyOf": [
               {
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -38306,7 +38366,7 @@
           },
           "source_calculations": {
             "items": {
-              "$ref": "#/components/schemas/StatmechSourceCalculationIn"
+              "$ref": "#/components/schemas/StatmechSourceCalcIn"
             },
             "title": "Source Calculations",
             "type": "array"

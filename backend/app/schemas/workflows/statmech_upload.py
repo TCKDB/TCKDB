@@ -1,19 +1,19 @@
 """Upload payloads for species-level statmech records.
 
-The nested statmech payload (``ConformerUploadStatmechPayload``) is
-submitted as a side effect of a conformer upload and accepts raw
-supporting-calculation DB ids from the surrounding workflow.
-
 ``StatmechUploadRequest`` is the standalone upload payload accepted by
-``POST /api/v1/uploads/statmech``. It carries the same scientific
-content as the nested path, but keeps the upload boundary FK-free:
-supporting calculations are declared inline and referenced by local
-string keys, and provenance refs use the existing upload fragments.
+``POST /api/v1/uploads/statmech``. Supporting calculations are declared
+inline and referenced by local string keys, and provenance refs use the
+existing upload fragments, so the upload boundary stays FK-free.
+
+The nested statmech payload (``ConformerUploadStatmechPayload``) now uses
+the same key-based reference components from
+``tckdb_schemas.statmech_bits``; it resolves those keys against the
+``key`` fields the conformer upload puts on its own calculations.
 """
 
 from __future__ import annotations
 
-from typing import Self
+from typing import Self, TypeAlias
 
 from pydantic import Field, model_validator
 from tckdb_schemas.stationary_point import (
@@ -21,15 +21,14 @@ from tckdb_schemas.stationary_point import (
     raise_for_blocking_findings,
 )
 from tckdb_schemas.statmech_bits import (
-    StatmechTorsionCoordinateIn,
+    StatmechSourceCalcIn,
+    StatmechTorsionIn,
 )
 
 from app.db.models.common import (
     RigidRotorKind,
     ScientificOriginKind,
-    StatmechCalculationRole,
     StatmechTreatmentKind,
-    TorsionTreatmentKind,
 )
 from app.schemas.common import SchemaBase
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
@@ -60,64 +59,12 @@ class StatmechCalculationIn(SchemaBase):
     calculation: CalculationWithResultsPayload
 
 
-class StatmechSourceCalculationIn(SchemaBase):
-    """Link between a statmech upload and a supporting calculation by key.
-
-    :param calculation_key: Local key of a calculation declared in
-        ``StatmechUploadRequest.calculations``.
-    :param role: Scientific role the calculation plays for this statmech.
-    """
-
-    calculation_key: str = Field(min_length=1)
-    role: StatmechCalculationRole
-
-
-class StatmechTorsionIn(SchemaBase):
-    """Torsion definition for a standalone statmech upload.
-
-    Unlike the nested-create schema, the principal scan calculation is
-    addressed by a local string key rather than a raw calculation id.
-
-    :param torsion_index: One-based torsion number within the record.
-    :param symmetry_number: Optional torsional symmetry number.
-    :param treatment_kind: Optional torsion treatment classification.
-    :param dimension: Number of coupled torsional coordinates.
-    :param top_description: Optional description of the rotating top.
-    :param invalidated_reason: Optional invalidation reason.
-    :param note: Optional free-text note.
-    :param source_scan_calculation_key: Optional local key referencing an
-        inline calculation declared in ``StatmechUploadRequest.calculations``.
-    :param coordinates: Ordered torsional coordinate definitions.
-    """
-
-    torsion_index: int = Field(ge=1)
-    symmetry_number: int | None = Field(default=None, ge=1)
-    treatment_kind: TorsionTreatmentKind | None = None
-
-    dimension: int = Field(default=1, ge=1)
-    top_description: str | None = None
-    invalidated_reason: str | None = None
-    note: str | None = None
-
-    source_scan_calculation_key: str | None = None
-
-    coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def validate_coordinates(self) -> Self:
-        if len(self.coordinates) != self.dimension:
-            raise ValueError(
-                "Number of torsion coordinates must equal dimension."
-            )
-
-        indices = [c.coordinate_index for c in self.coordinates]
-        expected = list(range(1, self.dimension + 1))
-        if sorted(indices) != expected:
-            raise ValueError(
-                "Torsion coordinate_index values must run contiguously "
-                "from 1..dimension."
-            )
-        return self
+#: Statmech → calculation link by local key. Was a class of its own here;
+#: it is now the shared wire component, because the conformer, bundle and
+#: standalone paths all express this link identically. Spelled as an
+#: explicit ``TypeAlias``: a bare ``X = SomeClass`` assignment is a
+#: *variable* to mypy, and annotating with it is an error.
+StatmechSourceCalculationIn: TypeAlias = StatmechSourceCalcIn
 
 
 class StatmechUploadRequest(SchemaBase):
