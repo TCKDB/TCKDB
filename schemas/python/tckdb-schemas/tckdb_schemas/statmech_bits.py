@@ -1,30 +1,48 @@
 """Shared statmech upload fragments.
 
-Carries ``StatmechTorsionCoordinateIn``, the slim atom-quartet definition
-reused by both the standalone statmech upload and the computed-species /
-computed-reaction bundle endpoints, plus the ``*Create`` payloads nested
-inside ``ConformerUploadRequest.statmech``.
+Every reference out of these fragments is a **local string key**, never a
+database row id (DR-0029 Requirement 1, and the "no FK IDs in upload
+schemas" rule). A depositor can name a calculation they declared in the
+same request; they cannot know its primary key, and a contract that asks
+for one is only usable by something that has already queried the
+database.
 
-The ``*Base`` classes here are plain ``BaseModel`` on purpose: the
-backend's ``*Read`` and ``*Update`` schemas still inherit from them while
-adding ``from_attributes=True`` ORM bases, so the field definitions have
-exactly one home even though only the create side is on the wire.
+Three components live here, and each is the single home for its concept
+across every upload path that carries statmech:
 
-The full ``StatmechUploadRequest`` (and its torsion/source-calc/etc.
-container classes) stay backend-side because they orchestrate
-service-layer resolution and ownership checks.
+``StatmechTorsionCoordinateIn``
+    The atom quartet defining one torsional coordinate. Shared by the
+    conformer, standalone-statmech and bundle paths, and reused as the
+    field home for the backend's ``*Read`` schema.
+
+``StatmechSourceCalcIn``
+    A statmech → calculation link, by local calculation key and
+    scientific role. ``StatmechSourceCalcInBundle`` is a backwards
+    compatible alias re-exported from the bundle modules.
+
+``StatmechTorsionIn``
+    One torsional mode, with its principal rotor scan addressed by local
+    key. Shared by the conformer and standalone-statmech paths; the
+    bundle keeps ``StatmechTorsionInBundle`` because it deliberately
+    allows ``coordinates`` to be omitted.
+
+The full ``StatmechUploadRequest`` (and its inline-calculation container)
+stay backend-side because they orchestrate service-layer resolution and
+ownership checks. The id-bearing ``*Base`` / ``*Read`` / ``*Update``
+schemas stay backend-side too, in ``app.schemas.entities.statmech`` —
+they describe persisted rows, which is not what a wire contract is for.
 """
 
 from typing import Self
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import Field, model_validator
 
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import StatmechCalculationRole, TorsionTreatmentKind
 
 
 class StatmechTorsionCoordinateIn(SchemaBase):
-    """Atom indices for one torsional coordinate in a standalone upload.
+    """Atom indices for one torsional coordinate.
 
     :param coordinate_index: One-based coordinate number within the rotor.
     :param atom1_index: First atom index.
@@ -52,59 +70,27 @@ class StatmechTorsionCoordinateIn(SchemaBase):
         return self
 
 
-class StatmechSourceCalculationBase(BaseModel):
-    """Shared fields for statmech source-calculation links.
+class StatmechSourceCalcIn(SchemaBase):
+    """Statmech → calculation link, by local calculation key.
 
-    :param calculation_id: Referenced calculation row.
-    :param role: Semantic role of the source calculation.
+    Only a key is accepted (DR-0029 Requirement 1). The key resolves
+    against whichever calc-key namespace the enclosing request defines —
+    the bundle's global namespace, the standalone statmech upload's
+    inline ``calculations`` list, or the keys a conformer upload put on
+    its own primary/additional calculations — and the resolved row is
+    attached as a ``statmech_source_calculation`` row with this role.
+
+    :param calculation_key: Local key of a calculation declared in the
+        same request.
+    :param role: Scientific role the calculation plays for this statmech.
     """
 
-    calculation_id: int
+    calculation_key: str = Field(min_length=1)
     role: StatmechCalculationRole
 
 
-class StatmechSourceCalculationCreate(StatmechSourceCalculationBase, SchemaBase):
-    """Nested create payload for a statmech source-calculation link."""
-
-
-class StatmechTorsionCoordinateBase(BaseModel):
-    """Shared fields for one torsional coordinate definition.
-
-    :param coordinate_index: One-based coordinate number within the coupled rotor.
-    :param atom1_index: First atom index in the torsion definition.
-    :param atom2_index: Second atom index in the torsion definition.
-    :param atom3_index: Third atom index in the torsion definition.
-    :param atom4_index: Fourth atom index in the torsion definition.
-    """
-
-    coordinate_index: int = Field(ge=1)
-    atom1_index: int = Field(ge=1)
-    atom2_index: int = Field(ge=1)
-    atom3_index: int = Field(ge=1)
-    atom4_index: int = Field(ge=1)
-
-    @model_validator(mode="after")
-    def validate_distinct_atoms(self) -> Self:
-        atom_indices = {
-            self.atom1_index,
-            self.atom2_index,
-            self.atom3_index,
-            self.atom4_index,
-        }
-        if len(atom_indices) != 4:
-            raise ValueError("Torsion coordinate atom indices must be distinct.")
-        return self
-
-
-class StatmechTorsionCoordinateCreate(
-    StatmechTorsionCoordinateBase,
-    SchemaBase,
-):
-    """Nested create payload for one torsional coordinate."""
-
-
-class StatmechTorsionBase(BaseModel):
-    """Shared fields for one statmech torsion.
+class StatmechTorsionIn(SchemaBase):
+    """One statmech torsion, with its rotor scan addressed by local key.
 
     :param torsion_index: One-based torsion number within the statmech record.
     :param symmetry_number: Optional torsional symmetry number.
@@ -113,7 +99,13 @@ class StatmechTorsionBase(BaseModel):
     :param top_description: Optional description of the rotating top.
     :param invalidated_reason: Optional reason why the torsion was invalidated.
     :param note: Optional free-text note.
-    :param source_scan_calculation_id: Optional principal scan calculation for this torsion.
+    :param source_scan_calculation_key: Optional local key of the
+        calculation that produced this rotor's scan. Resolves against the
+        same calc-key namespace as ``StatmechSourceCalcIn``.
+    :param coordinates: Ordered torsional coordinate definitions. The
+        number of coordinates must equal ``dimension``, and
+        ``coordinate_index`` values must run contiguously from
+        ``1..dimension``.
     """
 
     torsion_index: int = Field(ge=1)
@@ -125,18 +117,9 @@ class StatmechTorsionBase(BaseModel):
     invalidated_reason: str | None = None
     note: str | None = None
 
-    source_scan_calculation_id: int | None = None
+    source_scan_calculation_key: str | None = Field(default=None, min_length=1)
 
-
-class StatmechTorsionCreate(StatmechTorsionBase, SchemaBase):
-    """Nested create payload for one statmech torsion.
-
-    :param coordinates: Ordered torsional coordinate definitions. The number of
-        coordinates must equal ``dimension``, and ``coordinate_index`` values
-        must run contiguously from ``1..dimension``.
-    """
-
-    coordinates: list[StatmechTorsionCoordinateCreate] = Field(default_factory=list)
+    coordinates: list[StatmechTorsionCoordinateIn] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def validate_coordinates(self) -> Self:
@@ -152,3 +135,9 @@ class StatmechTorsionCreate(StatmechTorsionBase, SchemaBase):
                 "Torsion coordinate_index values must run contiguously from 1..dimension."
             )
         return self
+
+
+#: Historical name for :class:`StatmechSourceCalcIn`, kept importable so
+#: bundle-facing code and docs that spell it this way keep working. It is
+#: the same class object, so there is one OpenAPI component, not two.
+StatmechSourceCalcInBundle = StatmechSourceCalcIn

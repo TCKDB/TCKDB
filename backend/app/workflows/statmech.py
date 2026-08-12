@@ -1,10 +1,10 @@
 """Standalone statmech upload workflow orchestrator.
 
 Persists statmech records submitted independently of a conformer
-upload. Inline supporting calculations are resolved via their local
-string keys to real calculation ids, and the resulting scientific
-payload is routed through the canonical
-:func:`resolve_or_create_statmech` service used by nested uploads.
+upload. Inline supporting calculations are persisted first and handed to
+the canonical :func:`resolve_or_create_statmech` service as a local
+key → ``calculation.id`` map; the service does the key resolution, the
+same way it does for the nested conformer path.
 """
 
 from __future__ import annotations
@@ -16,11 +16,6 @@ from sqlalchemy.orm import Session
 from app.db.models.calculation import Calculation
 from app.db.models.common import SubmissionRecordType
 from app.db.models.statmech import Statmech
-from app.schemas.entities.statmech import (
-    StatmechSourceCalculationCreate,
-    StatmechTorsionCoordinateCreate,
-    StatmechTorsionCreate,
-)
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
 from app.services.calculation_resolution import (
@@ -81,9 +76,8 @@ def persist_statmech_upload(
     """Persist a complete standalone statmech upload workflow.
 
     Resolves the target species entry, persists any inline supporting
-    calculations, translates local calculation keys into real ids for
-    both source-calculation links and torsion source scans, and routes
-    the resulting payload through the canonical statmech resolution
+    calculations, and routes the payload plus its local key →
+    ``calculation.id`` map through the canonical statmech resolution
     service so there is a single persistence implementation.
 
     Statmech is append-only: repeated uploads against the same species
@@ -118,50 +112,12 @@ def persist_statmech_upload(
         )
         calculations_by_key[calc_in.key] = calc_row
 
-    # Resolve source-calculation links from local keys to real ids.
-    resolved_sources = [
-        StatmechSourceCalculationCreate(
-            calculation_id=calculations_by_key[sc.calculation_key].id,
-            role=sc.role,
-        )
-        for sc in request.source_calculations
-    ]
-
-    # Resolve torsion source scans from local keys and translate torsions
-    # to the nested-create shape expected by the canonical service.
-    resolved_torsions: list[StatmechTorsionCreate] = []
-    for torsion_in in request.torsions:
-        scan_id: int | None = None
-        if torsion_in.source_scan_calculation_key is not None:
-            scan_id = calculations_by_key[
-                torsion_in.source_scan_calculation_key
-            ].id
-        resolved_torsions.append(
-            StatmechTorsionCreate(
-                torsion_index=torsion_in.torsion_index,
-                symmetry_number=torsion_in.symmetry_number,
-                treatment_kind=torsion_in.treatment_kind,
-                dimension=torsion_in.dimension,
-                top_description=torsion_in.top_description,
-                invalidated_reason=torsion_in.invalidated_reason,
-                note=torsion_in.note,
-                source_scan_calculation_id=scan_id,
-                coordinates=[
-                    StatmechTorsionCoordinateCreate(
-                        coordinate_index=c.coordinate_index,
-                        atom1_index=c.atom1_index,
-                        atom2_index=c.atom2_index,
-                        atom3_index=c.atom3_index,
-                        atom4_index=c.atom4_index,
-                    )
-                    for c in torsion_in.coordinates
-                ],
-            )
-        )
-
     # Build the canonical statmech payload and route through the shared
-    # resolution service. No uploaded_calculation_id here — standalone
-    # uploads have no implicit "freshly uploaded" anchor calculation.
+    # resolution service. The source-calculation links and torsions travel
+    # as-is: both paths now speak the same key-based components, so there
+    # is nothing to translate here — only a key → id map to hand over.
+    # No uploaded_calculation_id here — standalone uploads have no
+    # implicit "freshly uploaded" anchor calculation.
     core_payload = ConformerUploadStatmechPayload(
         scientific_origin=request.scientific_origin,
         literature=request.literature,
@@ -177,8 +133,8 @@ def persist_statmech_upload(
         optical_isomers=request.optical_isomers,
         note=request.note,
         uploaded_calculation_role=None,
-        source_calculations=resolved_sources,
-        torsions=resolved_torsions,
+        source_calculations=request.source_calculations,
+        torsions=request.torsions,
         electronic_levels=request.electronic_levels,
     )
 
@@ -187,6 +143,9 @@ def persist_statmech_upload(
         core_payload,
         species_entry_id=species_entry.id,
         uploaded_calculation_id=None,
+        calculations_by_key={
+            key: calc.id for key, calc in calculations_by_key.items()
+        },
         created_by=created_by,
     )
 

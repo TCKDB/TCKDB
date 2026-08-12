@@ -83,7 +83,7 @@ from tckdb_schemas.workflows import (
 )
 from tckdb_schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from tckdb_schemas.workflows.transport_upload import TransportUploadPayload
-from tckdb_schemas.statmech_bits import StatmechTorsionCreate
+from tckdb_schemas.statmech_bits import StatmechTorsionIn
 
 SOFTWARE = {"name": "Gaussian", "version": "16"}
 LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
@@ -92,12 +92,14 @@ conformer = ConformerUploadRequest(
     species_entry={"smiles": "[H]", "charge": 0, "multiplicity": 2},
     geometry={"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
     calculation={
+        "key": "h_sp",
         "type": "sp",
         "software_release": SOFTWARE,
         "level_of_theory": LOT,
     },
     additional_calculations=[
         {
+            "key": "h_freq",
             "type": "freq",
             "software_release": SOFTWARE,
             "level_of_theory": LOT,
@@ -110,6 +112,10 @@ conformer = ConformerUploadRequest(
         is_linear=False,
         optical_isomers=1,
         electronic_levels=[{"level_index": 1, "energy_cm1": 0.0, "degeneracy": 2}],
+        # The whole point of the contract: the statmech cites a
+        # calculation by a name this payload chose, not by a row id it
+        # would have had to query the database for.
+        source_calculations=[{"calculation_key": "h_freq", "role": "freq"}],
     ),
     transport=TransportUploadPayload(
         sigma_angstrom=2.05,
@@ -163,7 +169,7 @@ transition_state = TransitionStateUploadRequest(
 
 # Nested wire types that used to be backend-only, exercised for
 # constructibility even where the smoke payloads above do not carry them.
-StatmechTorsionCreate(
+StatmechTorsionIn(
     torsion_index=1,
     dimension=1,
     coordinates=[
@@ -200,6 +206,31 @@ try:
                 "freq_result": {"n_imag": 1, "imag_freq_cm1": -400.0},
             }
         ],
+    )
+except ValueError:
+    rejected += 1
+try:
+    # A statmech source calc naming a key nobody declared. Accepting it
+    # would persist a statmech with no provenance link at all.
+    ConformerUploadRequest(
+        species_entry={"smiles": "[H]", "charge": 0, "multiplicity": 2},
+        geometry={"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
+        calculation={
+            "key": "h_sp",
+            "type": "sp",
+            "software_release": SOFTWARE,
+            "level_of_theory": LOT,
+        },
+        statmech=ConformerUploadStatmechPayload(
+            source_calculations=[{"calculation_key": "never_declared", "role": "sp"}],
+        ),
+    )
+except ValueError:
+    rejected += 1
+try:
+    # And the field it replaced is gone, not quietly tolerated.
+    ConformerUploadStatmechPayload(
+        source_calculations=[{"calculation_id": 1, "role": "sp"}],
     )
 except ValueError:
     rejected += 1
@@ -248,7 +279,7 @@ def test_wire_only_process_never_touched_the_backend(wire_only_payloads) -> None
 
 def test_wire_only_models_enforce_their_own_contracts(wire_only_payloads) -> None:
     """Validation travelled with the models, not just the field names."""
-    assert wire_only_payloads["rejected"] == 2
+    assert wire_only_payloads["rejected"] == 4
 
 
 def test_live_conformer_route_accepts_a_wire_only_payload(
@@ -259,6 +290,66 @@ def test_live_conformer_route_accepts_a_wire_only_payload(
     )
     assert resp.status_code == 201, resp.text
     assert "conformer_group_id" in resp.json()
+
+
+def test_conformer_payload_carries_no_calculation_row_ids(
+    wire_only_payloads,
+) -> None:
+    """The statmech block names calculations, and names only.
+
+    Reading the JSON rather than the model: a depositor who never queried
+    TCKDB has to be able to write this body, so no serialized field may
+    be a calculation primary key.
+    """
+    statmech = wire_only_payloads["conformer"]["statmech"]
+    assert statmech["source_calculations"] == [
+        {"calculation_key": "h_freq", "role": "freq"}
+    ]
+    for entry in statmech["source_calculations"]:
+        assert "calculation_id" not in entry
+    for torsion in statmech.get("torsions", []):
+        assert "source_scan_calculation_id" not in torsion
+
+
+def test_live_conformer_route_links_statmech_by_key_not_id(
+    client, wire_only_payloads
+) -> None:
+    """End to end: the key in the body became the right FK in the row.
+
+    A payload that validates is not a payload that persists. This asserts
+    the ``statmech_source_calculation`` row points at the *additional*
+    freq calculation named ``h_freq`` — not at the primary sp
+    calculation, which is what a workflow that ignored the key and reused
+    the "uploaded calculation" shortcut would have linked.
+    """
+    from app.db.models.calculation import Calculation
+    from app.db.models.common import CalculationType
+    from app.db.models.statmech import Statmech, StatmechSourceCalculation
+
+    resp = client.post(
+        "/api/v1/uploads/conformers", json=wire_only_payloads["conformer"]
+    )
+    assert resp.status_code == 201, resp.text
+
+    session = client._db_session
+    statmech = (
+        session.query(Statmech)
+        .order_by(Statmech.id.desc())
+        .first()
+    )
+    assert statmech is not None
+    links = (
+        session.query(StatmechSourceCalculation)
+        .filter(StatmechSourceCalculation.statmech_id == statmech.id)
+        .all()
+    )
+    linked_types = {
+        session.get(Calculation, link.calculation_id).type for link in links
+    }
+    assert CalculationType.freq in linked_types, (
+        "statmech.source_calculations[0].calculation_key='h_freq' did not "
+        "resolve to the freq calculation declared in the same upload"
+    )
 
 
 def test_live_transition_state_route_accepts_a_wire_only_payload(

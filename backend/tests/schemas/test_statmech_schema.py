@@ -5,7 +5,7 @@ import pytest
 from app.schemas.entities.statmech import (
     StatmechCreate,
     StatmechSourceCalculationCreate,
-    StatmechTorsionCoordinateCreate,
+    StatmechTorsionCoordinateIn,
     StatmechTorsionCoordinateUpdate,
     StatmechTorsionCreate,
 )
@@ -17,14 +17,14 @@ def test_statmech_torsion_create_requires_contiguous_coordinates() -> None:
             torsion_index=1,
             dimension=2,
             coordinates=[
-                StatmechTorsionCoordinateCreate(
+                StatmechTorsionCoordinateIn(
                     coordinate_index=1,
                     atom1_index=1,
                     atom2_index=2,
                     atom3_index=3,
                     atom4_index=4,
                 ),
-                StatmechTorsionCoordinateCreate(
+                StatmechTorsionCoordinateIn(
                     coordinate_index=3,
                     atom1_index=5,
                     atom2_index=6,
@@ -41,7 +41,7 @@ def test_statmech_torsion_create_requires_coordinate_count_to_match_dimension() 
             torsion_index=1,
             dimension=2,
             coordinates=[
-                StatmechTorsionCoordinateCreate(
+                StatmechTorsionCoordinateIn(
                     coordinate_index=1,
                     atom1_index=1,
                     atom2_index=2,
@@ -54,7 +54,7 @@ def test_statmech_torsion_create_requires_coordinate_count_to_match_dimension() 
 
 def test_statmech_torsion_coordinate_requires_distinct_atom_indices() -> None:
     with pytest.raises(ValueError, match="must be distinct"):
-        StatmechTorsionCoordinateCreate(
+        StatmechTorsionCoordinateIn(
             coordinate_index=1,
             atom1_index=1,
             atom2_index=2,
@@ -90,7 +90,7 @@ def test_statmech_create_supports_nested_torsions_and_source_calculations() -> N
                 torsion_index=1,
                 dimension=1,
                 coordinates=[
-                    StatmechTorsionCoordinateCreate(
+                    StatmechTorsionCoordinateIn(
                         coordinate_index=1,
                         atom1_index=1,
                         atom2_index=2,
@@ -117,7 +117,7 @@ def test_statmech_create_rejects_duplicate_torsion_indices() -> None:
                     torsion_index=1,
                     dimension=1,
                     coordinates=[
-                        StatmechTorsionCoordinateCreate(
+                        StatmechTorsionCoordinateIn(
                             coordinate_index=1,
                             atom1_index=1,
                             atom2_index=2,
@@ -130,7 +130,7 @@ def test_statmech_create_rejects_duplicate_torsion_indices() -> None:
                     torsion_index=1,
                     dimension=1,
                     coordinates=[
-                        StatmechTorsionCoordinateCreate(
+                        StatmechTorsionCoordinateIn(
                             coordinate_index=1,
                             atom1_index=5,
                             atom2_index=6,
