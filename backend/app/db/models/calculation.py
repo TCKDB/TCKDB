@@ -26,6 +26,7 @@ from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.db.base import Base, CreatedByMixin, PublicRefMixin, TimestampMixin
 from app.db.models.common import (
+    IMAGINARY_MODE_TAU_BASIS_VALUES,
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
     ArtifactKind,
@@ -516,6 +517,18 @@ class CalculationFreqResult(Base):
     #: every historical record, and ADR 0012's whole point is that a
     #: reader can see what was decided and on what basis.
     imaginary_mode_tau_cm1: Mapped[Optional[float]] = mapped_column(nullable=True)
+    #: Typed ``str`` rather than the ``TauBasis`` enum **on purpose**, and
+    #: only on the wire: a reader must be shown a basis this build does
+    #: not recognise rather than have the whole record refused for it.
+    #: That argument does not extend to the write side, where an
+    #: unrecognised value is a typo rather than a newer writer, so the
+    #: vocabulary is constrained in the database by
+    #: ``imaginary_mode_tau_basis_known`` below. A CHECK rather than a
+    #: native enum because the column stays ``TEXT`` in the ORM — and
+    #: because a CHECK, unlike a foreign key, still holds under
+    #: ``session_replication_role = replica``, which is what bulk loaders
+    #: and restore paths run under (see
+    #: ``tests/db/test_element_symbol_canonicality.py``).
     imaginary_mode_tau_basis: Mapped[Optional[str]] = mapped_column(
         Text, nullable=True
     )
@@ -537,6 +550,15 @@ class CalculationFreqResult(Base):
         ),
         order_by="CalculationFreqMode.mode_index",
         viewonly=True,
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "imaginary_mode_tau_basis IS NULL OR imaginary_mode_tau_basis IN ("
+            + ", ".join(f"'{value}'" for value in IMAGINARY_MODE_TAU_BASIS_VALUES)
+            + ")",
+            name="imaginary_mode_tau_basis_known",
+        ),
     )
 
 

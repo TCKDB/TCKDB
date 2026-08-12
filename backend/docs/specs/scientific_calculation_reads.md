@@ -334,7 +334,7 @@ page a caller reached with `include=all`. Unknown tokens → 422
 
 | Include | Adds field(s) | Backed by |
 |---|---|---|
-| `results` | `results: CalculationResultSummary` (one of `sp\|opt\|freq\|scan\|irc\|path_search`) | `calc_*_result` tables |
+| `results` | `results: CalculationResultSummary` (one of `sp\|opt\|freq\|scan\|irc\|path_search`). The `freq` block carries ADR 0012's judgement alongside `n_imag`, not behind an opt-in: `imaginary_mode_tau_cm1`, `imaginary_mode_tau_basis`, `reaction_coordinate_mode_index`, `imaginary_mode_structural_flag` and the derived `n_imag_at_or_above_tau`. See §4.5.1. | `calc_*_result` tables |
 | `dependencies` | `dependencies: list[CalculationDependencySummary]` (parent + child links with role + ref) | `calculation_dependency` |
 | `parameters` | `parameters: list[CalculationParameterSummary]` (raw + canonical) | `calculation_parameter` |
 | `constraints` | `constraints: list[CalculationConstraintSummary]` | `calculation_constraint` |
@@ -359,6 +359,43 @@ stable across opt-in expansions).
 When a section **is** in the include set but the underlying table has no
 rows for this calculation, the field is present with the empty value
 (`[]` for arrays, `null` for nullable singletons).
+
+#### 4.5.1 `results.freq` — `n_imag` never travels alone
+
+ADR 0012 retired counting imaginary modes in favour of judging them by
+magnitude against the protocol that produced them, and requires that
+wherever `n_imag` is reported it is accompanied by the tolerance applied,
+how that tolerance was chosen, and the count above it. The `freq` block
+therefore carries all of it:
+
+| Field | Meaning |
+|---|---|
+| `n_imag`, `imag_freq_cm1` | What the ESS printed. `n_imag` alone is **not** a safe filter: two correct calculations of the same saddle point can report 1 and 3. |
+| `reaction_coordinate_mode_index` | The `mode_index` the depositor designated the reaction coordinate. ADR 0012 makes designating exactly one mode the contract that replaced the `n_imag == 1` gate. |
+| `imaginary_mode_tau_cm1` | The tolerance actually applied, in cm⁻¹. |
+| `imaginary_mode_tau_basis` | Which row of ADR 0012's protocol table chose it. Typed `str`, **not** an enum, so a value a newer writer produced is displayed rather than made to refuse the record; the vocabulary is closed at the database instead (`ck_calc_freq_result_imaginary_mode_tau_basis_known`, revision `e2a7c9d4b615`). |
+| `imaginary_mode_structural_flag` | ADR 0012's structural exclusion signal: an imaginary mode at or above τ beyond the designated reaction coordinate. **This is the field that makes an `n_imag == 1` filter safe**, which is why it is on the cheap projection rather than behind an include — a flag a consumer must know to ask for does not protect the consumer who did not know. |
+| `n_imag_at_or_above_tau` | How many stored imaginary modes have `\|ω\| >= τ`, counting the reaction coordinate. The same bare comparison `tau_context.modes[].at_or_above_tau` reports per mode. |
+
+All four persisted fields are `null` together on a record deposited before
+ADR 0012 shipped — "never judged", which is a different fact from "judged
+and not flagged" and is not collapsed into `false`/`0` here any more than
+it was backfilled by `c2f7a4e8d1b6`. `n_imag_at_or_above_tau` is also
+`null` where no τ is stored, and where the record reports imaginary modes
+but stores no `calc_freq_mode` rows to count (there, `0` would describe
+the stored rows and misdescribe the record).
+
+Nothing here is re-resolved at read time: ADR 0012 requires τ to be
+*stored* precisely so a later parser improvement cannot silently
+re-decide a historical judgement. The single derived field compares two
+persisted numbers.
+
+Cost: **zero additional statements.** The four columns were already on the
+row this projection loads, and the count rides along as a correlated
+aggregate on the same `SELECT` rather than a second round trip — this
+builder runs once per record, so a second round trip here is multiplied by
+the page size. Pinned by
+`tests/services/scientific_read/test_record_builder_statement_cost.py::test_the_adr_0012_fields_cost_no_extra_statement_per_record`.
 
 ### 4.6 Review/trust behavior
 
