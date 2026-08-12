@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import json
 
+from app.db.models.calculation import CalculationFreqResult
 from app.db.models.common import CalculationType, ImaginaryModeDisposition
 from tests.services.scientific_read._factories import (
     attach_freq_result,
@@ -180,6 +181,43 @@ def test_never_judged_reports_nulls_rather_than_a_clean_bill(client, db_session)
     assert freq["imaginary_mode_tau_basis"] is None
     assert freq["imaginary_mode_structural_flag"] is None
     assert freq["n_imag_at_or_above_tau"] is None
+
+
+def test_a_count_with_nothing_to_count_over_is_null_not_zero(client, db_session):
+    """``n_imag`` without a frequency list: the count is not takeable.
+
+    ``calc_freq_mode`` is optional -- an upload may carry ``n_imag`` and
+    no per-mode rows -- and the count above tau is taken over those rows.
+    SQL answers 0, which is true of the stored rows and false of the
+    record, and 0 here would read as "one imaginary mode, none of them
+    above tau", i.e. a clean soft mode. This is the branch that separates
+    "measured nothing above tau" from "had nothing to measure", and it is
+    unreachable through the factory's ordinary path, so the row is built
+    directly.
+    """
+    calc = _freq_calc(db_session)
+    db_session.add(
+        CalculationFreqResult(
+            calculation_id=calc.id,
+            n_imag=1,
+            imag_freq_cm1=-58.0,
+            imaginary_mode_tau_cm1=30.0,
+            imaginary_mode_tau_basis="analytic_default",
+            imaginary_mode_structural_flag=False,
+        )
+    )
+    db_session.flush()
+
+    freq = _read_freq_block(client, calc)
+
+    assert freq["n_imag"] == 1
+    assert freq["imaginary_mode_tau_cm1"] == 30.0
+    assert freq["n_imag_at_or_above_tau"] is None, (
+        "58 cm-1 is above the stored tau of 30, but no mode row says so: "
+        "the count must not claim to have counted"
+    )
+    # The flag is a stored judgement and is unaffected by the missing rows.
+    assert freq["imaginary_mode_structural_flag"] is False
 
 
 def test_a_minimum_counts_zero_against_its_tau(client, db_session):
