@@ -4210,7 +4210,7 @@
         "type": "object"
       },
       "CalculationFreqResultSummary": {
-        "description": "Summary projection of a ``calc_freq_result`` row.\n\nPer-mode arrays are intentionally omitted here; the full per-mode\narray is served under the dedicated ``include=freq_modes`` heavy\ninclude (see :class:`CalculationFreqModeSummary`).",
+        "description": "Summary projection of a ``calc_freq_result`` row.\n\nPer-mode arrays are intentionally omitted here; the full per-mode\narray is served under the dedicated ``include=freq_modes`` heavy\ninclude (see :class:`CalculationFreqModeSummary`).\n\n**``n_imag`` does not travel alone.** ADR 0012 retired counting\nimaginary modes in favour of judging them by magnitude against the\nprotocol that produced them, and requires that wherever ``n_imag``\nis reported it is accompanied by the tolerance applied, how that\ntolerance was chosen, and the count above it. It is reported here\nanyway — it is what the ESS printed — but a consumer that filters on\n``n_imag == 1`` and stops is selecting on a quantity ADR 0012 shows\nis a property of the method, grid and Hessian algorithm as much as of\nthe structure: two correct calculations of the same saddle point can\nreturn 1 and 3.\n\n``imaginary_mode_structural_flag`` is the field that makes that\nfilter safe, and it is the reason these fields are on the *cheap*\nprojection rather than behind an opt-in include. It is ADR 0012's\nstructural exclusion signal: true means the record carries an\nimaginary mode at or above tau beyond its designated reaction\ncoordinate, so it is a genuine higher-order saddle — accepted,\nbecause that can be correct chemistry, but excluded from default\ntransition-state consumption. A flag a consumer has to know to ask\nfor does not protect the consumer who did not know.\n\nEvery field here is read straight off the stored row. Nothing is\nre-resolved: ADR 0012 requires tau to be *stored* precisely so that a\nlater parser improvement cannot silently re-decide a historical\njudgement, and recomputing it to fill this block would be that\ndefect. The one derived field is\n:attr:`n_imag_at_or_above_tau`, which compares stored magnitudes\nagainst the stored tau and resolves nothing.\n\n``imaginary_mode_tau_basis`` is typed ``str``, not the ``TauBasis``\nenum, deliberately: a value this build of the API does not recognise\nmust be *displayed* rather than rejected, because the record is what\nit is and a reader is owed it. The vocabulary is nonetheless\nconstrained at the database level\n(``ck_calc_freq_result_imaginary_mode_tau_basis_known``), so an\nunrecognised value means a newer writer, never a typo.\n\nAll four ADR 0012 fields are ``None`` together on a record deposited\nbefore that decision shipped. That is \"never judged under ADR 0012\",\nwhich is a different fact from \"judged and not flagged\" and is not\ncollapsed into ``false``/``0`` here any more than it was backfilled\nin the migration that added the columns.",
         "properties": {
           "imag_freq_cm1": {
             "anyOf": [
@@ -4223,6 +4223,39 @@
             ],
             "title": "Imag Freq Cm1"
           },
+          "imaginary_mode_structural_flag": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Mode Structural Flag"
+          },
+          "imaginary_mode_tau_basis": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Mode Tau Basis"
+          },
+          "imaginary_mode_tau_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Mode Tau Cm1"
+          },
           "n_imag": {
             "anyOf": [
               {
@@ -4233,6 +4266,28 @@
               }
             ],
             "title": "N Imag"
+          },
+          "n_imag_at_or_above_tau": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Imag At Or Above Tau"
+          },
+          "reaction_coordinate_mode_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Coordinate Mode Index"
           },
           "zpe_hartree": {
             "anyOf": [

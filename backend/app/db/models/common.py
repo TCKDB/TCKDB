@@ -92,6 +92,32 @@ class HessianMethod(str, Enum):
     finite_difference_energy = "finite_difference_energy"
 
 
+#: Every value ``calc_freq_result.imaginary_mode_tau_basis`` may hold --
+#: which row of ADR 0012's protocol table set the tolerance this record
+#: was judged at. A tuple rather than an ``Enum`` because the column is
+#: deliberately ``TEXT`` in the ORM and ``str`` on the wire: a reader must
+#: be shown a basis this build does not recognise rather than have the
+#: record refused for it. The vocabulary is nonetheless closed at the
+#: *write* side, by a CHECK constraint built from this tuple in
+#: :class:`app.db.models.calculation.CalculationFreqResult`, because an
+#: unrecognised value written by *this* build is a typo and not a newer
+#: writer.
+#:
+#: Mirrors ``tckdb_schemas.stationary_point.TauBasis``, which is the sole
+#: producer of the stored values. Duplicated rather than imported, for
+#: the same reason the enums above are duplicated; the two are pinned
+#: together by ``tests/db/test_imaginary_mode_tau_basis_constraint.py``,
+#: so adding a ``TauBasis`` member without migrating the constraint fails
+#: there rather than at the first upload that uses it.
+IMAGINARY_MODE_TAU_BASIS_VALUES: tuple[str, ...] = (
+    "analytic_tight",
+    "analytic_default",
+    "finite_difference_gradient",
+    "finite_difference_energy",
+    "protocol_not_recorded",
+)
+
+
 class ConformerSelectionKind(str, Enum):
     display_default = "display_default"
     curator_pick = "curator_pick"

@@ -243,12 +243,87 @@ class CalculationFreqResultSummary(BaseModel):
     Per-mode arrays are intentionally omitted here; the full per-mode
     array is served under the dedicated ``include=freq_modes`` heavy
     include (see :class:`CalculationFreqModeSummary`).
+
+    **``n_imag`` does not travel alone.** ADR 0012 retired counting
+    imaginary modes in favour of judging them by magnitude against the
+    protocol that produced them, and requires that wherever ``n_imag``
+    is reported it is accompanied by the tolerance applied, how that
+    tolerance was chosen, and the count above it. It is reported here
+    anyway — it is what the ESS printed — but a consumer that filters on
+    ``n_imag == 1`` and stops is selecting on a quantity ADR 0012 shows
+    is a property of the method, grid and Hessian algorithm as much as of
+    the structure: two correct calculations of the same saddle point can
+    return 1 and 3.
+
+    ``imaginary_mode_structural_flag`` is the field that makes that
+    filter safe, and it is the reason these fields are on the *cheap*
+    projection rather than behind an opt-in include. It is ADR 0012's
+    structural exclusion signal: true means the record carries an
+    imaginary mode at or above tau beyond its designated reaction
+    coordinate, so it is a genuine higher-order saddle — accepted,
+    because that can be correct chemistry, but excluded from default
+    transition-state consumption. A flag a consumer has to know to ask
+    for does not protect the consumer who did not know.
+
+    Every field here is read straight off the stored row. Nothing is
+    re-resolved: ADR 0012 requires tau to be *stored* precisely so that a
+    later parser improvement cannot silently re-decide a historical
+    judgement, and recomputing it to fill this block would be that
+    defect. The one derived field is
+    :attr:`n_imag_at_or_above_tau`, which compares stored magnitudes
+    against the stored tau and resolves nothing.
+
+    ``imaginary_mode_tau_basis`` is typed ``str``, not the ``TauBasis``
+    enum, deliberately: a value this build of the API does not recognise
+    must be *displayed* rather than rejected, because the record is what
+    it is and a reader is owed it. The vocabulary is nonetheless
+    constrained at the database level
+    (``ck_calc_freq_result_imaginary_mode_tau_basis_known``), so an
+    unrecognised value means a newer writer, never a typo.
+
+    All four ADR 0012 fields are ``None`` together on a record deposited
+    before that decision shipped. That is "never judged under ADR 0012",
+    which is a different fact from "judged and not flagged" and is not
+    collapsed into ``false``/``0`` here any more than it was backfilled
+    in the migration that added the columns.
     """
 
     n_imag: int | None = None
     imag_freq_cm1: float | None = None
     zpe_hartree: float | None = None
     zpe_uncertainty_hartree: float | None = None
+
+    #: ``mode_index`` of the mode the depositor designated the reaction
+    #: coordinate. ADR 0012 makes designating exactly one mode the
+    #: contract that replaced the ``n_imag == 1`` gate, so its absence on
+    #: a multi-imaginary-mode transition state is a finding.
+    reaction_coordinate_mode_index: int | None = None
+
+    #: The ADR 0012 tolerance actually applied to this record (cm-1) and
+    #: which row of the protocol table chose it. Two records with the
+    #: same frequency list and different tau were judged differently, and
+    #: neither is wrong: tau is a statement about the noise floor of the
+    #: protocol, not about the chemistry.
+    imaginary_mode_tau_cm1: float | None = None
+    imaginary_mode_tau_basis: str | None = None
+
+    #: ADR 0012's structural flag. See the class docstring: this is the
+    #: exclusion signal, and null means "never judged", not "clean".
+    imaginary_mode_structural_flag: bool | None = None
+
+    #: How many of the stored imaginary modes have ``|omega| >= tau``,
+    #: counting the designated reaction coordinate. The one derived field
+    #: on this projection, and derived only by comparing two persisted
+    #: numbers — the same bare comparison
+    #: :class:`TauRankedModeEntry.at_or_above_tau` reports per mode.
+    #:
+    #: ``None`` where the count cannot honestly be taken: when no tau is
+    #: stored (nothing to compare against), or when the record reports
+    #: imaginary modes but stores no per-mode rows to count (``n_imag``
+    #: without a frequency list). ``0`` is a measurement — tau was known
+    #: and nothing reached it — and is not returned in either of those
+    #: cases.
+    n_imag_at_or_above_tau: int | None = None
 
 
 class CalculationFreqModeSummary(BaseModel):

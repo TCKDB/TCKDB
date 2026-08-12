@@ -1000,9 +1000,46 @@ def _build_opt_summary(
 def _build_freq_summary(
     session: Session, calculation_id: int
 ) -> CalculationResultSummary | None:
-    row = session.get(CalculationFreqResult, calculation_id)
-    if row is None:
+    """Project ``calc_freq_result``, ADR 0012 judgement included.
+
+    One statement per record, which is what it cost before ADR 0012's
+    fields joined the projection: the two mode counts ride along as
+    correlated aggregates on the same SELECT rather than as a second
+    round trip, because this builder runs once per record on a search
+    page and a second round trip here would be multiplied by the page
+    size. See ``tests/services/scientific_read/
+    test_record_builder_statement_cost.py``.
+    """
+    imaginary = (
+        CalculationFreqMode.calculation_id == CalculationFreqResult.calculation_id,
+        CalculationFreqMode.is_imaginary.is_(True),
+    )
+    stored_imaginary_modes = (
+        select(func.count())
+        .select_from(CalculationFreqMode)
+        .where(*imaginary)
+        .correlate(CalculationFreqResult)
+        .scalar_subquery()
+    )
+    at_or_above_tau = (
+        select(func.count())
+        .select_from(CalculationFreqMode)
+        .where(
+            *imaginary,
+            func.abs(CalculationFreqMode.frequency_cm1)
+            >= CalculationFreqResult.imaginary_mode_tau_cm1,
+        )
+        .correlate(CalculationFreqResult)
+        .scalar_subquery()
+    )
+    fetched = session.execute(
+        select(CalculationFreqResult, stored_imaginary_modes, at_or_above_tau).where(
+            CalculationFreqResult.calculation_id == calculation_id
+        )
+    ).first()
+    if fetched is None:
         return None
+    row, stored_imaginary, above_tau = fetched
     return CalculationResultSummary(
         kind="freq",
         freq=CalculationFreqResultSummary(
@@ -1010,8 +1047,48 @@ def _build_freq_summary(
             imag_freq_cm1=row.imag_freq_cm1,
             zpe_hartree=row.zpe_hartree,
             zpe_uncertainty_hartree=row.zpe_uncertainty_hartree,
+            reaction_coordinate_mode_index=row.reaction_coordinate_mode_index,
+            imaginary_mode_tau_cm1=row.imaginary_mode_tau_cm1,
+            imaginary_mode_tau_basis=row.imaginary_mode_tau_basis,
+            imaginary_mode_structural_flag=row.imaginary_mode_structural_flag,
+            n_imag_at_or_above_tau=_count_at_or_above_tau(
+                tau_cm1=row.imaginary_mode_tau_cm1,
+                n_imag=row.n_imag,
+                stored_imaginary_modes=stored_imaginary,
+                at_or_above_tau=above_tau,
+            ),
         ),
     )
+
+
+def _count_at_or_above_tau(
+    *,
+    tau_cm1: float | None,
+    n_imag: int | None,
+    stored_imaginary_modes: int,
+    at_or_above_tau: int,
+) -> int | None:
+    """ADR 0012's "count above tau", or ``None`` where it cannot be taken.
+
+    Two ways it cannot be taken, and both would otherwise be reported as
+    a confident ``0``:
+
+    - **No tau is stored.** The record was never judged under ADR 0012
+      (every column it added is nullable and nothing was backfilled), so
+      there is no threshold to count against. Counting against a tau
+      resolved *now* is exactly what ADR 0012 forbids — it would let a
+      parser improvement silently re-decide a historical record.
+    - **No per-mode rows.** ``calc_freq_mode`` is optional: an upload may
+      carry ``n_imag`` with no frequency list. SQL then counts zero modes
+      at or above tau, which is true of the stored rows and false of the
+      record. ``n_imag == 0`` is the one case where the absence of rows
+      is itself the answer.
+    """
+    if tau_cm1 is None:
+        return None
+    if stored_imaginary_modes == 0 and n_imag != 0:
+        return None
+    return at_or_above_tau
 
 
 def _build_scan_summary(
