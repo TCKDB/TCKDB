@@ -26,6 +26,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     Calculation,
@@ -3632,3 +3633,32 @@ def test_bundle_ts_evidence_enforces_full_atom_coverage() -> None:
                 product_participant_mapping={"product:1": [1, 2, 3]}
             )
         )
+
+
+# ---------------------------------------------------------------------------
+# A statmech role must match the type of the job it names (DR-0028 Req 1)
+#
+# This is the fourth statmech write path and the one ARC deposits through.
+# ---------------------------------------------------------------------------
+
+
+def test_statmech_source_role_must_match_calculation_type(db_conn) -> None:
+    payload = _minimal_payload()
+    payload["species"][0]["statmech"] = {
+        "is_linear": False,
+        "external_symmetry": 6,
+        "statmech_treatment": "rrho",
+        # ``ch3-freq`` is a freq job; calling it the single-point is the
+        # claim this refuses.
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "sp"}],
+    }
+
+    with _isolated_session(db_conn) as session:
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_computed_reaction_upload(
+                session, ComputedReactionUploadRequest(**payload)
+            )
+
+    assert excinfo.value.code == "statmech_source_role_type_mismatch"
+    assert excinfo.value.context["declared_role"] == "sp"
+    assert excinfo.value.context["actual_calculation_type"] == "freq"
