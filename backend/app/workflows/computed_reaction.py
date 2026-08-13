@@ -75,6 +75,12 @@ from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.provenance_warnings import (
+    NOT_APPLICABLE,
+    collect_provenance_warnings,
+    collect_statmech_content_warnings,
+    statmech_has_rotational_structure,
+)
 from app.services.reaction_atom_map import (
     ResolvedAtomMapParticipant,
     persist_reaction_atom_map,
@@ -255,6 +261,131 @@ def _index_species_sp_calcs(
     return by_species
 
 
+def _collect_bundle_provenance_warnings(
+    request: ComputedReactionUploadRequest,
+) -> list[UploadWarning]:
+    """Report provenance this bundle's products could carry and do not.
+
+    The same warnings ``/uploads/thermo``, ``/uploads/statmech`` and
+    ``/uploads/kinetics`` have always returned, which this route returned
+    none of. A bundle deposit was therefore silently less complete than
+    the identical field-by-field deposit, with nothing saying so —
+    contrary to ADR 0011 and ADR 0008, under which absence is
+    incompleteness and incompleteness is annotated rather than refused.
+
+    Three things this has to get right that the standalone routes do not:
+
+    **Naming the subject.** A bundle carries many species. A bare
+    "missing workflow tool" on a twenty-species deposit is true and
+    useless, so every warning is prefixed with the species key it
+    concerns, in the ``species['ch4'].statmech.…`` form this payload's
+    own validators already use for error paths.
+
+    **Effective, not raw, values.** A per-species ``software_release``
+    falls back to the bundle-level ``analysis_software_release``, and the
+    workflow persists the fallback. Warning on the raw per-species field
+    would name provenance that was in fact recorded.
+
+    **Kinetics' level of theory is not applicable here.**
+    ``collect_kinetics_provenance_warnings`` asks the standalone route
+    for ``energy_level_of_theory``, and ``BundleKineticsIn`` has no such
+    field — nor does the bundle root, nor is it a column on ``kinetics``.
+    On the standalone route it is a resolution hint that
+    ``app.workflows.kinetics`` uses to auto-resolve source SP
+    calculations; a bundle names its source calculations by key and has
+    no use for it. Warning about it would be exactly the un-actionable
+    warning this wiring exists to avoid, so it is passed as
+    ``NOT_APPLICABLE`` rather than as ``None``.
+    """
+    warnings: list[UploadWarning] = []
+
+    for sp in request.species:
+        if sp.thermo is not None:
+            warnings.extend(
+                collect_provenance_warnings(
+                    scientific_origin=sp.thermo.scientific_origin,
+                    software_release=(
+                        sp.thermo.software_release or request.analysis_software_release
+                    ),
+                    workflow_tool_release=(
+                        sp.thermo.workflow_tool_release or request.workflow_tool_release
+                    ),
+                    literature=sp.thermo.literature,
+                    field_prefix=f"species[{sp.key!r}].thermo.",
+                )
+            )
+        if sp.statmech is not None:
+            warnings.extend(
+                collect_provenance_warnings(
+                    scientific_origin=sp.statmech.scientific_origin,
+                    software_release=(
+                        sp.statmech.software_release
+                        or request.analysis_software_release
+                    ),
+                    workflow_tool_release=(
+                        sp.statmech.workflow_tool_release
+                        or request.workflow_tool_release
+                    ),
+                    literature=sp.statmech.literature,
+                    freq_scale_factor=sp.statmech.freq_scale_factor,
+                    field_prefix=f"species[{sp.key!r}].statmech.",
+                )
+            )
+            # The species route has reported this since statmech landed
+            # there; the reaction route reported nothing, so the same
+            # untraceable partition function was named on one route and
+            # silent on the other.
+            #
+            # ``statmech_has_rotational_structure`` only became answerable
+            # on this route with #142: it reads the rotational constants,
+            # which ``BundleStatmechIn`` could not carry until now. Before
+            # that it could only ever see torsions, so a polyatomic
+            # deposited with constants and no torsions — the ordinary ARC
+            # shape — looked monatomic to it.
+            warnings.extend(
+                collect_statmech_content_warnings(
+                    scientific_origin=sp.statmech.scientific_origin,
+                    source_calculation_roles={
+                        item.role.value for item in sp.statmech.source_calculations
+                    },
+                    has_rotational_structure=statmech_has_rotational_structure(
+                        sp.statmech
+                    ),
+                    field=f"species[{sp.key!r}].statmech",
+                )
+            )
+
+    # Kinetics provenance is bundle-scoped, and the field paths say so.
+    # ``BundleKineticsIn`` carries no provenance fields at all; the workflow
+    # writes ``request.literature``, ``request.analysis_software_release`` and
+    # ``request.workflow_tool_release`` onto every kinetics row it creates.
+    # So the actionable field is the bundle root, and a path like
+    # ``kinetics[0].software_release`` would name a field that does not
+    # exist — ``SchemaBase`` is extra="forbid", so a depositor following
+    # that advice would get a 422. Naming the subject is not lost by using
+    # root paths: one bundle is one reaction, declared once at the root.
+    #
+    # Deduplicated because several fits share one set of root fields, and N
+    # identical warnings for one missing field is noise. Iterating the fits
+    # rather than testing a single origin keeps a mixed-origin bundle
+    # honest: a computed fit wants software provenance, a non-computed one
+    # wants a literature anchor, and a bundle carrying both should say both.
+    seen: set[tuple[str, str]] = set()
+    for kin in request.kinetics:
+        for warning in collect_provenance_warnings(
+            scientific_origin=kin.scientific_origin,
+            software_release=request.analysis_software_release,
+            workflow_tool_release=request.workflow_tool_release,
+            literature=request.literature,
+            energy_level_of_theory=NOT_APPLICABLE,
+        ):
+            if (warning.field, warning.code) not in seen:
+                seen.add((warning.field, warning.code))
+                warnings.append(warning)
+
+    return warnings
+
+
 def persist_computed_reaction_upload(
     session: Session,
     request: ComputedReactionUploadRequest,
@@ -278,6 +409,9 @@ def persist_computed_reaction_upload(
     applied_correction_ids: list[int] = []
     # Single-point energy reconciliation warnings from inline output logs.
     sp_energy_warnings: list[UploadWarning] = []
+    # Provenance-presence warnings for the scientific products this bundle
+    # carries. Request-derived only, so they are collected up front.
+    sp_energy_warnings.extend(_collect_bundle_provenance_warnings(request))
 
     # ------------------------------------------------------------------
     # 1. Resolve species + conformers + calculations
@@ -828,17 +962,38 @@ def persist_computed_reaction_upload(
                 )
                 fsf_id = fsf.id
 
+            # Per-species provenance overrides the bundle-level value, the
+            # same precedence thermo uses above. Falling back rather than
+            # replacing keeps every bundle that already relied on the
+            # bundle-level values persisting exactly what it did before.
+            statmech_software_release = (
+                resolve_software_release_ref(session, s.software_release)
+                if s.software_release is not None
+                else bundle_analysis_software_release
+            )
+            statmech_workflow_tool_release = (
+                resolve_workflow_tool_release_ref(session, s.workflow_tool_release)
+                if s.workflow_tool_release is not None
+                else bundle_workflow_tool_release
+            )
+            statmech_literature = (
+                resolve_or_create_literature(session, s.literature)
+                if s.literature is not None
+                else None
+            )
+
             statmech = Statmech(
                 species_entry_id=species_entry.id,
                 scientific_origin=s.scientific_origin,
+                literature_id=(
+                    statmech_literature.id if statmech_literature is not None else None
+                ),
                 software_release_id=(
-                    bundle_analysis_software_release.id
-                    if bundle_analysis_software_release
-                    else None
+                    statmech_software_release.id if statmech_software_release else None
                 ),
                 workflow_tool_release_id=(
-                    bundle_workflow_tool_release.id
-                    if bundle_workflow_tool_release
+                    statmech_workflow_tool_release.id
+                    if statmech_workflow_tool_release
                     else None
                 ),
                 is_linear=s.is_linear,
@@ -847,6 +1002,9 @@ def persist_computed_reaction_upload(
                 optical_isomers=s.optical_isomers,
                 point_group=s.point_group,
                 statmech_treatment=s.statmech_treatment,
+                rotational_constant_a_cm1=s.rotational_constant_a_cm1,
+                rotational_constant_b_cm1=s.rotational_constant_b_cm1,
+                rotational_constant_c_cm1=s.rotational_constant_c_cm1,
                 frequency_scale_factor_id=fsf_id,
                 uses_projected_frequencies=s.uses_projected_frequencies,
                 note=s.note,

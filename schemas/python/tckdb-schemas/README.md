@@ -24,6 +24,58 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.26.0 — the reaction bundle's statmech gains the six fields the species bundle already had
+
+Purely additive. Nothing is renamed, removed, narrowed or newly refused,
+so **every 0.25.0 payload validates unchanged under 0.26.0** — this is a
+minor bump, not a breaking one. What changes is what a payload is
+*allowed to say*.
+
+`BundleStatmechIn` — the per-species statmech on
+`/uploads/computed-reaction` — carried 12 fields against the 18 on
+`StatmechInBundle`, the same block on `/uploads/computed-species`. Both
+describe the same `statmech` row, resolved by the same services, subject
+to the same table constraints. Six fields were reachable from one route
+and not the other:
+
+| field | what it records |
+|---|---|
+| `literature` | the paper this statmech came out of |
+| `software_release` | the analysis code, per species |
+| `workflow_tool_release` | the workflow tool, per species |
+| `rotational_constant_a_cm1` | first principal rotational constant |
+| `rotational_constant_b_cm1` | second principal rotational constant |
+| `rotational_constant_c_cm1` | third principal rotational constant |
+
+All six already had columns on the `statmech` table, so this is a
+contract and projection change with no migration.
+
+`literature`, `software_release` and `workflow_tool_release` are
+**per-species overrides** of the bundle-level `literature` /
+`analysis_software_release` / `workflow_tool_release`, exactly as
+`BundleThermoIn`'s equivalents became in 0.25.0. Absent, the bundle-level
+value is used, so a 0.25.0 payload persists precisely what it did before.
+The override is what makes the ordinary mixed deposit expressible: one
+participant taken from a paper, the rest computed here.
+
+Nothing is deliberately withheld. `applied_energy_corrections` — the one
+field `BundleThermoIn` refuses, because `BundleSpeciesIn` already
+declares it against the same species entry — is not on `StatmechInBundle`
+either, so it is not part of this divergence and needs no exception.
+
+The rotational constants are the interesting half of the history.
+`BundleStatmechIn` was born narrow, like `BundleThermoIn`. But the three
+constants were added to `StatmechInBundle` **only**, two days after an
+earlier commit had correctly updated both models together. The habit was
+right and then it lapsed, and nothing could tell a one-sided addition
+from a deliberate asymmetry. `backend/tests/schemas/test_bundle_root_model_symmetry.py`
+now asserts the two field sets match, with an allowlist that requires a
+written reason per exemption.
+
+Consumers do not need to change. If you are building reaction bundles by
+hand and want per-species statmech provenance or rotational constants,
+these are the field names; if you are not, nothing moves.
+
 ### 0.25.0 — bundle roots gain SCF stability and thermo provenance; an atomless participant may not carry coordinates
 
 Three additions and one new refusal. Nothing is renamed or removed, so a

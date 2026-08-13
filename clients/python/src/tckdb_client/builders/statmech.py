@@ -11,10 +11,18 @@ the assemblers on both endpoints emit the field — the
 and as a forward-compat lever, not as a per-endpoint gate today.
 
 This builder intentionally exposes only the common subset of fields
-(no ``literature`` / ``software_release`` / ``workflow_tool_release``
-on the computed-species variant, no ``freq_scale_factor`` ref object,
-no ``torsions``). Producers needing those still fall back to the raw
-payload form.
+(no ``literature`` / ``software_release`` / ``workflow_tool_release``,
+no ``rotational_constant_{a,b,c}_cm1``, no ``freq_scale_factor`` ref
+object, no ``torsions``). Producers needing those still fall back to the
+raw payload form.
+
+The "common subset" framing is no longer a constraint imposed by the two
+bundle shapes disagreeing: as of tckdb-schemas 0.26.0 the two statmech
+models carry identical field sets, so anything omitted here is omitted by
+this builder's own choice and can be added without a per-endpoint gate.
+Before 0.26.0, ``literature`` / ``software_release`` /
+``workflow_tool_release`` and the rotational constants existed on
+``StatmechInBundle`` only.
 """
 
 from __future__ import annotations
@@ -137,10 +145,12 @@ def _normalise_statmech_source_calculations(value: Any) -> list[tuple[str, Any]]
 class Statmech:
     """One statmech block attached to a species.
 
-    Field set is the common subset of the backend's two statmech
-    bundle shapes (``StatmechInBundle`` for computed-species and
-    ``BundleStatmechIn`` for computed-reaction). Producers needing
-    ``literature`` / ``software_release`` / ``freq_scale_factor`` /
+    Field set is a subset of the backend's two statmech bundle shapes
+    (``StatmechInBundle`` for computed-species and ``BundleStatmechIn``
+    for computed-reaction), which carry identical field sets as of
+    tckdb-schemas 0.26.0. Producers needing ``literature`` /
+    ``software_release`` / ``workflow_tool_release`` /
+    ``rotational_constant_{a,b,c}_cm1`` / ``freq_scale_factor`` /
     ``torsions`` should still use the raw payload form.
 
     ``source_calculations`` accepts the same three shapes as
