@@ -3071,7 +3071,7 @@ Table statmech_torsion {
   source_scan_calculation_id bigint [ref: > calculation.id]
 
   indexes {
-    (statmech_id, torsion_index) [unique, name: 'uq_statmech_torsion_statmech_id']
+    (statmech_id, torsion_index) [unique, name: 'uq_statmech_torsion_statmech_id_torsion_index']
   }
 
   checks {

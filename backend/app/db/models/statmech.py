@@ -295,8 +295,17 @@ class StatmechTorsion(Base):
             "symmetry_number IS NULL OR symmetry_number >= 1",
             name="symmetry_number_ge_1",
         ),
+        # One hindered rotor per (record, index). A duplicate
+        # ``torsion_index`` is not a constraint violation anyone would
+        # notice at read time -- it is one rotor contributing twice to a
+        # partition function, i.e. a wrong number rather than an error.
+        # Named for both columns since ``b7e4d1a9c026``: the previous
+        # name said only ``statmech_id``, and was read as a uniqueness
+        # rule on ``statmech_id`` alone, which made the real invariant
+        # look absent. Measured in
+        # ``tests/db/test_statmech_torsion_index_uniqueness.py``.
         Index(
-            "uq_statmech_torsion_statmech_id",
+            "uq_statmech_torsion_statmech_id_torsion_index",
             "statmech_id",
             "torsion_index",
             unique=True,
