@@ -9,7 +9,7 @@ afterwards.
 
 The forgetting has now happened twice:
 
-* the deployed Pi's ``template1`` (task #109), so every ``CREATE DATABASE``
+* the deployed Pi's ``template1`` (task #109), so every database created
   there inherited SQL_ASCII while the real database was UTF8;
 * ``backend-nightly.yml`` (this file's reason for existing). The PR gates were
   pinned and the nightly was not, so the two jobs disagreed about what the
