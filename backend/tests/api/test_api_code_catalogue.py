@@ -194,6 +194,22 @@ def test_every_raise_site_code_is_catalogued() -> None:
     )
 
 
+def test_the_origin_detector_can_say_no() -> None:
+    """The drift guard is only worth its runtime if it can fail.
+
+    Found by mutation: replacing :func:`_defines_code` with ``return
+    True`` leaves ``test_every_origin_still_defines_its_code`` green, and
+    its ``checked > 50`` floor does not help -- that floor counts entries
+    whose *path* resolved, which is a different thing. So the detector is
+    exercised directly, on the two spellings it must accept and the two
+    near-misses it must reject.
+    """
+    assert _defines_code('raise ValueError("missing_filter: at least one")', "missing_filter")
+    assert _defines_code('not_found(code="handle_not_found")', "handle_not_found")
+    assert not _defines_code("a sentence mentioning missing_filter", "missing_filter")
+    assert not _defines_code('"invalid_handle_prefix"', "invalid_handle")
+
+
 def test_every_origin_still_defines_its_code() -> None:
     """The pointer must point at something, and at the right something.
 
