@@ -32,6 +32,7 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    ImaginaryModeDisposition,
     IRCDirection,
     ParameterSource,
     PathSearchMethod,
@@ -2058,6 +2059,7 @@ def test_detail_include_freq_modes_returns_per_mode_array(client, db_session):
             "is_imaginary": True,
             "reduced_mass_amu": 1.05,
             "force_constant_mdyne_angstrom": 0.5,
+            "imaginary_disposition": None,
         },
         {
             "mode_index": 2,
@@ -2065,6 +2067,7 @@ def test_detail_include_freq_modes_returns_per_mode_array(client, db_session):
             "is_imaginary": False,
             "reduced_mass_amu": 2.10,
             "force_constant_mdyne_angstrom": None,
+            "imaginary_disposition": None,
         },
         {
             "mode_index": 3,
@@ -2072,10 +2075,70 @@ def test_detail_include_freq_modes_returns_per_mode_array(client, db_session):
             "is_imaginary": False,
             "reduced_mass_amu": None,
             "force_constant_mdyne_angstrom": 3.2,
+            "imaginary_disposition": None,
         },
     ]
     # available_sections agrees that modes are present.
     assert body["record"]["available_sections"]["has_freq_modes"] is True
+
+
+def test_detail_include_freq_modes_reports_the_declared_disposition(
+    client, db_session
+):
+    """The verdict comes back beside the evidence it was passed on.
+
+    ADR 0012 accepts a transition state with several imaginary modes only
+    because the depositor said which one is the reaction coordinate and
+    what each of the others *is*. The declarations were stored from the
+    day the column existed and this projection dropped them, so a
+    consumer looking at three negative frequencies through
+    ``include=freq_modes`` met exactly the ambiguity the decision was
+    written to remove: it could see which mode was designated and not
+    what the other two had been declared to be.
+
+    The frequency list is ADR 0012's own motivating record — a clean
+    reaction coordinate at -1300 with -42 and -13 beside it — with the
+    two extras declared a torsion and projection residue.
+    """
+    _, _, calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.freq
+    )
+    attach_freq_result(
+        db_session,
+        calculation=calc,
+        frequencies_cm1=[-1300.0, -42.0, -13.0, 900.0],
+        reaction_coordinate_mode_index=1,
+        imaginary_dispositions=[
+            None,
+            ImaginaryModeDisposition.torsion,
+            ImaginaryModeDisposition.rigid_body_residue,
+            None,
+        ],
+    )
+    body = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}"
+        "?include=freq_modes"
+    ).json()
+    modes = body["record"]["freq_modes"]
+    assert [(m["mode_index"], m["imaginary_disposition"]) for m in modes] == [
+        # The designated reaction coordinate carries none, and must not:
+        # a disposition says what a mode is *instead of* the barrier.
+        (1, None),
+        (2, "torsion"),
+        (3, "rigid_body_residue"),
+        # A real mode cannot carry one at all (DB CHECK).
+        (4, None),
+    ]
+    # Which of the four nulls is the reaction coordinate is answered by
+    # the freq-result projection, not by this field -- the two are read
+    # together, and neither is guessed at from the other.
+    detail = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=results"
+    ).json()
+    assert (
+        detail["record"]["results"]["freq"]["reaction_coordinate_mode_index"]
+        == 1
+    )
 
 
 def test_detail_include_freq_modes_empty_list_when_no_modes(

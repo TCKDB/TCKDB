@@ -255,6 +255,52 @@ class TestVdwComplexImaginaryModeWarns:
         codes = {w["code"] for w in resp.json()["warnings"]}
         assert "n_imag_higher_order_saddle" in codes
 
+    def test_the_same_saddle_contradicted_by_its_own_modes_is_refused(
+        self, client
+    ):
+        """The matched partner of the test above, and the whole asymmetry.
+
+        Identical payload, identical ``n_imag = 3`` — the only change is
+        that a frequency list is deposited beside the scalar and shows
+        one imaginary mode rather than three. The test above is accepted
+        because absence is incompleteness; this one is refused because
+        the record now answers the same question two ways, and no re-run
+        can decide which answer was meant.
+
+        Written as a pair on purpose. A rule phrased "mode rows must
+        exist" would refuse both, which would mean refusing a deposit
+        TCKDB has always taken and still means to.
+        """
+        payload = _hydrogen_conformer_payload(label="vdw-contradicted")
+        payload["species_entry"]["species_entry_kind"] = "vdw_complex"
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=3, frequencies=[-22.0, 900.0, 1600.0])
+        ]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["code"] == "freq_n_imag_disagrees_with_modes"
+
+    def test_a_frequency_list_that_agrees_is_accepted_with_the_same_warning(
+        self, client
+    ):
+        """Three imaginary modes, deposited and agreeing, still upload.
+
+        The guard against the check above having quietly become a ban on
+        higher-order saddles: the payload that made the point of
+        ``test_vdw_complex_with_higher_order_saddle_is_accepted`` is
+        accepted with its list attached too, and warns for the same
+        reason it always did.
+        """
+        payload = _hydrogen_conformer_payload(label="vdw-saddle-listed")
+        payload["species_entry"]["species_entry_kind"] = "vdw_complex"
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=3, frequencies=[-22.0, -14.0, -9.0, 1600.0])
+        ]
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "n_imag_higher_order_saddle" in codes
+
     def test_stiff_vdw_mode_also_suggests_a_transition_state(self, client):
         payload = _hydrogen_conformer_payload(label="vdw-stiff")
         payload["species_entry"]["species_entry_kind"] = "vdw_complex"

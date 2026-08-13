@@ -24,6 +24,41 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.28.0 — a frequency result that contradicts itself says so by name
+
+**Not breaking.** No field is added, renamed or removed, and the set of
+payloads that validate is byte-for-byte the set that validated under
+0.27.0 — **every 0.27.0 payload validates unchanged under 0.28.0**, and
+every payload 0.27.0 refused is still refused. What changes is what a
+client is *told* when one is refused.
+
+`FreqResultPayload.validate_modes_consistency` has always refused a
+deposit whose `n_imag` disagrees with the imaginary modes in its own
+`modes` list — `n_imag = 3` beside a single imaginary row is a record
+that answers "how many imaginary modes?" two different ways, and neither
+of the two consumers reading it is told the other exists. It refused with
+a bare `ValueError`, so the 422 envelope reported
+`code = "validation_error"` and a client wanting to distinguish "your
+frequency list is inconsistent" (fix the payload) from any other
+validation failure had to match English.
+
+It now raises `CodedValidationError` under the new module-level constant
+`W_FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"`,
+with `context = {"n_imag", "imaginary_mode_count", "mode_count"}`. The
+first sentence of the message is byte-identical to the one 0.27.0 emitted
+(`message_prefix=False`), so a client matching prose is undisturbed;
+guidance naming the escape hatch follows it.
+
+Minor rather than patch because the envelope's `code` field is part of
+the published contract: a consumer may now branch on this refusal, which
+it could not before.
+
+**The asymmetry is unchanged and is the point.** `modes = null` with any
+`n_imag` is still accepted — absence is incompleteness, not
+contradiction, which is the same position the read API takes when it
+reports `n_imag_at_or_above_tau = null` rather than `0` for a record with
+no frequency list. Only a list that *disagrees* is refused.
+
 ### 0.27.0 — a statmech source link may be unique on something other than its key
 
 Additive, and a **relaxation**: nothing is renamed, removed or newly
