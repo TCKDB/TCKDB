@@ -1062,6 +1062,80 @@ def test_statmech_upload_chained_role_type_mismatch_is_coded(db_conn) -> None:
     assert context["accepted_calculation_types"] == ["sp", "opt"]
 
 
+def test_statmech_upload_accepts_two_different_chained_calcs_in_one_role(
+    db_conn,
+) -> None:
+    """Two *different* chained calculations may share a role.
+
+    The link table is keyed on ``(statmech_id, calculation_id, role)``, so
+    one rotor scan per torsion — every one of them ``role='scan'`` — is a
+    legitimate record, and the key-based validator has always allowed it
+    (two distinct keys, same role).
+
+    This is the case that makes the uniqueness tuple's second element
+    load-bearing. Narrowing it back to ``(calculation_key, role)`` still
+    catches a repeated *identical* link, because every chained entry has
+    ``calculation_key=None`` and the pair collides — so a test using the
+    same id twice passes either way and proves nothing. What the narrow
+    tuple actually breaks is this: two different ids collapse to
+    ``(None, 'scan')`` and a valid deposit is refused.
+    """
+    identity = {"smiles": "CCOCCCCCCC", "charge": 0, "multiplicity": 1}
+    session = Session(db_conn)
+    try:
+        with session.begin():
+            seeded = persist_statmech_upload(
+                session,
+                _basic_request(
+                    species_entry=dict(identity),
+                    calculations=[
+                        {"key": "scan_a", "calculation": _scan_calc_payload()},
+                        {"key": "scan_b", "calculation": _scan_calc_payload()},
+                    ],
+                    source_calculations=[
+                        {"calculation_key": "scan_a", "role": "scan"},
+                        {"calculation_key": "scan_b", "role": "scan"},
+                    ],
+                ),
+            )
+            # The key-based path already allows it — the premise this test
+            # extends to the chained path rather than assumes.
+            assert len(seeded.source_calculations) == 2
+
+            scan_ids = sorted(
+                row.id
+                for row in session.scalars(
+                    select(Calculation).where(
+                        Calculation.species_entry_id == seeded.species_entry_id,
+                        Calculation.type == CalculationType.scan,
+                    )
+                ).all()
+            )
+            assert len(scan_ids) == 2, scan_ids
+
+            chained = persist_statmech_upload(
+                session,
+                StatmechUploadRequest(
+                    species_entry=dict(identity),
+                    scientific_origin="computed",
+                    source_calculations=[
+                        {"existing_calculation_id": scan_ids[0], "role": "scan"},
+                        {"existing_calculation_id": scan_ids[1], "role": "scan"},
+                    ],
+                ),
+            )
+
+            links = session.scalars(
+                select(StatmechSourceCalculation).where(
+                    StatmechSourceCalculation.statmech_id == chained.id
+                )
+            ).all()
+            assert sorted(lk.calculation_id for lk in links) == scan_ids
+            assert {lk.role for lk in links} == {StatmechCalculationRole.scan}
+    finally:
+        session.close()
+
+
 def test_statmech_upload_rejects_duplicate_chained_links() -> None:
     """``(existing_calculation_id, role)`` must be unique, the way
     ``(calculation_key, role)`` already is — the underlying table is keyed

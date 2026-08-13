@@ -110,8 +110,27 @@ class ConformerUploadStatmechPayload(SchemaBase):
         primary-key violation surfacing as a 500. The bundle and
         standalone statmech uploads validate this; the conformer path
         did not.
+
+        The tuple carries a second discriminator alongside the key, read
+        reflectively because this class is also the payload the *backend*
+        hands the statmech resolution service — and the standalone
+        statmech upload's entries are a subclass that may name a
+        calculation by ``existing_calculation_id`` instead of by key.
+        Without it, every such entry collapses to ``(None, role)`` and two
+        genuinely different calculations sharing a role — one rotor scan
+        per torsion, all of them ``role='scan'`` — are refused as a
+        duplicate. Nothing changes for a payload built from this package:
+        ``StatmechSourceCalcIn`` has no such attribute, so the second
+        element is always ``None`` and the rule is the pair it always was.
         """
-        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        pairs = [
+            (
+                sc.calculation_key,
+                getattr(sc, "existing_calculation_id", None),
+                sc.role,
+            )
+            for sc in self.source_calculations
+        ]
         if len(set(pairs)) != len(pairs):
             raise ValueError(
                 "statmech.source_calculations must be unique by "

@@ -158,7 +158,9 @@ def assert_statmech_calculation_owned_by(
     can name any row in the database.
 
     :raises ValueError: if the calculation does not belong to
-        ``species_entry_id``. Surfaces as HTTP 422.
+        ``species_entry_id``. Surfaces as HTTP 422 with the generic
+        ``validation_error`` code — the same envelope this violation
+        already produces on the inline path.
     """
     if calculation.species_entry_id == species_entry_id:
         return
@@ -172,10 +174,20 @@ def assert_statmech_calculation_owned_by(
         calculation.species_entry_id,
         species_entry_id,
     )
+    # Deliberately *not* "{context}: ...". An uncoded ValueError has its
+    # code scraped out of the message by ``validation_detail_code``, whose
+    # pattern matches any ``snake_case_token: `` — so a field path ending
+    # in ``existing_calculation_id`` followed by a colon is promoted to
+    # ``code="existing_calculation_id"``, which is not a code at all and
+    # is not in any register a client could branch on. Phrasing the field
+    # path as the sentence's subject keeps this on the honest generic
+    # ``validation_error``, which is what the inline path already returns.
+    # (Thermo's equivalent refusal still emits the scraped string; see
+    # ``app/workflows/thermo.py`` ``_assert_calculation_owned_by``.)
     raise ValueError(
-        f"{context}: this calculation belongs to another species entry, "
-        "not to the statmech target. A supporting calculation must be one "
-        "of the target species entry's own."
+        f"{context} refers to a calculation that belongs to another "
+        "species entry, not to the statmech target. A supporting "
+        "calculation must be one of the target species entry's own."
     )
 
 
@@ -202,7 +214,7 @@ def _resolve_existing_calculation(
     calculation = session.get(Calculation, calculation_id)
     if calculation is None:
         raise NotFoundError(
-            f"{context}: refers to a calculation that does not exist."
+            f"{context} refers to a calculation that does not exist."
         )
     assert_statmech_calculation_owned_by(
         calculation,
@@ -355,7 +367,13 @@ def resolve_or_create_statmech(
     :raises ValueError: If ``uploaded_calculation_role`` is set but
         ``uploaded_calculation_id`` is not supplied.
     :raises CodedValueError: If a local calculation key does not resolve,
-        or if a declared role contradicts the resolved calculation's type.
+        or if a declared role contradicts the resolved calculation's type
+        — whichever way the calculation was named.
+    :raises NotFoundError: If an ``existing_calculation_id`` names a row
+        that does not exist. Only the standalone statmech upload can
+        produce this; the conformer and bundle payloads carry the
+        key-only component and have no way to name a row outside their
+        own request.
     """
     key_map: Mapping[str, int] = calculations_by_key or {}
 
