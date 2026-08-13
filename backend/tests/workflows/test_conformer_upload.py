@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
@@ -17,6 +18,7 @@ from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
 )
+from app.db.models.energy_correction import AppliedEnergyCorrection
 from app.db.models.geometry import Geometry
 from app.db.models.species import (
     ConformerGroup,
@@ -166,10 +168,16 @@ def test_persist_conformer_upload_creates_linked_statmech_record(db_conn) -> Non
         geometry={
             "xyz_text": "1\nH atom\nH 0.0 0.0 0.0",
         },
+        # A freq job, because the statmech block below claims it as the
+        # record's frequency basis. This said ``sp`` until statmech began
+        # enforcing DR-0028 Requirement 1: the subject of the test is that
+        # the statmech row is created and linked, not that a role may
+        # contradict the type of the job it names.
         calculation={
-            "type": "sp",
+            "type": "freq",
             "software_release": {"name": "Gaussian", "version": "16"},
             "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "freq_result": {"n_imag": 0},
         },
         label="conf-stat",
         statmech={
@@ -668,3 +676,160 @@ def test_conformer_upload_rejects_irc_additional() -> None:
                 },
             ],
         )
+
+
+# ---------------------------------------------------------------------------
+# Applied energy corrections: the source keys must name what they say
+#
+# Both keys used to be tested for ``is not None`` alone, so *any* string
+# resolved to the primary observation/calculation. The test that matters is
+# therefore not the rejection but the acceptance: a correction naming the
+# additional freq calculation must land on that row, not on the primary.
+# ---------------------------------------------------------------------------
+
+
+def _correction_request(
+    *,
+    label: str,
+    source_calculation_key: str | None = "primary_sp",
+    source_conformer_key: str | None = None,
+) -> ConformerUploadRequest:
+    """A conformer upload carrying one frequency-scale-factor correction.
+
+    ``source_calculation_key`` defaults to a declared key because the
+    payload schema already requires a scale-factor correction to name the
+    frequency calculation it was applied to; the tests below vary it to
+    exercise resolution, not that requirement.
+    """
+    correction: dict = {
+        "frequency_scale_factor": {
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "scale_kind": "zpe",
+            "value": 0.977,
+        },
+        "application_role": "zpe",
+        "value": 0.0215,
+        "value_unit": "hartree",
+    }
+    if source_calculation_key is not None:
+        correction["source_calculation_key"] = source_calculation_key
+    if source_conformer_key is not None:
+        correction["source_conformer_key"] = source_conformer_key
+    return ConformerUploadRequest(
+        species_entry={"smiles": "[H]", "charge": 0, "multiplicity": 2},
+        geometry={"xyz_text": "1\nH atom\nH 0.0 0.0 0.0"},
+        calculation={
+            "key": "primary_sp",
+            "type": "sp",
+            "software_release": {"name": "Gaussian", "version": "16"},
+            "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+            "sp_result": {"electronic_energy_hartree": -0.5},
+        },
+        additional_calculations=[
+            {
+                "key": "the_freq_job",
+                "type": "freq",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "freq_result": {"n_imag": 0},
+            },
+        ],
+        label=label,
+        applied_energy_corrections=[correction],
+    )
+
+
+def test_correction_calculation_key_links_the_calculation_it_names(
+    db_conn,
+) -> None:
+    """The named key wins over the primary calculation.
+
+    This is the assertion the old code could not pass: it resolved every
+    non-null key to ``calculation.id``, so a correction naming the freq
+    job was silently attached to the primary sp job instead.
+    """
+    with Session(db_conn) as session, session.begin():
+        outcome = persist_conformer_upload(
+            session,
+            _correction_request(
+                label="aec-names-freq", source_calculation_key="the_freq_job"
+            ),
+        )
+        freq_id = outcome.additional_calculations[0].calculation_id
+        primary_id = outcome.primary_calculation.calculation_id
+
+        applied = session.scalars(
+            select(AppliedEnergyCorrection).where(
+                AppliedEnergyCorrection.source_conformer_observation_id.is_(None)
+            )
+        ).all()
+        assert len(applied) == 1
+        assert applied[0].source_calculation_id == freq_id
+        assert applied[0].source_calculation_id != primary_id
+
+
+def test_correction_conformer_key_links_the_observation_it_names(
+    db_conn,
+) -> None:
+    with Session(db_conn) as session, session.begin():
+        outcome = persist_conformer_upload(
+            session,
+            _correction_request(
+                label="aec-names-label", source_conformer_key="aec-names-label"
+            ),
+        )
+        applied = session.scalars(
+            select(AppliedEnergyCorrection).where(
+                AppliedEnergyCorrection.source_conformer_observation_id
+                == outcome.observation.id
+            )
+        ).all()
+        assert len(applied) == 1
+
+
+def test_correction_with_undeclared_calculation_key_is_refused(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_conformer_upload(
+                session,
+                _correction_request(
+                    label="aec-ghost-calc",
+                    source_calculation_key="the_freq_jbo",
+                ),
+            )
+    assert (
+        excinfo.value.code == "applied_energy_correction_source_key_undeclared"
+    )
+    assert excinfo.value.context["key"] == "the_freq_jbo"
+    assert excinfo.value.context["declared_keys"] == [
+        "primary_sp",
+        "the_freq_job",
+    ]
+
+
+def test_correction_with_undeclared_conformer_key_is_refused(db_conn) -> None:
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_conformer_upload(
+                session,
+                _correction_request(
+                    label="aec-ghost-conf",
+                    source_conformer_key="a-different-conformer",
+                ),
+            )
+    assert (
+        excinfo.value.code == "applied_energy_correction_source_key_undeclared"
+    )
+    assert excinfo.value.context["declared_keys"] == ["aec-ghost-conf"]
+
+
+def test_correction_conformer_key_with_no_label_is_refused(db_conn) -> None:
+    """No label means the request named no conformer at all."""
+    with Session(db_conn) as session, session.begin():
+        request = _correction_request(
+            label="aec-no-label", source_conformer_key="anything"
+        )
+        request.label = None
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_conformer_upload(session, request)
+    assert excinfo.value.context["declared_keys"] == []

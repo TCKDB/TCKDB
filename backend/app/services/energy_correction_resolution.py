@@ -6,9 +6,12 @@ and creates applied correction rows with resolved FK IDs.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -29,6 +32,74 @@ from app.services.calculation_resolution import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software
+
+#: An applied correction names a source the enclosing upload never declared.
+W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED = (
+    "applied_energy_correction_source_key_undeclared"
+)
+
+
+# ---------------------------------------------------------------------------
+# Local key resolution
+# ---------------------------------------------------------------------------
+
+
+def resolve_applied_correction_source_key(
+    key: str | None,
+    declared: Mapping[str, int],
+    *,
+    field: str,
+    declares: str,
+) -> int | None:
+    """Turn one applied-correction source key into the row it names.
+
+    Blocking, and ADR 0008 permits it because this asserts a *contract*
+    rather than an expectation: a local key is a promise that the same
+    upload declared something under that name, and if it did not, no
+    correct payload can make the link mean what it says. The alternative
+    is worse than silence -- a key that resolves to whatever happens to be
+    at hand attaches a correction to a calculation the depositor never
+    chose, and they have no way to notice.
+
+    ``declared`` is the namespace the enclosing request built from its own
+    payload, so its keys are strings the depositor wrote. They are echoed
+    into the message on purpose: naming what *is* declared is what turns
+    the refusal into something fixable. Row ids never appear -- they are
+    values of this map, not part of any message.
+
+    :param key: The key the payload wrote, or ``None`` for no link.
+    :param declared: Declared local name -> persisted row id.
+    :param field: Field path naming the offending key, echoed verbatim.
+    :param declares: How a depositor declares a name in this namespace,
+        phrased as the remedy sentence's object.
+    :returns: The row id the key names, or ``None`` when ``key`` is
+        ``None``.
+    :raises CodedValueError: if ``key`` is set but names nothing declared.
+    """
+    if key is None:
+        return None
+    row_id = declared.get(key)
+    if row_id is not None:
+        return row_id
+
+    known = sorted(declared)
+    if known:
+        available = "Declared names here: " + ", ".join(repr(k) for k in known) + "."
+    else:
+        available = "This upload declares no such name at all."
+    raise CodedValueError(
+        W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
+        f"{field}='{key}' does not name anything declared in this upload. "
+        f"{available} {declares} An energy correction whose source cannot be "
+        f"named is a correction nobody can trace back to what it corrected.",
+        context={
+            "field": field,
+            "key": key,
+            "declared_keys": known,
+        },
+        message_prefix=False,
+    )
+
 
 # ---------------------------------------------------------------------------
 # Scheme resolution
