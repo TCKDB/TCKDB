@@ -2894,7 +2894,7 @@
       },
       "BundleThermoIn": {
         "additionalProperties": false,
-        "description": "Thermo data attached to a species in this bundle.\n\n:param scientific_origin: Scientific origin category.\n:param h298_kj_mol: Enthalpy at 298 K in kJ/mol.\n:param s298_j_mol_k: Entropy at 298 K in J/(mol*K).\n:param tmin_k: Minimum temperature in K.\n:param tmax_k: Maximum temperature in K.\n:param nasa: Optional NASA polynomial coefficients.\n:param points: Optional tabulated thermo data points.\n:param note: Optional note.",
+        "description": "Thermo data attached to a species in this bundle.\n\nThe reaction route's thermo carries the same provenance the species\nroute's ``ThermoInBundle`` carries, because it is the same claim about\nthe same kind of row. The two models were written three days apart in\nApril 2026 and diverged from the start — this one first, with eight\nfields, and never touched since; ``ThermoInBundle`` three days later\nwith fifteen. Nothing recorded a reason, and the gap was not visible\nfrom either model, so a depositor putting thermo on a reaction bundle\nsilently lost the record of which calculations produced it while the\nsame deposit on the species route kept it.\n\n``applied_energy_corrections`` is deliberately **not** here. The\nreaction bundle already declares applied corrections one level up, on\n:class:`BundleSpeciesIn`, against the same resolved species entry.\nAdding a second place to say it would let one deposit make the claim\ntwice, and the answer to \"which one counts\" would have to be invented.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this thermo.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param h298_kj_mol: Enthalpy at 298 K in kJ/mol.\n:param s298_j_mol_k: Entropy at 298 K in J/(mol*K).\n:param h298_uncertainty_kj_mol: Optional uncertainty on ``h298_kj_mol``.\n:param s298_uncertainty_j_mol_k: Optional uncertainty on\n    ``s298_j_mol_k``.\n:param tmin_k: Minimum temperature in K.\n:param tmax_k: Maximum temperature in K.\n:param nasa: Optional NASA polynomial coefficients.\n:param points: Optional tabulated thermo data points.\n:param source_calculations: Thermo → calc links by bundle-local\n    calculation key. Each key must resolve in the bundle's global\n    calc-key namespace and must name a calculation owned by this\n    species entry; the workflow rejects both failures.\n:param note: Optional note.",
         "properties": {
           "h298_kj_mol": {
             "anyOf": [
@@ -2906,6 +2906,28 @@
               }
             ],
             "title": "H298 Kj Mol"
+          },
+          "h298_uncertainty_kj_mol": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H298 Uncertainty Kj Mol"
+          },
+          "literature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "nasa": {
             "anyOf": [
@@ -2946,9 +2968,38 @@
             ],
             "title": "S298 J Mol K"
           },
+          "s298_uncertainty_j_mol_k": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S298 Uncertainty J Mol K"
+          },
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind",
             "default": "computed"
+          },
+          "software_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_calculations": {
+            "items": {
+              "$ref": "#/components/schemas/ThermoSourceCalcInBundle"
+            },
+            "title": "Source Calculations",
+            "type": "array"
           },
           "tmax_k": {
             "anyOf": [
@@ -2973,6 +3024,16 @@
               }
             ],
             "title": "Tmin K"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "BundleThermoIn",
@@ -5283,6 +5344,16 @@
             "$ref": "#/components/schemas/CalculationQuality",
             "default": "raw"
           },
+          "scf_stability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SCFStabilityPayload"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "software_release": {
             "$ref": "#/components/schemas/SoftwareReleaseRef"
           },
@@ -5517,6 +5588,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CalculationScanResultCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scf_stability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SCFStabilityPayload"
               },
               {
                 "type": "null"
@@ -9640,6 +9721,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CalculationScanResultCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scf_stability": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SCFStabilityPayload"
               },
               {
                 "type": "null"

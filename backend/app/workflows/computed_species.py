@@ -90,12 +90,6 @@ from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import assert_thermo_role_matches_calculation_type
 
 # ---------------------------------------------------------------------------
-# Thermo role/type compatibility (mirror DR-0028 helpers in workflows/thermo)
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
 # Outcome dataclasses
 # ---------------------------------------------------------------------------
 

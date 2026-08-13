@@ -108,13 +108,20 @@ def raise_for_atomless_structure(
     A free electron has no geometry anywhere in the deposit — that is not a
     convention, it is what "no atoms" means, and the atom-map fragment next
     door already reads it as an invariant when it refuses a ``geometry_key``
-    beside an empty ``atom_to_ts``. Until now the invariant held only because
-    no depositor had tried: nothing stopped a bundle declaring
-    ``molecule_kind: electron`` and hanging a one-atom conformer off it, and
-    the species row kept the geometry even after the atom map declined to use
-    it. A record of an electron's coordinates cannot be what it says it is, so
-    refusing it rejects no correct calculation — definitional, therefore
-    blocking under ADR 0008, rather than a warning.
+    beside an empty ``atom_to_ts``. A record of an electron's coordinates
+    cannot be what it says it is, so refusing it rejects no correct
+    calculation — definitional, therefore blocking under ADR 0008, rather
+    than a warning.
+
+    The invariant was previously enforced for one kind of geometry and not
+    the other. A *conformer* geometry reaches
+    ``assert_geometry_composition_matches_identity`` through
+    ``resolve_species_entry``, which refused it mid-transaction. A
+    *calculation* geometry — ``geometry_key``, ``input_geometries``,
+    ``output_geometries`` — reaches no composition check on any path, by
+    that function's own account, so an electron carrying one was accepted
+    and the structure stored. Stating the rule here covers both, names the
+    field that was wrong, and answers before any species is resolved.
 
     ``pseudo`` is out of scope here for the same reason it is absent from
     :data:`ATOMLESS_MOLECULE_KINDS`: a lumped construct's composition is
