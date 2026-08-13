@@ -4,12 +4,17 @@ Why a runtime observer and not just a source scan
 -------------------------------------------------
 :mod:`app.api.code_catalogue` claims to enumerate every code the API can
 emit. A claim like that is worth nothing unless something can falsify it,
-and a static scan cannot: three mechanisms mint a code from a variable
-rather than a literal at the raise site — the ownership guard takes its
-code as a parameter, ``tckdb_schemas.stationary_point`` raises with
-whichever code its blocking finding carries, and the integrity handler
-looks its code up by PostgreSQL constraint name. A fourth would be a code
-assembled at request time, which nothing static could ever see.
+and a static scan cannot: four mechanisms mint a code from a variable
+rather than a literal at the raise site — the ownership guard and
+``reconcile_id_ref`` take theirs as a parameter,
+``tckdb_schemas.stationary_point`` raises with whichever code its
+blocking finding carries, and the integrity handler looks its code up by
+PostgreSQL constraint name. A fifth would be a code assembled at request
+time, which nothing static could ever see.
+
+This is not hypothetical. The six ``*_handle_conflict`` codes were found
+by this observer and by nothing else: the scan cannot see them, and every
+document and enum in the repository had been written without them.
 
 So the check is made against what a consumer receives. Every JSON
 response with a 4xx/5xx status is recorded as it is built, and the test
