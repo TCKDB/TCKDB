@@ -412,6 +412,7 @@ def reconcile_species_entry_full(
     primary_calc: CalculationWithResultsPayload | None = None,
     additional_calcs: list[CalculationWithResultsPayload] | None = None,
     statmech: ConformerUploadStatmechPayload | None = None,
+    reference_xyz_text: str | None = None,
 ) -> list[UploadWarning]:
     """Layer 2: reconcile using full deduction pipeline.
 
@@ -423,6 +424,12 @@ def reconcile_species_entry_full(
     :param primary_calc: Primary calculation payload (opt/freq/sp).
     :param additional_calcs: Additional calculations (freq, sp, etc.).
     :param statmech: Optional statmech payload with symmetry info.
+    :param reference_xyz_text: The enclosing conformer's geometry, when
+        the caller has one. Needed by the frequency-completeness check
+        below, which asks whether a deposited frequency list is the
+        whole spectrum and cannot answer that without knowing how many
+        atoms the frequency job ran on. Callers with no geometry leave
+        it ``None`` and the check stays silent.
     :returns: List of warnings (may be empty).
     """
     warnings: list[UploadWarning] = []
@@ -444,6 +451,29 @@ def reconcile_species_entry_full(
     # Layer 1b: parser-fidelity check across all freq-bearing calcs.
     if primary_calc is not None:
         warnings.extend(check_freq_parser_fidelity([primary_calc, *additional]))
+
+    # Layer 1c: is the deposited frequency list the whole spectrum?
+    #
+    # This runs here rather than from the route's
+    # ``stationary_point_findings()`` call because the conformer route
+    # deliberately does not make that call — the Layer-1 pass above
+    # already owns the ``n_imag`` findings and calling both would report
+    # each one twice under two different ``field`` paths. Nothing else
+    # computes the completeness findings, so there is no such duplication
+    # to avoid for them, and routing them through here is what puts them
+    # on the one upload path that skips the schema-side collection.
+    if primary_calc is not None:
+        for index, calc in enumerate([primary_calc, *additional]):
+            warnings.extend(
+                stationary_point_warnings(
+                    calc.frequency_completeness_findings(
+                        location=(
+                            f"calculations[{index}].freq_result.modes"
+                        ),
+                        fallback_xyz_text=reference_xyz_text,
+                    )
+                )
+            )
 
     # Layer 2: deduction-based checks
     ess_result = build_ess_result_from_upload(
