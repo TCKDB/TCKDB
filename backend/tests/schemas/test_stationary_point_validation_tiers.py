@@ -770,6 +770,19 @@ def _ts_reaction() -> dict:
     }
 
 
+#: Saddle-point geometry for the transition-state builders below.
+#:
+#: A *linear triatomic*, and deliberately so. ``_XYZ`` is a single
+#: hydrogen atom, which was fine while nothing read the geometry, but a
+#: single atom has three degrees of freedom in total and the motivating
+#: record below deposits four frequencies — a combination
+#: ``freq_list_exceeds_geometry_degrees_of_freedom`` correctly refuses to
+#: call coherent. Three collinear atoms have ``3N - 5 = 4`` vibrational
+#: modes, so the motivating record is exactly a complete spectrum here,
+#: and the fixture doubles as the linear-molecule case that a naive
+#: ``3N - 6`` completeness rule would have wrongly flagged.
+_TS_XYZ = "3\ncomment\nH 0.0 0.0 -0.9\nH 0.0 0.0 0.0\nH 0.0 0.0 0.9"
+
 #: The motivating record, as a producer would deposit it: the signed
 #: frequency list, the designated reaction coordinate, and a disposition
 #: for each other imaginary mode.
@@ -810,7 +823,7 @@ def _standalone_ts(
         reaction=_ts_reaction(),
         charge=0,
         multiplicity=2,
-        geometry={"xyz_text": _XYZ},
+        geometry={"xyz_text": _TS_XYZ},
         primary_opt={
             "type": "opt",
             "software_release": _SOFTWARE,
@@ -851,7 +864,7 @@ def _bundle_ts_payload(
     return {
         "charge": 0,
         "multiplicity": 2,
-        "geometry": {"key": "ts_geom", "xyz_text": _XYZ},
+        "geometry": {"key": "ts_geom", "xyz_text": _TS_XYZ},
         "calculation": {
             "key": "ts_opt",
             "type": "opt",

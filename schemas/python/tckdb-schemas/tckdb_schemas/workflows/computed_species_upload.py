@@ -41,6 +41,7 @@ from tckdb_schemas.fragments.calculation import (
     SPResultPayload,
     WavefunctionDiagnosticPayload,
 )
+from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
 from tckdb_schemas.fragments.refs import (
@@ -259,6 +260,31 @@ class CalculationInBundle(SchemaBase):
                     )
                 seen.add(c.constraint_index)
         return self
+
+    def frequency_completeness_findings(
+        self, *, location: str, fallback_xyz_text: str | None = None
+    ) -> list[StationaryPointFinding]:
+        """Judge whether this calculation's frequency list is the spectrum.
+
+        The bundle twin of
+        :meth:`CalculationWithResultsPayload.frequency_completeness_findings`.
+        This class re-declares the primitive payload's fields rather than
+        inheriting them, so the adapter is re-declared too; the rule it
+        adapts to lives once, in
+        :mod:`tckdb_schemas.frequency_completeness`.
+        """
+        if self.freq_result is None or self.freq_result.modes is None:
+            return []
+        return evaluate_deposited_frequency_list(
+            len(self.freq_result.modes),
+            input_geometry_xyz_text=(
+                self.input_geometries[0].xyz_text
+                if self.input_geometries
+                else None
+            ),
+            fallback_xyz_text=fallback_xyz_text,
+            location=location,
+        )
 
     @model_validator(mode="after")
     def reject_database_id_fields(self) -> Self:
@@ -664,15 +690,22 @@ class ComputedSpeciesUploadRequest(SchemaBase):
             for calc in (conf.primary_calculation, *conf.additional_calculations):
                 if calc.freq_result is None:
                     continue
+                location = (
+                    f"conformers['{conf.key}'].calculations"
+                    f"['{calc.key}'].freq_result"
+                )
                 findings.extend(
                     evaluate_species_entry_frequency(
                         kind,
                         calc.freq_result.n_imag,
                         calc.freq_result.imag_freq_cm1,
-                        location=(
-                            f"conformers['{conf.key}'].calculations"
-                            f"['{calc.key}'].freq_result"
-                        ),
+                        location=location,
+                    )
+                )
+                findings.extend(
+                    calc.frequency_completeness_findings(
+                        location=f"{location}.modes",
+                        fallback_xyz_text=conf.geometry.xyz_text,
                     )
                 )
         return findings

@@ -38,6 +38,7 @@ from tckdb_schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_transition_state_frequency,
@@ -223,6 +224,40 @@ def transition_state_frequency_findings(
             (observation.canonical_key, observation.canonical_value)
             for observation in (calc_in.parameters or ())
         ),
+    )
+
+
+def frequency_completeness_findings(
+    calc_in: "CalculationIn", *, location: str, xyz_text: str | None
+) -> list[StationaryPointFinding]:
+    """Judge a bundle-local calculation's frequency list against its geometry.
+
+    The bundle form of
+    :meth:`CalculationWithResultsPayload.frequency_completeness_findings`.
+    It reads the mode list through :func:`freq_result_of` rather than off
+    ``freq_frequencies_cm1`` directly, for the same reason
+    :func:`freq_evidence` exists: the flat fields only become a stored
+    result block when ``type`` is ``freq``, so judging the raw field
+    would judge something the database will never hold.
+
+    :param xyz_text: The geometry this calculation ran on, already
+        resolved from ``geometry_key`` by the enclosing model — this
+        function cannot see the bundle's geometry namespace.
+    """
+    freq_result = freq_result_of(calc_in)
+    if freq_result is None or freq_result.modes is None:
+        return []
+    # ``input_geometries`` is added by the computed-reaction subclass and
+    # absent from the base bundle calculation, so it is read defensively
+    # rather than declared — the resolved ``geometry_key`` is the
+    # universal source and the inline list, where a producer supplied
+    # one, is the more specific one.
+    inline = getattr(calc_in, "input_geometries", None)
+    return evaluate_deposited_frequency_list(
+        len(freq_result.modes),
+        input_geometry_xyz_text=inline[0].xyz_text if inline else None,
+        fallback_xyz_text=xyz_text,
+        location=location,
     )
 
 
