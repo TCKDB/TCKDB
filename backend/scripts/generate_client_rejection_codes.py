@@ -120,6 +120,13 @@ Use :func:`rejection_code` rather than ``RejectionCode(exc.code)``. A
 server is routinely newer than the client pinned against it, and a code
 added since this file was generated must not turn a handled refusal into
 an unhandled ``ValueError``.
+
+:data:`REJECTION_STATUSES` gives the HTTP status each member arrives at,
+which is the retry advice: 422 means nothing was written and a corrected
+payload may be resent, 409 means the write reached the database, 404
+means the record named is not there, 426 means upgrade this package, and
+429 is the one status where retrying the same request unchanged is the
+right thing to do.
 """
 
 from __future__ import annotations
