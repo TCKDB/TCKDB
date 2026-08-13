@@ -57,6 +57,16 @@ _DIRECT_CHILDREN = (
     ("calculation_parameter", "calculation", "calculation_id"),
     ("calc_geometry_validation", "calculation", "calculation_id"),
     ("calc_scf_stability", "calculation", "calculation_id"),
+    # SUPERSEDED by revision d4e9b1c7a253 (2026-08-13). This entry is wrong and
+    # is retained only because this revision is deployed and what it ran cannot
+    # be rewritten. `source_calculation_id` is a PROVENANCE pointer -- the
+    # calculation whose stability this row cites -- not the calculation the row
+    # belongs to. Registering it as an ownership guard meant an unapproved
+    # calculation could not record SCF-stability evidence citing an approved
+    # one: a legitimate write, refused. d4e9b1c7a253 replaces trg_as_child_19
+    # with the ownership column alone and lists this triple in its
+    # `_REMOVED_CHILDREN`, which the registry test subtracts. Read that
+    # revision, not this line, for the registry the database actually has.
     ("calc_scf_stability", "calculation", "source_calculation_id"),
     ("calc_hessian", "calculation", "calculation_id"),
     ("calc_wavefunction_diagnostic", "calculation", "calculation_id"),
