@@ -138,6 +138,20 @@ def _scan_raise_sites() -> dict[str, str]:
     return found
 
 
+def _defines_code(source: str, code: str) -> bool:
+    """Is *code* written as a code in *source*?
+
+    Two spellings, because the backend has two conventions and the guard
+    must not quietly accept a substring of a longer identifier. A declared
+    code is a whole string literal, ``code="handle_not_found"``. A
+    message-prefix code opens one, ``"missing_filter: at least one of "``.
+    Requiring the opening quote is what stops ``invalid_handle`` from
+    being satisfied by a module that only mentions
+    ``invalid_handle_prefix``.
+    """
+    return bool(re.search(rf'"{re.escape(code)}(?:"|:)', source))
+
+
 def test_a_code_is_listed_once_per_status_it_arrives_at() -> None:
     """One ``(code, status)``, one entry -- but a code may have two.
 
@@ -198,7 +212,7 @@ def test_every_origin_still_defines_its_code() -> None:
         if not path.exists():
             problems.append(f"{entry.code}: {entry.origin} does not exist")
             continue
-        if f'"{entry.code}"' not in path.read_text():
+        if not _defines_code(path.read_text(), entry.code):
             problems.append(
                 f"{entry.code}: not written as a literal in {entry.origin}"
             )

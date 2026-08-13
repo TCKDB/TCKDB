@@ -222,12 +222,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("atom_map_element_not_conserved", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_element_not_conserved", 409, Surface.database_constraint,
-            "backend/app/scientific_checks/declarations.py",
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
             note=(
                 "Two entries, and both are real. The claim is stated once at "
                 "the wire boundary and again as a check constraint, so which "
                 "status a depositor sees depends on the write path rather "
-                "than on what they did wrong."
+                "than on what they did wrong. The origin is the same for "
+                "both because the literal has one home: the register names "
+                "the constraint by importing this constant, not by "
+                "respelling the code."
             )),
     ApiCode("atom_map_geometry_unparseable", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
@@ -238,7 +241,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("atom_map_not_a_bijection", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_not_a_bijection", 409, Surface.database_constraint,
-            "backend/app/scientific_checks/declarations.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_participant_not_declared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_without_transition_state", 422, Surface.coded_exception,
