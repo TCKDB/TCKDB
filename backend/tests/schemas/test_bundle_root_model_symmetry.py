@@ -196,9 +196,9 @@ ALLOWED_ASYMMETRIES: dict[tuple[str, str], str] = {
         "literature",
     ): (
         "Species-root only: an inline literature fragment resolved by the "
-        "workflow. The reaction root takes literature_id instead — see "
-        "the companion test below, which is why this pair is not simply "
-        "declared equivalent."
+        "workflow. The reaction root takes a literature_id instead, which "
+        "is a different contract rather than the same one spelled twice — "
+        "see the literature_id entry immediately below."
     ),
     (
         "calculation",
