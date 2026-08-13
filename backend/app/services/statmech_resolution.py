@@ -8,6 +8,18 @@ by row id. Turning a key into a real ``calculation.id`` happens here, from
 the ``calculations_by_key`` map the calling workflow builds after it has
 persisted the request's own calculations. That is the whole reason the
 schema layer never needs to know a primary key.
+
+The standalone statmech upload adds one second way to name a calculation:
+``existing_calculation_id``, citing a row an *earlier request* deposited.
+It exists because calculations are append-only and never deduplicated, so
+a deposit forced to re-send calculations it already stored would mint
+duplicate rows for the same job and turn "how many distinct calculations
+support this" into "how many times someone re-uploaded". It is handled
+here, next to the key path and not in the calling workflow, so that the
+two ways of naming a calculation cannot drift apart in what they check —
+a citation that is cheaper to validate is the route depositors use to get
+around validation. Bundle paths keep the key-only component; see
+``app.schemas.workflows.statmech_upload.StatmechSourceCalculationIn``.
 """
 
 from __future__ import annotations
@@ -18,6 +30,7 @@ from collections.abc import Mapping
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
+from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, StatmechCalculationRole
 from app.db.models.statmech import (
@@ -97,6 +110,106 @@ def _resolve_calculation_key(
             message_prefix=False,
         )
     return calculation_id
+
+
+def _chained_calculation_id(source: object) -> int | None:
+    """Read the optional ``existing_calculation_id`` off a source-calc link.
+
+    Read reflectively, and the indirection is the point rather than
+    laziness. Only the standalone statmech upload's
+    ``StatmechSourceCalculationIn`` declares this field; the shared wire
+    component ``tckdb_schemas.statmech_bits.StatmechSourceCalcIn`` that
+    the conformer and bundle paths use stays key-only, so there is no
+    single static type this function could take that spans all three.
+    Widening the shared component instead would hand chaining to the
+    bundle routes, which do not need it and are deliberately denied it.
+
+    ``payload.source_calculations`` is annotated with the key-only base
+    class, so this also documents *why* an attribute the annotation does
+    not mention is nonetheless present at runtime: Pydantic v2 defaults to
+    ``revalidate_instances="never"``, so a subclass instance assigned to a
+    parent-typed field passes through intact rather than being narrowed to
+    the parent. ``test_statmech_upload_chained_id_survives_payload_handover``
+    pins that, because it is the kind of behaviour that would otherwise
+    change under us silently and drop the link with no error at all.
+    """
+    value = getattr(source, "existing_calculation_id", None)
+    return value if isinstance(value, int) else None
+
+
+def assert_statmech_calculation_owned_by(
+    calculation: Calculation,
+    *,
+    species_entry_id: int,
+    context: str,
+) -> None:
+    """Refuse a supporting calculation belonging to another species entry.
+
+    Supporting calculations attached to a statmech record must belong to
+    the same species entry as the statmech target; otherwise the
+    provenance link is scientifically meaningless — the record would cite
+    evidence about a different molecule.
+
+    Lives here rather than in ``app.workflows.statmech`` because the two
+    ways of naming a calculation must be judged by the same code. For an
+    inline calculation the check is defensive (the workflow persists it
+    against the target's own species entry, so it cannot fail); for an
+    ``existing_calculation_id`` it is the real thing, because a chained id
+    can name any row in the database.
+
+    :raises ValueError: if the calculation does not belong to
+        ``species_entry_id``. Surfaces as HTTP 422.
+    """
+    if calculation.species_entry_id == species_entry_id:
+        return
+    # ``context`` already names the calculation the way the depositor
+    # wrote it, which is the identifier they can act on. The row ids go to
+    # the log instead — a 422 body must not hand out primary keys.
+    logger.warning(
+        "%s: calculation id=%s owned by species_entry_id=%s, not %s",
+        context,
+        calculation.id,
+        calculation.species_entry_id,
+        species_entry_id,
+    )
+    raise ValueError(
+        f"{context}: this calculation belongs to another species entry, "
+        "not to the statmech target. A supporting calculation must be one "
+        "of the target species entry's own."
+    )
+
+
+def _resolve_existing_calculation(
+    session: Session,
+    calculation_id: int,
+    *,
+    species_entry_id: int,
+    context: str,
+) -> Calculation:
+    """Load a chained ``existing_calculation_id`` and check it may be cited.
+
+    The counterpart of :func:`_resolve_calculation_key` for the citation
+    that reaches outside this request. A row that is absent is a 404 (the
+    depositor named something that is not there); a row owned by another
+    species entry is a 422. Neither message discloses a row id the caller
+    did not supply — the id in ``existing_calculation_id`` is echoed back
+    only because they wrote it.
+
+    Returning the row rather than its id is deliberate: the caller needs
+    it for :func:`assert_statmech_role_compatible`, and re-fetching would
+    invite the two checks to run against different rows.
+    """
+    calculation = session.get(Calculation, calculation_id)
+    if calculation is None:
+        raise NotFoundError(
+            f"{context}: refers to a calculation that does not exist."
+        )
+    assert_statmech_calculation_owned_by(
+        calculation,
+        species_entry_id=species_entry_id,
+        context=context,
+    )
+    return calculation
 
 
 def assert_statmech_role_compatible(
@@ -327,17 +440,34 @@ def resolve_or_create_statmech(
 
     for index, source in enumerate(payload.source_calculations):
         context = f"statmech.source_calculations[{index}]"
-        calculation_id = _resolve_calculation_key(
-            source.calculation_key,
-            key_map,
-            context=context,
-        )
-        _assert_role_compatible_by_id(
-            session,
-            calculation_id,
-            role=source.role,
-            context=f"{context}.calculation_key='{source.calculation_key}'",
-        )
+        chained_id = _chained_calculation_id(source)
+        if chained_id is not None:
+            context = f"{context}.existing_calculation_id"
+            calculation = _resolve_existing_calculation(
+                session,
+                chained_id,
+                species_entry_id=species_entry_id,
+                context=context,
+            )
+            calculation_id = calculation.id
+            # Same function, same map, same refusal as the local path.
+            # Routing the chained citation around this check is exactly
+            # how it would become the way to deposit an unchecked link.
+            assert_statmech_role_compatible(
+                calculation, role=source.role, context=context
+            )
+        else:
+            calculation_id = _resolve_calculation_key(
+                source.calculation_key,
+                key_map,
+                context=context,
+            )
+            _assert_role_compatible_by_id(
+                session,
+                calculation_id,
+                role=source.role,
+                context=f"{context}.calculation_key='{source.calculation_key}'",
+            )
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,

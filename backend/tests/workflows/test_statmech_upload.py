@@ -13,7 +13,13 @@ import pytest
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
+from tckdb_schemas.statmech_bits import StatmechSourceCalcIn
+from tckdb_schemas.workflows.conformer_upload import (
+    ConformerUploadStatmechPayload,
+)
 
+from app.api.error_contract import CodedValueError
+from app.api.errors import NotFoundError
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -35,7 +41,11 @@ from app.db.models.statmech import (
     StatmechTorsionDefinition,
 )
 from app.db.models.workflow import WorkflowToolRelease
-from app.schemas.workflows.statmech_upload import StatmechUploadRequest
+from app.schemas.workflows.statmech_upload import (
+    StatmechSourceCalculationIn,
+    StatmechUploadRequest,
+)
+from app.services.statmech_resolution import _chained_calculation_id
 from app.workflows.statmech import persist_statmech_upload
 
 # ---------------------------------------------------------------------------
@@ -846,3 +856,225 @@ def test_rotational_constant_positive_check(db_conn) -> None:
             savepoint.rollback()
     finally:
         session.close()
+
+
+# ---------------------------------------------------------------------------
+# Citing a calculation deposited by an earlier request
+# ---------------------------------------------------------------------------
+
+
+def test_statmech_upload_chained_id_survives_payload_handover() -> None:
+    """The chained id must survive the workflow's payload handover.
+
+    ``persist_statmech_upload`` copies ``source_calculations`` into a
+    ``ConformerUploadStatmechPayload``, whose field is annotated with the
+    key-only wire component that the standalone entry subclasses. Pydantic
+    v2 defaults to ``revalidate_instances="never"``, so the subclass
+    instance passes through intact — but if that default ever changed, or
+    if someone set ``revalidate_instances`` on the shared base config, the
+    entry would be narrowed to the parent and the chained id would vanish
+    **silently**: no error, no link row, a deposit that looks successful
+    and cites nothing.
+
+    That is why this is pinned separately from the end-to-end route tests.
+    A dropped link is the one failure this feature can produce that does
+    not announce itself.
+    """
+    entry = StatmechSourceCalculationIn(existing_calculation_id=4321, role="sp")
+    payload = ConformerUploadStatmechPayload(source_calculations=[entry])
+
+    carried = payload.source_calculations[0]
+    assert isinstance(carried, StatmechSourceCalculationIn), type(carried)
+    assert _chained_calculation_id(carried) == 4321
+    assert carried.calculation_key is None
+
+
+def test_statmech_key_only_entries_report_no_chained_id() -> None:
+    """The reader must not confuse "no chained id" with "some id".
+
+    Paired with the test above so neither can pass vacuously: the bundle
+    and conformer paths hand the service key-only entries, and those must
+    take the key branch.
+    """
+    key_entry = StatmechSourceCalcIn(calculation_key="freq0", role="freq")
+    assert _chained_calculation_id(key_entry) is None
+
+    local = StatmechSourceCalculationIn(calculation_key="freq0", role="freq")
+    assert _chained_calculation_id(local) is None
+
+
+def test_statmech_upload_links_existing_calculation_without_duplicating_it(
+    db_conn,
+) -> None:
+    """Workflow-level counterpart of the two-request API test: the link
+    points at the pre-existing row and no calculation row is added."""
+    identity = {"smiles": "CCOCC", "charge": 0, "multiplicity": 1}
+    session = Session(db_conn)
+    try:
+        with session.begin():
+            first = persist_statmech_upload(
+                session, _basic_request(species_entry=dict(identity))
+            )
+            entry_id = first.species_entry_id
+            existing = session.scalars(
+                select(Calculation).where(
+                    Calculation.species_entry_id == entry_id
+                )
+            ).all()
+            assert len(existing) == 1
+            existing_id = existing[0].id
+
+            second = persist_statmech_upload(
+                session,
+                StatmechUploadRequest(
+                    species_entry=dict(identity),
+                    scientific_origin="computed",
+                    statmech_treatment="rrho",
+                    external_symmetry=2,
+                    source_calculations=[
+                        {
+                            "existing_calculation_id": existing_id,
+                            "role": "freq",
+                        }
+                    ],
+                ),
+            )
+
+            assert second.id != first.id
+            links = session.scalars(
+                select(StatmechSourceCalculation).where(
+                    StatmechSourceCalculation.statmech_id == second.id
+                )
+            ).all()
+            assert [(lk.calculation_id, lk.role) for lk in links] == [
+                (existing_id, StatmechCalculationRole.freq)
+            ]
+
+            after = session.scalars(
+                select(Calculation).where(
+                    Calculation.species_entry_id == entry_id
+                )
+            ).all()
+            assert [row.id for row in after] == [existing_id]
+    finally:
+        session.close()
+
+
+def test_statmech_upload_chained_id_that_does_not_exist_raises_not_found(
+    db_conn,
+) -> None:
+    """A missing row is a named 404, never a ``KeyError`` or a raw FK error."""
+    request = StatmechUploadRequest(
+        species_entry={"smiles": "CCOCCC", "charge": 0, "multiplicity": 1},
+        scientific_origin="computed",
+        statmech_treatment="rrho",
+        source_calculations=[
+            {"existing_calculation_id": 999_999_999, "role": "sp"}
+        ],
+    )
+    with pytest.raises(NotFoundError, match="does not exist"):
+        with Session(db_conn) as session, session.begin():
+            persist_statmech_upload(session, request)
+
+
+def test_statmech_upload_chained_id_from_another_species_entry_raises(
+    db_conn,
+) -> None:
+    """Owner-consistency is enforced against the row, and the message
+    discloses no id the depositor did not supply."""
+    with pytest.raises(ValueError, match="another species entry") as excinfo:
+        with Session(db_conn) as session, session.begin():
+            owner = persist_statmech_upload(
+                session,
+                _basic_request(
+                    species_entry={
+                        "smiles": "CCOCCCC",
+                        "charge": 0,
+                        "multiplicity": 1,
+                    }
+                ),
+            )
+            foreign_calc = session.scalars(
+                select(Calculation).where(
+                    Calculation.species_entry_id == owner.species_entry_id
+                )
+            ).all()[0]
+
+            persist_statmech_upload(
+                session,
+                StatmechUploadRequest(
+                    species_entry={
+                        "smiles": "CCOCCCCC",
+                        "charge": 0,
+                        "multiplicity": 1,
+                    },
+                    scientific_origin="computed",
+                    statmech_treatment="rrho",
+                    source_calculations=[
+                        {
+                            "existing_calculation_id": foreign_calc.id,
+                            "role": "freq",
+                        }
+                    ],
+                ),
+            )
+
+    detail = str(excinfo.value)
+    assert "species_entry_id=" not in detail
+    assert "id=" not in detail
+
+
+def test_statmech_upload_chained_role_type_mismatch_is_coded(db_conn) -> None:
+    """A chained citation gets the same coded refusal a local one gets."""
+    identity = {"smiles": "CCOCCCCCC", "charge": 0, "multiplicity": 1}
+    with pytest.raises(CodedValueError) as excinfo:
+        with Session(db_conn) as session, session.begin():
+            owner = persist_statmech_upload(
+                session, _basic_request(species_entry=dict(identity))
+            )
+            freq_calc = session.scalars(
+                select(Calculation).where(
+                    Calculation.species_entry_id == owner.species_entry_id
+                )
+            ).all()[0]
+            assert freq_calc.type == CalculationType.freq
+
+            persist_statmech_upload(
+                session,
+                StatmechUploadRequest(
+                    species_entry=dict(identity),
+                    scientific_origin="computed",
+                    statmech_treatment="rrho",
+                    source_calculations=[
+                        {
+                            "existing_calculation_id": freq_calc.id,
+                            "role": "sp",
+                        }
+                    ],
+                ),
+            )
+
+    assert excinfo.value.code == "statmech_source_role_type_mismatch"
+    context = excinfo.value.context
+    assert context["field"] == (
+        "statmech.source_calculations[0].existing_calculation_id"
+    )
+    assert context["accepted_calculation_types"] == ["sp", "opt"]
+
+
+def test_statmech_upload_rejects_duplicate_chained_links() -> None:
+    """``(existing_calculation_id, role)`` must be unique, the way
+    ``(calculation_key, role)`` already is — the underlying table is keyed
+    on ``(statmech_id, calculation_id, role)``, so a repeat is a 500."""
+    with pytest.raises(ValidationError) as excinfo:
+        StatmechUploadRequest(
+            species_entry={"smiles": "O", "charge": 0, "multiplicity": 1},
+            scientific_origin="computed",
+            source_calculations=[
+                {"existing_calculation_id": 7, "role": "sp"},
+                {"existing_calculation_id": 7, "role": "sp"},
+            ],
+        )
+    assert any(
+        d["type"] == "value_error" for d in excinfo.value.errors()
+    ), excinfo.value.errors()

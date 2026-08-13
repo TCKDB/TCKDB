@@ -13,7 +13,7 @@ the same key-based reference components from
 
 from __future__ import annotations
 
-from typing import Self, TypeAlias
+from typing import Self
 
 from pydantic import Field, model_validator
 from tckdb_schemas.stationary_point import (
@@ -59,12 +59,103 @@ class StatmechCalculationIn(SchemaBase):
     calculation: CalculationWithResultsPayload
 
 
-#: Statmech → calculation link by local key. Was a class of its own here;
-#: it is now the shared wire component, because the conformer, bundle and
-#: standalone paths all express this link identically. Spelled as an
-#: explicit ``TypeAlias``: a bare ``X = SomeClass`` assignment is a
-#: *variable* to mypy, and annotating with it is an error.
-StatmechSourceCalculationIn: TypeAlias = StatmechSourceCalcIn
+class StatmechSourceCalculationIn(StatmechSourceCalcIn):
+    """Statmech → calculation link, for the *standalone* statmech upload.
+
+    Exactly one of ``calculation_key`` (a calculation declared inline in
+    this same request) or ``existing_calculation_id`` (a calculation row
+    a *previous* request already deposited) must be given. It widens the
+    shared wire component :class:`~tckdb_schemas.statmech_bits.StatmechSourceCalcIn`,
+    which stays key-only, and the widening is deliberately scoped to this
+    one contract — see "Why only here" below.
+
+    Why chaining exists at all
+    --------------------------
+    Local keys resolve only within one payload. Without a way to name a
+    calculation deposited earlier, a statmech deposit has to re-send the
+    opt/freq/sp jobs it already stored. Calculations are append-only and
+    are **never deduplicated**, so a re-send mints a second row for the
+    same job. That is not merely wasted space: it destroys the meaning of
+    counting candidates. "Seven independent depositions, twenty-one
+    distinct calculations" is evidence of reproducibility only while a
+    calculation row means *a job someone ran*; once re-deposits mint
+    duplicates the count silently becomes "how many times someone
+    re-uploaded", and the store cannot tell the two apart.
+
+    The counter-argument — that a self-contained deposit is stronger for
+    provenance, because a record can then never cite something that was
+    not reviewed alongside it — was weighed and accepted as the smaller
+    loss.
+
+    Audience guidance
+    -----------------
+    * ``calculation_key`` is the **contributor-facing** path. Web uploads,
+      community contributors and general workflow tools use local string
+      keys so a depositor never needs to know a database id.
+    * ``existing_calculation_id`` is **programmatic chaining**: a client
+      threading ids back out of a prior TCKDB upload response (ARC's
+      adapter chaining from its conformer upload, or replay/admin/repair
+      tooling). It is *not* the primary public upload UX.
+
+    The ``existing_*_id`` convention is deliberately id-based, and it is
+    **not** a violation of the "no FK IDs in upload schemas" rule. That
+    rule governs contributor-facing *scientific content* — a depositor
+    describes a molecule, not a row. This field describes neither; it is
+    a client quoting back an id TCKDB itself just issued to it. Please do
+    not "fix" it into a key: there is no key namespace spanning two
+    requests, which is the entire problem it solves.
+
+    Nothing is skipped on this path. A chained citation is loaded, checked
+    for owner-consistency against the statmech target's species entry, and
+    put through the identical role/type contract
+    (:func:`app.services.statmech_resolution.assert_statmech_role_compatible`)
+    that a locally-keyed citation passes. If it were cheaper to validate,
+    it would become the route depositors use to get around validation.
+
+    Why only here (the bundle answer)
+    ---------------------------------
+    The contribution-bundle routes (``/uploads/computed-species``,
+    ``/uploads/computed-reaction``, and the PDep network path) do **not**
+    get this field, and their omission is a decision rather than an
+    oversight. A bundle is self-contained by construction: it carries one
+    global calc-key namespace covering every calculation the bundle
+    deposits, so every citation a bundle needs to make is expressible as a
+    key within the request it arrives in. There is nothing for chaining to
+    reach for. Those paths therefore keep the key-only
+    ``StatmechSourceCalcIn``, and because ``SchemaBase`` sets
+    ``extra="forbid"`` a bundle that sends ``existing_calculation_id``
+    is refused with ``extra_forbidden`` rather than silently ignored.
+
+    The mirror of this field is
+    :class:`app.schemas.workflows.thermo_upload.ThermoSourceCalculationIn`
+    ``.existing_calculation_id``, which does the same job for thermo. The
+    two are intended to stay symmetric; an asymmetry between them is a
+    bug, not a signal. (Statmech reached this contract later only because
+    PR #148 moved it to local keys without a chaining mechanism, and the
+    gap read as deliberate because nothing recorded that it was not.)
+
+    :param calculation_key: Local key of a calculation declared in this
+        request's ``calculations`` list.
+    :param existing_calculation_id: Database id of a calculation row a
+        previous request already deposited. Programmatic chaining only;
+        contributor-facing uploads should prefer ``calculation_key``. The
+        workflow validates existence, owner-consistency and role/type
+        compatibility before linking.
+    :param role: Scientific role the calculation plays for this statmech.
+    """
+
+    calculation_key: str | None = Field(default=None, min_length=1)
+    existing_calculation_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def validate_exactly_one_reference(self) -> Self:
+        """Require exactly one of calculation_key or existing_calculation_id."""
+        if (self.calculation_key is None) == (self.existing_calculation_id is None):
+            raise ValueError(
+                "source_calculations entry must specify exactly one of "
+                "calculation_key or existing_calculation_id."
+            )
+        return self
 
 
 class StatmechUploadRequest(SchemaBase):
@@ -171,8 +262,20 @@ class StatmechUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_source_calculation_keys_exist(self) -> Self:
+        """Every *local* citation must name a calculation this request declares.
+
+        Chained citations (``existing_calculation_id``) carry no key and
+        are skipped here on purpose: the row they name was deposited by an
+        earlier request, so this payload cannot possibly declare it. They
+        are not thereby unchecked — existence, owner-consistency and
+        role/type compatibility are all enforced against the database in
+        :func:`app.services.statmech_resolution.resolve_or_create_statmech`,
+        which is the only place that can check them.
+        """
         defined = {c.key for c in self.calculations}
         for sc in self.source_calculations:
+            if sc.calculation_key is None:
+                continue
             if sc.calculation_key not in defined:
                 raise ValueError(
                     f"source_calculations references undefined "
@@ -182,10 +285,28 @@ class StatmechUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_unique_source_calculation_pairs(self) -> Self:
-        pairs = [(sc.calculation_key, sc.role) for sc in self.source_calculations]
+        """Refuse a repeated link, whichever way the calculation is named.
+
+        ``statmech_source_calculation`` is keyed on ``(statmech_id,
+        calculation_id, role)``, so a duplicate is a primary-key violation
+        surfacing as a 500. The reference is now two-valued, so the
+        uniqueness tuple carries both halves — the same shape thermo's
+        ``ThermoSourceCalculationIn`` uniqueness check uses.
+
+        One duplicate this cannot see: the same calculation cited once by
+        inline key and once by id. That is impossible in practice, because
+        an inline calculation is minted by this request and so has no id an
+        earlier request could have handed out; the database's own primary
+        key remains the backstop either way.
+        """
+        pairs = [
+            (sc.calculation_key, sc.existing_calculation_id, sc.role)
+            for sc in self.source_calculations
+        ]
         if len(set(pairs)) != len(pairs):
             raise ValueError(
-                "source_calculations must be unique by (calculation_key, role)."
+                "source_calculations must be unique by (calculation_key, "
+                "existing_calculation_id, role)."
             )
         return self
 

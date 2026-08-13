@@ -37615,6 +37615,44 @@
         "title": "StatmechSourceCalcIn",
         "type": "object"
       },
+      "StatmechSourceCalculationIn": {
+        "additionalProperties": false,
+        "description": "Statmech → calculation link, for the *standalone* statmech upload.\n\nExactly one of ``calculation_key`` (a calculation declared inline in\nthis same request) or ``existing_calculation_id`` (a calculation row\na *previous* request already deposited) must be given. It widens the\nshared wire component :class:`~tckdb_schemas.statmech_bits.StatmechSourceCalcIn`,\nwhich stays key-only, and the widening is deliberately scoped to this\none contract — see \"Why only here\" below.\n\nWhy chaining exists at all\n--------------------------\nLocal keys resolve only within one payload. Without a way to name a\ncalculation deposited earlier, a statmech deposit has to re-send the\nopt/freq/sp jobs it already stored. Calculations are append-only and\nare **never deduplicated**, so a re-send mints a second row for the\nsame job. That is not merely wasted space: it destroys the meaning of\ncounting candidates. \"Seven independent depositions, twenty-one\ndistinct calculations\" is evidence of reproducibility only while a\ncalculation row means *a job someone ran*; once re-deposits mint\nduplicates the count silently becomes \"how many times someone\nre-uploaded\", and the store cannot tell the two apart.\n\nThe counter-argument — that a self-contained deposit is stronger for\nprovenance, because a record can then never cite something that was\nnot reviewed alongside it — was weighed and accepted as the smaller\nloss.\n\nAudience guidance\n-----------------\n* ``calculation_key`` is the **contributor-facing** path. Web uploads,\n  community contributors and general workflow tools use local string\n  keys so a depositor never needs to know a database id.\n* ``existing_calculation_id`` is **programmatic chaining**: a client\n  threading ids back out of a prior TCKDB upload response (ARC's\n  adapter chaining from its conformer upload, or replay/admin/repair\n  tooling). It is *not* the primary public upload UX.\n\nThe ``existing_*_id`` convention is deliberately id-based, and it is\n**not** a violation of the \"no FK IDs in upload schemas\" rule. That\nrule governs contributor-facing *scientific content* — a depositor\ndescribes a molecule, not a row. This field describes neither; it is\na client quoting back an id TCKDB itself just issued to it. Please do\nnot \"fix\" it into a key: there is no key namespace spanning two\nrequests, which is the entire problem it solves.\n\nNothing is skipped on this path. A chained citation is loaded, checked\nfor owner-consistency against the statmech target's species entry, and\nput through the identical role/type contract\n(:func:`app.services.statmech_resolution.assert_statmech_role_compatible`)\nthat a locally-keyed citation passes. If it were cheaper to validate,\nit would become the route depositors use to get around validation.\n\nWhy only here (the bundle answer)\n---------------------------------\nThe contribution-bundle routes (``/uploads/computed-species``,\n``/uploads/computed-reaction``, and the PDep network path) do **not**\nget this field, and their omission is a decision rather than an\noversight. A bundle is self-contained by construction: it carries one\nglobal calc-key namespace covering every calculation the bundle\ndeposits, so every citation a bundle needs to make is expressible as a\nkey within the request it arrives in. There is nothing for chaining to\nreach for. Those paths therefore keep the key-only\n``StatmechSourceCalcIn``, and because ``SchemaBase`` sets\n``extra=\"forbid\"`` a bundle that sends ``existing_calculation_id``\nis refused with ``extra_forbidden`` rather than silently ignored.\n\nThe mirror of this field is\n:class:`app.schemas.workflows.thermo_upload.ThermoSourceCalculationIn`\n``.existing_calculation_id``, which does the same job for thermo. The\ntwo are intended to stay symmetric; an asymmetry between them is a\nbug, not a signal. (Statmech reached this contract later only because\nPR #148 moved it to local keys without a chaining mechanism, and the\ngap read as deliberate because nothing recorded that it was not.)\n\n:param calculation_key: Local key of a calculation declared in this\n    request's ``calculations`` list.\n:param existing_calculation_id: Database id of a calculation row a\n    previous request already deposited. Programmatic chaining only;\n    contributor-facing uploads should prefer ``calculation_key``. The\n    workflow validates existence, owner-consistency and role/type\n    compatibility before linking.\n:param role: Scientific role the calculation plays for this statmech.",
+        "properties": {
+          "calculation_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Calculation Key"
+          },
+          "existing_calculation_id": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Existing Calculation Id"
+          },
+          "role": {
+            "$ref": "#/components/schemas/StatmechCalculationRole"
+          }
+        },
+        "required": [
+          "role"
+        ],
+        "title": "StatmechSourceCalculationIn",
+        "type": "object"
+      },
       "StatmechSourceCalculationRead": {
         "description": "Read schema for a statmech source-calculation link.",
         "properties": {
@@ -38598,7 +38636,7 @@
           },
           "source_calculations": {
             "items": {
-              "$ref": "#/components/schemas/StatmechSourceCalcIn"
+              "$ref": "#/components/schemas/StatmechSourceCalculationIn"
             },
             "title": "Source Calculations",
             "type": "array"
@@ -41885,7 +41923,7 @@
       },
       "ThermoSourceCalculationIn": {
         "additionalProperties": false,
-        "description": "Link between a thermo upload and a supporting calculation.\n\nExactly one of ``calculation_key`` (inline reference into the same\nupload's ``calculations`` list) or ``existing_calculation_id`` (FK\nreference to a row already persisted in the ``calculation`` table)\nmust be provided. See DR-0028 for the rationale: ARC's typical\npipeline uploads opt/freq/sp during conformer upload, so the thermo\nupload should reference those existing rows rather than re-declare\nduplicate calculations.\n\nAudience guidance:\n\n* ``calculation_key`` is the **contributor-facing** path. Web uploads,\n  community contributors, and general workflow tools should use local\n  string keys so users never need to know database IDs. The future\n  computed-species bundle endpoint will resolve calculations,\n  artifacts, thermo, and thermo source links together server-side\n  using these keys.\n* ``existing_calculation_id`` is an **advanced / programmatic**\n  mechanism for clients that are chaining from a prior TCKDB upload\n  response (e.g. ARC's adapter using IDs returned by the conformer\n  upload, or replay/admin/repair tooling). It is not intended as the\n  primary public upload UX.\n\n:param calculation_key: Local key of a calculation declared in\n    ``ThermoUploadRequest.calculations``.\n:param existing_calculation_id: Database id of a calculation row that\n    already exists. Intended for programmatic workflows that are\n    chaining from a prior TCKDB upload response; contributor-facing\n    bundle uploads should prefer ``calculation_key`` so users do not\n    need to know database IDs. The workflow validates\n    owner-consistency and role/type compatibility before linking.\n:param role: The scientific role the calculation plays for this thermo.",
+        "description": "Link between a thermo upload and a supporting calculation.\n\nExactly one of ``calculation_key`` (inline reference into the same\nupload's ``calculations`` list) or ``existing_calculation_id`` (FK\nreference to a row already persisted in the ``calculation`` table)\nmust be provided. See DR-0028 for the rationale: ARC's typical\npipeline uploads opt/freq/sp during conformer upload, so the thermo\nupload should reference those existing rows rather than re-declare\nduplicate calculations.\n\nAudience guidance:\n\n* ``calculation_key`` is the **contributor-facing** path. Web uploads,\n  community contributors, and general workflow tools should use local\n  string keys so users never need to know database IDs. The future\n  computed-species bundle endpoint will resolve calculations,\n  artifacts, thermo, and thermo source links together server-side\n  using these keys.\n* ``existing_calculation_id`` is an **advanced / programmatic**\n  mechanism for clients that are chaining from a prior TCKDB upload\n  response (e.g. ARC's adapter using IDs returned by the conformer\n  upload, or replay/admin/repair tooling). It is not intended as the\n  primary public upload UX.\n\nThe ``existing_*_id`` convention is deliberately id-based and is\n**not** a violation of the \"no FK IDs in upload schemas\" rule, which\ngoverns contributor-facing *scientific content*. A depositor describes\na molecule, not a row; this field is a client quoting back an id TCKDB\nitself issued to it, and there is no key namespace spanning two\nrequests for it to use instead. Please do not \"fix\" it into a key.\n\nThe mirror of this field is\n:class:`app.schemas.workflows.statmech_upload.StatmechSourceCalculationIn`\n``.existing_calculation_id``, which does the same job for statmech and\ncarries the fuller argument for why chaining exists at all (calculations\nare append-only and never deduplicated, so a deposit forced to re-send\nthem mints duplicate rows for the same job and destroys the meaning of\ncounting distinct calculations). The two are intended to stay\nsymmetric: an asymmetry between them is a bug, not a signal. Statmech\nreached this contract later only because PR #148 moved it to local keys\nwithout a chaining mechanism.\n\nNeither field is offered by the contribution-bundle routes, and that\nomission is deliberate on both: a bundle carries one global calc-key\nnamespace covering everything it deposits, so every citation it needs\nto make is expressible as a key within the request it arrives in.\n\n:param calculation_key: Local key of a calculation declared in\n    ``ThermoUploadRequest.calculations``.\n:param existing_calculation_id: Database id of a calculation row that\n    already exists. Intended for programmatic workflows that are\n    chaining from a prior TCKDB upload response; contributor-facing\n    bundle uploads should prefer ``calculation_key`` so users do not\n    need to know database IDs. The workflow validates\n    owner-consistency and role/type compatibility before linking.\n:param role: The scientific role the calculation plays for this thermo.",
         "properties": {
           "calculation_key": {
             "anyOf": [
