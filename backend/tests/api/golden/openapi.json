@@ -7077,7 +7077,7 @@
         "type": "object"
       },
       "CalculationSCFStabilityRead": {
-        "description": "Read shape for SCF stability evidence.\n\nStatus widens the persisted enum with the projected ``\"not_checked\"``\nvalue the route handler emits when no row exists. All evidence\nfields are nullable because they are nullable on the row AND\nbecause the projected ``not_checked`` shape is all-nulls.\n\nNo cross-field validators here — those guard producer input on\n:class:`CalculationSCFStabilityCreate` and would mis-fire against\nthe projected ``not_checked`` shape.",
+        "description": "Read shape for SCF stability evidence.\n\nStatus widens the persisted enum with the projected ``\"not_checked\"``\nvalue the route handler emits when no row exists. All evidence\nfields are nullable because they are nullable on the row AND\nbecause the projected ``not_checked`` shape is all-nulls.\n\nNo cross-field validators here — those guard producer input on\n``tckdb_schemas.fragments.calculation.SCFStabilityContent`` (its\n``validate_status_consistency`` cross-checks ``status`` against\n``instability_count`` and the reoptimisation flag) and would\nmis-fire against the projected ``not_checked`` shape.",
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
