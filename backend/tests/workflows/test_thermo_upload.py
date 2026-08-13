@@ -55,9 +55,13 @@ from app.schemas.entities.thermo import (
 )
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
+from app.services.calculation_ownership import (
+    W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo
-from app.workflows.thermo import _assert_calculation_owned_by, persist_thermo_upload
+from app.workflows.thermo import persist_thermo_upload
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -889,12 +893,17 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
         )
         calc_a = _make_calculation(session, species_entry_id=species_a.id)
         # Guard runs on the still-attached ORM instance inside the session.
-        with pytest.raises(ValueError, match="different species entry"):
-            _assert_calculation_owned_by(
+        with pytest.raises(ValueError, match="another species entry") as excinfo:
+            assert_calculation_owned_by(
                 calc_a,
-                species_entry_id=calc_a.species_entry_id + 1,
+                code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+                target="thermo",
                 context="test wrong-owner guard",
+                species_entry_id=calc_a.species_entry_id + 1,
             )
+    # The code, not the sentence, is what a client branches on (#158).
+    assert excinfo.value.code == "thermo_source_calculation_owner_mismatch"
+    assert excinfo.value.context["field"] == "test wrong-owner guard"
 
 
 def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
@@ -905,7 +914,7 @@ def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
     half-written applied correction, no dangling source link.
 
     We simulate the cross-owner scenario by monkeypatching
-    ``_assert_calculation_owned_by`` to raise only when the workflow
+    ``assert_calculation_owned_by`` to raise only when the workflow
     reaches the applied-correction check (after the thermo row + source
     calc are already flushed in-session).
     """
@@ -935,30 +944,28 @@ def test_applied_correction_with_wrong_owner_source_calc_leaves_no_partial(
         ],
     )
 
-    real_check = thermo_module._assert_calculation_owned_by
+    real_check = thermo_module.assert_calculation_owned_by
     calls = {"n": 0}
 
-    def _fail_on_second_call(calculation, *, species_entry_id, context):
+    def _fail_on_second_call(calculation, **kwargs):
         calls["n"] += 1
         # First call = inline calc resolution (pass). Second call = applied
         # correction owner check (fail to simulate cross-owner).
         if calls["n"] == 1:
-            return real_check(
-                calculation, species_entry_id=species_entry_id, context=context,
-            )
+            return real_check(calculation, **kwargs)
         raise ValueError(
-            f"{context}: calculation id={calculation.id} belongs to a "
-            f"different species entry (simulated cross-owner)."
+            f"{kwargs['context']}: calculation id={calculation.id} belongs "
+            f"to a different species entry (simulated cross-owner)."
         )
 
     with pytest.raises(ValueError, match="simulated cross-owner"):
         with Session(db_conn) as session, session.begin():
-            original = thermo_module._assert_calculation_owned_by
-            thermo_module._assert_calculation_owned_by = _fail_on_second_call
+            original = thermo_module.assert_calculation_owned_by
+            thermo_module.assert_calculation_owned_by = _fail_on_second_call
             try:
                 persist_thermo_upload(session, request)
             finally:
-                thermo_module._assert_calculation_owned_by = original
+                thermo_module.assert_calculation_owned_by = original
 
     # Verify no partial persistence.
     with Session(db_conn) as verify:
@@ -1235,7 +1242,7 @@ def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
     species_a = {"smiles": "[OH]", "charge": 0, "multiplicity": 2}
     species_b = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
 
-    with pytest.raises(ValueError, match="different species entry") as exc_info:
+    with pytest.raises(ValueError, match="another species entry") as exc_info:
         with Session(db_conn) as session, session.begin():
             entry_a = resolve_species_entry(
                 session, SpeciesEntryIdentityPayload(**species_a),
@@ -1259,6 +1266,9 @@ def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
     detail = str(exc_info.value)
     assert "species_entry_id=" not in detail
     assert "id=" not in detail
+    # #158: the refusal declares its own code rather than leaving the
+    # envelope to guess one out of the field path.
+    assert exc_info.value.code == "thermo_source_calculation_owner_mismatch"
 
 
 def test_thermo_upload_role_freq_with_opt_calc_raises_422(db_conn) -> None:

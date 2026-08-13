@@ -45,6 +45,10 @@ from app.schemas.workflows.computed_reaction_upload import (
     calculation_in_to_with_results_payload,
 )
 from app.services.artifact_persistence import persist_artifact
+from app.services.calculation_ownership import (
+    W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.calculation_parameter_extraction import (
     try_extract_parameters_from_input_upload,
 )
@@ -915,13 +919,16 @@ def persist_computed_reaction_upload(
             for index, sc in enumerate(t.source_calculations):
                 source_calc_id = calculation_key_to_id[sc.calculation_key]
                 source_calc = session.get(Calculation, source_calc_id)
-                if source_calc.species_entry_id != species_entry.id:
-                    raise ValueError(
+                assert_calculation_owned_by(
+                    source_calc,
+                    code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    target="thermo",
+                    context=(
                         f"species[{sp.key!r}].thermo.source_calculations"
-                        f"[{index}].calculation_key="
-                        f"'{sc.calculation_key}': refers to a calculation "
-                        f"that is not owned by this species entry."
-                    )
+                        f"[{index}].calculation_key='{sc.calculation_key}'"
+                    ),
+                    species_entry_id=species_entry.id,
+                )
                 assert_thermo_role_matches_calculation_type(
                     source_calc,
                     role=sc.role,

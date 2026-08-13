@@ -47,6 +47,13 @@ from app.services.artifact_persistence import (
     persist_artifact_batch,
     validate_and_decode_all_artifacts,
 )
+from app.services.calculation_ownership import (
+    W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
+    W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.calculation_parameter_extraction import (
     try_extract_parameters_from_input_upload,
 )
@@ -725,12 +732,16 @@ def _persist_thermo_block(
     resolved_sources: list[ThermoSourceCalculationCreate] = []
     for sc in thermo_in.source_calculations:
         calc_row = calc_keys_to_id[sc.calculation_key]
-        if calc_row.species_entry_id != species_entry_id:
-            raise ValueError(
+        assert_calculation_owned_by(
+            calc_row,
+            code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="thermo",
+            context=(
                 f"thermo.source_calculations calculation_key="
-                f"'{sc.calculation_key}': refers to a calculation owned "
-                f"by a different species entry."
-            )
+                f"'{sc.calculation_key}'"
+            ),
+            species_entry_id=species_entry_id,
+        )
         assert_thermo_role_matches_calculation_type(
             calc_row,
             role=sc.role,
@@ -765,12 +776,16 @@ def _persist_thermo_block(
         source_calc_id: int | None = None
         if ac.source_calculation_key is not None:
             calc_row = calc_keys_to_id[ac.source_calculation_key]
-            if calc_row.species_entry_id != species_entry_id:
-                raise ValueError(
+            assert_calculation_owned_by(
+                calc_row,
+                code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+                target="applied energy correction",
+                context=(
                     f"thermo.applied_energy_corrections[{i}]."
-                    f"source_calculation_key='{ac.source_calculation_key}': "
-                    f"refers to a calculation owned by a different species entry."
-                )
+                    f"source_calculation_key='{ac.source_calculation_key}'"
+                ),
+                species_entry_id=species_entry_id,
+            )
             source_calc_id = calc_row.id
 
         applied = create_applied_energy_correction(
@@ -812,12 +827,16 @@ def _persist_top_level_applied_corrections(
         source_calc_id: int | None = None
         if ac.source_calculation_key is not None:
             calc_row = calc_keys_to_id[ac.source_calculation_key]
-            if calc_row.species_entry_id != species_entry_id:
-                raise ValueError(
+            assert_calculation_owned_by(
+                calc_row,
+                code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+                target="applied energy correction",
+                context=(
                     f"applied_energy_corrections[{i}]."
-                    f"source_calculation_key='{ac.source_calculation_key}': "
-                    f"refers to a calculation owned by a different species entry."
-                )
+                    f"source_calculation_key='{ac.source_calculation_key}'"
+                ),
+                species_entry_id=species_entry_id,
+            )
             source_calc_id = calc_row.id
 
         applied = create_applied_energy_correction(
@@ -920,14 +939,17 @@ def _persist_statmech_block(
 
     for sc in s.source_calculations:
         calc_row = calc_keys_to_id[sc.calculation_key]
-        if (
-            (species_entry_id is not None and calc_row.species_entry_id != species_entry_id)
-            or (transition_state_entry_id is not None and calc_row.transition_state_entry_id != transition_state_entry_id)
-        ):
-            raise ValueError(
+        assert_calculation_owned_by(
+            calc_row,
+            code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="statmech",
+            context=(
                 f"statmech.source_calculations calculation_key="
-                f"'{sc.calculation_key}': refers to a calculation owned by a different subject."
-            )
+                f"'{sc.calculation_key}'"
+            ),
+            species_entry_id=species_entry_id,
+            transition_state_entry_id=transition_state_entry_id,
+        )
         # The third statmech write path, and the third to need DR-0028
         # Requirement 1: a declared role must match the type of the job it
         # names. Shared with the conformer and standalone paths through
@@ -952,15 +974,17 @@ def _persist_statmech_block(
         scan_calc_id: int | None = None
         if torsion_in.source_scan_calculation_key is not None:
             scan_calc_row = calc_keys_to_id[torsion_in.source_scan_calculation_key]
-            if (
-                (species_entry_id is not None and scan_calc_row.species_entry_id != species_entry_id)
-                or (transition_state_entry_id is not None and scan_calc_row.transition_state_entry_id != transition_state_entry_id)
-            ):
-                raise ValueError(
+            assert_calculation_owned_by(
+                scan_calc_row,
+                code=W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
+                target="statmech torsion",
+                context=(
                     f"statmech.torsions source_scan_calculation_key="
-                    f"'{torsion_in.source_scan_calculation_key}': refers to a "
-                    f"calculation owned by a different subject."
-                )
+                    f"'{torsion_in.source_scan_calculation_key}'"
+                ),
+                species_entry_id=species_entry_id,
+                transition_state_entry_id=transition_state_entry_id,
+            )
             scan_calc_id = scan_calc_row.id
 
         torsion = StatmechTorsion(

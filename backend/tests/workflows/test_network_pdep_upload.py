@@ -2138,7 +2138,12 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_conn) -> Non
         )
         # Feed the seam a calc-key map pointing at O2's scan calc while
         # claiming a different species entry owns the statmech.
-        with pytest.raises(ValueError, match="different subject"):
+        # #158/#162: the seam's torsion scan link carries its own code,
+        # distinct from the statmech source-link code, because the repair
+        # is a different one -- the wrong rotor scan, not the wrong job.
+        with pytest.raises(
+            ValueError, match="another species entry"
+        ) as torsion_exc:
             _persist_statmech_block(
                 session,
                 statmech,
@@ -2146,6 +2151,10 @@ def test_seam_torsion_ownership_check_rejects_cross_species_scan(db_conn) -> Non
                 calc_keys_to_id={"O2_scan": o2_scan, "foreign_freq": foreign_freq},
                 created_by=None,
             )
+        assert (
+            torsion_exc.value.code
+            == "statmech_torsion_scan_calculation_owner_mismatch"
+        )
         # No torsion row was persisted for a foreign scan link.
         leaked = session.scalars(
             select(StatmechTorsion).where(

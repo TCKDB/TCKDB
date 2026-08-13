@@ -11,6 +11,10 @@ from app.db.models.common import SubmissionRecordType
 from app.db.models.transport import Transport
 from app.schemas.entities.transport import TransportSourceCalculationCreate
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.calculation_ownership import (
+    W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
@@ -23,40 +27,6 @@ from app.services.species_resolution import resolve_species_entry
 from app.services.transport_resolution import resolve_and_create_transport
 
 logger = logging.getLogger(__name__)
-
-
-def _assert_calculation_owned_by(
-    calculation: Calculation,
-    *,
-    species_entry_id: int,
-    context: str,
-) -> None:
-    """Defensive owner-consistency check for a resolved source calculation.
-
-    Supporting calculations attached to a transport record must belong to
-    the same species entry as the transport target; otherwise the
-    provenance link would be scientifically meaningless.
-
-    :raises ValueError: if the calculation does not belong to
-        ``species_entry_id``.
-    """
-    if calculation.species_entry_id != species_entry_id:
-        # ``context`` already names the calculation by the caller's own key,
-        # which is the identifier they can act on. The three row ids this
-        # message used to interpolate are internal handles that go to the
-        # log instead — a 422 body must not hand out primary keys.
-        logger.warning(
-            "%s: calculation id=%s owned by species_entry_id=%s, not %s",
-            context,
-            calculation.id,
-            calculation.species_entry_id,
-            species_entry_id,
-        )
-        raise ValueError(
-            f"{context}: this calculation belongs to another species entry, "
-            "not to the transport target. A supporting calculation must be one "
-            "of the target species entry's own."
-        )
 
 
 def persist_transport_upload(
@@ -100,10 +70,12 @@ def persist_transport_upload(
             species_entry_id=species_entry.id,
             created_by=created_by,
         )
-        _assert_calculation_owned_by(
+        assert_calculation_owned_by(
             calc_row,
-            species_entry_id=species_entry.id,
+            code=W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="transport",
             context=f"transport calculation '{calc_in.key}'",
+            species_entry_id=species_entry.id,
         )
         calculations_by_key[calc_in.key] = calc_row
 
