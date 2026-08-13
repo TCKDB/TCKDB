@@ -305,6 +305,33 @@ def test_the_status_fallback_family_is_not_exported() -> None:
     assert not [code for code in exported if STATUS_FALLBACK_PATTERN.match(code)]
 
 
+def test_the_runtime_observer_is_actually_watching() -> None:
+    """A guard that is not installed is a guard that cannot fail.
+
+    Deleting ``error_code_observer.install()`` from ``conftest.py`` turns
+    the completeness check into a no-op and nothing else in the suite
+    notices -- the teardown hook keeps running, over a set that is empty
+    because nothing is being recorded. That is the exact failure shape
+    this repository keeps finding, so it gets its own assertion: emit a
+    code the catalogue cannot possibly contain, and require the observer
+    to have seen it.
+
+    Draining here is also what stops the synthetic code reaching the
+    teardown hook and failing this test with its own bait.
+    """
+    from starlette.responses import JSONResponse
+
+    from tests import error_code_observer
+
+    JSONResponse(content={"code": "zzz_synthetic_probe_bait"}, status_code=499)
+    unlisted = error_code_observer.drain_unlisted()
+    assert (499, "zzz_synthetic_probe_bait") in unlisted, (
+        "the JSONResponse patch is not installed, so every error code the "
+        "suite produces is going unwatched and app/api/code_catalogue.py's "
+        "completeness claim is unchecked at runtime"
+    )
+
+
 def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
     """The point of the work, stated as a test.
 
