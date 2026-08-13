@@ -12,6 +12,7 @@ import pytest
 
 from tckdb_client import (
     CONFLICT_REJECTION_CODES,
+    REJECTION_STATUSES,
     RejectionCode,
     VALIDATION_REJECTION_CODES,
     rejection_code,
@@ -63,24 +64,59 @@ def test_a_known_code_round_trips() -> None:
     )
 
 
-def test_the_status_sets_partition_nothing_and_cover_everything() -> None:
-    """Every member is reachable through at least one status.
+def test_every_member_says_what_status_it_arrives_at() -> None:
+    """No member without an indication of what it means for retrying.
 
-    Not a partition: a claim enforced both at the wire boundary and by a
-    check constraint reports the same code from both, so the two sets
-    legitimately overlap. What must not happen is a member in neither --
-    a code a client is told about with no indication of what it means for
-    retrying.
+    This used to read "every member is in ``VALIDATION`` or ``CONFLICT``",
+    which was the same property while 422 and 409 were the only statuses
+    a member could arrive at. They no longer are: the enum now carries the
+    404 that names a missing record, the 426 that asks the client to
+    upgrade, and the 429 that asks it to wait, and those are exactly the
+    codes whose retry advice a caller most needs. The property being
+    protected was never "in one of two sets" -- it was "not told about a
+    code with nothing to do about it" -- so it is asserted against the
+    status map, which covers every member.
+
+    The two named sets are then held to being *exactly* their statuses, so
+    neither can quietly gain or lose a member.
     """
-    covered = VALIDATION_REJECTION_CODES | CONFLICT_REJECTION_CODES
-    orphans = sorted(member.value for member in RejectionCode if member not in covered)
+    orphans = sorted(
+        member.value for member in RejectionCode if member not in REJECTION_STATUSES
+    )
     assert not orphans, orphans
-    assert VALIDATION_REJECTION_CODES & CONFLICT_REJECTION_CODES, (
+
+    assert VALIDATION_REJECTION_CODES == {
+        member for member, statuses in REJECTION_STATUSES.items() if 422 in statuses
+    }
+    assert CONFLICT_REJECTION_CODES == {
+        member for member, statuses in REJECTION_STATUSES.items() if 409 in statuses
+    }
+    assert all(statuses for statuses in REJECTION_STATUSES.values()), (
+        "a member mapped to no status at all is the orphan this test exists "
+        "to refuse, wearing an empty frozenset"
+    )
+
+
+def test_a_claim_enforced_twice_still_reports_from_both_sites() -> None:
+    """The two sets must overlap, and the overlap must be dual enforcement.
+
+    Not a partition: the atom map's element conservation and bijectivity
+    are stated once at the wire boundary and again as a check constraint,
+    so the same code arrives as a 422 or a 409 depending on the write
+    path. Losing the overlap silently would mean a dual-enforcement claim
+    had stopped reporting one code from both sites -- which happened while
+    the code catalogue was being written, and this assertion is what would
+    have caught it.
+    """
+    both = VALIDATION_REJECTION_CODES & CONFLICT_REJECTION_CODES
+    assert both, (
         "No code is enforced at both the wire boundary and in the schema. That "
         "may be legitimate, but it used to be true of the atom-map checks and "
         "losing it silently would mean a dual-enforcement claim stopped "
         "reporting one code from both sites."
     )
+    for member in both:
+        assert REJECTION_STATUSES[member] >= {409, 422}
 
 
 def test_the_enum_is_not_empty_and_covers_the_conservation_laws() -> None:

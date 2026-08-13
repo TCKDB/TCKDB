@@ -128,6 +128,7 @@ from enum import Enum
 
 __all__ = [
     "CONFLICT_REJECTION_CODES",
+    "REJECTION_STATUSES",
     "RejectionCode",
     "VALIDATION_REJECTION_CODES",
     "rejection_code",
@@ -214,6 +215,30 @@ def render() -> str:
     for code in conflict:
         lines.append(f"        RejectionCode.{_member(code)},\n")
     lines.append("    }\n)\n")
+
+    lines.append(
+        "\n#: The HTTP status(es) each code arrives at. Every member appears\n"
+        "#: here, including the ones carried by a status with no named set\n"
+        "#: above -- a 404 that names a missing record, a 426 that asks the\n"
+        "#: client to upgrade, a 429 that asks it to wait. A member with no\n"
+        "#: status would be a code a consumer is told about with no\n"
+        "#: indication of what to do next, which is what\n"
+        "#: ``tests/test_rejection_codes.py`` refuses.\n"
+        "#:\n"
+        "#: A frozenset rather than an int because a claim enforced at the\n"
+        "#: wire boundary and again in the schema reports the same code from\n"
+        "#: both, at two different statuses.\n"
+        "REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {\n"
+    )
+    statuses: dict[str, set[int]] = {}
+    for entry in entries:
+        statuses.setdefault(entry.code, set()).add(entry.status)
+    for code in sorted(statuses):
+        rendered = ", ".join(str(status) for status in sorted(statuses[code]))
+        lines.append(
+            f"    RejectionCode.{_member(code)}: frozenset({{{rendered}}}),\n"
+        )
+    lines.append("}\n")
 
     lines.append(_FOOTER)
     return "".join(lines)
