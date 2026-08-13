@@ -138,17 +138,23 @@ def _scan_raise_sites() -> dict[str, str]:
     return found
 
 
-def test_no_code_is_listed_twice() -> None:
-    """One code, one entry.
+def test_a_code_is_listed_once_per_status_it_arrives_at() -> None:
+    """One ``(code, status)``, one entry -- but a code may have two.
 
-    Two entries for one code would let the generated enum and the drift
-    guards disagree about its status without either of them noticing.
+    Two entries for one code at one status would let the generated enum
+    and the drift guards disagree about it. Two entries at *different*
+    statuses is a fact about the system, not a mistake: the atom map's
+    claims are stated once at the wire boundary and again as a check
+    constraint, so the same code arrives as a 422 or a 409 depending on
+    the write path. Collapsing those to one entry silently dropped both
+    from the client's ``CONFLICT_REJECTION_CODES`` while this was being
+    written, which is how the distinction was found.
     """
-    codes = [entry.code for entry in CATALOGUE]
-    duplicates = sorted({code for code in codes if codes.count(code) > 1})
+    pairs = [(entry.code, entry.status) for entry in CATALOGUE]
+    duplicates = sorted({pair for pair in pairs if pairs.count(pair) > 1})
     assert not duplicates, f"catalogued more than once: {duplicates}"
-    assert len(codes) > 50, (
-        f"only {len(codes)} entries. The API emits far more than that, so a "
+    assert len(pairs) > 50, (
+        f"only {len(pairs)} entries. The API emits far more than that, so a "
         "catalogue this small has stopped being an enumeration."
     )
 

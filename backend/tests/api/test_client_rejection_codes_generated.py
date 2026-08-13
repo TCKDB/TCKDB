@@ -88,6 +88,32 @@ def test_every_refusal_code_the_register_declares_is_exported() -> None:
     )
 
 
+def test_every_constraint_rejection_is_in_the_conflict_set() -> None:
+    """A 409 code must land in the set that advises on 409s.
+
+    Membership in ``RejectionCode`` is not enough: a client reading
+    ``CONFLICT_REJECTION_CODES`` to decide whether the write reached the
+    database needs the code to be *in* it. Two codes -- the atom map's
+    element conservation and its bijectivity -- are enforced both at the
+    wire boundary and by a check constraint, and a catalogue that listed
+    each of them once, at 422, dropped both from this set without
+    changing any code's value. Nothing noticed until a 409 was observed
+    arriving in a real response.
+    """
+    published = GENERATED.read_text()
+    conflict_block = published.split("CONFLICT_REJECTION_CODES")[-1]
+    expected = {code for code, _detail in constraint_rejections().values()}
+    assert expected, "no constraint rejections -- the guard would be vacuous"
+
+    missing = sorted(
+        code for code in expected if code.upper() not in conflict_block
+    )
+    assert not missing, (
+        f"These codes are refused by PostgreSQL and reported as a 409, but "
+        f"CONFLICT_REJECTION_CODES does not contain them: {missing}"
+    )
+
+
 def test_every_client_facing_catalogue_code_is_exported() -> None:
     """The same read, against the source the enum is now generated from.
 

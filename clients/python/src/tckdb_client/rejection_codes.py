@@ -3,7 +3,7 @@
 **Generated. Do not edit by hand.** Regenerate with
 ``conda run -n tckdb_env python backend/scripts/generate_client_rejection_codes.py``;
 ``backend/tests/api/test_client_rejection_codes_generated.py`` fails if
-this file and the server's scientific check register disagree.
+this file and the server's code catalogue disagree.
 
 Every member is a refusal TCKDB can report with an HTTP 4xx: a deposit
 that contradicts chemistry, a query that names a filter the endpoint does
@@ -316,6 +316,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
 #: (404, 426, 429); read the HTTP status for those.
 CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
     {
+        RejectionCode.ATOM_MAP_ELEMENT_NOT_CONSERVED,
+        RejectionCode.ATOM_MAP_NOT_A_BIJECTION,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
         RejectionCode.IDEMPOTENCY_IN_PROGRESS,
