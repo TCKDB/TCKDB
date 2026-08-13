@@ -161,16 +161,17 @@ class ApiCode:
 
     :param code: The wire string, exactly as it appears in the body.
         Changing it changes a published contract.
-    :param status: The HTTP status that carries it. Where one code is
-        reported at more than one status the entry names the one a client
-        will actually see; a code genuinely reported at two statuses gets
-        two entries.
+    :param status: The HTTP status that carries it. A code enforced in
+        two places can arrive at two statuses — the atom map's claims are
+        stated at the wire boundary and again as a check constraint — and
+        that gets two entries, because the retry advice differs and a
+        client reads it off the status.
     :param surface: The mechanism — see :class:`Surface`.
     :param origin: Repo-relative module that *defines* the literal, with
         no line number (a line-number anchor turns a cosmetic edit into a
         red gate; see :attr:`app.scientific_checks.PythonCheck.location`
-        for the incident). Empty only for a family entry that names no
-        single site.
+        for the incident). Where a code is minted from a variable this is
+        the module holding the constant, not the module that raises.
     :param note: A fact the site cannot state about itself. Deliberately
         rare — this is an enumeration, not a second copy of the refusal
         messages.
