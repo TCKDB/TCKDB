@@ -356,6 +356,14 @@ class CalculationFreqModeSummary(BaseModel):
     declared a torsion and projection residue. It was the ambiguity ADR
     0012 was written to remove, reintroduced by a projection that carried
     the evidence and dropped the judgement.
+
+    The same declaration is also reported under
+    ``include=imaginary_mode_projections``, where it sits beside a
+    *determination* projected from the stored Hessian and an
+    ``agreement`` field naming their relationship. That include lists
+    only the imaginary modes, ranked by magnitude, and is the one to ask
+    for when the question is whether a declaration checks out. This one
+    is the frequency list, and reports what the record says.
     """
 
     mode_index: int
