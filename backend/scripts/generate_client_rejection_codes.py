@@ -7,20 +7,33 @@ The codes exist on the server and nowhere else, so a client hard-codes
 strings -- and a typo in a hard-coded string does not fail, it silently
 never matches. ``if err.code == "reaction_mass_balace_failed":`` is a
 branch that will never be taken, on the day the deposit it was written
-for finally arrives. Generating the enum from the register moves that
-from a runtime non-event to an import error, and keeps the two in step
-by construction rather than by discipline.
+for finally arrives. Generating the enum from the server's own
+enumeration moves that from a runtime non-event to an import error, and
+keeps the two in step by construction rather than by discipline.
 
 What goes in, and what deliberately does not
 --------------------------------------------
-Only the codes a *refusal* carries: the ``error_envelope`` channel (HTTP
-422, refused before anything was written) and the rejection codes
-declared on database constraints (HTTP 409, refused by a position
-PostgreSQL holds). ``upload_warning`` codes arrive alongside an
-*accepted* upload, in a different part of the response, and putting them
-in an enum named for rejections would invite a client to treat an
-accepted deposit as a failed one. ``trust_label`` codes are not refusals
-at all.
+The source is :mod:`app.api.code_catalogue` -- the enumeration of every
+code the API can emit -- and not the scientific check register, which
+this generator used to read.
+
+That change is the point of the file. The register enumerates positions
+about chemistry; its inclusion test is "could this check be wrong in an
+interesting way?", and it correctly refuses a role/type mismatch, an
+ownership refusal and ``missing_filter``. Generating the client enum from
+it meant "correctly excluded from the register" also meant "a client
+cannot import this code" -- which was true of two dozen live read-API
+codes. One list cannot be both the scientific claim and the wire
+contract without one of them being diluted.
+
+Membership is now derived from :attr:`~app.api.code_catalogue.ApiCode.is_client_facing`:
+a 4xx, and not a generic fallback (which repeats the status) or an
+accidental prefix (a function name that landed in the code position and
+is not a contract at all). ``upload_warning`` codes still do not appear:
+they arrive alongside an *accepted* upload, and putting them in an enum
+named for rejections would invite a client to treat an accepted deposit
+as a failed one. Nor do trust labels, which refuse nothing, nor 5xx
+codes, which refuse nothing the caller did.
 
 Nothing else is emitted. No file paths, no line numbers, no docstrings,
 no counts, no prose lifted from ``asserts``. That is a deliberate
@@ -50,11 +63,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from app.scientific_checks import CodeChannel  # noqa: E402
-from app.scientific_checks.declarations import (  # noqa: E402
-    constraint_rejections,
-    register,
-)
+from app.api.code_catalogue import client_facing  # noqa: E402
 
 OUTPUT = (
     REPO_ROOT
@@ -72,19 +81,25 @@ _HEADER = f'''"""Machine-readable codes TCKDB reports when it refuses a deposit.
 **Generated. Do not edit by hand.** Regenerate with
 ``conda run -n tckdb_env python {GENERATOR}``;
 ``backend/tests/api/test_client_rejection_codes_generated.py`` fails if
-this file and the server's scientific check register disagree.
+this file and the server's code catalogue disagree.
 
-Every member here is a position TCKDB takes about chemistry -- a claim a
-referee could argue with -- and each one is proved to arrive in a real
-HTTP response body by a test on the server side. The register that
-generates this file is rendered for humans at
+Every member is a refusal TCKDB can report with an HTTP 4xx: a deposit
+that contradicts chemistry, a query that names a filter the endpoint does
+not have, a calculation the depositor does not own, a handle of the wrong
+type. They are not all scientific, and that is deliberate -- the subset
+that *is* a position about chemistry is documented for humans at
 ``docs/guides/scientific_check_register.md``, which is where to look for
-what a code asserts, why it refuses rather than warns, and what the
-escape hatch is for legitimate chemistry it would otherwise reject.
+what such a code asserts, why it refuses rather than warns, and what the
+escape hatch is for legitimate chemistry it would otherwise reject. A
+code absent from that document is still a real refusal; it simply is not
+a claim a referee could argue with.
 
 Deliberately absent: warning codes, which arrive alongside an *accepted*
 upload, and trust labels, which are applied at read time and refuse
-nothing. Both would be misread as failures under this name.
+nothing -- both would be misread as failures under this name. Also absent
+are the ``http_<status>`` fallbacks and the generic ``validation_error``
+family, which carry nothing the status line does not, and 5xx codes,
+which refuse nothing the caller did.
 
 Using it::
 
@@ -154,26 +169,24 @@ def _member(code: str) -> str:
 
 
 def render() -> str:
-    checks = register()
+    entries = client_facing()
 
-    validation = sorted(
-        {
-            code
-            for check in checks
-            if check.channel is CodeChannel.error_envelope
-            for code in check.codes
-        }
-    )
-    conflict = sorted({code for code, _detail in constraint_rejections().values()})
+    validation = sorted({entry.code for entry in entries if entry.status == 422})
+    conflict = sorted({entry.code for entry in entries if entry.status == 409})
 
     if not validation:
         raise SystemExit(
-            "The register declares no error_envelope codes. Generating an "
-            "empty enum would quietly remove a published client API; refusing."
+            "The catalogue declares no client-facing 422 codes. Generating "
+            "an empty enum would quietly remove a published client API; "
+            "refusing."
         )
 
     lines = [_HEADER]
-    for code in sorted(set(validation) | set(conflict)):
+    # Every client-facing code is a member, including the ones carried by a
+    # status the two frozensets below do not cover (404, 426, 429 ...).
+    # Membership is what makes a code importable, which is the whole point;
+    # the sets are retry advice for the two statuses that have any.
+    for code in sorted({entry.code for entry in entries}):
         lines.append(f'    {_member(code)} = "{code}"\n')
 
     lines.append(
@@ -188,11 +201,13 @@ def render() -> str:
     lines.append("    }\n)\n")
 
     lines.append(
-        "\n#: Codes carried by an HTTP 409: a position PostgreSQL holds\n"
-        "#: refused the write. A code may appear in both sets -- the same\n"
-        "#: claim can be enforced at the wire boundary and again in the\n"
-        "#: schema, and which one fires depends on the write path, not on\n"
-        "#: what the depositor did wrong.\n"
+        "\n#: Codes carried by an HTTP 409: the write reached the database\n"
+        "#: and a position it holds refused it, or an idempotency key was\n"
+        "#: reused. A code may appear in both sets -- the same claim can be\n"
+        "#: enforced at the wire boundary and again in the schema, and which\n"
+        "#: one fires depends on the write path, not on what the depositor\n"
+        "#: did wrong. Members in neither set are carried by some other 4xx\n"
+        "#: (404, 426, 429); read the HTTP status for those.\n"
         "CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(\n"
         "    {\n"
     )
@@ -220,7 +235,7 @@ def main() -> int:
             return 1
         if OUTPUT.read_text() != rendered:
             print(
-                f"{OUTPUT} is out of date with the scientific check register. "
+                f"{OUTPUT} is out of date with app/api/code_catalogue.py. "
                 f"Regenerate it with `python {GENERATOR}` "
                 "and bump the client version in clients/python/pyproject.toml.",
                 file=sys.stderr,
