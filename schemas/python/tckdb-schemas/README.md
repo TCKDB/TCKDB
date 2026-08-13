@@ -24,6 +24,63 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.29.0 — a frequency list is measured against the geometry it was computed on
+
+**Not breaking.** No field is added, renamed or removed, and **every
+0.28.0 payload validates unchanged under 0.29.0**: the set of payloads
+that validate is byte-for-byte the set that validated before, and every
+payload 0.28.0 refused is still refused. The new judgement is entirely at
+the **warning** tier — it changes what an accepted upload is *told*,
+never whether it is accepted.
+
+[ADR 0012](https://github.com/TCKDB/TCKDB/blob/main/docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md)
+§"What a record must carry" requires "the complete signed unrounded
+frequency list, never filtered", and nothing checked it. A depositor
+could send three modes, all imaginary, with `n_imag = 3` and pass every
+rule the package had — `freq_n_imag_disagrees_with_modes` included,
+because that rule compares the imaginary count against `n_imag` and a
+list of nothing but imaginary modes satisfies it exactly. The real modes
+were simply absent, and absence is silent.
+
+New module `tckdb_schemas.frequency_completeness`, with two codes:
+
+| code | when |
+|---|---|
+| `freq_list_incomplete_for_geometry` | the list is shorter than the smallest complete spectrum the geometry admits |
+| `freq_list_exceeds_geometry_degrees_of_freedom` | the list is longer than `3N`, so it describes motion the geometry does not have |
+
+Both are warnings carrying `structural_flag=True`, reported through the
+existing `stationary_point_findings()` surface on every published upload
+request model and reaching a client as an `UploadWarning` in the 201
+body.
+
+**The bounds are deliberately the weakest ones that are certainly true.**
+Linearity is never determined: a collinear molecule has `3N - 5` modes,
+one *more* than `3N - 6`, so comparing against `3N - 6` accepts every
+linear molecule without choosing a collinearity tolerance. For `N ≤ 2`
+linearity is a fact rather than a measurement, so those take exact counts
+(`N = 1` → 0 modes, `N = 2` → 1). The ceiling is `3N` and not `3N - 6`
+because ADR 0012 also asks for "the six translation/rotation eigenvalues
+… so contamination is directly assessable" — a record carrying all `3N`
+is the most complete record the ADR describes and must not be refused as
+an over-count.
+
+**Why warn and not block.** The check cannot tell a filtered list from a
+genuinely shorter one: a partial-Hessian job, a frozen-atom or ONIOM
+Hessian, and a lumped participant all produce fewer than `3N - 6` modes
+and are correct records of what was computed. And `modes = null` is
+accepted and must stay accepted, so a block's cheapest workaround is
+deleting the frequency list — turning a partial list into no list at all,
+which is the failure ADR 0012 §"Why not refuse, when refusing is cheaper"
+names outright. The over-long case genuinely is definitional; it warns
+here because promoting it to a refusal belongs in the scientific-check
+register rather than in an implementation.
+
+Minor rather than patch because two new machine-readable warning codes
+enter the published vocabulary: a consumer may now branch on them, which
+it could not before. Neither is a refusal code, so no client rejection
+constant changes.
+
 ### 0.28.0 — a frequency result that contradicts itself says so by name
 
 **Not breaking.** No field is added, renamed or removed, and the set of

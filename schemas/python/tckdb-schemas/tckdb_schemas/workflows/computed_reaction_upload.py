@@ -70,6 +70,7 @@ from tckdb_schemas.shared.calculation_in import (
     GeometryIn,
     calculation_in_to_with_results_payload as _base_calc_to_payload,
     freq_evidence,
+    frequency_completeness_findings,
     transition_state_frequency_findings,
 )
 from tckdb_schemas.stationary_point import (
@@ -703,28 +704,46 @@ class BundleSpeciesIn(SchemaBase):
         ignored which entity owns the frequency would wrongly reject it.
         """
         kind = self.species_entry.species_entry_kind
+        xyz_by_geometry_key = {
+            conformer.geometry.key: conformer.geometry.xyz_text
+            for conformer in self.conformers
+        }
         findings: list[StationaryPointFinding] = []
         for conformer in self.conformers:
+            location = (
+                f"species['{self.key}'].conformers['{conformer.key}']"
+                f".calculation"
+            )
             n_imag, imag_freq_cm1 = freq_evidence(conformer.calculation)
             findings.extend(
                 evaluate_species_entry_frequency(
-                    kind,
-                    n_imag,
-                    imag_freq_cm1,
-                    location=(
-                        f"species['{self.key}'].conformers['{conformer.key}']"
-                        f".calculation"
-                    ),
+                    kind, n_imag, imag_freq_cm1, location=location
+                )
+            )
+            findings.extend(
+                frequency_completeness_findings(
+                    conformer.calculation,
+                    location=f"{location}.freq_frequencies_cm1",
+                    xyz_text=conformer.geometry.xyz_text,
                 )
             )
         for calc in self.calculations:
+            location = f"species['{self.key}'].calculations['{calc.key}']"
             n_imag, imag_freq_cm1 = freq_evidence(calc)
             findings.extend(
                 evaluate_species_entry_frequency(
-                    kind,
-                    n_imag,
-                    imag_freq_cm1,
-                    location=f"species['{self.key}'].calculations['{calc.key}']",
+                    kind, n_imag, imag_freq_cm1, location=location
+                )
+            )
+            findings.extend(
+                frequency_completeness_findings(
+                    calc,
+                    location=f"{location}.freq_frequencies_cm1",
+                    # ``validate_calc_geometry_belongs_to_conformer`` has
+                    # already refused a key that names anything else, so a
+                    # miss here means the calculation named no geometry at
+                    # all and the check declines to speak.
+                    xyz_text=xyz_by_geometry_key.get(calc.geometry_key or ""),
                 )
             )
         return findings
@@ -833,10 +852,15 @@ class BundleTransitionStateIn(SchemaBase):
         """Judge this transition state against its own frequency evidence."""
         findings: list[StationaryPointFinding] = []
         for calc in (self.calculation, *self.calculations):
+            location = f"transition_state.calculations['{calc.key}']"
             findings.extend(
-                transition_state_frequency_findings(
+                transition_state_frequency_findings(calc, location=location)
+            )
+            findings.extend(
+                frequency_completeness_findings(
                     calc,
-                    location=f"transition_state.calculations['{calc.key}']",
+                    location=f"{location}.freq_frequencies_cm1",
+                    xyz_text=self.geometry.xyz_text,
                 )
             )
         return findings

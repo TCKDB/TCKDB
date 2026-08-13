@@ -205,6 +205,7 @@ def upload_conformer(
         primary_calc=request.calculation,
         additional_calcs=request.additional_calculations,
         statmech=request.statmech,
+        reference_xyz_text=request.geometry.xyz_text,
     )
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.conformer

@@ -47,12 +47,24 @@ def inline_calculation_findings(
         freq_result = item.calculation.freq_result
         if freq_result is None:
             continue
+        location = f"calculations['{item.key}'].freq_result"
         findings.extend(
             evaluate_species_entry_frequency(
                 kind,
                 freq_result.n_imag,
                 freq_result.imag_freq_cm1,
-                location=f"calculations['{item.key}'].freq_result",
+                location=location,
+            )
+        )
+        # No reference geometry to fall back to: these three requests
+        # carry a product and its evidence, never a conformer. So the
+        # completeness question is answerable only for a calculation that
+        # named the geometry it ran on, and stays silent otherwise —
+        # which is the same rule the bundles apply, reached by a
+        # different route.
+        findings.extend(
+            item.calculation.frequency_completeness_findings(
+                location=f"{location}.modes"
             )
         )
     return findings

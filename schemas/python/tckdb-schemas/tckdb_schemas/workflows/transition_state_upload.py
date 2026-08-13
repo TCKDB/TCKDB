@@ -252,6 +252,12 @@ class TransitionStateUploadRequest(SchemaBase):
                     location=f"{label}.freq_result"
                 )
             )
+            findings.extend(
+                calc.frequency_completeness_findings(
+                    location=f"{label}.freq_result.modes",
+                    fallback_xyz_text=self.geometry.xyz_text,
+                )
+            )
         return findings
 
     @model_validator(mode="after")

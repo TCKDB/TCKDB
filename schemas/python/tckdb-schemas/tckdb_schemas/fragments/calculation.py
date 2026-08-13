@@ -16,6 +16,7 @@ from tckdb_schemas.enums import (
     PathSearchMethod,
     SCFStabilityStatus,
 )
+from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.calculation_origin import CalculationOriginMetadata
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.execution_environment import ExecutionEnvironmentManifestPayload
@@ -928,6 +929,38 @@ class CalculationWithResultsPayload(CalculationPayload):
                 self.freq_result.reaction_coordinate_mode_index
             ),
             tau=self.tau_resolution(),
+        )
+
+    def frequency_completeness_findings(
+        self, *, location: str, fallback_xyz_text: str | None = None
+    ) -> list[StationaryPointFinding]:
+        """Judge whether this calculation's frequency list is the spectrum.
+
+        A thin adapter over :mod:`tckdb_schemas.frequency_completeness`,
+        which owns the arithmetic and knows no payload shapes. What is
+        payload-shaped, and lives here, is *which* geometry the frequency
+        job ran on: ``input_geometries[0]`` when the producer named one,
+        and otherwise the reference geometry the workflow will fall back
+        to — the same fallback ``input_geometries``' own description
+        documents, so the check counts the atoms the database will end up
+        binding this calculation to rather than a different set.
+
+        :param location: Path to the payload element, used verbatim.
+        :param fallback_xyz_text: The enclosing conformer's or transition
+            state's reference geometry, for the common case of a freq
+            calculation that names no input geometry of its own.
+        """
+        if self.freq_result is None or self.freq_result.modes is None:
+            return []
+        return evaluate_deposited_frequency_list(
+            len(self.freq_result.modes),
+            input_geometry_xyz_text=(
+                self.input_geometries[0].xyz_text
+                if self.input_geometries
+                else None
+            ),
+            fallback_xyz_text=fallback_xyz_text,
+            location=location,
         )
 
     def tau_resolution(self) -> TauResolution:
