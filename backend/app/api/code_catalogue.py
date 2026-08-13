@@ -21,9 +21,9 @@ real codes unbranchable.
 This module is the second set. It enumerates codes; it says nothing about
 chemistry. The register is now an *annotated subset* of it, and
 ``backend/tests/api/test_api_code_catalogue.py`` checks the containment:
-every code the register declares must exist here, and the two lists are
-verified to be different sizes, so "the catalogue" and "the register"
-cannot quietly become the same list again.
+every code the register declares must exist here, and this list must stay
+several times the size of that one, so "the catalogue" and "the register"
+cannot quietly converge into a single list again.
 
 There is deliberately no ``scientific`` flag on :class:`ApiCode`. Folding
 the two lists into one with a boolean is the design this replaces: it
@@ -57,12 +57,11 @@ Nor any line numbers or rendered paths in the generated client file. See
 ``backend/scripts/generate_client_rejection_codes.py`` for why a gate that
 fires on cosmetic movement is worse than no gate.
 
-Why completeness is checked three ways, not claimed once
---------------------------------------------------------
+Why completeness is checked, not claimed
+----------------------------------------
 A catalogue that asserts it is complete and is not would be exactly the
 kind of check-that-cannot-fail this repository keeps finding. Codes reach
-this file by three different routes, and none of the three alone is
-enough:
+this file by four different routes, and no one of them is enough:
 
 * **A static scan of raise sites** (:data:`Surface.coded_exception`,
   :data:`Surface.message_prefix`) finds every code written as a literal
@@ -73,15 +72,20 @@ enough:
   and ``scientific_read.handles.reconcile_id_ref`` both take their code as
   a *parameter*, ``tckdb_schemas.stationary_point`` raises with whichever
   code its blocking finding carries, and the integrity handler looks its
-  code up by PostgreSQL constraint name. That is fifteen codes the scan
+  code up by PostgreSQL constraint name. That is eighteen codes the scan
   is blind to, and the ``*_handle_conflict`` family was found only by the
   observer below. For those the guard checks the *defining* module
   instead, which is where the literal actually lives.
+* **A handler, a middleware or a route writes the body itself** and names
+  the code in a literal there — twenty-one of these, none of them at a
+  ``raise``. They are found by reading the small number of places that
+  build an error body, which is a closed set because the exception
+  handlers are registered in one function.
 * **A runtime observer** in ``backend/tests/conftest.py`` records the
   ``code`` of every error response the test suite produces and fails the
   test that emits one this catalogue does not list. That is what makes
   the completeness claim falsifiable rather than asserted, and it is the
-  only one of the three that can catch a code assembled at request time.
+  only one of the four that can catch a code assembled at request time.
 """
 
 from __future__ import annotations
