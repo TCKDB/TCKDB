@@ -33,6 +33,10 @@ import sys
 from types import ModuleType
 
 from tckdb_schemas.fragments import reaction_atom_map as wire_atom_map
+from tckdb_schemas.fragments.calculation import (
+    W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
+    FreqResultPayload,
+)
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
     TAU_ANALYTIC_TIGHT_CM1,
@@ -460,6 +464,74 @@ CHECK_TRANSITION_STATE_SOFT_REACTION_COORDINATE = ScientificCheck(
     escape_hatch=(
         "None is needed — the check never refuses. A referee should read the "
         "threshold as a tunable reporting line, not a claim about physics."
+    ),
+)
+
+CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES = ScientificCheck(
+    group="Stationary points",
+    sort_key=7,
+    code=W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
+    asserts=(
+        "A frequency result that deposits both a scalar imaginary-mode count "
+        "and a frequency list agrees with itself about how many imaginary "
+        "modes it has."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "A contract between two fields of one record, not an expectation "
+        "about a result — which is the narrow thing ADR 0008 reserves the "
+        "blocking tier for. Every other entry in this group judges chemistry "
+        "and had to argue that no correct calculation could produce the "
+        "record it refuses; this one does not need that argument, because it "
+        "makes no claim about the potential energy surface at all. It says "
+        "only that ``calc_freq_result.n_imag`` and the ``calc_freq_mode`` "
+        "rows beside it must answer the same question the same way. A deposit "
+        "that says three and shows one is accepted today, after which the "
+        "cheap summary and the evidence table disagree permanently and "
+        "neither reader is told the other exists — the summary-reading "
+        "consumer filters it as a higher-order saddle, the mode-reading "
+        "consumer sees a clean first-order one, and both are quoting the same "
+        "row. No re-run and no better parser can decide which was meant, "
+        "because the payload itself no longer knows."
+    ),
+    adr="0008, 0012",
+    enforced_by=(
+        PythonCheck(
+            FreqResultPayload.validate_modes_consistency,
+            note=(
+                "**Absence is deliberately not disagreement.** The rule "
+                "engages only where a frequency list was deposited: "
+                "``modes = null`` with any ``n_imag`` is accepted, because an "
+                "incomplete record is still a true record and ADR 0012's read "
+                "surface already reports ``n_imag_at_or_above_tau = null`` "
+                "rather than ``0`` for exactly that state. An *empty* list is "
+                "a different claim — the depositor handing over a frequency "
+                "list with nothing imaginary in it — and is judged like any "
+                "other list, which is why ``n_imag = 3`` with ``modes = []`` "
+                "is refused while ``n_imag = 3`` with ``modes = null`` is not. "
+                "**Not also held in PostgreSQL, and that is a limit rather "
+                "than a choice.** The rule counts rows in ``calc_freq_mode`` "
+                "and compares the total against a column of "
+                "``calc_freq_result``, which is a cross-table aggregate: a "
+                "CHECK constraint may not contain a subquery, so no constraint "
+                "expresses it and only a deferred constraint trigger could. "
+                "That was not added, for the reason already written on "
+                "``calc_freq_result``'s tau-basis CHECK — a trigger does not "
+                "fire under ``session_replication_role = replica``, which is "
+                "what bulk loaders and restore paths run under, so it would be "
+                "absent from precisely the write paths that do not reach this "
+                "validator. A second guard that holds only where the first one "
+                "already holds is not depth."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "Omit ``modes``. A record that deposits only the scalar is "
+        "incomplete, warns nowhere and is refused nowhere — ADR 0012 asks for "
+        "the complete signed frequency list, and asking is as far as this "
+        "tier goes. What has no door is depositing both and letting them "
+        "contradict each other."
     ),
 )
 

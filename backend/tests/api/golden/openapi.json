@@ -4226,7 +4226,7 @@
         "type": "object"
       },
       "CalculationFreqModeSummary": {
-        "description": "One vibrational mode row (``calc_freq_mode``), projected for the\n``include=freq_modes`` heavy include of the calculation detail\nendpoint.\n\nThe per-mode harmonic frequency array belongs to the frequency\n*calculation* (not to the statmech record that consumes it), so it\nis served here alongside the other per-calculation detail includes\n(``scan`` coordinates, geometry links). Consumers that need to\nregenerate a species' vibrational analysis read the raw modes from\nthis include and the applied scale factor from the statmech record.\n\nImaginary modes are stored as a negative ``frequency_cm1`` together\nwith ``is_imaginary = True`` (the DB enforces the sign matches the\nflag). ``mode_index`` is scientific order metadata (1-based, part of\nthe row's natural key), not a DB surrogate id, so it stays visible.",
+        "description": "One vibrational mode row (``calc_freq_mode``), projected for the\n``include=freq_modes`` heavy include of the calculation detail\nendpoint.\n\nThe per-mode harmonic frequency array belongs to the frequency\n*calculation* (not to the statmech record that consumes it), so it\nis served here alongside the other per-calculation detail includes\n(``scan`` coordinates, geometry links). Consumers that need to\nregenerate a species' vibrational analysis read the raw modes from\nthis include and the applied scale factor from the statmech record.\n\nImaginary modes are stored as a negative ``frequency_cm1`` together\nwith ``is_imaginary = True`` (the DB enforces the sign matches the\nflag). ``mode_index`` is scientific order metadata (1-based, part of\nthe row's natural key), not a DB surrogate id, so it stays visible.\n\n**The evidence and the verdict on it travel together.** This include\nis where a reader meets the individual negative frequencies, and it\nis therefore where the question ADR 0012 exists to answer gets asked:\na record with several of them is accepted only because the depositor\nsaid which one is the reaction coordinate and what each of the others\n*is*. The designation lives on the freq-result projection\n(``reaction_coordinate_mode_index``); the dispositions live per mode\nand were, until this field existed, stored and unreadable here — so a\nconsumer looking at three negative frequencies could see that one of\nthem was designated and could not see that the other two had been\ndeclared a torsion and projection residue. It was the ambiguity ADR\n0012 was written to remove, reintroduced by a projection that carried\nthe evidence and dropped the judgement.",
         "properties": {
           "force_constant_mdyne_angstrom": {
             "anyOf": [
@@ -4242,6 +4242,16 @@
           "frequency_cm1": {
             "title": "Frequency Cm1",
             "type": "number"
+          },
+          "imaginary_disposition": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImaginaryModeDisposition"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "is_imaginary": {
             "title": "Is Imaginary",

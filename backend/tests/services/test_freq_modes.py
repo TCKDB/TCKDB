@@ -12,6 +12,10 @@ from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from tckdb_schemas.coded_error import CodedValidationError
+from tckdb_schemas.fragments.calculation import (
+    W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
+)
 
 from app.db.models.calculation import (
     CalculationFreqMode,
@@ -114,6 +118,112 @@ class TestFreqResultPayloadModes:
                     ),
                 ],
             )
+
+    def test_the_mismatch_is_refused_under_its_own_code(self) -> None:
+        """The refusal names itself, rather than arriving as prose.
+
+        Asserted on the exception's ``code`` attribute, never on the
+        message: Pydantic echoes rejected input back into its error
+        string, so a substring test can be satisfied by a payload that
+        was *accepted* and merely mentioned somewhere else in the
+        report. The type and the code cannot be faked that way.
+        """
+        with pytest.raises(ValidationError) as excinfo:
+            FreqResultPayload(
+                n_imag=3,
+                modes=[
+                    FrequencyModePayload(
+                        mode_index=1, frequency_cm1=-1300.0, is_imaginary=True
+                    ),
+                    FrequencyModePayload(
+                        mode_index=2, frequency_cm1=800.0, is_imaginary=False
+                    ),
+                ],
+            )
+        errors = excinfo.value.errors()
+        assert len(errors) == 1, errors
+        coded = errors[0]["ctx"]["error"]
+        assert isinstance(coded, CodedValidationError)
+        assert coded.code == W_FREQ_N_IMAG_DISAGREES_WITH_MODES
+        # What it is short of, structured rather than parsed out of prose.
+        assert coded.context == {
+            "n_imag": 3,
+            "imaginary_mode_count": 1,
+            "mode_count": 2,
+        }
+
+    def test_a_scalar_with_no_frequency_list_is_accepted(self) -> None:
+        """Absence is not disagreement, and this is where the two part.
+
+        A depositor who uploads no per-mode data has an incomplete
+        record, not a contradictory one. The read API already takes this
+        position from the other end by reporting
+        ``n_imag_at_or_above_tau = null`` rather than ``0`` for exactly
+        this state, and a rule reading "mode rows must exist" would
+        refuse a record TCKDB has always accepted and still means to.
+        """
+        payload = FreqResultPayload(n_imag=3, imag_freq_cm1=-1300.0)
+        assert payload.n_imag == 3
+        assert payload.modes is None
+
+    def test_an_empty_frequency_list_is_a_claim_and_is_judged(self) -> None:
+        """``modes = []`` is not ``modes = null``, and is not treated as it.
+
+        The distinction is worth pinning because persistence *does*
+        collapse the two -- ``if calc_upload.freq_result.modes:`` writes
+        no rows for either -- so it would be easy to argue the validator
+        should collapse them as well. It must not. An empty list is a
+        depositor handing over the frequency list and saying nothing in
+        it is imaginary, which beside ``n_imag = 3`` is the same
+        contradiction as any other disagreeing list; omitting the field
+        is declining to say. Only the second is absence.
+        """
+        assert FreqResultPayload(n_imag=0, modes=[]).modes == []
+        with pytest.raises(ValidationError) as excinfo:
+            FreqResultPayload(n_imag=3, modes=[])
+        coded = excinfo.value.errors()[0]["ctx"]["error"]
+        assert coded.code == W_FREQ_N_IMAG_DISAGREES_WITH_MODES
+        assert coded.context["imaginary_mode_count"] == 0
+        assert coded.context["mode_count"] == 0
+
+    def test_a_list_that_shows_more_than_the_scalar_claims(self) -> None:
+        """The disagreement is refused in both directions.
+
+        A rule written as "the list must not fall short" would pass this
+        payload, and the record would then say one imaginary mode in its
+        summary and show two in its evidence -- the same defect with the
+        readers swapped.
+        """
+        with pytest.raises(ValidationError) as excinfo:
+            FreqResultPayload(
+                n_imag=1,
+                modes=[
+                    FrequencyModePayload(
+                        mode_index=1, frequency_cm1=-1300.0, is_imaginary=True
+                    ),
+                    FrequencyModePayload(
+                        mode_index=2, frequency_cm1=-42.0, is_imaginary=True
+                    ),
+                ],
+            )
+        coded = excinfo.value.errors()[0]["ctx"]["error"]
+        assert coded.code == W_FREQ_N_IMAG_DISAGREES_WITH_MODES
+        assert coded.context == {
+            "n_imag": 1,
+            "imaginary_mode_count": 2,
+            "mode_count": 2,
+        }
+
+    def test_a_list_with_no_scalar_beside_it_is_accepted(self) -> None:
+        """``n_imag = null`` has nothing to disagree with the list about."""
+        payload = FreqResultPayload(
+            modes=[
+                FrequencyModePayload(
+                    mode_index=1, frequency_cm1=-1300.0, is_imaginary=True
+                ),
+            ],
+        )
+        assert payload.n_imag is None
 
     def test_n_imag_matches_when_consistent(self) -> None:
         payload = FreqResultPayload(

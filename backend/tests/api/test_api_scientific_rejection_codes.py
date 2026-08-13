@@ -353,6 +353,110 @@ class TestStationaryPoints:
 
 
 # ---------------------------------------------------------------------------
+# A frequency result against its own frequency list
+# ---------------------------------------------------------------------------
+#
+# Unlike every other entry above, this one asserts nothing about the
+# potential energy surface. It says only that the scalar the ESS printed
+# and the mode rows deposited beside it must answer the same question the
+# same way -- a contract between two fields of one record, which is the
+# narrow thing ADR 0008 reserves the blocking tier for.
+
+
+class TestAFrequencyResultAgainstItsOwnModes:
+    def test_a_scalar_that_outruns_the_frequency_list(self, client):
+        """``n_imag = 3`` beside one imaginary row is refused by name.
+
+        The failure this guards: accepted, the record's cheap summary
+        claims three imaginary modes while its evidence table shows one,
+        a reader who trusts the summary and a reader who reads the modes
+        get different answers about the same row, and neither is told.
+        """
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json={
+                **_conformer_payload(
+                    species_entry=_METHANE, xyz_text=_METHANE_XYZ
+                ),
+                "calculation": _freq_calc(
+                    n_imag=3,
+                    imag_freq_cm1=-1300.0,
+                    frequencies=[-1300.0, 800.0, 1600.0],
+                ),
+            },
+        )
+        body = _assert_code(response, "freq_n_imag_disagrees_with_modes")
+        # The sentence 0.27.0 emitted is byte-for-byte the sentence a
+        # prose-matching client still sees; the code is new information
+        # beside it, not a rewrite of it.
+        assert (
+            "n_imag=3 does not match imaginary mode count 1 in modes."
+            in str(body["detail"])
+        )
+        # What it is short of, without anyone parsing that sentence.
+        assert body["context"] == {
+            "n_imag": 3,
+            "imaginary_mode_count": 1,
+            "mode_count": 3,
+        }
+
+    def test_the_same_scalar_with_no_frequency_list_is_accepted(self, client):
+        """Absence is not disagreement, and the rule must not conflate them.
+
+        Identical ``n_imag`` to the test above, with the frequency list
+        omitted rather than contradicting it. A depositor who uploads no
+        per-mode data has an incomplete record, not a false one, and the
+        read API already says so by reporting
+        ``n_imag_at_or_above_tau = null`` rather than ``0`` for exactly
+        this state. It is the asymmetry that makes the check above safe
+        to block on, and a rule written "mode rows must exist" would
+        refuse this deposit.
+
+        Ridden on a van der Waals complex because that is the one
+        declared kind for which several imaginary modes are an
+        expectation rather than a contradiction, so nothing else in the
+        payload can be what refuses it.
+        """
+        payload = _conformer_payload(
+            species_entry={**_METHANE, "species_entry_kind": "vdw_complex"},
+            xyz_text=_METHANE_XYZ,
+            label="vdw-scalar-only",
+        )
+        payload["additional_calculations"] = [
+            _freq_calc(n_imag=3, imag_freq_cm1=-22.0)
+        ]
+        response = client.post("/api/v1/uploads/conformers", json=payload)
+        assert response.status_code == 201, response.text
+        assert "n_imag_higher_order_saddle" in {
+            warning["code"] for warning in response.json()["warnings"]
+        }
+
+    def test_a_frequency_list_that_agrees_is_deposited(self, client):
+        """The same three imaginary modes, declared, are accepted.
+
+        ADR 0012's own motivating record -- a reaction coordinate at
+        -1300 with -42 and -13 beside it -- with the scalar agreeing with
+        the list, the barrier designated and the two extras declared. The
+        blocking tier above has to let this through or it is the
+        ``n_imag == 1`` gate under another name.
+        """
+        response = client.post(
+            "/api/v1/uploads/transition-states",
+            json=_transition_state_payload(
+                label="ts-declared-extras",
+                freq=_freq_calc(
+                    n_imag=3,
+                    imag_freq_cm1=-1300.0,
+                    frequencies=[-1300.0, -42.0, -13.0, 900.0],
+                    reaction_coordinate_mode_index=1,
+                    dispositions={2: "torsion", 3: "rigid_body_residue"},
+                ),
+            ),
+        )
+        assert response.status_code == 201, response.text
+
+
+# ---------------------------------------------------------------------------
 # Conservation, against the saddle point
 # ---------------------------------------------------------------------------
 

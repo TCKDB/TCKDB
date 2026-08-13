@@ -3,6 +3,7 @@ from typing import Self
 
 from pydantic import BaseModel, Field, model_validator
 
+from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.common import SchemaBase
 from tckdb_schemas.enums import (
     CalculationGeometryRole,
@@ -133,6 +134,24 @@ class OptResultPayload(SchemaBase):
     final_energy_hartree: float | None = None
 
 
+#: ``calc_freq_result.n_imag`` is a scalar the ESS printed; ``calc_freq_mode``
+#: is the evidence beside it. Where a deposit carries both and they disagree,
+#: the record answers "how many imaginary modes?" two different ways and tells
+#: neither reader that the other exists — the cheap summary says three, the
+#: frequency list shows one, and the two consumers walk away with different
+#: science from the same row. That is a contract between two fields of one
+#: record rather than an expectation about a result, so ADR 0008 puts it at
+#: the blocking tier.
+#:
+#: **Absence is not disagreement.** ``modes = null`` is a deposit that carries
+#: no frequency list, which is incomplete rather than contradictory and is
+#: accepted with ``n_imag`` at any value; ADR 0012's read surface already
+#: reports ``n_imag_at_or_above_tau = null`` rather than ``0`` for exactly that
+#: state. An *empty* list is a different claim — "here is the frequency list,
+#: and nothing in it is imaginary" — and is judged like any other list.
+W_FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
+
+
 class FrequencyModePayload(BaseModel):
     """One vibrational mode within a frequency calculation result.
 
@@ -229,9 +248,26 @@ class FreqResultPayload(SchemaBase):
         if self.n_imag is not None:
             imaginary_count = sum(1 for m in self.modes if m.is_imaginary)
             if imaginary_count != self.n_imag:
-                raise ValueError(
+                raise CodedValidationError(
+                    W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
+                    # First sentence unchanged, byte for byte: attaching a
+                    # code is additive and must not move published prose.
                     f"n_imag={self.n_imag} does not match imaginary mode count "
-                    f"{imaginary_count} in modes."
+                    f"{imaginary_count} in modes. The scalar the ESS printed "
+                    f"and the frequency list deposited beside it are the same "
+                    f"claim made twice, and a record that makes it two ways "
+                    f"tells a consumer reading the summary something different "
+                    f"from one reading the evidence "
+                    f"({W_FREQ_N_IMAG_DISAGREES_WITH_MODES}). Deposit the "
+                    f"complete signed frequency list, or omit modes entirely "
+                    f"— absence is incompleteness, which is accepted, and only "
+                    f"contradiction is refused.",
+                    context={
+                        "n_imag": self.n_imag,
+                        "imaginary_mode_count": imaginary_count,
+                        "mode_count": len(self.modes),
+                    },
+                    message_prefix=False,
                 )
         return self
 

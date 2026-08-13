@@ -342,6 +342,20 @@ class CalculationFreqModeSummary(BaseModel):
     with ``is_imaginary = True`` (the DB enforces the sign matches the
     flag). ``mode_index`` is scientific order metadata (1-based, part of
     the row's natural key), not a DB surrogate id, so it stays visible.
+
+    **The evidence and the verdict on it travel together.** This include
+    is where a reader meets the individual negative frequencies, and it
+    is therefore where the question ADR 0012 exists to answer gets asked:
+    a record with several of them is accepted only because the depositor
+    said which one is the reaction coordinate and what each of the others
+    *is*. The designation lives on the freq-result projection
+    (``reaction_coordinate_mode_index``); the dispositions live per mode
+    and were, until this field existed, stored and unreadable here — so a
+    consumer looking at three negative frequencies could see that one of
+    them was designated and could not see that the other two had been
+    declared a torsion and projection residue. It was the ambiguity ADR
+    0012 was written to remove, reintroduced by a projection that carried
+    the evidence and dropped the judgement.
     """
 
     mode_index: int
@@ -349,6 +363,25 @@ class CalculationFreqModeSummary(BaseModel):
     is_imaginary: bool
     reduced_mass_amu: float | None = None
     force_constant_mdyne_angstrom: float | None = None
+
+    #: What the **depositor declared** this imaginary mode is, when it is
+    #: not the reaction coordinate — one of ``rigid_body_residue``,
+    #: ``torsion``, ``ring_pucker``, ``intermolecular``,
+    #: ``symmetry_breaking`` or an explicit ``unassigned``. Never
+    #: inferred: TCKDB reports a declaration here and, separately, a
+    #: determination projected from the stored Hessian under
+    #: ``include=imaginary_mode_projections``, and resolves a
+    #: disagreement between the two nowhere.
+    #:
+    #: ``None`` on every real mode (the database refuses a disposition
+    #: there), on the designated reaction coordinate (a disposition says
+    #: what a mode is *instead of* the reaction coordinate, so the two
+    #: cannot both be true), and on any extra imaginary mode whose
+    #: depositor said nothing. Those three are different facts and this
+    #: field does not distinguish them on its own —
+    #: ``reaction_coordinate_mode_index`` and ``is_imaginary``, both
+    #: already on the wire, do.
+    imaginary_disposition: ImaginaryModeDisposition | None = None
 
 
 class ImaginaryModeProjectionEntry(BaseModel):

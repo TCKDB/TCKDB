@@ -1452,7 +1452,10 @@ def _build_freq_modes(
 
     The array is bounded by the molecule's ``3N-6`` (or ``3N-5``) degrees
     of freedom, so it is safe to inline without pagination. Imaginary
-    modes carry a negative ``frequency_cm1`` with ``is_imaginary = True``.
+    modes carry a negative ``frequency_cm1`` with ``is_imaginary = True``,
+    and each one carries the disposition its depositor declared for it —
+    the evidence and the verdict on it come out of the same query, so a
+    reader cannot receive one without the other.
 
     Ordering: ``mode_index ASC`` — the row's natural ordering key.
     """
@@ -1469,6 +1472,7 @@ def _build_freq_modes(
             is_imaginary=row.is_imaginary,
             reduced_mass_amu=row.reduced_mass_amu,
             force_constant_mdyne_angstrom=row.force_constant_mdyne_angstrom,
+            imaginary_disposition=row.imaginary_disposition,
         )
         for row in rows
     ]

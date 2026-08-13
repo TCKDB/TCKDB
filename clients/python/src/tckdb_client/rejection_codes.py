@@ -65,6 +65,7 @@ class RejectionCode(str, Enum):
     ATOM_MAP_INFERRED_REQUIRES_NOTE = "atom_map_inferred_requires_note"
     ATOM_MAP_NOT_A_BIJECTION = "atom_map_not_a_bijection"
     ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
+    FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
     REACTION_CHARGE_NOT_CONSERVED = "reaction_charge_not_conserved"
@@ -94,6 +95,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ATOM_MAP_INDICES_NOT_GEOMETRY_RELATIVE,
         RejectionCode.ATOM_MAP_INFERRED_REQUIRES_NOTE,
         RejectionCode.ATOM_MAP_NOT_A_BIJECTION,
+        RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.REACTION_CHARGE_NOT_CONSERVED,
         RejectionCode.REACTION_MASS_BALANCE_FAILED,
