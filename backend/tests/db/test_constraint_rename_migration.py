@@ -62,6 +62,18 @@ def alembic_at_previous_head(db_engine, monkeypatch):
 
     Restores head in teardown whatever the test did to the catalog, so a
     failure here fails this test rather than every test that follows it.
+
+    The teardown runs ``downgrade`` before ``upgrade``, and that ordering
+    is load-bearing rather than defensive. Two of the tests below finish
+    by repairing the catalog and letting the migration through, which
+    leaves ``alembic_version`` at head -- so a teardown that only put the
+    *names* back and then called ``upgrade`` would find nothing to run,
+    and would hand the next test on this worker a database carrying the
+    doubled name under a version stamp claiming it had been renamed.
+    That is not hypothetical: it is what the first version of this file
+    did, and ``test_constraint_names_match_the_model.py`` caught it in CI
+    as a schema-wide sweep failure with no obvious author. Forcing the
+    version back down first makes the final ``upgrade`` real work again.
     """
     url = db_engine.url.render_as_string(hide_password=False)
     for key, value in (
@@ -80,8 +92,13 @@ def alembic_at_previous_head(db_engine, monkeypatch):
     try:
         yield config, engine
     finally:
+        # Order matters; see the docstring. Names first so the downgrade
+        # meets a catalog it can act on, then the version stamp back down
+        # so the final upgrade actually runs the rename.
         _restore_pre_upgrade_names(engine)
+        command.downgrade(config, _PREVIOUS_HEAD)
         command.upgrade(config, _CURRENT_HEAD)
+        _assert_left_at_head(engine)
         engine.dispose()
 
 
@@ -119,6 +136,28 @@ def _restore_pre_upgrade_names(engine) -> None:
             engine,
             f'ALTER TABLE {_TABLE} ADD CONSTRAINT "{_OLD}" CHECK ({_DEFINITION})',
         )
+
+
+def _assert_left_at_head(engine) -> None:
+    """Fail loudly here rather than quietly somewhere downstream.
+
+    This file is the only thing in the suite that alters the schema of
+    the worker's database, so a teardown that half-worked does not show
+    up as a failure in this file -- it shows up as an unrelated test
+    somewhere else reading a catalog nobody expected. Checking the exit
+    state keeps the blame local.
+    """
+    names = _constraint_names(engine)
+    assert _NEW in names and _OLD not in names, (
+        "teardown left calculation_artifact carrying "
+        f"{sorted(n for n in names if n.endswith('bytes_gt_0'))}; the next "
+        "test on this worker would see a schema this file broke"
+    )
+    with engine.connect() as connection:
+        version = connection.scalar(text("SELECT version_num FROM alembic_version"))
+    assert version == _CURRENT_HEAD, (
+        f"teardown left alembic_version at {version!r}, not {_CURRENT_HEAD!r}"
+    )
 
 
 def test_a_constraint_already_correctly_named_is_left_alone(alembic_at_previous_head):
