@@ -65,7 +65,12 @@ Defined in [scientific_statmech.py](../../app/schemas/reads/scientific_statmech.
   calc detail endpoint).
 - **`StatmechConformerContextItem`** — `conformer_group_ref` for
   groups reachable via the statmech's `species_entry`.
-- **`StatmechEvidenceSummary`** — bounded counts/booleans.
+- **`StatmechEvidenceSummary`** — bounded counts/booleans, including
+  `sp_from_optimization`: the upload layer accepts an `opt` calculation
+  under the `sp` role (an optimisation's final energy *is* the
+  single-point value, at the optimisation's own level of theory), so
+  `has_sp_calculation` alone does not say whether a dedicated single
+  point was run. This flag does.
 - **`AvailableStatmechSections`** — `has_*` boolean map.
 
 `statmech` rows do **not** carry frequencies inline — frequencies

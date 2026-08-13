@@ -261,6 +261,75 @@ def test_detail_evidence_summary_with_freq_and_torsion(client, db_session):
     assert ev["source_calculation_count"] == 1
 
 
+def _attach_sp_source(db_session, sm, *, species_entry, calc_type):
+    """Link one ``sp``-role source calculation of the given job type."""
+    calc = make_calculation(
+        db_session, type=calc_type, species_entry_id=species_entry.id
+    )
+    attach_statmech_source_calculation(
+        db_session,
+        statmech=sm,
+        calculation=calc,
+        role=StatmechCalculationRole.sp,
+    )
+    return calc
+
+
+def test_detail_sp_from_a_dedicated_single_point_is_not_flagged(
+    client, db_session
+):
+    """``has_sp_calculation`` on its own stopped being a complete answer.
+
+    The upload layer accepts an ``opt`` under the ``sp`` role, so a reader
+    seeing ``has_sp_calculation: true`` can no longer tell whether a
+    dedicated single point was ever run. These two tests are the pair that
+    makes the distinction visible without asking for
+    ``include=source_calculations``.
+    """
+    _, entry, sm = _make_statmech(db_session)
+    _attach_sp_source(db_session, sm, species_entry=entry, calc_type=CalculationType.sp)
+    ev = client.get(_detail_url(sm.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["has_sp_calculation"] is True
+    assert ev["sp_from_optimization"] is False
+
+
+def test_detail_sp_borrowed_from_an_optimization_is_flagged(
+    client, db_session
+):
+    _, entry, sm = _make_statmech(db_session)
+    _attach_sp_source(
+        db_session, sm, species_entry=entry, calc_type=CalculationType.opt
+    )
+    ev = client.get(_detail_url(sm.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["has_sp_calculation"] is True
+    assert ev["sp_from_optimization"] is True
+
+
+def test_detail_sp_from_optimization_is_false_without_an_sp_role(
+    client, db_session
+):
+    """An ``opt``-role link to an ``opt`` job says nothing about the energy."""
+    species, entry, sm = _make_statmech(db_session)
+    calc = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry.id
+    )
+    attach_statmech_source_calculation(
+        db_session,
+        statmech=sm,
+        calculation=calc,
+        role=StatmechCalculationRole.opt,
+    )
+    ev = client.get(_detail_url(sm.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["has_sp_calculation"] is False
+    assert ev["sp_from_optimization"] is False
+
+
 def test_detail_available_sections_present(client, db_session):
     species, entry, sm = _make_statmech(db_session)
     body = client.get(_detail_url(sm.public_ref)).json()

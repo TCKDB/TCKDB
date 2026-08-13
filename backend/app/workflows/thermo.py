@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
@@ -29,12 +32,33 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
+from app.services.statmech_resolution import accepted_types_phrase
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 
-_THERMO_ROLE_TO_CALC_TYPE: dict[ThermoCalculationRole, CalculationType] = {
-    ThermoCalculationRole.opt: CalculationType.opt,
-    ThermoCalculationRole.freq: CalculationType.freq,
-    ThermoCalculationRole.sp: CalculationType.sp,
+logger = logging.getLogger(__name__)
+
+#: A thermo source link declares a role the resolved calculation cannot
+#: play, because its ``Calculation.type`` is a different kind of job.
+#:
+#: Deliberately *not* the statmech code
+#: (``statmech_source_role_type_mismatch``): the two refusals are about
+#: different subjects — which supporting calculations a partition function
+#: was built from, versus which ones an enthalpy was — and a client that
+#: repairs one may have nothing to say about the other. Same rule, same
+#: shape of context, two codes a client can tell apart.
+W_THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
+
+#: Roles that name a specific kind of job, and the ``CalculationType``\ s
+#: each accepts; the first entry is the canonical one the role is named
+#: after. Mirrors ``_STATMECH_ROLE_TO_CALC_TYPES`` including the ``sp``
+#: exception — there is no reason for the two products to disagree about
+#: what a role means, and making them agree was the whole point of #126.
+_THERMO_ROLE_TO_CALC_TYPES: dict[
+    ThermoCalculationRole, tuple[CalculationType, ...]
+] = {
+    ThermoCalculationRole.opt: (CalculationType.opt,),
+    ThermoCalculationRole.freq: (CalculationType.freq,),
+    ThermoCalculationRole.sp: (CalculationType.sp, CalculationType.opt),
 }
 
 
@@ -79,23 +103,54 @@ def assert_thermo_role_matches_calculation_type(
 
     DR-0028 Requirement 1: a single typo in ``existing_calculation_id`` (or
     a mis-keyed inline calc) would otherwise silently link thermo to the
-    wrong supporting calc within the same species. ``opt``/``freq``/``sp``
+    wrong supporting calc within the same species. ``opt``/``freq``
     require exact ``CalculationType`` match. ``composite`` and ``imported``
     accept any type for v0 — those roles describe a scientific origin
     rather than a specific job type, and the existing test/usage corpus
     has no precedent constraining them.
 
-    :raises ValueError: if ``role`` is one of opt/freq/sp and the
-        calculation's type does not match.
+    ``sp`` additionally accepts an ``opt``: a depositor who ran no separate
+    single point still has the number, because the optimisation's final
+    energy *is* the single-point value at the optimisation's own level of
+    theory. The reverse is refused — an ``sp`` job optimised nothing, so it
+    cannot serve the ``opt`` role — and the exception generalises no
+    further. :func:`app.services.statmech_resolution.assert_statmech_role_compatible`
+    carries the full argument and holds the identical map; the two products
+    must not disagree about what a role means.
+
+    :raises CodedValueError: if ``role`` is one of opt/freq/sp and the
+        calculation's type is none of the ones that role accepts. The
+        detail names the offending field but never a row id (DR-0028
+        Req 2); the id goes to the log instead.
     """
-    expected = _THERMO_ROLE_TO_CALC_TYPE.get(role)
-    if expected is None:
+    accepted = _THERMO_ROLE_TO_CALC_TYPES.get(role)
+    if accepted is None or calculation.type in accepted:
         return
-    if calculation.type != expected:
-        raise ValueError(
-            f"{context}: role='{role.value}' is incompatible with the "
-            f"resolved calculation type."
-        )
+    logger.info(
+        "thermo role/type mismatch at %s: calculation id=%s type=%s, role=%s",
+        context,
+        calculation.id,
+        calculation.type.value,
+        role.value,
+    )
+    raise CodedValueError(
+        W_THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+        f"{context}: role='{role.value}' is incompatible with the "
+        f"resolved calculation type '{calculation.type.value}'. A thermo "
+        f"record must not claim evidence it does not have. Point the link "
+        f"at a {accepted_types_phrase(accepted)} calculation, or declare "
+        f"the role the named calculation actually played.",
+        context={
+            "field": context,
+            "declared_role": role.value,
+            "expected_calculation_type": accepted[0].value,
+            "accepted_calculation_types": [
+                calc_type.value for calc_type in accepted
+            ],
+            "actual_calculation_type": calculation.type.value,
+        },
+        message_prefix=False,
+    )
 
 
 def _resolve_source_calculation(

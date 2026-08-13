@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
+    CalculationType,
     RecordReviewStatus,
     StatmechCalculationRole,
     SubmissionRecordType,
@@ -289,6 +290,7 @@ def build_statmech_record(
         torsion_rows=torsion_rows,
         has_frequency_scale_factor=fsf_summary is not None,
         has_conformer_context=has_conformer_context,
+        sp_from_optimization=_sp_role_is_an_optimization(session, source_rows),
     )
     available = AvailableStatmechSections(
         has_source_calculations=bool(source_rows),
@@ -960,12 +962,43 @@ def _build_conformer_context(
 # ---------------------------------------------------------------------------
 
 
+def _sp_role_is_an_optimization(
+    session: Session, source_rows: list[StatmechSourceCalculation]
+) -> bool:
+    """Did the single-point energy come from an optimisation's final step?
+
+    The upload layer accepts an ``opt`` calculation under the ``sp`` role,
+    because an optimisation's final energy *is* the single-point value at
+    the optimisation's own level of theory
+    (:func:`app.services.statmech_resolution.assert_statmech_role_compatible`).
+    That makes ``has_sp_calculation`` ambiguous on its own — true for a
+    dedicated single point and true for a borrowed one — and the
+    difference is a real provenance distinction a reader should not have
+    to infer from ``include=source_calculations``.
+
+    One bounded query, and none at all for the common case of a statmech
+    with no ``sp``-role link; ``sp``-role rows number 0 or 1 in practice.
+    """
+    sp_ids = [
+        r.calculation_id
+        for r in source_rows
+        if r.role is StatmechCalculationRole.sp
+    ]
+    if not sp_ids:
+        return False
+    types = session.scalars(
+        select(Calculation.type).where(Calculation.id.in_(sp_ids))
+    ).all()
+    return any(calc_type is CalculationType.opt for calc_type in types)
+
+
 def _build_evidence_summary(
     *,
     source_rows: list[StatmechSourceCalculation],
     torsion_rows: list[StatmechTorsion],
     has_frequency_scale_factor: bool,
     has_conformer_context: bool,
+    sp_from_optimization: bool = False,
 ) -> StatmechEvidenceSummary:
     roles = {r.role for r in source_rows}
     has_rotor_scans = any(
@@ -976,6 +1009,7 @@ def _build_evidence_summary(
         has_opt_calculation=StatmechCalculationRole.opt in roles,
         has_freq_calculation=StatmechCalculationRole.freq in roles,
         has_sp_calculation=StatmechCalculationRole.sp in roles,
+        sp_from_optimization=sp_from_optimization,
         has_rotor_scans=has_rotor_scans,
         torsion_count=len(torsion_rows),
         has_frequency_scale_factor=has_frequency_scale_factor,

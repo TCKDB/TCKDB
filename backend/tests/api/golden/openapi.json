@@ -36753,7 +36753,7 @@
         "type": "object"
       },
       "StatmechEvidenceSummary": {
-        "description": "Compact statmech-evidence projection.\n\nCounts come from cheap aggregates over\n``statmech_source_calculation`` and ``statmech_torsion``.\n``has_rotor_scans`` is true iff at least one torsion row carries\na ``source_scan_calculation_id``.",
+        "description": "Compact statmech-evidence projection.\n\nCounts come from cheap aggregates over\n``statmech_source_calculation`` and ``statmech_torsion``.\n``has_rotor_scans`` is true iff at least one torsion row carries\na ``source_scan_calculation_id``.\n\n``sp_from_optimization`` disambiguates ``has_sp_calculation``. The\nupload layer accepts an ``opt`` calculation under the ``sp`` role —\nan optimisation's final energy is the single-point value at the\noptimisation's own level of theory — so ``has_sp_calculation`` alone\nno longer says whether a dedicated single point was ever run. That is\na genuine provenance difference between two records, and the four-role\nmodel says a difference like that belongs in the data rather than in\nan inference a reader has to draw from\n``include=source_calculations``.",
         "properties": {
           "has_conformer_context": {
             "title": "Has Conformer Context",
@@ -36782,6 +36782,11 @@
           "source_calculation_count": {
             "title": "Source Calculation Count",
             "type": "integer"
+          },
+          "sp_from_optimization": {
+            "default": false,
+            "title": "Sp From Optimization",
+            "type": "boolean"
           },
           "torsion_count": {
             "title": "Torsion Count",
