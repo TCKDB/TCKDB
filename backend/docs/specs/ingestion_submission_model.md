@@ -44,6 +44,56 @@ seam. Direct uploads additionally set `link_records=True` so the workflow's full
 review-target set is linked; the bundle path keeps its own curated, role-bearing
 `submission_record_link` rows.
 
+## Citing a calculation deposited by an earlier request
+
+A submission is normally self-contained: everything a record cites is declared
+in the same payload and addressed by **local string key**, so a depositor never
+needs to know a database id. Two product uploads make one bounded exception.
+
+`POST /uploads/thermo` and `POST /uploads/statmech` accept
+`source_calculations[*].existing_calculation_id` — a calculation row deposited
+by a *previous* request — as an alternative to `calculation_key`. Exactly one of
+the two must be given per entry.
+
+The exception exists because **calculations are append-only and are never
+deduplicated**. Without it, a client that deposits opt/freq/sp during its
+conformer step and then deposits statmech has to re-send those calculations,
+minting a second row for the same job. That does not merely waste space: it
+destroys the meaning of counting candidates. A count of distinct calculations
+supporting a species is evidence of reproducibility only while a calculation row
+means *a job someone ran*; once re-deposits mint duplicates, the count silently
+becomes "how many times someone re-uploaded", and the store cannot tell the two
+apart. The counter-argument — a self-contained deposit is stronger for
+provenance, because a record can then never cite something not reviewed
+alongside it — was weighed and accepted as the smaller loss.
+
+This is **programmatic chaining**, not the contributor UX: it is for clients
+threading ids back out of a prior TCKDB upload response (ARC's adapter, replay
+and repair tooling). It is not a violation of the "no FK IDs in upload schemas"
+rule, which governs contributor-facing scientific content — the depositor is
+quoting back an id TCKDB issued to them, not describing chemistry by row.
+
+A chained citation is not a cheaper citation. It passes the same checks a
+locally-keyed one does, in the same code, and the checks live in the resolution
+service rather than the calling workflow so the two cannot drift apart:
+
+| check | local key | `existing_calculation_id` |
+|---|---|---|
+| reference resolves | schema: key was declared in this payload | service: row exists, else **404** |
+| owner-consistency with the target species entry | by construction, plus a defensive guard | enforced against the row, **422** |
+| role/type compatibility | `assert_statmech_role_compatible` / `assert_thermo_role_matches_calculation_type` | the same function, same coded refusal |
+| link uniqueness | schema, per `(key, role)` | schema, per `(key, existing_id, role)` |
+| submission scoping, `record_review`, audit | applies to the statmech/thermo record created by this request | unchanged — the cited calculation is **not** re-reviewed or re-linked; it keeps the review state its own submission gave it |
+
+The **contribution-bundle routes do not offer this field, deliberately**. A
+bundle is self-contained by construction — it carries one global calc-key
+namespace covering every calculation it deposits — so every citation it needs to
+make is expressible as a key within the request it arrives in, and there is
+nothing for chaining to reach for. The bundle paths keep the key-only
+`StatmechSourceCalcIn`; because the wire base sets `extra="forbid"`, a bundle
+that sends `existing_calculation_id` is refused with `extra_forbidden` rather
+than silently ignored.
+
 ## Async upload jobs (`/jobs/*`)
 
 ### Support and retry contract

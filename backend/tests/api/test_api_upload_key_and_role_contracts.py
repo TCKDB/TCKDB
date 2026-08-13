@@ -34,6 +34,10 @@ resp.text`` is true even when the field was wrongly *accepted*. Only
 
 from __future__ import annotations
 
+from sqlalchemy import select
+
+from app.db.models.calculation import Calculation
+
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
@@ -517,3 +521,418 @@ class TestTheExceptionDoesNotRunInReverse:
         resp = client.post("/api/v1/uploads/thermo", json=payload)
         body = _assert_code(resp, _THERMO_ROLE_TYPE_MISMATCH)
         assert body["context"]["accepted_calculation_types"] == ["sp", "opt"]
+
+
+# ---------------------------------------------------------------------------
+# Citing a calculation a *previous* request deposited
+# ---------------------------------------------------------------------------
+#
+# Everything above names a calculation by a local key, which resolves only
+# within one payload. ``existing_calculation_id`` is the one way to name a
+# calculation across requests, and it exists because calculations are
+# append-only and never deduplicated: a statmech deposit forced to re-send
+# the opt/freq/sp it already stored would mint a second row for the same
+# job, and the count of distinct calculations supporting a species would
+# quietly stop meaning "jobs someone ran" and start meaning "times someone
+# re-uploaded".
+#
+# The tests here exist mostly to prove the *other* half: a chained citation
+# is not a cheaper citation. If it skipped a check, it would immediately
+# become the route depositors use to skip that check.
+
+
+def _calculation_ids(client, species_entry_id: int) -> set[int]:
+    """Every calculation row currently owned by ``species_entry_id``.
+
+    Read through the request session the ``client`` fixture binds its
+    dependency overrides to, so this sees exactly what the requests wrote
+    and nothing committed by any other test.
+    """
+    return set(
+        client._db_session.scalars(
+            select(Calculation.id).where(
+                Calculation.species_entry_id == species_entry_id
+            )
+        ).all()
+    )
+
+
+def _deposit_calculations(client, *, label: str, species: dict) -> dict:
+    """Request A: deposit opt/freq/sp via the conformer route.
+
+    This is the real chaining source rather than a contrived one — the
+    conformer upload response is the only place TCKDB hands a client the
+    calculation ids it later chains from, and depositing conformers then
+    statmech is exactly ARC's pipeline.
+
+    :returns: ``{"species_entry_id": …, "opt": id, "freq": id, "sp": id}``.
+    """
+    resp = client.post(
+        "/api/v1/uploads/conformers",
+        json=_conformer_payload(
+            label,
+            species_entry=species,
+            calculation=dict(_opt_calc(), key="opt_job"),
+            additional_calculations=[
+                dict(_freq_calc(), key="freq_job"),
+                dict(_sp_calc(), key="sp_job"),
+            ],
+        ),
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    deposited = {
+        "species_entry_id": body["species_entry_id"],
+        body["primary_calculation"]["type"]: body["primary_calculation"][
+            "calculation_id"
+        ],
+    }
+    for ref in body["additional_calculations"]:
+        deposited[ref["type"]] = ref["calculation_id"]
+    assert {"opt", "freq", "sp"} <= set(deposited), deposited
+    return deposited
+
+
+class TestChainedCitationAcrossRequests:
+    def test_statmech_cites_a_prior_calculation_and_mints_no_duplicate(
+        self, client
+    ):
+        """The whole point of the feature, in two requests.
+
+        Request A deposits opt/freq/sp. Request B deposits statmech citing
+        all three by ``existing_calculation_id``. The links must point at
+        those exact rows, and the set of calculations owned by the species
+        entry must be **unchanged** — if it grew, the deposit re-minted a
+        job that was already stored, which is the failure this field was
+        added to prevent.
+        """
+        species = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+        a = _deposit_calculations(client, label="chain-a", species=species)
+        entry_id = a["species_entry_id"]
+
+        before = _calculation_ids(client, entry_id)
+        assert before == {a["opt"], a["freq"], a["sp"]}, before
+
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry=species,
+                source_calculations=[
+                    {"existing_calculation_id": a["opt"], "role": "opt"},
+                    {"existing_calculation_id": a["freq"], "role": "freq"},
+                    {"existing_calculation_id": a["sp"], "role": "sp"},
+                ],
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+        statmech_id = resp.json()["id"]
+
+        read = client.get(f"/api/v1/statmech/{statmech_id}")
+        assert read.status_code == 200, read.text
+        links = {
+            sc["role"]: sc["calculation_id"]
+            for sc in read.json()["source_calculations"]
+        }
+        assert links == {
+            "opt": a["opt"],
+            "freq": a["freq"],
+            "sp": a["sp"],
+        }, links
+
+        after = _calculation_ids(client, entry_id)
+        assert after == before, (
+            "the chained deposit minted calculation rows: "
+            f"{sorted(after - before)}"
+        )
+
+    def test_chained_and_inline_citations_may_be_mixed(self, client):
+        """One list may name some calcs by id and mint others inline.
+
+        The inline calc *is* a new row — that is not the duplication the
+        feature prevents, because nothing had deposited it before.
+        """
+        species = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+        a = _deposit_calculations(client, label="chain-mixed", species=species)
+        entry_id = a["species_entry_id"]
+        before = _calculation_ids(client, entry_id)
+
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry=species,
+                calculations=[
+                    {"key": "fresh_freq", "calculation": _freq_calc()}
+                ],
+                source_calculations=[
+                    {"existing_calculation_id": a["opt"], "role": "opt"},
+                    {"calculation_key": "fresh_freq", "role": "freq"},
+                ],
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+
+        after = _calculation_ids(client, entry_id)
+        assert len(after) == len(before) + 1, (before, after)
+        assert before <= after
+
+        read = client.get(f"/api/v1/statmech/{resp.json()['id']}")
+        links = {
+            sc["role"]: sc["calculation_id"]
+            for sc in read.json()["source_calculations"]
+        }
+        assert links["opt"] == a["opt"]
+        assert links["freq"] in (after - before)
+
+
+class TestChainedCitationPassesEveryCheckALocalOneDoes:
+    """A citation that reaches outside the request is not a cheaper one."""
+
+    def test_role_contradicting_the_type_is_refused_with_the_same_code(
+        self, client
+    ):
+        """Chained and local refusals are the same coded error, not merely
+        both-refusals — a client branching on ``code`` must not have to
+        know which way the calculation was named."""
+        species = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+        a = _deposit_calculations(client, label="chain-role", species=species)
+
+        chained = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry=species,
+                source_calculations=[
+                    {"existing_calculation_id": a["sp"], "role": "freq"},
+                ],
+            ),
+        )
+        chained_body = _assert_code(chained, _ROLE_TYPE_MISMATCH)
+
+        local = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry={"smiles": "CCCCC", "charge": 0, "multiplicity": 1},
+                calculations=[{"key": "my_sp_job", "calculation": _sp_calc()}],
+                source_calculations=[
+                    {"calculation_key": "my_sp_job", "role": "freq"}
+                ],
+            ),
+        )
+        local_body = _assert_code(local, _ROLE_TYPE_MISMATCH)
+
+        for key in (
+            "declared_role",
+            "expected_calculation_type",
+            "accepted_calculation_types",
+            "actual_calculation_type",
+        ):
+            assert chained_body["context"][key] == local_body["context"][key]
+
+        # The field path names the reference the depositor wrote, and the
+        # cited row id appears nowhere except where they supplied it.
+        assert chained_body["context"]["field"] == (
+            "statmech.source_calculations[0].existing_calculation_id"
+        )
+
+    def test_the_opt_serves_sp_exception_reaches_the_chained_path(
+        self, client
+    ):
+        """PR #156 made ``sp`` accept a tuple of types. A chained citation
+        must inherit that, not a stale single-type copy of the rule."""
+        species = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+        a = _deposit_calculations(client, label="chain-optsp", species=species)
+
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry=species,
+                source_calculations=[
+                    {"existing_calculation_id": a["opt"], "role": "sp"},
+                ],
+            ),
+        )
+        assert resp.status_code == 201, resp.text
+
+    def test_the_exception_still_does_not_run_in_reverse_when_chained(
+        self, client
+    ):
+        species = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+        a = _deposit_calculations(client, label="chain-spopt", species=species)
+
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry=species,
+                source_calculations=[
+                    {"existing_calculation_id": a["sp"], "role": "opt"},
+                ],
+            ),
+        )
+        body = _assert_code(resp, _ROLE_TYPE_MISMATCH)
+        assert body["context"]["accepted_calculation_types"] == ["opt"]
+
+    def test_an_id_that_does_not_exist_is_a_clean_404(self, client):
+        """Not a 500, and not a foreign-key error leaking out of psycopg."""
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry={"smiles": "CCCCCC", "charge": 0, "multiplicity": 1},
+                source_calculations=[
+                    {"existing_calculation_id": 999_999_999, "role": "sp"},
+                ],
+            ),
+        )
+        assert resp.status_code == 404, resp.text
+        body = resp.json()
+        assert set(body) >= {"code", "detail"}, body
+        assert body["code"] == "resource_not_found", body
+        assert "does not exist" in body["detail"]
+        # The field the depositor wrote is named; nothing else is.
+        assert "existing_calculation_id" in body["detail"]
+
+    def test_a_calculation_owned_by_another_species_entry_is_refused(
+        self, client
+    ):
+        """A chained id can name *any* row, so owner-consistency stops
+        being defensive here and becomes the real check.
+
+        The refusal is a bare ``ValueError`` → HTTP 422 carrying the
+        generic ``validation_error`` code, which is what the same
+        violation produces on the inline path. That it has no *specific*
+        code is tracked as #158.
+
+        ``code`` is asserted here for a reason that is easy to lose. An
+        uncoded ``ValueError`` has its code scraped out of the message by
+        ``validation_detail_code``, whose pattern promotes any
+        ``snake_case_token: ``. Phrase this refusal as ``f"{context}: …"``
+        with a field path ending in ``existing_calculation_id`` and the
+        response advertises ``code="existing_calculation_id"`` — a string
+        that is not a code, is in no register, and would invite a client
+        to branch on it. This test is what stops that phrasing coming
+        back. (Thermo's equivalent refusal still emits the scraped
+        string; ``app/workflows/thermo.py`` ``_assert_calculation_owned_by``.)
+        """
+        other = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
+        a = _deposit_calculations(client, label="chain-owner", species=other)
+
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                species_entry={"smiles": "CCCCCCC", "charge": 0, "multiplicity": 1},
+                source_calculations=[
+                    {"existing_calculation_id": a["sp"], "role": "sp"},
+                ],
+            ),
+        )
+        assert resp.status_code == 422, resp.text
+        body = resp.json()
+        assert body["code"] == "validation_error", body
+        detail = body["detail"]
+        assert "another species entry" in detail
+        # No row id the depositor did not supply, and no id at all beyond
+        # the one they wrote (which is not echoed into this message).
+        assert "species_entry_id=" not in detail
+        assert "id=" not in detail
+
+    def test_neither_reference_is_refused_at_the_schema(self, client):
+        """Assert on error type and location, never substring presence:
+        Pydantic echoes rejected input into its message, so
+        ``"existing_calculation_id" in resp.text`` is true even when the
+        field was wrongly *accepted*."""
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(source_calculations=[{"role": "sp"}]),
+        )
+        assert resp.status_code == 422, resp.text
+        details = resp.json()["detail"]
+        assert any(
+            d["type"] == "value_error"
+            and tuple(d["loc"])[-2:] == ("source_calculations", 0)
+            for d in details
+        ), details
+
+    def test_both_references_at_once_are_refused_at_the_schema(self, client):
+        resp = client.post(
+            "/api/v1/uploads/statmech",
+            json=_standalone_statmech_payload(
+                calculations=[{"key": "k", "calculation": _sp_calc()}],
+                source_calculations=[
+                    {
+                        "calculation_key": "k",
+                        "existing_calculation_id": 1,
+                        "role": "sp",
+                    }
+                ],
+            ),
+        )
+        assert resp.status_code == 422, resp.text
+        details = resp.json()["detail"]
+        assert any(d["type"] == "value_error" for d in details), details
+
+
+class TestBundleRoutesDoNotOfferChaining:
+    """The answer to "should bundles get this too" is no, and it is
+    enforced rather than merely documented.
+
+    A bundle is self-contained by construction: one global calc-key
+    namespace covers every calculation it deposits, so every citation it
+    needs to make is already expressible as a key within the request it
+    arrives in. There is nothing for chaining to reach for. Because the
+    shared wire component sets ``extra="forbid"``, a bundle that sends the
+    field is refused rather than silently ignored — which is the failure
+    mode that matters, since a silently dropped provenance link looks
+    exactly like a successful deposit.
+    """
+
+    def test_computed_species_bundle_refuses_existing_calculation_id(
+        self, client
+    ):
+        payload = _bundle_payload(
+            statmech={
+                "external_symmetry": 1,
+                "source_calculations": [
+                    {"existing_calculation_id": 1, "role": "sp"}
+                ],
+            }
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 422, resp.text
+        details = resp.json()["detail"]
+        assert any(
+            d["type"] == "extra_forbidden"
+            and tuple(d["loc"])[-1] == "existing_calculation_id"
+            for d in details
+        ), details
+
+    def test_conformer_nested_statmech_refuses_existing_calculation_id(
+        self, client
+    ):
+        payload = _conformer_payload(
+            "conf-no-chaining",
+            statmech={
+                "source_calculations": [
+                    {"existing_calculation_id": 1, "role": "sp"}
+                ]
+            },
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 422, resp.text
+        details = resp.json()["detail"]
+        assert any(
+            d["type"] == "extra_forbidden"
+            and tuple(d["loc"])[-1] == "existing_calculation_id"
+            for d in details
+        ), details
+
+    def test_the_bundle_still_accepts_the_key_it_does_offer(self, client):
+        """The refusals above are about the chaining field only — the
+        bundle's own key-based citation is untouched."""
+        payload = _bundle_payload(
+            statmech={
+                "external_symmetry": 1,
+                "source_calculations": [
+                    {"calculation_key": "opt0", "role": "opt"}
+                ],
+            }
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text

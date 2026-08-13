@@ -24,6 +24,36 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.27.0 — a statmech source link may be unique on something other than its key
+
+Additive, and a **relaxation**: nothing is renamed, removed or newly
+refused, so **every 0.26.0 payload validates unchanged under 0.27.0**.
+Minor rather than patch because the accepted set genuinely grows.
+
+`ConformerUploadStatmechPayload.validate_unique_source_calculation_pairs`
+now keys uniqueness on `(calculation_key, existing_calculation_id, role)`
+rather than `(calculation_key, role)`, reading the second element
+reflectively.
+
+For a payload built from this package there is no behaviour change at
+all: `StatmechSourceCalcIn` has no `existing_calculation_id`, so the
+second element is always `None` and the rule is the pair it always was.
+The widening exists because this class is also the payload the backend
+hands its statmech resolution service, and the standalone statmech upload
+(`POST /api/v1/uploads/statmech`, a backend-side contract) passes a
+subclass whose entries may name a calculation by row id — citing one a
+*previous* request deposited — instead of by key. Under the old tuple
+every such entry collapsed to `(None, role)`, so two genuinely different
+calculations sharing a role, which is one rotor scan per torsion with all
+of them `role='scan'`, were refused as a duplicate.
+
+`existing_calculation_id` itself is deliberately **not** added to
+`StatmechSourceCalcIn`. It is shared with the conformer and bundle paths,
+which are self-contained by construction — one calc-key namespace covers
+everything they deposit — so they have nothing to chain to, and
+`extra="forbid"` keeps them refusing the field outright rather than
+silently dropping the link.
+
 ### 0.26.0 — the reaction bundle's statmech gains the six fields the species bundle already had
 
 Purely additive. Nothing is renamed, removed, narrowed or newly refused,

@@ -27,43 +27,21 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
-from app.services.statmech_resolution import resolve_or_create_statmech
+from app.services.statmech_resolution import (
+    assert_statmech_calculation_owned_by,
+    resolve_or_create_statmech,
+)
 
 logger = logging.getLogger(__name__)
 
 
-def _assert_calculation_owned_by(
-    calculation: Calculation,
-    *,
-    species_entry_id: int,
-    context: str,
-) -> None:
-    """Defensive owner-consistency check for a resolved source calculation.
-
-    Supporting calculations attached to a statmech record must belong to
-    the same species entry as the statmech target; otherwise the
-    provenance link would be scientifically meaningless.
-
-    :raises ValueError: if the calculation does not belong to
-        ``species_entry_id``.
-    """
-    if calculation.species_entry_id != species_entry_id:
-        # ``context`` already names the calculation by the caller's own key,
-        # which is the identifier they can act on. The three row ids this
-        # message used to interpolate are internal handles that go to the
-        # log instead — a 422 body must not hand out primary keys.
-        logger.warning(
-            "%s: calculation id=%s owned by species_entry_id=%s, not %s",
-            context,
-            calculation.id,
-            calculation.species_entry_id,
-            species_entry_id,
-        )
-        raise ValueError(
-            f"{context}: this calculation belongs to another species entry, "
-            "not to the statmech target. A supporting calculation must be one "
-            "of the target species entry's own."
-        )
+#: Owner-consistency for a statmech supporting calculation. The body moved
+#: to :mod:`app.services.statmech_resolution` when the standalone upload
+#: gained ``existing_calculation_id``: a chained citation can name any row
+#: in the database, so this stopped being a purely defensive check and had
+#: to be judged by the same code that judges the inline path. Re-exported
+#: under the old name so the inline call site below reads unchanged.
+_assert_calculation_owned_by = assert_statmech_calculation_owned_by
 
 
 def persist_statmech_upload(
@@ -83,12 +61,21 @@ def persist_statmech_upload(
     Statmech is append-only: repeated uploads against the same species
     entry create independent rows.
 
+    A ``source_calculations`` entry may instead cite a calculation an
+    *earlier* request deposited, by ``existing_calculation_id``. Nothing
+    is persisted for it here — the row already exists, which is the point,
+    since re-sending it would mint a duplicate calculation for the same
+    job. Its existence, ownership and role/type compatibility are checked
+    inside the resolution service alongside the inline path.
+
     :param session: Active SQLAlchemy session.
     :param request: Workflow-facing standalone statmech upload payload.
     :param created_by: Optional application user id for newly created rows.
     :returns: Newly created ``Statmech`` row.
     :raises ValueError: If a resolved supporting calculation does not
         belong to the statmech target's species entry.
+    :raises NotFoundError: If an ``existing_calculation_id`` names a
+        calculation row that does not exist.
     """
     species_entry = resolve_species_entry(
         session, request.species_entry, created_by=created_by
@@ -114,8 +101,15 @@ def persist_statmech_upload(
 
     # Build the canonical statmech payload and route through the shared
     # resolution service. The source-calculation links and torsions travel
-    # as-is: both paths now speak the same key-based components, so there
-    # is nothing to translate here — only a key → id map to hand over.
+    # as-is — only a key → id map is handed over.
+    #
+    # ``source_calculations`` entries are ``StatmechSourceCalculationIn``,
+    # a subclass of the key-only component this payload's field is
+    # annotated with, because the standalone upload also accepts
+    # ``existing_calculation_id``. They survive the handover unnarrowed
+    # (Pydantic v2 revalidates model instances never by default), and the
+    # service reads the chained id back off them; nothing is translated
+    # here, so there is only one place that decides what a citation means.
     # No uploaded_calculation_id here — standalone uploads have no
     # implicit "freshly uploaded" anchor calculation.
     core_payload = ConformerUploadStatmechPayload(

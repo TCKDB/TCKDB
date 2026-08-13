@@ -80,6 +80,29 @@ class ThermoSourceCalculationIn(SchemaBase):
       upload, or replay/admin/repair tooling). It is not intended as the
       primary public upload UX.
 
+    The ``existing_*_id`` convention is deliberately id-based and is
+    **not** a violation of the "no FK IDs in upload schemas" rule, which
+    governs contributor-facing *scientific content*. A depositor describes
+    a molecule, not a row; this field is a client quoting back an id TCKDB
+    itself issued to it, and there is no key namespace spanning two
+    requests for it to use instead. Please do not "fix" it into a key.
+
+    The mirror of this field is
+    :class:`app.schemas.workflows.statmech_upload.StatmechSourceCalculationIn`
+    ``.existing_calculation_id``, which does the same job for statmech and
+    carries the fuller argument for why chaining exists at all (calculations
+    are append-only and never deduplicated, so a deposit forced to re-send
+    them mints duplicate rows for the same job and destroys the meaning of
+    counting distinct calculations). The two are intended to stay
+    symmetric: an asymmetry between them is a bug, not a signal. Statmech
+    reached this contract later only because PR #148 moved it to local keys
+    without a chaining mechanism.
+
+    Neither field is offered by the contribution-bundle routes, and that
+    omission is deliberate on both: a bundle carries one global calc-key
+    namespace covering everything it deposits, so every citation it needs
+    to make is expressible as a key within the request it arrives in.
+
     :param calculation_key: Local key of a calculation declared in
         ``ThermoUploadRequest.calculations``.
     :param existing_calculation_id: Database id of a calculation row that
