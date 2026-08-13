@@ -143,16 +143,91 @@ def _freq_scale_factor_warning(
     )
 
 
-def _computed_common_warnings(
+# ---------------------------------------------------------------------------
+# Request-agnostic core
+# ---------------------------------------------------------------------------
+
+
+class _NotApplicable:
+    """Sentinel: this record type has no such anchor, so do not judge it.
+
+    Distinct from ``None``, and the distinction is the point. ``None``
+    means *the depositor could have supplied this and did not* — a real
+    gap, worth a warning. ``NOT_APPLICABLE`` means *there is no field on
+    this payload to supply it through*, which is a fact about the schema
+    rather than about the deposit, and warning about it would tell a
+    depositor to do something they cannot do.
+
+    The concrete case is ``energy_level_of_theory`` on a bundle. On the
+    standalone kinetics route it is a real anchor: ``app.workflows.
+    kinetics`` uses it to auto-resolve source SP calculations. A bundle
+    names its source calculations by key instead and has no field for
+    it, so it is NOT_APPLICABLE there.
+    """
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "NOT_APPLICABLE"
+
+
+NOT_APPLICABLE = _NotApplicable()
+
+
+def collect_provenance_warnings(
     *,
+    scientific_origin: ScientificOriginKind,
     software_release: object | None,
     workflow_tool_release: object | None,
+    literature: object | None,
+    freq_scale_factor: object | None = NOT_APPLICABLE,
+    energy_level_of_theory: object | None = NOT_APPLICABLE,
+    field_prefix: str = "",
 ) -> list[UploadWarning]:
+    """Warn about provenance anchors a record could carry and does not.
+
+    Request-agnostic, for the reason ``collect_statmech_content_warnings``
+    is: the standalone routes and the two bundle roots make the same
+    claim about the same rows, so they should report the same gaps in
+    the same shape. Before this, the bundle roots reported nothing at
+    all — the collectors existed and only the standalone routes called
+    them.
+
+    Callers pass the **effective** value, not the raw field. On the
+    reaction bundle a per-species ``software_release`` falls back to the
+    bundle-level ``analysis_software_release``, and the workflow
+    persists the fallback, so warning on the raw per-species field would
+    warn about provenance that was in fact recorded.
+
+    :param field_prefix: Dot-path prefix naming the subject, e.g.
+        ``"species['ch4'].statmech."``. A bundle carries many records
+        and a bare ``software_release`` on a twenty-species deposit
+        names none of them; ``UploadWarning.field`` is already
+        documented as a dot-path and already carries indexed paths from
+        the standalone kinetics route, so this needs no new machinery.
+    :param freq_scale_factor: Statmech's extra anchor, or
+        :data:`NOT_APPLICABLE` for record types that have none.
+    :param energy_level_of_theory: Kinetics' extra anchor, or
+        :data:`NOT_APPLICABLE`.
+    """
     warnings: list[UploadWarning] = []
-    if software_release is None:
-        warnings.append(_software_release_warning())
-    if workflow_tool_release is None:
-        warnings.append(_workflow_tool_release_warning())
+    if scientific_origin in _COMPUTATIONAL_ORIGINS:
+        if software_release is None:
+            warnings.append(
+                _software_release_warning(f"{field_prefix}software_release")
+            )
+        if workflow_tool_release is None:
+            warnings.append(
+                _workflow_tool_release_warning(f"{field_prefix}workflow_tool_release")
+            )
+        if freq_scale_factor is None:
+            warnings.append(
+                _freq_scale_factor_warning(f"{field_prefix}freq_scale_factor")
+            )
+        if energy_level_of_theory is None:
+            warnings.append(
+                _level_of_theory_warning(f"{field_prefix}energy_level_of_theory")
+            )
+    elif literature is None:
+        warnings.append(_literature_warning(f"{field_prefix}literature"))
     return warnings
 
 
@@ -165,28 +240,24 @@ def collect_thermo_provenance_warnings(
     request: ThermoUploadRequest,
 ) -> list[UploadWarning]:
     """Structured warnings for provenance absent from a thermo upload."""
-    if request.scientific_origin in _COMPUTATIONAL_ORIGINS:
-        return _computed_common_warnings(
-            software_release=request.software_release,
-            workflow_tool_release=request.workflow_tool_release,
-        )
-    if request.literature is None:
-        return [_literature_warning()]
-    return []
+    return collect_provenance_warnings(
+        scientific_origin=request.scientific_origin,
+        software_release=request.software_release,
+        workflow_tool_release=request.workflow_tool_release,
+        literature=request.literature,
+    )
 
 
 def collect_transport_provenance_warnings(
     request: TransportUploadRequest,
 ) -> list[UploadWarning]:
     """Structured warnings for provenance absent from a transport upload."""
-    if request.scientific_origin in _COMPUTATIONAL_ORIGINS:
-        return _computed_common_warnings(
-            software_release=request.software_release,
-            workflow_tool_release=request.workflow_tool_release,
-        )
-    if request.literature is None:
-        return [_literature_warning()]
-    return []
+    return collect_provenance_warnings(
+        scientific_origin=request.scientific_origin,
+        software_release=request.software_release,
+        workflow_tool_release=request.workflow_tool_release,
+        literature=request.literature,
+    )
 
 
 def collect_statmech_content_warnings(
@@ -271,19 +342,13 @@ def collect_statmech_provenance_warnings(
     anchor: a NULL value means "unknown/not recorded", and leaving it
     implicit erases a scientifically meaningful piece of the record.
     """
-    warnings: list[UploadWarning] = []
-    if request.scientific_origin in _COMPUTATIONAL_ORIGINS:
-        warnings.extend(
-            _computed_common_warnings(
-                software_release=request.software_release,
-                workflow_tool_release=request.workflow_tool_release,
-            )
-        )
-        if request.freq_scale_factor is None:
-            warnings.append(_freq_scale_factor_warning())
-    elif request.literature is None:
-        warnings.append(_literature_warning())
-    return warnings
+    return collect_provenance_warnings(
+        scientific_origin=request.scientific_origin,
+        software_release=request.software_release,
+        workflow_tool_release=request.workflow_tool_release,
+        literature=request.literature,
+        freq_scale_factor=request.freq_scale_factor,
+    )
 
 
 def collect_kinetics_provenance_warnings(
@@ -295,19 +360,13 @@ def collect_kinetics_provenance_warnings(
     without it, source SP calculations cannot be auto-resolved and the
     kinetics record loses its electronic-energy anchor.
     """
-    warnings: list[UploadWarning] = []
-    if request.scientific_origin in _COMPUTATIONAL_ORIGINS:
-        warnings.extend(
-            _computed_common_warnings(
-                software_release=request.software_release,
-                workflow_tool_release=request.workflow_tool_release,
-            )
-        )
-        if request.energy_level_of_theory is None:
-            warnings.append(_level_of_theory_warning())
-    elif request.literature is None:
-        warnings.append(_literature_warning())
-    return warnings
+    return collect_provenance_warnings(
+        scientific_origin=request.scientific_origin,
+        software_release=request.software_release,
+        workflow_tool_release=request.workflow_tool_release,
+        literature=request.literature,
+        energy_level_of_theory=request.energy_level_of_theory,
+    )
 
 
 def collect_kinetics_content_warnings(

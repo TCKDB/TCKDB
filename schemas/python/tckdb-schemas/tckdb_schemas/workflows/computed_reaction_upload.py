@@ -430,13 +430,57 @@ class BundleStatmechTorsionIn(SchemaBase):
 class BundleStatmechIn(SchemaBase):
     """Statistical mechanics properties for a species in this bundle.
 
+    The reaction route's statmech carries the same fields the species
+    route's ``StatmechInBundle`` carries, for the reason
+    :class:`BundleThermoIn` gives: it is the same claim about the same
+    kind of row, written against the same table.
+
+    The gap this closes had two distinct causes, and only one of them is
+    the same as thermo's. This model was born narrow in ``17706cf7`` --
+    congenital, like ``BundleThermoIn``. But the three rotational
+    constants were added to ``StatmechInBundle`` **only**, by
+    ``264519f1``, two days after ``0ea9182f`` had correctly updated both
+    models in one commit. The habit was right and then it lapsed, and
+    nothing in the tree could notice: no test compared the two field
+    sets, so a one-sided addition read exactly like a deliberate one.
+    ``tests/schemas/test_bundle_root_model_symmetry.py`` is now that
+    test, and an intentional divergence has to be written down in its
+    allowlist with a reason rather than merely happening.
+
+    Nothing is deliberately withheld here. ``applied_energy_corrections``
+    -- the one field :class:`BundleThermoIn` refuses, because
+    :class:`BundleSpeciesIn` already declares it against the same species
+    entry -- is not on ``StatmechInBundle`` either, so it is not part of
+    this divergence and needs no exception.
+
+    ``literature``, ``software_release`` and ``workflow_tool_release``
+    are per-species overrides of the bundle-level
+    ``analysis_software_release`` / ``workflow_tool_release`` /
+    ``literature``, exactly as thermo's are. Before this, a reaction
+    bundle's statmech took the bundle-level values with no way to say
+    that one species' partition function came from a different analysis
+    code -- which is the ordinary case when one participant is taken
+    from a paper and the rest were computed here.
+
     :param scientific_origin: Scientific origin category.
+    :param literature: Optional literature provenance for this statmech.
+    :param software_release: Optional analysis-code provenance. Overrides
+        the bundle-level ``analysis_software_release`` for this species.
+    :param workflow_tool_release: Optional workflow-tool provenance.
+        Overrides the bundle-level value for this species.
     :param is_linear: Whether the molecule is linear.
     :param rigid_rotor_kind: Rotational treatment classification.
     :param external_symmetry: External symmetry number.
     :param optical_isomers: Number of optical isomers (>= 1).
     :param point_group: Optional point-group label (e.g. ``"C2v"``).
     :param statmech_treatment: Overall statmech treatment classification.
+    :param rotational_constant_a_cm1: First reported principal rotational
+        constant (cm^-1), in source-provided order (conventionally
+        descending A >= B >= C). Optional.
+    :param rotational_constant_b_cm1: Second reported principal rotational
+        constant (cm^-1). Optional.
+    :param rotational_constant_c_cm1: Third reported principal rotational
+        constant (cm^-1). Optional.
     :param freq_scale_factor: Frequency scale factor applied.
     :param uses_projected_frequencies: Whether projected frequencies were used.
     :param source_calculations: Statmech → calc links by bundle-local
@@ -448,12 +492,22 @@ class BundleStatmechIn(SchemaBase):
     """
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
+
+    literature: LiteratureUploadRequest | None = None
+    software_release: SoftwareReleaseRef | None = None
+    workflow_tool_release: WorkflowToolReleaseRef | None = None
+
     is_linear: bool | None = None
     rigid_rotor_kind: RigidRotorKind | None = None
     external_symmetry: int | None = Field(default=None, ge=1)
     optical_isomers: int | None = Field(default=None, ge=1)
     point_group: str | None = None
     statmech_treatment: StatmechTreatmentKind | None = None
+
+    rotational_constant_a_cm1: float | None = Field(default=None, gt=0)
+    rotational_constant_b_cm1: float | None = Field(default=None, gt=0)
+    rotational_constant_c_cm1: float | None = Field(default=None, gt=0)
+
     freq_scale_factor: FreqScaleFactorRef | None = None
     uses_projected_frequencies: bool | None = None
     source_calculations: list[StatmechSourceCalcInBundle] = Field(default_factory=list)

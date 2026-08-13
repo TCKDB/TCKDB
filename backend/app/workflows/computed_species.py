@@ -77,6 +77,7 @@ from app.services.hessian_extraction import (
 )
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.provenance_warnings import (
+    collect_provenance_warnings,
     collect_statmech_content_warnings,
     statmech_has_rotational_structure,
 )
@@ -518,8 +519,42 @@ def persist_computed_species_upload(
     # delete them.
     bundle_stored_shas: list[str] = []
     # Non-blocking gaps surfaced on the upload response: single-point
-    # energy reconciliation, and absent statmech evidence.
+    # energy reconciliation, absent statmech evidence, and absent
+    # provenance on the scientific products this bundle carries.
     upload_warnings: list[UploadWarning] = []
+
+    # Provenance-presence warnings, the same ones /uploads/thermo and
+    # /uploads/statmech have always returned. They were never wired here,
+    # so a depositor using the bundle route — which is the route the ARC
+    # adapter uses — got neither the refusal nor the annotation ADR 0011
+    # and ADR 0008 promise, and their record was silently less complete
+    # than the identical field-by-field deposit.
+    #
+    # This bundle is one species, so ``thermo.``/``statmech.`` already
+    # names its subject unambiguously and matches the real payload path.
+    # The reaction bundle, which carries many species, prefixes with the
+    # species key instead.
+    if request.thermo is not None:
+        upload_warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=request.thermo.scientific_origin,
+                software_release=request.thermo.software_release,
+                workflow_tool_release=request.thermo.workflow_tool_release,
+                literature=request.thermo.literature,
+                field_prefix="thermo.",
+            )
+        )
+    if request.statmech is not None:
+        upload_warnings.extend(
+            collect_provenance_warnings(
+                scientific_origin=request.statmech.scientific_origin,
+                software_release=request.statmech.software_release,
+                workflow_tool_release=request.statmech.workflow_tool_release,
+                literature=request.statmech.literature,
+                freq_scale_factor=request.statmech.freq_scale_factor,
+                field_prefix="statmech.",
+            )
+        )
     try:
         for outcome in conformer_outcomes:
             for calc_in, calc_row in (

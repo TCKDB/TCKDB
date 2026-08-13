@@ -2663,7 +2663,7 @@
       },
       "BundleStatmechIn": {
         "additionalProperties": false,
-        "description": "Statistical mechanics properties for a species in this bundle.\n\n:param scientific_origin: Scientific origin category.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label (e.g. ``\"C2v\"``).\n:param statmech_treatment: Overall statmech treatment classification.\n:param freq_scale_factor: Frequency scale factor applied.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key. Each referenced key must resolve into the\n    bundle's global calc-key namespace and must be owned by this\n    species entry (workflow-layer ownership check).\n:param torsions: Torsional modes.\n:param note: Optional note.",
+        "description": "Statistical mechanics properties for a species in this bundle.\n\nThe reaction route's statmech carries the same fields the species\nroute's ``StatmechInBundle`` carries, for the reason\n:class:`BundleThermoIn` gives: it is the same claim about the same\nkind of row, written against the same table.\n\nThe gap this closes had two distinct causes, and only one of them is\nthe same as thermo's. This model was born narrow in ``17706cf7`` --\ncongenital, like ``BundleThermoIn``. But the three rotational\nconstants were added to ``StatmechInBundle`` **only**, by\n``264519f1``, two days after ``0ea9182f`` had correctly updated both\nmodels in one commit. The habit was right and then it lapsed, and\nnothing in the tree could notice: no test compared the two field\nsets, so a one-sided addition read exactly like a deliberate one.\n``tests/schemas/test_bundle_root_model_symmetry.py`` is now that\ntest, and an intentional divergence has to be written down in its\nallowlist with a reason rather than merely happening.\n\nNothing is deliberately withheld here. ``applied_energy_corrections``\n-- the one field :class:`BundleThermoIn` refuses, because\n:class:`BundleSpeciesIn` already declares it against the same species\nentry -- is not on ``StatmechInBundle`` either, so it is not part of\nthis divergence and needs no exception.\n\n``literature``, ``software_release`` and ``workflow_tool_release``\nare per-species overrides of the bundle-level\n``analysis_software_release`` / ``workflow_tool_release`` /\n``literature``, exactly as thermo's are. Before this, a reaction\nbundle's statmech took the bundle-level values with no way to say\nthat one species' partition function came from a different analysis\ncode -- which is the ordinary case when one participant is taken\nfrom a paper and the rest were computed here.\n\n:param scientific_origin: Scientific origin category.\n:param literature: Optional literature provenance for this statmech.\n:param software_release: Optional analysis-code provenance. Overrides\n    the bundle-level ``analysis_software_release`` for this species.\n:param workflow_tool_release: Optional workflow-tool provenance.\n    Overrides the bundle-level value for this species.\n:param is_linear: Whether the molecule is linear.\n:param rigid_rotor_kind: Rotational treatment classification.\n:param external_symmetry: External symmetry number.\n:param optical_isomers: Number of optical isomers (>= 1).\n:param point_group: Optional point-group label (e.g. ``\"C2v\"``).\n:param statmech_treatment: Overall statmech treatment classification.\n:param rotational_constant_a_cm1: First reported principal rotational\n    constant (cm^-1), in source-provided order (conventionally\n    descending A >= B >= C). Optional.\n:param rotational_constant_b_cm1: Second reported principal rotational\n    constant (cm^-1). Optional.\n:param rotational_constant_c_cm1: Third reported principal rotational\n    constant (cm^-1). Optional.\n:param freq_scale_factor: Frequency scale factor applied.\n:param uses_projected_frequencies: Whether projected frequencies were used.\n:param source_calculations: Statmech → calc links by bundle-local\n    calculation key. Each referenced key must resolve into the\n    bundle's global calc-key namespace and must be owned by this\n    species entry (workflow-layer ownership check).\n:param torsions: Torsional modes.\n:param note: Optional note.",
         "properties": {
           "external_symmetry": {
             "anyOf": [
@@ -2697,6 +2697,16 @@
               }
             ],
             "title": "Is Linear"
+          },
+          "literature": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "note": {
             "anyOf": [
@@ -2742,9 +2752,55 @@
               }
             ]
           },
+          "rotational_constant_a_cm1": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant A Cm1"
+          },
+          "rotational_constant_b_cm1": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant B Cm1"
+          },
+          "rotational_constant_c_cm1": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rotational Constant C Cm1"
+          },
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind",
             "default": "computed"
+          },
+          "software_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoftwareReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "source_calculations": {
             "items": {
@@ -2780,6 +2836,16 @@
               }
             ],
             "title": "Uses Projected Frequencies"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowToolReleaseRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "BundleStatmechIn",
