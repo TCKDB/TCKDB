@@ -31,7 +31,12 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
-from app.db.models.thermo import Thermo, ThermoNASA, ThermoPoint
+from app.db.models.thermo import (
+    Thermo,
+    ThermoNASA,
+    ThermoPoint,
+    ThermoSourceCalculation,
+)
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_reaction_upload import (
@@ -91,6 +96,7 @@ from app.services.species_resolution import resolve_species_entry
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
+from app.workflows.thermo import assert_thermo_role_matches_calculation_type
 
 
 def _persist_calculation(
@@ -716,21 +722,47 @@ def persist_computed_reaction_upload(
             species_entry = species_key_to_entry[sp.key]
             t = sp.thermo
 
+            # Per-thermo provenance overrides the bundle-level default.
+            # The bundle value describes the run; a species whose thermo
+            # came out of a different code or a paper says so here, and
+            # falling back only when it stays silent keeps every deposit
+            # written before these fields existed reading the same way.
+            thermo_software_release = (
+                resolve_software_release_ref(session, t.software_release)
+                if t.software_release is not None
+                else bundle_analysis_software_release
+            )
+            thermo_workflow_tool_release = (
+                resolve_workflow_tool_release_ref(session, t.workflow_tool_release)
+                if t.workflow_tool_release is not None
+                else bundle_workflow_tool_release
+            )
+            thermo_literature = (
+                resolve_or_create_literature(session, t.literature)
+                if t.literature is not None
+                else None
+            )
+
             thermo = Thermo(
                 species_entry_id=species_entry.id,
                 scientific_origin=t.scientific_origin,
+                literature_id=(
+                    thermo_literature.id if thermo_literature is not None else None
+                ),
                 software_release_id=(
-                    bundle_analysis_software_release.id
-                    if bundle_analysis_software_release
+                    thermo_software_release.id
+                    if thermo_software_release
                     else None
                 ),
                 workflow_tool_release_id=(
-                    bundle_workflow_tool_release.id
-                    if bundle_workflow_tool_release
+                    thermo_workflow_tool_release.id
+                    if thermo_workflow_tool_release
                     else None
                 ),
                 h298_kj_mol=t.h298_kj_mol,
                 s298_j_mol_k=t.s298_j_mol_k,
+                h298_uncertainty_kj_mol=t.h298_uncertainty_kj_mol,
+                s298_uncertainty_j_mol_k=t.s298_uncertainty_j_mol_k,
                 tmin_k=t.tmin_k,
                 tmax_k=t.tmax_k,
                 note=t.note,
@@ -740,6 +772,36 @@ def persist_computed_reaction_upload(
             session.flush()
             thermo_ids.append(thermo.id)
             thermo_by_species_key[sp.key] = thermo
+
+            # Which calculations produced this number. The schema already
+            # refused a key that names nothing in the bundle; ownership is
+            # checked here because this is the layer that knows which
+            # species entry each key resolved to.
+            for index, sc in enumerate(t.source_calculations):
+                source_calc_id = calculation_key_to_id[sc.calculation_key]
+                source_calc = session.get(Calculation, source_calc_id)
+                if source_calc.species_entry_id != species_entry.id:
+                    raise ValueError(
+                        f"species[{sp.key!r}].thermo.source_calculations"
+                        f"[{index}].calculation_key="
+                        f"'{sc.calculation_key}': refers to a calculation "
+                        f"that is not owned by this species entry."
+                    )
+                assert_thermo_role_matches_calculation_type(
+                    source_calc,
+                    role=sc.role,
+                    context=(
+                        f"species[{sp.key!r}].thermo.source_calculations"
+                        f"[{index}].calculation_key='{sc.calculation_key}'"
+                    ),
+                )
+                session.add(
+                    ThermoSourceCalculation(
+                        thermo_id=thermo.id,
+                        calculation_id=source_calc_id,
+                        role=sc.role,
+                    )
+                )
 
             if t.nasa is not None:
                 session.add(ThermoNASA(thermo_id=thermo.id, **t.nasa.model_dump()))

@@ -49,7 +49,10 @@ from tckdb_schemas.fragments.reaction_atom_map import (
     ReactionAtomMapIn,
     validate_reaction_atom_map,
 )
-from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
+from tckdb_schemas.fragments.identity import (
+    SpeciesEntryIdentityPayload,
+    raise_for_atomless_structure,
+)
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
     SoftwareReleaseRef,
@@ -81,6 +84,7 @@ from tckdb_schemas.workflows.computed_species_upload import (
     AppliedEnergyCorrectionInBundle,
     CalculationDependencyInBundle,
     StatmechSourceCalcInBundle,
+    ThermoSourceCalcInBundle,
 )
 
 
@@ -277,24 +281,78 @@ class ConformerIn(SchemaBase):
 class BundleThermoIn(SchemaBase):
     """Thermo data attached to a species in this bundle.
 
+    The reaction route's thermo carries the same provenance the species
+    route's ``ThermoInBundle`` carries, because it is the same claim about
+    the same kind of row. The two models were written three days apart in
+    April 2026 and diverged from the start — this one first, with eight
+    fields, and never touched since; ``ThermoInBundle`` three days later
+    with fifteen. Nothing recorded a reason, and the gap was not visible
+    from either model, so a depositor putting thermo on a reaction bundle
+    silently lost the record of which calculations produced it while the
+    same deposit on the species route kept it.
+
+    ``applied_energy_corrections`` is deliberately **not** here. The
+    reaction bundle already declares applied corrections one level up, on
+    :class:`BundleSpeciesIn`, against the same resolved species entry.
+    Adding a second place to say it would let one deposit make the claim
+    twice, and the answer to "which one counts" would have to be invented.
+
     :param scientific_origin: Scientific origin category.
+    :param literature: Optional literature provenance for this thermo.
+    :param software_release: Optional analysis-code provenance. Overrides
+        the bundle-level ``analysis_software_release`` for this species.
+    :param workflow_tool_release: Optional workflow-tool provenance.
+        Overrides the bundle-level value for this species.
     :param h298_kj_mol: Enthalpy at 298 K in kJ/mol.
     :param s298_j_mol_k: Entropy at 298 K in J/(mol*K).
+    :param h298_uncertainty_kj_mol: Optional uncertainty on ``h298_kj_mol``.
+    :param s298_uncertainty_j_mol_k: Optional uncertainty on
+        ``s298_j_mol_k``.
     :param tmin_k: Minimum temperature in K.
     :param tmax_k: Maximum temperature in K.
     :param nasa: Optional NASA polynomial coefficients.
     :param points: Optional tabulated thermo data points.
+    :param source_calculations: Thermo → calc links by bundle-local
+        calculation key. Each key must resolve in the bundle's global
+        calc-key namespace and must name a calculation owned by this
+        species entry; the workflow rejects both failures.
     :param note: Optional note.
     """
 
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
+
+    literature: LiteratureUploadRequest | None = None
+    software_release: SoftwareReleaseRef | None = None
+    workflow_tool_release: WorkflowToolReleaseRef | None = None
+
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
+    h298_uncertainty_kj_mol: float | None = Field(default=None, ge=0)
+    s298_uncertainty_j_mol_k: float | None = Field(default=None, ge=0)
     tmin_k: float | None = Field(default=None, gt=0)
     tmax_k: float | None = Field(default=None, gt=0)
     nasa: ThermoNASACreate | None = None
     points: list[ThermoPointCreate] = Field(default_factory=list)
+    source_calculations: list[ThermoSourceCalcInBundle] = Field(
+        default_factory=list
+    )
     note: str | None = None
+
+    @model_validator(mode="after")
+    def validate_unique_source_calculation_pairs(self) -> Self:
+        """One (calculation, role) pair may be claimed once.
+
+        Mirrors ``ThermoInBundle``: the same rule guards the same table
+        constraint, and two upload routes disagreeing about it would mean
+        one of them turns a nameable 422 into an ``IntegrityError``.
+        """
+        seen = {(sc.calculation_key, sc.role) for sc in self.source_calculations}
+        if len(seen) != len(self.source_calculations):
+            raise ValueError(
+                "thermo.source_calculations must not repeat the same "
+                "(calculation_key, role) pair."
+            )
+        return self
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
@@ -499,6 +557,64 @@ class BundleSpeciesIn(SchemaBase):
             "owned by this species."
         ),
     )
+
+    def structure_locations(self) -> list[str]:
+        """Field paths at which this species actually supplied coordinates.
+
+        Every way a geometry can reach the database through this model, in one
+        place, so the atomless check below judges what would really be stored
+        rather than the one field that prompted it. A conformer always carries
+        a geometry, so its mere presence is structure; a calculation carries
+        structure when it names one, ran on one, or reported one.
+        """
+
+        locations: list[str] = []
+        for conformer in self.conformers:
+            locations.append(f"conformers['{conformer.key}'].geometry")
+        for conformer in self.conformers:
+            locations.extend(
+                self._calculation_structure_locations(
+                    conformer.calculation,
+                    path=f"conformers['{conformer.key}'].calculation",
+                )
+            )
+        for calc in self.calculations:
+            locations.extend(
+                self._calculation_structure_locations(
+                    calc, path=f"calculations['{calc.key}']"
+                )
+            )
+        return locations
+
+    @staticmethod
+    def _calculation_structure_locations(
+        calc: ComputedReactionCalculationIn, *, path: str
+    ) -> list[str]:
+        locations: list[str] = []
+        if calc.geometry_key is not None:
+            locations.append(f"{path}.geometry_key")
+        if calc.input_geometries:
+            locations.append(f"{path}.input_geometries")
+        if calc.output_geometries:
+            locations.append(f"{path}.output_geometries")
+        return locations
+
+    @model_validator(mode="after")
+    def validate_atomless_species_carries_no_structure(self) -> Self:
+        """Refuse a geometry deposited against a participant with no atoms.
+
+        Definitional, therefore blocking (ADR 0008). This model is where a
+        declared ``molecule_kind`` and the conformers deposited under it are
+        both in hand for the first time, so it is the earliest place the
+        contradiction can be named with the key that caused it.
+        """
+
+        raise_for_atomless_structure(
+            self.species_entry.molecule_kind,
+            subject=f"Species '{self.key}'",
+            structure_locations=self.structure_locations(),
+        )
+        return self
 
     @model_validator(mode="after")
     def validate_calc_geometry_keys(self) -> Self:
@@ -1246,6 +1362,21 @@ class ComputedReactionUploadRequest(SchemaBase):
             )
             for calc in self.transition_state.calculations:
                 all_calc_keys_to_types[calc.key] = calc.type
+
+        # Per-species thermo source_calculation keys, same contract as
+        # statmech's above: typos caught here as a 422 that can name the
+        # key, owner-consistency left to the workflow, which is the layer
+        # that knows which species entry each calculation resolved to.
+        for sp in self.species:
+            if sp.thermo is None:
+                continue
+            for i, sc in enumerate(sp.thermo.source_calculations):
+                if sc.calculation_key not in all_calc_keys:
+                    raise ValueError(
+                        f"species[{sp.key!r}].thermo.source_calculations[{i}]."
+                        f"calculation_key references undefined "
+                        f"calculation_key '{sc.calculation_key}'."
+                    )
 
         for sp in self.species:
             if sp.statmech is None:

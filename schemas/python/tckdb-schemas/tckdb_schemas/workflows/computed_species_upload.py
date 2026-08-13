@@ -36,6 +36,7 @@ from tckdb_schemas.fragments.calculation import (
     OptResultPayload,
     OutputGeometryEntry,
     PathSearchResultPayload,
+    SCFStabilityPayload,
     SpinDiagnosticPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
@@ -153,6 +154,7 @@ class CalculationInBundle(SchemaBase):
 
     wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
     spin_diagnostic: SpinDiagnosticPayload | None = None
+    scf_stability: SCFStabilityPayload | None = None
     hessian: HessianPayload | None = None
 
     input_geometries: list[GeometryPayload] = Field(

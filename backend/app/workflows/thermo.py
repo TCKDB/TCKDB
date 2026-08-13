@@ -61,13 +61,21 @@ def _assert_calculation_owned_by(
         )
 
 
-def _assert_calculation_role_compatible(
+def assert_thermo_role_matches_calculation_type(
     calculation: Calculation,
     *,
     role: ThermoCalculationRole,
     context: str,
 ) -> None:
     """Verify resolved ``Calculation.type`` is compatible with declared role.
+
+    The single owner of this rule, for every route that links thermo to a
+    supporting calculation: the standalone ``/uploads/thermo`` endpoint,
+    the computed-species bundle and the computed-reaction bundle. It was
+    written twice before — once here and once in ``computed_species`` —
+    and a third copy went in with the reaction route's ``thermo.
+    source_calculations``, at which point three copies of one rule could
+    disagree about the same deposit.
 
     DR-0028 Requirement 1: a single typo in ``existing_calculation_id`` (or
     a mis-keyed inline calc) would otherwise silently link thermo to the
@@ -124,7 +132,7 @@ def _resolve_source_calculation(
             context=context,
         )
 
-    _assert_calculation_role_compatible(
+    assert_thermo_role_matches_calculation_type(
         calc_row,
         role=entry.role,
         context=context,

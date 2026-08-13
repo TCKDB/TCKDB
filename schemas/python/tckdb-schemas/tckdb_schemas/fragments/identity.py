@@ -15,6 +15,7 @@ Backend-only read/CRUD species-entry schemas remain in the backend
 package and continue to import the mixin from this module via the shim.
 """
 
+from collections.abc import Sequence
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
@@ -94,6 +95,51 @@ def participant_has_no_atoms(molecule_kind: MoleculeKind) -> bool:
     """
 
     return molecule_kind in ATOMLESS_MOLECULE_KINDS
+
+
+def raise_for_atomless_structure(
+    molecule_kind: MoleculeKind,
+    *,
+    subject: str,
+    structure_locations: Sequence[str],
+) -> None:
+    """Refuse coordinates deposited against a participant known to have no atoms.
+
+    A free electron has no geometry anywhere in the deposit — that is not a
+    convention, it is what "no atoms" means, and the atom-map fragment next
+    door already reads it as an invariant when it refuses a ``geometry_key``
+    beside an empty ``atom_to_ts``. Until now the invariant held only because
+    no depositor had tried: nothing stopped a bundle declaring
+    ``molecule_kind: electron`` and hanging a one-atom conformer off it, and
+    the species row kept the geometry even after the atom map declined to use
+    it. A record of an electron's coordinates cannot be what it says it is, so
+    refusing it rejects no correct calculation — definitional, therefore
+    blocking under ADR 0008, rather than a warning.
+
+    ``pseudo`` is out of scope here for the same reason it is absent from
+    :data:`ATOMLESS_MOLECULE_KINDS`: a lumped construct's composition is
+    unknown, not empty, and a geometry deposited against one is an
+    under-described molecule rather than a contradiction.
+
+    :param molecule_kind: What the payload declares this participant to be.
+    :param subject: How to name the offending participant in the message,
+        already quoted for the reader (e.g. ``"Species 'e'"``).
+    :param structure_locations: Field paths, relative to the participant, at
+        which structure was actually supplied. Empty means nothing to refuse.
+    """
+
+    if not participant_has_no_atoms(molecule_kind):
+        return
+    locations = list(structure_locations)
+    if not locations:
+        return
+    raise ValueError(
+        f"{subject} declares molecule_kind="
+        f"{molecule_kind.value!r}, which has no atoms, but carries structure "
+        f"at {', '.join(locations)}. A participant with no atoms has no "
+        f"geometry anywhere in the deposit; remove the structure, or declare "
+        f"the participant as what it actually is."
+    )
 
 
 class SpeciesIdentityPayload(SchemaBase):

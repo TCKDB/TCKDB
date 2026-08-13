@@ -27,6 +27,7 @@ from tckdb_schemas.fragments.calculation import (
     FrequencyModePayload,
     HessianPayload,
     OptResultPayload,
+    SCFStabilityPayload,
     SpinDiagnosticPayload,
     SPResultPayload,
     WavefunctionDiagnosticPayload,
@@ -114,6 +115,11 @@ class CalculationIn(SchemaBase):
     # Optional inline post-hoc diagnostics (forwarded to the shared seam).
     wavefunction_diagnostic: WavefunctionDiagnosticPayload | None = None
     spin_diagnostic: SpinDiagnosticPayload | None = None
+
+    #: Whether the SCF solution was tested for stability, and what the test
+    #: found. Absence means the test was not run — ``not_checked`` is
+    #: deliberately not a storable status, so no row is the encoding.
+    scf_stability: SCFStabilityPayload | None = None
 
     # Parsed execution-control parameters (routed through the shared seam).
     parameters: list[CalculationParameterObservation] | None = None
@@ -275,6 +281,7 @@ def calculation_in_to_with_results_payload(
         hessian=calc_in.hessian,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         spin_diagnostic=calc_in.spin_diagnostic,
+        scf_stability=calc_in.scf_stability,
         parameters=calc_in.parameters,
         parameters_json=calc_in.parameters_json,
         parameters_parser_version=calc_in.parameters_parser_version,
