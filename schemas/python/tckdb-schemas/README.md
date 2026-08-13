@@ -24,6 +24,79 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.25.0 — bundle roots gain SCF stability and thermo provenance; an atomless participant may not carry coordinates
+
+Three additions and one new refusal. Nothing is renamed or removed, so a
+0.24.0 payload keeps validating — **unless** it declared a free electron
+and hung a geometry off it, which is the refusal below.
+
+**`scf_stability` now reaches the bundle roots.** The field existed only
+on `CalculationWithResultsPayload`, so `/uploads/conformers`,
+`/transition-states`, `/statmech`, `/thermo` and `/transport` could record
+whether an SCF solution had been tested for stability, and
+`/uploads/computed-species`, `/uploads/computed-reaction` and
+`/networks/pdep` could not. Models are `extra="forbid"`, so a bundle that
+tried got a 422 rather than a silent drop.
+
+`SCFStabilityPayload` is now split so the bundles can carry it without
+carrying database ids with it. The new `SCFStabilityContent` holds the
+finding — `status`, `lowest_eigenvalue`, `instability_count`,
+`instability_type`, `reoptimized_wavefunction`, `note` — and
+`SCFStabilityPayload` extends it with the two FK fields
+(`source_calculation_id`, `source_artifact_id`) the primitive routes
+already accept as programmatic chaining. `CalculationInBundle` and the
+shared `CalculationIn` take the content class; the primitive routes are
+unchanged, so a 0.24.0 payload to any of them still validates.
+
+The FK fields are not merely omitted for tidiness. A bundle names
+everything by local key, `source_calculation_id` is already in the
+bundle's own `_FORBIDDEN_DB_ID_FIELDS`, and a sideways local key could
+not be resolved anyway: the block is persisted with the calculation it
+hangs off, before that calculation's siblings exist. A depositor who
+needs to cite another row has the primitive routes.
+
+```python
+{"key": "h_sp", "type": "sp", ...,
+ "scf_stability": {"status": "stabilized", "instability_count": 1,
+                   "reoptimized_wavefunction": True}}
+```
+
+**`BundleThermoIn` gains the provenance `ThermoInBundle` already had.**
+The reaction route's per-species thermo could not record which
+calculations produced it. It now takes `source_calculations`,
+`literature`, `software_release`, `workflow_tool_release`,
+`h298_uncertainty_kj_mol` and `s298_uncertainty_j_mol_k`, and the
+workflow persists them — including the `thermo_source_calculation` rows
+that route wrote none of. `software_release` / `workflow_tool_release`
+override the bundle-level values for that species and fall back to them
+when omitted, so existing payloads read exactly as before.
+
+`applied_energy_corrections` is deliberately **not** added: the reaction
+bundle already declares those on `BundleSpeciesIn`, against the same
+resolved species entry, and a second place to say it would need a rule
+for which one counts.
+
+```python
+{"key": "h", "species_entry": {...},
+ "thermo": {"h298_kj_mol": 218.0,
+            "source_calculations": [{"calculation_key": "h_sp", "role": "sp"}]}}
+```
+
+**An atomless participant may no longer carry coordinates.** A species
+declaring `molecule_kind: electron` is now refused, as a 422 naming the
+field, if it carries a conformer, or a `geometry_key`, `input_geometries`
+or `output_geometries` on any of its calculations. A conformer geometry
+was already refused — later, and as
+`species_geometry_composition_mismatch` from mid-transaction — but a
+*calculation* geometry reached no composition check on any path and was
+accepted, so an electron's coordinates could be stored. Definitional
+under ADR 0008: a record of an electron's coordinates cannot be what it
+says it is, so this rejects no correct calculation.
+
+`molecule_kind: pseudo` is unaffected and stays that way. A lumped
+construct's composition is *unknown*, not empty, and a geometry deposited
+under one is an under-described molecule rather than a contradiction.
+
 ### 0.24.0 — **BREAKING**: statmech source calculations are named, not numbered
 
 `ConformerUploadRequest.statmech` used to identify a supporting

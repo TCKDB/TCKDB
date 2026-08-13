@@ -21,6 +21,7 @@ from tckdb_schemas.fragments.calculation import (
     OutputGeometryEntry,
     PathSearchPointPayload,
     PathSearchResultPayload,
+    SCFStabilityContent,
     SCFStabilityPayload,
     SpinDiagnosticPayload,
     SPResultPayload,

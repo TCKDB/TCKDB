@@ -311,7 +311,7 @@ class SPResultPayload(SchemaBase):
     electronic_energy_hartree: float | None = None
 
 
-class SCFStabilityPayload(SchemaBase):
+class SCFStabilityContent(SchemaBase):
     """Optional inline SCF wavefunction stability evidence.
 
     Attaches to any calculation type — there is no calc_type restriction.
@@ -331,12 +331,13 @@ class SCFStabilityPayload(SchemaBase):
         (e.g. ``"RHF→UHF"``, ``"internal"``).
     :param reoptimized_wavefunction: Whether a stable wavefunction was
         obtained by stability optimisation / reoptimisation.
-    :param source_calculation_id: Optional FK to the calculation whose
-        log carries the stability evidence (when separate from the
-        owning calculation).
-    :param source_artifact_id: Optional FK to a ``calculation_artifact``
-        row holding the stability log bytes (e.g. an ``ancillary`` or
-        ``output_log`` artifact).
+
+    Holds the stability finding and nothing that names another database
+    row, which is what lets a bundle carry it. A bundle upload identifies
+    everything by local key; the two FK fields on
+    :class:`SCFStabilityPayload` below would put raw primary keys back on
+    a surface a depositor is meant to be able to write without ever
+    having queried TCKDB.
     """
 
     status: SCFStabilityStatus
@@ -344,8 +345,6 @@ class SCFStabilityPayload(SchemaBase):
     instability_count: int | None = Field(default=None, ge=0)
     instability_type: str | None = None
     reoptimized_wavefunction: bool | None = None
-    source_calculation_id: int | None = None
-    source_artifact_id: int | None = None
     note: str | None = None
 
     @model_validator(mode="after")
@@ -392,6 +391,36 @@ class SCFStabilityPayload(SchemaBase):
                 "wavefunction was subsequently obtained."
             )
         return self
+
+
+class SCFStabilityPayload(SCFStabilityContent):
+    """SCF stability evidence that may cite rows outside its own record.
+
+    The primitive upload routes take this shape. They already accept
+    database ids as a deliberate programmatic-chaining mechanism, so
+    naming the calculation or artifact that carries the stability log is
+    the same kind of claim they already support.
+
+    Bundle roots take :class:`SCFStabilityContent` instead. Not because
+    the citation is unwanted there, but because a bundle has no way to
+    make it: a bundle names things by local key, and the calculation this
+    block hangs off is persisted before its siblings exist, so a key
+    pointing sideways could not be resolved at the moment it is read. A
+    depositor who needs the citation has the primitive routes; a
+    depositor who has only what a parser found — a status, an eigenvalue,
+    a count — can now say it from a bundle, which is what they could not
+    do at all before.
+
+    :param source_calculation_id: Optional FK to the calculation whose
+        log carries the stability evidence (when separate from the
+        owning calculation).
+    :param source_artifact_id: Optional FK to a ``calculation_artifact``
+        row holding the stability log bytes (e.g. an ``ancillary`` or
+        ``output_log`` artifact).
+    """
+
+    source_calculation_id: int | None = None
+    source_artifact_id: int | None = None
 
 
 class HessianPayload(SchemaBase):

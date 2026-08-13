@@ -19,7 +19,6 @@ from app.db.models.common import (
     CalculationType,
     ScientificOriginKind,
     SubmissionRecordType,
-    ThermoCalculationRole,
 )
 from app.db.models.species import ConformerObservation
 from app.db.models.statmech import (
@@ -30,7 +29,10 @@ from app.db.models.statmech import (
 )
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
-from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.schemas.fragments.calculation import (
+    CalculationWithResultsPayload,
+    SCFStabilityPayload,
+)
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_species_upload import (
     CalculationInBundle,
@@ -88,37 +90,7 @@ from app.services.sp_energy_extraction import (
 )
 from app.services.species_resolution import resolve_species_entry
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
-
-# ---------------------------------------------------------------------------
-# Thermo role/type compatibility (mirror DR-0028 helpers in workflows/thermo)
-# ---------------------------------------------------------------------------
-
-_THERMO_ROLE_TO_CALC_TYPE: dict[ThermoCalculationRole, CalculationType] = {
-    ThermoCalculationRole.opt: CalculationType.opt,
-    ThermoCalculationRole.freq: CalculationType.freq,
-    ThermoCalculationRole.sp: CalculationType.sp,
-}
-
-
-def _assert_thermo_role_type_compatible(
-    calc: Calculation,
-    role: ThermoCalculationRole,
-    *,
-    context: str,
-) -> None:
-    """Verify a thermo source calc's type is compatible with the role.
-
-    Mirrors ``app.workflows.thermo._assert_calculation_role_compatible``.
-    """
-    expected = _THERMO_ROLE_TO_CALC_TYPE.get(role)
-    if expected is None:
-        return
-    if calc.type != expected:
-        raise ValueError(
-            f"{context}: role='{role.value}' is incompatible with the "
-            f"resolved calculation type."
-        )
-
+from app.workflows.thermo import assert_thermo_role_matches_calculation_type
 
 # ---------------------------------------------------------------------------
 # Outcome dataclasses
@@ -178,6 +150,11 @@ def _to_calc_with_results_payload(
         path_search_result=calc_in.path_search_result,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         spin_diagnostic=calc_in.spin_diagnostic,
+        scf_stability=(
+            None
+            if calc_in.scf_stability is None
+            else SCFStabilityPayload(**calc_in.scf_stability.model_dump())
+        ),
         hessian=calc_in.hessian,
         input_geometries=calc_in.input_geometries,
         output_geometries=calc_in.output_geometries,
@@ -718,9 +695,9 @@ def _persist_thermo_block(
                 f"'{sc.calculation_key}': refers to a calculation owned "
                 f"by a different species entry."
             )
-        _assert_thermo_role_type_compatible(
+        assert_thermo_role_matches_calculation_type(
             calc_row,
-            sc.role,
+            role=sc.role,
             context=(
                 f"thermo.source_calculations calculation_key="
                 f"'{sc.calculation_key}'"
