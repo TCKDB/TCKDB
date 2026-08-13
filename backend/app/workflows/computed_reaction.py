@@ -93,6 +93,7 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 from app.services.species_resolution import resolve_species_entry
+from app.services.statmech_resolution import assert_statmech_role_compatible
 from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
@@ -887,6 +888,17 @@ def persist_computed_reaction_upload(
                         f"calculation_key='{sc.calculation_key}': "
                         f"refers to a calculation {flavor}."
                     )
+                # The fourth statmech write path, and the one ARC actually
+                # deposits through. Same DR-0028 Requirement 1 as the other
+                # three, from the same shared service.
+                assert_statmech_role_compatible(
+                    calc_row,
+                    role=sc.role,
+                    context=(
+                        f"species[{sp.key!r}].statmech.source_calculations[{i}]."
+                        f"calculation_key='{sc.calculation_key}'"
+                    ),
+                )
                 session.add(
                     StatmechSourceCalculation(
                         statmech_id=statmech.id,

@@ -17,7 +17,10 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
 from app.services.conformer_resolution import resolve_conformer_group
-from app.services.energy_correction_resolution import create_applied_energy_correction
+from app.services.energy_correction_resolution import (
+    create_applied_energy_correction,
+    resolve_applied_correction_source_key,
+)
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.record_review import (
     RecordRef,
@@ -80,6 +83,10 @@ def persist_conformer_upload(
         the basin-level group may be reused.
     :raises ValueError:
         If species identity or geometry parsing fails during upload resolution.
+    :raises CodedValueError:
+        If an applied energy correction names a source key this request
+        never declared, or a statmech source link declares a role the
+        calculation it names cannot play.
     """
 
     species_entry = resolve_species_entry(
@@ -199,19 +206,44 @@ def persist_conformer_upload(
             created_by=created_by,
         )
 
+    # The one name this request gives the conformer it is depositing. A
+    # conformer upload creates exactly one observation, and ``label`` is
+    # the only string the depositor attaches to it, so it is the whole
+    # conformer namespace here -- unlike the bundle, where every
+    # ``ConformerInBundle`` carries a required ``key``.
+    conformers_by_key: dict[str, int] = (
+        {request.label: observation.id} if request.label is not None else {}
+    )
+
     applied_corrections: list = []
-    for correction_payload in request.applied_energy_corrections:
-        # Resolve local string keys to IDs.
-        # source_conformer_key always resolves to the observation just created.
-        source_conf_id = (
-            observation.id
-            if correction_payload.source_conformer_key is not None
-            else None
+    for index, correction_payload in enumerate(request.applied_energy_corrections):
+        # Resolve local string keys against the namespaces this request
+        # actually declared. Both keys used to be tested for `is not None`
+        # alone, so any string at all resolved to the primary
+        # observation/calculation and a typo attached the correction to
+        # something the depositor never named. The calc-key namespace is
+        # the one the statmech block already points at (DR-0029 Req 1).
+        source_conf_id = resolve_applied_correction_source_key(
+            correction_payload.source_conformer_key,
+            conformers_by_key,
+            field=(
+                f"applied_energy_corrections[{index}].source_conformer_key"
+            ),
+            declares=(
+                "A conformer upload names its conformer with the "
+                "request's 'label'."
+            ),
         )
-        source_calc_id = (
-            calculation.id
-            if correction_payload.source_calculation_key is not None
-            else None
+        source_calc_id = resolve_applied_correction_source_key(
+            correction_payload.source_calculation_key,
+            calculations_by_key,
+            field=(
+                f"applied_energy_corrections[{index}].source_calculation_key"
+            ),
+            declares=(
+                "Put a matching 'key' on 'calculation' or on one of "
+                "'additional_calculations'."
+            ),
         )
         applied_corrections.append(
             create_applied_energy_correction(

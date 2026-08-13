@@ -89,6 +89,7 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 from app.services.species_resolution import resolve_species_entry
+from app.services.statmech_resolution import assert_statmech_role_compatible
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import assert_thermo_role_matches_calculation_type
 
@@ -892,6 +893,18 @@ def _persist_statmech_block(
                 f"statmech.source_calculations calculation_key="
                 f"'{sc.calculation_key}': refers to a calculation owned by a different subject."
             )
+        # The third statmech write path, and the third to need DR-0028
+        # Requirement 1: a declared role must match the type of the job it
+        # names. Shared with the conformer and standalone paths through
+        # the statmech resolution service so all three refuse alike.
+        assert_statmech_role_compatible(
+            calc_row,
+            role=sc.role,
+            context=(
+                f"statmech.source_calculations.calculation_key="
+                f"'{sc.calculation_key}'"
+            ),
+        )
         session.add(
             StatmechSourceCalculation(
                 statmech_id=statmech.id,
