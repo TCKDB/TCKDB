@@ -39,6 +39,20 @@ jobs:
           POSTGRES_USER: tckdb
           POSTGRES_PASSWORD: tckdb
           POSTGRES_DB: tckdb_nightly_ci
+          # Same pin as backend-ci.yml and docker-compose.yml, for the same
+          # reason. This image sets no locale, so initdb falls back to
+          # SQL_ASCII. The nightly ran that way while the PR gates did not,
+          # so the two jobs disagreed about what the database would accept:
+          # every `\uXXXX` escape above U+007F that the gates stored happily
+          # raised 22P05 here. On 2026-08-13 that surfaced as an idempotency
+          # receipt failing to write, which turned a 409 replay into a 201
+          # and failed a test that was correct.
+          #
+          # POSTGRES_INITDB_ARGS applies only at initdb, so it cannot be
+          # retrofitted onto a cluster that already exists -- which is why
+          # this belongs here rather than in a setup step.
+          LANG: C.UTF-8
+          POSTGRES_INITDB_ARGS: "--encoding=UTF8"
         ports:
           - 5432:5432
         options: >-
