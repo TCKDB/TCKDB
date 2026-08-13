@@ -164,7 +164,18 @@ class TestOnlyTheCodePositionDeclaresACode:
     def test_a_code_survives_pydantic_wrapping_its_sentence(self):
         """A validator's ``ValueError`` reaches ``errors()`` as
         ``"Value error, <message>"``. The code is still the first thing
-        the *raiser* wrote, so it is still in the code position."""
+        the *raiser* wrote, so it is still in the code position.
+
+        Deliberately built without ``ctx``, and that is the whole point of
+        the case. Pydantic v2 *also* preserves the raw exception in
+        ``ctx["error"]``, whose ``str()`` carries no wrapper, so every live
+        route recovers its code from there and would keep working if the
+        prefix list were emptied — measured, not assumed (mutation M2b).
+        The prefix stripping is what stops the whole read API's twenty-four
+        codes depending on Pydantic continuing to hand over an exception
+        object: strip the context anywhere in front of this function and
+        ``msg`` is all that is left.
+        """
         details = [
             {
                 "type": "value_error",
