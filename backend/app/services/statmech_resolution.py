@@ -42,17 +42,30 @@ W_STATMECH_CALCULATION_KEY_UNDECLARED = "statmech_calculation_key_undeclared"
 #: play, because its ``Calculation.type`` is a different kind of job.
 W_STATMECH_SOURCE_ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
 
-#: Roles that name a specific kind of job, and the ``CalculationType`` each
-#: one requires. ``composite`` and ``imported`` are deliberately absent:
-#: they describe a scientific origin rather than a job type, so no single
-#: ``CalculationType`` is the right one for them (the same carve-out
-#: ``_THERMO_ROLE_TO_CALC_TYPE`` makes in :mod:`app.workflows.thermo`).
-_STATMECH_ROLE_TO_CALC_TYPE: dict[StatmechCalculationRole, CalculationType] = {
-    StatmechCalculationRole.opt: CalculationType.opt,
-    StatmechCalculationRole.freq: CalculationType.freq,
-    StatmechCalculationRole.sp: CalculationType.sp,
-    StatmechCalculationRole.scan: CalculationType.scan,
+#: Roles that name a specific kind of job, and the ``CalculationType``\ s
+#: each one accepts. The first entry is the canonical one — the type the
+#: role is named after — and is what the refusal reports as *expected*.
+#:
+#: ``composite`` and ``imported`` are deliberately absent: they describe a
+#: scientific origin rather than a job type, so no ``CalculationType`` is
+#: the right one for them (the same carve-out
+#: ``_THERMO_ROLE_TO_CALC_TYPES`` makes in :mod:`app.workflows.thermo`).
+#:
+#: ``sp`` is the one role with a second accepted type, and the asymmetry is
+#: deliberate — see :func:`assert_statmech_role_compatible`.
+_STATMECH_ROLE_TO_CALC_TYPES: dict[
+    StatmechCalculationRole, tuple[CalculationType, ...]
+] = {
+    StatmechCalculationRole.opt: (CalculationType.opt,),
+    StatmechCalculationRole.freq: (CalculationType.freq,),
+    StatmechCalculationRole.sp: (CalculationType.sp, CalculationType.opt),
+    StatmechCalculationRole.scan: (CalculationType.scan,),
 }
+
+
+def accepted_types_phrase(accepted: tuple[CalculationType, ...]) -> str:
+    """``"'sp' or 'opt'"`` — the accepted types, for a refusal message."""
+    return " or ".join(f"'{calc_type.value}'" for calc_type in accepted)
 
 
 def _resolve_calculation_key(
@@ -104,13 +117,33 @@ def assert_statmech_role_compatible(
 
     This is DR-0028 Requirement 1, applied to the path it was written for
     but never reached: thermo has enforced it since DR-0028
-    (``app.workflows.thermo._assert_calculation_role_compatible``) while
-    statmech accepted any pairing. Local string keys made the gap sharper
+    (:func:`app.workflows.thermo.assert_thermo_role_matches_calculation_type`)
+    while statmech accepted any pairing. Local string keys made the gap sharper
     than row ids did — a plausible-looking wrong key resolves silently
     where a wrong integer would more often have failed a foreign key.
 
     ``composite`` and ``imported`` accept any type, as they do for thermo:
     they name where a number came from, not which job produced it.
+
+    One named exception, and only one: **``role='sp'`` accepts an ``opt``
+    calculation.** A depositor who never ran a separate single point has
+    not lost the number — an optimisation's final energy *is* the
+    single-point value, at the optimisation's own level of theory, which
+    the calculation row already carries. Refusing that rejects a
+    legitimate and common deposit. The mixed-method case is not a
+    counter-example but the other branch: someone optimising at
+    wB97X-D/def2-TZVP and refining at DLPNO-CCSD(T)/def2-TZVP *has* a
+    separate ``sp`` calculation and links the ``sp`` role to it, so there
+    is never a second level of theory to reconcile here.
+
+    The exception does not run in reverse, and the asymmetry is the point:
+    an ``sp`` calculation cannot serve the ``opt`` role, because it
+    optimised nothing and there is no converged geometry to claim. Nor
+    does it generalise — ``role='freq'`` on an ``sp`` job is still a
+    record asserting vibrational evidence that was never produced.
+    ``backend/tests/api/test_api_upload_key_and_role_contracts.py`` pins
+    both directions so that "restoring symmetry" fails a test rather than
+    a deposit.
 
     :param calculation: The resolved source calculation row.
     :param role: The role the upload declared for it.
@@ -118,11 +151,12 @@ def assert_statmech_role_compatible(
         into the 422 body — so it must name the caller's own key, never a
         row id.
     :raises CodedValueError: if ``role`` names a job type and the
-        calculation is not of that type.
+        calculation is of none of the types that role accepts.
     """
-    expected = _STATMECH_ROLE_TO_CALC_TYPE.get(role)
-    if expected is None or calculation.type == expected:
+    accepted = _STATMECH_ROLE_TO_CALC_TYPES.get(role)
+    if accepted is None or calculation.type in accepted:
         return
+    expected = accepted[0]
     # The row id is the operator's handle, not the depositor's: it goes to
     # the log, while the 422 names only the key the depositor wrote.
     logger.info(
@@ -137,13 +171,16 @@ def assert_statmech_role_compatible(
         f"{context}: role='{role.value}' claims a "
         f"'{expected.value}' calculation, but the calculation it names has "
         f"type '{calculation.type.value}'. A statmech record must not claim "
-        f"evidence it does not have. Point the link at the "
-        f"'{expected.value}' calculation, or declare the role the named "
-        f"calculation actually played.",
+        f"evidence it does not have. Point the link at a "
+        f"{accepted_types_phrase(accepted)} calculation, or declare the role "
+        f"the named calculation actually played.",
         context={
             "field": context,
             "declared_role": role.value,
             "expected_calculation_type": expected.value,
+            "accepted_calculation_types": [
+                calc_type.value for calc_type in accepted
+            ],
             "actual_calculation_type": calculation.type.value,
         },
         message_prefix=False,

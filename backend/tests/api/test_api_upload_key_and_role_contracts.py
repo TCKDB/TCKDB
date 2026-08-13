@@ -5,11 +5,19 @@ provenance it does not have, and getting away with it.
 
 * **A declared role must match the calculation's type.** Thermo has
   enforced this since DR-0028 Requirement 1
-  (``app.workflows.thermo._assert_calculation_role_compatible``). Statmech
-  did not, on any of its three write paths, so
+  (``app.workflows.thermo.assert_thermo_role_matches_calculation_type``).
+  Statmech did not, on any of its three write paths, so
   ``{"calculation_key": "my_sp_job", "role": "freq"}`` persisted happily
   and the statmech record then claimed a frequency calculation it never
   had.
+
+* **With exactly one exception: an ``opt`` may serve the ``sp`` role.**
+  A depositor who ran no separate single point has not lost the number —
+  the optimisation's final energy *is* the single-point value, at the
+  optimisation's own level of theory. The exception does not run in
+  reverse and does not generalise; the last section here pins both
+  halves of that, because "restoring symmetry" should cost a red test
+  rather than a rejected deposit.
 
 * **A declared key must name something declared.** The conformer upload's
   applied energy corrections tested both of their source keys for
@@ -30,6 +38,7 @@ _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
 
 _ROLE_TYPE_MISMATCH = "statmech_source_role_type_mismatch"
+_THERMO_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
 _KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
 
 
@@ -60,6 +69,15 @@ def _freq_calc() -> dict:
         "software_release": _SOFTWARE,
         "level_of_theory": _LOT,
         "freq_result": {"n_imag": 0, "zpe_hartree": 0.021},
+    }
+
+
+def _opt_calc() -> dict:
+    return {
+        "type": "opt",
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT,
+        "opt_result": {"converged": True},
     }
 
 
@@ -296,3 +314,206 @@ class TestConformerCorrectionSourceKeys:
         )
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 201, resp.text
+
+
+# ---------------------------------------------------------------------------
+# Thermo's copy of the rule, and the code it now carries
+# ---------------------------------------------------------------------------
+
+
+def _thermo_payload(smiles: str, **overrides) -> dict:
+    base: dict = {
+        "species_entry": {"smiles": smiles, "charge": 0, "multiplicity": 1},
+        "scientific_origin": "computed",
+        "h298_kj_mol": -83.7,
+    }
+    base.update(overrides)
+    return base
+
+
+class TestThermoRoleMismatchIsMachineReadable:
+    """The same claim, refused by thermo, must name itself to a client.
+
+    Statmech's refusal has carried a code since #152; thermo's raised a
+    bare ``ValueError``, so the identical depositor mistake arrived as
+    ``validation_error`` — a code no client can branch on and one that
+    never appears in the generated ``RejectionCode`` constants. The two
+    codes are deliberately different strings: same rule, different
+    subject, and a client may want to tell a broken partition function
+    from a broken enthalpy.
+    """
+
+    def test_freq_role_on_an_sp_calculation_is_refused_with_a_code(
+        self, client
+    ):
+        payload = _thermo_payload(
+            "CCCCO",
+            calculations=[{"key": "my_sp_job", "calculation": _sp_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_sp_job", "role": "freq"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        body = _assert_code(resp, _THERMO_ROLE_TYPE_MISMATCH)
+        assert body["context"]["declared_role"] == "freq"
+        assert body["context"]["expected_calculation_type"] == "freq"
+        assert body["context"]["actual_calculation_type"] == "sp"
+        # The offending link is named by the depositor's own key, and no
+        # row id is disclosed anywhere in the body (DR-0028 Req 2).
+        assert "my_sp_job" in body["context"]["field"]
+        assert "calculation_id" not in resp.text
+
+    def test_the_code_is_not_statmechs(self, client):
+        """Two subjects, two codes — a client must be able to tell them apart."""
+        payload = _thermo_payload(
+            "CCCCCO",
+            calculations=[{"key": "my_sp_job", "calculation": _sp_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_sp_job", "role": "freq"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 422, resp.text
+        assert resp.json()["code"] != _ROLE_TYPE_MISMATCH
+
+    def test_matching_roles_still_upload(self, client):
+        payload = _thermo_payload(
+            "CCCCCCO",
+            calculations=[
+                {"key": "my_sp_job", "calculation": _sp_calc()},
+                {"key": "my_freq_job", "calculation": _freq_calc()},
+            ],
+            source_calculations=[
+                {"calculation_key": "my_sp_job", "role": "sp"},
+                {"calculation_key": "my_freq_job", "role": "freq"},
+            ],
+        )
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 201, resp.text
+
+
+# ---------------------------------------------------------------------------
+# The one exception: an ``opt`` may serve the ``sp`` role — one way only
+# ---------------------------------------------------------------------------
+
+
+class TestOptimisationMayServeTheSinglePointRole:
+    """A depositor who ran no separate single point still has the energy.
+
+    The optimisation's final energy *is* the single-point value, at the
+    optimisation's own level of theory — which the calculation row it
+    points at already carries, so nothing is left unstated. The
+    mixed-method depositor is the other branch entirely: they have a real
+    ``sp`` calculation and link the ``sp`` role to that.
+    """
+
+    def test_statmech_sp_role_accepts_an_opt_calculation(self, client):
+        payload = _standalone_statmech_payload(
+            species_entry={"smiles": "CCCCC", "charge": 0, "multiplicity": 1},
+            calculations=[{"key": "my_opt_job", "calculation": _opt_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_opt_job", "role": "sp"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/statmech", json=payload)
+        assert resp.status_code == 201, resp.text
+
+    def test_thermo_sp_role_accepts_an_opt_calculation(self, client):
+        payload = _thermo_payload(
+            "CCCCCC",
+            calculations=[{"key": "my_opt_job", "calculation": _opt_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_opt_job", "role": "sp"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        assert resp.status_code == 201, resp.text
+
+    def test_bundle_statmech_sp_role_accepts_an_opt_calculation(self, client):
+        payload = _bundle_payload(
+            statmech={
+                "external_symmetry": 1,
+                "source_calculations": [
+                    {"calculation_key": "opt0", "role": "sp"}
+                ],
+            }
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text
+
+    def test_bundle_thermo_sp_role_accepts_an_opt_calculation(self, client):
+        payload = _bundle_payload(
+            thermo={
+                "h298_kj_mol": 217.998,
+                "source_calculations": [
+                    {"calculation_key": "opt0", "role": "sp"}
+                ],
+            }
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text
+
+
+class TestTheExceptionDoesNotRunInReverse:
+    """An ``sp`` calculation optimised nothing, so it cannot be the ``opt``.
+
+    This asymmetry is the part a later reader is most likely to "tidy up".
+    It is not an oversight: ``role='opt'`` is the claim that the linked job
+    produced the converged geometry the record stands on, and a
+    single-point job produced no geometry at all. The accepted-type list in
+    the refusal's ``context`` is asserted here so the one-sidedness is
+    visible in the response, not only in the source.
+    """
+
+    def test_statmech_opt_role_refuses_an_sp_calculation(self, client):
+        payload = _standalone_statmech_payload(
+            species_entry={"smiles": "CCCCCC", "charge": 0, "multiplicity": 1},
+            calculations=[{"key": "my_sp_job", "calculation": _sp_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_sp_job", "role": "opt"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/statmech", json=payload)
+        body = _assert_code(resp, _ROLE_TYPE_MISMATCH)
+        assert body["context"]["declared_role"] == "opt"
+        assert body["context"]["actual_calculation_type"] == "sp"
+        assert body["context"]["accepted_calculation_types"] == ["opt"]
+
+    def test_thermo_opt_role_refuses_an_sp_calculation(self, client):
+        payload = _thermo_payload(
+            "CCCCCCC",
+            calculations=[{"key": "my_sp_job", "calculation": _sp_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_sp_job", "role": "opt"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        body = _assert_code(resp, _THERMO_ROLE_TYPE_MISMATCH)
+        assert body["context"]["declared_role"] == "opt"
+        assert body["context"]["actual_calculation_type"] == "sp"
+        assert body["context"]["accepted_calculation_types"] == ["opt"]
+
+    def test_sp_role_still_refuses_a_freq_calculation(self, client):
+        """The exception is one named type, not "anything with an energy"."""
+        payload = _standalone_statmech_payload(
+            species_entry={"smiles": "CCCCCCC", "charge": 0, "multiplicity": 1},
+            calculations=[{"key": "my_freq_job", "calculation": _freq_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_freq_job", "role": "sp"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/statmech", json=payload)
+        body = _assert_code(resp, _ROLE_TYPE_MISMATCH)
+        assert body["context"]["accepted_calculation_types"] == ["sp", "opt"]
+
+    def test_thermo_sp_role_still_refuses_a_freq_calculation(self, client):
+        payload = _thermo_payload(
+            "CCCCCCCC",
+            calculations=[{"key": "my_freq_job", "calculation": _freq_calc()}],
+            source_calculations=[
+                {"calculation_key": "my_freq_job", "role": "sp"}
+            ],
+        )
+        resp = client.post("/api/v1/uploads/thermo", json=payload)
+        body = _assert_code(resp, _THERMO_ROLE_TYPE_MISMATCH)
+        assert body["context"]["accepted_calculation_types"] == ["sp", "opt"]

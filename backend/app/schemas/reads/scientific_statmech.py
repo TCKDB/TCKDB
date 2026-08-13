@@ -269,12 +269,24 @@ class StatmechEvidenceSummary(BaseModel):
     ``statmech_source_calculation`` and ``statmech_torsion``.
     ``has_rotor_scans`` is true iff at least one torsion row carries
     a ``source_scan_calculation_id``.
+
+    ``sp_from_optimization`` disambiguates ``has_sp_calculation``. The
+    upload layer accepts an ``opt`` calculation under the ``sp`` role —
+    an optimisation's final energy is the single-point value at the
+    optimisation's own level of theory — so ``has_sp_calculation`` alone
+    no longer says whether a dedicated single point was ever run. That is
+    a genuine provenance difference between two records, and the four-role
+    model says a difference like that belongs in the data rather than in
+    an inference a reader has to draw from
+    ``include=source_calculations``.
     """
 
     source_calculation_count: int
     has_opt_calculation: bool
     has_freq_calculation: bool
     has_sp_calculation: bool
+    #: At least one ``sp``-role source link points at an ``opt`` job.
+    sp_from_optimization: bool = False
     has_rotor_scans: bool
     torsion_count: int
     has_frequency_scale_factor: bool
