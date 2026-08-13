@@ -1,0 +1,552 @@
+"""Every code the API can put in the ``code`` field of an error body.
+
+Why this exists, and why it is not the scientific check register
+----------------------------------------------------------------
+:mod:`app.scientific_checks` enumerates the positions TCKDB takes about
+chemistry. Its inclusion test is "could this check be wrong in an
+interesting way?", and membership *is* the claim that a check encodes a
+scientific decision — so an entry that fails the test dilutes every other
+entry. That register is also the manuscript's validation claim.
+
+The client's ``RejectionCode`` enum used to be generated from that
+register alone, which quietly made it serve a second, different purpose:
+enumerating what the API can return. Those are different sets. A
+role/type mismatch, an ownership refusal and ``missing_filter`` are real
+codes a client must be able to branch on, and none of them can be wrong
+in an interesting way — so the register was correctly refusing them, and
+the consequence was that a client could not import them. The register was
+being asked to choose between diluting a scientific claim and leaving
+real codes unbranchable.
+
+This module is the second set. It enumerates codes; it says nothing about
+chemistry. The register is now an *annotated subset* of it, and
+``backend/tests/api/test_api_code_catalogue.py`` checks the containment:
+every code the register declares must exist here, and this list must stay
+several times the size of that one, so "the catalogue" and "the register"
+cannot quietly converge into a single list again.
+
+There is deliberately no ``scientific`` flag on :class:`ApiCode`. Folding
+the two lists into one with a boolean is the design this replaces: it
+would make the scientific claim a one-word edit, which is exactly what
+the register's inclusion test exists to prevent. Membership *here* is
+cheap because it claims nothing; membership *there* stays expensive
+because it claims a position a referee could argue with.
+
+What is not in scope
+--------------------
+The ``code`` field of an *error* body, and nothing else. TCKDB puts codes
+in successful responses too — ``UploadWarning``, the contribution-bundle
+dry run's messages, the reproducibility rubric's warnings — and those are
+a different contract with a different meaning: the deposit was accepted.
+Listing them here, under a module a client reads to find out what refused
+its request, would be the same category error as putting them in an enum
+named ``RejectionCode``.
+
+What an entry deliberately does not carry
+-----------------------------------------
+No prose describing what the code means. The refusal already has a
+sentence — the one the depositor receives — and copying it here would
+create a second copy to keep in step, which is drift with extra steps.
+:attr:`ApiCode.origin` names the module that defines the literal, and the
+drift guard checks the literal is still in it, so a reader is one grep
+from the real message and a rename fails CI. Where a *fact* needs
+recording that the site cannot state itself, :attr:`ApiCode.note` records
+it — and those notes are few on purpose.
+
+Nor any line numbers or rendered paths in the generated client file. See
+``backend/scripts/generate_client_rejection_codes.py`` for why a gate that
+fires on cosmetic movement is worse than no gate.
+
+Why completeness is checked, not claimed
+----------------------------------------
+A catalogue that asserts it is complete and is not would be exactly the
+kind of check-that-cannot-fail this repository keeps finding. Codes reach
+this file by four different routes, and no one of them is enough:
+
+* **A static scan of raise sites** (:data:`Surface.coded_exception`,
+  :data:`Surface.message_prefix`) finds every code written as a literal
+  where the refusal is raised. It is the bulk of the catalogue and it is
+  closed under inspection.
+* **A scan cannot see a code minted from a variable.** Four mechanisms do
+  exactly that: :func:`app.services.calculation_ownership.assert_calculation_owned_by`
+  and ``scientific_read.handles.reconcile_id_ref`` both take their code as
+  a *parameter*, ``tckdb_schemas.stationary_point`` raises with whichever
+  code its blocking finding carries, and the integrity handler looks its
+  code up by PostgreSQL constraint name. That is eighteen codes the scan
+  is blind to, and the ``*_handle_conflict`` family was found only by the
+  observer below. For those the guard checks the *defining* module
+  instead, which is where the literal actually lives.
+* **A handler, a middleware or a route writes the body itself** and names
+  the code in a literal there — twenty-one of these, none of them at a
+  ``raise``. They are found by reading the small number of places that
+  build an error body, which is a closed set because the exception
+  handlers are registered in one function.
+* **A runtime observer** in ``backend/tests/conftest.py`` records the
+  ``code`` of every error response the test suite produces and fails the
+  test that emits one this catalogue does not list. That is what makes
+  the completeness claim falsifiable rather than asserted, and it is the
+  only one of the four that can catch a code assembled at request time.
+"""
+
+from __future__ import annotations
+
+import re
+from dataclasses import dataclass
+from enum import Enum
+
+#: Codes of the form ``http_<status>``, produced by
+#: :func:`app.api.errors._http_exception_handler` whenever an
+#: ``HTTPException`` carries a plain-string detail with no ``"code: "``
+#: prefix. Enumerating each status separately would be noise: the code
+#: carries nothing the HTTP status line does not already say, which is
+#: also why the family is not exported to a client.
+STATUS_FALLBACK_PATTERN = re.compile(r"^http_\d{3}$")
+
+
+class Surface(str, Enum):
+    """How a code gets into the response body.
+
+    This is a statement about mechanism, not about importance. It is what
+    makes the catalogue's completeness checkable: each value implies a
+    different way of finding the codes that use it, and a code whose
+    surface is misdeclared fails its guard.
+    """
+
+    #: The raiser attached the code to the exception and the handler
+    #: passes it through unparsed — a
+    #: :class:`~tckdb_schemas.coded_error.CodedValidationError` at 422, or
+    #: an :class:`app.api.errors.NotFoundError` carrying ``code=`` at 404.
+    #: The only surface where nothing reads English.
+    coded_exception = "coded_exception"
+
+    #: The raiser wrote ``"code: message"`` and the envelope promoted the
+    #: token in the code position. The read API's published convention —
+    #: see :mod:`app.api.error_contract` for what "code position" means
+    #: and why the rule had to be narrowed to it.
+    message_prefix = "message_prefix"
+
+    #: An ``HTTPException`` whose ``detail`` is a *dict* carrying its own
+    #: ``code`` key, lifted by :func:`app.api.error_contract.detail_code`.
+    detail_object = "detail_object"
+
+    #: A route, middleware or exception handler writes the body itself and
+    #: names the code in a Python literal.
+    response_literal = "response_literal"
+
+    #: HTTP 409, keyed on the PostgreSQL constraint name the driver
+    #: reports. The code is looked up from the scientific check register's
+    #: :class:`~app.scientific_checks.DatabaseConstraint` declarations, so
+    #: these are the one surface where the register is the source.
+    database_constraint = "database_constraint"
+
+    #: HTTP 409 classified only by SQLSTATE, because no register entry
+    #: names the constraint that fired. Says *which kind* of consistency
+    #: rule refused the write, not which rule.
+    sqlstate_category = "sqlstate_category"
+
+    #: The handler had nothing more specific to say and used its
+    #: ``fallback_code``. Catalogued because the API emits it, excluded
+    #: from the client enum because branching on it tells a caller
+    #: nothing the HTTP status did not.
+    generic_fallback = "generic_fallback"
+
+    #: Not a code. A ``f"{context}: "`` prefix whose ``context`` happens
+    #: to be a snake_case identifier, so it occupies the code position and
+    #: the envelope reports it as though it were a contract. Recorded
+    #: rather than hidden, and never exported to a client — a fabricated
+    #: code that looks real is worse than an honestly generic one, which
+    #: is the finding #159 was opened for.
+    accidental_prefix = "accidental_prefix"
+
+
+@dataclass(frozen=True)
+class ApiCode:
+    """One code the API can report, and how it gets there.
+
+    :param code: The wire string, exactly as it appears in the body.
+        Changing it changes a published contract.
+    :param status: The HTTP status that carries it. A code enforced in
+        two places can arrive at two statuses — the atom map's claims are
+        stated at the wire boundary and again as a check constraint — and
+        that gets two entries, because the retry advice differs and a
+        client reads it off the status.
+    :param surface: The mechanism — see :class:`Surface`.
+    :param origin: Repo-relative module that *defines* the literal, with
+        no line number (a line-number anchor turns a cosmetic edit into a
+        red gate; see :attr:`app.scientific_checks.PythonCheck.location`
+        for the incident). Where a code is minted from a variable this is
+        the module holding the constant, not the module that raises.
+    :param note: A fact the site cannot state about itself. Deliberately
+        rare — this is an enumeration, not a second copy of the refusal
+        messages.
+    """
+
+    code: str
+    status: int
+    surface: Surface
+    origin: str
+    note: str | None = None
+
+    @property
+    def is_client_facing(self) -> bool:
+        """Whether a client should be able to import and branch on this.
+
+        Derived, never declared. A 5xx is not a refusal of anything the
+        caller did; a generic fallback repeats the status; an accidental
+        prefix is not a contract at all. Everything else is a refusal a
+        caller can act on, and the point of this module is that acting on
+        it must not require hard-coding a string.
+        """
+        return 400 <= self.status < 500 and self.surface not in {
+            Surface.generic_fallback,
+            Surface.accidental_prefix,
+        }
+
+
+#: Every code the API can report, ordered by code so a diff is readable.
+#:
+#: Adding one is cheap on purpose: an entry claims only that the code
+#: exists and where it comes from. That is the whole point of separating
+#: this from :mod:`app.scientific_checks`, whose entries claim something a
+#: referee could argue with and must stay expensive.
+CATALOGUE: tuple[ApiCode, ...] = (
+    ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py"),
+    ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/energy_correction_resolution.py"),
+    ApiCode("arrhenius_a_units_molecularity_mismatch", 422, Surface.coded_exception,
+            "backend/app/chemistry/units.py"),
+    ApiCode("artifact_integrity_failed", 502, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("artifact_storage_unavailable", 503, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_contradicts_irc_mapping", 422, Surface.coded_exception,
+            "backend/app/services/reaction_atom_map.py"),
+    ApiCode("atom_map_element_not_conserved", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_element_not_conserved", 409, Surface.database_constraint,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            note=(
+                "Two entries, and both are real. The claim is stated once at "
+                "the wire boundary and again as a check constraint, so which "
+                "status a depositor sees depends on the write path rather "
+                "than on what they did wrong. The origin is the same for "
+                "both because the literal has one home: the register names "
+                "the constraint by importing this constant, not by "
+                "respelling the code."
+            )),
+    ApiCode("atom_map_geometry_unparseable", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_indices_not_geometry_relative", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_inferred_requires_note", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_not_a_bijection", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_not_a_bijection", 409, Surface.database_constraint,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_participant_not_declared", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("atom_map_without_transition_state", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("canonical_parameter_value_requires_key", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/calculations_search.py"),
+    ApiCode("client_sort_not_supported", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("composed_search_candidate_limit_exceeded", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("composed_search_invalid_page", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("composed_search_pagination_changed", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("create_applied_group_additivity", 422, Surface.accidental_prefix,
+            "backend/app/services/group_additivity_resolution.py",
+            note=(
+                "The function name, not a code. The refusal is written in "
+                "the house style, with the enclosing function as the "
+                "context prefix, so it lands in the code position and the "
+                "envelope reports it. Reachable from POST /uploads/thermo."
+            )),
+    ApiCode("curation_policy_version_conflict", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("curator_task_not_found", 404, Surface.coded_exception,
+            "backend/app/services/machine_review/curator_task_lifecycle.py"),
+    ApiCode("cursor_offset_conflict", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/analytics.py"),
+    ApiCode("cursor_query_mismatch", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/keyset.py"),
+    ApiCode("data_integrity_error", 500, Surface.generic_fallback,
+            "backend/app/api/errors.py"),
+    ApiCode("database_unavailable", 503, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("doi_already_recorded", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("domain_error", 400, Surface.generic_fallback,
+            "backend/app/api/errors.py"),
+    ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
+            "backend/app/scientific_checks/declarations.py"),
+    ApiCode("export_all_cap_exceeded", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/export.py"),
+    ApiCode("export_seed_empty", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/export.py"),
+    ApiCode("export_seed_unresolved", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/export.py"),
+    ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+    ApiCode("geometry_too_large", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/geometry.py"),
+    ApiCode("handle_not_found", 404, Surface.coded_exception,
+            "backend/app/services/scientific_read/calculation_paths.py"),
+    ApiCode("handle_type_mismatch", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("idempotency_conflict", 409, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("idempotency_in_progress", 409, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("include_not_implemented_yet", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/calculations.py"),
+    ApiCode("integrity_conflict", 409, Surface.generic_fallback,
+            "backend/app/api/errors.py"),
+    ApiCode("invalid_cursor", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/keyset.py"),
+    ApiCode("invalid_handle", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("invalid_idempotency_key", 400, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("invalid_pagination", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("invalid_range", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/analytics.py"),
+    ApiCode("invalid_structure_query", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/structure_search.py"),
+    ApiCode("invalid_temperature_range", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("irc_result_not_found", 404, Surface.coded_exception,
+            "backend/app/services/scientific_read/calculation_paths.py"),
+    ApiCode("keyset_predicate", 422, Surface.accidental_prefix,
+            "backend/app/services/scientific_read/keyset.py",
+            note=(
+                "The function name, not a code, in the code position -- the "
+                "same shape as create_applied_group_additivity. Guards an "
+                "internal argument invariant, so it fires only on a backend "
+                "bug."
+            )),
+    ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("lowest_energy_unavailable", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/species_calculations_search.py"),
+    ApiCode("manifest_already_frozen", 422, Surface.message_prefix,
+            "backend/app/services/release/manifest.py"),
+    ApiCode("manifest_not_frozen", 404, Surface.message_prefix,
+            "backend/app/api/routes/scientific/releases.py"),
+    ApiCode("missing_filter", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/artifacts_search.py"),
+    ApiCode("missing_identifier", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/species.py"),
+    ApiCode("missing_reaction_search_filter", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/reactions.py"),
+    ApiCode("missing_structure_query", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/structure_search.py"),
+    ApiCode("ml_export_all_cap_exceeded", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("ml_export_lot_unresolved", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("ml_export_seed_empty", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("ml_export_seed_unresolved", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("multiple_structure_queries", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/structure_search.py"),
+    ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
+            "backend/app/scientific_checks/declarations.py"),
+    ApiCode("non_finite_value", 422, Surface.message_prefix,
+            "backend/app/services/release/artifacts.py"),
+    ApiCode("owner_missing", 404, Surface.coded_exception,
+            "backend/app/services/scientific_read/calculations.py"),
+    ApiCode("parameter_value_requires_key", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/calculations_search.py"),
+    ApiCode("path_search_result_not_found", 404, Surface.coded_exception,
+            "backend/app/services/scientific_read/calculation_paths.py"),
+    ApiCode("post_search_fields_must_be_in_body", 422, Surface.message_prefix,
+            "backend/app/api/routes/scientific/artifacts.py"),
+    ApiCode("pressure_alias_conflict", 422, Surface.message_prefix,
+            "backend/app/schemas/reads/scientific_kinetics.py"),
+    ApiCode("query_timeout", 503, Surface.response_literal,
+            "backend/app/api/errors.py"),
+    ApiCode("query_too_expensive", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/provenance.py"),
+    ApiCode("rate_limit_exceeded", 429, Surface.response_literal,
+            "backend/app/api/rate_limit.py"),
+    ApiCode("rationale_required", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("reaction_charge_not_conserved", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py"),
+    ApiCode("reaction_mass_balance_failed", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py"),
+    ApiCode("record_has_no_subject", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("record_not_approved", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("record_ref_not_selectable", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("record_subject_mismatch", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("record_type_not_selectable", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("reaction_entry_handle_conflict", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("reaction_handle_conflict", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("reference_conflict", 409, Surface.sqlstate_category,
+            "backend/app/api/errors.py"),
+    ApiCode("release_artifact_corrupt", 500, Surface.message_prefix,
+            "backend/app/api/routes/scientific/releases.py"),
+    ApiCode("release_not_draft", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("release_not_published", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("release_scoping_not_implemented", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/profile.py"),
+    ApiCode("release_selects_nothing", 422, Surface.message_prefix,
+            "backend/app/services/release/manifest.py"),
+    ApiCode("release_tag_taken", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("request_validation_error", 422, Surface.generic_fallback,
+            "backend/app/api/errors.py"),
+    ApiCode("resource_not_found", 404, Surface.generic_fallback,
+            "backend/app/api/errors.py"),
+    ApiCode("scan_result_not_found", 404, Surface.coded_exception,
+            "backend/app/services/scientific_read/calculation_paths.py"),
+    ApiCode("schema_not_initialized", 503, Surface.response_literal,
+            "backend/app/api/routes/health.py"),
+    ApiCode("selection_already_stands", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("selection_already_superseded", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("selection_no_longer_approved", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("smiles_too_long", 422, Surface.message_prefix,
+            "backend/app/schemas/reads/scientific_kinetics_search.py"),
+    ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("species_geometry_composition_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/species_resolution.py"),
+    ApiCode("species_geometry_isotope_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/species_resolution.py"),
+    ApiCode("species_handle_conflict", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("species_kind_conflict", 422, Surface.coded_exception,
+            "backend/app/services/species_resolution.py"),
+    ApiCode("species_smiles_charge_mismatch", 422, Surface.coded_exception,
+            "backend/app/chemistry/species.py"),
+    ApiCode("state_conflict", 409, Surface.sqlstate_category,
+            "backend/app/api/errors.py"),
+    ApiCode("statmech_calculation_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/statmech_resolution.py"),
+    ApiCode("statmech_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py"),
+    ApiCode("statmech_source_role_type_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/statmech_resolution.py"),
+    ApiCode("statmech_subject_not_exactly_one", 409, Surface.database_constraint,
+            "backend/app/scientific_checks/declarations.py"),
+    ApiCode("statmech_torsion_scan_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py"),
+    ApiCode("stored_species_smiles_unparseable", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py"),
+    ApiCode("subject_type_mismatch", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("supersedes_same_record", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("tckdb_client_version_invalid", 426, Surface.detail_object,
+            "backend/app/api/client_version.py"),
+    ApiCode("tckdb_client_version_missing", 426, Surface.detail_object,
+            "backend/app/api/client_version.py"),
+    ApiCode("tckdb_client_version_unsupported", 426, Surface.detail_object,
+            "backend/app/api/client_version.py"),
+    ApiCode("thermo_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py"),
+    ApiCode("thermo_source_role_type_mismatch", 422, Surface.coded_exception,
+            "backend/app/workflows/thermo.py"),
+    ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py"),
+    ApiCode("transition_state_composition_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py"),
+    ApiCode("transition_state_irc_mapping_element_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/reaction_resolution.py"),
+    ApiCode("transition_state_no_imaginary_mode", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("transition_state_reaction_coordinate_ambiguous", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("transition_state_reaction_coordinate_not_designated", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("transport_source_calculation_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py"),
+    ApiCode("unique_conflict", 409, Surface.sqlstate_category,
+            "backend/app/api/errors.py"),
+    ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
+            "backend/app/api/routes/releases_admin.py"),
+    ApiCode("unknown_include_token", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py"),
+    ApiCode("unknown_record", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+    ApiCode("unknown_record_type", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/literature_records.py"),
+    ApiCode("unknown_release", 404, Surface.message_prefix,
+            "backend/app/services/scientific_read/releases.py"),
+    ApiCode("unknown_release_artifact", 404, Surface.message_prefix,
+            "backend/app/api/routes/scientific/releases.py"),
+    ApiCode("unknown_selection", 404, Surface.message_prefix,
+            "backend/app/api/routes/releases_admin.py"),
+    ApiCode("unsafe_lowest_energy_comparison", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/species_calculations_search.py"),
+    ApiCode("unsupported_direction", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/reactions.py"),
+    ApiCode("unsupported_filter", 422, Surface.coded_exception,
+            "backend/app/api/error_contract.py"),
+    ApiCode("unsupported_ranking_for_calculation_type", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/species_calculations_search.py"),
+    ApiCode("unsupported_reaction_molecularity", 422, Surface.coded_exception,
+            "backend/app/chemistry/units.py"),
+    ApiCode("unsupported_release_record_type", 422, Surface.message_prefix,
+            "backend/app/services/release/records.py"),
+    ApiCode("validation_error", 422, Surface.generic_fallback,
+            "backend/app/api/errors.py"),
+    ApiCode("withdraw_reason_required", 422, Surface.message_prefix,
+            "backend/app/services/release/curation.py"),
+)
+
+
+def catalogued_codes() -> frozenset[str]:
+    """Every code in the catalogue, as bare strings.
+
+    Cheap enough to call per response: the tuple is a module constant and
+    this rebuilds a small frozenset from it.
+    """
+    return frozenset(entry.code for entry in CATALOGUE)
+
+
+def client_facing() -> tuple[ApiCode, ...]:
+    """The entries a client should be able to import and branch on.
+
+    See :attr:`ApiCode.is_client_facing` for the rule and why it is
+    derived rather than declared.
+    """
+    return tuple(entry for entry in CATALOGUE if entry.is_client_facing)
+
+
+__all__ = [
+    "CATALOGUE",
+    "STATUS_FALLBACK_PATTERN",
+    "ApiCode",
+    "Surface",
+    "catalogued_codes",
+    "client_facing",
+]

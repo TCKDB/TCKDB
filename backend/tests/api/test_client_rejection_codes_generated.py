@@ -1,10 +1,16 @@
-"""The generated client enum must not drift from the register.
+"""The generated client enum must not drift from the code catalogue.
 
 The staleness gate, in the same shape as the one guarding
 ``docs/guides/scientific_check_register.md``: regenerate in memory,
 compare against the committed file, fail if they differ. This lives on
-the server side because only the backend can import the register --
+the server side because only the backend can import the catalogue --
 ``clients/python`` has no dependency on ``app`` and must not gain one.
+
+The enum is generated from :mod:`app.api.code_catalogue`, not from the
+scientific check register. Both are still checked below: the catalogue
+because it is the source, and the register because every scientific
+refusal code must survive the change of source — that containment is what
+``test_api_code_catalogue.py`` guards from the other direction.
 
 What this buys a client author is narrow and specific. Without it the
 codes exist on the server and are transcribed by hand into ARC and every
@@ -79,6 +85,55 @@ def test_every_refusal_code_the_register_declares_is_exported() -> None:
         f"These codes are declared to reach a client but are absent from "
         f"{GENERATED.name}: {missing}. A consumer would have to hard-code them, "
         "and a hard-coded code that is wrong never matches rather than failing."
+    )
+
+
+def test_every_constraint_rejection_is_in_the_conflict_set() -> None:
+    """A 409 code must land in the set that advises on 409s.
+
+    Membership in ``RejectionCode`` is not enough: a client reading
+    ``CONFLICT_REJECTION_CODES`` to decide whether the write reached the
+    database needs the code to be *in* it. Two codes -- the atom map's
+    element conservation and its bijectivity -- are enforced both at the
+    wire boundary and by a check constraint, and a catalogue that listed
+    each of them once, at 422, dropped both from this set without
+    changing any code's value. Nothing noticed until a 409 was observed
+    arriving in a real response.
+    """
+    published = GENERATED.read_text()
+    conflict_block = published.split("CONFLICT_REJECTION_CODES")[-1]
+    expected = {code for code, _detail in constraint_rejections().values()}
+    assert expected, "no constraint rejections -- the guard would be vacuous"
+
+    missing = sorted(
+        code for code in expected if code.upper() not in conflict_block
+    )
+    assert not missing, (
+        f"These codes are refused by PostgreSQL and reported as a 409, but "
+        f"CONFLICT_REJECTION_CODES does not contain them: {missing}"
+    )
+
+
+def test_every_client_facing_catalogue_code_is_exported() -> None:
+    """The same read, against the source the enum is now generated from.
+
+    Without this the test above would be the only independent check, and
+    it only covers the scientific subset -- so the generator could drop
+    every read-API code and stay green, which is the state this work was
+    opened to end.
+    """
+    from app.api.code_catalogue import client_facing
+
+    expected = {entry.code for entry in client_facing()}
+    assert len(expected) > 50, (
+        f"only {len(expected)} client-facing codes; the catalogue has "
+        "stopped enumerating what the API returns"
+    )
+    published = GENERATED.read_text()
+    missing = sorted(code for code in expected if f'"{code}"' not in published)
+    assert not missing, (
+        f"The catalogue says these reach a client, but {GENERATED.name} does "
+        f"not export them: {missing}"
     )
 
 

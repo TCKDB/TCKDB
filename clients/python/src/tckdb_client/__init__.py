@@ -22,6 +22,7 @@ from tckdb_client.errors import (
 from tckdb_client.idempotency import make_idempotency_key, validate_idempotency_key
 from tckdb_client.rejection_codes import (
     CONFLICT_REJECTION_CODES,
+    REJECTION_STATUSES,
     RejectionCode,
     VALIDATION_REJECTION_CODES,
     rejection_code,
@@ -108,6 +109,7 @@ __all__ = [
     "TCKDBIdempotencyConflictError",
     "TCKDBPaginationError",
     "CONFLICT_REJECTION_CODES",
+    "REJECTION_STATUSES",
     "RejectionCode",
     "VALIDATION_REJECTION_CODES",
     "rejection_code",

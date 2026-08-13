@@ -26,8 +26,32 @@ from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
+from tests import error_code_observer
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+
+# Installed at import so it is in place before the first request of the
+# session, in the controller and in every xdist worker alike.
+error_code_observer.install()
+
+
+def pytest_runtest_teardown(item) -> None:
+    """Fail the test that emitted a code ``app.api.code_catalogue`` omits.
+
+    Attached to the test rather than to the session so the failure names
+    the request that produced the code. See
+    ``backend/tests/error_code_observer.py`` for why a source scan alone
+    cannot make the catalogue's completeness falsifiable.
+    """
+    unlisted = error_code_observer.drain_unlisted()
+    if unlisted:
+        raise AssertionError(
+            f"{item.nodeid} produced error code(s) that "
+            "app/api/code_catalogue.py does not list: "
+            + ", ".join(f"HTTP {status} {code!r}" for status, code in unlisted)
+            + ". Add an entry there (it claims only that the code exists and "
+            "where it comes from) so a client can import it."
+        )
 
 
 @pytest.fixture(autouse=True)
