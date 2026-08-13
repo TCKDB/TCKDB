@@ -795,21 +795,16 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
         """A chained id can name *any* row, so owner-consistency stops
         being defensive here and becomes the real check.
 
-        The refusal is a bare ``ValueError`` → HTTP 422 carrying the
-        generic ``validation_error`` code, which is what the same
-        violation produces on the inline path. That it has no *specific*
-        code is tracked as #158.
-
-        ``code`` is asserted here for a reason that is easy to lose. An
-        uncoded ``ValueError`` has its code scraped out of the message by
-        ``validation_detail_code``, whose pattern promotes any
-        ``snake_case_token: ``. Phrase this refusal as ``f"{context}: …"``
-        with a field path ending in ``existing_calculation_id`` and the
-        response advertises ``code="existing_calculation_id"`` — a string
-        that is not a code, is in no register, and would invite a client
-        to branch on it. This test is what stops that phrasing coming
-        back. (Thermo's equivalent refusal still emits the scraped
-        string; ``app/workflows/thermo.py`` ``_assert_calculation_owned_by``.)
+        The refusal declares ``statmech_source_calculation_owner_mismatch``
+        (#158). It used to be a bare ``ValueError``, and it was phrased
+        without the house-style colon on purpose: an uncoded ``ValueError``
+        had its code scraped out of the message by
+        ``validation_detail_code``, which promoted any ``snake_case_token:
+        `` — so ``f"{context}: …"`` with a field path ending in
+        ``existing_calculation_id`` made *that field name* the advertised
+        code. #161 fixed the envelope (only a token in the code position is
+        promoted) and #158 gave this refusal a real code, so the sentence
+        no longer has to be written around the parser.
         """
         other = {"smiles": "[H]", "charge": 0, "multiplicity": 2}
         a = _deposit_calculations(client, label="chain-owner", species=other)
@@ -825,7 +820,9 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
         )
         assert resp.status_code == 422, resp.text
         body = resp.json()
-        assert body["code"] == "validation_error", body
+        assert body["code"] == "statmech_source_calculation_owner_mismatch", body
+        # Never the field name the old scraper would have promoted.
+        assert body["code"] != "existing_calculation_id", body
         detail = body["detail"]
         assert "another species entry" in detail
         # No row id the depositor did not supply, and no id at all beyond

@@ -1022,6 +1022,9 @@ def test_statmech_upload_chained_id_from_another_species_entry_raises(
     detail = str(excinfo.value)
     assert "species_entry_id=" not in detail
     assert "id=" not in detail
+    # #158: the refusal declares a code of its own rather than relying on
+    # the envelope's generic ``validation_error``.
+    assert excinfo.value.code == "statmech_source_calculation_owner_mismatch"
 
 
 def test_statmech_upload_chained_role_type_mismatch_is_coded(db_conn) -> None:

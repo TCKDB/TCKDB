@@ -14,8 +14,10 @@ Three ways a ``code`` can be found, in descending order of trust
    ``.code`` as an attribute. Nothing is parsed. This is the mechanism
    every scientific refusal uses, and the only one a new one should.
 2. **A legacy ``"code: message"`` detail**, promoted by :func:`detail_code`.
-3. **A nested ``code:`` inside a framework-generated validation message**,
-   promoted by :func:`validation_detail_code`.
+3. **The same legacy convention, one layer down** — a message that
+   *begins* with ``"code: "`` but which a framework has wrapped in its own
+   sentence (``"Value error, invalid_handle: …"``) or buried in a list of
+   validation failures. Promoted by :func:`validation_detail_code`.
 
 (2) and (3) read English, and reading English is how a code silently stops
 being reported when somebody rewords a sentence — which is exactly what had
@@ -24,6 +26,32 @@ happened to the parenthesised convention the scientific checks used to use
 colon, so those codes matched nothing and every chemistry refusal reached
 its client as the generic ``validation_error``. They are kept because
 existing details are a published surface, not because they are a good idea.
+
+What "declared" means for (3), and why it had to be narrowed
+------------------------------------------------------------
+(3) used to promote *any* ``snake_case_token: `` appearing anywhere in a
+message. The house style for a workflow refusal is
+``raise ValueError(f"{context}: <prose>")`` where ``context`` is a **field
+path**, so a path ending in a field name — ``source_calculations[0].
+existing_calculation_id`` — put that field name in front of a colon and
+the envelope advertised ``code="existing_calculation_id"``. That is worse
+than no code: ``validation_error`` is honestly generic, whereas a
+fabricated code looks real, so a client branches on a string that was
+never a contract and that moves the moment somebody renames a field or
+rewords a sentence.
+
+The rule is now positional, because *position is the declaration*. A code
+is a token the raiser wrote in the **code position** — the very start of
+its own message, which is exactly what convention (2) means by
+``"code: message"`` — and (3) is that same test applied underneath a
+framework wrapper. A token that merely occurs mid-sentence is prose, and
+prose is not promoted.
+
+The narrowing is deliberately one-way. The ambiguity check still runs on
+the *unfiltered* candidate set, so a message containing two tokens keeps
+falling back exactly as it did; the position test can only turn a promoted
+token into the generic fallback, never turn a fallback into a new code.
+No response gains a code it did not already have.
 """
 
 from __future__ import annotations
@@ -35,6 +63,34 @@ from typing import Any
 from tckdb_schemas.coded_error import CodedValidationError
 
 _NESTED_CODE_PATTERN = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*_[a-z0-9_]+): ")
+
+#: The same token, but only where the message *starts* with it -- the code
+#: position of the ``"code: message"`` convention.
+_CODE_POSITION_PATTERN = re.compile(r"^([a-z][a-z0-9_]*_[a-z0-9_]+): ")
+
+#: Sentences a framework puts in front of an exception's own message.
+#: Pydantic v2 renders a ``ValueError`` raised inside a validator as
+#: ``"Value error, <str(exc)>"`` and an ``AssertionError`` as
+#: ``"Assertion failed, <str(exc)>"``. Stripping exactly these -- not "any
+#: leading words" -- is what lets the code position be recognised one layer
+#: down without turning the test back into "somewhere in the sentence".
+_FRAMEWORK_MESSAGE_PREFIXES = ("Value error, ", "Assertion failed, ")
+
+
+def _code_position_token(text: str) -> str | None:
+    """The code *text* declares as its own, or ``None``.
+
+    A code is declared by being written where a code goes: first, followed
+    by ``": "``. Anything else in the sentence is prose that happens to
+    contain an underscore.
+    """
+
+    for prefix in _FRAMEWORK_MESSAGE_PREFIXES:
+        if text.startswith(prefix):
+            text = text[len(prefix) :]
+            break
+    match = _CODE_POSITION_PATTERN.match(text)
+    return match.group(1) if match else None
 
 
 def _json_safe(obj: Any) -> Any:
@@ -140,7 +196,11 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
     """Promote one unambiguous validation code.
 
     Prefers a code the raising exception *declared* (see
-    :func:`_declared_errors`) over one spelled inside a message.
+    :func:`_declared_errors`) over one spelled inside a message. A code
+    spelled inside a message counts only where it is spelled in the **code
+    position** (see :func:`_code_position_token` and the module docstring);
+    a ``snake_case`` token found mid-sentence is a field path or a
+    quantity, not a contract.
     """
 
     # Pydantic/FastAPI expose the independent validation failures as the
@@ -160,12 +220,16 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
         return fallback
 
     candidates: set[str] = set()
+    in_code_position: set[str] = set()
 
     def collect_message(value: object) -> None:
         if isinstance(value, BaseException):
             value = str(value)
         if isinstance(value, str):
             candidates.update(_NESTED_CODE_PATTERN.findall(value))
+            declared = _code_position_token(value)
+            if declared is not None:
+                in_code_position.add(declared)
 
     def collect(value: object) -> None:
         if isinstance(value, dict):
@@ -184,8 +248,14 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
             collect_message(value)
 
     collect(detail)
+    # Ambiguity is judged on everything the pattern found, before the
+    # position test narrows it: a message carrying two tokens fell back
+    # before this rule existed and must keep falling back, so that
+    # tightening the rule can never *add* a code to a published response.
     if len(candidates) == 1:
-        return candidates.pop()
+        token = candidates.pop()
+        if token in in_code_position:
+            return token
     return fallback
 
 

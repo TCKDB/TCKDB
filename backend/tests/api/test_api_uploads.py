@@ -487,6 +487,15 @@ class TestThermoUpload:
         assert "does not exist" in resp.json()["detail"]
 
     def test_existing_calc_wrong_species_entry_returns_422(self, client):
+        """A cross-owner chained citation is refused, under a real code.
+
+        This is the response #161 was about. The refusal used to be a bare
+        ``ValueError`` phrased ``f"{context}: …"`` where ``context`` ended
+        in ``existing_calculation_id``, and the envelope scraped that field
+        name out of the sentence and advertised it as ``code``. A client
+        could branch on a string that was never a contract and that moved
+        with any rewording. The code is now declared by the refusal.
+        """
         # Seed a calc owned by a CC species, then upload thermo for a
         # different species (H) that references it.
         _, calc_id = self._seed_calc(client, calc_type="sp")
@@ -500,8 +509,15 @@ class TestThermoUpload:
         }
         resp = client.post("/api/v1/uploads/thermo", json=payload)
         assert resp.status_code == 422, resp.text
-        detail = resp.json()["detail"]
-        assert "different species entry" in detail
+        body = resp.json()
+        assert body["code"] == "thermo_source_calculation_owner_mismatch", body
+        # The fabricated code must never come back: a field name is not a
+        # code, and no register or generated client constant holds it.
+        assert body["code"] != "existing_calculation_id", body
+        detail = body["detail"]
+        assert "another species entry" in detail
+        # The field the depositor wrote is still named, in context.
+        assert body["context"]["field"].endswith("existing_calculation_id")
         # No internal id values leaked.
         assert str(calc_id) not in detail
         assert "species_entry_id=" not in detail

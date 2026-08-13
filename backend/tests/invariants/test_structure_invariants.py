@@ -9,6 +9,8 @@ quietly.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
@@ -24,9 +26,13 @@ from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
+from app.services.calculation_ownership import (
+    W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.geometry_validation import validate_calculation_geometry
 from app.workflows.reaction import persist_reaction_upload
-from app.workflows.thermo import _assert_calculation_owned_by
 
 # ---------------------------------------------------------------------------
 # Invariant 1: geometry atom-count consistency
@@ -170,20 +176,27 @@ def test_reaction_upload_requires_at_least_one_participant_per_side() -> None:
 class _FakeCalc:
     """Minimal stand-in for a ``Calculation`` row for the guard test.
 
-    The workflow's owner-consistency check only reads ``id`` and
-    ``species_entry_id``; a full ORM row requires DB setup that adds no
-    signal to this invariant.
+    The owner-consistency check only reads ``id``, ``species_entry_id``
+    and ``transition_state_entry_id``; a full ORM row requires DB setup
+    that adds no signal to this invariant.
     """
 
-    def __init__(self, *, id: int, species_entry_id: int) -> None:
+    def __init__(
+        self,
+        *,
+        id: int,
+        species_entry_id: int | None = None,
+        transition_state_entry_id: int | None = None,
+    ) -> None:
         self.id = id
         self.species_entry_id = species_entry_id
+        self.transition_state_entry_id = transition_state_entry_id
 
 
-def test_thermo_workflow_rejects_calculation_owned_by_other_species() -> None:
-    """``_assert_calculation_owned_by`` is the defensive guard that
-    prevents a thermo upload from attaching a calculation belonging to
-    a different ``species_entry``.
+def test_owner_guard_rejects_calculation_owned_by_other_species() -> None:
+    """``assert_calculation_owned_by`` is the guard that prevents a
+    product from attaching a calculation belonging to a different
+    ``species_entry``.
 
     A silent regression here (e.g. flipped equality, or the guard being
     dropped during refactor) would let scientifically meaningless
@@ -192,17 +205,96 @@ def test_thermo_workflow_rejects_calculation_owned_by_other_species() -> None:
     calc = _FakeCalc(id=42, species_entry_id=7)
 
     # Same owner → no error.
-    _assert_calculation_owned_by(
-        calc, species_entry_id=7, context="same owner",  # type: ignore[arg-type]
+    assert_calculation_owned_by(
+        calc,  # type: ignore[arg-type]
+        code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+        target="thermo",
+        context="same owner",
+        species_entry_id=7,
     )
 
-    # Different owner → raise.
-    with pytest.raises(ValueError, match="different species entry"):
-        _assert_calculation_owned_by(
-            calc,
-            species_entry_id=8,  # type: ignore[arg-type]
+    # Different owner → raise, with the code and not a scraped field name.
+    with pytest.raises(ValueError, match="another species entry") as excinfo:
+        assert_calculation_owned_by(
+            calc,  # type: ignore[arg-type]
+            code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="thermo",
             context="cross-owner",
+            species_entry_id=8,
         )
+    assert excinfo.value.code == "thermo_source_calculation_owner_mismatch"
+
+
+def test_owner_guard_rejects_calculation_owned_by_other_ts_entry() -> None:
+    """The same guard, for the transition-state half of the relationship.
+
+    The bundle statmech path checks a transition-state entry rather than a
+    species entry, and before #162 that branch lived in its own inline
+    copy of the comparison. It is the same claim and now the same code.
+    """
+    calc = _FakeCalc(id=42, transition_state_entry_id=3)
+
+    assert_calculation_owned_by(
+        calc,  # type: ignore[arg-type]
+        code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+        target="statmech",
+        context="same owner",
+        transition_state_entry_id=3,
+    )
+
+    with pytest.raises(ValueError, match="another transition state entry"):
+        assert_calculation_owned_by(
+            calc,  # type: ignore[arg-type]
+            code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="statmech",
+            context="cross-owner",
+            transition_state_entry_id=4,
+        )
+
+
+def test_owner_guard_refuses_to_run_with_nothing_to_compare() -> None:
+    """A guard given no owner would accept every calculation.
+
+    The recurring defect in this area is a check that cannot fail. If both
+    owner ids are ``None`` the comparison is vacuous, so the call is a
+    programming error and says so, rather than silently passing.
+    """
+    calc = _FakeCalc(id=42, species_entry_id=7)
+
+    with pytest.raises(ValueError, match="guard nothing"):
+        assert_calculation_owned_by(
+            calc,  # type: ignore[arg-type]
+            code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="thermo",
+            context="no owner supplied",
+        )
+
+
+def test_every_product_routes_its_owner_check_through_one_implementation() -> None:
+    """#162: the rule was written five times and pinned once.
+
+    Two of those copies had already drifted -- thermo's logged nothing
+    where statmech's and transport's logged the row ids an operator needs
+    -- and nothing went red, because only thermo's copy was covered. The
+    invariant is now the consolidation itself: no workflow may hold a
+    private owner-consistency comparison, and every module that needs one
+    must reach the shared implementation.
+    """
+    modules = [
+        "app/workflows/thermo.py",
+        "app/workflows/statmech.py",
+        "app/workflows/transport.py",
+        "app/workflows/computed_species.py",
+        "app/workflows/computed_reaction.py",
+        "app/services/statmech_resolution.py",
+    ]
+    root = Path(__file__).resolve().parents[2]
+    for relative in modules:
+        source = (root / relative).read_text()
+        assert "assert_calculation_owned_by" in source, relative
+        # The private per-product copies this consolidated (#162).
+        assert "def _assert_calculation_owned_by" not in source, relative
+        assert "def assert_statmech_calculation_owned_by" not in source, relative
 
 
 def test_thermo_upload_schema_rejects_source_calc_key_with_no_declared_calc() -> None:

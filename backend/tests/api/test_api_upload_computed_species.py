@@ -230,12 +230,36 @@ class TestValidationRejections:
         assert resp.status_code == 422
 
     def test_existing_calculation_id_in_parameters_json_rejected(self, client):
+        """The second site #161 was really about.
+
+        The refusal names the offending key at the end of a dotted path, so
+        the envelope's message scraper used to promote *that key* as the
+        response's ``code``: this route advertised
+        ``code="existing_calculation_id"``, a string in no register and in
+        no generated client constant. The refusal is legitimate; the code
+        was invented. It is now the honest generic one.
+
+        The substring assertion below is deliberately not the load-bearing
+        one -- Pydantic echoes rejected input into its own message, so
+        ``"existing_calculation_id" in resp.text`` would also be true if
+        the field had been wrongly *accepted*. Type and location are what
+        prove the refusal happened.
+        """
         payload = _hydrogen_bundle_payload()
         payload["conformers"][0]["primary_calculation"]["parameters_json"] = {
             "tckdb_origin": {"existing_calculation_id": 99}
         }
         resp = client.post("/api/v1/uploads/computed-species", json=payload)
         assert resp.status_code == 422
+        body = resp.json()
+        assert body["code"] == "request_validation_error", body
+        assert body["code"] != "existing_calculation_id", body
+        assert any(
+            d["type"] == "value_error"
+            and tuple(d["loc"])[:4]
+            == ("body", "conformers", 0, "primary_calculation")
+            for d in body["detail"]
+        ), body["detail"]
         assert "existing_calculation_id" in resp.text
 
     def test_empty_conformers_returns_422(self, client):

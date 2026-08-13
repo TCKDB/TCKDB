@@ -21,6 +21,11 @@ from app.schemas.workflows.thermo_upload import (
     ThermoSourceCalculationIn,
     ThermoUploadRequest,
 )
+from app.services.calculation_ownership import (
+    W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
@@ -60,29 +65,6 @@ _THERMO_ROLE_TO_CALC_TYPES: dict[
     ThermoCalculationRole.freq: (CalculationType.freq,),
     ThermoCalculationRole.sp: (CalculationType.sp, CalculationType.opt),
 }
-
-
-def _assert_calculation_owned_by(
-    calculation: Calculation,
-    *,
-    species_entry_id: int,
-    context: str,
-) -> None:
-    """Defensive owner-consistency check for a resolved source calculation.
-
-    Supporting calculations attached to a thermo record must belong to the
-    same species entry as the thermo target; otherwise the provenance link
-    would be scientifically meaningless.
-
-    :raises ValueError: if the calculation does not belong to
-        ``species_entry_id``. The error detail names the field that was
-        wrong but does not leak internal row identifiers (DR-0028 Req 2).
-    """
-    if calculation.species_entry_id != species_entry_id:
-        raise ValueError(
-            f"{context}: refers to a calculation owned by a different "
-            f"species entry."
-        )
 
 
 def assert_thermo_role_matches_calculation_type(
@@ -181,10 +163,12 @@ def _resolve_source_calculation(
                 f"calculation that does not exist."
             )
         context = f"{field_path}.existing_calculation_id"
-        _assert_calculation_owned_by(
+        assert_calculation_owned_by(
             calc_row,
-            species_entry_id=species_entry_id,
+            code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="thermo",
             context=context,
+            species_entry_id=species_entry_id,
         )
 
     assert_thermo_role_matches_calculation_type(
@@ -263,10 +247,12 @@ def persist_thermo_upload(
             species_entry_id=species_entry.id,
             created_by=created_by,
         )
-        _assert_calculation_owned_by(
+        assert_calculation_owned_by(
             calc_row,
-            species_entry_id=species_entry.id,
+            code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="thermo",
             context=f"thermo calculation '{calc_in.key}'",
+            species_entry_id=species_entry.id,
         )
         calculations_by_key[calc_in.key] = calc_row
 
@@ -332,13 +318,15 @@ def persist_thermo_upload(
                     f"'{correction_payload.source_calculation_key}' did not "
                     f"resolve to a declared calculation."
                 )
-            _assert_calculation_owned_by(
+            assert_calculation_owned_by(
                 calc_row,
-                species_entry_id=species_entry.id,
+                code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+                target="applied energy correction",
                 context=(
                     "applied_energy_correction "
                     f"source_calculation_key='{correction_payload.source_calculation_key}'"
                 ),
+                species_entry_id=species_entry.id,
             )
             source_calc_id = calc_row.id
 

@@ -108,6 +108,106 @@ class TestPromotionIsTypedNotTextual:
         assert validation_detail_context(details) == {}
 
 
+class TestOnlyTheCodePositionDeclaresACode:
+    """#161: a field path that ends in a field name is not a code.
+
+    The house style for a workflow refusal is
+    ``raise ValueError(f"{context}: <prose>")`` with ``context`` a field
+    path. Before this rule, a path ending in ``existing_calculation_id``
+    put that field name in front of a colon and the envelope advertised it
+    as ``code`` — a string in no register, in no generated client
+    constant, that changes when somebody renames a field. That is worse
+    than an uncoded error: ``validation_error`` is honestly generic, a
+    fabricated code looks real.
+    """
+
+    def test_a_field_path_is_not_promoted(self):
+        message = (
+            "source_calculations[0].existing_calculation_id: refers to a "
+            "calculation owned by a different species entry."
+        )
+        assert (
+            validation_detail_code(message, fallback="validation_error")
+            == "validation_error"
+        )
+
+    def test_a_token_the_sentence_merely_mentions_is_not_promoted(self):
+        """The same defect, elsewhere: prose that names a column.
+
+        ``app/services/reaction_resolution.py`` refuses a reaction whose
+        family disagrees with the resolved one, and the sentence names the
+        column. That is prose about a field, not a declaration of a code.
+        """
+        message = (
+            "Resolved reaction already has a different reaction_family: "
+            "H_Abstraction != Disproportionation."
+        )
+        assert (
+            validation_detail_code(message, fallback="validation_error")
+            == "validation_error"
+        )
+
+    def test_a_code_written_in_the_code_position_is_still_promoted(self):
+        """The regression guard for the narrowing.
+
+        Every read-API refusal declares its code the legacy way, as the
+        leading ``"code: "`` of its own message. Twenty-four distinct codes
+        reach clients only through this path; tightening the rule must not
+        cost a single one of them.
+        """
+        message = "invalid_handle: 'not-a-handle' is not a <prefix>_<body> public ref"
+        assert (
+            validation_detail_code(message, fallback="validation_error")
+            == "invalid_handle"
+        )
+
+    def test_a_code_survives_pydantic_wrapping_its_sentence(self):
+        """A validator's ``ValueError`` reaches ``errors()`` as
+        ``"Value error, <message>"``. The code is still the first thing
+        the *raiser* wrote, so it is still in the code position.
+
+        Deliberately built without ``ctx``, and that is the whole point of
+        the case. Pydantic v2 *also* preserves the raw exception in
+        ``ctx["error"]``, whose ``str()`` carries no wrapper, so every live
+        route recovers its code from there and would keep working if the
+        prefix list were emptied — measured, not assumed (mutation M2b).
+        The prefix stripping is what stops the whole read API's twenty-four
+        codes depending on Pydantic continuing to hand over an exception
+        object: strip the context anywhere in front of this function and
+        ``msg`` is all that is left.
+        """
+        details = [
+            {
+                "type": "value_error",
+                "loc": ["body"],
+                "msg": (
+                    "Value error, pressure_alias_conflict: pressure_bar and "
+                    "deprecated pressure must agree."
+                ),
+            }
+        ]
+        assert (
+            validation_detail_code(details, fallback="request_validation_error")
+            == "pressure_alias_conflict"
+        )
+
+    def test_two_tokens_still_fall_back_exactly_as_before(self):
+        """The narrowing is one-way, and this is what pins that.
+
+        ``invalid_pagination: limit_too_large: …`` carries two tokens and
+        has always fallen back. Judging ambiguity *after* the position
+        filter would leave one survivor and promote it — turning a
+        published ``validation_error`` into a new code. Ambiguity is
+        therefore judged on the unfiltered set: the rule can only remove a
+        code, never add one.
+        """
+        message = "invalid_pagination: limit_too_large: limit must be <= 200 (got 500)"
+        assert (
+            validation_detail_code(message, fallback="validation_error")
+            == "validation_error"
+        )
+
+
 def _failure(code: str, field: str) -> dict:
     """One entry of a Pydantic ``errors()`` list, carrying a coded cause."""
     return {

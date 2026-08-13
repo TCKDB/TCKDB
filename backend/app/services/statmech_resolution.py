@@ -41,6 +41,10 @@ from app.db.models.statmech import (
     StatmechTorsionDefinition,
 )
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
+from app.services.calculation_ownership import (
+    W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
@@ -137,60 +141,6 @@ def _chained_calculation_id(source: object) -> int | None:
     return value if isinstance(value, int) else None
 
 
-def assert_statmech_calculation_owned_by(
-    calculation: Calculation,
-    *,
-    species_entry_id: int,
-    context: str,
-) -> None:
-    """Refuse a supporting calculation belonging to another species entry.
-
-    Supporting calculations attached to a statmech record must belong to
-    the same species entry as the statmech target; otherwise the
-    provenance link is scientifically meaningless — the record would cite
-    evidence about a different molecule.
-
-    Lives here rather than in ``app.workflows.statmech`` because the two
-    ways of naming a calculation must be judged by the same code. For an
-    inline calculation the check is defensive (the workflow persists it
-    against the target's own species entry, so it cannot fail); for an
-    ``existing_calculation_id`` it is the real thing, because a chained id
-    can name any row in the database.
-
-    :raises ValueError: if the calculation does not belong to
-        ``species_entry_id``. Surfaces as HTTP 422 with the generic
-        ``validation_error`` code — the same envelope this violation
-        already produces on the inline path.
-    """
-    if calculation.species_entry_id == species_entry_id:
-        return
-    # ``context`` already names the calculation the way the depositor
-    # wrote it, which is the identifier they can act on. The row ids go to
-    # the log instead — a 422 body must not hand out primary keys.
-    logger.warning(
-        "%s: calculation id=%s owned by species_entry_id=%s, not %s",
-        context,
-        calculation.id,
-        calculation.species_entry_id,
-        species_entry_id,
-    )
-    # Deliberately *not* "{context}: ...". An uncoded ValueError has its
-    # code scraped out of the message by ``validation_detail_code``, whose
-    # pattern matches any ``snake_case_token: `` — so a field path ending
-    # in ``existing_calculation_id`` followed by a colon is promoted to
-    # ``code="existing_calculation_id"``, which is not a code at all and
-    # is not in any register a client could branch on. Phrasing the field
-    # path as the sentence's subject keeps this on the honest generic
-    # ``validation_error``, which is what the inline path already returns.
-    # (Thermo's equivalent refusal still emits the scraped string; see
-    # ``app/workflows/thermo.py`` ``_assert_calculation_owned_by``.)
-    raise ValueError(
-        f"{context} refers to a calculation that belongs to another "
-        "species entry, not to the statmech target. A supporting "
-        "calculation must be one of the target species entry's own."
-    )
-
-
 def _resolve_existing_calculation(
     session: Session,
     calculation_id: int,
@@ -216,10 +166,12 @@ def _resolve_existing_calculation(
         raise NotFoundError(
             f"{context} refers to a calculation that does not exist."
         )
-    assert_statmech_calculation_owned_by(
+    assert_calculation_owned_by(
         calculation,
-        species_entry_id=species_entry_id,
+        code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+        target="statmech",
         context=context,
+        species_entry_id=species_entry_id,
     )
     return calculation
 

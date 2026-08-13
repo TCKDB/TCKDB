@@ -18,6 +18,10 @@ from app.db.models.common import SubmissionRecordType
 from app.db.models.statmech import Statmech
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.schemas.workflows.statmech_upload import StatmechUploadRequest
+from app.services.calculation_ownership import (
+    W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
+)
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
@@ -27,21 +31,9 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
-from app.services.statmech_resolution import (
-    assert_statmech_calculation_owned_by,
-    resolve_or_create_statmech,
-)
+from app.services.statmech_resolution import resolve_or_create_statmech
 
 logger = logging.getLogger(__name__)
-
-
-#: Owner-consistency for a statmech supporting calculation. The body moved
-#: to :mod:`app.services.statmech_resolution` when the standalone upload
-#: gained ``existing_calculation_id``: a chained citation can name any row
-#: in the database, so this stopped being a purely defensive check and had
-#: to be judged by the same code that judges the inline path. Re-exported
-#: under the old name so the inline call site below reads unchanged.
-_assert_calculation_owned_by = assert_statmech_calculation_owned_by
 
 
 def persist_statmech_upload(
@@ -92,10 +84,12 @@ def persist_statmech_upload(
             species_entry_id=species_entry.id,
             created_by=created_by,
         )
-        _assert_calculation_owned_by(
+        assert_calculation_owned_by(
             calc_row,
-            species_entry_id=species_entry.id,
+            code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+            target="statmech",
             context=f"statmech calculation '{calc_in.key}'",
+            species_entry_id=species_entry.id,
         )
         calculations_by_key[calc_in.key] = calc_row
 

@@ -296,8 +296,12 @@ def test_reaction_bundle_thermo_source_must_belong_to_its_own_species(client):
     }
 
     resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
-    assert resp.status_code != 201, resp.text[:800]
-    assert "not owned by this species entry" in resp.text
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+    # #158: the same rule the standalone thermo route enforces, reported
+    # under the same code -- the reaction bundle is not a second contract.
+    assert body["code"] == "thermo_source_calculation_owner_mismatch", body
+    assert "another species entry" in body["detail"]
 
 
 def test_reaction_bundle_thermo_source_key_must_exist(client):

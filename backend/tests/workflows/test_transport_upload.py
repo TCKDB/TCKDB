@@ -26,11 +26,12 @@ from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.workflow import WorkflowToolRelease
 from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.transport_upload import TransportUploadRequest
-from app.services.species_resolution import resolve_species_entry
-from app.workflows.transport import (
-    _assert_calculation_owned_by,
-    persist_transport_upload,
+from app.services.calculation_ownership import (
+    W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+    assert_calculation_owned_by,
 )
+from app.services.species_resolution import resolve_species_entry
+from app.workflows.transport import persist_transport_upload
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -365,9 +366,16 @@ def test_wrong_owner_source_calc_rejected_by_workflow_check(db_conn) -> None:
         session.add(calc)
         session.flush()
 
-        with pytest.raises(ValueError, match="not to the transport target"):
-            _assert_calculation_owned_by(
+        with pytest.raises(
+            ValueError, match="not to the transport target"
+        ) as excinfo:
+            assert_calculation_owned_by(
                 calc,
-                species_entry_id=calc.species_entry_id + 1,
+                code=W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
+                target="transport",
                 context="test wrong-owner guard",
+                species_entry_id=calc.species_entry_id + 1,
             )
+        # #158: transport's refusal carries its own code, distinct from
+        # thermo's and statmech's -- same rule, different subject.
+        assert excinfo.value.code == "transport_source_calculation_owner_mismatch"
