@@ -733,15 +733,16 @@ class CalculationResultSummary(BaseModel):
     """Single-result projection — exactly one of the per-type blocks set.
 
     Each per-type block is a thin wrapper around the existing
-    CalculationSPResultRead/OptResultRead/FreqResultRead etc., reduced to
+    CalculationSPResultRead, CalculationOptResultRead and
+    CalculationFreqResultRead, reduced to
     only the fields that are publicly meaningful for evidence purposes
     (energy, converged, basis-of-truth flags). Heavy arrays (frequency
     modes, scan/IRC point arrays) are NOT exposed here — the per-mode
     frequency array is available via `include=freq_modes`; scan/IRC/
     path-search summaries via `include=scan|irc|path_search`."""
-    sp: CalculationResultSPSummary | None = None
-    opt: CalculationResultOptSummary | None = None
-    freq: CalculationResultFreqSummary | None = None
+    sp: CalculationSPResultSummary | None = None
+    opt: CalculationOptResultSummary | None = None
+    freq: CalculationFreqResultSummary | None = None
 
 
 class CalculationDependencySummary(BaseModel):

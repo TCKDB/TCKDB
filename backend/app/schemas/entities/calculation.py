@@ -555,8 +555,10 @@ class CalculationSCFStabilityRead(ORMBaseSchema):
     because the projected ``not_checked`` shape is all-nulls.
 
     No cross-field validators here — those guard producer input on
-    :class:`CalculationSCFStabilityCreate` and would mis-fire against
-    the projected ``not_checked`` shape.
+    ``tckdb_schemas.fragments.calculation.SCFStabilityContent`` (its
+    ``validate_status_consistency`` cross-checks ``status`` against
+    ``instability_count`` and the reoptimisation flag) and would
+    mis-fire against the projected ``not_checked`` shape.
     """
 
     calculation_id: int
