@@ -67,7 +67,7 @@ def _resolvable_names() -> set[str]:
 def _referenced_but_not_defined() -> list[str]:
     text = _spec_text()
     defined = set(_DEFINED.findall(text))
-    return sorted({name for name in _NAME.findall(text)} - defined)
+    return sorted(set(_NAME.findall(text)) - defined)
 
 
 def test_the_scan_finds_names_to_check() -> None:
