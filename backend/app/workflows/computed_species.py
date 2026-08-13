@@ -29,7 +29,10 @@ from app.db.models.statmech import (
 )
 from app.db.models.thermo import Thermo
 from app.schemas.entities.thermo import ThermoSourceCalculationCreate
-from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.schemas.fragments.calculation import (
+    CalculationWithResultsPayload,
+    SCFStabilityPayload,
+)
 from app.schemas.fragments.geometry import GeometryPayload
 from app.schemas.workflows.computed_species_upload import (
     CalculationInBundle,
@@ -147,7 +150,11 @@ def _to_calc_with_results_payload(
         path_search_result=calc_in.path_search_result,
         wavefunction_diagnostic=calc_in.wavefunction_diagnostic,
         spin_diagnostic=calc_in.spin_diagnostic,
-        scf_stability=calc_in.scf_stability,
+        scf_stability=(
+            None
+            if calc_in.scf_stability is None
+            else SCFStabilityPayload(**calc_in.scf_stability.model_dump())
+        ),
         hessian=calc_in.hessian,
         input_geometries=calc_in.input_geometries,
         output_geometries=calc_in.output_geometries,

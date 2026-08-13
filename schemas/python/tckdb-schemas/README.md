@@ -36,8 +36,24 @@ on `CalculationWithResultsPayload`, so `/uploads/conformers`,
 whether an SCF solution had been tested for stability, and
 `/uploads/computed-species`, `/uploads/computed-reaction` and
 `/networks/pdep` could not. Models are `extra="forbid"`, so a bundle that
-tried got a 422 rather than a silent drop. Added to `CalculationInBundle`
-and to the shared `CalculationIn`, and forwarded by both adapters.
+tried got a 422 rather than a silent drop.
+
+`SCFStabilityPayload` is now split so the bundles can carry it without
+carrying database ids with it. The new `SCFStabilityContent` holds the
+finding — `status`, `lowest_eigenvalue`, `instability_count`,
+`instability_type`, `reoptimized_wavefunction`, `note` — and
+`SCFStabilityPayload` extends it with the two FK fields
+(`source_calculation_id`, `source_artifact_id`) the primitive routes
+already accept as programmatic chaining. `CalculationInBundle` and the
+shared `CalculationIn` take the content class; the primitive routes are
+unchanged, so a 0.24.0 payload to any of them still validates.
+
+The FK fields are not merely omitted for tidiness. A bundle names
+everything by local key, `source_calculation_id` is already in the
+bundle's own `_FORBIDDEN_DB_ID_FIELDS`, and a sideways local key could
+not be resolved anyway: the block is persisted with the calculation it
+hangs off, before that calculation's siblings exist. A depositor who
+needs to cite another row has the primitive routes.
 
 ```python
 {"key": "h_sp", "type": "sp", ...,

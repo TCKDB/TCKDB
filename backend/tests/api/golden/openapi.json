@@ -5347,7 +5347,7 @@
           "scf_stability": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SCFStabilityPayload"
+                "$ref": "#/components/schemas/SCFStabilityContent"
               },
               {
                 "type": "null"
@@ -5597,7 +5597,7 @@
           "scf_stability": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SCFStabilityPayload"
+                "$ref": "#/components/schemas/SCFStabilityContent"
               },
               {
                 "type": "null"
@@ -9730,7 +9730,7 @@
           "scf_stability": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/SCFStabilityPayload"
+                "$ref": "#/components/schemas/SCFStabilityContent"
               },
               {
                 "type": "null"
@@ -30278,9 +30278,79 @@
         "title": "RoleChangeRequest",
         "type": "object"
       },
+      "SCFStabilityContent": {
+        "additionalProperties": false,
+        "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n\nHolds the stability finding and nothing that names another database\nrow, which is what lets a bundle carry it. A bundle upload identifies\neverything by local key; the two FK fields on\n:class:`SCFStabilityPayload` below would put raw primary keys back on\na surface a depositor is meant to be able to write without ever\nhaving queried TCKDB.",
+        "properties": {
+          "instability_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instability Count"
+          },
+          "instability_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instability Type"
+          },
+          "lowest_eigenvalue": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lowest Eigenvalue"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "reoptimized_wavefunction": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reoptimized Wavefunction"
+          },
+          "status": {
+            "$ref": "#/components/schemas/SCFStabilityStatus-Input"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "SCFStabilityContent",
+        "type": "object"
+      },
       "SCFStabilityPayload": {
         "additionalProperties": false,
-        "description": "Optional inline SCF wavefunction stability evidence.\n\nAttaches to any calculation type — there is no calc_type restriction.\nProducers must only emit ``status = stable`` when an actual\nSCF/wavefunction stability analysis was observed; ordinary SCF\nconvergence does NOT qualify. When unsure whether a stability\nanalysis was performed, omit the block — the read API will project\n``not_checked``. Use ``status = inconclusive`` only when a stability\nanalysis was clearly attempted but its result could not be parsed.\n\n:param status: Persisted status. ``not_checked`` is NOT a valid\n    stored value — omit the block to express that.\n:param lowest_eigenvalue: Smallest eigenvalue from the stability\n    Hessian (software-specific).\n:param instability_count: Number of distinct instabilities found.\n:param instability_type: Free-text describing the instability class\n    (e.g. ``\"RHF→UHF\"``, ``\"internal\"``).\n:param reoptimized_wavefunction: Whether a stable wavefunction was\n    obtained by stability optimisation / reoptimisation.\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
+        "description": "SCF stability evidence that may cite rows outside its own record.\n\nThe primitive upload routes take this shape. They already accept\ndatabase ids as a deliberate programmatic-chaining mechanism, so\nnaming the calculation or artifact that carries the stability log is\nthe same kind of claim they already support.\n\nBundle roots take :class:`SCFStabilityContent` instead. Not because\nthe citation is unwanted there, but because a bundle has no way to\nmake it: a bundle names things by local key, and the calculation this\nblock hangs off is persisted before its siblings exist, so a key\npointing sideways could not be resolved at the moment it is read. A\ndepositor who needs the citation has the primitive routes; a\ndepositor who has only what a parser found — a status, an eigenvalue,\na count — can now say it from a bundle, which is what they could not\ndo at all before.\n\n:param source_calculation_id: Optional FK to the calculation whose\n    log carries the stability evidence (when separate from the\n    owning calculation).\n:param source_artifact_id: Optional FK to a ``calculation_artifact``\n    row holding the stability log bytes (e.g. an ``ancillary`` or\n    ``output_log`` artifact).",
         "properties": {
           "instability_count": {
             "anyOf": [
