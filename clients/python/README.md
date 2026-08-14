@@ -188,8 +188,12 @@ repairing and resending, while a reaction that does not balance means the
 deposit is wrong and should not be retried at all.
 
 `exc.code` names which one it was. `RejectionCode` is generated from the
-server's scientific check register, so a code that is renamed breaks the
-import rather than turning a branch into one that silently never matches:
+server's code catalogue, so a code that is renamed breaks the import rather
+than turning a branch into one that silently never matches. Every member is
+a refusal a caller can actually receive: codes the catalogue records as
+guards no request can trip are catalogued on the server and deliberately not
+exported, because a branch for a code that never arrives is the same silent
+non-event as a typo.
 
 ```python
 from tckdb_client import RejectionCode, TCKDBHTTPError, rejection_code

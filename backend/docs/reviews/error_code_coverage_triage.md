@@ -80,6 +80,38 @@ code (scan in "Method" below). The repair is a message reword
 
 ### 2. Three of the five ownership codes are guards that check a value they just set
 
+> **Two of three, corrected in #184.** The rule below is incomplete, and
+> `statmech_torsion_scan_calculation_owner_mismatch` is the code it gets
+> wrong. A guard is reachable when the field it guards can name a
+> calculation the enclosing block did not itself scope to the target —
+> which a foreign row id achieves, and so does a **key resolved in a
+> namespace wider than the target's owner**. The second clause is the one
+> missing here, and it is not hypothetical: this analysis read call
+> *sites* rather than the callers of the function containing them, and
+> `_persist_statmech_block` has two production callers in
+> `workflows/network_pdep.py` besides the one in `computed_species.py`.
+> Both hand it a map spanning every species and every transition state in
+> the bundle. The PDep payload schema narrows a *species* statmech's
+> source and torsion keys to that species's own calculations first; it
+> does not do the same for a *transition state*'s. So a TS torsion naming
+> a species-owned scan calculation reaches the guard, and
+> `POST /api/v1/uploads/networks/pdep` returns
+> `422 statmech_torsion_scan_calculation_owner_mismatch` — measured, and
+> pinned by `tests/api/test_api_network_pdep_ownership.py`. That code
+> stays in the client enum. The other two were removed from it in #184
+> and keep annotated catalogue entries.
+>
+> Two further consequences of applying the corrected rule, neither fixed
+> in #184 (both live in files that change hands elsewhere): the reaction
+> bundle enforces the same ownership rule with four inline comparisons
+> that raise a bare `ValueError`
+> (`workflows/computed_reaction.py:807`, `:847`, `:1095`) instead of
+> calling the shared guard, so the same mistake there answers
+> `validation_error`; and a species torsion's `source_scan_calculation_key`
+> in that bundle (`workflows/computed_reaction.py:1128`) is checked for
+> neither ownership nor anything else, so a torsion may cite a sibling
+> species's or the TS's scan calculation and be persisted silently.
+
 `assert_calculation_owned_by` takes its code as a parameter and has five.
 Two are emitted by the suite; three are not — and the three are unreachable by
 construction, for one reason:
@@ -115,6 +147,18 @@ not "checked but never routed", but "checked against a value the same function
 assigned".
 
 ### 3. `idempotency_in_progress` is a dead ternary branch, and the code says why
+
+> **Half-corrected in #186.** The branch is dead, as stated. But
+> `app/api/idempotency.py` did *not* say why in the sense that matters: it
+> said "for v0", which reads as a milestone not yet reached, and the
+> distinction between a deferral and a decision is the one a client author
+> needs. The spec settles it — `idempotency_in_progress` is listed under
+> *Optional*, "Only implement `idempotency_in_progress` if needed by the
+> chosen approach", and the approach chosen does not need it. It is a
+> contingency. The comment now says so, the catalogue entry is
+> `Reach.guard`, and the member is gone from the client enum; the ternary
+> and the `in_progress` parameter stay, because they are what make the
+> state sayable if an advisory lock is ever added.
 
 `app/api/errors.py:444` picks the code off `exc.in_progress`.
 `IdempotencyConflict.__init__` defaults it to `False`

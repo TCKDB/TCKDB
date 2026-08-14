@@ -71,7 +71,6 @@ class RejectionCode(str, Enum):
     can be used wherever the raw code was.
     """
 
-    APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
     ATOM_MAP_ATOMS_UNACCOUNTED_FOR = "atom_map_atoms_unaccounted_for"
@@ -105,7 +104,6 @@ class RejectionCode(str, Enum):
     HANDLE_NOT_FOUND = "handle_not_found"
     HANDLE_TYPE_MISMATCH = "handle_type_mismatch"
     IDEMPOTENCY_CONFLICT = "idempotency_conflict"
-    IDEMPOTENCY_IN_PROGRESS = "idempotency_in_progress"
     INCLUDE_NOT_IMPLEMENTED_YET = "include_not_implemented_yet"
     INVALID_CURSOR = "invalid_cursor"
     INVALID_HANDLE = "invalid_handle"
@@ -187,7 +185,6 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_NO_IMAGINARY_MODE = "transition_state_no_imaginary_mode"
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
-    TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = "transport_source_calculation_owner_mismatch"
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CURATION_POLICY = "unknown_curation_policy"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
@@ -210,7 +207,6 @@ class RejectionCode(str, Enum):
 #: payload may be sent again under the same idempotency key.
 VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
     {
-        RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
         RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
@@ -305,7 +301,6 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
-        RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
         RejectionCode.UNKNOWN_RECORD,
         RejectionCode.UNKNOWN_RECORD_TYPE,
@@ -333,7 +328,6 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.CURATION_POLICY_VERSION_CONFLICT,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
-        RejectionCode.IDEMPOTENCY_IN_PROGRESS,
         RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
         RejectionCode.REFERENCE_CONFLICT,
         RejectionCode.RELEASE_TAG_TAKEN,
@@ -355,7 +349,6 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
 #: wire boundary and again in the schema reports the same code from
 #: both, at two different statuses.
 REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
-    RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
     RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR: frozenset({422}),
@@ -389,7 +382,6 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.HANDLE_NOT_FOUND: frozenset({404}),
     RejectionCode.HANDLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.IDEMPOTENCY_CONFLICT: frozenset({409}),
-    RejectionCode.IDEMPOTENCY_IN_PROGRESS: frozenset({409}),
     RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET: frozenset({422}),
     RejectionCode.INVALID_CURSOR: frozenset({422}),
     RejectionCode.INVALID_HANDLE: frozenset({422}),
@@ -471,7 +463,6 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
-    RejectionCode.TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CURATION_POLICY: frozenset({404}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),

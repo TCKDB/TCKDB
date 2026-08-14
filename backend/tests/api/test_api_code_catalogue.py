@@ -31,6 +31,8 @@ from pathlib import Path
 from app.api.code_catalogue import (
     CATALOGUE,
     STATUS_FALLBACK_PATTERN,
+    ApiCode,
+    Reach,
     Surface,
     catalogued_codes,
     client_facing,
@@ -523,6 +525,13 @@ def test_client_facing_excludes_what_a_client_cannot_use() -> None:
                 "reach a client as an importable constant"
             )
             excluded += 1
+        if entry.reach is Reach.guard:
+            assert entry.code not in exported, (
+                f"{entry.code} is classified as a guard no request can trip, "
+                "so a client branch written for it would never run -- the "
+                "silent non-event this enum is generated to remove"
+            )
+            excluded += 1
         if entry.status >= 500:
             assert entry.code not in exported, (
                 f"{entry.code} is reported at {entry.status}; a 5xx refuses "
@@ -651,4 +660,123 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
             f"{code} has been added to the scientific check register. That is "
             "the decision #164 refused; if it has been revisited, this test "
             "should be changed deliberately and not merely to go green."
+        )
+
+
+#: The three codes #184 and #186 classified as guards. Named here rather
+#: than derived, because the value of the classification is that flipping
+#: one back is a deliberate act with a test to change, not a silent
+#: widening of the client contract.
+_GUARD_CODES = (
+    "applied_energy_correction_source_calculation_owner_mismatch",
+    "idempotency_in_progress",
+    "transport_source_calculation_owner_mismatch",
+)
+
+
+def test_the_reach_rule_can_say_no() -> None:
+    """``Reach`` must change an answer, or it is a comment with a type.
+
+    The same shape as ``test_the_origin_detector_can_say_no`` above, and
+    for the same reason: a field whose only evidence is that the codes
+    carrying it happen not to be exported proves nothing, because they
+    could be excluded by one of the three older rules instead. So it is
+    exercised on two entries that differ in nothing else.
+    """
+    origin = "backend/app/services/calculation_ownership.py"
+    reachable = ApiCode("probe_code", 422, Surface.coded_exception, origin)
+    guarded = ApiCode(
+        "probe_code", 422, Surface.coded_exception, origin,
+        reach=Reach.guard, note="probe",
+    )
+
+    assert reachable.reach is Reach.request, "Reach.request must be the default"
+    assert reachable.is_client_facing
+    assert not guarded.is_client_facing
+
+
+def test_every_guard_entry_is_catalogued_annotated_and_unexported() -> None:
+    """The three-way distinction, asserted as three separate properties.
+
+    Catalogued, because the literal exists and a reader who greps it
+    deserves an answer. Annotated, because "no request can produce this"
+    is a claim and an unexplained claim is the kind that rots -- the note
+    has to say which property of the code makes it true. Not exported,
+    because a caller cannot receive it.
+    """
+    guards = [entry for entry in CATALOGUE if entry.reach is Reach.guard]
+    assert guards, (
+        "no entry is classified as a guard, so every assertion below runs "
+        "over an empty set -- the failure this file exists to avoid"
+    )
+    assert len(guards) * 8 < len(CATALOGUE), (
+        f"{len(guards)} of {len(CATALOGUE)} entries are classified as guards. "
+        "The class is meant to be the rare case a caller can never reach; at "
+        "this proportion it has become a place to put codes nobody has "
+        "tested, which is a different thing and hides real refusals from "
+        "clients."
+    )
+
+    catalogued = catalogued_codes()
+    exported = {entry.code for entry in client_facing()}
+    for entry in guards:
+        assert entry.code in catalogued
+        assert entry.code not in exported
+        assert entry.note, (
+            f"{entry.code} is classified Reach.guard with no note. The note "
+            "is where the claim is justified; without it the classification "
+            "is unfalsifiable."
+        )
+
+    named = {entry.code for entry in guards}
+    for code in _GUARD_CODES:
+        assert code in named, (
+            f"{code} is no longer classified as a guard. If a write path now "
+            "reaches it, that is good news and this list should shrink "
+            "deliberately -- together with the client version bump that "
+            "re-exports it."
+        )
+
+
+def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
+    """The classification rests on live schemas, so it is checked against them.
+
+    An ownership guard can fire only when the field it guards can name a
+    calculation the enclosing block did not itself scope to the target:
+    a foreign row id, or a key resolved in a namespace wider than the
+    target's owner. The two ownership codes classified ``Reach.guard``
+    are classified that way because their fields carry no
+    ``existing_*_id`` -- a property of these payload models, not of the
+    test suite. Asserting it here means the day somebody adds the field,
+    this fails and names the entry to reclassify, instead of the
+    catalogue telling clients the wrong thing for another year.
+
+    The third ownership code with the same *shape*,
+    ``statmech_torsion_scan_calculation_owner_mismatch``, is deliberately
+    absent: its key is resolved in a bundle-wide namespace on the PDep
+    path, so it is reachable and stays exported. See
+    ``tests/api/test_api_network_pdep_ownership.py``.
+    """
+    from tckdb_schemas.energy_correction import (
+        AppliedEnergyCorrectionUploadPayload,
+    )
+
+    from app.schemas.workflows.transport_upload import (
+        TransportSourceCalculationIn,
+    )
+
+    for model in (
+        TransportSourceCalculationIn,
+        AppliedEnergyCorrectionUploadPayload,
+    ):
+        foreign = sorted(
+            name
+            for name in model.model_fields
+            if name.endswith("_id") or name.startswith("existing_")
+        )
+        assert not foreign, (
+            f"{model.__name__} now carries {foreign}. A field that accepts a "
+            "row this request did not create is exactly what makes an "
+            "ownership guard reachable, so the matching catalogue entry is "
+            "no longer Reach.guard and the client enum must re-export it."
         )

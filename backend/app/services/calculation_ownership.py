@@ -61,17 +61,48 @@ W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = (
 #: Separate from the statmech source-link code because the torsion's scan
 #: is a different field with a different repair — the depositor picked the
 #: wrong rotor scan, not the wrong supporting job.
+#:
+#: Reachable, and by exactly one route, which is worth writing down
+#: because it was read as unreachable once. ``_persist_statmech_block`` is
+#: shared by the species bundle and the PDep bundle. Under
+#: ``/uploads/computed-species`` the calc-key map is one species entry's
+#: own, so the comparison is against a value just assigned; under
+#: ``/uploads/networks/pdep`` the map handed to the same seam spans every
+#: species *and* every transition state. The PDep payload schema narrows
+#: a **species** torsion's scan key to that species's own calculations
+#: before the seam ever sees it — and does not do the same for a
+#: **transition state**'s. So a TS torsion naming a species scan
+#: calculation reaches this guard, and
+#: ``tests/api/test_api_network_pdep_ownership.py`` provokes it on the
+#: wire.
 W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
     "statmech_torsion_scan_calculation_owner_mismatch"
 )
 
 #: A transport source link cites a calculation owned by another subject.
+#:
+#: The one code here that no write path can produce: transport's single
+#: guard reads a calculation the same loop persisted against the target's
+#: own species entry, its source-link payload carries no
+#: ``existing_calculation_id``, and the other two callers of
+#: ``resolve_and_create_transport`` pass no source calculations at all.
+#: Catalogued as ``Reach.guard`` and not exported to clients; kept as the
+#: tripwire for the path that changes any of those three facts.
 W_TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH = (
     "transport_source_calculation_owner_mismatch"
 )
 
 #: An applied energy correction names a source calculation owned by
 #: another subject.
+#:
+#: No request produces *this code*: all three call sites read from a key
+#: map built for the target's own owner. The rule is not unreachable,
+#: though — the reaction bundle resolves the same key in a bundle-wide
+#: namespace and enforces ownership with an inline comparison that raises
+#: a bare ``ValueError``, so the same mistake there answers
+#: ``validation_error``. Also catalogued as ``Reach.guard``, and the
+#: repair that would change that is converting those two copies to call
+#: this function.
 W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = (
     "applied_energy_correction_source_calculation_owner_mismatch"
 )
