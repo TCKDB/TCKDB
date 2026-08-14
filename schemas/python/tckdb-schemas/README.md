@@ -24,6 +24,55 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.32.0 — **BREAKING**: a calculation cites literature inline, and the reaction bundle's 201 names its statmech
+
+**Breaking:** `CalculationIn.literature_id` is **removed**. It was a
+database primary key on an upload surface — supplying it required having
+already queried this database, which a depositor has not — contradicting
+"no FK IDs in upload schemas". It is replaced by `literature`, the same
+inline `LiteratureUploadRequest` fragment
+`CalculationInBundle.literature` has always taken on the species bundle,
+resolved (and deduplicated) by the workflow.
+
+`CalculationIn` is shared, so this lands on **two** routes:
+
+| payload | 0.31.0 | 0.32.0 |
+|---|---|---|
+| `computed-reaction`, calculation with `literature_id: 7` | 201, FK stored | **422** — `extra="forbid"` names the field |
+| `network-pdep`, calculation with `literature_id: 7` | 201, FK stored | **422** |
+| either route, calculation with inline `literature: {...}` | field did not exist | 201, row resolved-or-created and attached |
+| two calculations citing the same DOI | n/a | one `literature` row, shared |
+
+**Migrating.** Replace `"literature_id": <n>` with the citation itself:
+`"literature": {"kind": "article", "title": …, "doi": …}`. The workflow
+resolves an existing row by DOI/ISBN or creates one, so repeating the
+same fragment across calculations does not duplicate it. A calculation
+that cited nothing needs no change. The failure is a 422 naming
+`literature_id`, not a silent drop — deliberately, since silently
+ignoring it would discard the citation.
+
+`calculation_in_to_with_results_payload` gains a keyword-only
+`literature_id` and **raises** if handed a calculation carrying a
+`literature` fragment without one. The package cannot resolve literature
+(it has no database), so the caller resolves and passes the id down;
+defaulting to `None` would make "cited nothing" and "the workflow forgot"
+the same value.
+
+**Additive:** `ComputedReactionUploadResult` gains `statmech_ids` and
+`atom_map_id`. Both were already computed by the workflow and discarded
+by pydantic's default `extra="ignore"`, so a bundle depositing kinetics,
+thermo *and* statmech got a 201 naming two of the three, and the atom map
+it wrote had to be fetched back through the read API. The result model is
+now `extra="forbid"` so the next such omission fails loudly.
+
+**Documentation only, no shape change:** `BundleKineticsIn`'s docstring
+now records the three scientific-content fields the standalone
+`/uploads/kinetics` route has and it does not
+(`interpretation_assignments`, `tunneling_application`,
+`network_kinetics_ref`), with the git evidence that two of the three are
+drift rather than design. No field was added or removed; closing those
+gaps needs bundle-local-key schemas plus workflow persistence.
+
 ### 0.31.0 — **BREAKING**: `source_conformer_key` now points at something, on every route that accepts it
 
 **A field that cannot be wrong is not a field.** Three upload paths

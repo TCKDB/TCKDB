@@ -2128,7 +2128,7 @@
       },
       "BundleKineticsIn": {
         "additionalProperties": false,
-        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.",
+        "description": "One kinetics fit (Arrhenius parameters) within the bundle.\n\nThe reaction direction is determined by ``reactant_keys`` / ``product_keys``\nwhich reference species keys. For the forward direction, these match the\nbundle's reaction; for the reverse, they are swapped.\n\n:param reactant_keys: Species keys on the reactant side of this fit.\n:param product_keys: Species keys on the product side of this fit.\n:param scientific_origin: Scientific origin category.\n:param model_kind: Kinetics functional form.\n:param is_third_body: True for a simple ``+M`` third-body reaction (no falloff).\n:param a: Arrhenius pre-exponential factor.\n:param a_units: Units for A.\n:param n: Temperature exponent.\n:param reported_ea: Activation energy in reported units.\n:param reported_ea_units: Units for Ea.\n:param tmin_k: Minimum valid temperature.\n:param tmax_k: Maximum valid temperature.\n:param tunneling_model: Optional tunneling model label.\n:param degeneracy: Optional finite, strictly positive multiplicative\n    reaction-path degeneracy associated with the reported kinetics\n    expression. ``None`` means no claim is made; do not interpret it as\n    ``1.0``.\n:param degeneracy_convention: Whether degeneracy is already included in\n    the reported rate. Defaults to ``unknown`` for legacy producers.\n:param note: Optional note.\n\n**Three fields the standalone route has and this model does not.**\nRecorded here because the gap was invisible: nothing in the tree\ncompared this model against ``KineticsUploadRequest``, and\n``test_bundle_root_model_symmetry`` explicitly excludes kinetics on the\ngrounds that it has no second spelling — true of the *species bundle*,\nfalse of the standalone route.\n\n* ``interpretation_assignments`` — which statmech records the rate's\n  partition functions came from.\n* ``tunneling_application`` — the typed, replayable tunneling evidence.\n* ``network_kinetics_ref`` — the master-equation solve a fitted rate\n  delegates its pressure dependence to.\n\nThe first two are **drift, not design**. Both were added to\n``KineticsUploadRequest`` by ``ee7377f5`` (#66), a commit that edited\n*this file* in the same diff to close the analogous transition-state\nevidence gap on parity grounds — and left kinetics one-sided with no\nrecorded reason. No commit message, comment or doc anywhere claims a\ndeliberately reduced kinetics shape. The consequence is concrete: this\nmodel carries ``tunneling_model``, the *label*, so a bundle depositor\ncan claim Eckart tunneling was applied and has no way to attach the\nevidence for it. The standalone route cross-checks the two\n(``validate_tunneling_declaration_agrees``); here there is nothing to\ncheck against.\n\n``network_kinetics_ref`` is **unaddressed rather than decided**.\n``2fb5c25b`` (#29) established that this model \"carries only scalar\nArrhenius fields … and its workflow writes no kinetics child tables\",\ndirecting the pressure-dependent forms to the single-reaction endpoint.\nThat covers PLOG and Chebyshev child rows; ``network_kinetics_ref``\nresolves to a nullable scalar column on ``kinetics`` itself, and this\nmodel accepts ``pressure_context='pressure_dependent'`` — precisely the\nstate that handle exists to name — with no way to name it.\n\nClosing any of the three means new bundle-local-key schemas plus\npersistence in ``app.workflows.computed_reaction``, which is a feature\nrather than a contract change and is deliberately not attempted here.\nUntil then ``collect_kinetics_content_warnings_for`` is passed\n``NOT_APPLICABLE`` for all three, so no depositor is advised to fill a\nfield this model does not have.",
         "properties": {
           "a": {
             "anyOf": [
@@ -5200,7 +5200,7 @@
       },
       "CalculationIn": {
         "additionalProperties": false,
-        "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature_id: Optional literature provenance id.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param wavefunction_diagnostic: Optional inline T1/D1 wavefunction\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param spin_diagnostic: Optional inline spin-contamination ``<S^2>``\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
+        "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature: Optional inline literature provenance, resolved (or\n    created) by the workflow. Replaces the former ``literature_id``,\n    which was a database primary key on an upload surface — usable only\n    by a client that had already queried this database, which a\n    depositor has not. Matches ``CalculationInBundle.literature`` on the\n    species bundle, which took the inline fragment from the start.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param wavefunction_diagnostic: Optional inline T1/D1 wavefunction\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param spin_diagnostic: Optional inline spin-contamination ``<S^2>``\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
         "properties": {
           "artifacts": {
             "items": {
@@ -5322,16 +5322,15 @@
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryRef"
           },
-          "literature_id": {
+          "literature": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Literature Id"
+            ]
           },
           "opt_converged": {
             "anyOf": [
@@ -9678,16 +9677,15 @@
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryRef"
           },
-          "literature_id": {
+          "literature": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Literature Id"
+            ]
           },
           "opt_converged": {
             "anyOf": [
@@ -10003,7 +10001,20 @@
         "type": "object"
       },
       "ComputedReactionUploadResult": {
+        "additionalProperties": false,
+        "description": "What the reaction bundle wrote, named back to the depositor.\n\n``extra=\"forbid\"`` is load-bearing rather than tidy. This model is\nbuilt as ``ComputedReactionUploadResult(**result_dict)`` from the\nworkflow's return value, so under pydantic's default ``extra=\"ignore\"``\na key the workflow computes but the model does not declare is dropped\nin silence — with a 201 that looks complete. That is exactly how\n``statmech_ids`` and ``atom_map_id`` went missing: both were collected\nby the workflow, both were discarded here, and no test could fail\nbecause the seam had no failure mode. Forbidding extras turns the next\nsuch omission into an error at construction time.",
         "properties": {
+          "atom_map_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Atom Map Id"
+          },
           "calculation_keys": {
             "additionalProperties": {
               "type": "integer"
@@ -10035,6 +10046,13 @@
               "type": "integer"
             },
             "title": "Species Entry Ids",
+            "type": "array"
+          },
+          "statmech_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Statmech Ids",
             "type": "array"
           },
           "submission_id": {

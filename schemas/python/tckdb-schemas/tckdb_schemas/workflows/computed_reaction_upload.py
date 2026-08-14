@@ -973,6 +973,47 @@ class BundleKineticsIn(SchemaBase):
     :param degeneracy_convention: Whether degeneracy is already included in
         the reported rate. Defaults to ``unknown`` for legacy producers.
     :param note: Optional note.
+
+    **Three fields the standalone route has and this model does not.**
+    Recorded here because the gap was invisible: nothing in the tree
+    compared this model against ``KineticsUploadRequest``, and
+    ``test_bundle_root_model_symmetry`` explicitly excludes kinetics on the
+    grounds that it has no second spelling — true of the *species bundle*,
+    false of the standalone route.
+
+    * ``interpretation_assignments`` — which statmech records the rate's
+      partition functions came from.
+    * ``tunneling_application`` — the typed, replayable tunneling evidence.
+    * ``network_kinetics_ref`` — the master-equation solve a fitted rate
+      delegates its pressure dependence to.
+
+    The first two are **drift, not design**. Both were added to
+    ``KineticsUploadRequest`` by ``ee7377f5`` (#66), a commit that edited
+    *this file* in the same diff to close the analogous transition-state
+    evidence gap on parity grounds — and left kinetics one-sided with no
+    recorded reason. No commit message, comment or doc anywhere claims a
+    deliberately reduced kinetics shape. The consequence is concrete: this
+    model carries ``tunneling_model``, the *label*, so a bundle depositor
+    can claim Eckart tunneling was applied and has no way to attach the
+    evidence for it. The standalone route cross-checks the two
+    (``validate_tunneling_declaration_agrees``); here there is nothing to
+    check against.
+
+    ``network_kinetics_ref`` is **unaddressed rather than decided**.
+    ``2fb5c25b`` (#29) established that this model "carries only scalar
+    Arrhenius fields … and its workflow writes no kinetics child tables",
+    directing the pressure-dependent forms to the single-reaction endpoint.
+    That covers PLOG and Chebyshev child rows; ``network_kinetics_ref``
+    resolves to a nullable scalar column on ``kinetics`` itself, and this
+    model accepts ``pressure_context='pressure_dependent'`` — precisely the
+    state that handle exists to name — with no way to name it.
+
+    Closing any of the three means new bundle-local-key schemas plus
+    persistence in ``app.workflows.computed_reaction``, which is a feature
+    rather than a contract change and is deliberately not attempted here.
+    Until then ``collect_kinetics_content_warnings_for`` is passed
+    ``NOT_APPLICABLE`` for all three, so no depositor is advised to fill a
+    field this model does not have.
     """
 
     reactant_keys: list[str] = Field(min_length=1)

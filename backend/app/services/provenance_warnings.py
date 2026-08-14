@@ -372,6 +372,28 @@ def collect_kinetics_provenance_warnings(
 def collect_kinetics_content_warnings(
     request: KineticsUploadRequest,
 ) -> list[UploadWarning]:
+    """Adapter for the standalone ``/uploads/kinetics`` request shape.
+
+    Kept so the standalone route reads unchanged. All three inputs exist on
+    ``KineticsUploadRequest``, so all three are judged.
+    """
+    return collect_kinetics_content_warnings_for(
+        scientific_origin=request.scientific_origin,
+        interpretation_assignments=request.interpretation_assignments,
+        network_kinetics_ref=request.network_kinetics_ref,
+        tunneling_model=request.tunneling_model,
+        tunneling_application=request.tunneling_application,
+    )
+
+
+def collect_kinetics_content_warnings_for(
+    *,
+    scientific_origin: ScientificOriginKind,
+    interpretation_assignments: object | None = NOT_APPLICABLE,
+    network_kinetics_ref: object | None = NOT_APPLICABLE,
+    tunneling_model: object | None = None,
+    tunneling_application: object | None = NOT_APPLICABLE,
+) -> list[UploadWarning]:
     """Report scientific evidence a rate could carry but does not.
 
     Separate from the provenance collector because these describe *scientific
@@ -384,11 +406,44 @@ def collect_kinetics_content_warnings(
       deposited without its statmech legitimately carries no assignments.
     * ``tunneling_model`` is a reported label. A paper stating "Eckart
       tunneling was applied" ships no imaginary frequency and no barriers.
+
+    **Why the parameters, and why they default to** :data:`NOT_APPLICABLE`.
+
+    This collector used to read ``interpretation_assignments``,
+    ``network_kinetics_ref`` and ``tunneling_application`` straight off a
+    ``KineticsUploadRequest``. ``BundleKineticsIn`` — the reaction bundle's
+    kinetics block, and the model the ARC adapter actually deposits through
+    — carries none of the three, but *does* carry ``tunneling_model``. So a
+    bundle could declare ``tunneling_model='eckart'`` and, the moment this
+    collector was wired to that route, be told to supply
+    ``tunneling_application``: a field that does not exist on that model,
+    on a payload whose ``SchemaBase`` is ``extra="forbid"``. A depositor
+    following the advice would get a 422.
+
+    :data:`NOT_APPLICABLE` is how a caller says *there is no field here to
+    fill*, as distinct from ``None``/empty meaning *there is one and it was
+    left empty*. Judging is opt-in: a caller that does not pass an argument
+    is not asked about it, so a new caller cannot accidentally emit advice
+    it has no field to act on.
+
+    That the bundle must pass all three sentinels is a statement about the
+    bundle's schema, not an endorsement of it — see ``BundleKineticsIn``'s
+    docstring for the drift this records.
+
+    :param interpretation_assignments: The assignment list, or
+        :data:`NOT_APPLICABLE` where the payload has no such field.
+    :param network_kinetics_ref: The master-equation handle, or
+        :data:`NOT_APPLICABLE`. Only consulted to *suppress* the
+        missing-TS-interpretation warning, never to raise one.
+    :param tunneling_model: The reported label. Always available.
+    :param tunneling_application: The typed evidence, or
+        :data:`NOT_APPLICABLE`.
     """
     warnings: list[UploadWarning] = []
     if (
-        request.scientific_origin in _COMPUTATIONAL_ORIGINS
-        and not request.interpretation_assignments
+        scientific_origin in _COMPUTATIONAL_ORIGINS
+        and interpretation_assignments is not NOT_APPLICABLE
+        and not interpretation_assignments
     ):
         warnings.append(
             UploadWarning(
@@ -408,14 +463,24 @@ def collect_kinetics_content_warnings(
     # exactly what ``network_kinetics_ref`` declares — but for everything else
     # (including variational TST, which still evaluates Q at the variational
     # dividing surface) the omission is a real gap worth naming.
-    subjects = {
-        "transition_state" if item.role == "transition_state" else item.role
-        for item in request.interpretation_assignments
-    }
+    #
+    # ``network_kinetics_ref`` is only ever read to *suppress* this warning,
+    # so a caller with no such field is not silently accused of omitting one:
+    # NOT_APPLICABLE is not ``None``, and only ``None`` lets the warning
+    # through. The guard is unreachable anyway when
+    # ``interpretation_assignments`` is NOT_APPLICABLE, since the sentinel is
+    # not iterable — hence the explicit check before the comprehension.
+    subjects: set[object] = set()
+    if interpretation_assignments is not NOT_APPLICABLE:
+        subjects = {
+            "transition_state" if item.role == "transition_state" else item.role
+            for item in interpretation_assignments
+        }
     if (
-        request.interpretation_assignments
+        interpretation_assignments is not NOT_APPLICABLE
+        and interpretation_assignments
         and "transition_state" not in subjects
-        and request.network_kinetics_ref is None
+        and network_kinetics_ref is None
     ):
         warnings.append(
             UploadWarning(
@@ -430,16 +495,22 @@ def collect_kinetics_content_warnings(
                 ),
             )
         )
+    # The case #155 exists for. A caller that *has* a tunneling_application
+    # field and left it empty gets told so; a caller that has no such field
+    # gets nothing, because "attach the typed evidence" is not something it
+    # can do. Note the condition is on the *evidence* being NOT_APPLICABLE,
+    # not on the label: a bundle can and does declare ``tunneling_model``.
     if (
-        request.tunneling_model not in (None, TunnelingModel.none)
-        and request.tunneling_application is None
+        tunneling_application is not NOT_APPLICABLE
+        and tunneling_model not in (None, TunnelingModel.none)
+        and tunneling_application is None
     ):
         warnings.append(
             UploadWarning(
                 field="tunneling_application",
                 code=W_MISSING_TUNNELING_APPLICATION,
                 message=(
-                    f"tunneling_model='{request.tunneling_model.value}' is declared "
+                    f"tunneling_model='{tunneling_model.value}' is declared "
                     "with no typed tunneling_application evidence, so the correction "
                     "is recorded as a reported attribute and cannot be replayed."
                 ),
