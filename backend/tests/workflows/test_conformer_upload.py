@@ -685,12 +685,20 @@ def test_conformer_upload_rejects_irc_additional() -> None:
 # resolved to the primary observation/calculation. The test that matters is
 # therefore not the rejection but the acceptance: a correction naming the
 # additional freq calculation must land on that row, not on the primary.
+#
+# The conformer half then resolved against ``label`` for a while, because a
+# label was the only name this request gave its single conformer. That was
+# still a conflation -- a label is a human tag that also feeds
+# conformer-group matching -- so the namespace is now the request's own
+# ``conformer_key``, the counterpart to the ``key`` it already puts on its
+# calculations.
 # ---------------------------------------------------------------------------
 
 
 def _correction_request(
     *,
     label: str,
+    conformer_key: str | None = None,
     source_calculation_key: str | None = "primary_sp",
     source_conformer_key: str | None = None,
 ) -> ConformerUploadRequest:
@@ -735,6 +743,7 @@ def _correction_request(
             },
         ],
         label=label,
+        conformer_key=conformer_key,
         applied_energy_corrections=[correction],
     )
 
@@ -775,9 +784,52 @@ def test_correction_conformer_key_links_the_observation_it_names(
         outcome = persist_conformer_upload(
             session,
             _correction_request(
-                label="aec-names-label", source_conformer_key="aec-names-label"
+                label="aec-names-key",
+                conformer_key="the-conformer",
+                source_conformer_key="the-conformer",
             ),
         )
+        applied = session.scalars(
+            select(AppliedEnergyCorrection).where(
+                AppliedEnergyCorrection.source_conformer_observation_id
+                == outcome.observation.id
+            )
+        ).all()
+        assert len(applied) == 1
+
+
+def test_correction_conformer_key_is_not_the_label(db_conn) -> None:
+    """``label`` was the namespace and is not one any more.
+
+    A label is a human tag that also drives conformer-group matching, so
+    a reference resolving through it broke whenever the label was changed
+    for grouping reasons -- and a depositor with no label could not name
+    their conformer at all. ``conformer_key`` answers only to references,
+    which is the whole of its job.
+    """
+    with Session(db_conn) as session, session.begin():
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_conformer_upload(
+                session,
+                _correction_request(
+                    label="a-human-label",
+                    conformer_key="a-machine-key",
+                    source_conformer_key="a-human-label",
+                ),
+            )
+    assert excinfo.value.context["declared_keys"] == ["a-machine-key"]
+
+
+def test_correction_conformer_key_works_without_any_label(db_conn) -> None:
+    """The deposit that could not previously be expressed at all."""
+    with Session(db_conn) as session, session.begin():
+        request = _correction_request(
+            label="unused",
+            conformer_key="unlabelled",
+            source_conformer_key="unlabelled",
+        )
+        request.label = None
+        outcome = persist_conformer_upload(session, request)
         applied = session.scalars(
             select(AppliedEnergyCorrection).where(
                 AppliedEnergyCorrection.source_conformer_observation_id
@@ -814,22 +866,24 @@ def test_correction_with_undeclared_conformer_key_is_refused(db_conn) -> None:
                 session,
                 _correction_request(
                     label="aec-ghost-conf",
+                    conformer_key="aec-ghost-conf-key",
                     source_conformer_key="a-different-conformer",
                 ),
             )
     assert (
         excinfo.value.code == "applied_energy_correction_source_key_undeclared"
     )
-    assert excinfo.value.context["declared_keys"] == ["aec-ghost-conf"]
+    assert excinfo.value.context["declared_keys"] == ["aec-ghost-conf-key"]
 
 
-def test_correction_conformer_key_with_no_label_is_refused(db_conn) -> None:
-    """No label means the request named no conformer at all."""
+def test_correction_conformer_key_with_no_conformer_key_is_refused(
+    db_conn,
+) -> None:
+    """No ``conformer_key`` means the request named no conformer at all."""
     with Session(db_conn) as session, session.begin():
         request = _correction_request(
-            label="aec-no-label", source_conformer_key="anything"
+            label="aec-no-key", source_conformer_key="anything"
         )
-        request.label = None
         with pytest.raises(CodedValueError) as excinfo:
             persist_conformer_upload(session, request)
     assert excinfo.value.context["declared_keys"] == []
