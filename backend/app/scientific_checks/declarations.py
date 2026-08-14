@@ -37,6 +37,10 @@ from tckdb_schemas.fragments.calculation import (
     W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
     FreqResultPayload,
 )
+from tckdb_schemas.frequency_completeness import (
+    W_FREQ_LIST_EXCEEDS_GEOMETRY,
+    evaluate_frequency_list_completeness,
+)
 from tckdb_schemas.stationary_point import (
     TAU_ANALYTIC_DEFAULT_CM1,
     TAU_ANALYTIC_TIGHT_CM1,
@@ -57,6 +61,7 @@ from tckdb_schemas.stationary_point import (
     W_TS_REACTION_COORDINATE_NOT_DESIGNATED,
     evaluate_species_entry_frequency,
     evaluate_transition_state_frequency,
+    raise_for_blocking_findings,
     resolve_tau,
 )
 
@@ -532,6 +537,112 @@ CHECK_FREQ_N_IMAG_AGREES_WITH_ITS_MODES = ScientificCheck(
         "the complete signed frequency list, and asking is as far as this "
         "tier goes. What has no door is depositing both and letting them "
         "contradict each other."
+    ),
+)
+
+CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM = ScientificCheck(
+    group="Stationary points",
+    sort_key=8,
+    code=W_FREQ_LIST_EXCEEDS_GEOMETRY,
+    asserts=(
+        "A frequency list carries no more modes than the geometry it is "
+        "attached to has degrees of freedom: at most ``3N`` for ``N`` atoms, "
+        "the six rigid-body modes included."
+    ),
+    tier=CheckTier.block,
+    channel=CodeChannel.error_envelope,
+    tier_rationale=(
+        "Definitional, and — unusually in this group — arithmetically so. "
+        "``3N`` is the dimension of the nuclear coordinate space, so it is the "
+        "total number of eigenvalues the mass-weighted Hessian of an "
+        "``N``-atom geometry has: not the vibrational count, which is "
+        "``3N - 6`` or ``3N - 5``, but every Cartesian degree of freedom "
+        "including the six translations and rotations ADR 0012 asks a record "
+        "to carry. A longer list is therefore not a short spectrum — it is "
+        "not a spectrum of that geometry at all, under any harmonic "
+        "treatment, integration grid, coordinate system or level of theory. "
+        "That is what separates it from the ``n_imag == 1`` gate ADR 0012 "
+        "retired: there, two scientifically correct calculations of one "
+        "structure legitimately returned different answers and the tier was "
+        "an expectation about numerical quality wearing the costume of a "
+        "definition. Here no protocol takes part, so no correct deposit is "
+        "refused. "
+        "The contrast with the *floor* is the argument, and the floor is "
+        "correctly a warning for precisely the reasons this is not. First, "
+        "the ambiguity a short list carries is one-sided: a partial-Hessian "
+        "job, a frozen-atom or ONIOM Hessian and a lumped ``pseudo`` "
+        "participant all *remove* modes and are honest records of what was "
+        "computed, TCKDB carries no field saying which of them a short list "
+        "is, and nothing whatsoever filters modes *in*. Second, ``modes = "
+        "null`` is accepted and must stay accepted, so the cheapest way past "
+        "a completeness *block* on the floor would be deleting the frequency "
+        "list — converting visible ambiguity into invisible falsehood, which "
+        "ADR 0012 §\"Why not refuse, when refusing is cheaper\" names as worse "
+        "than no rule. Neither reaches the ceiling. Deleting an over-long "
+        "list loses a spectrum the check has already found is not this "
+        "geometry's, which is the repair rather than the evasion; and "
+        "accepting it is the destructive option, because stored it reads as "
+        "this geometry's spectrum and a consumer recomputing a partition "
+        "function from the pair gets a number rather than an error. "
+        "No threshold is declared because there is none to declare: ``3N`` is "
+        "counted from the deposited geometry, not tuned."
+    ),
+    adr="0012",
+    enforced_by=(
+        PythonCheck(
+            evaluate_frequency_list_completeness,
+            note=(
+                "Owns the arithmetic and knows no payload shapes; the "
+                "geometry each frequency list is measured against is resolved "
+                "by ``evaluate_deposited_frequency_list`` in the same module "
+                "— the calculation's own first input geometry where the "
+                "producer named one, and otherwise the enclosing conformer's "
+                "or transition state's reference geometry, which is the "
+                "fallback the persistence workflow itself applies for "
+                "``freq``. Written once so the payload shapes that call it "
+                "cannot drift into counting three different sets of atoms. "
+                "**The same function also reports the floor**, "
+                "``freq_list_incomplete_for_geometry``, at the warning tier "
+                "and with a structural flag; that finding has no entry here "
+                "because it is an expectation rather than a definition, for "
+                "the reasons set out above. This entry is deliberately about "
+                "one of the two codes the function emits."
+            ),
+        ),
+        PythonCheck(
+            raise_for_blocking_findings,
+            note=(
+                "Where the refusal actually happens, and named because the "
+                "deciding module cannot do it. "
+                "``tckdb_schemas.frequency_completeness`` returns findings "
+                "and never raises, so the code reaches the 422 envelope only "
+                "through this shared raiser, which every published upload "
+                "request model calls from a ``model_validator`` before any "
+                "route body opens a submission. It reports whichever code its "
+                "blocking findings agreed on — a payload carrying two "
+                "different contradictions falls back to the generic code and "
+                "names both in the message, because naming either one would "
+                "tell the client the other is not there."
+            ),
+        ),
+    ),
+    escape_hatch=(
+        "**None, and that absence is the argument for blocking rather than a "
+        "gap in it.** Every other entry in this group needs a door because a "
+        "correct record can trip it: a genuine higher-order saddle is "
+        "deposited by designating its reaction coordinate, a van der Waals "
+        "complex by declaring ``molecule_kind``, a contradictory ``n_imag`` "
+        "by omitting ``modes``. There is no counterpart here because there is "
+        "nothing to let through — no calculation, honest or otherwise, "
+        "produces more modes than the geometry has degrees of freedom, so a "
+        "hatch would exist only to admit a record whose own two halves "
+        "disagree. What looks like a hatch and is not: omitting ``modes`` "
+        "still avoids the refusal, but it is not a door onto legitimate "
+        "chemistry the check would have refused — it deposits a different, "
+        "weaker record, and the thing it drops is a frequency list this check "
+        "has already determined does not belong to the geometry beside it. "
+        "The repair is to attach the calculation to the geometry it ran on, "
+        "or to deposit that geometry."
     ),
 )
 

@@ -457,6 +457,147 @@ class TestAFrequencyResultAgainstItsOwnModes:
 
 
 # ---------------------------------------------------------------------------
+# A frequency list against the geometry it is attached to
+# ---------------------------------------------------------------------------
+#
+# The one bound in ``tckdb_schemas.frequency_completeness`` that refuses.
+# ``3N`` is the dimension of the nuclear coordinate space, so a list longer
+# than it is not a short spectrum -- it is not a spectrum of that geometry
+# under any harmonic treatment, grid, coordinate system or level of theory.
+# The *floor* (``freq_list_incomplete_for_geometry``) stays advisory, and
+# the last test here is what proves the promotion did not drag it along:
+# a filtered list has several honest explanations and ``modes = null`` is
+# accepted, so blocking on the floor would pay a depositor to delete the
+# list. Nothing filters modes *in*, so the ceiling has no such reading.
+
+
+def _water_conformer(frequencies: list[float] | None, *, label: str) -> dict:
+    """A water conformer depositing *frequencies* as its own spectrum.
+
+    Water because ``3N = 9`` and ``3N - 6 = 3`` are far enough apart that
+    the floor, the ceiling and the space between them are three visibly
+    different lists rather than three off-by-ones.
+    """
+    payload = _conformer_payload(
+        species_entry=_WATER,
+        xyz_text=(
+            "3\nwater\n"
+            "O  0.000000  0.000000  0.117300\n"
+            "H  0.000000  0.757200 -0.469200\n"
+            "H  0.000000 -0.757200 -0.469200"
+        ),
+        label=label,
+    )
+    payload["additional_calculations"] = [
+        _freq_calc(n_imag=0, frequencies=frequencies)
+    ]
+    return payload
+
+
+class TestAFrequencyListAgainstItsGeometry:
+    def test_ten_modes_on_a_nine_degree_of_freedom_geometry(self, client):
+        """The refusal, named in the ``code`` field.
+
+        Water has nine Cartesian degrees of freedom in total. A tenth
+        mode describes motion the geometry does not have, so the list and
+        the geometry are not records of the same molecule -- and no
+        re-run, tighter grid or different coordinate system changes that,
+        which is why this refuses where the floor warns.
+        """
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_water_conformer(
+                [float(100 * n) for n in range(1, 11)], label="water-overlong"
+            ),
+        )
+        body = _assert_code(
+            response, "freq_list_exceeds_geometry_degrees_of_freedom"
+        )
+        # The arithmetic a depositor needs, in the sentence rather than
+        # left for them to work out.
+        assert "carries 10 modes" in str(body["detail"])
+        assert "only 9 degrees of freedom" in str(body["detail"])
+        # Which element of the payload, without parsing the sentence.
+        assert body["context"] == {
+            "locations": ["additional_calculations[0].freq_result.modes"]
+        }
+
+    def test_exactly_three_n_is_accepted_because_the_ceiling_is_inclusive(
+        self, client
+    ):
+        """Nine modes on water: the whole mass-weighted Hessian spectrum.
+
+        ADR 0012 §"What a record must carry" asks for the six
+        translation/rotation eigenvalues *as well as* the spectrum, "so
+        contamination is directly assessable". That record sits exactly on
+        the ceiling, so a strict comparison would refuse the most complete
+        deposit the ADR describes. This is the assertion that keeps the
+        refusal above narrow.
+        """
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_water_conformer(
+                [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1595.0, 3657.0, 3756.0],
+                label="water-all-nine",
+            ),
+        )
+        assert response.status_code == 201, response.text
+
+    def test_a_linear_molecule_at_its_ceiling_is_accepted(self, client):
+        """Carbon dioxide, nine modes, ``3N = 9``.
+
+        Linearity is never determined by this check -- doing so would mean
+        choosing a collinearity tolerance at validation time -- so the
+        molecule most likely to be mis-bounded by a rule written around
+        ``3N - 6`` is asserted directly. Its vibrational count is
+        ``3N - 5 = 4``, one *more* than ``3N - 6``, and its full
+        eigenvalue set is nine.
+        """
+        payload = _conformer_payload(
+            species_entry={"smiles": "O=C=O", "charge": 0, "multiplicity": 1},
+            xyz_text=(
+                "3\ncarbon dioxide\n"
+                "C  0.000000  0.000000  0.000000\n"
+                "O  0.000000  0.000000  1.162000\n"
+                "O  0.000000  0.000000 -1.162000"
+            ),
+            label="co2-all-nine",
+        )
+        payload["additional_calculations"] = [
+            _freq_calc(
+                n_imag=0,
+                frequencies=[
+                    0.1, 0.2, 0.3, 0.4, 0.5, 667.0, 667.0, 1333.0, 2349.0
+                ],
+            )
+        ]
+        response = client.post("/api/v1/uploads/conformers", json=payload)
+        assert response.status_code == 201, response.text
+
+    def test_a_short_list_still_only_warns(self, client):
+        """The floor did not become a block by accident.
+
+        Two modes where water has three. Advisory on purpose: a
+        partial-Hessian job, a frozen-atom or ONIOM Hessian and a lumped
+        participant all produce fewer modes and are honest records of what
+        was computed, TCKDB carries no field saying which, and
+        ``modes = null`` is accepted -- so a block here would pay a
+        depositor to delete the list, which ADR 0012 §"Why not refuse,
+        when refusing is cheaper" calls worse than no rule. Asserted
+        beside the refusal above because a promotion applied one bound too
+        widely is invisible from the blocking side.
+        """
+        response = client.post(
+            "/api/v1/uploads/conformers",
+            json=_water_conformer([1595.0, 3756.0], label="water-short"),
+        )
+        assert response.status_code == 201, response.text
+        assert "freq_list_incomplete_for_geometry" in {
+            warning["code"] for warning in response.json()["warnings"]
+        }
+
+
+# ---------------------------------------------------------------------------
 # Conservation, against the saddle point
 # ---------------------------------------------------------------------------
 

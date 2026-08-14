@@ -15,13 +15,31 @@ against the independently stored frequency lists, agreeing to within
 about the ones it omits, which reads as agreement. The completeness of
 the stored list is load-bearing for that claim.
 
-Tier: **warn**, not block. The two arguments are set out in
+Two bounds, two tiers, and the split is the design rather than an
+accident of when each was written.
+
+The **floor** — fewer modes than the smallest complete spectrum the
+geometry admits — is **warn**. The two arguments are set out in
 ``tckdb_schemas.frequency_completeness``; the one this file makes
 executable is the second, which is that ``modes = null`` is accepted and
 must stay accepted, so a block's cheapest workaround is deleting the
-frequency list — turning a partial list into no list at all. The tests
-below therefore assert ``201`` throughout and read the warning out of
-the response body.
+frequency list — turning a partial list into no list at all.
+
+The **ceiling** — more modes than ``3N`` — is **block**. ``3N`` is the
+total number of Cartesian degrees of freedom, the six rigid-body modes
+included, so no harmonic analysis of that geometry produces more at any
+level of theory, on any grid, in any coordinate system: there is no
+correct deposit to refuse, and no filtering that produces *extra* modes,
+so neither of the floor's arguments reaches it. It warned in 0.29.0
+pending a scientific-check register entry and now has one
+(``CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM``).
+
+So the tests below assert ``201`` and read a warning out of the body for
+everything on the floor side, and ``422`` with a named ``code`` for
+everything past the ceiling. The end-to-end proof that the code reaches
+the ``code`` field of the response body — as opposed to appearing inside
+its prose — lives in ``test_api_scientific_rejection_codes.py``, which is
+where the register's guard requires it.
 """
 
 from __future__ import annotations
@@ -106,6 +124,18 @@ def _conformer_payload(
 def _post(client, payload: dict):
     resp = client.post("/api/v1/uploads/conformers", json=payload)
     assert resp.status_code == 201, resp.text
+    return resp.json()
+
+
+def _post_refused(client, payload: dict) -> dict:
+    """Post a payload the ceiling must refuse, and return the 422 body.
+
+    Separate from :func:`_post` rather than parameterised on status,
+    because a helper that accepts either would let a refusal quietly
+    become an acceptance and vice versa.
+    """
+    resp = client.post("/api/v1/uploads/conformers", json=payload)
+    assert resp.status_code == 422, resp.text
     return resp.json()
 
 
@@ -200,17 +230,25 @@ class TestATruncatedListSaysSo:
             W_FREQ_LIST_INCOMPLETE
         ]
 
-    def test_a_list_longer_than_the_geometry_allows_names_the_geometry(
-        self, client
-    ):
+
+class TestAnOverlongListIsRefused:
+    """The other bound, and the other tier.
+
+    Kept as its own class rather than sitting beside the truncation tests,
+    because the two are different judgements about different records and
+    reading them under one heading is how the tiers get conflated again.
+    """
+
+    def test_a_list_longer_than_the_geometry_allows_is_refused(self, client):
         """Ten modes on a three-atom geometry: nine degrees of freedom exist.
 
-        Arithmetically impossible rather than merely short, so it gets
-        its own code — the usual cause is a calculation attached to the
-        wrong geometry, which is a different repair from "deposit the
-        rest of the list".
+        Arithmetically impossible rather than merely short, so it gets its
+        own code *and* its own tier — the usual cause is a calculation
+        attached to the wrong geometry, which is a different repair from
+        "deposit the rest of the list" and a different judgement about
+        whether the record can be stored at all.
         """
-        body = _post(
+        body = _post_refused(
             client,
             _conformer_payload(
                 smiles="O",
@@ -219,9 +257,10 @@ class TestATruncatedListSaysSo:
                 label="water-overlong",
             ),
         )
-        assert [w["code"] for w in _completeness_warnings(body)] == [
-            W_FREQ_LIST_EXCEEDS_GEOMETRY
-        ]
+        assert body["code"] == W_FREQ_LIST_EXCEEDS_GEOMETRY
+        # Nothing was written, so there is no warning to carry either: the
+        # blocking tier owns the fact it refuses.
+        assert "warnings" not in body
 
 
 class TestALinearMoleculeIsNotFlagged:
@@ -295,10 +334,15 @@ class TestSpeciesWithNoModesToDeposit:
         )
         assert _completeness_warnings(body) == []
 
-    def test_a_single_atom_reporting_modes_is_flagged_not_refused(self, client):
-        """Three translations exist, so ``3N = 3`` is the ceiling; a
-        fourth entry describes motion the geometry does not have."""
-        body = _post(
+    def test_a_single_atom_reporting_four_modes_is_refused(self, client):
+        """Three translations exist, so ``3N = 3`` is the ceiling.
+
+        A fourth entry describes motion the geometry does not have, and a
+        one-atom geometry is the sharpest form of the case: there is no
+        vibrational mode to be partially reported, so a non-empty list of
+        length four cannot be a filtered anything.
+        """
+        body = _post_refused(
             client,
             _conformer_payload(
                 smiles="[H]",
@@ -308,9 +352,27 @@ class TestSpeciesWithNoModesToDeposit:
                 multiplicity=2,
             ),
         )
-        assert [w["code"] for w in _completeness_warnings(body)] == [
-            W_FREQ_LIST_EXCEEDS_GEOMETRY
-        ]
+        assert body["code"] == W_FREQ_LIST_EXCEEDS_GEOMETRY
+
+    def test_a_single_atom_reporting_its_three_translations_is_accepted(
+        self, client
+    ):
+        """``3N = 3`` exactly: on the ceiling, so accepted.
+
+        The boundary that keeps the refusal above from being an off-by-one
+        on the smallest geometry TCKDB accepts.
+        """
+        body = _post(
+            client,
+            _conformer_payload(
+                smiles="[H]",
+                xyz_text="1\nH atom\nH 0.0 0.0 0.0",
+                frequencies=[0.1, 0.2, 0.3],
+                label="h-atom-at-ceiling",
+                multiplicity=2,
+            ),
+        )
+        assert _completeness_warnings(body) == []
 
 
 #: H + CH4 -> H2 + CH3, so the saddle point is CH5: 6 atoms, non-linear,

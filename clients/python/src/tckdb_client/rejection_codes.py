@@ -99,6 +99,7 @@ class RejectionCode(str, Enum):
     EXPORT_ALL_CAP_EXCEEDED = "export_all_cap_exceeded"
     EXPORT_SEED_EMPTY = "export_seed_empty"
     EXPORT_SEED_UNRESOLVED = "export_seed_unresolved"
+    FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM = "freq_list_exceeds_geometry_degrees_of_freedom"
     FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
     GEOMETRY_TOO_LARGE = "geometry_too_large"
     HANDLE_NOT_FOUND = "handle_not_found"
@@ -233,6 +234,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.EXPORT_ALL_CAP_EXCEEDED,
         RejectionCode.EXPORT_SEED_EMPTY,
         RejectionCode.EXPORT_SEED_UNRESOLVED,
+        RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM,
         RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES,
         RejectionCode.GEOMETRY_TOO_LARGE,
         RejectionCode.HANDLE_TYPE_MISMATCH,
@@ -377,6 +379,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),
     RejectionCode.EXPORT_SEED_UNRESOLVED: frozenset({422}),
+    RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM: frozenset({422}),
     RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES: frozenset({422}),
     RejectionCode.GEOMETRY_TOO_LARGE: frozenset({422}),
     RejectionCode.HANDLE_NOT_FOUND: frozenset({404}),
