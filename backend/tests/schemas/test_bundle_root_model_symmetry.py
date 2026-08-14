@@ -191,26 +191,12 @@ ALLOWED_ASYMMETRIES: dict[tuple[str, str], str] = {
         "species by key; the species bundle has one species and attaches "
         "geometries to conformers directly."
     ),
-    (
-        "calculation",
-        "literature",
-    ): (
-        "Species-root only: an inline literature fragment resolved by the "
-        "workflow. The reaction root takes a literature_id instead, which "
-        "is a different contract rather than the same one spelled twice — "
-        "see the literature_id entry immediately below."
-    ),
-    (
-        "calculation",
-        "literature_id",
-    ): (
-        "Reaction-root only, and flagged rather than endorsed. This is a "
-        "database FK on an upload surface; the species root's inline "
-        "'literature' fragment is the pattern the repo's no-FK-in-uploads "
-        "rule asks for. Tracked separately — this entry records the "
-        "asymmetry so the symmetry gate does not fire on it, and does not "
-        "claim it is right."
-    ),
+    # ``literature`` / ``literature_id`` were both listed here until the
+    # reaction root's raw FK was replaced by the same inline fragment the
+    # species root always took. Both roots now spell the citation
+    # ``literature``, so there is no asymmetry left to exempt — and
+    # ``test_the_allowlist_describes_asymmetries_that_still_exist`` would
+    # fail if these entries were left behind.
 }
 
 

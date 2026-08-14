@@ -7,7 +7,7 @@ the ``get_write_db`` dependency (commit on success, rollback on exception).
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, get_write_db
@@ -155,13 +155,38 @@ class TransportUploadResult(BaseModel):
 
 
 class ComputedReactionUploadResult(BaseModel):
+    """What the reaction bundle wrote, named back to the depositor.
+
+    ``extra="forbid"`` is load-bearing rather than tidy. This model is
+    built as ``ComputedReactionUploadResult(**result_dict)`` from the
+    workflow's return value, so under pydantic's default ``extra="ignore"``
+    a key the workflow computes but the model does not declare is dropped
+    in silence — with a 201 that looks complete. That is exactly how
+    ``statmech_ids`` and ``atom_map_id`` went missing: both were collected
+    by the workflow, both were discarded here, and no test could fail
+    because the seam had no failure mode. Forbidding extras turns the next
+    such omission into an error at construction time.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
     type: str = "computed_reaction"
     submission_id: int | None = None
     reaction_entry_id: int
     reaction_id: int
     transition_state_entry_id: int | None = None
+    #: The ``reaction_atom_map`` row this bundle wrote, if it carried an
+    #: ``atom_map`` block. Previously computed and dropped, which is why
+    #: every atom-map test in the tree reads it back through
+    #: ``/reactions/{id}/full`` instead of taking it from the 201.
+    atom_map_id: int | None = None
     kinetics_ids: list[int]
     thermo_ids: list[int]
+    #: One id per ``statmech`` row written for a species in this bundle.
+    #: A bundle depositing all three product types now gets all three
+    #: named; before, statmech had to be found by querying back through
+    #: ``species_entry_ids``.
+    statmech_ids: list[int] = Field(default_factory=list)
     species_entry_ids: list[int]
     species_count: int
     # Bundle-local calc key → assigned ``calculation.id`` for every

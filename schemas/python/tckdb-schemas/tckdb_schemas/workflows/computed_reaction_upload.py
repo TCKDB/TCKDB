@@ -221,6 +221,8 @@ class ComputedReactionCalculationIn(_BaseCalculationIn):
 
 def calculation_in_to_with_results_payload(
     calc_in: ComputedReactionCalculationIn,
+    *,
+    literature_id: int | None = None,
 ) -> CalculationWithResultsPayload:
     """Adapt a computed-reaction ``ComputedReactionCalculationIn`` to the
     shared upload shape.
@@ -229,8 +231,12 @@ def calculation_in_to_with_results_payload(
     shared ``CalculationWithResultsPayload`` so the existing calculation
     persistence seam writes the corresponding rows. The base converter
     handles type/result/parameter mapping unchanged.
+
+    ``literature_id`` is the workflow-resolved id for the calculation's
+    inline ``literature`` fragment; see the base converter for why it
+    cannot be resolved inside this package.
     """
-    base = _base_calc_to_payload(calc_in)
+    base = _base_calc_to_payload(calc_in, literature_id=literature_id)
     return base.model_copy(
         update={
             "input_geometries": list(calc_in.input_geometries),

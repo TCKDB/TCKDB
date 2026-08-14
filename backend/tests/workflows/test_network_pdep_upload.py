@@ -2548,9 +2548,13 @@ def test_upload_schema_exposes_no_fk_ids_or_hashes() -> None:
         return offenders
 
     offenders = _walk(NetworkPDepUploadRequest, set())
-    # ``CalculationIn.literature_id`` is a pre-existing FK leak inherited from
-    # the shared calculation fragment; it is not introduced by this schema.
-    assert [o for o in offenders if o != "CalculationIn.literature_id"] == []
+    # This assertion used to carry one exemption: ``CalculationIn.literature_id``,
+    # an FK leak inherited from the shared calculation fragment rather than
+    # introduced here. That field is gone — the shared ``CalculationIn`` now
+    # takes an inline ``literature`` fragment, which the workflow resolves —
+    # so the gate is unconditional again. Do not re-add an exemption; widen
+    # the schema or fix it.
+    assert offenders == []
 
 
 def test_chebyshev_grid_dimensions_must_match_declared_orders() -> None:
