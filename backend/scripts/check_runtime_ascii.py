@@ -13,6 +13,14 @@ WHY
     rebuilt by someone in a hurry.
 
 WHAT IS IN SCOPE, AND WHY IT IS DRAWN THIS NARROWLY
+    Three trees: ``backend/app``, ``backend/scripts`` and the wire package
+    ``schemas/python/tckdb-schemas/tckdb_schemas``. The wire package was
+    added late and should have been there from the first commit: it raises
+    the validation errors a client reads and builds the ``message=``
+    strings that are written to ``upload_warning.message``. It had nine
+    violations on the day it was first scanned, all of them at emission
+    sites, in the one package this check had never been pointed at.
+
     Only string literals that are structurally *at an emission site*:
     the argument of a ``raise``, the argument of a logging call, or a
     ``message=`` / ``detail=`` / ``reason=`` / ``msg=`` keyword. Those
@@ -79,12 +87,29 @@ from pathlib import Path
 
 BACKEND_ROOT = Path(__file__).resolve().parent.parent
 
-#: Checked by default.
+#: The repository root. The wire package is a sibling of ``backend``, so the
+#: default targets are expressed relative to ``BACKEND_ROOT`` and resolved
+#: here rather than against the current directory: CI runs this script with
+#: ``working-directory: backend`` and a developer runs it from wherever they
+#: happen to be, and the two must scan the same tree.
+REPO_ROOT = BACKEND_ROOT.parent
+
+#: Where the wire package's sources live, relative to ``BACKEND_ROOT``.
+WIRE_PACKAGE_TARGET = "../schemas/python/tckdb-schemas/tckdb_schemas"
+
+#: Checked by default, as paths relative to ``BACKEND_ROOT``.
 #:
 #: ``app`` because it is the deployed code. ``scripts`` because several of
 #: them write to a real database (``bulk_load_arc.py``,
 #: ``seed_scientific_demo_data.py``) and one of them says in its own comment
 #: that the cluster it connects to is ``SQL_ASCII``.
+#:
+#: ``tckdb_schemas`` because it was left out and the omission was not a
+#: judgement, it was an oversight: the wire package raises validation errors
+#: and builds the ``message=`` strings that become ``UploadWarning.message``
+#: rows. A database column and a client-facing string are exactly what this
+#: check was written for, and until now it was the one package that produced
+#: them and was never looked at. Nine violations were sitting there.
 #:
 #: ``tests`` is deliberately NOT checked. Test data is the one place where
 #: non-ASCII is the point: ``tests/schemas/test_artifact_in_schema.py``
@@ -92,8 +117,15 @@ BACKEND_ROOT = Path(__file__).resolve().parent.parent
 #: ``haséaccent`` precisely to prove the system handles them. Linting those
 #: would mean annotating the tests that prove the encoding works, in order
 #: to protect against an encoding problem. And nothing under ``tests``
-#: executes in a deployment.
-DEFAULT_TARGETS = ("app", "scripts")
+#: executes in a deployment. The same reasoning excludes the wire package's
+#: own ``tests/``, which is why the target is the package directory and not
+#: the distribution directory above it.
+DEFAULT_TARGETS = ("app", "scripts", WIRE_PACKAGE_TARGET)
+
+
+def default_target_paths() -> list[Path]:
+    """The default targets as absolute paths."""
+    return [(BACKEND_ROOT / name).resolve() for name in DEFAULT_TARGETS]
 
 ALLOW_MARKER = "# tckdb: allow-non-ascii"
 
@@ -135,10 +167,13 @@ class Finding:
     characters: str
 
     def render(self, root: Path) -> str:
-        try:
-            shown = self.path.relative_to(root)
-        except ValueError:
-            shown = self.path
+        shown: Path = self.path
+        for base in (root, REPO_ROOT):
+            try:
+                shown = self.path.relative_to(base)
+            except ValueError:
+                continue
+            break
         snippet = self.text if len(self.text) <= 80 else self.text[:77] + "..."
         return (
             f"{shown}:{self.line}: non-ASCII {self.characters!r} in a "
@@ -318,13 +353,16 @@ def check_file(path: Path) -> list[Finding]:
     return check_source(source, path)
 
 
+def walk(path: Path) -> list[Path]:
+    """The files *path* expands to: every ``*.py`` and ``*.sh`` beneath it."""
+    if path.is_dir():
+        return sorted({*path.rglob("*.py"), *path.rglob("*.sh")})
+    return [path]
+
+
 def check_path(path: Path) -> list[Finding]:
     findings: list[Finding] = []
-    if path.is_dir():
-        files = sorted({*path.rglob("*.py"), *path.rglob("*.sh")})
-    else:
-        files = [path]
-    for file in files:
+    for file in walk(path):
         findings.extend(check_file(file))
     return findings
 
@@ -334,20 +372,33 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "targets",
         nargs="*",
-        help="files or directories to check (default: app, scripts)",
+        help=(
+            "files or directories to check "
+            f"(default: {', '.join(DEFAULT_TARGETS)})"
+        ),
     )
     args = parser.parse_args(argv)
 
-    targets = [Path(t) for t in args.targets] or [
-        BACKEND_ROOT / name for name in DEFAULT_TARGETS
-    ]
+    targets = [Path(t) for t in args.targets] or default_target_paths()
 
     findings: list[Finding] = []
     for target in targets:
         if not target.exists():
             print(f"error: no such path: {target}", file=sys.stderr)
             return 2
-        findings.extend(check_path(target))
+        walked = walk(target)
+        if target.is_dir() and not walked:
+            # Guard the guard. A target that expands to nothing makes this
+            # check pass without reading a line, which is indistinguishable
+            # from a clean tree in the CI log. A mistyped or moved directory
+            # is the way a check quietly stops checking.
+            print(
+                f"error: {target} contains no *.py or *.sh to check",
+                file=sys.stderr,
+            )
+            return 2
+        for file in walked:
+            findings.extend(check_file(file))
 
     if not findings:
         return 0

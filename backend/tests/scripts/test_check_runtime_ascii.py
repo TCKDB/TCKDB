@@ -289,7 +289,7 @@ def test_shell_scripts_are_actually_collected():
 
 
 def test_the_packaged_sources_are_clean():
-    """Runs the real check over app/ and scripts/, as CI does."""
+    """Runs the real check over every default target, as CI does."""
     assert checker.main([]) == 0
 
 
@@ -304,3 +304,176 @@ def test_tests_are_out_of_scope_by_construction():
     in a deployment.
     """
     assert "tests" not in checker.DEFAULT_TARGETS
+
+
+# ---------------------------------------------------------------------------
+# What it is pointed at
+#
+# The rule above is only worth what its target list covers, and for a long
+# time that list was two directories chosen when the script was written. The
+# wire package -- which raises the validation errors a client reads and builds
+# the ``message=`` strings written to ``upload_warning.message`` -- was never
+# on it, and had nine violations at emission sites the day it was first
+# scanned. Nothing asserted the coverage, so nothing noticed.
+#
+# Everything below fails if the target list shrinks, if the wire package stops
+# resolving, or if CI stops scanning what a local run scans.
+# ---------------------------------------------------------------------------
+
+#: The trees that must stay covered. Each entry is here because losing it
+#: would lose a real emission site, not because it happens to be listed
+#: today: ``app`` is the deployed code, ``scripts`` writes to real databases,
+#: and the wire package produces the persisted warning text.
+REQUIRED_TARGETS = frozenset({"app", "scripts", checker.WIRE_PACKAGE_TARGET})
+
+WIRE_PACKAGE = (checker.BACKEND_ROOT / checker.WIRE_PACKAGE_TARGET).resolve()
+
+
+def test_the_target_list_does_not_shrink():
+    """A deleted target is a silent loss of coverage.
+
+    This is the assertion that did not exist. Removing the wire package
+    from ``DEFAULT_TARGETS`` would leave every other test in this file
+    green while the check stopped reading the package that caused
+    2026-08-04's class of failure.
+    """
+    assert REQUIRED_TARGETS <= set(checker.DEFAULT_TARGETS)
+
+
+def test_every_default_target_resolves_to_real_files():
+    """Guard the guard: a target that expands to nothing passes vacuously.
+
+    ``main`` reports zero findings for a directory it cannot read and for
+    a directory that is empty, and the two are indistinguishable in a CI
+    log. Assert the expansion instead of the exit code.
+    """
+    for target in checker.default_target_paths():
+        assert target.exists(), target
+        walked = checker.walk(target)
+        assert walked, target
+        assert any(p.suffix == ".py" for p in walked), target
+
+
+def test_the_wire_package_target_reaches_the_modules_that_emit():
+    """Named modules, not a count.
+
+    A path that resolved one directory too high (the distribution root)
+    or one too low would still expand to files and still satisfy the test
+    above. These two modules are where the nine violations were.
+    """
+    walked = set(checker.walk(WIRE_PACKAGE))
+    assert WIRE_PACKAGE / "stationary_point.py" in walked
+    assert WIRE_PACKAGE / "fragments" / "calculation.py" in walked
+
+
+def test_the_wire_package_is_covered_by_the_defaults():
+    """The modules above are reached by ``main([])``, not only directly."""
+    covered: set[Path] = set()
+    for target in checker.default_target_paths():
+        covered.update(checker.walk(target))
+    assert WIRE_PACKAGE / "stationary_point.py" in covered
+
+
+def test_the_wire_packages_own_tests_stay_out_of_scope():
+    """Same reasoning as ``backend/tests``: test data is where non-ASCII lives.
+
+    The target is the package directory, so ``tckdb-schemas/tests`` sits
+    outside it. If the target ever moved up to the distribution root this
+    would fail, which is the point.
+    """
+    wire_tests = WIRE_PACKAGE.parent / "tests"
+    assert wire_tests.is_dir(), "expected the wire package to ship tests"
+    covered: set[Path] = set()
+    for target in checker.default_target_paths():
+        covered.update(checker.walk(target))
+    assert not any(wire_tests in p.parents for p in covered)
+
+
+def test_the_wire_package_is_clean():
+    assert checker.check_path(WIRE_PACKAGE) == []
+
+
+def test_a_reintroduced_em_dash_in_a_wire_message_is_caught():
+    """The live rule against the live file, not a hand-written sample.
+
+    Reads the real ``stationary_point.py``, puts an em dash back into a
+    ``message=`` literal that had one, and checks the modified source.
+    Proves the checker fires on this package's actual shape -- deeply
+    nested ``message=(...)`` f-string concatenations inside a
+    ``StationaryPointFinding(...)`` call -- rather than on the flat
+    one-liners the parametrized cases above use.
+    """
+    path = WIRE_PACKAGE / "stationary_point.py"
+    source = path.read_text(encoding="utf-8")
+    clean = "correct chemistry -- a transition "
+    assert clean in source, "the message this mutation targets has moved"
+    assert checker.check_source(source, path) == []
+
+    mutated = source.replace(clean, "correct chemistry — a transition ")
+    found = checker.check_source(mutated, path)
+    assert len(found) == 1
+    assert found[0].characters == "—"
+
+
+def test_the_defaults_do_not_depend_on_the_current_directory(tmp_path, monkeypatch):
+    """CI runs from ``backend/``; a developer runs from anywhere.
+
+    The wire package is outside ``backend``, so it is reached by a
+    ``..`` segment. Resolved against the current directory instead of the
+    script's own location, that would point somewhere else -- or nowhere
+    -- depending on who ran it.
+    """
+    from_here = checker.default_target_paths()
+    monkeypatch.chdir(tmp_path)
+    assert checker.default_target_paths() == from_here
+    monkeypatch.chdir(checker.REPO_ROOT)
+    assert checker.default_target_paths() == from_here
+    assert all(p.is_absolute() for p in from_here)
+
+
+def test_an_empty_target_is_an_error_not_a_pass(tmp_path, capsys):
+    """A moved or mistyped directory must fail loudly.
+
+    Exit 0 on a directory with nothing in it is how a check stops
+    checking without anyone finding out.
+    """
+    (tmp_path / "notes.txt").write_text("no sources here", encoding="utf-8")
+    assert checker.main([str(tmp_path)]) == 2
+    assert "no *.py or *.sh" in capsys.readouterr().err
+
+
+def test_a_missing_target_is_an_error_not_a_pass(tmp_path, capsys):
+    assert checker.main([str(tmp_path / "gone")]) == 2
+    assert "no such path" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# CI parity
+# ---------------------------------------------------------------------------
+
+WORKFLOW = checker.REPO_ROOT / ".github" / "workflows" / "backend-ci.yml"
+STEP_NAME = "Lint (non-ASCII in runtime strings)"
+
+
+def _ascii_lint_step() -> dict:
+    import yaml
+
+    workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            if step.get("name") == STEP_NAME:
+                return step
+    raise AssertionError(f"no step named {STEP_NAME!r} in {WORKFLOW}")
+
+
+def test_ci_invokes_the_check_with_no_arguments():
+    """The target list has to live in one place.
+
+    If CI passed its own paths, a local run and a CI run would scan
+    different trees and the divergence would only show up as a green PR
+    followed by a red merge -- or, worse, the other way round.
+    """
+    step = _ascii_lint_step()
+    command = step["run"].strip()
+    assert command.endswith("scripts/check_runtime_ascii.py"), command
+    assert step["working-directory"] == "backend"
