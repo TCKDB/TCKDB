@@ -40,6 +40,20 @@ import pytest
 from tckdb_schemas.workflows import computed_reaction_upload as rx
 from tckdb_schemas.workflows import computed_species_upload as sp
 
+
+def _standalone_kinetics_model():
+    """``KineticsUploadRequest``, the standalone route's kinetics shape.
+
+    Imported inside a function because it lives backend-side, not in the
+    wire package: the standalone kinetics schema was never extracted when
+    the bundle roots were (``9fde2742``). That split is itself part of why
+    the two drifted — the models do not sit next to each other, and
+    nothing imported both until this file did.
+    """
+    from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
+
+    return KineticsUploadRequest
+
 # ---------------------------------------------------------------------------
 # The pairs
 # ---------------------------------------------------------------------------
@@ -191,26 +205,12 @@ ALLOWED_ASYMMETRIES: dict[tuple[str, str], str] = {
         "species by key; the species bundle has one species and attaches "
         "geometries to conformers directly."
     ),
-    (
-        "calculation",
-        "literature",
-    ): (
-        "Species-root only: an inline literature fragment resolved by the "
-        "workflow. The reaction root takes a literature_id instead, which "
-        "is a different contract rather than the same one spelled twice — "
-        "see the literature_id entry immediately below."
-    ),
-    (
-        "calculation",
-        "literature_id",
-    ): (
-        "Reaction-root only, and flagged rather than endorsed. This is a "
-        "database FK on an upload surface; the species root's inline "
-        "'literature' fragment is the pattern the repo's no-FK-in-uploads "
-        "rule asks for. Tracked separately — this entry records the "
-        "asymmetry so the symmetry gate does not fire on it, and does not "
-        "claim it is right."
-    ),
+    # ``literature`` / ``literature_id`` were both listed here until the
+    # reaction root's raw FK was replaced by the same inline fragment the
+    # species root always took. Both roots now spell the citation
+    # ``literature``, so there is no asymmetry left to exempt — and
+    # ``test_the_allowlist_describes_asymmetries_that_still_exist`` would
+    # fail if these entries were left behind.
 }
 
 
@@ -321,15 +321,19 @@ def test_the_statmech_pair_needs_no_exemptions():
         )
 
 
-def test_kinetics_and_transport_have_no_second_spelling():
+def test_kinetics_and_transport_have_no_second_spelling_across_the_two_roots():
     """Recorded because "cover those too" needs an answer either way.
 
     Kinetics exists only on the reaction root — a species bundle has no
     reaction to have a rate for — and transport has no bundle model on
-    either root; it is a standalone route only. Neither is a pair, so
-    neither can drift. This asserts that rather than leaving the reader
-    to infer it from MODEL_PAIRS, and it will fail the day a second
-    spelling is introduced, which is the day it would need adding above.
+    either root; it is a standalone route only.
+
+    This used to conclude "neither is a pair, so neither can drift". The
+    first half is right and the second half was wrong, and the error was
+    load-bearing: kinetics has no second spelling *across the two bundle
+    roots*, but it does have one across the **bundle and the standalone
+    route**, and that is where it drifted. See
+    :func:`test_bundle_kinetics_records_the_same_science_as_the_standalone_route`.
     """
     assert not hasattr(sp, "KineticsInBundle"), (
         "A species-root kinetics model now exists and should be added to "
@@ -343,3 +347,155 @@ def test_kinetics_and_transport_have_no_second_spelling():
             f"the {label} bundle root gained transport model(s) {transport}; "
             "if both roots now have one, add the pair to MODEL_PAIRS."
         )
+
+
+#: Scientific-content fields ``BundleKineticsIn`` lacks that
+#: ``KineticsUploadRequest`` has, each with the evidence for whether the
+#: asymmetry is deliberate. Unlike :data:`ALLOWED_ASYMMETRIES`, an entry
+#: here is **not** a claim that the gap is correct — two of the three are
+#: recorded drift. It is a claim that the gap is *known*, so that a fourth
+#: appearing is visible on the day it lands rather than months later.
+KNOWN_BUNDLE_KINETICS_GAPS: dict[str, str] = {
+    "interpretation_assignments": (
+        "DRIFT, not design. Added to KineticsUploadRequest by ee7377f5 (#66), "
+        "a commit that edited computed_reaction_upload.py in the same diff to "
+        "close the analogous transition-state evidence gap on parity grounds, "
+        "and left kinetics one-sided with no recorded reason. Closing it needs "
+        "a bundle-local-key assignment model plus persistence in "
+        "app.workflows.computed_reaction — a feature, not a contract change."
+    ),
+    "tunneling_application": (
+        "DRIFT, not design. Same commit, same omission, and the sharper half: "
+        "BundleKineticsIn carries tunneling_model, the label, so a bundle can "
+        "claim Eckart tunneling and never attach the evidence. The standalone "
+        "route cross-checks label against evidence "
+        "(validate_tunneling_declaration_agrees); the bundle has nothing to "
+        "check against."
+    ),
+    "network_kinetics_ref": (
+        "UNADDRESSED rather than decided. 2fb5c25b (#29) established that this "
+        "model carries only scalar Arrhenius fields and its workflow writes no "
+        "kinetics child tables, directing PLOG/Chebyshev to the single-reaction "
+        "endpoint. That reasoning covers child rows; network_kinetics_ref is a "
+        "nullable scalar column on kinetics itself, and BundleKineticsIn "
+        "accepts pressure_context='pressure_dependent' — the exact state the "
+        "handle names — with no way to name it."
+    ),
+}
+
+#: Fields on ``KineticsUploadRequest`` the bundle deliberately spells
+#: elsewhere or deliberately refuses. Excluded from the comparison rather
+#: than listed as gaps, because for each of these the reason is on record.
+_STANDALONE_ONLY_BY_DESIGN = frozenset(
+    {
+        # Identity. The bundle declares one reaction at its root and names
+        # participants by local key; ``direction`` is expressed by which
+        # keys land in ``reactant_keys`` vs ``product_keys``, which
+        # BundleKineticsIn's own docstring states.
+        "reaction",
+        "direction",
+        # Provenance. The reaction workflow writes ``request.literature``,
+        # ``request.analysis_software_release`` and
+        # ``request.workflow_tool_release`` onto every kinetics row it
+        # creates, so these are supplied once at the bundle root.
+        "software_release",
+        "workflow_tool_release",
+        "literature",
+        # A resolution hint for auto-resolving source SP calculations. The
+        # bundle names its source calculations by key instead, which is why
+        # ``_collect_bundle_provenance_warnings`` already passes it as
+        # NOT_APPLICABLE.
+        "energy_level_of_theory",
+        # Kinetics child tables. 2fb5c25b (#29) decided this explicitly:
+        # BundleKineticsIn "carries only scalar Arrhenius fields … and its
+        # workflow writes no kinetics child tables", and its
+        # ``validate_model_kind`` refuses the forms that would need them,
+        # directing those deposits to the single-reaction endpoint. This is
+        # the one asymmetry here that is genuinely on record as a decision.
+        "arrhenius_entries",
+        "chebyshev",
+        "falloff",
+        "plog_entries",
+        "third_body_efficiencies",
+    }
+)
+
+
+def test_bundle_kinetics_records_the_same_science_as_the_standalone_route():
+    """The comparison nothing in the tree was making.
+
+    ``BundleKineticsIn`` and ``KineticsUploadRequest`` describe the same
+    ``kinetics`` row. The bundle is the route the ARC adapter deposits
+    through, so a field the bundle lacks is missing from the *majority* of
+    deposits, not a minority.
+
+    The gate is deliberately shaped like ``ALLOWED_ASYMMETRIES`` but reads
+    the opposite way: entries in :data:`KNOWN_BUNDLE_KINETICS_GAPS` are
+    recorded gaps, most of them drift. Closing one means deleting its entry;
+    a *new* one means this test names it and someone has to decide.
+    """
+    standalone = _standalone_kinetics_model()
+    bundle_fields = set(rx.BundleKineticsIn.model_fields)
+    standalone_fields = set(standalone.model_fields)
+
+    missing = standalone_fields - bundle_fields - _STANDALONE_ONLY_BY_DESIGN
+    unexplained = sorted(missing - set(KNOWN_BUNDLE_KINETICS_GAPS))
+
+    assert not unexplained, (
+        f"{standalone.__name__} carries {len(unexplained)} scientific-content "
+        f"field(s) BundleKineticsIn does not: {unexplained}.\n"
+        "A reaction-bundle deposit therefore records less than the identical "
+        "standalone deposit, and nothing tells the depositor. Either widen "
+        "BundleKineticsIn (and persist it in app.workflows.computed_reaction), "
+        "or add the field to KNOWN_BUNDLE_KINETICS_GAPS with the git evidence "
+        "for why it belongs on only one route."
+    )
+
+
+def test_the_by_design_exclusions_still_name_real_fields():
+    """A stale exclusion is a hole that silently swallows the next gap.
+
+    ``_STANDALONE_ONLY_BY_DESIGN`` subtracts names before anything is
+    judged, so a name that no longer exists on either model — a rename, a
+    removal — would sit there forever excusing nothing, and a *new* field
+    that happened to reuse the name would be excused without anyone
+    deciding. Checked against the union so a field legitimately added to
+    the bundle later does not fail this.
+    """
+    known = set(_standalone_kinetics_model().model_fields) | set(
+        rx.BundleKineticsIn.model_fields
+    )
+    stale = sorted(_STANDALONE_ONLY_BY_DESIGN - known)
+    assert not stale, (
+        f"_STANDALONE_ONLY_BY_DESIGN excludes {stale}, which exists on neither "
+        "kinetics model. Drop the entries."
+    )
+
+
+def test_the_known_gap_list_describes_gaps_that_still_exist():
+    """A stale entry would hide a closed gap behind a "known" label."""
+    standalone = _standalone_kinetics_model()
+    bundle_fields = set(rx.BundleKineticsIn.model_fields)
+    stale = sorted(
+        name
+        for name in KNOWN_BUNDLE_KINETICS_GAPS
+        if name in bundle_fields or name not in standalone.model_fields
+    )
+    assert not stale, (
+        f"KNOWN_BUNDLE_KINETICS_GAPS still lists {stale}, which BundleKineticsIn "
+        "now has (or the standalone route no longer does). Delete the entries — "
+        "leaving them turns a closed gap into a permanent excuse."
+    )
+
+
+def test_the_bundle_can_claim_tunneling_it_cannot_evidence():
+    """Pins the concrete consequence, not just the field list.
+
+    The field-set tests above would still pass if ``tunneling_model`` were
+    also dropped from the bundle — a *consistent* model that simply says
+    less. This one asserts the specific inconsistency that makes the gap
+    worth fixing rather than worth tolerating: the label is accepted and
+    the evidence has nowhere to go.
+    """
+    assert "tunneling_model" in rx.BundleKineticsIn.model_fields
+    assert "tunneling_application" not in rx.BundleKineticsIn.model_fields

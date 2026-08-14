@@ -39,6 +39,7 @@ from tckdb_schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
+from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     evaluate_transition_state_frequency,
@@ -58,7 +59,12 @@ class CalculationIn(SchemaBase):
     :param software_release: Required software provenance reference.
     :param level_of_theory: Required level-of-theory reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
-    :param literature_id: Optional literature provenance id.
+    :param literature: Optional inline literature provenance, resolved (or
+        created) by the workflow. Replaces the former ``literature_id``,
+        which was a database primary key on an upload surface — usable only
+        by a client that had already queried this database, which a
+        depositor has not. Matches ``CalculationInBundle.literature`` on the
+        species bundle, which took the inline fragment from the start.
     :param sp_electronic_energy_hartree: SP result (if type=sp).
     :param opt_converged: Opt result (if type=opt).
     :param opt_n_steps: Opt result (if type=opt).
@@ -87,7 +93,7 @@ class CalculationIn(SchemaBase):
     software_release: SoftwareReleaseRef
     level_of_theory: LevelOfTheoryRef
     workflow_tool_release: WorkflowToolReleaseRef | None = None
-    literature_id: int | None = None
+    literature: LiteratureUploadRequest | None = None
     execution_environment: ExecutionEnvironmentManifestPayload | None = None
 
     # Optional inline results (avoids separate result upload)
@@ -263,6 +269,8 @@ def frequency_completeness_findings(
 
 def calculation_in_to_with_results_payload(
     calc_in: "CalculationIn",
+    *,
+    literature_id: int | None = None,
 ) -> CalculationWithResultsPayload:
     """Adapt a bundle-local ``CalculationIn`` to the shared upload shape.
 
@@ -272,7 +280,30 @@ def calculation_in_to_with_results_payload(
     parameter-snapshot metadata unchanged. Bundle-only fields (``key``,
     ``geometry_key``, ``artifacts``) are consumed by the workflow directly and
     are not part of the shared payload.
+
+    ``literature_id`` is passed *in* rather than read off ``calc_in``: the
+    upload now carries an inline ``literature`` fragment, and resolving it
+    to a row needs a database session, which this package deliberately
+    cannot reach. The caller resolves and hands the id down — the same
+    split ``computed_species._to_calc_with_results_payload`` has always
+    used.
+
+    A caller that supplies a ``literature`` fragment but no resolved id is
+    refused rather than quietly losing the citation. Defaulting to ``None``
+    would make "this upload cited nothing" and "the workflow forgot to
+    resolve the citation" the same value, which is the class of silent drop
+    this change exists to remove.
+
+    :raises ValueError: if ``calc_in.literature`` is set and
+        ``literature_id`` is not.
     """
+    if calc_in.literature is not None and literature_id is None:
+        raise ValueError(
+            "calculation_in_to_with_results_payload was given a calculation "
+            "carrying an inline 'literature' fragment but no resolved "
+            "literature_id. Resolve it in the workflow and pass it in; "
+            "dropping it here would discard a depositor's citation."
+        )
 
     opt_result: OptResultPayload | None = None
     freq_result: FreqResultPayload | None = None
@@ -309,7 +340,7 @@ def calculation_in_to_with_results_payload(
         software_release=calc_in.software_release,
         workflow_tool_release=calc_in.workflow_tool_release,
         level_of_theory=calc_in.level_of_theory,
-        literature_id=calc_in.literature_id,
+        literature_id=literature_id,
         execution_environment=calc_in.execution_environment,
         opt_result=opt_result,
         freq_result=freq_result,

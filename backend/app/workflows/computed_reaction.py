@@ -146,7 +146,19 @@ def _persist_calculation(
     is not yet in the key map).
     """
 
-    shared_payload = calculation_in_to_with_results_payload(calc_in)
+    # The calculation's citation arrives as an inline literature fragment
+    # (it used to arrive as a raw ``literature_id``, which only a client
+    # that had already queried this database could supply). Resolve it to a
+    # row here — the wire package has no session — and hand the id to the
+    # adapter, which refuses the pair "fragment present, id absent".
+    literature_id = (
+        resolve_or_create_literature(session, calc_in.literature).id
+        if calc_in.literature is not None
+        else None
+    )
+    shared_payload = calculation_in_to_with_results_payload(
+        calc_in, literature_id=literature_id
+    )
     calculation = resolve_and_persist_calculation_with_results(
         session,
         shared_payload,
