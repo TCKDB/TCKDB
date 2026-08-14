@@ -126,8 +126,8 @@ def create_applied_group_additivity(
     thermo = session.get(Thermo, thermo_id)
     if thermo is None:
         raise ValueError(
-            "create_applied_group_additivity: thermo_id does not reference an "
-            "existing thermo record."
+            "The thermo record this group-additivity breakdown explains does "
+            "not exist."
         )
     if thermo.scientific_origin != ScientificOriginKind.estimated:
         raise ValueError(

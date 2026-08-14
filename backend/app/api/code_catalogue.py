@@ -74,8 +74,17 @@ this file by four different routes, and no one of them is enough:
   code its blocking finding carries, and the integrity handler looks its
   code up by PostgreSQL constraint name. That is nineteen codes the scan
   is blind to, and the ``*_handle_conflict`` family was found only by the
-  observer below. For those the guard checks the *defining* module
-  instead, which is where the literal actually lives. The nineteenth,
+  observer below. Six of the nineteen have since been brought back into
+  static view: #177 widened the scan to read a ``*_code=`` argument at
+  any call, not only at a ``raise``, so the codes handed to
+  ``reconcile_id_ref`` are seen where they are written. That matters
+  because five of those six are emitted by no test — the observer's
+  record across the three gates holds 101 distinct ``(status, code)``
+  pairs and only ``level_of_theory_handle_conflict`` among them — and a
+  runtime observer can only see what the suite provokes. For the rest the
+  guard
+  checks the *defining* module instead, which is where the literal
+  actually lives. The nineteenth,
   ``freq_list_exceeds_geometry_degrees_of_freedom``, shows why that is the
   right key rather than a convenience: its literal lives in
   ``tckdb_schemas.frequency_completeness`` while the ``raise`` that
@@ -161,6 +170,16 @@ class Surface(str, Enum):
     #: rather than hidden, and never exported to a client — a fabricated
     #: code that looks real is worse than an honestly generic one, which
     #: is the finding #159 was opened for.
+    #:
+    #: **No entry uses this today.** The two that did —
+    #: ``create_applied_group_additivity`` and ``keyset_predicate`` —
+    #: were reworded in #178 so that their refusals say what went wrong
+    #: instead of naming the function it went wrong in, and a message
+    #: with no token in the code position is not an accidental prefix at
+    #: all. Cataloguing one was always the second-best fix: it stopped
+    #: the token being *promoted* (#164) while leaving a depositor to
+    #: read a function name. The value stays because the classification
+    #: is what makes recording the next one cheaper than hiding it.
     accidental_prefix = "accidental_prefix"
 
 
@@ -270,14 +289,6 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
-    ApiCode("create_applied_group_additivity", 422, Surface.accidental_prefix,
-            "backend/app/services/group_additivity_resolution.py",
-            note=(
-                "The function name, not a code. The refusal is written in "
-                "the house style, with the enclosing function as the "
-                "context prefix, so it lands in the code position and the "
-                "envelope reports it. Reachable from POST /uploads/thermo."
-            )),
     ApiCode("curation_policy_version_conflict", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
@@ -288,6 +299,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/keyset.py"),
     ApiCode("data_integrity_error", 500, Surface.generic_fallback,
             "backend/app/api/errors.py"),
+    ApiCode("database_error", 503, Surface.generic_fallback,
+            "backend/app/api/errors.py",
+            note=(
+                "The operational-error handler's fallback_code, and it is "
+                "dead: that handler always passes an explicit code "
+                "(database_unavailable, or query_timeout on SQLSTATE "
+                "57014), and error_envelope reads the fallback only when "
+                "code is falsy. Listed because the argument is written "
+                "and a future edit that stops setting code would emit it "
+                "-- an enumeration that omits a fallback nobody has "
+                "reached yet is one that goes stale silently. Found by "
+                "widening the closure scan to *_code keywords."
+            )),
     ApiCode("database_unavailable", 503, Surface.response_literal,
             "backend/app/api/errors.py"),
     ApiCode("doi_already_recorded", 422, Surface.message_prefix,
@@ -345,14 +369,6 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("irc_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
-    ApiCode("keyset_predicate", 422, Surface.accidental_prefix,
-            "backend/app/services/scientific_read/keyset.py",
-            note=(
-                "The function name, not a code, in the code position -- the "
-                "same shape as create_applied_group_additivity. Guards an "
-                "internal argument invariant, so it fires only on a backend "
-                "bug."
-            )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
     ApiCode("lowest_energy_unavailable", 422, Surface.coded_exception,

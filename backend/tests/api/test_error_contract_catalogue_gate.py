@@ -17,10 +17,19 @@ branch on them.
 So promotion now also consults :mod:`app.api.code_catalogue`, which records
 per code *by which mechanism* it reaches the body. A leading token is
 promoted only where the catalogue lists that code as
-:data:`~app.api.code_catalogue.Surface.message_prefix`. The two above are
+:data:`~app.api.code_catalogue.Surface.message_prefix`. The two above were
 catalogued as :data:`~app.api.code_catalogue.Surface.accidental_prefix` --
 the catalogue's own word for "not a code" -- so the honest record of the
-defect is what stops it reaching a client.
+defect is what stopped it reaching a client.
+
+#178 then fixed the messages themselves. Both now say what went wrong
+instead of naming the function it went wrong in, so neither token occupies
+the code position any more and neither is catalogued at all: a message with
+no leading token is not an accidental prefix, it is just a message. The two
+raises above are kept in this docstring as the shape to recognise, and the
+tests below are still provoked from the real functions -- because the gate
+is what stops the *next* one, and the next one will be written the same
+way.
 
 What this file exists to prevent
 --------------------------------
@@ -67,10 +76,29 @@ SCANNED_ROOTS = (
 )
 SKIPPED = ("/tests/", "/importers/")
 _BARE_CODE = re.compile(r"^[a-z][a-z0-9_]*_[a-z0-9_]+$")
+_CODE_POSITION = re.compile(r"^[a-z][a-z0-9_]*_[a-z0-9_]+: ")
 
 
 def _promoted(message: str) -> str:
     return validation_detail_code(message, fallback="validation_error")
+
+
+def _assert_no_token_in_the_code_position(message: str) -> None:
+    """The message must not open with ``some_token: ``.
+
+    Asserting only that a message *falls back* would be satisfied by the
+    gate alone: re-adding ``keyset_predicate: `` in front of the prose
+    would still degrade to ``validation_error``, because the token is
+    uncatalogued, and the test that was meant to hold the wording would
+    stay green. #177 is the same lesson one layer down -- a guard that
+    passes for a second reason stops guarding the first.
+    """
+    assert not _CODE_POSITION.match(message), (
+        f"the refusal opens with a token in the code position: {message!r}. "
+        "A message says what went wrong; it does not name the function it "
+        "went wrong in, and a leading token is read as a code by anyone "
+        "who has seen the read API's convention."
+    )
 
 
 def _sources() -> list[tuple[str, ast.Module]]:
@@ -170,15 +198,37 @@ class TestTheGateIsTheCatalogue:
         """
         assert len(MESSAGE_PREFIX_CODES) > 50, sorted(MESSAGE_PREFIX_CODES)
 
-    def test_it_excludes_what_the_catalogue_calls_not_a_code(self):
-        accidental = {
+    def test_it_excludes_every_code_that_arrives_some_other_way(self):
+        """Promotion is for the message-prefix surface and no other.
+
+        Written over *every* other surface rather than over
+        ``accidental_prefix`` alone, which is what it used to say. #178
+        reworded the two accidental prefixes out of existence, so that
+        set is now empty and the assertion it satisfied would have gone
+        on passing while checking nothing -- the failure shape this file
+        is otherwise careful about. The surfaces below hold 70-odd
+        entries between them, and the count says so.
+        """
+        other = {
             entry.code
             for entry in CATALOGUE
-            if entry.surface is Surface.accidental_prefix
+            if entry.surface is not Surface.message_prefix
         }
-        assert not (accidental & MESSAGE_PREFIX_CODES), sorted(
-            accidental & MESSAGE_PREFIX_CODES
-        )
+        assert len(other) > 50, sorted(other)
+        assert not (other & MESSAGE_PREFIX_CODES), sorted(other & MESSAGE_PREFIX_CODES)
+
+    def test_a_function_name_is_in_no_surface_at_all(self):
+        """The two #178 reworded are not catalogued under any surface.
+
+        Not ``accidental_prefix`` either: a message that no longer leads
+        with the token has no token in the code position, so there is
+        nothing to classify. An entry reappearing means a refusal has
+        gone back to naming the function it was raised in.
+        """
+        catalogued = {entry.code for entry in CATALOGUE}
+        for name in ("create_applied_group_additivity", "keyset_predicate"):
+            assert name not in catalogued
+            assert name not in MESSAGE_PREFIX_CODES
 
 
 class TestNoCataloguedCodeIsLost:
@@ -238,17 +288,24 @@ class TestAFunctionNameIsNotACode:
         the function that had the bug.
 
         Provoked from the real function so that rewording its message
-        cannot make this test pass for the wrong reason.
+        cannot make this test pass for the wrong reason. Two things have
+        to be true for it now: the message no longer leads with the
+        function's name (#178), *and* a leading token would not be
+        promoted even if it did (#164). Either alone would leave the
+        other free to regress.
         """
         with pytest.raises(ValueError) as raised:
             keyset_predicate([], [])
         message = str(raised.value)
         assert _promoted(message) == "validation_error"
+        _assert_no_token_in_the_code_position(message)
 
     def test_the_length_guard_is_the_same_shape(self):
         with pytest.raises(ValueError) as raised:
             keyset_predicate([(object(), "asc")], [1, 2])
-        assert _promoted(str(raised.value)) == "validation_error"
+        message = str(raised.value)
+        assert _promoted(message) == "validation_error"
+        _assert_no_token_in_the_code_position(message)
 
     def test_an_uncatalogued_token_in_the_code_position_is_not_promoted(self):
         """The general rule, on a token no catalogue entry can ever claim."""

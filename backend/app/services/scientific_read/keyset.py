@@ -211,11 +211,13 @@ def keyset_predicate(
     """
     if len(keys) != len(last_values):
         raise ValueError(
-            "keyset_predicate: keys and last_values must be the same length; "
-            f"got {len(keys)} keys and {len(last_values)} values."
+            "The sort keys and the previous page's final row must be the "
+            f"same length; got {len(keys)} keys and {len(last_values)} values."
         )
     if not keys:
-        raise ValueError("keyset_predicate: at least one sort key is required.")
+        raise ValueError(
+            "Keyset pagination needs at least one sort key to page from."
+        )
 
     branches = []
     for index, (column, direction) in enumerate(keys):
