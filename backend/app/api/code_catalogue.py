@@ -72,10 +72,15 @@ this file by four different routes, and no one of them is enough:
   and ``scientific_read.handles.reconcile_id_ref`` both take their code as
   a *parameter*, ``tckdb_schemas.stationary_point`` raises with whichever
   code its blocking finding carries, and the integrity handler looks its
-  code up by PostgreSQL constraint name. That is eighteen codes the scan
+  code up by PostgreSQL constraint name. That is nineteen codes the scan
   is blind to, and the ``*_handle_conflict`` family was found only by the
   observer below. For those the guard checks the *defining* module
-  instead, which is where the literal actually lives.
+  instead, which is where the literal actually lives. The nineteenth,
+  ``freq_list_exceeds_geometry_degrees_of_freedom``, shows why that is the
+  right key rather than a convenience: its literal lives in
+  ``tckdb_schemas.frequency_completeness`` while the ``raise`` that
+  carries it lives in ``stationary_point``, so no scan of raise sites
+  could attribute it to the module a reader needs to open.
 * **A handler, a middleware or a route writes the body itself** and names
   the code in a literal there — twenty-one of these, none of them at a
   ``raise``. They are found by reading the small number of places that
@@ -297,6 +302,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/export.py"),
     ApiCode("export_seed_unresolved", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/export.py"),
+    ApiCode("freq_list_exceeds_geometry_degrees_of_freedom", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/frequency_completeness.py",
+            note=(
+                "One of two codes that module reports, and the only one that "
+                "refuses. Its sibling freq_list_incomplete_for_geometry is an "
+                "UploadWarning on an accepted 201 and is deliberately absent "
+                "from this catalogue, which enumerates error bodies only. "
+                "Minted from a variable: raise_for_blocking_findings reports "
+                "whichever code its blocking finding carries, so the scan "
+                "cannot see it and the origin is the defining module."
+            )),
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
     ApiCode("geometry_too_large", 422, Surface.message_prefix,

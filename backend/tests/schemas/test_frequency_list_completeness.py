@@ -14,6 +14,7 @@ request models, not only the one that happened to get a demonstration.
 from __future__ import annotations
 
 import pytest
+from pydantic import ValidationError
 from tckdb_schemas.frequency_completeness import (
     W_FREQ_LIST_EXCEEDS_GEOMETRY,
     W_FREQ_LIST_INCOMPLETE,
@@ -93,7 +94,52 @@ class TestTheJudgement:
     def test_one_past_the_ceiling_is_reported_under_a_different_code(self):
         findings = evaluate_frequency_list_completeness(10, 3, location="x")
         assert [f.code for f in findings] == [W_FREQ_LIST_EXCEEDS_GEOMETRY]
-        assert findings[0].tier is ValidationTier.warn
+
+    def test_one_past_the_ceiling_blocks_where_one_short_of_the_floor_warns(
+        self,
+    ):
+        """The asymmetry, asserted as one fact rather than two.
+
+        Written as a single test because the two tiers are only
+        defensible together: the floor cannot distinguish a filtered list
+        from a genuinely shorter one and ``modes = null`` is accepted, so
+        blocking it would pay a depositor to delete the list; nothing
+        filters modes *in*, so neither argument reaches the ceiling. A
+        change that promoted or demoted one of them alone should fail
+        here, which two separate assertions in two separate tests would
+        let through one at a time.
+        """
+        over = evaluate_frequency_list_completeness(10, 3, location="x")
+        under = evaluate_frequency_list_completeness(2, 3, location="x")
+        assert over[0].tier is ValidationTier.block
+        assert under[0].tier is ValidationTier.warn
+        # The structural flag keeps an *accepted* record out of default
+        # queries and bulk exports. A refused payload leaves no record to
+        # keep out of anything, so the blocking finding carries none --
+        # the same as every other blocking finding in ``stationary_point``.
+        assert over[0].structural_flag is False
+        assert under[0].structural_flag is True
+
+    def test_the_refusal_says_why_it_is_a_refusal(self):
+        """The message has to carry the argument, not only the arithmetic.
+
+        A depositor who reads "cannot produce that many modes" and
+        nothing else will look for the switch that turns the rule off.
+        The sentence names the reason there is none: filtering makes a
+        spectrum shorter, never longer.
+        """
+        message = evaluate_frequency_list_completeness(10, 3, location="x")[
+            0
+        ].message
+        assert "carries 10 modes" in message
+        assert "only 9 degrees of freedom" in message
+        assert "shorter, never longer" in message
+        assert message.isascii(), (
+            "a message that reaches a response body and a log must be "
+            "ASCII; an em dash in one rolled back a whole upload against a "
+            "SQL_ASCII database on 2026-08-04 (see "
+            "backend/scripts/check_runtime_ascii.py)"
+        )
 
     def test_the_location_is_used_verbatim(self):
         findings = evaluate_frequency_list_completeness(
@@ -333,6 +379,22 @@ _TRUNCATED = [3756.0]
 _TS_COMPLETE = [-1300.0, 500.0, 900.0, 1200.0, 1500.0, 3000.0]
 _TS_TRUNCATED = [-1300.0]
 
+#: Water, ``3N = 9``: the whole mass-weighted Hessian spectrum, the six
+#: near-zero rigid-body eigenvalues ADR 0012 asks for included. Sits
+#: exactly on the ceiling and must be accepted.
+_AT_CEILING = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 1595.0, 3657.0, 3756.0]
+#: One past it, which no harmonic analysis of three atoms can produce.
+_OVERLONG = [*_AT_CEILING, 4000.0]
+
+#: The same pair for the four-atom saddle point (``3N = 12``). The first
+#: entry stays imaginary so ``freq_n_imag_disagrees_with_modes`` and the
+#: reaction-coordinate contract are both satisfied and the completeness
+#: bound is the only rule in play.
+_TS_AT_CEILING = [
+    -1300.0, 0.1, 0.2, 0.3, 0.4, 0.5, 500.0, 900.0, 1200.0, 1500.0, 3000.0, 3100.0
+]
+_TS_OVERLONG = [*_TS_AT_CEILING, 3200.0]
+
 
 class TestEveryPublishedRequestModelAsksTheQuestion:
     """One parametrised proof per published upload request body.
@@ -370,6 +432,69 @@ class TestEveryPublishedRequestModelAsksTheQuestion:
             for f in build(truncated).stationary_point_findings()
             if f.code == W_FREQ_LIST_INCOMPLETE
         ] == [W_FREQ_LIST_INCOMPLETE]
+
+    @pytest.mark.parametrize(
+        ("build", "overlong"),
+        [
+            (_conformer_request, _OVERLONG),
+            (_computed_species_request, _OVERLONG),
+            (_transition_state_request, _TS_OVERLONG),
+            (_computed_reaction_request, _OVERLONG),
+        ],
+        ids=[
+            "conformers",
+            "computed-species",
+            "transition-states",
+            "computed-reaction",
+        ],
+    )
+    def test_a_list_past_the_ceiling_refuses_the_request(self, build, overlong):
+        """Every published model refuses, not merely reports.
+
+        The parametrisation above proves each model *collects* the
+        finding. That is not the same claim once the ceiling blocks: a
+        model could collect findings and never call
+        ``raise_for_blocking_findings``, in which case the ceiling would
+        be reported to the route as a warning-shaped finding that
+        ``stationary_point_warnings`` silently drops -- a refusal that
+        refuses nothing, and invisible from either side on its own. So
+        each seam is asserted at the raise.
+        """
+        with pytest.raises(ValidationError) as exc:
+            build(overlong)
+        assert W_FREQ_LIST_EXCEEDS_GEOMETRY in str(exc.value)
+
+    @pytest.mark.parametrize(
+        ("build", "at_ceiling"),
+        [
+            (_conformer_request, _AT_CEILING),
+            (_computed_species_request, _AT_CEILING),
+            (_transition_state_request, _TS_AT_CEILING),
+            (_computed_reaction_request, _AT_CEILING),
+        ],
+        ids=[
+            "conformers",
+            "computed-species",
+            "transition-states",
+            "computed-reaction",
+        ],
+    )
+    def test_a_list_exactly_at_the_ceiling_is_accepted_by_every_model(
+        self, build, at_ceiling
+    ):
+        """``3N`` exactly, through each seam, accepted and unflagged.
+
+        The complement of the test above, and it is what keeps the
+        refusal from being one mode too eager on any one seam. ADR 0012
+        asks for the six translation/rotation eigenvalues alongside the
+        spectrum, so this list -- the whole mass-weighted Hessian
+        spectrum -- is the most complete record it describes.
+        """
+        assert [
+            f.code
+            for f in build(at_ceiling).stationary_point_findings()
+            if f.code in {W_FREQ_LIST_EXCEEDS_GEOMETRY, W_FREQ_LIST_INCOMPLETE}
+        ] == []
 
 
 # ---------------------------------------------------------------------------
@@ -443,6 +568,21 @@ class TestTheBundleTransitionStateSeams:
             for f in build(_TS_TRUNCATED).stationary_point_findings()
             if f.code == W_FREQ_LIST_INCOMPLETE
         ] == [W_FREQ_LIST_INCOMPLETE]
+
+    @pytest.mark.parametrize(
+        "build",
+        [_computed_reaction_ts, _network_pdep_ts],
+        ids=["computed-reaction-ts", "network-pdep-ts"],
+    )
+    def test_the_ceiling_refuses_and_the_ceiling_itself_does_not(self, build):
+        with pytest.raises(ValidationError) as exc:
+            build(_TS_OVERLONG)
+        assert W_FREQ_LIST_EXCEEDS_GEOMETRY in str(exc.value)
+        assert [
+            f.code
+            for f in build(_TS_AT_CEILING).stationary_point_findings()
+            if f.code in {W_FREQ_LIST_EXCEEDS_GEOMETRY, W_FREQ_LIST_INCOMPLETE}
+        ] == []
 
 
 def _network_pdep_species(frequencies: list[float]):
@@ -551,6 +691,21 @@ class TestTheProductUploadSeam:
             if f.code == W_FREQ_LIST_INCOMPLETE
         ] == [W_FREQ_LIST_INCOMPLETE]
 
+    @pytest.mark.parametrize(
+        "build",
+        [_statmech_request, _thermo_request, _transport_request],
+        ids=["statmech", "thermo", "transport"],
+    )
+    def test_the_ceiling_refuses_and_the_ceiling_itself_does_not(self, build):
+        with pytest.raises(ValidationError) as exc:
+            build(_OVERLONG)
+        assert W_FREQ_LIST_EXCEEDS_GEOMETRY in str(exc.value)
+        assert [
+            f.code
+            for f in build(_AT_CEILING).stationary_point_findings()
+            if f.code in {W_FREQ_LIST_EXCEEDS_GEOMETRY, W_FREQ_LIST_INCOMPLETE}
+        ] == []
+
     def test_a_calculation_naming_no_geometry_is_not_judged(self):
         """No geometry, no question — and no false alarm either."""
         from app.schemas.workflows.statmech_upload import StatmechUploadRequest
@@ -588,3 +743,13 @@ class TestTheNetworkWellSeam:
             for f in _network_pdep_species(_TRUNCATED).stationary_point_findings()
             if f.code == W_FREQ_LIST_INCOMPLETE
         ] == [W_FREQ_LIST_INCOMPLETE]
+
+    def test_the_ceiling_refuses_and_the_ceiling_itself_does_not(self):
+        with pytest.raises(ValidationError) as exc:
+            _network_pdep_species(_OVERLONG)
+        assert W_FREQ_LIST_EXCEEDS_GEOMETRY in str(exc.value)
+        assert [
+            f.code
+            for f in _network_pdep_species(_AT_CEILING).stationary_point_findings()
+            if f.code in {W_FREQ_LIST_EXCEEDS_GEOMETRY, W_FREQ_LIST_INCOMPLETE}
+        ] == []

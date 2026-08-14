@@ -290,9 +290,30 @@ class TestVdwComplexImaginaryModeWarns:
         ``test_vdw_complex_with_higher_order_saddle_is_accepted`` is
         accepted with its list attached too, and warns for the same
         reason it always did.
+
+        **The geometry is widened to two atoms here, and it has to be.**
+        Every other test in this class runs on the one-hydrogen-atom
+        fixture, which was fine while nothing read the geometry — but a
+        single atom has ``3N = 3`` degrees of freedom in total and this
+        test deposits *four* frequencies, a combination no harmonic
+        analysis produces and
+        ``freq_list_exceeds_geometry_degrees_of_freedom`` now refuses.
+        Two atoms have six, which hold the list. The same fixture defect
+        was found and fixed once already, on ``_TS_XYZ`` in
+        ``tests/schemas/test_stationary_point_validation_tiers.py``; this
+        copy survived because the bound was reported as a warning nobody
+        asserted on, and the promotion to a refusal is what surfaced it.
+        The property under test is untouched: three declared imaginary
+        modes, agreeing with ``n_imag``, on a kind for which several
+        imaginary modes are an expectation.
         """
         payload = _hydrogen_conformer_payload(label="vdw-saddle-listed")
+        payload["species_entry"]["smiles"] = "[H][H]"
+        payload["species_entry"]["multiplicity"] = 1
         payload["species_entry"]["species_entry_kind"] = "vdw_complex"
+        payload["geometry"]["xyz_text"] = (
+            "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.741"
+        )
         payload["additional_calculations"] = [
             _freq_calc(n_imag=3, frequencies=[-22.0, -14.0, -9.0, 1600.0])
         ]

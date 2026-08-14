@@ -24,6 +24,57 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.30.0 — **BREAKING**: a frequency list longer than `3N` is refused, not flagged
+
+**This narrows the set of payloads that validate.** A payload accepted by
+0.29.0 with a `freq_list_exceeds_geometry_degrees_of_freedom` warning is
+refused by 0.30.0 with a 422 naming that same code. Nothing is added,
+renamed or removed, and every *other* 0.29.0 payload validates unchanged
+— but a rule that moves from warn to block is a breaking wire change and
+is labelled one, whatever the shape of the diff.
+
+| | 0.29.0 | 0.30.0 |
+|---|---|---|
+| `n_modes > 3N` | 201, `UploadWarning` with `structural_flag` | **422**, `code = freq_list_exceeds_geometry_degrees_of_freedom` |
+| `n_modes == 3N` | 201, silent | 201, silent (unchanged) |
+| `n_modes < 3N − 6` | 201, `UploadWarning` | 201, `UploadWarning` (unchanged) |
+| `modes` omitted | 201, silent | 201, silent (unchanged) |
+
+**Who is affected.** Only a deposit whose frequency list is longer than
+the total number of Cartesian degrees of freedom of the geometry it is
+attached to. The in-repo corpora were re-measured against this bound
+specifically — 57 ARC statmech records and the 4 conformers of the
+hydrazine pressure-dependent network — and **nothing is within six modes
+of the ceiling**: the closest record sits at `3N − 6`, and the 13 records
+that do violate a bound violate the *floor*, which still warns. No
+existing deposit changes verdict.
+
+**Why this one may block when its sibling may not.** `3N` is the
+dimension of the nuclear coordinate space, so it is the total number of
+eigenvalues the mass-weighted Hessian of an `N`-atom geometry has — every
+Cartesian degree of freedom, the six rigid-body modes
+[ADR 0012](https://github.com/TCKDB/TCKDB/blob/main/docs/adr/0012-imaginary-modes-are-judged-by-magnitude-not-counted.md)
+asks a record to carry included. A longer list is not a short spectrum;
+it is not a spectrum of that geometry under any harmonic treatment, grid,
+coordinate system or level of theory, so no protocol takes part and no
+correct deposit is refused. Both arguments that keep the *floor*
+advisory fail here: every mechanism that makes a short list honest — a
+partial Hessian, a frozen-atom or ONIOM region, a lumped participant —
+*removes* modes, and nothing filters modes in; and deleting an over-long
+list to evade the refusal loses a spectrum the check has already found is
+not this geometry's, which is the repair rather than the evasion.
+`freq_list_incomplete_for_geometry` is unchanged and stays a warning.
+
+The tier now follows a scientific-check register entry
+(`CHECK_FREQ_LIST_WITHIN_GEOMETRY_DEGREES_OF_FREEDOM`, ADR 0012) rather
+than an implementation, which is what 0.29.0 said the promotion was
+waiting for. `RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM`
+is exported by `tckdb-client` 0.38.0.
+
+**Migrating:** attach the calculation to the geometry it actually ran on,
+or deposit the geometry it ran on. If the payload was relying on the
+warning, the fix is the same fix it was advising.
+
 ### 0.29.0 — a frequency list is measured against the geometry it was computed on
 
 **Not breaking.** No field is added, renamed or removed, and **every
