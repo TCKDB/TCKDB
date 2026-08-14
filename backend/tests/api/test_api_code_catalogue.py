@@ -228,10 +228,10 @@ def _code_positions(
             # ``code=`` at a raise was already visible. ``conflict_code=``
             # was not, because ``reconcile_id_ref`` is *called*, not
             # raised -- so the six ``*_handle_conflict`` codes were
-            # invisible to every static check and were found by the
-            # runtime observer alone. Only one of the six is emitted by
-            # the suite, so being seen here is the only coverage the
-            # other five will ever get.
+            # invisible to this scan and were found by the runtime
+            # observer alone. Only one of the six is emitted anywhere in
+            # the three gates, so the observer cannot be what covers the
+            # other five.
             #
             # A *qualified* ``*_code=`` only, away from a raise. Bare
             # ``code=`` is also how ``UploadWarning``, the dry run's
@@ -368,7 +368,8 @@ def test_every_raise_site_code_is_catalogued() -> None:
     """
     scanned = _scan_code_sites()
     assert len(scanned) > 80, (
-        f"the scan found only {len(scanned)} codes at raise sites, which is "
+        f"the scan found only {len(scanned)} codes at raise sites and code "
+        "arguments, which is "
         "far fewer than this backend has. The scan is broken, and a broken "
         "scan passes this test by finding nothing."
     )
@@ -390,7 +391,7 @@ def test_the_origin_detector_can_say_no() -> None:
     exercised directly, on the spellings it must accept and the
     near-misses it must reject.
 
-    The fourth rejection is the one this test was reopened for. The
+    The ``__all__`` rejection is the one this test was reopened for. The
     regex this detector replaced answered *yes* for a module that merely
     exports a function of that name, so ``keyset_predicate`` was
     "defined" by ``__all__`` -- and #164 reworded its refusal with the

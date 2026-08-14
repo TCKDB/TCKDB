@@ -120,8 +120,9 @@ def create_applied_group_additivity(
     :raises ValueError: if ``thermo_id`` does not reference a thermo record
         whose ``scientific_origin`` is ``estimated``. The upload schema
         already enforces this, but the guard also protects future
-        programmatic (non-upload) callers. The message names the field, not
-        the row id (no DB id leakage).
+        programmatic (non-upload) callers. Neither message carries a row id
+        (no DB id leakage), and neither opens with this function's name --
+        a refusal says what went wrong, not where.
     """
     thermo = session.get(Thermo, thermo_id)
     if thermo is None:
