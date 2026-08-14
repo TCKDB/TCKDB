@@ -85,7 +85,8 @@ list is a second artifact to keep in step and that forgetting to register
 a new code would silently degrade it to ``validation_error`` — the same
 failure class the narrowing existed to fix. That objection was correct
 against a *bare* list. It is answered by a catalogued one, because
-forgetting is caught at test time by three independent nets:
+forgetting is caught at test time by two static scans that between them
+cover every shape a message-prefix code is written in:
 
 * ``backend/tests/api/test_api_code_catalogue.py::test_every_raise_site_code_is_catalogued``
   statically scans every ``raise`` in ``backend/app`` and
@@ -95,23 +96,36 @@ forgetting is caught at test time by three independent nets:
   *not* see two shapes — a code interpolated into the code position
   (``f"{PREFIX}: …"``) and a message bound to a local before being raised —
   which is why it is not the only net.
-* The runtime observer (``backend/tests/error_code_observer.py``) fails the
-  test that *emits* an uncatalogued code, and it is exactly those two
-  shapes it covers: the six ``*_handle_conflict`` codes are interpolated
-  from a ``conflict_code`` parameter, and they were found by the observer
-  and by nothing else.
 * ``backend/tests/api/test_error_contract_catalogue_gate.py`` pins this
   module's dependency on the catalogue, so the gate cannot be quietly
-  widened back to "any leading token" or narrowed to nothing.
+  widened back to "any leading token" or narrowed to nothing — and it
+  carries a second static scan for the first of those two shapes: find the
+  helpers that raise a *parameter* in the code position, then require every
+  literal handed to that parameter to be catalogued. ``reconcile_id_ref``
+  is the one such helper and the six ``*_handle_conflict`` codes are its
+  arguments.
 
-The residual exposure is therefore a code emitted only in production, never
-in any test, *and* written in a shape the static scan cannot read. A census
-of every string literal in both trees beginning with a ``token: `` prefix
-found 73 such tokens: 66 catalogued as ``message_prefix``, 5 logger format
+That second scan is not belt and braces; it replaces a net this change
+removes. The runtime observer in ``backend/tests/error_code_observer.py``
+fails the test that *emits* an uncatalogued code, and until now that was
+the only thing covering an interpolated code — it is how the six
+``*_handle_conflict`` codes were found. But a gated promotion never puts an
+unknown token in ``code`` at all, so the body the observer inspects is a
+clean ``validation_error`` and it has nothing to see. Measured, not
+reasoned about: renaming ``conflict_code="level_of_theory_handle_conflict"``
+leaves the observer green after this change and made it red before. The
+observer still covers every other surface; for this one, the scan above is
+the replacement.
+
+The residual exposure is therefore the one shape neither scan reads: a
+message bound to a local before being raised (``message = "code: …"; raise
+ValueError(message)``). No such site exists — a census of every string
+literal in both trees beginning with a ``token: `` prefix found 73 tokens,
+of which 66 are catalogued as ``message_prefix``, 5 are logger format
 strings that reach no response body (``geometry_validation``, ``manifest``,
-``readyz``, ``startup``, ``status``), and the 2 accidental prefixes above.
-So the set of error-reachable prefixes the catalogue does not cover is
-presently empty — measured, and re-measurable, rather than asserted.
+``readyz``, ``startup``, ``status``), and 2 are the accidental prefixes
+above. So the set of error-reachable prefixes the catalogue does not cover
+is presently empty — measured, and re-measurable, rather than asserted.
 """
 
 from __future__ import annotations

@@ -46,9 +46,13 @@ while proving nothing.
 
 from __future__ import annotations
 
+import ast
+import re
+from pathlib import Path
+
 import pytest
 
-from app.api.code_catalogue import CATALOGUE, Surface
+from app.api.code_catalogue import CATALOGUE, Surface, catalogued_codes
 from app.api.error_contract import (
     MESSAGE_PREFIX_CODES,
     detail_code,
@@ -56,9 +60,94 @@ from app.api.error_contract import (
 )
 from app.services.scientific_read.keyset import keyset_predicate
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+SCANNED_ROOTS = (
+    REPO_ROOT / "backend" / "app",
+    REPO_ROOT / "schemas" / "python" / "tckdb-schemas" / "tckdb_schemas",
+)
+SKIPPED = ("/tests/", "/importers/")
+_BARE_CODE = re.compile(r"^[a-z][a-z0-9_]*_[a-z0-9_]+$")
+
 
 def _promoted(message: str) -> str:
     return validation_detail_code(message, fallback="validation_error")
+
+
+def _sources() -> list[tuple[str, ast.Module]]:
+    parsed: list[tuple[str, ast.Module]] = []
+    for root in SCANNED_ROOTS:
+        for path in sorted(root.rglob("*.py")):
+            if any(skip in str(path) for skip in SKIPPED):
+                continue
+            parsed.append(
+                (str(path.relative_to(REPO_ROOT)), ast.parse(path.read_text()))
+            )
+    return parsed
+
+
+def _helpers_that_raise_a_parameter_as_the_code(
+    sources: list[tuple[str, ast.Module]],
+) -> dict[str, str]:
+    """``function name -> parameter`` for ``raise X(f"{param}: ...")``.
+
+    The shape the catalogue's raise-site scan cannot read, because the code
+    is not a literal anywhere near the ``raise``.
+    """
+    helpers: dict[str, str] = {}
+    for _path, tree in sources:
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            parameters = {
+                argument.arg
+                for argument in [
+                    *node.args.args,
+                    *node.args.kwonlyargs,
+                    *node.args.posonlyargs,
+                ]
+            }
+            for inner in ast.walk(node):
+                if not isinstance(inner, ast.Raise) or not isinstance(
+                    inner.exc, ast.Call
+                ):
+                    continue
+                for argument in inner.exc.args:
+                    if not isinstance(argument, ast.JoinedStr) or len(
+                        argument.values
+                    ) < 2:
+                        continue
+                    head, following = argument.values[0], argument.values[1]
+                    if (
+                        isinstance(head, ast.FormattedValue)
+                        and isinstance(head.value, ast.Name)
+                        and head.value.id in parameters
+                        and isinstance(following, ast.Constant)
+                        and isinstance(following.value, str)
+                        and following.value.startswith(": ")
+                    ):
+                        helpers[node.name] = head.value.id
+    return helpers
+
+
+def _codes_passed_to(helpers: dict[str, str]) -> dict[str, str]:
+    """``code -> call site`` for every literal handed to such a parameter."""
+    found: dict[str, str] = {}
+    for path, tree in _sources():
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+            parameter = helpers.get(name or "")
+            if parameter is None:
+                continue
+            for keyword in node.keywords:
+                if keyword.arg != parameter:
+                    continue
+                value = keyword.value
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    if _BARE_CODE.fullmatch(value.value):
+                        found.setdefault(value.value, path)
+    return found
 
 
 class TestTheGateIsTheCatalogue:
@@ -95,15 +184,30 @@ class TestTheGateIsTheCatalogue:
 class TestNoCataloguedCodeIsLost:
     """The regression that matters: promotion must keep every real code."""
 
-    @pytest.mark.parametrize("code", sorted(MESSAGE_PREFIX_CODES))
-    def test_every_catalogued_message_prefix_code_is_still_promoted(self, code):
-        """One case per code, so a loss names the code that was lost.
+    def test_every_catalogued_message_prefix_code_is_still_promoted(self):
+        """Written as a loop, not a ``parametrize``, and that is a finding.
 
-        The prose deliberately contains no second ``token: ``, because a
-        message carrying two tokens has always fallen back and this is not
-        the test for that.
+        Parametrising over ``MESSAGE_PREFIX_CODES`` reads better and names
+        the lost code in the test id -- but pytest turns an empty parameter
+        set into a *skip*, so the mutation that empties the derivation
+        (measured: ``frozenset()``) made the one test that checks nothing is
+        lost report ``1 skipped`` instead of failing. A vacuous pass dressed
+        as a skip is the exact shape this repository keeps finding, so the
+        loop form is used and the count is asserted.
+
+        The prose deliberately carries no second ``token: ``: a message with
+        two tokens has always fallen back, and that is a different test.
         """
-        assert _promoted(f"{code}: the request was refused.") == code
+        lost = [
+            code
+            for code in sorted(MESSAGE_PREFIX_CODES)
+            if _promoted(f"{code}: the request was refused.") != code
+        ]
+        assert not lost, f"these codes stopped being promoted: {lost}"
+        assert len(MESSAGE_PREFIX_CODES) > 50, (
+            f"only {len(MESSAGE_PREFIX_CODES)} codes were checked, so this "
+            "test passed without exercising the read API's code surface"
+        )
 
     def test_a_code_still_survives_pydantic_wrapping_its_sentence(self):
         """The framework-wrapper path is gated the same way, not bypassed."""
@@ -160,6 +264,71 @@ class TestAFunctionNameIsNotACode:
                 "calculation owned by a different species entry."
             )
             == "validation_error"
+        )
+
+
+class TestTheShapeTheRaiseSiteScanCannotRead:
+    """The net this change would otherwise have removed.
+
+    Before this change, an uncatalogued code in the code position was
+    *promoted*, so the runtime observer saw it in the body and failed the
+    test that produced it. That was the only net covering a code
+    interpolated into the code position from a parameter, because the
+    catalogue's static scan reads literals at ``raise`` sites and this shape
+    has no literal there.
+
+    Gating promotion closes that net: the token now degrades to
+    ``validation_error``, the body carries no unknown code, and the observer
+    has nothing to see. Measured, not reasoned about -- renaming
+    ``conflict_code="level_of_theory_handle_conflict"`` to ``..._clash``
+    leaves both the raise-site scan and the observer green, where before
+    this change the observer failed the test that emitted it.
+
+    So the net is restored here, statically and in the same shape: find the
+    helpers that raise a *parameter* as the code, then require every literal
+    handed to that parameter to be catalogued. ``reconcile_id_ref`` is the
+    one such helper today and the six ``*_handle_conflict`` codes are its
+    arguments; five of the six are never emitted by any test, so the
+    observer could not have covered them either.
+    """
+
+    def test_the_scan_finds_the_helper_it_is_written_for(self):
+        """An empty scan would make the next assertion prove nothing."""
+        helpers = _helpers_that_raise_a_parameter_as_the_code(_sources())
+        assert "reconcile_id_ref" in helpers, sorted(helpers)
+        assert helpers["reconcile_id_ref"] == "conflict_code"
+
+    def test_every_code_minted_from_a_parameter_is_catalogued(self):
+        """Otherwise the gate would silently degrade a real code.
+
+        This is the failure #159 refused to risk. It is checked rather than
+        argued about, and the check names what it saw.
+        """
+        helpers = _helpers_that_raise_a_parameter_as_the_code(_sources())
+        codes = _codes_passed_to(helpers)
+        assert len(codes) >= 6, f"the scan found only {sorted(codes)}"
+        known = catalogued_codes()
+        missing = {code: where for code, where in codes.items() if code not in known}
+        assert not missing, (
+            "these codes reach the code position but no catalogue entry "
+            f"claims them, so promotion will drop them: {missing}"
+        )
+
+    def test_they_are_catalogued_as_arriving_by_this_mechanism(self):
+        """Catalogued is not enough -- the surface has to be right too.
+
+        A code listed under any other surface would still be dropped by the
+        gate, so the containment that matters is against the promotable set,
+        not against the catalogue as a whole.
+        """
+        helpers = _helpers_that_raise_a_parameter_as_the_code(_sources())
+        codes = _codes_passed_to(helpers)
+        assert len(codes) >= 6, f"the scan found only {sorted(codes)}"
+        not_promotable = sorted(set(codes) - MESSAGE_PREFIX_CODES)
+        assert not not_promotable, (
+            "these codes are written in the code position but are not "
+            f"catalogued as message_prefix, so they will not be promoted: "
+            f"{not_promotable}"
         )
 
 
