@@ -270,13 +270,14 @@ def normalize_reaction(
         out.has_explicit_reverse = True
         out.warnings.append(
             f"Explicit REV/ reverse-rate on reaction (line {rxn.line_no}) "
-            "dropped; TCKDB has no reverse-linkage field yet (spec §6.7)."
+            "dropped; TCKDB has no reverse-linkage field yet "
+            "(spec section 6.7)."
         )
 
     for aux in rxn.unsupported_aux:
         out.warnings.append(
             f"Unsupported aux construct on reaction (line {rxn.line_no}): "
-            f"{aux!r} — skipped (spec §2 out-of-scope)."
+            f"{aux!r} -- skipped (spec section 2 out-of-scope)."
         )
 
     return out

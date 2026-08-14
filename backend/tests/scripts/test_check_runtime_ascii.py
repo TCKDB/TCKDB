@@ -457,7 +457,11 @@ def test_a_green_run_says_what_it_read(capsys):
     """
     assert checker.main([]) == 0
     lines = capsys.readouterr().out.splitlines()
-    assert len(lines) == len(checker.DEFAULT_TARGETS)
+    # One line per target, and never fewer lines than there are trees that
+    # must stay covered. The first half alone would track a shrinking target
+    # list instead of catching it: delete a target and both sides move
+    # together. ``REQUIRED_TREES`` is a list of literals, so it cannot move.
+    assert len(lines) == len(checker.DEFAULT_TARGETS) >= len(REQUIRED_TREES)
     assert any(
         line.startswith("checked ")
         and checker.WIRE_PACKAGE_TARGET.removeprefix("../") in line
@@ -496,3 +500,342 @@ def test_ci_invokes_the_check_with_no_arguments():
     command = step["run"].strip()
     assert command.endswith("scripts/check_runtime_ascii.py"), command
     assert step["working-directory"] == "backend"
+    lines = [line.strip() for line in command.splitlines() if line.strip()]
+    for line in lines:
+        assert line.endswith(
+            ("check_runtime_ascii.py", "check_runtime_ascii.py --audit")
+        ), line
+
+
+def test_ci_prints_the_coverage_account():
+    """The gate has to say what it is *not* scanning, in the log.
+
+    The summary line added in #166 made an empty scan visible. ``--audit``
+    is the same idea one level up: it makes an unscanned *tree* visible,
+    which is the state all five of the 2026-08 encoding misses were in.
+    A gate that only runs the scan reports coverage it already has.
+    """
+    command = _ascii_lint_step()["run"]
+    assert "check_runtime_ascii.py --audit" in command, command
+
+
+# ---------------------------------------------------------------------------
+# The trees that ship to a contributor
+#
+# Same defect as the wire package, one layer further out: the Python a
+# contributor installs -- ``tckdb_client``, the CHEMKIN adapter, the MCP
+# integration -- was never on the target list, and the client builders and the
+# adapter had ten violations between them the day they were first scanned.
+#
+# Every path below is written out as a literal on purpose. Asserting
+# ``checker.CLIENT_PACKAGE_TARGET in checker.DEFAULT_TARGETS`` would pass
+# unchanged if that constant were repointed at the wrong directory: the test
+# would follow the mutation instead of catching it. A literal cannot follow
+# anything.
+# ---------------------------------------------------------------------------
+
+#: Repository-relative, and deliberately not imported from the checker.
+REQUIRED_TREES = (
+    "backend/app",
+    "backend/scripts",
+    "schemas/python/tckdb-schemas/tckdb_schemas",
+    "clients/python/src/tckdb_client",
+    "clients/python/adapters/chemkin/tckdb_chemkin",
+    "integrations/mcp/src/tckdb_mcp",
+)
+
+CLIENT_PACKAGE = checker.REPO_ROOT / "clients/python/src/tckdb_client"
+CHEMKIN_ADAPTER = checker.REPO_ROOT / "clients/python/adapters/chemkin/tckdb_chemkin"
+MCP_INTEGRATION = checker.REPO_ROOT / "integrations/mcp/src/tckdb_mcp"
+
+
+def test_every_required_tree_is_a_default_target():
+    """Written as literals so the assertion cannot track a repointing."""
+    targets = {p.resolve() for p in checker.default_target_paths()}
+    for tree in REQUIRED_TREES:
+        assert (checker.REPO_ROOT / tree).resolve() in targets, tree
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        CLIENT_PACKAGE / "builders" / "uploads.py",
+        CLIENT_PACKAGE / "builders" / "calculation.py",
+        CLIENT_PACKAGE / "builders" / "sources.py",
+        CHEMKIN_ADAPTER / "normalizer.py",
+        MCP_INTEGRATION / "config.py",
+        MCP_INTEGRATION / "tools" / "reaction_kinetics.py",
+    ],
+)
+def test_the_new_targets_reach_the_modules_that_emit(module: Path):
+    """Named modules, not a count.
+
+    A target resolved one directory too high (``clients/python``) or one
+    too low (``.../builders``) still expands to files, and a test that
+    only counted them would stay green. These six modules are where the
+    ten violations were, or -- for ``tckdb_mcp`` -- where the next one
+    would be.
+    """
+    covered: set[Path] = set()
+    for target in checker.default_target_paths():
+        covered.update(checker.walk(target))
+    assert module in covered, module
+
+
+@pytest.mark.parametrize(
+    "tests_dir",
+    [
+        checker.REPO_ROOT / "clients/python/tests",
+        checker.REPO_ROOT / "clients/python/adapters/chemkin/tests",
+        checker.REPO_ROOT / "integrations/mcp/tests",
+    ],
+)
+def test_the_new_trees_own_tests_stay_out_of_scope(tests_dir: Path):
+    """Each target is a package directory, so its sibling tests sit outside."""
+    assert tests_dir.is_dir(), tests_dir
+    covered: set[Path] = set()
+    for target in checker.default_target_paths():
+        covered.update(checker.walk(target))
+    assert not any(tests_dir in p.parents for p in covered)
+
+
+@pytest.mark.parametrize(
+    "tree", [CLIENT_PACKAGE, CHEMKIN_ADAPTER, MCP_INTEGRATION]
+)
+def test_the_shipped_client_trees_are_clean(tree: Path):
+    assert checker.check_path(tree) == []
+
+
+def test_the_mcp_integration_was_clean_before_it_was_covered():
+    """Coverage, not repair -- said here so the diff is not misread.
+
+    ``tckdb_mcp`` had no violations on the day it was added to the target
+    list. Nothing in it was changed. It is on the list so the *next*
+    string written there is checked by the pull request that writes it,
+    which is precisely what did not happen for the wire package or for
+    the client builders.
+    """
+    walked = checker.walk(MCP_INTEGRATION)
+    assert walked, "the MCP target must not be empty"
+    assert any(p.suffix == ".py" for p in walked)
+    assert checker.check_path(MCP_INTEGRATION) == []
+
+
+def test_a_reintroduced_em_dash_in_a_client_diagnostic_is_caught():
+    """The live rule against the live file.
+
+    Puts the em dash back into the ``message=`` literal it was removed
+    from, in the real ``uploads.py``, and checks the modified source.
+    The literal is a multi-line implicit concatenation nested inside a
+    ``Diagnostic(...)`` call inside an ``out.append(...)`` -- the shape
+    the flat samples earlier in this file do not exercise.
+    """
+    path = CLIENT_PACKAGE / "builders" / "uploads.py"
+    source = path.read_text(encoding="utf-8")
+    clean = "carry a transport field -- the block will not be "
+    assert clean in source, "the message this mutation targets has moved"
+    assert checker.check_source(source, path) == []
+
+    mutated = source.replace(clean, "carry a transport field — the block will not be ")
+    found = checker.check_source(mutated, path)
+    assert len(found) == 1
+    assert found[0].characters == "—"
+
+
+def test_a_reintroduced_section_sign_in_a_chemkin_warning_is_caught():
+    """The adapter's accumulated warnings, which reach a user another way.
+
+    ``out.warnings.append(...)`` is an accumulator, not a raise and not a
+    ``message=`` keyword, so this also pins that the accumulator rule
+    covers the adapter and not only the backend's cccbdb builders.
+    """
+    path = CHEMKIN_ADAPTER / "normalizer.py"
+    source = path.read_text(encoding="utf-8")
+    clean = "(spec section 6.7)."
+    assert clean in source, "the warning this mutation targets has moved"
+    assert checker.check_source(source, path) == []
+
+    mutated = source.replace(clean, "(spec §6.7).")
+    found = checker.check_source(mutated, path)
+    assert len(found) == 1
+    assert found[0].kind == "accumulated warning"
+    assert found[0].characters == "§"
+
+
+def test_a_reintroduced_em_dash_in_the_mcp_integration_is_caught():
+    """The zero-violation tree still has to be a tree the rule fires on.
+
+    Adding a clean directory to the target list proves nothing on its
+    own: the same green result comes from a target that resolves nowhere.
+    This mutates a real ``raise`` in ``config.py`` and requires a finding.
+    """
+    path = MCP_INTEGRATION / "config.py"
+    source = path.read_text(encoding="utf-8")
+    clean = '"TCKDB_MCP_DEFAULT_LIMIT must be >= 1"'
+    assert clean in source, "the raise this mutation targets has moved"
+    assert checker.check_source(source, path) == []
+
+    mutated = source.replace(clean, '"TCKDB_MCP_DEFAULT_LIMIT must be — >= 1"')
+    found = checker.check_source(mutated, path)
+    assert len(found) == 1
+    assert found[0].kind == "raised message"
+    assert found[0].characters == "—"
+
+
+def test_the_summary_names_every_tree_with_a_non_empty_count(capsys):
+    """The failure mode this whole file exists to rule out.
+
+    A target that silently resolves to nothing produces the same green
+    exit as a clean tree. The summary is the only place the difference is
+    visible, so assert against the printed count, per named tree, using
+    literals rather than the checker's own target list.
+    """
+    assert checker.main([]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    for tree in REQUIRED_TREES:
+        shown = tree.removeprefix("backend/")
+        matching = [
+            line
+            for line in lines
+            if line.startswith("checked ") and line.endswith(f" under {shown}")
+        ]
+        assert len(matching) == 1, (tree, lines)
+        count = int(matching[0].split()[1])
+        assert count > 0, matching[0]
+
+
+# ---------------------------------------------------------------------------
+# Saying what is NOT scanned
+#
+# Five encoding misses in one week, every one of them the same shape: a
+# correct check aimed at fewer places than it should have been, and nothing
+# anywhere that said so. The target list records what is scanned;
+# ``UNSCANNED_BY_DESIGN`` records what is not and why, and ``--audit`` refuses
+# to let a source file be absent from both.
+# ---------------------------------------------------------------------------
+
+
+def test_the_audit_accounts_for_every_source_file():
+    """The assertion that makes the *next* missing tree fail a pull request."""
+    undeclared, _ = checker.audit()
+    assert undeclared == [], undeclared
+
+
+def test_the_audit_run_reports_and_passes(capsys):
+    assert checker.main(["--audit"]) == 0
+    out = capsys.readouterr().out
+    assert "audit: every source file is scanned or declared" in out
+    assert "declared" in out
+
+
+def test_the_audit_covers_the_repository_not_just_the_backend():
+    """A repository-wide sweep is the point; a backend-only one would have
+    missed every tree this change adds."""
+    sources = checker.repository_sources()
+    for expected in (
+        "backend/app/api/app.py",
+        "clients/python/src/tckdb_client/builders/uploads.py",
+        "integrations/mcp/src/tckdb_mcp/config.py",
+        "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py",
+    ):
+        assert expected in sources, expected
+
+
+def test_an_undeclared_source_file_fails_the_audit(monkeypatch, capsys):
+    """Mutation: drop a declaration and the audit must go red.
+
+    ``backend/alembic`` is 69 files that no target covers. Removing its
+    entry has to surface all of them rather than quietly reclassifying
+    them, otherwise the table is decoration.
+    """
+    kept = tuple(
+        entry for entry in checker.UNSCANNED_BY_DESIGN if entry[0] != "backend/alembic"
+    )
+    assert len(kept) == len(checker.UNSCANNED_BY_DESIGN) - 1
+    monkeypatch.setattr(checker, "UNSCANNED_BY_DESIGN", kept)
+
+    undeclared, _ = checker.audit()
+    assert any(p.startswith("backend/alembic/") for p in undeclared)
+    assert checker.main(["--audit"]) == 1
+    assert "neither scanned" in capsys.readouterr().err
+
+
+def test_a_stale_declaration_fails_the_audit(monkeypatch, capsys):
+    """The other half: an exclusion that matches nothing.
+
+    A declaration left behind after its directory moves is the same
+    failure as a target that expands to no files -- one list drifting
+    away from the tree it claims to describe, while both stay green.
+    """
+    monkeypatch.setattr(
+        checker,
+        "UNSCANNED_BY_DESIGN",
+        (*checker.UNSCANNED_BY_DESIGN, ("backend/nowhere", "moved away")),
+    )
+    assert checker.main(["--audit"]) == 1
+    assert "matching no file" in capsys.readouterr().err
+
+
+def test_the_audit_does_not_silently_reclassify_a_scanned_tree(monkeypatch):
+    """Mutation: point a target at nothing and the audit must notice.
+
+    If ``tckdb_client`` were repointed at a directory that does not
+    exist, the gate itself exits 2 -- but only if it is run. The audit is
+    the second reader of the same list, and it has to see the package's
+    28 files become undeclared rather than vanish from both accounts.
+    """
+    monkeypatch.setattr(
+        checker,
+        "DEFAULT_TARGETS",
+        tuple(
+            "../clients/python/src/gone" if t == checker.CLIENT_PACKAGE_TARGET else t
+            for t in checker.DEFAULT_TARGETS
+        ),
+    )
+    undeclared, _ = checker.audit()
+    assert any(
+        p.startswith("clients/python/src/tckdb_client/") for p in undeclared
+    ), undeclared
+
+
+def test_test_trees_are_declared_rather_than_forgotten():
+    """``tests/`` is out of scope on purpose, and the audit says so.
+
+    The reason is the same one that keeps ``backend/tests`` off the
+    target list, and stating it once in the script is what stops a future
+    reader from reading the omission as an oversight.
+    """
+    _, counts = checker.audit()
+    assert counts["tests/ trees"] > 0
+    assert checker.audit_reason("clients/python/tests/test_client.py") == (
+        checker.TEST_TREE_REASON
+    )
+    assert checker.audit_reason("clients/python/conftest.py") == checker.TEST_TREE_REASON
+    assert checker.audit_reason("clients/python/src/tckdb_client/client.py") is None
+
+
+def test_the_declared_trees_name_the_alembic_violations_rather_than_hide_them():
+    """``backend/alembic`` is excluded, and the exclusion is not a shrug.
+
+    Four raise-site em dashes live there, printed by downgrade guards.
+    They are unfixed because applied revisions are immutable under
+    ``.claude/rules/migration-rules.md``, so the reason has to carry the
+    anchors -- an exclusion whose text is "not scanned" is how a known
+    defect becomes an unknown one.
+    """
+    reasons = dict(checker.UNSCANNED_BY_DESIGN)
+    alembic = reasons["backend/alembic"]
+    for revision in (
+        "b6e1d3a9c740",
+        "c4d8f1b2a9e6",
+        "d3a7f1c9b284",
+        "e3f4a5b6c7d8",
+    ):
+        assert revision in alembic, revision
+    still_there = checker.check_path(checker.REPO_ROOT / "backend" / "alembic")
+    assert len(still_there) == 4, [f.render(checker.BACKEND_ROOT) for f in still_there]
+
+
+def test_audit_rejects_paths():
+    with pytest.raises(SystemExit):
+        checker.main(["--audit", "app"])

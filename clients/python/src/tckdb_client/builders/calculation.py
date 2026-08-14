@@ -545,7 +545,7 @@ class Calculation:
         raise TCKDBBuilderValidationError(
             "cannot infer dependency role for "
             f"{self.type!r} depending on {parent.type!r}; supported "
-            "phase-1 shapes are freq→opt, sp→opt, opt→<any>."
+            "phase-1 shapes are freq->opt, sp->opt, opt-><any>."
         )
 
 
