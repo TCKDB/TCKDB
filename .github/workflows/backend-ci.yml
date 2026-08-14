@@ -167,17 +167,27 @@ jobs:
         # Narrower than ruff's RUF001-003, which this repo disables on
         # purpose because scientific notation is legitimate prose. This one
         # looks only at strings that leave the process -- raises, log calls,
-        # message=/detail=/reason= -- and covers app/, scripts/ and the wire
-        # package, but not tests/, where non-ASCII data is the point. See the
-        # script's header.
+        # message=/detail=/reason= -- and covers app/, scripts/, the wire
+        # package, the Python client, the CHEMKIN adapter and the MCP
+        # integration, but not tests/, where non-ASCII data is the point. See
+        # the script's header.
         #
         # No arguments on purpose: the target list lives in the script, so a
-        # local run and this one scan the same tree. The wire package sits
-        # outside `working-directory: backend`, and the script resolves it
-        # relative to its own location rather than the current directory. It
-        # refuses a target that expands to no files, so a moved package
-        # fails the gate instead of silently emptying it.
-        run: conda run -n tckdb_env python scripts/check_runtime_ascii.py
+        # local run and this one scan the same tree. Four of the six targets
+        # sit outside `working-directory: backend`, and the script resolves
+        # them relative to its own location rather than the current
+        # directory. It refuses a target that expands to no files, so a moved
+        # package fails the gate instead of silently emptying it.
+        #
+        # `--audit` runs first so the log opens with the coverage account:
+        # what is scanned, and what is deliberately not scanned and why. Five
+        # encoding misses in one week were all the same shape -- a correct
+        # check aimed at fewer places than it should have been -- and none of
+        # them was visible in a CI log until someone went looking. It fails
+        # on any source file that is in neither list.
+        run: |
+          conda run -n tckdb_env python scripts/check_runtime_ascii.py --audit
+          conda run -n tckdb_env python scripts/check_runtime_ascii.py
 
       - name: Type check (mypy, scoped)
         if: matrix.gate == 'api'

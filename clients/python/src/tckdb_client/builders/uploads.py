@@ -270,7 +270,7 @@ class ComputedSpeciesUpload:
                     message=(
                         "Transport is accepted for forward compatibility but "
                         "the computed-species bundle schema does not yet "
-                        "carry a transport field — the block will not be "
+                        "carry a transport field -- the block will not be "
                         "emitted on the wire. Use the standalone "
                         "/uploads/transport endpoint to ship transport data "
                         "today."
@@ -493,7 +493,7 @@ def _artifact_second_phase_diag(calc: Calculation) -> Diagnostic:
         message=(
             f"Calculation {label!r} has "
             f"{len(calc.artifacts)} attached artifact(s). Artifacts are "
-            "not included in the scientific upload payload — call "
+            "not included in the scientific upload payload -- call "
             "upload.artifact_plan(result) on the upload response and "
             "pass the plan to client.upload_artifacts(plan)."
         ),
@@ -565,7 +565,7 @@ def _extract_computed_reaction_calc_keys(
             "missing the 'calculation_keys' mapping. The server is "
             "older than the tckdb-client artifact-planning feature; "
             "upload artifacts directly via "
-            "client.upload_artifact(calculation_id, …) once you know "
+            "client.upload_artifact(calculation_id, ...) once you know "
             "each calculation's server id."
         )
     out: dict[str, int] = {}
@@ -573,7 +573,7 @@ def _extract_computed_reaction_calc_keys(
         if not isinstance(key, str) or not isinstance(value, int):
             raise TCKDBBuilderValidationError(
                 "artifact_plan: calculation_keys entries must be "
-                f"str → int, got {key!r} -> {type(value).__name__}."
+                f"str -> int, got {key!r} -> {type(value).__name__}."
             )
         out[key] = value
     return out
@@ -1455,7 +1455,7 @@ class ComputedReactionUpload:
                     message=(
                         "Transport is accepted for forward compatibility but "
                         "the computed-reaction bundle schema does not yet "
-                        "carry a per-species transport field — the block "
+                        "carry a per-species transport field -- the block "
                         "will not be emitted on the wire. Use the "
                         "standalone /uploads/transport endpoint to ship "
                         "transport data today."
@@ -1477,7 +1477,7 @@ class ComputedReactionUpload:
                     message=(
                         "Thermo source_calculations were validated locally "
                         "but the computed-reaction BundleThermoIn schema "
-                        "does not carry that field — the references will "
+                        "does not carry that field -- the references will "
                         "not be emitted on the wire. The computed-species "
                         "endpoint does emit them; if provenance is "
                         "load-bearing, upload via /uploads/computed-species."

@@ -13,13 +13,28 @@ WHY
     rebuilt by someone in a hurry.
 
 WHAT IS IN SCOPE, AND WHY IT IS DRAWN THIS NARROWLY
-    Three trees: ``backend/app``, ``backend/scripts`` and the wire package
-    ``schemas/python/tckdb-schemas/tckdb_schemas``. The wire package was
-    added late and should have been there from the first commit: it raises
-    the validation errors a client reads and builds the ``message=``
-    strings that are written to ``upload_warning.message``. It had nine
-    violations on the day it was first scanned, all of them at emission
-    sites, in the one package this check had never been pointed at.
+    Six trees; see ``DEFAULT_TARGETS``. Three of them are backend-side
+    (``backend/app``, ``backend/scripts``, and the wire package
+    ``schemas/python/tckdb-schemas/tckdb_schemas``); three are the
+    shipped Python that runs on a *contributor's* machine
+    (``clients/python/src/tckdb_client``, the CHEMKIN adapter
+    ``clients/python/adapters/chemkin/tckdb_chemkin``, and the MCP
+    integration ``integrations/mcp/src/tckdb_mcp``).
+
+    Each of those was added after a measurement, not before one. The
+    wire package had nine violations on the day it was first scanned.
+    The client builders had eight and the CHEMKIN adapter two, all of
+    them at emission sites, in packages this check had never been
+    pointed at. ``tckdb_mcp`` had none: it is here for coverage, so the
+    next string written into it is checked by the pull request that
+    writes it, and nothing in this file's history should be read as
+    having repaired anything there.
+
+    That is the recurring shape, and it is the reason for ``--audit``
+    below: every one of these was a correct check aimed at fewer places
+    than it should have been, and in each case the omission was found
+    by a person noticing, months late, rather than by the check saying
+    so.
 
     Only string literals that are structurally *at an emission site*:
     the argument of a ``raise``, the argument of a logging call, or a
@@ -70,11 +85,27 @@ ESCAPE HATCH
     need a non-ASCII character -- an error quoting a unit symbol, a
     parser reporting the token it failed on. Say so in place.
 
+SAYING WHAT IS *NOT* SCANNED
+    A target list is a list somebody forgets to extend, and this one was
+    forgotten five times. So the list is not the only record: every
+    ``*.py`` and ``*.sh`` in the repository is either under a target or
+    named in ``UNSCANNED_BY_DESIGN`` with a reason. ``--audit`` proves
+    it and prints the exclusions; ``tests/scripts/test_check_runtime_ascii.py``
+    runs the audit, so a *new* tree of Python that nothing scans fails a
+    pull request on the day it is added rather than being discovered by
+    an incident.
+
+    The audit deliberately does not decide whether a tree *should* be
+    scanned. It only refuses to let one be absent from both lists, which
+    is the state that made every previous miss invisible.
+
 USAGE
     python scripts/check_runtime_ascii.py [PATH ...]
+    python scripts/check_runtime_ascii.py --audit
 
     Defaults to the packaged sources. Exits 1 and prints one line per
-    finding, in ``path:line: text`` form.
+    finding, in ``path:line: text`` form. ``--audit`` exits 1 naming any
+    source file that is neither scanned nor declared out of scope.
 """
 
 from __future__ import annotations
@@ -96,6 +127,16 @@ REPO_ROOT = BACKEND_ROOT.parent
 
 #: Where the wire package's sources live, relative to ``BACKEND_ROOT``.
 WIRE_PACKAGE_TARGET = "../schemas/python/tckdb-schemas/tckdb_schemas"
+
+#: The Python client a contributor installs, relative to ``BACKEND_ROOT``.
+CLIENT_PACKAGE_TARGET = "../clients/python/src/tckdb_client"
+
+#: The CHEMKIN importer adapter, which ships and versions separately from
+#: the client (``clients/python/adapters/chemkin/pyproject.toml``).
+CHEMKIN_ADAPTER_TARGET = "../clients/python/adapters/chemkin/tckdb_chemkin"
+
+#: The MCP integration. Added at zero violations -- coverage, not repair.
+MCP_INTEGRATION_TARGET = "../integrations/mcp/src/tckdb_mcp"
 
 #: Checked by default, as paths relative to ``BACKEND_ROOT``.
 #:
@@ -120,12 +161,186 @@ WIRE_PACKAGE_TARGET = "../schemas/python/tckdb-schemas/tckdb_schemas"
 #: executes in a deployment. The same reasoning excludes the wire package's
 #: own ``tests/``, which is why the target is the package directory and not
 #: the distribution directory above it.
-DEFAULT_TARGETS = ("app", "scripts", WIRE_PACKAGE_TARGET)
+#:
+#: ``tckdb_client`` and ``tckdb_chemkin`` for the same reason the wire
+#: package was added, one layer further out: their strings are the ones a
+#: contributor reads in a terminal, and the adapter's are accumulated into
+#: ``NormalizedReaction.warnings`` and carried up through an import run.
+#: Eight and two violations respectively when first scanned.
+#:
+#: ``tckdb_mcp`` scanned clean when it was added. It is on the list so that
+#: the *next* string written there is checked; nothing was repaired in it.
+DEFAULT_TARGETS = (
+    "app",
+    "scripts",
+    WIRE_PACKAGE_TARGET,
+    CLIENT_PACKAGE_TARGET,
+    CHEMKIN_ADAPTER_TARGET,
+    MCP_INTEGRATION_TARGET,
+)
 
 
 def default_target_paths() -> list[Path]:
     """The default targets as absolute paths."""
     return [(BACKEND_ROOT / name).resolve() for name in DEFAULT_TARGETS]
+
+
+#: Source suffixes the audit accounts for. Exactly what :func:`walk` reads,
+#: so "scanned" and "audited" cannot drift apart.
+SOURCE_SUFFIXES = (".py", ".sh")
+
+#: Never walked: version control, virtualenvs, caches, build output, and
+#: anything under a dot-directory (which is how ``.git``, ``.venv`` and
+#: ``.claude/worktrees`` are excluded without naming each one).
+_AUDIT_SKIP_DIRS = frozenset({"node_modules", "__pycache__", "build", "dist"})
+
+#: Why the audit passes over a tests tree. Stated once because it is the
+#: same reason every time, and it is the reason given in this file's header
+#: for scanning the wire *package* rather than its distribution directory.
+TEST_TREE_REASON = (
+    "test data is the one place non-ASCII is the point, and nothing under "
+    "tests/ runs in a deployment"
+)
+
+#: Source files no target covers, and why. Keys are repository-relative
+#: POSIX paths; a file is declared if it equals a key or lies under one.
+#:
+#: This exists so that "not scanned" is a decision on the record rather than
+#: an absence nobody can see. ``--audit`` fails on any source file that is in
+#: neither this table nor a target, which is the state every one of the five
+#: 2026-08 encoding misses was in.
+UNSCANNED_BY_DESIGN: tuple[tuple[str, str], ...] = (
+    (
+        "backend/alembic",
+        "migration revisions. Four raise-site em dashes are sitting here "
+        "(b6e1d3a9c740:144, c4d8f1b2a9e6:183, d3a7f1c9b284:352, "
+        "e3f4a5b6c7d8:628), printed to an operator's terminal by a "
+        "downgrade guard. They are recorded rather than fixed because "
+        ".claude/rules/migration-rules.md forbids mutating a revision that "
+        "has been applied to a deployed database. Scanning this tree means "
+        "settling that question first",
+    ),
+    (
+        "backend/main.py",
+        "the ASGI entry point: three statements and no string literal at "
+        "all. Everything it serves is emitted from backend/app, which is "
+        "scanned",
+    ),
+    (
+        "clients/python/examples",
+        "demo programs that print to a terminal. Out of charter for the "
+        "same reason a docstring is: nothing here reaches a database "
+        "column, a response body or a log",
+    ),
+    (
+        "clients/python/scripts",
+        "one generator that rewrites a checked-in Markdown document; its "
+        "output is prose in a document, not an emitted string",
+    ),
+    (
+        "examples/clients",
+        "demo programs, as clients/python/examples",
+    ),
+)
+
+
+def _is_test_path(relative: str) -> bool:
+    """Whether *relative* is test scaffolding rather than shipped code."""
+    parts = relative.split("/")
+    return "tests" in parts or parts[-1] == "conftest.py"
+
+
+def audit_reason(relative: str) -> str | None:
+    """Why *relative* is not scanned, or ``None`` if nothing says."""
+    if _is_test_path(relative):
+        return TEST_TREE_REASON
+    for prefix, reason in UNSCANNED_BY_DESIGN:
+        if relative == prefix or relative.startswith(prefix + "/"):
+            return reason
+    return None
+
+
+def repository_sources() -> list[str]:
+    """Every source file in the repository, repository-relative."""
+    out: list[str] = []
+    for path in REPO_ROOT.rglob("*"):
+        if path.suffix not in SOURCE_SUFFIXES or path.is_dir():
+            continue
+        parts = path.relative_to(REPO_ROOT).parts
+        if any(
+            part.startswith(".") or part in _AUDIT_SKIP_DIRS or part.endswith(".egg-info")
+            for part in parts[:-1]
+        ):
+            continue
+        out.append("/".join(parts))
+    return sorted(out)
+
+
+def audit() -> tuple[list[str], dict[str, int]]:
+    """Split the repository's sources into undeclared and declared-by-reason.
+
+    Returns the source files that are neither scanned nor declared, and a
+    count of declared files per ``UNSCANNED_BY_DESIGN`` prefix (plus the
+    test trees under their shared reason). A declaration matching nothing
+    is reported as a count of zero: a stale exclusion is the same failure
+    as a target that expands to no files, one list drifting away from the
+    tree it describes.
+    """
+    scanned = default_target_paths()
+    undeclared: list[str] = []
+    counts: dict[str, int] = {"tests/ trees": 0}
+    for prefix, _ in UNSCANNED_BY_DESIGN:
+        counts[prefix] = 0
+
+    for relative in repository_sources():
+        absolute = REPO_ROOT / relative
+        if any(target in absolute.parents or target == absolute for target in scanned):
+            continue
+        if _is_test_path(relative):
+            counts["tests/ trees"] += 1
+            continue
+        for prefix, _ in UNSCANNED_BY_DESIGN:
+            if relative == prefix or relative.startswith(prefix + "/"):
+                counts[prefix] += 1
+                break
+        else:
+            undeclared.append(relative)
+    return undeclared, counts
+
+
+def run_audit() -> int:
+    """Print the coverage account and fail on anything undeclared."""
+    undeclared, counts = audit()
+    for target in DEFAULT_TARGETS:
+        resolved = (BACKEND_ROOT / target).resolve()
+        print(f"scanned    {len(walk(resolved)):>4}  {_relative(resolved)}")
+    for label, count in counts.items():
+        print(f"declared   {count:>4}  {label}")
+
+    empty = [label for label, count in counts.items() if count == 0]
+    if empty:
+        print(
+            "error: declared out of scope but matching no file: "
+            + ", ".join(empty)
+            + "\n       A stale exclusion hides the tree it used to name.",
+            file=sys.stderr,
+        )
+        return 1
+    if undeclared:
+        for relative in undeclared:
+            print(f"undeclared {'':>4}  {relative}")
+        print(
+            f"\n{len(undeclared)} source file(s) are neither scanned by "
+            f"{Path(__file__).name} nor named in UNSCANNED_BY_DESIGN.\n"
+            "Add the tree to DEFAULT_TARGETS, or say in UNSCANNED_BY_DESIGN "
+            "why it is not scanned. Silence is what let five encoding misses "
+            "through.",
+            file=sys.stderr,
+        )
+        return 1
+    print("audit: every source file is scanned or declared out of scope")
+    return 0
+
 
 ALLOW_MARKER = "# tckdb: allow-non-ascii"
 
@@ -381,7 +596,20 @@ def main(argv: list[str] | None = None) -> int:
             f"(default: {', '.join(DEFAULT_TARGETS)})"
         ),
     )
+    parser.add_argument(
+        "--audit",
+        action="store_true",
+        help=(
+            "check no source file in the repository is missing from both "
+            "the target list and UNSCANNED_BY_DESIGN, and print the account"
+        ),
+    )
     args = parser.parse_args(argv)
+
+    if args.audit:
+        if args.targets:
+            parser.error("--audit takes no paths: it looks at the whole repository")
+        return run_audit()
 
     targets = [Path(t) for t in args.targets] or default_target_paths()
 

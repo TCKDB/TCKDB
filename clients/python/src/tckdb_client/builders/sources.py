@@ -105,7 +105,7 @@ class SourceCalculations:
 
         if not isinstance(calc, _Calculation):
             raise TCKDBBuilderValidationError(
-                f"SourceCalculations.add({role!r}, …) expected a "
+                f"SourceCalculations.add({role!r}, ...) expected a "
                 f"Calculation, got {type(calc).__name__}."
             )
         self._entries.append((role, calc))
