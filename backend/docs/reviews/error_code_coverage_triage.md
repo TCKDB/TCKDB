@@ -20,6 +20,16 @@ the suite *does* exercise.
 
 ### 1. `invalid_pagination` never reaches a client on two of its four paths, and four tests are named after a code they cannot produce
 
+> **Resolved in #170.** The two messages now carry one token each, and the
+> second token became the code: `limit_too_large` and `offset_too_large` are
+> catalogued and exported, `invalid_pagination` keeps the two malformed
+> cases. The four tests provoke the service and assert the code. The
+> ambiguity scan below landed with them, green. One correction to the
+> account: three of the four tests were named `test_rejects_invalid_pagination`;
+> the fourth (`test_api_species_search.py`) was
+> `test_get_invalid_pagination_limit_rejected`, and its comment already said
+> the framework caught the request first.
+
 `backend/app/services/scientific_read/common.py` raises it four ways. Two
 carry a second `snake_case: ` token inside the message:
 
@@ -115,6 +125,13 @@ So the branch cannot fire, the catalogue lists the code as one the API can
 emit, and `clients/python/src/tckdb_client/rejection_codes.py:108` exports it.
 
 ### 4. Two catalogue entries have the wrong HTTP status, and nothing can catch that
+
+> **Resolved in #170.** Both entries are 409, the observer compares
+> `(status, code)`, and both codes are now provoked on the wire — which was
+> the necessary third part: measured across the three gates, the 91 codes the
+> suite emits agreed with the catalogue at every status, so widening the
+> comparison alone turned nothing red. Both wrong entries were among the 52
+> codes no test produced.
 
 Measured on the wire:
 
@@ -291,6 +308,15 @@ candidates. Two sites in the whole tree carry more than one, both
 `invalid_pagination` (the `raise` statements at `common.py:80` and
 `common.py:85`, whose messages are on the following lines). The class is
 closed and small.
+
+> **Landed in #170** as
+> `tests/api/test_error_contract_catalogue_gate.py::TestOneMessageDeclaresOneCode`,
+> in the same change that fixed the two sites, so it went green immediately.
+> Two details the sketch above did not anticipate: it reads every string
+> expression rather than only `raise` arguments (a message bound to a local
+> is the one shape neither this scan nor the observer could otherwise see),
+> and it excludes docstrings, because this repository quotes real refusal
+> messages in prose. It reads 125 messages across 68 codes.
 
 ---
 
@@ -518,13 +544,18 @@ red gets disabled.
 
 **Should**, roughly in value order:
 
-1. Fix `invalid_pagination`'s two messages so the code survives promotion;
+1. ~~Fix `invalid_pagination`'s two messages so the code survives promotion;
    point the four `test_rejects_invalid_pagination` tests at a path that
    actually reaches the service (`?offset=999999`, or a POST body); and make
-   them assert `code`, not just `422`.
-2. Correct the two wrong statuses in the catalogue, and decide whether the
+   them assert `code`, not just `422`.~~ **Done in #170**, with the two
+   second tokens promoted to codes rather than reworded away — see finding 1.
+2. ~~Correct the two wrong statuses in the catalogue, and decide whether the
    observer should check `(status, code)` rather than `code` — the check is
-   one tuple wider and would have caught both.
+   one tuple wider and would have caught both.~~ **Done in #170.** The
+   parenthetical was the one claim in this document that measurement
+   contradicted: the wider check would *not* have caught either on its own,
+   because neither code was emitted by any test. It catches them now because
+   the same change provokes both.
 3. Write the Tier A and Tier B tests — 20 codes, 19 of them already provoked
    on the wire, so the payloads are known and 12 of them already have
    service-level tests to hang the assertion next to.
