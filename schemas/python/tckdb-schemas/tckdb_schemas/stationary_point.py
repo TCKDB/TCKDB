@@ -669,8 +669,8 @@ def _vdw_complex_findings(
                 location=location,
                 message=(
                     f"{location}: the imaginary mode is "
-                    f"{abs(imag_freq_cm1):.1f} cm⁻¹, at or above "
-                    f"{TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm⁻¹. That is far "
+                    f"{abs(imag_freq_cm1):.1f} cm-1, at or above "
+                    f"{TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm-1. That is far "
                     f"too stiff to be an intermolecular mode of a van der "
                     f"Waals complex, so it is unlikely to be Hessian grid "
                     f"noise and looks instead like a genuine reaction "
@@ -739,8 +739,8 @@ def evaluate_transition_state_frequency(
                 location=location,
                 message=(
                     f"{location}: a transition state has at least one "
-                    f"imaginary mode by definition — it is the reaction "
-                    f"coordinate — but the frequency analysis reports none "
+                    f"imaginary mode by definition -- it is the reaction "
+                    f"coordinate -- but the frequency analysis reports none "
                     f"({W_TS_NO_IMAGINARY_MODE}). Zero imaginary modes is a "
                     f"minimum: the geometry did not converge onto a barrier "
                     f"top. Re-run the saddle-point search, or deposit the "
@@ -771,9 +771,9 @@ def evaluate_transition_state_frequency(
                     f"imaginary modes and the payload does not say which one "
                     f"is the reaction coordinate "
                     f"({W_TS_REACTION_COORDINATE_NOT_DESIGNATED}). Extra "
-                    f"imaginary modes are accepted — a torsional maximum or a "
+                    f"imaginary modes are accepted -- a torsional maximum or a "
                     f"loose intermolecular mode is real chemistry, not a "
-                    f"defect — but exactly one mode must be designated and "
+                    f"defect -- but exactly one mode must be designated and "
                     f"removed from the partition function, which is the "
                     f"contract every transition-state-theory code enforces. "
                     f"Set freq_result.reaction_coordinate_mode_index, and give "
@@ -866,9 +866,9 @@ def evaluate_transition_state_frequency(
                     f"numerical noise "
                     f"({W_TS_EXTRA_IMAGINARY_MODE_ABOVE_TAU}). The structure "
                     f"is a genuine higher-order saddle. It is accepted "
-                    f"because that can be correct chemistry — a transition "
+                    f"because that can be correct chemistry -- a transition "
                     f"state may sit at a torsional maximum and still be the "
-                    f"right reactive bottleneck — and flagged because a "
+                    f"right reactive bottleneck -- and flagged because a "
                     f"consumer treating it as a plain first-order saddle "
                     f"would be wrong. {resolved_tau.reason} {_REMEDIATION}"
                 ),
@@ -946,12 +946,12 @@ def _soft_reaction_coordinate_findings(
             tau=tau,
             message=(
                 f"{location}: the transition state's reaction coordinate is "
-                f"{magnitude_cm1:.1f} cm⁻¹, below "
-                f"{TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm⁻¹ "
+                f"{magnitude_cm1:.1f} cm-1, below "
+                f"{TS_IMAGINARY_FREQUENCY_MIN_CM1:.0f} cm-1 "
                 f"({W_TS_IMAG_FREQ_TOO_SMALL}). A reaction coordinate this "
                 f"soft is often an under-converged geometry or a coarse "
-                f"integration grid. It can also be real — flat and "
-                f"variational barriers genuinely produce one — which is why "
+                f"integration grid. It can also be real -- flat and "
+                f"variational barriers genuinely produce one -- which is why "
                 f"this is a quality expectation and not a refusal. For "
                 f"reference, the noise floor for this calculation's extra "
                 f"modes is {tau.reason}"

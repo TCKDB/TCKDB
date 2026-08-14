@@ -261,7 +261,7 @@ class FreqResultPayload(SchemaBase):
                     f"from one reading the evidence "
                     f"({W_FREQ_N_IMAG_DISAGREES_WITH_MODES}). Deposit the "
                     f"complete signed frequency list, or omit modes entirely "
-                    f"— absence is incompleteness, which is accepted, and only "
+                    f"-- absence is incompleteness, which is accepted, and only "
                     f"contradiction is refused.",
                     context={
                         "n_imag": self.n_imag,
