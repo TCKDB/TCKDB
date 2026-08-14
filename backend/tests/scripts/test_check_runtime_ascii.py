@@ -447,6 +447,25 @@ def test_a_missing_target_is_an_error_not_a_pass(tmp_path, capsys):
     assert "no such path" in capsys.readouterr().err
 
 
+def test_a_green_run_says_what_it_read(capsys):
+    """The CI log has to show the coverage, not just the verdict.
+
+    "The gate is green" is worth exactly as much as the tree it looked
+    at, and for as long as this check existed the tree silently excluded
+    the package that produces the strings it protects. A success that
+    prints nothing cannot be told apart from a success over nothing.
+    """
+    assert checker.main([]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert len(lines) == len(checker.DEFAULT_TARGETS)
+    assert any(
+        line.startswith("checked ")
+        and checker.WIRE_PACKAGE_TARGET.removeprefix("../") in line
+        and " 0 file(s) " not in line
+        for line in lines
+    ), lines
+
+
 # ---------------------------------------------------------------------------
 # CI parity
 # ---------------------------------------------------------------------------

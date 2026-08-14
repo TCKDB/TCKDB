@@ -167,13 +167,7 @@ class Finding:
     characters: str
 
     def render(self, root: Path) -> str:
-        shown: Path = self.path
-        for base in (root, REPO_ROOT):
-            try:
-                shown = self.path.relative_to(base)
-            except ValueError:
-                continue
-            break
+        shown = _relative(self.path)
         snippet = self.text if len(self.text) <= 80 else self.text[:77] + "..."
         return (
             f"{shown}:{self.line}: non-ASCII {self.characters!r} in a "
@@ -353,6 +347,16 @@ def check_file(path: Path) -> list[Finding]:
     return check_source(source, path)
 
 
+def _relative(path: Path) -> Path:
+    """*path* against the nearest of the roots, for readable output."""
+    for base in (BACKEND_ROOT, REPO_ROOT):
+        try:
+            return path.relative_to(base)
+        except ValueError:
+            continue
+    return path
+
+
 def walk(path: Path) -> list[Path]:
     """The files *path* expands to: every ``*.py`` and ``*.sh`` beneath it."""
     if path.is_dir():
@@ -399,6 +403,11 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         for file in walked:
             findings.extend(check_file(file))
+        # Say what was read. A silent success cannot be told apart from a
+        # success over nothing, and "the gate is green" is worth exactly as
+        # much as the tree it looked at -- which is the defect this target
+        # list had for as long as it existed.
+        print(f"checked {len(walked)} file(s) under {_relative(target)}")
 
     if not findings:
         return 0
