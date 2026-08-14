@@ -70,6 +70,34 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     abuse-control setting ``settings.public_max_limit``; the
     ``offset`` cap protects deep pagination as required by the public
     abuse-controls policy.
+
+    Three codes, not one, because the remedies are three
+    ---------------------------------------------------
+    ``invalid_pagination`` is the malformed request: a negative offset or
+    a limit below one is a client bug, and there is nothing to do about
+    it but fix the caller. The two caps are not that. They are hosting
+    policy — both are settings, and a self-hosted deployment sets them
+    differently — so hitting one is not a mistake the caller could have
+    avoided by reading the schema:
+
+    * ``limit_too_large`` — resend the identical query with a smaller
+      page size and it succeeds. Mechanically recoverable.
+    * ``offset_too_large`` — deep pagination is refused. Retrying with a
+      smaller offset returns *different rows*, so the remedy is to
+      narrow the query, not to retry. The composed-search path already
+      gives that same situation its own code
+      (``composed_search_candidate_limit_exceeded``, "narrow the
+      query"); reporting it generically here was the inconsistency.
+
+    All three used to be spelled ``invalid_pagination``, and the two
+    below carried their real name as a *second* token inside the message
+    (``"invalid_pagination: limit_too_large: …"``). A message naming two
+    candidate codes cannot pick one honestly, so
+    :func:`app.api.error_contract.validation_detail_code` refused to
+    promote either and a client received the generic ``validation_error``
+    — the code was catalogued, exported, and unreachable on these two
+    paths. One token per message is now checked statically by
+    ``tests/api/test_error_contract_catalogue_gate.py``.
     """
     if offset < 0:
         raise ValueError("invalid_pagination: offset must be >= 0")
@@ -78,13 +106,13 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     effective_limit_cap = min(MAX_LIMIT, settings.public_max_limit)
     if limit > effective_limit_cap:
         raise ValueError(
-            "invalid_pagination: limit_too_large: limit must be "
-            f"<= {effective_limit_cap} (got {limit})"
+            f"limit_too_large: limit must be <= {effective_limit_cap} "
+            f"(got {limit})"
         )
     if offset > settings.public_max_offset:
         raise ValueError(
-            "invalid_pagination: offset_too_large: offset must be "
-            f"<= {settings.public_max_offset} (got {offset})"
+            f"offset_too_large: offset must be <= {settings.public_max_offset} "
+            f"(got {offset})"
         )
     return offset, limit
 

@@ -36,21 +36,28 @@ error_code_observer.install()
 
 
 def pytest_runtest_teardown(item) -> None:
-    """Fail the test that emitted a code ``app.api.code_catalogue`` omits.
+    """Fail the test that emitted a ``(status, code)`` the catalogue omits.
 
     Attached to the test rather than to the session so the failure names
     the request that produced the code. See
     ``backend/tests/error_code_observer.py`` for why a source scan alone
-    cannot make the catalogue's completeness falsifiable.
+    cannot make the catalogue's completeness falsifiable, and why the
+    comparison is on the pair rather than on the code alone.
     """
     unlisted = error_code_observer.drain_unlisted()
     if unlisted:
         raise AssertionError(
-            f"{item.nodeid} produced error code(s) that "
-            "app/api/code_catalogue.py does not list: "
-            + ", ".join(f"HTTP {status} {code!r}" for status, code in unlisted)
-            + ". Add an entry there (it claims only that the code exists and "
-            "where it comes from) so a client can import it."
+            f"{item.nodeid} produced an error the catalogue in "
+            "app/api/code_catalogue.py does not describe: "
+            + "; ".join(
+                error_code_observer.explain(status, code)
+                for status, code in unlisted
+            )
+            + ". Either add an entry (it claims only that the code exists, "
+            "at which status, and where it comes from) so a client can "
+            "import it -- or, if an entry exists at a different status, "
+            "correct the status: it is the retry advice a client branches "
+            "on, and the client's REJECTION_STATUSES is generated from it."
         )
 
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.api.config import settings
 from app.db.models.common import (
     CalculationType,
     ReproducibilityAssessorKind,
@@ -71,12 +72,39 @@ def test_returns_404_for_missing_species_entry_id(client, db_session):
     assert "species_entry not found" in resp.text
 
 
-def test_rejects_invalid_pagination(client, db_session):
+def test_rejects_a_limit_above_the_service_cap(client, db_session, monkeypatch):
+    """Two bounds, and only one of them used to be tested.
+
+    ``?limit=999`` -- what this test used to send -- is refused by
+    ``Query(le=200)`` before the service runs, so the pagination code the
+    test was named after could never appear. Both bounds are asserted
+    here; see ``test_api_species_statmech.py`` for the full account.
+    """
     entry = _entry(db_session)
+    base = f"/api/v1/scientific/species-entries/{entry.id}/thermo"
+
+    outer = client.get(f"{base}?limit=999")
+    assert outer.status_code == 422
+    assert outer.json()["code"] == "request_validation_error"
+
+    monkeypatch.setattr(settings, "public_max_limit", 10)
+    inner = client.get(f"{base}?limit=50")
+    assert inner.status_code == 422, inner.text
+    assert inner.json()["code"] == "limit_too_large"
+
+
+def test_rejects_an_offset_beyond_the_deep_paging_cap(
+    client, db_session, monkeypatch
+):
+    """``offset`` carries no ``le``, so the service is the only bound."""
+    entry = _entry(db_session)
+    monkeypatch.setattr(settings, "public_max_offset", 5)
+
     resp = client.get(
-        f"/api/v1/scientific/species-entries/{entry.id}/thermo?limit=999"
+        f"/api/v1/scientific/species-entries/{entry.id}/thermo?offset=6"
     )
-    assert resp.status_code == 422
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "offset_too_large"
 
 
 def test_returns_nasa_block_when_present(client, db_session):

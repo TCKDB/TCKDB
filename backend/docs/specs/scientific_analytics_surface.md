@@ -281,7 +281,9 @@ Every one below is `422`.
 | `invalid_range` | a `*_min` above its `*_max`. `context` carries `min_filter`, `max_filter`, `min`, `max` — the two *actual* parameter names, not a derived stem, so the message never points at a parameter that does not exist. An empty page would read as "TCKDB has no such data"; a typo should not be able to say that. |
 | `invalid_temperature_range` | `temperature_min_k` above `temperature_max_k` (shared helper) |
 | `client_sort_not_supported` | any `sort=` value |
-| `invalid_pagination` | `offset < 0`, `limit < 1`, or `limit` / `offset` above the hosted caps |
+| `invalid_pagination` | `offset < 0` or `limit < 1` — a malformed request |
+| `limit_too_large` | `limit` above `min(MAX_LIMIT, settings.public_max_limit)`. Resend the same query with a smaller page size |
+| `offset_too_large` | `offset` above `settings.public_max_offset`. Deep pagination is refused; narrow the query rather than retry, because a smaller offset returns different rows |
 | `unknown_include_token` | any `include=` token other than `internal_ids` / `all` |
 | `cursor_offset_conflict` | `cursor=` supplied together with a non-zero `offset=` |
 | `invalid_cursor` | malformed, truncated, or wrong-version cursor |

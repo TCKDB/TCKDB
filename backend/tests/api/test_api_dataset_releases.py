@@ -524,6 +524,58 @@ def test_a_non_selectable_record_ref_is_refused(
 
 
 # ---------------------------------------------------------------------------
+# The two refusals that arrive at 409, and why the status is the assertion
+# ---------------------------------------------------------------------------
+#
+# Both raise ``ReleaseCurationError``, which subclasses ``ValueError`` -- so
+# reading the raise site says 422, and the catalogue recorded 422 for both.
+# The routes that reach them wrap the error in ``HTTPException(409)`` instead
+# (``api/routes/releases_admin.py``), because in both cases the tag or the
+# policy version *already exists*: the caller is colliding with state, not
+# sending a malformed payload. Nothing in the suite emitted either code, so
+# the runtime observer had never seen the disagreement, and it was comparing
+# codes rather than ``(status, code)`` pairs and could not have reported it
+# even if it had. These two tests are what make that guard load-bearing:
+# after them, a status regression on either code fails here *and* in the
+# observer's teardown hook.
+
+
+def test_a_repeated_release_tag_is_a_409(client, login_as, _api_curator_user):
+    """409, not 422: the write collides with a release that already exists.
+
+    The distinction is the client's retry advice. 422 invites resending a
+    corrected payload; 409 says the tag is spoken for and a different one
+    is needed.
+    """
+    _as_curator(client, login_as, _api_curator_user)
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+    assert client.post("/api/v1/releases", json=RELEASE).status_code == 201
+
+    again = client.post("/api/v1/releases", json=RELEASE)
+    assert again.status_code == 409, again.text
+    assert again.json()["code"] == "release_tag_taken"
+
+
+def test_re_registering_a_policy_version_with_new_content_is_a_409(
+    client, login_as, _api_curator_user
+):
+    """Registering ``(name, version)`` twice is idempotent only if it agrees.
+
+    A released dataset cites a policy *version*, so the same version may not
+    change content underneath it. Re-posting the identical body is accepted
+    and returns the existing row; changing the description is refused.
+    """
+    _as_curator(client, login_as, _api_curator_user)
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+
+    edited = dict(POLICY, description="Quietly different criteria prose.")
+    response = client.post("/api/v1/releases/policies", json=edited)
+    assert response.status_code == 409, response.text
+    assert response.json()["code"] == "curation_policy_version_conflict"
+
+
+# ---------------------------------------------------------------------------
 # A published release survives everything that happens next
 # ---------------------------------------------------------------------------
 

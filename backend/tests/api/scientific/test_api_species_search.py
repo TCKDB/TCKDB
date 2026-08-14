@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.api.config import settings
 from tests.services.scientific_read._factories import (
     make_species,
     make_species_entry,
@@ -121,9 +122,56 @@ def test_get_unknown_smiles_returns_200_empty_records(client, db_session):
     assert body["pagination"]["total"] == 0
 
 
-def test_get_invalid_pagination_limit_rejected(client, db_session):
-    resp = client.get(
-        "/api/v1/scientific/species/search?smiles=X&limit=999"
-    )
-    # FastAPI Query(le=200) catches it before reaching the service.
+def test_get_limit_above_the_framework_bound_is_rejected_by_the_framework(
+    client, db_session
+):
+    """``Query(le=200)`` is the outer bound, and it is not the service.
+
+    Kept, and now asserted precisely: this request never reaches
+    ``validate_pagination``, so it says nothing about the pagination
+    codes. The two tests below are the ones that do.
+    """
+    resp = client.get("/api/v1/scientific/species/search?smiles=X&limit=999")
     assert resp.status_code == 422
+    assert resp.json()["code"] == "request_validation_error"
+
+
+def test_get_limit_above_the_service_cap_is_rejected_by_the_service(
+    client, db_session, monkeypatch
+):
+    """A limit inside ``Query``'s bound but above the hosted cap.
+
+    The two caps are independent: ``MAX_LIMIT`` is the schema's, and
+    ``settings.public_max_limit`` is the deployment's. They are equal in
+    the shipped configuration, which is why no request could reach this
+    branch through a GET route until the hosted cap is lowered -- and why
+    the branch went untested for as long as it did.
+    """
+    monkeypatch.setattr(settings, "public_max_limit", 10)
+    resp = client.get("/api/v1/scientific/species/search?smiles=X&limit=50")
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "limit_too_large"
+
+
+def test_get_offset_beyond_the_shipped_deep_paging_cap_is_rejected(
+    client, db_session
+):
+    """No monkeypatch: the shipped ``public_max_offset`` is the bound.
+
+    ``offset`` has no ``le`` on any route, so this is reachable against
+    the configuration TCKDB actually runs -- which is the point of
+    asserting it here rather than under a lowered cap like its siblings.
+
+    Both sides of the boundary are asserted. An expected value derived
+    from the same constant the guard reads will follow that constant
+    wherever it moves; pinning the cap itself as *accepted* is what stops
+    this passing if the comparison is widened.
+    """
+    base = "/api/v1/scientific/species/search?smiles=X&offset="
+
+    allowed = client.get(f"{base}{settings.public_max_offset}")
+    assert allowed.status_code == 200, allowed.text
+
+    resp = client.get(f"{base}{settings.public_max_offset + 1}")
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "offset_too_large"

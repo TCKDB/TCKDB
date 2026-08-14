@@ -289,8 +289,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
-    ApiCode("curation_policy_version_conflict", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("curation_policy_version_conflict", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409, not the 422 its ValueError base would suggest. "
+                "ReleaseCurationError subclasses ValueError, so reading the "
+                "raise site says 422; the one route that can reach it wraps "
+                "it in HTTPException(409) instead "
+                "(api/routes/releases_admin.py). The status is a property of "
+                "the route, not of the raise, which is why it was recorded "
+                "wrong until the observer started checking the pair."
+            )),
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/curator_task_lifecycle.py"),
     ApiCode("cursor_offset_conflict", 422, Surface.coded_exception,
@@ -371,6 +380,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
+    ApiCode("limit_too_large", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py",
+            note=(
+                "Split out of invalid_pagination, which covered four "
+                "conditions with three different remedies. A limit above the "
+                "hosted cap is recoverable by resending the same query with "
+                "a smaller page size; a negative offset is a caller bug. "
+                "Unreachable through a GET route in the shipped "
+                "configuration, where MAX_LIMIT and public_max_limit are "
+                "both 200 and Query(le=200) refuses anything larger first -- "
+                "reachable through a POST search body, and through any GET "
+                "on a deployment that lowers public_max_limit."
+            )),
     ApiCode("lowest_energy_unavailable", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/species_calculations_search.py"),
     ApiCode("manifest_already_frozen", 422, Surface.message_prefix,
@@ -401,6 +423,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("non_finite_value", 422, Surface.message_prefix,
             "backend/app/services/release/artifacts.py"),
+    ApiCode("offset_too_large", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/common.py",
+            note=(
+                "The sibling of limit_too_large, and the reason they are two "
+                "codes rather than one: retrying with a smaller offset "
+                "returns different rows, so this one is not recoverable by "
+                "resending. Reachable on any paginated read against the "
+                "shipped configuration -- offset carries no upper bound at "
+                "the route, so settings.public_max_offset is the only one."
+            )),
     ApiCode("owner_missing", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculations.py"),
     ApiCode("parameter_value_requires_key", 422, Surface.message_prefix,
@@ -449,8 +481,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/profile.py"),
     ApiCode("release_selects_nothing", 422, Surface.message_prefix,
             "backend/app/services/release/manifest.py"),
-    ApiCode("release_tag_taken", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("release_tag_taken", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 for the same reason as "
+                "curation_policy_version_conflict: the route wraps the "
+                "ReleaseCurationError in HTTPException(409) rather than "
+                "letting its ValueError base reach the 422 handler."
+            )),
     ApiCode("request_validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("resource_not_found", 404, Surface.generic_fallback,

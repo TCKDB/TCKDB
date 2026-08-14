@@ -552,7 +552,9 @@ that has freq/sp children.
 | Unknown `include` token | 422 | `unknown_include_token` |
 | `sort=` supplied | 422 | `client_sort_not_supported` |
 | `temperature_min > temperature_max` | n/a — endpoint has no temperature filters in v0 |
-| `offset < 0` or `limit > 200` | 422 | `invalid_pagination` |
+| `offset < 0` or `limit < 1` | 422 | `invalid_pagination` |
+| `limit` above the hosted cap | 422 | `limit_too_large` |
+| `offset` above the hosted deep-paging cap | 422 | `offset_too_large` |
 | POST with query-string keys | 422 | `post_search_fields_must_be_in_body` |
 
 All errors use the existing `ValueError → 422`, `NotFoundError → 404`

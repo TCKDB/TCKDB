@@ -63,6 +63,7 @@ import pytest
 
 from app.api.code_catalogue import CATALOGUE, Surface, catalogued_codes
 from app.api.error_contract import (
+    _NESTED_CODE_PATTERN,
     MESSAGE_PREFIX_CODES,
     detail_code,
     validation_detail_code,
@@ -387,6 +388,149 @@ class TestTheShapeTheRaiseSiteScanCannotRead:
             f"catalogued as message_prefix, so they will not be promoted: "
             f"{not_promotable}"
         )
+
+
+def _static_message(node: ast.AST) -> str | None:
+    """The static text of a string expression, interpolations blanked.
+
+    An f-string's ``{...}`` holes are replaced by ``\\ufffd`` rather than
+    dropped: dropping them would let the text on either side join and
+    invent a token that the runtime string never contains, and
+    ``\\ufffd`` matches neither half of the code pattern, so it cannot
+    create one or bridge across one. What it cannot do is see a token a
+    *value* supplies at runtime -- see the class docstring for why that
+    is a known and bounded gap rather than an oversight.
+    """
+    if isinstance(node, ast.Constant):
+        return node.value if isinstance(node.value, str) else None
+    if isinstance(node, ast.JoinedStr):
+        parts: list[str] = []
+        for value in node.values:
+            if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                parts.append(value.value)
+            else:
+                parts.append("�")
+        return "".join(parts)
+    if isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add):
+        left = _static_message(node.left)
+        right = _static_message(node.right)
+        return None if left is None or right is None else left + right
+    return None
+
+
+def _messages_opening_with_a_promotable_code() -> list[tuple[str, int, str]]:
+    """``(path, line, text)`` for every message that declares a code.
+
+    Docstrings are excluded: this module and its neighbours quote real
+    refusal messages to explain them, and a quotation is not a message a
+    client can receive.
+    """
+    longest: dict[tuple[str, int], str] = {}
+    for path, tree in _sources():
+        documentation = {
+            id(node.value)
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Expr)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        }
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.Constant, ast.JoinedStr, ast.BinOp)):
+                continue
+            if id(node) in documentation:
+                continue
+            text = _static_message(node)
+            if text is None:
+                continue
+            match = _CODE_POSITION.match(text)
+            if match is None:
+                continue
+            token = text.split(":", 1)[0]
+            if token not in MESSAGE_PREFIX_CODES:
+                continue
+            # ``ast.walk`` yields a concatenation *and* its first operand,
+            # both of which open with the code. Keeping the longest text
+            # per site reports the message the raiser actually built,
+            # rather than the same defect twice with half of it missing.
+            key = (path, node.lineno)
+            if len(text) > len(longest.get(key, "")):
+                longest[key] = text
+    return [(path, line, text) for (path, line), text in sorted(longest.items())]
+
+
+class TestOneMessageDeclaresOneCode:
+    """A message that names two codes cannot honestly report either.
+
+    ``validation_detail_code`` judges ambiguity on the *unfiltered*
+    candidate set, deliberately: a message carrying two ``token: ``
+    tokens fell back to ``validation_error`` before the position rule
+    existed and must keep falling back, so that tightening the rule can
+    never *add* a code to a published response. That is the right rule.
+
+    Its consequence is that a message which opens with a real code and
+    then spells a second one mid-sentence silently publishes neither.
+    Two sites in the tree did exactly that, both in
+    ``validate_pagination``::
+
+        "invalid_pagination: limit_too_large: limit must be <= 200 (got …)"
+
+    Both were catalogued, both were exported to the client enum, and
+    neither could ever reach a ``code`` field. The repair was to say what
+    went wrong once -- the second token was the honest name all along, so
+    it became the code -- and this is the gate that keeps the class
+    closed. It lands green because the two sites it was written for are
+    fixed in the same change; a gate that lands red gets disabled rather
+    than satisfied.
+
+    What it cannot see, stated so it is not mistaken for coverage: a
+    token supplied by an interpolated *value* at runtime (a
+    ``resource_name`` that happens to be ``foo_bar`` immediately before a
+    colon), and a message assembled across statements. The runtime
+    observer does not cover those either -- a degraded body carries a
+    perfectly catalogued ``validation_error`` -- so the residual is real.
+    It is bounded by the fact that every such message is built here, from
+    literals, in one function per refusal.
+    """
+
+    def test_the_scan_sees_the_messages_it_is_written_over(self):
+        """An empty scan would make the next assertion prove nothing."""
+        messages = _messages_opening_with_a_promotable_code()
+        assert len(messages) > 40, (
+            f"only {len(messages)} coded messages found; the scan has stopped "
+            "reading the tree and the assertion below is vacuous"
+        )
+        codes = {text.split(":", 1)[0] for _path, _line, text in messages}
+        for expected in ("invalid_pagination", "limit_too_large", "offset_too_large"):
+            assert expected in codes, sorted(codes)
+
+    def test_no_coded_message_names_a_second_code(self):
+        ambiguous = [
+            (path, line, text)
+            for path, line, text in _messages_opening_with_a_promotable_code()
+            if len(set(_NESTED_CODE_PATTERN.findall(text))) > 1
+        ]
+        assert not ambiguous, (
+            "these messages open with a catalogued code and then name "
+            "another one, so validation_detail_code refuses to promote "
+            "either and the client receives validation_error: "
+            + "; ".join(f"{path}:{line} {text!r}" for path, line, text in ambiguous)
+        )
+
+    def test_the_scan_would_notice_a_second_token(self):
+        """The assertion above passes over a set that is empty today.
+
+        So the detector is provoked directly: the exact shape that was in
+        the tree must be classified as ambiguous, and must actually
+        degrade when the envelope reads it. Without this the gate could be
+        broken -- a pattern that matches nothing -- and stay green.
+        """
+        regressed = "invalid_pagination: limit_too_large: limit must be <= 200 (got 999)"
+        assert len(set(_NESTED_CODE_PATTERN.findall(regressed))) > 1
+        assert _promoted(regressed) == "validation_error"
+
+        repaired = "limit_too_large: limit must be <= 200 (got 999)"
+        assert len(set(_NESTED_CODE_PATTERN.findall(repaired))) == 1
+        assert _promoted(repaired) == "limit_too_large"
 
 
 class TestTheLegacyDetailPathIsGatedToo:

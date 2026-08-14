@@ -304,9 +304,21 @@ def test_unknown_include_token_rejected(db_session):
         )
 
 
-def test_invalid_pagination_limit_rejected(db_session):
-    with pytest.raises(ValueError, match="invalid_pagination"):
+def test_limit_above_the_cap_is_rejected(db_session):
+    """``limit_too_large``, not ``invalid_pagination``.
+
+    The request schema puts no upper bound on ``limit``, so a POST body
+    reaches this branch against the shipped configuration -- unlike a GET,
+    where ``Query(le=200)`` refuses it first.
+    """
+    with pytest.raises(ValueError, match="limit_too_large"):
         search_species(db_session, SpeciesSearchRequest(smiles="X", limit=999))
+
+
+def test_a_malformed_limit_is_still_invalid_pagination(db_session):
+    """The code that stayed. A limit below one is a caller bug, not policy."""
+    with pytest.raises(ValueError, match="invalid_pagination"):
+        search_species(db_session, SpeciesSearchRequest(smiles="X", limit=0))
 
 
 # ---------------------------------------------------------------------------
