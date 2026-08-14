@@ -8,6 +8,7 @@ persists to ``group_additivity_scheme`` / ``applied_group_additivity`` /
 
 from __future__ import annotations
 
+import json
 import logging
 
 import pytest
@@ -246,6 +247,39 @@ def test_service_guard_rejects_ga_on_non_estimated_thermo(db_session):
         create_applied_group_additivity(
             db_session, payload, thermo_id=computed.id
         )
+
+
+def test_the_missing_thermo_guard_does_not_answer_with_its_own_name(db_session):
+    """The refusal must not advertise the function it was raised in.
+
+    The message is written in the house style, ``f"{context}: <prose>"``,
+    with the enclosing function as ``context`` -- so the token lands in the
+    code position and the envelope used to publish
+    ``code="create_applied_group_additivity"``: a function name presented to
+    a client as a branchable contract. It is in no register, in no generated
+    client constant, and it moves the day somebody renames the function.
+
+    The envelope is built here by the *real* handler rather than asserted
+    about in the abstract, because what a depositor receives is the thing
+    under test. ``validation_error`` is the right answer: honestly generic
+    beats convincingly fake.
+
+    This guard protects programmatic callers -- ``persist_thermo_upload``
+    passes the row it has just created, so no HTTP request can reach it --
+    which is why the case is provoked directly.
+    """
+    from app.api.errors import _value_error_handler
+
+    payload = AppliedGroupAdditivityUploadPayload.model_validate(_ga_payload())
+    with pytest.raises(ValueError) as raised:
+        create_applied_group_additivity(db_session, payload, thermo_id=-1)
+
+    response = _value_error_handler(None, raised.value)  # type: ignore[arg-type]
+    body = json.loads(response.body)
+    assert response.status_code == 422
+    assert body["code"] == "validation_error"
+    assert body["detail"] == str(raised.value)
+    assert body["context"] == {}
 
 
 def test_ga_requires_at_least_one_component():
