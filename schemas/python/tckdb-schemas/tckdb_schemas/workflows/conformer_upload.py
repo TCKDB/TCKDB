@@ -236,11 +236,29 @@ class ConformerUploadRequest(SchemaBase):
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed
     note: str | None = None
     label: str | None = Field(default=None, max_length=64)
+    conformer_key: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "Optional local name for the single conformer observation this "
+            "upload creates, referenced from "
+            "``applied_energy_corrections[*].source_conformer_key``. It is "
+            "the conformer namespace's counterpart to "
+            "``ConformerCalculationIn.key``, and it is deliberately not "
+            "``label``: a label is a human tag that also participates in "
+            "conformer-group matching, so renaming it for grouping reasons "
+            "would silently break a correction reference, and a depositor "
+            "who has no label has no way to point at their own conformer. "
+            "Optional by design — a payload with no conformer "
+            "cross-reference never needs one."
+        ),
+    )
 
     @model_validator(mode="after")
     def normalize_optional_text_fields(self) -> Self:
         self.note = normalize_optional_text(self.note)
         self.label = normalize_optional_text(self.label)
+        self.conformer_key = normalize_optional_text(self.conformer_key)
         return self
 
     def declared_calculation_keys(self) -> list[str]:

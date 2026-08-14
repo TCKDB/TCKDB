@@ -24,6 +24,60 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.31.0 — **BREAKING**: `source_conformer_key` now points at something, on every route that accepts it
+
+**A field that cannot be wrong is not a field.** Three upload paths
+accepted a value, returned 201, and did nothing with it. All three are
+now either persisted or refused, and the set of payloads that validate
+narrows in three places — hence the major-ish bump on a pre-1.0 line.
+
+| payload | 0.30.0 | 0.31.0 |
+|---|---|---|
+| species/reaction bundle, `source_conformer_key` naming a declared conformer | 201, link **not** stored | 201, link stored |
+| species/reaction bundle, `source_conformer_key` naming nothing | 201, silently ignored | **422** `applied_energy_correction_source_key_undeclared` |
+| `/uploads/conformers`, `source_conformer_key` equal to `label` | 201, resolved via the label | **422**, same code |
+| `/uploads/conformers`, `source_conformer_key` equal to a new `conformer_key` | field did not exist | 201, link stored |
+| reaction bundle, two conformers of one species sharing a `key` | 201 | **422** |
+| species bundle root `workflow_tool_release` | accepted, dropped, *and* warned about as missing | persisted as the thermo/statmech default |
+
+**New field: `ConformerUploadRequest.conformer_key`** (optional). It is
+the conformer namespace's counterpart to `ConformerCalculationIn.key`.
+`source_conformer_key` previously resolved against `label`, because a
+label was the only string a conformer upload attached to its conformer.
+That conflated two jobs: a label is a human tag that also feeds
+conformer-group matching, so renaming it for grouping reasons silently
+broke a correction reference, and a depositor with no label could not
+name their own conformer at all.
+
+**Migrating a conformer upload.** If you set `source_conformer_key` to
+your own `label`, add `conformer_key` with that same string; `label` is
+free to keep meaning what it means. If you set neither, nothing changes.
+
+**Migrating a bundle.** A `source_conformer_key` that names a real
+`conformers[*].key` needs no change — it now does what it always looked
+like it did. One that names anything else was never recording a link and
+now says so. On the reaction bundle the namespace is scoped to the
+species the correction sits under: a sibling species's conformer is out
+of scope, which is what makes ownership true by construction rather than
+by a second check. A transition state in that bundle declares no
+conformers at all, so a TS-side `source_conformer_key` can never resolve
+and is refused rather than ignored.
+
+**`ComputedSpeciesUploadRequest.workflow_tool_release` is now read.** It
+is the bundle-level default the `thermo` and `statmech` blocks inherit
+when they name no workflow tool of their own — the precedence
+`ComputedReactionUploadRequest` has applied to `literature` /
+`analysis_software_release` / `workflow_tool_release` since those fields
+and their reader landed in one commit (2026-03-22). The species root
+declared the same field five weeks later and no commit ever wired it, so
+this is drift, not design. Nothing that omitted the field changes.
+
+**`ComputedSpeciesUploadRequest.note` is still not persisted**, and now
+says so in its own description. Unlike `workflow_tool_release` it has no
+row to go to — the bundle owns no record of its own — so giving it one
+is a decision about what a bundle-level note *is*, not a wiring
+omission.
+
 ### 0.30.0 — **BREAKING**: a frequency list longer than `3N` is refused, not flagged
 
 **This narrows the set of payloads that validate.** A payload accepted by

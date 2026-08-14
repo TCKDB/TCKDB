@@ -169,6 +169,19 @@ class AppliedEnergyCorrectionUploadPayload(SchemaBase):
     The ``source_conformer_key`` and ``source_calculation_key`` are local
     string keys that reference other objects in the same upload bundle;
     they are resolved to integer IDs by the workflow orchestrator.
+
+    Both keys resolve against a namespace the *enclosing* request
+    declared, and a key naming nothing in it is refused with
+    ``applied_energy_correction_source_key_undeclared`` rather than
+    dropped. ``source_conformer_key`` names the request's
+    ``conformer_key`` on ``/uploads/conformers``; ``conformers[*].key``
+    on ``/uploads/computed-species``; and, on
+    ``/uploads/computed-reaction``, ``conformers[*].key`` of the species
+    the correction sits under — a transition state declares no
+    conformers there, so a TS-side correction can never name one.
+    Scoping the reaction bundle's conformer namespace to one species is
+    what makes ownership true by construction: a correction targeting
+    one species entry cannot borrow another's conformer.
     """
 
     # Provenance source — exactly one required

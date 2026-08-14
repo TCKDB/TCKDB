@@ -37,6 +37,8 @@ from __future__ import annotations
 from sqlalchemy import select
 
 from app.db.models.calculation import Calculation
+from app.db.models.energy_correction import AppliedEnergyCorrection
+from app.db.models.species import ConformerObservation
 
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "B3LYP", "basis": "6-31G(d)"}
@@ -298,26 +300,104 @@ class TestConformerCorrectionSourceKeys:
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 201, resp.text
 
-    def test_conformer_key_that_is_not_the_label_is_refused(self, client):
+    def test_conformer_key_that_names_nothing_is_refused(self, client):
         payload = _conformer_payload(
             "conf-aec-label",
+            conformer_key="the-conformer",
             applied_energy_corrections=[
                 _zpe_correction(source_conformer_key="some-other-conformer")
             ],
         )
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         body = _assert_code(resp, _KEY_UNDECLARED)
-        assert body["context"]["declared_keys"] == ["conf-aec-label"]
+        assert body["context"]["declared_keys"] == ["the-conformer"]
 
-    def test_conformer_key_matching_the_label_is_accepted(self, client):
+    def test_the_declared_conformer_key_is_accepted_and_persisted(
+        self, client, db_session
+    ):
         payload = _conformer_payload(
-            "conf-aec-good-label",
+            "conf-aec-good-key",
+            conformer_key="the-conformer",
             applied_energy_corrections=[
-                _zpe_correction(source_conformer_key="conf-aec-good-label")
+                _zpe_correction(source_conformer_key="the-conformer")
             ],
         )
         resp = client.post("/api/v1/uploads/conformers", json=payload)
         assert resp.status_code == 201, resp.text
+        # ``id`` on this route is the conformer observation the upload
+        # created -- the row a source_conformer_key must point at.
+        observation_id = resp.json()["id"]
+        row = db_session.scalars(
+            select(AppliedEnergyCorrection).order_by(
+                AppliedEnergyCorrection.id.desc()
+            )
+        ).first()
+        # A 201 proves the payload was accepted, not that the link exists.
+        assert row.source_conformer_observation_id == observation_id
+
+
+class TestTheConformerNamespaceIsNotTheLabel:
+    """A reference key answers to references; a label does not.
+
+    ``source_conformer_key`` used to resolve against ``request.label``,
+    because a label was the only string a conformer upload attached to
+    its conformer. That conflated two jobs. ``label`` is a human tag that
+    also feeds conformer-group matching, so renaming it for grouping
+    reasons silently broke a correction reference; and a depositor who
+    set no label could not name their own conformer at all — the exact
+    shape of "a field that cannot be right".
+
+    ``conformer_key`` is the conformer namespace's counterpart to the
+    ``key`` this same request already puts on its calculations.
+    """
+
+    def test_a_label_is_no_longer_a_reference(self, client):
+        """The old spelling now refuses instead of resolving."""
+        payload = _conformer_payload(
+            "conf-label-not-key",
+            applied_energy_corrections=[
+                _zpe_correction(source_conformer_key="conf-label-not-key")
+            ],
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        # Nothing at all is declared: the label is not in the namespace.
+        assert body["context"]["declared_keys"] == []
+        assert body["context"]["key"] == "conf-label-not-key"
+
+    def test_a_label_does_not_shadow_a_different_conformer_key(self, client):
+        """Setting both, the key is the one that resolves — not the label."""
+        payload = _conformer_payload(
+            "a-human-label",
+            conformer_key="a-machine-key",
+            applied_energy_corrections=[
+                _zpe_correction(source_conformer_key="a-human-label")
+            ],
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert body["context"]["declared_keys"] == ["a-machine-key"]
+
+    def test_a_conformer_with_no_label_can_still_be_named(
+        self, client, db_session
+    ):
+        """The case that was previously impossible to express."""
+        payload = _conformer_payload(
+            None,
+            conformer_key="unlabelled-conformer",
+            applied_energy_corrections=[
+                _zpe_correction(source_conformer_key="unlabelled-conformer")
+            ],
+        )
+        payload.pop("label")
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text
+        row = db_session.scalars(
+            select(AppliedEnergyCorrection).order_by(
+                AppliedEnergyCorrection.id.desc()
+            )
+        ).first()
+        assert row.source_conformer_observation_id == resp.json()["id"]
 
 
 # ---------------------------------------------------------------------------
@@ -933,3 +1013,299 @@ class TestBundleRoutesDoNotOfferChaining:
         )
         resp = client.post("/api/v1/uploads/computed-species", json=payload)
         assert resp.status_code == 201, resp.text
+
+
+# ---------------------------------------------------------------------------
+# The same rule on the two bundle routes — the ones ARC deposits through
+# ---------------------------------------------------------------------------
+
+
+_XYZ_H = "1\nH atom\nH 0.0 0.0 0.0"
+_XYZ_H2 = "2\nH2\nH 0.0 0.0 0.0\nH 0.0 0.0 0.74"
+_XYZ_TS = "2\nH...H\nH 0.0 0.0 0.0\nH 0.0 0.0 1.40"
+
+
+def _aec_total(**overrides) -> dict:
+    """One scheme-backed AEC total, naming no source key by default."""
+    base: dict = {
+        "scheme": {"name": "AEC-key-contract", "kind": "atom_energy"},
+        "application_role": "aec_total",
+        "value": -0.0012,
+        "value_unit": "hartree",
+    }
+    base.update(overrides)
+    return base
+
+
+def _latest_correction(db_session) -> AppliedEnergyCorrection:
+    """The row the request under test just wrote.
+
+    Asserted against the database rather than the response body: a 201
+    proves the payload was accepted, not that the link was stored — which
+    is precisely the distinction this whole file exists to make.
+    """
+    row = db_session.scalars(
+        select(AppliedEnergyCorrection).order_by(
+            AppliedEnergyCorrection.id.desc()
+        )
+    ).first()
+    assert row is not None, "no applied_energy_correction row was written"
+    return row
+
+
+def _rxn_opt(key: str) -> dict:
+    return {
+        "key": key,
+        "type": "opt",
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT,
+        "opt_converged": True,
+    }
+
+
+def _rxn_species(key: str, smiles: str, multiplicity: int, xyz: str) -> dict:
+    return {
+        "key": key,
+        "species_entry": {
+            "smiles": smiles,
+            "charge": 0,
+            "multiplicity": multiplicity,
+        },
+        "conformers": [
+            {
+                "key": f"{key}-conf",
+                "geometry": {"key": f"{key}-geom", "xyz_text": xyz},
+                "calculation": _rxn_opt(f"{key}-opt"),
+            }
+        ],
+    }
+
+
+def _rxn_bundle() -> dict:
+    """``H + H -> H2``. Two species, so a sibling conformer key exists."""
+    return {
+        "species": [
+            _rxn_species("h", "[H]", 2, _XYZ_H),
+            _rxn_species("h2", "[H][H]", 1, _XYZ_H2),
+        ],
+        "reversible": True,
+        "reactant_keys": ["h", "h"],
+        "product_keys": ["h2"],
+    }
+
+
+def _rxn_bundle_with_ts() -> dict:
+    bundle = _rxn_bundle()
+    bundle["transition_state"] = {
+        "charge": 0,
+        "multiplicity": 3,
+        "geometry": {"key": "ts-geom", "xyz_text": _XYZ_TS},
+        "calculation": _rxn_opt("ts-opt"),
+        "calculations": [
+            {
+                "key": "ts-freq",
+                "type": "freq",
+                "geometry_key": "ts-geom",
+                "software_release": _SOFTWARE,
+                "level_of_theory": _LOT,
+                "freq_n_imag": 1,
+                "freq_imag_freq_cm1": -1500.0,
+                "freq_frequencies_cm1": [-1500.0],
+            }
+        ],
+    }
+    return bundle
+
+
+class TestSpeciesBundleConformerSourceKeys:
+    """``source_conformer_key`` was inert on both bundle roots.
+
+    ``/uploads/conformers`` got this rule; the bundles never did. Both
+    bundle workflows passed only ``source_calculation_id`` to
+    ``create_applied_energy_correction`` and never read
+    ``source_conformer_key`` at all — so a depositor naming a real
+    conformer got a 201 with ``source_conformer_observation_id`` NULL,
+    and a depositor naming one that does not exist got the identical
+    201. By deposit volume this was the larger half: these are the two
+    routes the ARC adapter uses.
+    """
+
+    def test_a_declared_conformer_key_is_persisted(self, client, db_session):
+        payload = _bundle_payload(
+            applied_energy_corrections=[_aec_total(source_conformer_key="c0")]
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text
+        observation_id = resp.json()["conformers"][0][
+            "conformer_observation_id"
+        ]
+        assert (
+            _latest_correction(db_session).source_conformer_observation_id
+            == observation_id
+        )
+
+    def test_an_undeclared_conformer_key_is_refused(self, client):
+        payload = _bundle_payload(
+            applied_energy_corrections=[_aec_total(source_conformer_key="c1")]
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert body["context"]["key"] == "c1"
+        assert body["context"]["declared_keys"] == ["c0"]
+        assert (
+            body["context"]["field"]
+            == "applied_energy_corrections[0].source_conformer_key"
+        )
+
+    def test_the_rule_reaches_thermos_nested_corrections_too(self, client):
+        """Two lists of corrections in this bundle, one rule."""
+        payload = _bundle_payload(
+            thermo={
+                "h298_kj_mol": 217.998,
+                "applied_energy_corrections": [
+                    _aec_total(source_conformer_key="not-a-conformer")
+                ],
+            }
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert (
+            body["context"]["field"]
+            == "thermo.applied_energy_corrections[0].source_conformer_key"
+        )
+
+    def test_a_declared_key_under_thermo_is_persisted(
+        self, client, db_session
+    ):
+        payload = _bundle_payload(
+            thermo={
+                "h298_kj_mol": 217.998,
+                "applied_energy_corrections": [
+                    _aec_total(source_conformer_key="c0")
+                ],
+            }
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text
+        observation_id = resp.json()["conformers"][0][
+            "conformer_observation_id"
+        ]
+        assert (
+            _latest_correction(db_session).source_conformer_observation_id
+            == observation_id
+        )
+
+    def test_omitting_the_key_still_leaves_the_link_unset(
+        self, client, db_session
+    ):
+        """The green half: silence stays silence, and is not a refusal."""
+        payload = _bundle_payload(applied_energy_corrections=[_aec_total()])
+        resp = client.post("/api/v1/uploads/computed-species", json=payload)
+        assert resp.status_code == 201, resp.text
+        assert (
+            _latest_correction(db_session).source_conformer_observation_id
+            is None
+        )
+
+
+class TestReactionBundleConformerSourceKeys:
+    """The reaction bundle scopes the conformer namespace to one species.
+
+    Calculation keys are global across that bundle, with ownership
+    checked separately afterwards. Conformer keys are not: a correction
+    targeting one species entry resolves only against that species's own
+    ``conformers[*].key``, which makes ownership true by construction
+    rather than by a second check that can be forgotten — and it is why
+    the request model now requires those keys to be unique within a
+    species, which nothing enforced before.
+    """
+
+    def test_a_declared_conformer_key_is_persisted(self, client, db_session):
+        bundle = _rxn_bundle()
+        bundle["species"][0]["applied_energy_corrections"] = [
+            _aec_total(source_conformer_key="h-conf")
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        row = _latest_correction(db_session)
+        assert row.source_conformer_observation_id is not None
+        observation = db_session.get(
+            ConformerObservation, row.source_conformer_observation_id
+        )
+        assert observation is not None
+
+    def test_an_undeclared_conformer_key_is_refused(self, client):
+        bundle = _rxn_bundle()
+        bundle["species"][0]["applied_energy_corrections"] = [
+            _aec_total(source_conformer_key="h-confomer")
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert body["context"]["declared_keys"] == ["h-conf"]
+        assert body["context"]["field"] == (
+            "species['h'].applied_energy_corrections[0].source_conformer_key"
+        )
+
+    def test_a_sibling_species_conformer_is_out_of_scope(self, client):
+        """The ownership rule, expressed as a namespace rather than a check."""
+        bundle = _rxn_bundle()
+        bundle["species"][0]["applied_energy_corrections"] = [
+            _aec_total(source_conformer_key="h2-conf")
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        # The sibling's key is really present in this payload and is
+        # still refused; the message names only what is in scope.
+        assert body["context"]["key"] == "h2-conf"
+        assert body["context"]["declared_keys"] == ["h-conf"]
+
+    def test_duplicate_conformer_keys_within_a_species_are_refused(
+        self, client
+    ):
+        """An ambiguous key is the defect that keys exist to remove."""
+        bundle = _rxn_bundle()
+        species = bundle["species"][0]
+        species["conformers"] = [
+            species["conformers"][0],
+            {
+                "key": "h-conf",
+                "geometry": {"key": "h-geom-2", "xyz_text": _XYZ_H},
+                "calculation": _rxn_opt("h-opt-2"),
+            },
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        assert resp.status_code == 422, resp.text[:400]
+        assert resp.json()["code"] == "request_validation_error"
+
+    def test_a_transition_state_correction_cannot_name_a_conformer(
+        self, client
+    ):
+        """A TS in this bundle declares no conformers, so no key can be right.
+
+        Refusing beats ignoring for the reason it does everywhere else:
+        the depositor believes they recorded a link and did not.
+        """
+        bundle = _rxn_bundle_with_ts()
+        bundle["transition_state"]["applied_energy_corrections"] = [
+            _aec_total(source_conformer_key="ts-conf")
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert body["context"]["declared_keys"] == []
+        assert body["context"]["field"] == (
+            "transition_state.applied_energy_corrections[0]."
+            "source_conformer_key"
+        )
+
+    def test_a_transition_state_correction_without_a_key_still_uploads(
+        self, client, db_session
+    ):
+        bundle = _rxn_bundle_with_ts()
+        bundle["transition_state"]["applied_energy_corrections"] = [
+            _aec_total()
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        row = _latest_correction(db_session)
+        assert row.source_conformer_observation_id is None
+        assert row.target_transition_state_entry_id is not None

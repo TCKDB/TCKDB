@@ -28,7 +28,9 @@ from sqlalchemy import select
 
 from app.db.models.calculation import Calculation, CalculationSCFStability
 from app.db.models.common import SCFStabilityStatus, ThermoCalculationRole
+from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo, ThermoSourceCalculation
+from app.db.models.workflow import WorkflowToolRelease
 
 _SOFTWARE = {"name": "Gaussian", "version": "16"}
 _LOT = {"method": "wb97xd", "basis": "def2tzvp"}
@@ -426,3 +428,127 @@ def test_calculation_rows_are_shared_not_duplicated_by_thermo_links(
         )
     ).one()
     assert link.calculation_id == total
+
+
+# ---------------------------------------------------------------------------
+# A bundle-level workflow tool, on the root that never read it
+# ---------------------------------------------------------------------------
+
+
+_ARC = {"name": "ARC", "version": "1.1.0"}
+
+
+class TestSpeciesBundleLevelWorkflowTool:
+    """``ComputedSpeciesUploadRequest.workflow_tool_release`` did nothing.
+
+    The reaction root declared its ``workflow_tool_release`` and read it
+    in the same commit (2026-03-22); the species root declared the same
+    field five weeks later and no commit ever wired it. That is drift,
+    not design — so it is now the bundle-level default the thermo and
+    statmech blocks inherit, the precedence the reaction root already
+    applies to this field and its two siblings.
+
+    The sharpest symptom was not the missing link. A depositor who filled
+    the field in was *also* told, in the 201 body, that their record was
+    missing workflow-tool provenance.
+    """
+
+    def test_thermo_inherits_the_bundle_level_tool(self, client, db_session):
+        bundle = _species_bundle(
+            workflow_tool_release=dict(_ARC),
+            thermo={"scientific_origin": "computed", "h298_kj_mol": 218.0},
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        thermo = db_session.get(Thermo, resp.json()["thermo"]["thermo_id"])
+        assert thermo.workflow_tool_release_id is not None
+
+    def test_statmech_inherits_the_bundle_level_tool(self, client, db_session):
+        bundle = _species_bundle(
+            workflow_tool_release=dict(_ARC),
+            statmech={"external_symmetry": 1, "statmech_treatment": "rrho"},
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        statmech = db_session.get(
+            Statmech, resp.json()["statmech"]["statmech_id"]
+        )
+        assert statmech.workflow_tool_release_id is not None
+
+    def test_a_block_level_tool_overrides_the_bundle_default(
+        self, client, db_session
+    ):
+        """Fallback, not replacement — the block that speaks wins."""
+        bundle = _species_bundle(
+            workflow_tool_release=dict(_ARC),
+            thermo={
+                "scientific_origin": "computed",
+                "h298_kj_mol": 218.0,
+                "workflow_tool_release": {"name": "Arkane", "version": "3.2"},
+            },
+            statmech={"external_symmetry": 1, "statmech_treatment": "rrho"},
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        thermo = db_session.get(Thermo, resp.json()["thermo"]["thermo_id"])
+        statmech = db_session.get(
+            Statmech, resp.json()["statmech"]["statmech_id"]
+        )
+        thermo_release = db_session.get(
+            WorkflowToolRelease, thermo.workflow_tool_release_id
+        )
+        statmech_release = db_session.get(
+            WorkflowToolRelease, statmech.workflow_tool_release_id
+        )
+        assert thermo_release.version == "3.2"
+        # The silent block still inherits, so the override is scoped.
+        assert statmech_release.version == "1.1.0"
+        assert thermo.workflow_tool_release_id != (
+            statmech.workflow_tool_release_id
+        )
+
+    def test_the_bundle_no_longer_warns_about_what_it_was_given(
+        self, client
+    ):
+        """The 201 body used to report the filled-in field as missing."""
+        bundle = _species_bundle(
+            workflow_tool_release=dict(_ARC),
+            thermo={"scientific_origin": "computed", "h298_kj_mol": 218.0},
+            statmech={"external_symmetry": 1, "statmech_treatment": "rrho"},
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "missing_workflow_tool_provenance" not in codes
+        # The other gaps this bundle really does have are still reported,
+        # so the assertion above is not passing over an empty set.
+        assert "missing_software_release_provenance" in codes
+
+    def test_a_bundle_that_names_no_tool_still_warns(self, client):
+        """The red half: silence is still reported as silence."""
+        bundle = _species_bundle(
+            thermo={"scientific_origin": "computed", "h298_kj_mol": 218.0},
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        codes = {w["code"] for w in resp.json()["warnings"]}
+        assert "missing_workflow_tool_provenance" in codes
+
+    def test_the_root_note_is_still_not_persisted(self, client, db_session):
+        """Stated, not discovered.
+
+        ``note`` is the species root's other unread field. It is left
+        unwired deliberately: unlike ``workflow_tool_release`` it has no
+        row to go to — the bundle owns no record of its own — so giving
+        it one is a decision about what a bundle-level note *is*, not the
+        wiring omission this change fixes. The field now says so in its
+        own description, and this test pins that the claim is true.
+        """
+        bundle = _species_bundle(
+            note="this note goes nowhere",
+            thermo={"scientific_origin": "computed", "h298_kj_mol": 218.0},
+        )
+        resp = client.post("/api/v1/uploads/computed-species", json=bundle)
+        assert resp.status_code == 201, resp.text[:800]
+        thermo = db_session.get(Thermo, resp.json()["thermo"]["thermo_id"])
+        assert thermo.note is None
