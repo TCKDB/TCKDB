@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 import pytest
 from pydantic import ValidationError
@@ -252,12 +253,15 @@ def test_service_guard_rejects_ga_on_non_estimated_thermo(db_session):
 def test_the_missing_thermo_guard_does_not_answer_with_its_own_name(db_session):
     """The refusal must not advertise the function it was raised in.
 
-    The message is written in the house style, ``f"{context}: <prose>"``,
-    with the enclosing function as ``context`` -- so the token lands in the
-    code position and the envelope used to publish
+    The message used to be written in the house style,
+    ``f"{context}: <prose>"``, with the enclosing function as ``context`` --
+    so the token landed in the code position and the envelope published
     ``code="create_applied_group_additivity"``: a function name presented to
-    a client as a branchable contract. It is in no register, in no generated
-    client constant, and it moves the day somebody renames the function.
+    a client as a branchable contract. It was in no register, in no generated
+    client constant, and it moved the day somebody renamed the function.
+    #164 stopped it being promoted; #178 reworded it, which is the actual
+    fix, and dropped its catalogue entry because a message with no leading
+    token is not a code by any spelling.
 
     The envelope is built here by the *real* handler rather than asserted
     about in the abstract, because what a depositor receives is the thing
@@ -280,6 +284,13 @@ def test_the_missing_thermo_guard_does_not_answer_with_its_own_name(db_session):
     assert body["code"] == "validation_error"
     assert body["detail"] == str(raised.value)
     assert body["context"] == {}
+    assert not re.match(r"^[a-z][a-z0-9_]*_[a-z0-9_]+: ", str(raised.value)), (
+        f"the refusal opens with a token in the code position: "
+        f"{str(raised.value)!r}. Asserting only that the body falls back to "
+        "validation_error would not have caught this: the gate added in #164 "
+        "degrades an uncatalogued token anyway, so the wording needs its own "
+        "assertion or nothing holds it."
+    )
 
 
 def test_ga_requires_at_least_one_component():

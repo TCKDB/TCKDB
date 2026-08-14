@@ -114,6 +114,35 @@ wrapper over a contract that is itself still moving.
 
 ### Changed
 
+- **Two refusals stopped naming the function they were raised in.** The
+  `detail` of the group-additivity missing-thermo guard and of the two keyset
+  argument guards used to begin `create_applied_group_additivity: ` and
+  `keyset_predicate: ` — the enclosing function in the position a client reads
+  as a code. #164 stopped either being *promoted* into the `code` field; this
+  reworks the messages themselves, so what a caller reads says what went wrong.
+  Both entries are gone from `app/api/code_catalogue.py`, because a message
+  with no token in the code position is not a code by any spelling.
+  **No `RejectionCode` member is removed and `tckdb-client` is unchanged at
+  0.38.0**: an `accidental_prefix` entry was never client-facing, so neither
+  string was ever generated into the enum — checked with
+  `generate_client_rejection_codes.py --check`, which reports the committed
+  file up to date. Neither code was ever emitted, either: the runtime observer
+  recorded 101 distinct `(status, code)` pairs across all three gates and
+  neither appears. Both guards are reachable only by a direct programmatic
+  call — `persist_thermo_upload` passes a row it has just flushed, so
+  `session.get` cannot return `None` from any HTTP path — and the catalogue
+  said otherwise, which is corrected.
+- **The origin guard can now tell a code from a function of the same name.**
+  `test_every_origin_still_defines_its_code` matched the code anywhere a
+  double quote preceded it, so `"keyset_predicate"` in `__all__` satisfied the
+  entry for `keyset_predicate` — the guard was blindest exactly where that
+  class of defect lives, and #164 reworded that message with the guard staying
+  green. Matching is now by syntactic position, shared with the catalogue's
+  closure scan so the two cannot drift. That scan also reads `*_code=`
+  arguments at any call, not only at a `raise`, which brings the six
+  `*_handle_conflict` codes into static view (five of them are emitted by no
+  test) and revealed one uncatalogued code, `database_error` — a dead
+  `fallback_code` in the operational-error handler, now listed and annotated.
 - `backend/pyproject.toml` now declares the repository's actual MIT license
   instead of `TBD — see repository root`.
 

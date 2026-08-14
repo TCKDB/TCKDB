@@ -64,8 +64,8 @@ whether the token **is** one, because a code and a function name are the
 same shape and both get written first. The house style is
 ``raise ValueError(f"{context}: <prose>")``, and when ``context`` is the
 enclosing function rather than a field path — ``create_applied_group_additivity``,
-``keyset_predicate`` — the position test promotes a function name and the
-envelope publishes it as though a client could branch on it.
+``keyset_predicate`` were the two — the position test promotes a function
+name and the envelope publishes it as though a client could branch on it.
 
 So the token is now also checked against :mod:`app.api.code_catalogue`,
 which enumerates every code the API can emit and records, per code, *by
@@ -77,6 +77,14 @@ that lands in the code position is catalogued as
 :data:`~app.api.code_catalogue.Surface.accidental_prefix` — the catalogue's
 own word for "not a code" — and is therefore not promoted. The honest
 record of a defect becomes the thing that stops it reaching a client.
+
+That record was always the second-best fix, and #178 applied the first:
+both messages now say what went wrong rather than naming the function they
+went wrong in, so neither token is in the code position and neither is
+catalogued under any surface. The gate below is unchanged and is what
+covers the next one written the same way — an allow-list of
+``message_prefix`` codes refuses an unknown token whether or not anyone
+thought to record it.
 
 Why consulting a list is safe here, having been refused before
 --------------------------------------------------------------
@@ -120,12 +128,14 @@ the replacement.
 The residual exposure is therefore the one shape neither scan reads: a
 message bound to a local before being raised (``message = "code: …"; raise
 ValueError(message)``). No such site exists — a census of every string
-literal in both trees beginning with a ``token: `` prefix found 73 tokens,
-of which 66 are catalogued as ``message_prefix``, 5 are logger format
-strings that reach no response body (``geometry_validation``, ``manifest``,
-``readyz``, ``startup``, ``status``), and 2 are the accidental prefixes
-above. So the set of error-reachable prefixes the catalogue does not cover
-is presently empty — measured, and re-measurable, rather than asserted.
+literal in both trees beginning with a ``token: `` prefix found 71 tokens
+(re-measured after #178), of which 66 are catalogued as ``message_prefix``
+and 5 are logger format strings that reach no response body
+(``geometry_validation``, ``manifest``, ``readyz``, ``startup``,
+``status``). The two accidental prefixes that made the count 73 are gone:
+they were reworded, not reclassified. So the set of error-reachable
+prefixes the catalogue does not cover is presently empty — measured, and
+re-measurable, rather than asserted.
 """
 
 from __future__ import annotations
