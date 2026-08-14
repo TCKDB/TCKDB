@@ -183,6 +183,58 @@ class Surface(str, Enum):
     accidental_prefix = "accidental_prefix"
 
 
+class Reach(str, Enum):
+    """Whether a *request* can produce this code.
+
+    :class:`Surface` says how a code gets into a body. This says whether
+    anything a caller can send makes it get there at all, and the two are
+    independent. Keeping them apart is what lets the catalogue stay
+    complete while the client enum stays honest: this module enumerates
+    what exists, and ``RejectionCode`` answers "what might I get back".
+
+    Three-way, not two: catalogued and client-facing (a caller can
+    provoke it); catalogued and not client-facing (a real guard no
+    request can trip); not catalogued at all (not a code). The middle
+    case had no spelling before, so a guard could only be recorded by
+    telling clients they might receive it, or by deleting the entry and
+    leaving the next reader to rediscover the literal.
+
+    This governs the client enum and nothing else. It is deliberately
+    *not* consulted by :data:`app.api.error_contract.MESSAGE_PREFIX_CODES`
+    — promotion is a question about whether a message declared a code,
+    and gating that on reachability would degrade a refusal the day
+    somebody made it reachable and forgot to reclassify.
+    """
+
+    #: A caller can provoke it with a request. The default, because the
+    #: overwhelming majority of codes are refusals of something a
+    #: depositor did.
+    request = "request"
+
+    #: No request can produce it: the branch compares against a value the
+    #: request path established itself, or names a state nothing sets.
+    #: Catalogued, because the literal exists and a reader who greps it
+    #: deserves an answer; never exported, because an enum member a
+    #: client can import and branch on but never receive is a lie in the
+    #: contract.
+    #:
+    #: Not a defect to clean up. Several of these guard an ownership rule
+    #: that no current write path can break because the calculation was
+    #: scoped to the target three lines above the check — and in a
+    #: database where a mis-attached calculation is a scientific error
+    #: rather than a crash, a cheap tripwire against a bug five lines up
+    #: is worth keeping. What is not worth keeping is telling a client it
+    #: might receive one.
+    #:
+    #: Every entry carrying this value must state *why* in its
+    #: :attr:`ApiCode.note`, and the reason has to be a property of the
+    #: code rather than of the test suite. "No test provokes it" is not
+    #: one: three quarters of the codes no test reaches are ordinary
+    #: refusals nobody has got round to, and classifying those as guards
+    #: would hide them from clients for the wrong reason entirely.
+    guard = "guard"
+
+
 @dataclass(frozen=True)
 class ApiCode:
     """One code the API can report, and how it gets there.
@@ -200,15 +252,22 @@ class ApiCode:
         red gate; see :attr:`app.scientific_checks.PythonCheck.location`
         for the incident). Where a code is minted from a variable this is
         the module holding the constant, not the module that raises.
+    :param reach: Whether a request can produce it — see :class:`Reach`.
+        Defaults to :attr:`Reach.request`, so the classification costs
+        nothing to the entries where it is uninteresting and has to be
+        written down where it is not.
     :param note: A fact the site cannot state about itself. Deliberately
         rare — this is an enumeration, not a second copy of the refusal
-        messages.
+        messages. Required on every :attr:`Reach.guard` entry, because
+        "no request can produce this" is a claim and an unexplained claim
+        is the kind that rots.
     """
 
     code: str
     status: int
     surface: Surface
     origin: str
+    reach: Reach = Reach.request
     note: str | None = None
 
     @property
@@ -217,14 +276,23 @@ class ApiCode:
 
         Derived, never declared. A 5xx is not a refusal of anything the
         caller did; a generic fallback repeats the status; an accidental
-        prefix is not a contract at all. Everything else is a refusal a
-        caller can act on, and the point of this module is that acting on
-        it must not require hard-coding a string.
+        prefix is not a contract at all; and a guard no request can trip
+        is a code the caller will never see, so a branch written for it
+        is a branch that never runs — the same silent non-event a
+        hard-coded typo produces, which is what generating this enum
+        exists to remove. Everything else is a refusal a caller can act
+        on, and the point of this module is that acting on it must not
+        require hard-coding a string.
         """
-        return 400 <= self.status < 500 and self.surface not in {
-            Surface.generic_fallback,
-            Surface.accidental_prefix,
-        }
+        return (
+            400 <= self.status < 500
+            and self.reach is Reach.request
+            and self.surface
+            not in {
+                Surface.generic_fallback,
+                Surface.accidental_prefix,
+            }
+        )
 
 
 #: Every code the API can report, ordered by code so a diff is readable.
@@ -235,7 +303,23 @@ class ApiCode:
 #: referee could argue with and must stay expensive.
 CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py"),
+            "backend/app/services/calculation_ownership.py",
+            reach=Reach.guard,
+            note=(
+                "No request produces this code. All three call sites "
+                "(workflows/thermo.py once, workflows/computed_species.py "
+                "twice) read the calculation out of a key map the enclosing "
+                "block built for the target's own owner, and no applied "
+                "correction anywhere carries an existing_calculation_id, so "
+                "nothing can name a foreign row. The condition itself is not "
+                "unreachable: the reaction bundle resolves the same key in a "
+                "namespace spanning every species and the transition state. "
+                "It checks ownership with an inline comparison that raises a "
+                "bare ValueError instead of calling this guard, so a "
+                "depositor who makes that mistake there receives "
+                "validation_error. Converting those two copies is what would "
+                "make this code reachable, and is why the guard stays."
+            )),
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "backend/app/services/energy_correction_resolution.py"),
     ApiCode("arrhenius_a_units_molecularity_mismatch", 422, Surface.coded_exception,
@@ -357,7 +441,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("idempotency_conflict", 409, Surface.response_literal,
             "backend/app/api/errors.py"),
     ApiCode("idempotency_in_progress", 409, Surface.response_literal,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            reach=Reach.guard,
+            note=(
+                "The ternary that mints it has one live arm. "
+                "IdempotencyConflict.in_progress defaults to False and the "
+                "one construction site never passes it, so no response can "
+                "carry this code. Not a milestone that has not arrived: "
+                "docs/specs/upload-idempotency-key-spec.md lists it under "
+                "*Optional* -- 'Only implement idempotency_in_progress if "
+                "needed by the chosen approach' -- and the approach chosen, a "
+                "unique constraint plus the integrity handler, does not need "
+                "it. It is a contingency, and app/api/idempotency.py names "
+                "the change that would make it live."
+            )),
     ApiCode("include_not_implemented_yet", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations.py"),
     ApiCode("integrity_conflict", 409, Surface.generic_fallback,
@@ -558,7 +655,21 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("transition_state_reaction_coordinate_not_designated", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transport_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py"),
+            "backend/app/services/calculation_ownership.py",
+            reach=Reach.guard,
+            note=(
+                "No request produces it, and unlike its four siblings no "
+                "write path anywhere can even produce the condition. "
+                "Transport has one guard, in workflows/transport.py, over a "
+                "calculation the same loop persisted two statements earlier "
+                "with the transport target's own species entry; "
+                "TransportSourceCalculationIn carries only calculation_key "
+                "and role, so no request can name a foreign row; and the two "
+                "other callers of resolve_and_create_transport (the conformer "
+                "upload, the PDep bundle) pass no source calculations at all. "
+                "The guard stays as the tripwire for the day one of them "
+                "does."
+            )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
             "backend/app/api/errors.py"),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
@@ -616,6 +727,7 @@ __all__ = [
     "CATALOGUE",
     "STATUS_FALLBACK_PATTERN",
     "ApiCode",
+    "Reach",
     "Surface",
     "catalogued_codes",
     "client_facing",

@@ -114,6 +114,49 @@ wrapper over a contract that is itself still moving.
 
 ### Changed
 
+- **Three codes a client could import but never receive are no longer
+  exported.** `app/api/code_catalogue.py` gains a `Reach` field, so an entry
+  can now record that no request produces it — the middle case of a three-way
+  distinction that previously had no spelling: catalogued and client-facing (a
+  caller can provoke it), catalogued and not client-facing (a real guard no
+  request can trip), not catalogued at all (not a code). Before this, a guard
+  could only be recorded by telling clients they might receive it, or by
+  deleting the entry and leaving the next reader to rediscover the literal.
+  `Reach` governs the client enum and nothing else; promotion
+  (`MESSAGE_PREFIX_CODES`) deliberately does not consult it.
+
+  **`tckdb-client` 0.39.0 → 0.40.0**, and three `RejectionCode` members are
+  removed: `TRANSPORT_SOURCE_CALCULATION_OWNER_MISMATCH`,
+  `APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH` and
+  `IDEMPOTENCY_IN_PROGRESS`. Removing a member is breaking for an importer
+  even when the code was unreachable, hence the minor bump. **No code changes
+  value**, and all three keep a catalogue entry stating why no request reaches
+  them. The two ownership guards stay in the code: against a bug five lines up
+  they are a cheap tripwire, and in a database where a mis-attached
+  calculation is a scientific error rather than a crash that is worth keeping.
+  `idempotency_in_progress` is a contingency, not a milestone —
+  `docs/specs/upload-idempotency-key-spec.md` lists it under *Optional* ("Only
+  implement `idempotency_in_progress` if needed by the chosen approach") and
+  the approach chosen does not need it; `app/api/idempotency.py` used to say
+  "for v0", which does not distinguish a deferral from a decision, and now
+  says which one it is.
+
+- **A refusal that was recorded as unreachable is reachable, and is now
+  tested.** `statmech_torsion_scan_calculation_owner_mismatch` was classified
+  alongside the two above on the rule "an ownership guard is reachable exactly
+  when the field it guards accepts a foreign row id". That rule is
+  incomplete: a guard is also reachable when its key resolves in a namespace
+  wider than the target's owner. `_persist_statmech_block` is shared by the
+  species bundle, where the calc-key map is one species entry's own, and the
+  PDep bundle, where it spans every species and transition state — and the
+  PDep schema narrows a *species* statmech's keys to that species's own
+  calculations but does not do the same for a *transition state*'s. A TS
+  torsion naming a species-owned rotor scan therefore reaches the guard.
+  Measured on the wire at `POST /api/v1/uploads/networks/pdep`; the code
+  stays exported and `tests/api/test_api_network_pdep_ownership.py` provokes
+  it, and the sibling `statmech_source_calculation_owner_mismatch`, through
+  the route.
+
 - **Two refusals stopped naming the function they were raised in.** The
   `detail` of the group-additivity missing-thermo guard and of the two keyset
   argument guards used to begin `create_applied_group_additivity: ` and

@@ -10,13 +10,41 @@ Provides a route-level dependency (``idempotency_dependency``) that:
    existing response or (b) record a fresh response after the write.
 
 Concurrent in-flight duplicate requests are *not* protected by an
-explicit advisory lock or ``idempotency_in_progress`` placeholder for
-v0. The unique constraint
-``uq_idempotency_record_user_method_endpoint_key`` plus the integrity
-error handler in :mod:`app.api.errors` is what catches a race: the
-losing committer surfaces ``409 idempotency_conflict`` via constraint-
-name mapping. This is the explicitly-allowed v0 behavior in
-``docs/specs/upload-idempotency-key-spec.md``.
+explicit advisory lock or ``idempotency_in_progress`` placeholder. The
+unique constraint ``uq_idempotency_record_user_method_endpoint_key``
+plus the integrity error handler in :mod:`app.api.errors` is what
+catches a race: the losing committer surfaces ``409
+idempotency_conflict`` via constraint-name mapping.
+
+Whether that is a gap or a decision
+-----------------------------------
+This paragraph used to end "for v0", and "deliberate for v0" and
+"planned for v1" are not the same claim — a reader looking for which
+one this was could not tell, which is the only reason the distinction
+is spelled out here at all.
+
+It is a decision. ``docs/specs/upload-idempotency-key-spec.md`` lists
+``idempotency_in_progress`` under *Optional* and says "Only implement
+``idempotency_in_progress`` if needed by the chosen approach". It was
+never a milestone to reach; it was a code that some approaches need and
+others do not, and the approach chosen here — one unique constraint,
+one integrity handler — does not. Nothing scheduled sets the flag.
+
+The consequence, recorded because it is a published contract. The
+``in_progress`` ternary in
+:func:`app.api.errors._idempotency_conflict_handler` has one live arm:
+``IdempotencyConflict.in_progress`` defaults to ``False`` and the one
+construction site in :mod:`app.services.idempotency` never passes it,
+so ``idempotency_in_progress`` cannot reach a response body. It is
+catalogued as :attr:`app.api.code_catalogue.Reach.guard` and is not
+generated into the client's ``RejectionCode``, because an enum member a
+caller can import and branch on but never receive is a lie in the
+contract.
+
+The parameter and the ternary stay. They are the two lines that make
+the state sayable the day an advisory lock is added, and the catalogue
+entry is what tells whoever adds it that the code already exists rather
+than inventing a second spelling for it.
 """
 
 from __future__ import annotations
