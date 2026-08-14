@@ -200,6 +200,15 @@ class TestOnlyTheCodePositionDeclaresACode:
         published ``validation_error`` into a new code. Ambiguity is
         therefore judged on the unfiltered set: the rule can only remove a
         code, never add one.
+
+        The message below is now a synthetic example rather than a
+        quotation: ``validate_pagination`` was the one place that wrote
+        two tokens, and it no longer does — the second token was the
+        honest name for what went wrong, so it became the code and
+        ``invalid_pagination`` kept only the malformed cases. The *rule*
+        is unchanged and is what this pins. That no real message carries
+        two tokens is a separate, statically checked claim; see
+        ``test_error_contract_catalogue_gate.py::TestOneMessageDeclaresOneCode``.
         """
         message = "invalid_pagination: limit_too_large: limit must be <= 200 (got 500)"
         assert (

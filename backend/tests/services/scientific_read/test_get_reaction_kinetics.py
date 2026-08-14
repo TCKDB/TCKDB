@@ -448,8 +448,10 @@ def test_temperature_min_greater_than_max_rejected(db_session):
 
 
 def test_limit_max_enforced(db_session):
+    """``limit_too_large`` -- the hosted cap, which is not the same refusal
+    as a malformed limit and no longer shares its code."""
     entry = _setup_entry(db_session)
-    with pytest.raises(ValueError, match="invalid_pagination"):
+    with pytest.raises(ValueError, match="limit_too_large"):
         get_reaction_kinetics(
             db_session,
             reaction_entry_id=entry.id,

@@ -116,6 +116,7 @@ class RejectionCode(str, Enum):
     INVALID_TEMPERATURE_RANGE = "invalid_temperature_range"
     IRC_RESULT_NOT_FOUND = "irc_result_not_found"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
+    LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
     MANIFEST_ALREADY_FROZEN = "manifest_already_frozen"
     MANIFEST_NOT_FROZEN = "manifest_not_frozen"
@@ -131,6 +132,7 @@ class RejectionCode(str, Enum):
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
     NON_FINITE_VALUE = "non_finite_value"
+    OFFSET_TOO_LARGE = "offset_too_large"
     OWNER_MISSING = "owner_missing"
     PARAMETER_VALUE_REQUIRES_KEY = "parameter_value_requires_key"
     PATH_SEARCH_RESULT_NOT_FOUND = "path_search_result_not_found"
@@ -245,6 +247,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.INVALID_STRUCTURE_QUERY,
         RejectionCode.INVALID_TEMPERATURE_RANGE,
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
+        RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.MISSING_FILTER,
@@ -258,6 +261,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
         RejectionCode.NON_FINITE_VALUE,
+        RejectionCode.OFFSET_TOO_LARGE,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.POST_SEARCH_FIELDS_MUST_BE_IN_BODY,
         RejectionCode.PRESSURE_ALIAS_CONFLICT,
@@ -396,6 +400,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.INVALID_TEMPERATURE_RANGE: frozenset({422}),
     RejectionCode.IRC_RESULT_NOT_FOUND: frozenset({404}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
     RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({422}),
     RejectionCode.MANIFEST_NOT_FROZEN: frozenset({404}),
@@ -411,6 +416,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
     RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE: frozenset({409}),
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),
+    RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),
     RejectionCode.PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
     RejectionCode.PATH_SEARCH_RESULT_NOT_FOUND: frozenset({404}),

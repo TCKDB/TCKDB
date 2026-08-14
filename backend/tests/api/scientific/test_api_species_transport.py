@@ -7,6 +7,7 @@ species entry, honouring the opt-in ``include=trust`` policy.
 
 from __future__ import annotations
 
+from app.api.config import settings
 from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
@@ -86,10 +87,36 @@ def test_empty_when_entry_has_no_transport(client, db_session):
     assert body["records"] == []
 
 
-def test_rejects_invalid_pagination(client, db_session):
+def test_rejects_a_limit_above_the_service_cap(client, db_session, monkeypatch):
+    """Two bounds, and only one of them used to be tested.
+
+    ``?limit=999`` -- what this test used to send -- is refused by
+    ``Query(le=200)`` before the service runs, so the pagination code the
+    test was named after could never appear. Both bounds are asserted
+    here; see ``test_api_species_statmech.py`` for the full account.
+    """
     _, entry = _entry(db_session)
-    resp = client.get(_url(entry.id, limit=999))
-    assert resp.status_code == 422
+
+    outer = client.get(_url(entry.id, limit=999))
+    assert outer.status_code == 422
+    assert outer.json()["code"] == "request_validation_error"
+
+    monkeypatch.setattr(settings, "public_max_limit", 10)
+    inner = client.get(_url(entry.id, limit=50))
+    assert inner.status_code == 422, inner.text
+    assert inner.json()["code"] == "limit_too_large"
+
+
+def test_rejects_an_offset_beyond_the_deep_paging_cap(
+    client, db_session, monkeypatch
+):
+    """``offset`` carries no ``le``, so the service is the only bound."""
+    _, entry = _entry(db_session)
+    monkeypatch.setattr(settings, "public_max_offset", 5)
+
+    resp = client.get(_url(entry.id, offset=6))
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "offset_too_large"
 
 
 def test_rejects_client_sort(client, db_session):
