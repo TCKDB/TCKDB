@@ -579,6 +579,54 @@ def test_the_runtime_observer_is_actually_watching() -> None:
     )
 
 
+def test_the_observer_watches_the_status_and_not_only_the_code() -> None:
+    """A catalogued code at an uncatalogued status must still fail.
+
+    The observer recorded ``(status, code)`` from the day it was written
+    and compared only the code, so a wrong status was invisible to it.
+    Two entries were wrong -- ``curation_policy_version_conflict`` and
+    ``release_tag_taken`` are both 409 and were both catalogued at 422 --
+    and nothing in the suite could say so. Status is not decoration: the
+    client's ``REJECTION_STATUSES`` is generated from this field, and 409
+    versus 422 is the difference between "the write reached the database"
+    and "nothing was written, resend a corrected payload".
+
+    Stated in both directions, because half of it passes vacuously: the
+    right status must be accepted, or the widened check would be
+    satisfied by rejecting everything.
+    """
+    from starlette.responses import JSONResponse
+
+    from tests import error_code_observer
+
+    sample = CATALOGUE[0]
+    wrong_status = 409 if sample.status != 409 else 422
+    assert wrong_status not in {
+        entry.status for entry in CATALOGUE if entry.code == sample.code
+    }
+
+    JSONResponse(content={"code": sample.code}, status_code=sample.status)
+    assert (sample.status, sample.code) not in error_code_observer.drain_unlisted(), (
+        f"{sample.code} at its own catalogued status {sample.status} is "
+        "being reported as unlisted, so the observer now refuses correct "
+        "pairs and its failures say nothing"
+    )
+
+    JSONResponse(content={"code": sample.code}, status_code=wrong_status)
+    unlisted = error_code_observer.drain_unlisted()
+    assert (wrong_status, sample.code) in unlisted, (
+        f"{sample.code} arrived at {wrong_status} and the catalogue records "
+        f"it only at {sample.status}, but the observer let it through -- it "
+        "is comparing codes again, not (status, code) pairs"
+    )
+    assert str(sample.status) in error_code_observer.explain(
+        wrong_status, sample.code
+    ), "the failure must name the status the catalogue does record"
+    assert "no catalogue entry at all" in error_code_observer.explain(
+        999, "zzz_synthetic_probe_bait"
+    ), "a code with no entry must not be reported as a status disagreement"
+
+
 def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
     """The point of the work, stated as a test.
 

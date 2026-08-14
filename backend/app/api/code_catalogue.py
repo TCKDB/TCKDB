@@ -289,8 +289,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
-    ApiCode("curation_policy_version_conflict", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("curation_policy_version_conflict", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409, not the 422 its ValueError base would suggest. "
+                "ReleaseCurationError subclasses ValueError, so reading the "
+                "raise site says 422; the one route that can reach it wraps "
+                "it in HTTPException(409) instead "
+                "(api/routes/releases_admin.py). The status is a property of "
+                "the route, not of the raise, which is why it was recorded "
+                "wrong until the observer started checking the pair."
+            )),
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/curator_task_lifecycle.py"),
     ApiCode("cursor_offset_conflict", 422, Surface.coded_exception,
@@ -449,8 +458,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/profile.py"),
     ApiCode("release_selects_nothing", 422, Surface.message_prefix,
             "backend/app/services/release/manifest.py"),
-    ApiCode("release_tag_taken", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("release_tag_taken", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 for the same reason as "
+                "curation_policy_version_conflict: the route wraps the "
+                "ReleaseCurationError in HTTPException(409) rather than "
+                "letting its ValueError base reach the 422 handler."
+            )),
     ApiCode("request_validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("resource_not_found", 404, Surface.generic_fallback,
