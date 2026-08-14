@@ -978,7 +978,7 @@
       },
       "AppliedEnergyCorrectionUploadPayload": {
         "additionalProperties": false,
-        "description": "Upload-facing payload for one applied energy correction.\n\nExactly one of ``scheme`` or ``frequency_scale_factor`` must be provided.\nThe ``source_conformer_key`` and ``source_calculation_key`` are local\nstring keys that reference other objects in the same upload bundle;\nthey are resolved to integer IDs by the workflow orchestrator.",
+        "description": "Upload-facing payload for one applied energy correction.\n\nExactly one of ``scheme`` or ``frequency_scale_factor`` must be provided.\nThe ``source_conformer_key`` and ``source_calculation_key`` are local\nstring keys that reference other objects in the same upload bundle;\nthey are resolved to integer IDs by the workflow orchestrator.\n\nBoth keys resolve against a namespace the *enclosing* request\ndeclared, and a key naming nothing in it is refused with\n``applied_energy_correction_source_key_undeclared`` rather than\ndropped. ``source_conformer_key`` names the request's\n``conformer_key`` on ``/uploads/conformers``; ``conformers[*].key``\non ``/uploads/computed-species``; and, on\n``/uploads/computed-reaction``, ``conformers[*].key`` of the species\nthe correction sits under — a transition state declares no\nconformers there, so a TS-side correction can never name one.\nScoping the reaction bundle's conformer namespace to one species is\nwhat makes ownership true by construction: a correction targeting\none species entry cannot borrow another's conformer.",
         "properties": {
           "application_role": {
             "$ref": "#/components/schemas/tckdb_schemas__enums__EnergyCorrectionApplicationRole"
@@ -2604,7 +2604,7 @@
         "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT). Their\n    ``geometry_key`` must reference one of this species's conformer\n    geometries so the backend can anchor them to the correct observation.\n:param thermo: Optional thermochemistry data.",
         "properties": {
           "applied_energy_corrections": {
-            "description": "Applied energy corrections targeting this species's resolved species_entry. Use for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this species.",
+            "description": "Applied energy corrections targeting this species's resolved species_entry. Use for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this species. ``source_conformer_key`` resolves against this species's own ``conformers[*].key`` — a sibling species's conformer is not in scope and is refused.",
             "items": {
               "$ref": "#/components/schemas/AppliedEnergyCorrectionInBundle"
             },
@@ -3110,7 +3110,7 @@
         "description": "Transition state for the reaction in this bundle.\n\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param unmapped_smiles: Optional SMILES for the TS.\n:param geometry: Saddle-point geometry.\n:param calculation: Primary opt calculation.\n:param calculations: Additional calculations (freq, sp, irc).\n:param label: Optional label.\n:param note: Optional note.",
         "properties": {
           "applied_energy_corrections": {
-            "description": "Applied energy corrections targeting the resolved transition_state_entry directly. TS-side corrections are never stored as reaction-entry corrections. ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this transition state.",
+            "description": "Applied energy corrections targeting the resolved transition_state_entry directly. TS-side corrections are never stored as reaction-entry corrections. ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this transition state. ``source_conformer_key`` has nothing to resolve against here — a transition state in this bundle declares no conformers — so setting it is refused rather than ignored.",
             "items": {
               "$ref": "#/components/schemas/AppliedEnergyCorrectionInBundle"
             },
@@ -10093,10 +10093,10 @@
       },
       "ComputedSpeciesUploadRequest": {
         "additionalProperties": false,
-        "description": "Bundle upload payload for one computed species result.",
+        "description": "Bundle upload payload for one computed species result.\n\n``workflow_tool_release`` is the bundle-level default: the thermo and\nstatmech blocks fall back to it when they name no workflow tool of\ntheir own, and a block that names one overrides it. That is the same\nprecedence ``ComputedReactionUploadRequest`` has always applied to\nits ``literature`` / ``analysis_software_release`` /\n``workflow_tool_release`` trio.\n\n``note`` is **not** persisted by this route. It is recorded here so\nthe omission is stated rather than discovered: the bundle has no row\nof its own to carry a bundle-level note, and choosing one is a\nseparate decision from wiring a field that already has a home.",
         "properties": {
           "applied_energy_corrections": {
-            "description": "Applied energy corrections targeting the bundle's species entry (one bundle = one species entry). Use this for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). Frequency-scale-factor corrections still belong on thermo/statmech blocks where their source calc lives.",
+            "description": "Applied energy corrections targeting the bundle's species entry (one bundle = one species entry). Use this for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). Frequency-scale-factor corrections still belong on thermo/statmech blocks where their source calc lives. ``source_conformer_key`` resolves against this bundle's conformer keys.",
             "items": {
               "$ref": "#/components/schemas/AppliedEnergyCorrectionInBundle"
             },
@@ -10120,6 +10120,7 @@
                 "type": "null"
               }
             ],
+            "description": "Free-text note about the bundle. Accepted and validated but not persisted: there is no bundle-level row to carry it.",
             "title": "Note"
           },
           "species_entry": {
@@ -10153,7 +10154,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "Bundle-level workflow-tool provenance. Used as the default for the thermo and statmech blocks; a value on either of those overrides it."
           }
         },
         "required": [
@@ -11745,6 +11747,19 @@
           },
           "calculation": {
             "$ref": "#/components/schemas/ConformerCalculationIn"
+          },
+          "conformer_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Optional local name for the single conformer observation this upload creates, referenced from ``applied_energy_corrections[*].source_conformer_key``. It is the conformer namespace's counterpart to ``ConformerCalculationIn.key``, and it is deliberately not ``label``: a label is a human tag that also participates in conformer-group matching, so renaming it for grouping reasons would silently break a correction reference, and a depositor who has no label has no way to point at their own conformer. Optional by design — a payload with no conformer cross-reference never needs one.",
+            "title": "Conformer Key"
           },
           "geometry": {
             "$ref": "#/components/schemas/GeometryPayload"

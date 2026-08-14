@@ -609,7 +609,9 @@ class BundleSpeciesIn(SchemaBase):
             "(application_role=bac_total). ``source_calculation_key`` "
             "resolves against the bundle's global calculation namespace; "
             "the workflow rejects 422 when the referenced calc is not "
-            "owned by this species."
+            "owned by this species. ``source_conformer_key`` resolves "
+            "against this species's own ``conformers[*].key`` — a "
+            "sibling species's conformer is not in scope and is refused."
         ),
     )
 
@@ -815,7 +817,10 @@ class BundleTransitionStateIn(SchemaBase):
             "``source_calculation_key`` resolves against the bundle's "
             "global calculation namespace; the workflow rejects 422 "
             "when the referenced calc is not owned by this transition "
-            "state."
+            "state. ``source_conformer_key`` has nothing to resolve "
+            "against here — a transition state in this bundle declares "
+            "no conformers — so setting it is refused rather than "
+            "ignored."
         ),
     )
     validation_evidence: list[TransitionStateValidationEvidenceIn] = Field(
@@ -1340,6 +1345,23 @@ class ComputedReactionUploadRequest(SchemaBase):
             raise ValueError("Calculation keys must be globally unique.")
         if len(set(all_geom_keys)) != len(all_geom_keys):
             raise ValueError("Geometry keys must be globally unique.")
+
+        # Conformer keys are unique *within* a species, not globally.
+        # They are the namespace ``applied_energy_corrections[*].
+        # source_conformer_key`` resolves against, and that namespace is
+        # scoped to one species precisely so a correction cannot borrow a
+        # sibling species's conformer. Per-species is therefore the whole
+        # scope in which a duplicate could make a reference ambiguous —
+        # and an ambiguous reference is the defect these keys exist to
+        # remove, so it is refused rather than resolved to whichever
+        # conformer happened to be written last.
+        for sp in self.species:
+            conformer_keys = [conf.key for conf in sp.conformers]
+            if len(set(conformer_keys)) != len(conformer_keys):
+                raise ValueError(
+                    f"Conformer keys must be unique within species "
+                    f"'{sp.key}'."
+                )
 
         return self
 

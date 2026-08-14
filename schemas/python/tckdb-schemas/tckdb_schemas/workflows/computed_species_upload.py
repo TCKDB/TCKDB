@@ -617,7 +617,20 @@ class StatmechInBundle(SchemaBase):
 
 
 class ComputedSpeciesUploadRequest(SchemaBase):
-    """Bundle upload payload for one computed species result."""
+    """Bundle upload payload for one computed species result.
+
+    ``workflow_tool_release`` is the bundle-level default: the thermo and
+    statmech blocks fall back to it when they name no workflow tool of
+    their own, and a block that names one overrides it. That is the same
+    precedence ``ComputedReactionUploadRequest`` has always applied to
+    its ``literature`` / ``analysis_software_release`` /
+    ``workflow_tool_release`` trio.
+
+    ``note`` is **not** persisted by this route. It is recorded here so
+    the omission is stated rather than discovered: the bundle has no row
+    of its own to carry a bundle-level note, and choosing one is a
+    separate decision from wiring a field that already has a home.
+    """
 
     species_entry: SpeciesEntryIdentityPayload
 
@@ -634,12 +647,26 @@ class ComputedSpeciesUploadRequest(SchemaBase):
             "(application_role=aec_total) and BAC totals "
             "(application_role=bac_total). Frequency-scale-factor "
             "corrections still belong on thermo/statmech blocks where "
-            "their source calc lives."
+            "their source calc lives. ``source_conformer_key`` resolves "
+            "against this bundle's conformer keys."
         ),
     )
 
-    workflow_tool_release: WorkflowToolReleaseRef | None = None
-    note: str | None = None
+    workflow_tool_release: WorkflowToolReleaseRef | None = Field(
+        default=None,
+        description=(
+            "Bundle-level workflow-tool provenance. Used as the default "
+            "for the thermo and statmech blocks; a value on either of "
+            "those overrides it."
+        ),
+    )
+    note: str | None = Field(
+        default=None,
+        description=(
+            "Free-text note about the bundle. Accepted and validated but "
+            "not persisted: there is no bundle-level row to carry it."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_unique_conformer_keys(self) -> Self:

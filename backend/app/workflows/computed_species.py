@@ -34,6 +34,7 @@ from app.schemas.fragments.calculation import (
     SCFStabilityPayload,
 )
 from app.schemas.fragments.geometry import GeometryPayload
+from app.schemas.fragments.refs import WorkflowToolReleaseRef
 from app.schemas.workflows.computed_species_upload import (
     CalculationInBundle,
     ComputedSpeciesUploadRequest,
@@ -75,6 +76,7 @@ from app.services.charge_multiplicity_extraction import (
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
+    resolve_applied_correction_source_key,
     resolve_or_create_freq_scale_factor_ref,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
@@ -100,6 +102,15 @@ from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import assert_statmech_role_compatible
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import assert_thermo_role_matches_calculation_type
+
+#: How a computed-species bundle declares a name in the conformer
+#: namespace, phrased as the object of the remedy sentence in
+#: ``resolve_applied_correction_source_key``.
+_BUNDLE_CONFORMER_KEY_REMEDY = (
+    "Every conformer in this bundle carries a required 'key'; "
+    "'source_conformer_key' must match one of them."
+)
+
 
 # ---------------------------------------------------------------------------
 # Outcome dataclasses
@@ -188,6 +199,7 @@ def _build_synthetic_thermo_upload_request(
     thermo_in: ThermoInBundle,
     *,
     species_entry_payload,
+    default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
 ) -> ThermoUploadRequest:
     """Construct a ``ThermoUploadRequest`` from the bundle's thermo block.
 
@@ -196,13 +208,18 @@ def _build_synthetic_thermo_upload_request(
     ``source_calculations``) — those resolve from the bundle's calc-key
     namespace separately. The synthetic request is fed to
     ``resolve_thermo_upload`` to pick up provenance resolution for free.
+
+    ``default_workflow_tool_release`` is the bundle root's value, applied
+    only where the thermo block itself names none.
     """
     return ThermoUploadRequest(
         species_entry=species_entry_payload,
         scientific_origin=thermo_in.scientific_origin,
         literature=thermo_in.literature,
         software_release=thermo_in.software_release,
-        workflow_tool_release=thermo_in.workflow_tool_release,
+        workflow_tool_release=(
+            thermo_in.workflow_tool_release or default_workflow_tool_release
+        ),
         h298_kj_mol=thermo_in.h298_kj_mol,
         s298_j_mol_k=thermo_in.s298_j_mol_k,
         h298_uncertainty_kj_mol=thermo_in.h298_uncertainty_kj_mol,
@@ -474,7 +491,14 @@ def persist_computed_species_upload(
             )
         )
 
-    # Build the local-key → Calculation map for cross-references.
+    # Build the local-key → row maps for cross-references. Conformer keys
+    # are required and unique across the bundle
+    # (``validate_unique_conformer_keys``), so this is a total namespace:
+    # every conformer a depositor can name is in it, and nothing else is.
+    conformer_keys_to_observation_id: dict[str, int] = {
+        outcome.conformer_in_bundle.key: outcome.observation.id
+        for outcome in conformer_outcomes
+    }
     calc_keys_to_id: dict[str, Calculation] = {}
     for outcome in conformer_outcomes:
         calc_keys_to_id[outcome.conformer_in_bundle.primary_calculation.key] = (
@@ -541,12 +565,21 @@ def persist_computed_species_upload(
     # names its subject unambiguously and matches the real payload path.
     # The reaction bundle, which carries many species, prefixes with the
     # species key instead.
+    #
+    # ``collect_provenance_warnings`` documents that callers pass the
+    # *effective* value rather than the raw field, which is now the
+    # bundle-level fallback where the block itself is silent — warning
+    # about provenance that was in fact recorded is the same lie in the
+    # other direction.
     if request.thermo is not None:
         upload_warnings.extend(
             collect_provenance_warnings(
                 scientific_origin=request.thermo.scientific_origin,
                 software_release=request.thermo.software_release,
-                workflow_tool_release=request.thermo.workflow_tool_release,
+                workflow_tool_release=(
+                    request.thermo.workflow_tool_release
+                    or request.workflow_tool_release
+                ),
                 literature=request.thermo.literature,
                 field_prefix="thermo.",
             )
@@ -556,7 +589,10 @@ def persist_computed_species_upload(
             collect_provenance_warnings(
                 scientific_origin=request.statmech.scientific_origin,
                 software_release=request.statmech.software_release,
-                workflow_tool_release=request.statmech.workflow_tool_release,
+                workflow_tool_release=(
+                    request.statmech.workflow_tool_release
+                    or request.workflow_tool_release
+                ),
                 literature=request.statmech.literature,
                 freq_scale_factor=request.statmech.freq_scale_factor,
                 field_prefix="statmech.",
@@ -617,6 +653,8 @@ def persist_computed_species_upload(
             request,
             species_entry_id=species_entry.id,
             calc_keys_to_id=calc_keys_to_id,
+            conformer_keys_to_observation_id=conformer_keys_to_observation_id,
+            default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
         )
 
@@ -625,6 +663,7 @@ def persist_computed_species_upload(
             request.statmech,
             species_entry_id=species_entry.id,
             calc_keys_to_id=calc_keys_to_id,
+            default_workflow_tool_release=request.workflow_tool_release,
             created_by=created_by,
             warnings=upload_warnings,
         )
@@ -648,6 +687,7 @@ def persist_computed_species_upload(
             request,
             species_entry_id=species_entry.id,
             calc_keys_to_id=calc_keys_to_id,
+            conformer_keys_to_observation_id=conformer_keys_to_observation_id,
             created_by=created_by,
         )
 
@@ -716,12 +756,17 @@ def _persist_thermo_block(
     *,
     species_entry_id: int,
     calc_keys_to_id: dict[str, Calculation],
+    conformer_keys_to_observation_id: dict[str, int],
+    default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
 ) -> tuple[Thermo | None, list[int]]:
     """Persist optional thermo + nested AECs.
 
     Returns ``(thermo_row | None, applied_correction_ids)`` so the caller
     can record review state for both the thermo row and each AEC row.
+
+    ``default_workflow_tool_release`` is the bundle-level fallback used
+    when the thermo block names no workflow tool of its own.
     """
     if request.thermo is None:
         return None, []
@@ -758,7 +803,9 @@ def _persist_thermo_block(
         )
 
     synthetic = _build_synthetic_thermo_upload_request(
-        thermo_in, species_entry_payload=request.species_entry
+        thermo_in,
+        species_entry_payload=request.species_entry,
+        default_workflow_tool_release=default_workflow_tool_release,
     )
     thermo_create = resolve_thermo_upload(
         session, synthetic, species_entry_id=species_entry_id
@@ -788,10 +835,21 @@ def _persist_thermo_block(
             )
             source_calc_id = calc_row.id
 
+        source_conf_id = resolve_applied_correction_source_key(
+            ac.source_conformer_key,
+            conformer_keys_to_observation_id,
+            field=(
+                f"thermo.applied_energy_corrections[{i}]."
+                f"source_conformer_key"
+            ),
+            declares=_BUNDLE_CONFORMER_KEY_REMEDY,
+        )
+
         applied = create_applied_energy_correction(
             session,
             ac,
             target_species_entry_id=species_entry_id,
+            source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
         )
@@ -806,6 +864,7 @@ def _persist_top_level_applied_corrections(
     *,
     species_entry_id: int,
     calc_keys_to_id: dict[str, Calculation],
+    conformer_keys_to_observation_id: dict[str, int],
     created_by: int | None,
 ) -> list[int]:
     """Persist bundle-level applied energy corrections (AEC/BAC).
@@ -813,8 +872,9 @@ def _persist_top_level_applied_corrections(
     Top-level applied corrections target the bundle's species entry.
     Each ``source_calculation_key`` is resolved against the bundle's
     global calc-key namespace and verified to belong to the same
-    species entry; the row + optional component breakdown are written
-    via the shared ``create_applied_energy_correction`` service.
+    species entry; each ``source_conformer_key`` is resolved against the
+    bundle's conformer keys. The row + optional component breakdown are
+    written via the shared ``create_applied_energy_correction`` service.
 
     Returns the list of created AEC ids so the caller can record review
     state for each one.
@@ -839,10 +899,18 @@ def _persist_top_level_applied_corrections(
             )
             source_calc_id = calc_row.id
 
+        source_conf_id = resolve_applied_correction_source_key(
+            ac.source_conformer_key,
+            conformer_keys_to_observation_id,
+            field=f"applied_energy_corrections[{i}].source_conformer_key",
+            declares=_BUNDLE_CONFORMER_KEY_REMEDY,
+        )
+
         applied = create_applied_energy_correction(
             session,
             ac,
             target_species_entry_id=species_entry_id,
+            source_conformer_observation_id=source_conf_id,
             source_calculation_id=source_calc_id,
             created_by=created_by,
         )
@@ -857,6 +925,7 @@ def _persist_statmech_block(
     species_entry_id: int | None = None,
     transition_state_entry_id: int | None = None,
     calc_keys_to_id: dict[str, Calculation],
+    default_workflow_tool_release: WorkflowToolReleaseRef | None = None,
     created_by: int | None,
     warnings: list[UploadWarning] | None = None,
 ) -> Statmech | None:
@@ -887,9 +956,14 @@ def _persist_statmech_block(
         if s.software_release is not None
         else None
     )
+    # The statmech block's own value wins; the caller's bundle-level
+    # default fills in only where the block stays silent.
+    statmech_workflow_tool_ref = (
+        s.workflow_tool_release or default_workflow_tool_release
+    )
     workflow_tool_release = (
-        resolve_workflow_tool_release_ref(session, s.workflow_tool_release)
-        if s.workflow_tool_release is not None
+        resolve_workflow_tool_release_ref(session, statmech_workflow_tool_ref)
+        if statmech_workflow_tool_ref is not None
         else None
     )
 

@@ -206,13 +206,23 @@ def persist_conformer_upload(
             created_by=created_by,
         )
 
-    # The one name this request gives the conformer it is depositing. A
-    # conformer upload creates exactly one observation, and ``label`` is
-    # the only string the depositor attaches to it, so it is the whole
-    # conformer namespace here -- unlike the bundle, where every
-    # ``ConformerInBundle`` carries a required ``key``.
+    # The name this request gives the conformer it is depositing, which
+    # is now a name chosen to be one: ``conformer_key``, the conformer
+    # namespace's counterpart to the ``key`` this request already puts on
+    # its calculations, and to the required ``key`` every
+    # ``ConformerInBundle`` carries.
+    #
+    # It used to be ``label``, because a label was the only string a
+    # conformer upload attached to its conformer. That conflated two
+    # different things. A label is a human tag that also feeds
+    # conformer-group matching, so renaming it for grouping reasons
+    # silently broke a correction reference; and a depositor with no
+    # label could not point at their own conformer at all. A reference
+    # key answers only to references.
     conformers_by_key: dict[str, int] = (
-        {request.label: observation.id} if request.label is not None else {}
+        {request.conformer_key: observation.id}
+        if request.conformer_key is not None
+        else {}
     )
 
     applied_corrections: list = []
@@ -230,8 +240,10 @@ def persist_conformer_upload(
                 f"applied_energy_corrections[{index}].source_conformer_key"
             ),
             declares=(
-                "A conformer upload names its conformer with the "
-                "request's 'label'."
+                "Put a matching 'conformer_key' on the request. It is "
+                "deliberately not 'label' -- a label also drives "
+                "conformer-group matching, so a reference to it breaks "
+                "when the label is changed for grouping reasons."
             ),
         )
         source_calc_id = resolve_applied_correction_source_key(

@@ -68,6 +68,7 @@ from app.services.charge_multiplicity_extraction import (
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
+    resolve_applied_correction_source_key,
     resolve_or_create_freq_scale_factor_ref,
 )
 from app.services.geometry_resolution import resolve_geometry_payload
@@ -407,6 +408,15 @@ def persist_computed_reaction_upload(
     geometry_key_to_id: dict[str, int] = {}
     calculation_key_to_id: dict[str, int] = {}
     observation_id_by_geometry_key: dict[str, int] = {}
+    # Conformer keys are scoped to the species that declared them, unlike
+    # calc and geometry keys which are globally unique across the bundle.
+    # That scoping is what makes an applied correction's
+    # ``source_conformer_key`` owner-correct by construction: a species's
+    # correction can only name that species's own conformers, so there is
+    # no sibling-species conformer to borrow and no separate owner check
+    # to write. Uniqueness within a species is enforced by the request
+    # model, so this map loses nothing.
+    observation_id_by_conformer_key: dict[str, dict[str, int]] = {}
     # Review-row targets accumulated as records are written so the
     # caller's ReviewPolicy can be applied at end-of-workflow.
     review_targets: list[RecordRef] = []
@@ -435,6 +445,7 @@ def persist_computed_reaction_upload(
         )
 
         # Conformers
+        conformers_by_key = observation_id_by_conformer_key.setdefault(sp.key, {})
         for conf in sp.conformers:
             geom_payload = conf.geometry.to_payload()
             geometry = resolve_geometry_payload(session, geom_payload)
@@ -472,6 +483,7 @@ def persist_computed_reaction_upload(
             session.add(observation)
             session.flush()
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
+            conformers_by_key[conf.key] = observation.id
             review_targets.append(
                 RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
             )
@@ -799,10 +811,26 @@ def persist_computed_reaction_upload(
                         f"refers to a calculation that is not owned by this "
                         f"species entry."
                     )
+            source_conf_id = resolve_applied_correction_source_key(
+                ac.source_conformer_key,
+                observation_id_by_conformer_key.get(sp.key, {}),
+                field=(
+                    f"species['{sp.key}'].applied_energy_corrections[{i}]."
+                    f"source_conformer_key"
+                ),
+                declares=(
+                    "Every conformer under this species carries a required "
+                    "'key'; 'source_conformer_key' must match one of them. "
+                    "A sibling species's conformer is not in scope -- a "
+                    "correction targeting one species entry cannot cite "
+                    "another's structure."
+                ),
+            )
             applied = create_applied_energy_correction(
                 session,
                 ac,
                 target_species_entry_id=species_entry.id,
+                source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
             )
@@ -823,10 +851,32 @@ def persist_computed_reaction_upload(
                         f"refers to a calculation that is not owned by this "
                         f"transition state entry."
                     )
+            # A transition state in this bundle declares no conformers at
+            # all -- it carries one geometry and its calculations, and no
+            # ``ConformerObservation`` is written for it. So the namespace
+            # is empty by construction, and any key names nothing. It is
+            # refused rather than ignored for the same reason every other
+            # source key is: a link the depositor believes they recorded
+            # and did not is worse than a link they were told they cannot
+            # make.
+            source_conf_id = resolve_applied_correction_source_key(
+                ac.source_conformer_key,
+                {},
+                field=(
+                    f"transition_state.applied_energy_corrections[{i}]."
+                    f"source_conformer_key"
+                ),
+                declares=(
+                    "A computed-reaction bundle declares conformers only "
+                    "under a species; its transition state has none, so a "
+                    "TS-side correction cannot name one."
+                ),
+            )
             applied = create_applied_energy_correction(
                 session,
                 ac,
                 target_transition_state_entry_id=ts_entry.id,
+                source_conformer_observation_id=source_conf_id,
                 source_calculation_id=source_calc_id,
                 created_by=created_by,
             )
