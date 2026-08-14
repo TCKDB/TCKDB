@@ -930,6 +930,185 @@ def test_plog_entry_wrong_order_units_rejected():
         KineticsUploadRequest.model_validate(payload)
 
 
+# ---------------------------------------------------------------------------
+# Naming the offending term must not cost the term's code
+# ---------------------------------------------------------------------------
+#
+# ``_validate_a_units_named`` prefixes the field path onto the check's own
+# sentence. ``CodedValidationError`` is a ``ValueError``, so re-raising a
+# plain ``ValueError`` to add that prefix destroyed the declared code at the
+# raise site -- upstream of every promotion rule #159/#161/#164 built. These
+# pin both halves of the repair: the code survives, and the sentence does not
+# move by a byte.
+
+#: What the check itself says for order-3 units on a bimolecular reaction.
+#: Written out rather than derived so that rewording the check fails here
+#: instead of silently agreeing with itself.
+_ORDER_3_ON_BIMOLECULAR = (
+    "a_units 'cm6_mol2_s' is incompatible with bimolecular reaction "
+    "(molecularity=2). Expected one of: "
+    "['cm3_mol_s', 'cm3_molecule_s', 'm3_mol_s']."
+)
+
+
+def _sole_error(payload: dict) -> dict:
+    """The single Pydantic error the payload produces.
+
+    More than one and the envelope falls back by design, which would make
+    every assertion below pass for the wrong reason.
+    """
+    with pytest.raises(ValidationError) as caught:
+        KineticsUploadRequest.model_validate(payload)
+    errors = caught.value.errors()
+    assert len(errors) == 1, errors
+    return errors[0]
+
+
+def _multi_arrhenius_order_3_payload() -> dict:
+    return _multi_arrhenius_payload([
+        {"entry_index": 1, "a": 1.0e12, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "a": 3.0e11, "a_units": "cm6_mol2_s"},
+    ])
+
+
+def _plog_order_3_payload() -> dict:
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "plog"
+    payload["plog_entries"] = [
+        {"entry_index": 1, "pressure_bar": 0.1, "a": 1.0e10, "a_units": "cm3_mol_s"},
+        {"entry_index": 2, "pressure_bar": 1.0, "a": 2.0e10, "a_units": "cm6_mol2_s"},
+    ]
+    return payload
+
+
+@pytest.mark.parametrize(
+    ("field", "build"),
+    [
+        ("arrhenius_entries[2].a_units", _multi_arrhenius_order_3_payload),
+        ("plog_entries[2].a_units", _plog_order_3_payload),
+    ],
+)
+def test_a_named_sibling_a_factor_keeps_its_code_and_its_sentence(field, build):
+    """Every call site of the wrapper, not just the one that was reported.
+
+    ``entry_index`` is 2 in both cases so a fix that hard-coded index 1 --
+    or that named the wrong term -- is visible here rather than plausible.
+    """
+    error = _sole_error(build())
+    declared = error["ctx"]["error"]
+
+    # The code the check declared reaches the envelope's reader as an
+    # attribute of the exception. Nothing is parsed out of the sentence.
+    assert declared.code == "arrhenius_a_units_molecularity_mismatch"
+    # Byte-for-byte what the lossy ``raise ValueError(f"{field}: {exc}")``
+    # produced: field path, ": ", then the check's own prose unchanged.
+    assert str(declared) == f"{field}: {_ORDER_3_ON_BIMOLECULAR}"
+    # The field is also machine-readable, alongside the facts the check
+    # already attached.
+    assert declared.context["field"] == field
+    assert declared.context["molecularity"] == 2
+    assert declared.context["a_units"] == "cm6_mol2_s"
+
+
+def test_the_falloff_k0_call_site_keeps_its_code_too():
+    """The third call site, whose molecularity is k∞'s plus one.
+
+    Kept separate from the parametrized pair because its expected sentence
+    is a different one -- order-2 units judged against order 3 -- and
+    folding it in would have meant asserting a sentence neither case
+    actually produces.
+    """
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "troe"
+    payload["a_units"] = "cm3_mol_s"
+    payload["falloff"] = {
+        "low_a": 1.0e30,
+        "low_a_units": "cm3_mol_s",  # order-2, but k0 must be order-3
+        "low_n": -3.0,
+        "low_ea_kj_mol": 0.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "troe_t2": 5000.0,
+    }
+    declared = _sole_error(payload)["ctx"]["error"]
+    assert declared.code == "arrhenius_a_units_molecularity_mismatch"
+    assert str(declared) == (
+        "falloff.low_a_units: a_units 'cm3_mol_s' is incompatible with "
+        "termolecular reaction (molecularity=3). Expected one of: "
+        "['cm6_mol2_s', 'cm6_molecule2_s', 'm6_mol2_s']."
+    )
+    assert declared.context["field"] == "falloff.low_a_units"
+
+
+def test_the_second_code_the_wrapper_can_carry_also_survives():
+    """``validate_a_units_for_molecularity`` declares two codes, not one.
+
+    The falloff call site asks for ``len(reactants) + 1``, so a termolecular
+    reaction asks about molecularity 4 -- which the units table does not
+    define, and which the check refuses with
+    ``unsupported_reaction_molecularity`` rather than with the mismatch
+    code. It travelled through the same lossy wrapper, so it was lost the
+    same way and is repaired by the same change. Pinned separately because
+    a fix that special-cased the one code in the bug report would still
+    pass every other test here.
+    """
+    payload = _kinetics_request().model_dump()
+    payload["reaction"]["reactants"] = payload["reaction"]["reactants"] + [
+        payload["reaction"]["reactants"][0]
+    ]
+    payload["model_kind"] = "troe"
+    payload["a_units"] = "cm6_mol2_s"  # order 3, correct for three reactants
+    payload["falloff"] = {
+        "low_a": 1.0e30,
+        "low_a_units": "cm6_mol2_s",  # k0 would need order 4, which does not exist
+        "low_n": -3.0,
+        "low_ea_kj_mol": 0.0,
+        "troe_alpha": 0.5,
+        "troe_t3": 100.0,
+        "troe_t1": 1000.0,
+        "troe_t2": 5000.0,
+    }
+    declared = _sole_error(payload)["ctx"]["error"]
+    assert declared.code == "unsupported_reaction_molecularity"
+    assert str(declared) == (
+        "falloff.low_a_units: Unsupported reaction molecularity: 4. "
+        "Expected 1 (unimolecular), 2 (bimolecular), or 3 (termolecular)."
+    )
+    assert declared.context["field"] == "falloff.low_a_units"
+    assert declared.context["molecularity"] == 4
+
+
+def test_the_field_path_is_not_itself_promotable_as_a_code():
+    """The #159 trap, checked rather than assumed.
+
+    The repaired message still *starts* with a snake_case token followed by
+    a colon -- ``a_units``, inside ``plog_entries[2].a_units`` -- which is
+    exactly the shape #159 narrowed promotion to. Promotion is gated on the
+    catalogue, so a field path cannot be published as a code; if that gate
+    ever loosened, this fix would be the thing that fabricated one.
+    """
+    from app.api.error_contract import MESSAGE_PREFIX_CODES, validation_detail_code
+
+    for field in (
+        "arrhenius_entries[2].a_units",
+        "plog_entries[2].a_units",
+        "falloff.low_a_units",
+        "a_units",
+    ):
+        assert field not in MESSAGE_PREFIX_CODES
+
+    payload = _kinetics_request().model_dump()
+    payload["model_kind"] = "plog"
+    payload["plog_entries"] = [
+        {"entry_index": 2, "pressure_bar": 1.0, "a": 2.0e10, "a_units": "cm6_mol2_s"},
+    ]
+    with pytest.raises(ValidationError) as caught:
+        KineticsUploadRequest.model_validate(payload)
+    promoted = validation_detail_code(caught.value.errors(), fallback="validation_error")
+    assert promoted == "arrhenius_a_units_molecularity_mismatch"
+
+
 def test_falloff_low_a_units_wrong_order_rejected():
     """k0 is one order higher than k∞; a bimolecular reaction's low-pressure
     limit must be order-3, so order-2 low_a_units is rejected and named."""
