@@ -654,6 +654,65 @@ class TestRateCoefficients:
         body = _assert_code(response, "arrhenius_a_units_molecularity_mismatch")
         assert "is incompatible with" in str(body["detail"])
 
+    def test_the_same_mistake_on_a_sibling_a_factor_reports_the_same_code(
+        self, client
+    ):
+        """A PLOG term's A-units are the same refusal as the main line's.
+
+        The main-line check calls ``validate_a_units_for_molecularity``
+        directly; every sibling A-factor (a ``multi_arrhenius`` term, a PLOG
+        entry, a falloff k0) goes through ``_validate_a_units_named``, which
+        prefixes the field so the client learns *which* term failed. That
+        wrapper used to re-raise a plain ``ValueError``, and because
+        ``CodedValueError`` is a ``ValueError`` the declared code was
+        destroyed at the raise site -- before any promotion rule could see
+        it. The same chemistry error therefore arrived under two different
+        contracts depending on where in the payload it was written.
+
+        The main line here is deliberately *correct* (``per_s`` for one
+        reactant), so the only failure is the PLOG entry's: with more than
+        one validation failure the envelope falls back by design, and this
+        would then pass for the wrong reason.
+        """
+        response = client.post(
+            "/api/v1/uploads/kinetics",
+            json={
+                "reaction": _reaction_payload([_METHANE], [_METHANE]),
+                "scientific_origin": "experimental",
+                "model_kind": "plog",
+                "a": 2.16e8,
+                "a_units": "per_s",
+                "n": 0.0,
+                "reported_ea": 14.35,
+                "reported_ea_units": "kj_mol",
+                "plog_entries": [
+                    {
+                        "entry_index": 1,
+                        "pressure_bar": 1.0,
+                        "a": 1.0e10,
+                        # Order-2 units on a unimolecular reaction.
+                        "a_units": "cm3_mol_s",
+                        "n": 0.0,
+                        "ea_kj_mol": 0.0,
+                    }
+                ],
+            },
+        )
+        body = _assert_code(response, "arrhenius_a_units_molecularity_mismatch")
+        detail = str(body["detail"])
+        # The prose is unchanged: the field prefix the wrapper has always
+        # added, then the check's own sentence, verbatim.
+        assert "plog_entries[1].a_units: " in detail
+        assert "is incompatible with" in detail
+        # And the field name did not become the code. That would be the
+        # #159 fabrication -- a leading token published as though a client
+        # could branch on it -- reintroduced by the fix for this one.
+        assert body["code"] != "plog_entries[1].a_units"
+        assert body["code"] != "a_units"
+        # The structured facts survive the re-raise, and name the term.
+        assert body["context"]["field"] == "plog_entries[1].a_units"
+        assert body["context"]["molecularity"] == 1
+
 
 # ---------------------------------------------------------------------------
 # Atom mapping across a reaction

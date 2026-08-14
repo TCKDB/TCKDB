@@ -2,6 +2,7 @@ import math
 from typing import Self
 
 from pydantic import Field, field_validator, model_validator
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.chemistry.units import validate_a_units_for_molecularity
 from app.db.models.common import (
@@ -34,10 +35,48 @@ def _validate_a_units_named(field: str, a_units: ArrheniusAUnits, molecularity: 
     Wraps :func:`validate_a_units_for_molecularity` so a rejected sibling
     A-factor (a ``multi_arrhenius`` term, PLOG entry, or falloff k0) reports
     which term failed without leaking database ids.
+
+    Adding the field name must not cost the code
+    -------------------------------------------
+    The wrapped check raises :class:`~tckdb_schemas.coded_error.CodedValidationError`,
+    which is a ``ValueError``, so the obvious ``except ValueError: raise
+    ValueError(f"{field}: {exc}")`` re-raised a *plain* ``ValueError`` and
+    the declared code was gone before any promotion rule could see it.
+    order-2 ``a_units`` on a unimolecular ``plog_entries[1]`` reached the
+    client as the generic ``request_validation_error`` -- these validators
+    run while the request body is being parsed, so the fallback is the
+    request one -- while the identical mistake on the main-line ``a_units``,
+    which calls the check directly, arrived as
+    ``arrhenius_a_units_molecularity_mismatch``. Same refusal, two contracts,
+    decided by whether a wrapper happened to be in the way.
+
+    So the coded case is caught first and re-raised *as itself*: same code,
+    same context (plus the field, which is the machine-readable form of what
+    the prefix says in prose), and ``str(exc)`` byte-identical to what the
+    lossy version produced. ``message_prefix=False`` is what keeps it
+    identical -- the default would insert the code ahead of the field and
+    move a published message.
+
+    Note what the prefix does *not* become. The message now starts with
+    ``"plog_entries[1].a_units: "``, and #159 promotes a leading token only
+    where :mod:`app.api.code_catalogue` calls it a code. A field path is not
+    catalogued, so it cannot be mistaken for one; the code arrives because
+    the exception declares it, never because of where it sits in a sentence.
     """
     try:
         validate_a_units_for_molecularity(a_units, molecularity)
+    except CodedValidationError as exc:
+        raise CodedValidationError(
+            exc.code,
+            f"{field}: {exc}",
+            context={**exc.context, "field": field},
+            message_prefix=False,
+        ) from exc
     except ValueError as exc:
+        # Defensive, and currently unreachable: every raise in
+        # ``validate_a_units_for_molecularity`` is coded. Kept so that a
+        # future uncoded ValueError still gets its field named rather than
+        # silently losing the context this helper exists to add.
         raise ValueError(f"{field}: {exc}") from exc
 
 
