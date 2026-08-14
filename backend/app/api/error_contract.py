@@ -19,6 +19,10 @@ Three ways a ``code`` can be found, in descending order of trust
    sentence (``"Value error, invalid_handle: …"``) or buried in a list of
    validation failures. Promoted by :func:`validation_detail_code`.
 
+(2) and (3) additionally require the token to be a code
+:mod:`app.api.code_catalogue` lists as arriving that way; see "Why position
+is necessary but not sufficient" below.
+
 (2) and (3) read English, and reading English is how a code silently stops
 being reported when somebody rewords a sentence — which is exactly what had
 happened to the parenthesised convention the scientific checks used to use
@@ -52,6 +56,62 @@ the *unfiltered* candidate set, so a message containing two tokens keeps
 falling back exactly as it did; the position test can only turn a promoted
 token into the generic fallback, never turn a fallback into a new code.
 No response gains a code it did not already have.
+
+Why position is necessary but not sufficient
+--------------------------------------------
+Position says *somebody meant this to be read as a code*. It cannot say
+whether the token **is** one, because a code and a function name are the
+same shape and both get written first. The house style is
+``raise ValueError(f"{context}: <prose>")``, and when ``context`` is the
+enclosing function rather than a field path — ``create_applied_group_additivity``,
+``keyset_predicate`` — the position test promotes a function name and the
+envelope publishes it as though a client could branch on it.
+
+So the token is now also checked against :mod:`app.api.code_catalogue`,
+which enumerates every code the API can emit and records, per code, *by
+which mechanism* it arrives. A token is promoted only where the catalogue
+declares that code as :data:`~app.api.code_catalogue.Surface.message_prefix`
+— that is, only where the catalogue agrees this is a code and agrees it
+legitimately arrives by being written in front of a colon. A function name
+that lands in the code position is catalogued as
+:data:`~app.api.code_catalogue.Surface.accidental_prefix` — the catalogue's
+own word for "not a code" — and is therefore not promoted. The honest
+record of a defect becomes the thing that stops it reaching a client.
+
+Why consulting a list is safe here, having been refused before
+--------------------------------------------------------------
+#159 declined to gate promotion on a hand-list, on the grounds that the
+list is a second artifact to keep in step and that forgetting to register
+a new code would silently degrade it to ``validation_error`` — the same
+failure class the narrowing existed to fix. That objection was correct
+against a *bare* list. It is answered by a catalogued one, because
+forgetting is caught at test time by three independent nets:
+
+* ``backend/tests/api/test_api_code_catalogue.py::test_every_raise_site_code_is_catalogued``
+  statically scans every ``raise`` in ``backend/app`` and
+  ``tckdb_schemas`` and demands an entry. Measured by mutation, not
+  assumed: a new ``raise ValueError("some_new_code: …")`` fails it as a
+  plain literal, as an f-string, and when raised inside a helper. It does
+  *not* see two shapes — a code interpolated into the code position
+  (``f"{PREFIX}: …"``) and a message bound to a local before being raised —
+  which is why it is not the only net.
+* The runtime observer (``backend/tests/error_code_observer.py``) fails the
+  test that *emits* an uncatalogued code, and it is exactly those two
+  shapes it covers: the six ``*_handle_conflict`` codes are interpolated
+  from a ``conflict_code`` parameter, and they were found by the observer
+  and by nothing else.
+* ``backend/tests/api/test_error_contract_catalogue_gate.py`` pins this
+  module's dependency on the catalogue, so the gate cannot be quietly
+  widened back to "any leading token" or narrowed to nothing.
+
+The residual exposure is therefore a code emitted only in production, never
+in any test, *and* written in a shape the static scan cannot read. A census
+of every string literal in both trees beginning with a ``token: `` prefix
+found 73 such tokens: 66 catalogued as ``message_prefix``, 5 logger format
+strings that reach no response body (``geometry_validation``, ``manifest``,
+``readyz``, ``startup``, ``status``), and the 2 accidental prefixes above.
+So the set of error-reachable prefixes the catalogue does not cover is
+presently empty — measured, and re-measurable, rather than asserted.
 """
 
 from __future__ import annotations
@@ -61,6 +121,8 @@ import re
 from typing import Any
 
 from tckdb_schemas.coded_error import CodedValidationError
+
+from app.api.code_catalogue import CATALOGUE, Surface
 
 _NESTED_CODE_PATTERN = re.compile(r"(?<![a-z0-9_])([a-z][a-z0-9_]*_[a-z0-9_]+): ")
 
@@ -76,13 +138,27 @@ _CODE_POSITION_PATTERN = re.compile(r"^([a-z][a-z0-9_]*_[a-z0-9_]+): ")
 #: down without turning the test back into "somewhere in the sentence".
 _FRAMEWORK_MESSAGE_PREFIXES = ("Value error, ", "Assertion failed, ")
 
+#: The codes the catalogue says arrive by being written in front of a colon.
+#: Derived from :data:`app.api.code_catalogue.CATALOGUE` rather than listed
+#: again here: a second spelling of the same set is the drift this whole
+#: mechanism is trying to avoid. Built once — the catalogue is a module
+#: constant — and read on every promotion.
+#:
+#: Membership, not observation, is the test. Fifty-odd catalogued codes have
+#: never been seen in a test run (tracked as #174); they are codes all the
+#: same, and gating on "has the observer seen it?" would degrade exactly the
+#: refusals nobody has exercised yet.
+MESSAGE_PREFIX_CODES: frozenset[str] = frozenset(
+    entry.code for entry in CATALOGUE if entry.surface is Surface.message_prefix
+)
+
 
 def _code_position_token(text: str) -> str | None:
-    """The code *text* declares as its own, or ``None``.
+    """The token *text* wrote where a code goes, or ``None``.
 
-    A code is declared by being written where a code goes: first, followed
-    by ``": "``. Anything else in the sentence is prose that happens to
-    contain an underscore.
+    Purely syntactic: first in the message, followed by ``": "``. Says that
+    somebody meant it to be read as a code, not that it is one — see
+    :func:`_promotable_code` for the second half of the test.
     """
 
     for prefix in _FRAMEWORK_MESSAGE_PREFIXES:
@@ -91,6 +167,26 @@ def _code_position_token(text: str) -> str | None:
             break
     match = _CODE_POSITION_PATTERN.match(text)
     return match.group(1) if match else None
+
+
+def _promotable_code(text: str) -> str | None:
+    """The code *text* declares, or ``None`` if it declares no code.
+
+    Both halves must hold. The token has to be in the **code position**,
+    because that is how a raiser declares a code; and the catalogue has to
+    list it as a ``message_prefix`` code, because position alone cannot tell
+    a code from the function name the house style puts in the same place.
+
+    Keeping the two halves separate is deliberate: the position test says
+    what the message *claims*, and the catalogue says whether the claim is
+    one the API actually makes. See the module docstring for why gating on a
+    list is safe here and was not before.
+    """
+
+    token = _code_position_token(text)
+    if token is None or token not in MESSAGE_PREFIX_CODES:
+        return None
+    return token
 
 
 def _json_safe(obj: Any) -> Any:
@@ -125,7 +221,19 @@ class CodedValueError(CodedValidationError):
 
 
 def detail_code(detail: object, *, fallback: str) -> str:
-    """Extract a legacy ``code: message`` prefix or return *fallback*."""
+    """Extract a legacy ``code: message`` prefix or return *fallback*.
+
+    A ``dict`` detail carrying its own ``code`` key is a *declaration* — the
+    raiser named the code rather than spelling it in a sentence — so it is
+    passed through unchecked, the same way a
+    :class:`CodedValidationError`'s ``.code`` is.
+
+    A string prefix is read English, so it must clear the same catalogue
+    test the code position clears in :func:`validation_detail_code`. Without
+    it this path had the wider hole of the two: its character test does not
+    even require an underscore, so ``raise HTTPException(422, "manifest: …")``
+    would publish ``code="manifest"``.
+    """
 
     if isinstance(detail, dict):
         nested = detail.get("code")
@@ -133,7 +241,12 @@ def detail_code(detail: object, *, fallback: str) -> str:
             return nested
     if isinstance(detail, str):
         prefix, separator, _tail = detail.partition(": ")
-        if separator and prefix and all(ch.islower() or ch.isdigit() or ch == "_" for ch in prefix):
+        if (
+            separator
+            and prefix
+            and all(ch.islower() or ch.isdigit() or ch == "_" for ch in prefix)
+            and prefix in MESSAGE_PREFIX_CODES
+        ):
             return prefix
     return fallback
 
@@ -197,10 +310,11 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
 
     Prefers a code the raising exception *declared* (see
     :func:`_declared_errors`) over one spelled inside a message. A code
-    spelled inside a message counts only where it is spelled in the **code
-    position** (see :func:`_code_position_token` and the module docstring);
-    a ``snake_case`` token found mid-sentence is a field path or a
-    quantity, not a contract.
+    spelled inside a message counts only where it is in the **code
+    position** *and* the catalogue lists it as arriving that way (see
+    :func:`_promotable_code` and the module docstring); a ``snake_case``
+    token found mid-sentence is a field path or a quantity, and one in the
+    code position that no catalogue entry claims is a function name.
     """
 
     # Pydantic/FastAPI expose the independent validation failures as the
@@ -227,7 +341,7 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
             value = str(value)
         if isinstance(value, str):
             candidates.update(_NESTED_CODE_PATTERN.findall(value))
-            declared = _code_position_token(value)
+            declared = _promotable_code(value)
             if declared is not None:
                 in_code_position.add(declared)
 
@@ -299,6 +413,7 @@ def reject_unsupported_filters(
 
 
 __all__ = [
+    "MESSAGE_PREFIX_CODES",
     "CodedValidationError",
     "CodedValueError",
     "detail_code",
