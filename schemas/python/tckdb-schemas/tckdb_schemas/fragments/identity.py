@@ -118,10 +118,16 @@ def raise_for_atomless_structure(
     ``assert_geometry_composition_matches_identity`` through
     ``resolve_species_entry``, which refused it mid-transaction. A
     *calculation* geometry — ``geometry_key``, ``input_geometries``,
-    ``output_geometries`` — reaches no composition check on any path, by
+    ``output_geometries`` — reached no composition check on any path, by
     that function's own account, so an electron carrying one was accepted
     and the structure stored. Stating the rule here covers both, names the
     field that was wrong, and answers before any species is resolved.
+
+    The database-side half of that asymmetry has since been closed too, by
+    ``app.services.calculation_geometry_composition`` (#143), which compares
+    every geometry linked to a calculation against its subject. This check
+    stays: it answers on the wire, names the offending field path, and does
+    not depend on a species being resolvable first.
 
     ``pseudo`` is out of scope here for the same reason it is absent from
     :data:`ATOMLESS_MOLECULE_KINDS`: a lumped construct's composition is

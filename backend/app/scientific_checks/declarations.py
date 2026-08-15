@@ -80,6 +80,7 @@ from app.scientific_checks import (
     collect_registered_checks,
 )
 from app.services import (
+    calculation_geometry_composition,
     charge_multiplicity_reconciliation,
     reaction_resolution,
     species_resolution,
@@ -1295,6 +1296,7 @@ CHECK_REPRODUCIBILITY_IS_ITS_OWN_JUDGEMENT = ScientificCheck(
 #: listed here, so forgetting to register a module is caught rather than
 #: silently omitted from the register.
 DECLARING_MODULES: tuple[ModuleType, ...] = (
+    calculation_geometry_composition,
     chemistry_species,
     chemistry_units,
     charge_multiplicity_reconciliation,

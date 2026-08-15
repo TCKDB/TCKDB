@@ -20,13 +20,13 @@ of its own molecule's atoms — so it blocks.
 ``resolve_species_entry``, so it reaches every conformer geometry on the
 computed-species bundle, ``/uploads/conformers``, the computed-reaction bundle
 and the PDep bundle. It does **not** reach ``CalculationIn.input_geometries``
-or ``output_geometries`` on any path: benzene coordinates can still be attached
-as a calculation geometry under a ``smiles: "C"`` species entry and the deposit
-is accepted. That gap is stated rather than closed here — for an *output*
-geometry, an optimisation that drifted is science to record, not a payload to
-refuse; for an *input* geometry it is simply open. The only comparison those
-geometries get is the advisory ``calc_geometry_validation`` row, which is
-formula-based too (see ``app.services.geometry_validation``).
+or ``output_geometries``, which are attached to a ``calculation`` row and
+never resolved through ``resolve_species_entry``. Those were unchecked
+everywhere until #143 and are now owned by
+``app.services.calculation_geometry_composition``, tested in
+``tests/services/test_calculation_geometry_composition.py``. The two rules
+compare the same way on purpose; what differs is the subject each compares
+against.
 
 The interesting half of this file is the accepting half. A blocking check that
 refuses correct science is worse than no check, so isotopologues, charged

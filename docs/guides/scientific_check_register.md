@@ -84,32 +84,33 @@ disagree, this one is right by construction.
 
 | Tier | Entries | Meaning |
 | --- | --- | --- |
-| `block` | 19 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
+| `block` | 20 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
 | `warn` | 8 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 0 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **33** | |
+| **total** | **34** | |
 
 ## Where a check's code reaches a client
 
 | Channel | Entries | What a consumer can do with it |
 | --- | --- | --- |
-| `error_envelope` | 20 | the `code` field of the 422 error body — a client can branch on it |
+| `error_envelope` | 21 | the `code` field of the 422 error body — a client can branch on it |
 | `upload_warning` | 9 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
 | `none` | 2 | *nothing carries a code* |
-| **total** | **33** | |
+| **total** | **34** | |
 
 ## Recorded divergences
 
 Where a check's documentation and its behaviour disagree, or where a guarantee is narrower than its name suggests. Every one of these is reported, never silently fixed — the register changes no check behaviour.
 
 - **[8]** The multiset of isotopic substitutions declared in a species entry's SMILES equals the multiset carried by the geometry deposited under it.
-- **[11]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
-- **[15]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
-- **[30]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+- **[9]** Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
+- **[12]** An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
+- **[16]** A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+- **[31]** A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 ## Entries
 
@@ -263,7 +264,27 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Not a divergence but a documented false *acceptance*, restated here because a referee will ask: only the multiset is compared, so isotopomers are not distinguished. An identity of `[2H]OC` (CH3-OD) accepts a geometry labelling a methyl hydrogen instead (CH2D-OH) — different molecules with different zero-point energies. Closing it needs an atom-level SMILES-to-XYZ correspondence the repository does not have. Where the two disagree invisibly, the geometry is authoritative for masses and the SMILES only for identity.
 
-### 9. A species entry's declared charge equals the summed formal charge of its own SMILES.
+### 9. Every geometry linked to a calculation is made of the atoms of the subject that calculation is filed under -- the species entry's own formula, or, for a transition state, the sum of its reaction's reactants.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `block` |
+| **Code** | `calculation_geometry_composition_mismatch` |
+| **Code reaches a client via** | the `code` field of the 422 error body — a client can branch on it |
+| **Governing ADR** | 0008 |
+
+**Why this tier.** Definitional. A calculation's numbers are computed from its geometry and attributed to its subject; a geometry made of different atoms than the subject makes that attribution false rather than weak. No correct calculation can produce one, because no electronic-structure program adds or removes a nucleus -- which is also why this holds for output geometries and not only input ones: dissociation, isomerisation and proton transfer all conserve element counts.
+
+**Enforced at.**
+
+- `assert_calculation_geometry_composition` — `backend/app/services/calculation_geometry_composition.py::assert_calculation_geometry_composition`
+  *Called from every site that inserts a `calculation_input_geometry` or `calculation_output_geometry` row -- eight of them across four modules -- on both the producer-explicit branch and the `geometry_key`/fallback branch. A guard test fails if a ninth appears unchecked.*
+
+**Escape hatch.** Declare the structure's real composition: give the calculation the geometry it was run on, or file it under the subject that geometry belongs to. Absence does not block -- a `pseudo` owner, a transition state whose reaction records no reactants or a pseudo reactant, and an unparseable stored SMILES are all left unjudged. Only atom counts are compared, so isotopologues, scan and IRC points, constitutional isomers and dissociated optimisations all pass.
+
+**Recorded divergence.** A documented false *acceptance*, restated because a referee will ask: counts alone cannot tell a constitutional isomer from its partner, so an ethanol calculation carrying dimethyl ether coordinates passes. Catching that needs bond perception from XYZ, which fails silently on exactly the strained, radical and stretched structures where it would matter -- the same reasoning that keeps `species_geometry_composition_mismatch` to counts. It also refuses a geometry carrying ghost or dummy centres (counterpoise/BSSE), because `Bq` appears in no SMILES; that refusal is correct while `geometry_atom` has no way to say 'no nucleus here', since such a row is already miscounted by `natoms` and every degrees-of-freedom read downstream.
+
+### 10. A species entry's declared charge equals the summed formal charge of its own SMILES.
 
 | Field | Value |
 | --- | --- |
@@ -281,7 +302,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** A free electron short-circuits before the comparison, returning a pinned identity pair. Multiplicity is deliberately **not** validated against the SMILES at all: standard SMILES does not encode spin state, so RDKit's inferred radical count is only a hint and the uploaded multiplicity is authoritative — which is what lets singlet CH2 (whose SMILES `[CH2]` implies a triplet) and the singlet and triplet states of O2 be represented.
 
-### 10. The charge and spin multiplicity a depositor declares match the ones the electronic-structure log says the calculation was actually run at.
+### 11. The charge and spin multiplicity a depositor declares match the ones the electronic-structure log says the calculation was actually run at.
 
 | Field | Value |
 | --- | --- |
@@ -299,7 +320,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Absence is not contradiction: if the producing program is not one of the wired parsers, the artifact is missing, the log is truncated, or the declarations inside a single log disagree with each other, the value is left unknown and **no** warning is emitted. Only a value genuinely read from the log may contradict a declaration — emitting a mismatch because parsing failed would fabricate a contradiction out of ignorance.
 
-### 11. An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
+### 12. An optimisation's output geometry still describes the species it was declared for — the optimiser handed back the molecule it was given.
 
 | Field | Value |
 | --- | --- |
@@ -308,12 +329,12 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 | **Code reaches a client via** | *nothing carries a code* |
 | **Governing ADR** | 0008, 0002 |
 
-**Why this tier.** An expectation, and correctly non-blocking. An optimisation that rearranged, dissociated or transferred a proton is science to record, not a payload to refuse, and connectivity perception from XYZ is unreliable for exactly the weak complexes, radicals, ions and stretched geometries where a genuine rearrangement would matter. The result is written as an evidence row that grades the record at read time; it never refuses an upload.
+**Why this tier.** An expectation, and correctly non-blocking. An optimisation that rearranged, dissociated or transferred a proton is science to record, not a payload to refuse, and connectivity perception from XYZ is unreliable for exactly the weak complexes, radicals, ions and stretched geometries where a genuine rearrangement would matter. The result is written as an evidence row that grades the record at read time; it never refuses an upload. Since #143 the tier is also the only one left to it: the *composition* half of what this row reports is owned by `calculation_geometry_composition_mismatch`, which blocks, so what this row can still say on its own is the RMSD suspicion — a correct-formula structure that moved further than expected, which is an expectation by construction.
 
 **Enforced at.**
 
 - `validate_calculation_geometry` — `backend/app/services/geometry_validation.py::validate_calculation_geometry`
-  *Species-owned `opt` calculations only. Transition states are deliberately excluded, having no canonical SMILES to compare against. Best-effort by policy: a missing SMILES, a missing output geometry, unparseable coordinates or a raising chemistry layer all write nothing and let the upload continue. A Kabsch RMSD above 1.0 A against the input geometry is recorded as a separate suspicion signal.*
+  *Species-owned `opt` calculations only. Transition states are deliberately excluded, having no canonical SMILES to compare against. Best-effort by policy: a missing SMILES, a missing output geometry, unparseable coordinates or a raising chemistry layer all write nothing and let the upload continue. A Kabsch RMSD above 1.0 A against the input geometry is recorded as a separate suspicion signal. Its `fail` outcome is no longer reachable through an upload path: `is_isomorphic=False` fires only on an element-count mismatch, no calculation can change an element count, and `assert_calculation_geometry_composition` refuses such a deposit before this runs. The pure seam keeps the verdict and is pinned directly by `tests/workflows/test_geometry_validation_wiring.py`.*
 
 **Escape hatch.** The whole check is advisory, so there is nothing to escape. What a consumer must not do is read a `fail` row as 'this calculation is scientifically invalid'; it means only that the automated identity validator found a mismatch.
 
@@ -323,7 +344,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Stationary points
 
-### 12. A transition state has at least one imaginary vibrational mode, exactly one of them is designated the reaction coordinate, and no undeclared mode is stiff enough to make that designation meaningless.
+### 13. A transition state has at least one imaginary vibrational mode, exactly one of them is designated the reaction coordinate, and no undeclared mode is stiff enough to make that designation meaningless.
 
 | Field | Value |
 | --- | --- |
@@ -342,7 +363,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Three, and they are the point of the rule. Deposit no frequency evidence: `n_imag=None` produces no findings at all, because absence is never contradiction. Or deposit the extra imaginary modes honestly — designate the reaction coordinate and give each other mode a disposition (`torsion`, `rigid_body_residue`, `intermolecular`, `ring_pucker`, `symmetry_breaking`, or an explicit `unassigned`) — and a genuine higher-order saddle is accepted with a warning and a structural flag. Or, if the extra mode really is the barrier, designate *it*. What has no door is refusing to say which mode is the reaction coordinate.
 
-### 13. A species entry declared a minimum has no imaginary vibrational modes.
+### 14. A species entry declared a minimum has no imaginary vibrational modes.
 
 | Field | Value |
 | --- | --- |
@@ -360,7 +381,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Declare `species_entry_kind='vdw_complex'`, which records the same mode with a warning instead, or deposit the structure through a transition-state payload if the single imaginary mode is real.
 
-### 14. A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
+### 15. A van der Waals complex is formally a minimum, so an imaginary mode on one is recorded and flagged rather than refused — unless the mode is too stiff to be an intermolecular one, which suggests a genuine reaction coordinate.
 
 | Field | Value |
 | --- | --- |
@@ -378,7 +399,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** This *is* the escape hatch for the blocking minimum rule. Its own cost is that a genuinely mislabelled saddle point deposited as a van der Waals complex is accepted with a warning.
 
-### 15. A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
+### 16. A transition state's imaginary modes other than the reaction coordinate are judged by magnitude against a tolerance read from the protocol that produced them, not by counting them.
 
 | Field | Value |
 | --- | --- |
@@ -413,7 +434,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** ADR 0012 recommends replacing the threshold with a determination — projecting each imaginary eigenvector onto the six rigid-body vectors (more than about 90 percent overlap means projection residue) and onto dihedral-rotation vectors (more than about 70 percent means a torsion) — and says those should be implemented *before* tau is tuned, because a determination beats a threshold wherever one is available. Tau shipped first, so that ordering was not followed; the projections themselves now exist. They are computed at *read* time from `calc_hessian` -- whose eigenvectors, mass-weighted by the per-atom masses `geometry_atom` carries, are the displacement vectors ADR 0012 wanted -- and nothing about them is stored, so no schema change was involved and no historical record was re-decided. See `include=imaginary_mode_projections` on the scientific calculation read, and ADR 0013 as amended. The disposition on each extra mode remains *declared by the depositor*; the determination is reported beside it and a disagreement is surfaced as one, never silently resolved. Under ADR 0008 a projection is an expectation about a record, so it informs this check and does not gate it. Where no Hessian is stored the projection reads 'not determinable', which is not the same answer as 'no residue found' — and is not a shrug either: that block carries this check's own stored judgement beside the refusal, being the tau applied, the row of the protocol table it came from, the recorded parameters that chose that row, the structural flag, and every imaginary mode ranked by magnitude against the tau. It reports the comparison and stops there. Magnitude cannot separate a spurious mode from a real one that is not the reaction coordinate — a transition state can sit at a maximum of a torsional profile while being a perfectly correct reactive bottleneck — so no mode in that block is labelled, and the only assignment on it is the one the depositor declared.
 
-### 16. A transition state's reaction coordinate should exceed roughly 100 cm-1 in magnitude.
+### 17. A transition state's reaction coordinate should exceed roughly 100 cm-1 in magnitude.
 
 | Field | Value |
 | --- | --- |
@@ -448,7 +469,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the check never refuses. A referee should read the threshold as a tunable reporting line, not a claim about physics.
 
-### 17. A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
+### 18. A deposited saddle point should carry passing intrinsic-reaction-coordinate evidence that it connects the declared reactants and products.
 
 | Field | Value |
 | --- | --- |
@@ -466,7 +487,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None needed — the warning is the accommodation. Note the warning fires on absence of a *passing* record, so evidence that was run and failed is stored and still warns.
 
-### 18. A frequency result that deposits both a scalar imaginary-mode count and a frequency list agrees with itself about how many imaginary modes it has.
+### 19. A frequency result that deposits both a scalar imaginary-mode count and a frequency list agrees with itself about how many imaginary modes it has.
 
 | Field | Value |
 | --- | --- |
@@ -484,7 +505,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Omit `modes`. A record that deposits only the scalar is incomplete, warns nowhere and is refused nowhere — ADR 0012 asks for the complete signed frequency list, and asking is as far as this tier goes. What has no door is depositing both and letting them contradict each other.
 
-### 19. A frequency list carries no more modes than the geometry it is attached to has degrees of freedom: at most `3N` for `N` atoms, the six rigid-body modes included.
+### 20. A frequency list carries no more modes than the geometry it is attached to has degrees of freedom: at most `3N` for `N` atoms, the six rigid-body modes included.
 
 | Field | Value |
 | --- | --- |
@@ -506,7 +527,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Atom mapping across a reaction
 
-### 20. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
+### 21. An atom does not change element on the way across a reaction: carbon does not map onto nitrogen.
 
 | Field | Value |
 | --- | --- |
@@ -527,7 +548,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Case is not load-bearing, and no longer needs a special provision to stop it becoming so. The comparison used to be case-insensitive on both sides, because the two ends quote two different geometries and nothing guaranteed they spelled an element the same way — carbon becoming nitrogen is a contradiction, while `Cl` becoming `CL` is one program shouting where another did not, and refusing the second would have refused correct chemistry. `b4e7c1d20f83` canonicalised the symbol on the way into `geometry_atom.element` and `c5a1f8e3d074` made that a CHECK, so one element now has one spelling in every state the database can be in and both the constraint and the service compare the stored values directly. Isotope mass number is deliberately *not* carried across the same way, because a NULL disables a MATCH SIMPLE foreign key; isotope consistency is checked in the service layer instead.
 
-### 21. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
+### 22. One saddle-point atom is claimed by exactly one atom of each leg, and one participant atom maps to exactly one saddle-point atom.
 
 | Field | Value |
 | --- | --- |
@@ -551,7 +572,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Per leg, not globally: the reactant and product legs each claim the whole saddle point, which is the point of storing two maps both pointing at it. A `side` column exists on the pair row purely so this can be a unique constraint, because SQL cannot dereference the participant to find its role.
 
-### 22. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
+### 23. Every atom index in a map is counted against a named geometry that the participant actually owns, and names an atom that geometry actually has.
 
 | Field | Value |
 | --- | --- |
@@ -575,7 +596,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None, and the cost is stated in ADR 0011: the map is welded to the geometries it names, so depositing a second conformer or re-optimising at another level of theory does not carry it across. Canonical-order-relative indexing would be portable, and was rejected because its failure mode is a map that looks fine and refers to a different atom order than the depositor intended. Portability can be added later as a derived view; correctness cannot be retrofitted onto records nobody can verify.
 
-### 23. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
+### 24. When a map covers every declared participant of an atom-balanced reaction, both legs claim the same saddle-point atoms and no saddle-point atom is left unclaimed.
 
 | Field | Value |
 | --- | --- |
@@ -593,7 +614,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Leave the map incomplete, or deposit an unbalanced reaction — either drops the rule to the warning tier by design rather than by accident.
 
-### 24. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
+### 25. Where a deposit carries both an atom map and an IRC participant mapping for the same saddle point, they agree about which saddle-point atoms each participant is made of.
 
 | Field | Value |
 | --- | --- |
@@ -611,7 +632,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** Omit one surface, or correct whichever is wrong — the mappings are optional on every path and a partial atom map is always accepted. Three absences are deliberately *not* disagreements: an atom map that omits a participant or leaves atoms unmapped is compared only over what it does claim, a transition state with no passing IRC mapping is not compared at all, and a barrierless channel has neither surface. Two participants on one side that are the same species entry are interchangeable, so a disagreement a permutation within that group would resolve is treated as arbitrary labelling rather than contradiction. A participant with no atoms is not an absence: both surfaces can say it has none -- an empty atom list -- so a reaction releasing a free electron carries a complete partition on both and is compared like any other, with the electron contributing no atoms to either side of the comparison.
 
-### 25. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
+### 26. A reaction that has a transition state should say which atom of the reactants is which atom of the saddle point and of the products.
 
 | Field | Value |
 | --- | --- |
@@ -629,7 +650,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None is needed — the warning *is* the accommodation. TCKDB deliberately will not infer a map: several chemically distinct maps are usually consistent with the same reactants and products, so choosing one by algorithm would manufacture provenance.
 
-### 26. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
+### 27. A supplied atom map should cover every declared participant molecule, every atom of each mapped participant, and every atom of the saddle point.
 
 | Field | Value |
 | --- | --- |
@@ -647,7 +668,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Escape hatch.** None.
 
-### 27. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
+### 28. An atom map records whether a human asserted it or an algorithm produced it, an inferred map names the algorithm, and neither attribution can be relabelled afterwards.
 
 | Field | Value |
 | --- | --- |
@@ -671,7 +692,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Rate coefficients
 
-### 28. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
+### 29. An Arrhenius pre-exponential factor carries units of the dimensionality its reaction order requires — per-second for unimolecular, concentration^-1 time^-1 for bimolecular, concentration^-2 time^-1 for termolecular.
 
 | Field | Value |
 | --- | --- |
@@ -691,7 +712,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Statistical mechanics
 
-### 29. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
+### 30. A partition function belongs to exactly one subject — a species entry or a transition-state entry, never both and never neither.
 
 | Field | Value |
 | --- | --- |
@@ -712,7 +733,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Pressure-dependent networks
 
-### 30. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
+### 31. A set of phenomenological k(T,P) declares whether this database holds the master-equation derivation behind it; a `computed` solve must actually carry master-equation evidence, and a `reported` one must cite the publication it was transcribed from.
 
 | Field | Value |
 | --- | --- |
@@ -735,7 +756,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 **Recorded divergence.** Existence, not coverage — and the trigger must not be read as the whole contract. The database guarantees a computed solve carries nonzero evidence of each applicable class; the three coverage rules (one energy per state, one energy-transfer model per (well, collider) pair or a network-wide declaration, one barrier per saddle-point path) remain properties of the single wired upload path. A computed solve with four energies out of five passes the database and fails the validator. ADR 0010's amendment states this deliberately: a computed solve with *zero* energies is a contradiction and may block, while an incomplete one is a true record to be graded by the trust and reproducibility layers. Separately, `kind` cannot surface in CHEMKIN export, which has no provenance field; a tripwire test guards the moment network kinetics first reach mechanism output.
 
-### 31. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
+### 32. A collisional energy-transfer model records whether its ⟨ΔE⟩down was determined per (well, collider) pair or declared once for the whole network.
 
 | Field | Value |
 | --- | --- |
@@ -756,7 +777,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Custody of the evidence
 
-### 32. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
+### 33. The bytes TCKDB serves for a stored artifact are the bytes it stored, and a record whose evidence is known not to be is labelled as such at read time rather than graded as if it were intact.
 
 | Field | Value |
 | --- | --- |
@@ -784,7 +805,7 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 
 ## Reproducibility
 
-### 33. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
+### 34. Whether a record's preserved evidence is sufficient to understand, audit or repeat it is assessed separately from how far its evidence is trusted and from whether a curator approved it, and the three may disagree.
 
 | Field | Value |
 | --- | --- |

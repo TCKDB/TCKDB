@@ -63,6 +63,9 @@ from app.schemas.workflows.reaction_upload import (
     ReactionUploadRequest,
 )
 from app.services.artifact_persistence import persist_artifact
+from app.services.calculation_geometry_composition import (
+    assert_calculation_geometry_composition,
+)
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
@@ -159,6 +162,17 @@ def _persist_calculation(
     )
 
     if effective_geometry_id is not None:
+        # ``geometry_key`` resolves against a map spanning every species and
+        # every transition state in the bundle, so this is a real refusal
+        # rather than a restatement: a well's calculation naming another
+        # well's geometry, or a transition state's naming a participant's,
+        # reaches here with the wrong atoms.
+        assert_calculation_geometry_composition(
+            session,
+            calc=calculation,
+            geometry_id=effective_geometry_id,
+            field=f"calculation '{calc_in.key}': geometry_key",
+        )
         session.add(
             CalculationOutputGeometry(
                 calculation_id=calculation.id,

@@ -14,6 +14,9 @@ from app.db.models.calculation import Calculation, CalculationOutputGeometry
 from app.db.models.common import CalculationGeometryRole
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.schemas.fragments.calculation import CalculationWithResultsPayload
+from app.services.calculation_geometry_composition import (
+    assert_calculation_geometry_composition,
+)
 from app.services.calculation_resolution import (
     persist_additional_calculations,
     resolve_and_persist_calculation_with_results,
@@ -92,6 +95,20 @@ def persist_ts_calculations(
         primary_opt_upload,
         transition_state_entry_id=transition_state_entry_id,
         created_by=created_by,
+    )
+    # The saddle geometry has already been compared against this reaction's
+    # reactants by ``validate_transition_state_composition``, so this call
+    # cannot refuse anything the caller has not already been refused for. It
+    # is here so that the invariant is stated at every site that writes the
+    # row rather than at all-but-one of them: this is the only site that adds
+    # a ``calculation_output_geometry`` without going through
+    # ``attach_calculation_output_geometries``, and a future caller passing a
+    # different ``geometry_id`` would otherwise inherit an unchecked path.
+    assert_calculation_geometry_composition(
+        session,
+        calc=primary_calc,
+        geometry_id=geometry_id,
+        field="primary_opt: geometry",
     )
     session.add(
         CalculationOutputGeometry(
