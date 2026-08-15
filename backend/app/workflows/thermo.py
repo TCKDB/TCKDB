@@ -24,7 +24,9 @@ from app.schemas.workflows.thermo_upload import (
 from app.services.calculation_ownership import (
     W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_THERMO_STATMECH_OWNER_MISMATCH,
     assert_calculation_owned_by,
+    assert_statmech_owned_by,
 )
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
@@ -189,8 +191,16 @@ def _resolve_statmech_id(
 
     Mirrors the ``existing_calculation_id`` handling for source
     calculations (DR-0028): a missing row produces 404, a row owned by a
-    different species entry produces 422 (ValueError). The error detail
-    names the field but does not leak internal identifiers.
+    different species entry produces 422. The error detail names the field
+    but does not leak internal identifiers.
+
+    The 422 goes through the shared ownership guard rather than an inline
+    comparison, which is what gives it
+    ``thermo_statmech_owner_mismatch`` instead of the generic
+    ``validation_error`` a client cannot branch on (#195). This is the
+    plainest reachable case of the rule: ``existing_statmech_id`` is a row
+    id the depositor supplies, so nothing in the enclosing request scoped
+    it to this species entry.
     """
     if existing_statmech_id is None:
         return None
@@ -200,11 +210,19 @@ def _resolve_statmech_id(
             "existing_statmech_id refers to a statmech record that does "
             "not exist."
         )
-    if statmech.species_entry_id != species_entry_id:
-        raise ValueError(
-            "existing_statmech_id refers to a statmech record owned by a "
-            "different species entry."
-        )
+    assert_statmech_owned_by(
+        statmech,
+        code=W_THERMO_STATMECH_OWNER_MISMATCH,
+        target="thermo",
+        # Named the way its two neighbours in this module are, and not as
+        # the bare field: a message opening ``existing_statmech_id: `` puts
+        # a snake_case token in the code position, which is the shape #159
+        # and #164 spent two changes teaching the envelope to distrust. The
+        # code is declared on the exception; the sentence must not look like
+        # it is declaring a second one.
+        context="thermo existing_statmech_id",
+        species_entry_id=species_entry_id,
+    )
     return statmech.id
 
 

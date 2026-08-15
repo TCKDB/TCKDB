@@ -111,6 +111,17 @@ code (scan in "Method" below). The repair is a message reword
 > in that bundle (`workflows/computed_reaction.py:1128`) is checked for
 > neither ownership nor anything else, so a torsion may cite a sibling
 > species's or the TS's scan calculation and be persisted silently.
+>
+> **Both resolved.** #193 routed the torsion's scan key through the shared
+> guard; #195 did the same for the inline comparisons (three, not four —
+> the count above was measured before #174 and #177 moved the file, and
+> re-deriving the anchors on `main` found three). Two of the three now
+> report `applied_energy_correction_source_calculation_owner_mismatch`,
+> which is what took that entry out of `Reach.guard` and back into the
+> client enum, and the third reports the
+> `statmech_source_calculation_owner_mismatch` its three sibling write
+> paths already did. Provoked on the wire in
+> `tests/api/test_api_bundle_ownership_codes.py`.
 
 `assert_calculation_owned_by` takes its code as a parameter and has five.
 Two are emitted by the suite; three are not — and the three are unreachable by
@@ -460,6 +471,18 @@ The last three are the finding-2 cluster. They are deliberate forward guards,
 so the recommendation is **not** deletion — it is that they stop being
 exported to the client enum as branchable refusals while the API cannot
 produce them.
+
+> **Two of the three have since become reachable, and the row above is
+> right about why it could not see it.** Both rows list only the call
+> sites that *use the shared guard*, because that is what a scan of
+> `assert_calculation_owned_by` finds. The reaction bundle enforced the
+> same rule with its own inline comparison, so its call sites are absent
+> from both rows and the "why it cannot fire" column was reasoning over
+> an incomplete list. #193 (`statmech_torsion_scan_...`) and #195
+> (`applied_energy_correction_source_...`) routed those sites through the
+> guard; both codes are now `Reach.request` and exported.
+> `transport_source_calculation_owner_mismatch` is the one that stands:
+> no write path anywhere produces the condition.
 
 ---
 

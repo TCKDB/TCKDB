@@ -41,6 +41,12 @@ from app.schemas.workflows.kinetics_upload import (
     KineticsUploadRequest,
 )
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
+from app.services.calculation_ownership import (
+    W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
+    W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+    assert_owned_by,
+    assert_statmech_owned_by,
+)
 from app.services.calculation_resolution import resolve_level_of_theory_ref
 from app.services.kinetics_resolution import persist_kinetics, resolve_kinetics_upload
 from app.services.record_review import (
@@ -179,7 +185,8 @@ def _resolve_interpretation_assignments(
     """
 
     resolved: list[_ResolvedInterpretation] = []
-    for assignment in request.interpretation_assignments:
+    for index, assignment in enumerate(request.interpretation_assignments):
+        field = f"interpretation_assignments[{index}]"
         statmech = session.scalar(
             select(Statmech).where(Statmech.public_ref == assignment.statmech_ref)
         )
@@ -228,12 +235,26 @@ def _resolve_interpretation_assignments(
                 created_by=created_by,
             )
             species_entry_id = participant_entry.id
-            if statmech.species_entry_id != species_entry_id:
-                raise ValueError("interpretation statmech_ref must belong to its declared reaction participant.")
+            assert_statmech_owned_by(
+                statmech,
+                code=W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+                target=f"{assignment.role} {assignment.participant_index}",
+                context=f"{field}.statmech_ref",
+                species_entry_id=species_entry_id,
+            )
             subject_key = f"{assignment.role}:{assignment.participant_index}"
         else:
-            if statmech.transition_state_entry_id != ts_entry_id:
-                raise ValueError("transition-state interpretation statmech_ref must belong to its declared TS entry.")
+            # ``ts_entry_id`` cannot be None here: the schema requires
+            # ``transition_state_entry_ref`` for this role and the lookup
+            # above refuses a ref that names nothing, so the guard always
+            # has an owner to compare against.
+            assert_statmech_owned_by(
+                statmech,
+                code=W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+                target="transition state",
+                context=f"{field}.statmech_ref",
+                transition_state_entry_id=ts_entry_id,
+            )
             subject_key = "transition_state"
 
         selection_id: int | None = None
@@ -261,11 +282,35 @@ def _resolve_interpretation_assignments(
             if len(selection_ids) != 1:
                 raise ValueError("conformer_selection content locator must resolve exactly one selection.")
             selection_id = selection_ids[0]
-            if (
-                assignment.role != "transition_state"
-                and statmech.species_entry_id != selection_species_entry.id
-            ):
-                raise ValueError("conformer selection subject must match the interpretation statmech species.")
+            # The role test is defence in depth, not a live branch:
+            # ``validate_role_shape`` already refuses a conformer_selection
+            # on a transition-state assignment, so nothing reaching here
+            # can carry one. Kept because the guard below reads
+            # ``statmech.species_entry_id``, which a TS statmech has as
+            # NULL -- the comparison would be against nothing.
+            if assignment.role != "transition_state":
+                # The cited row is the *selection*; the subject it must
+                # agree with is the statmech this assignment names. So the
+                # selection's species entry is the row's owner and the
+                # statmech's is the target's -- the reverse of the reading
+                # the sentence invites, and the reason this calls the core
+                # helper rather than a statmech-shaped wrapper.
+                #
+                # ``statmech.species_entry_id`` is non-null here: the
+                # branch above has just held it equal to the participant's
+                # species entry.
+                assert_owned_by(
+                    subject_noun="conformer selection",
+                    row_id=selection_id,
+                    row_species_entry_id=selection_species_entry.id,
+                    row_transition_state_entry_id=None,
+                    code=(
+                        W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH
+                    ),
+                    target=f"{assignment.role} {assignment.participant_index}",
+                    context=f"{field}.conformer_selection",
+                    species_entry_id=statmech.species_entry_id,
+                )
 
         resolved.append(
             _ResolvedInterpretation(

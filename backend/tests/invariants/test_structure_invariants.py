@@ -27,9 +27,13 @@ from app.schemas.fragments.identity import SpeciesEntryIdentityPayload
 from app.schemas.workflows.reaction_upload import ReactionUploadRequest
 from app.schemas.workflows.thermo_upload import ThermoUploadRequest
 from app.services.calculation_ownership import (
+    W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
     W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_THERMO_STATMECH_OWNER_MISMATCH,
     assert_calculation_owned_by,
+    assert_owned_by,
+    assert_statmech_owned_by,
 )
 from app.services.geometry_validation import validate_calculation_geometry
 from app.workflows.reaction import persist_reaction_upload
@@ -270,6 +274,61 @@ def test_owner_guard_refuses_to_run_with_nothing_to_compare() -> None:
         )
 
 
+def test_owner_guard_rejects_statmech_owned_by_another_subject() -> None:
+    """The statmech spelling of the same rule (#195).
+
+    A thermo record cites a statmech row by ``existing_statmech_id`` and a
+    kinetics interpretation cites one by ``statmech_ref``; both used to
+    compare inline and raise a bare ``ValueError``. ``Statmech`` carries
+    the same two owner columns a calculation does, so the comparison is
+    shared and only the noun and the code differ -- which is what this
+    checks, in both directions.
+    """
+    statmech = _FakeCalc(id=9, species_entry_id=7)
+
+    assert_statmech_owned_by(
+        statmech,  # type: ignore[arg-type]
+        code=W_THERMO_STATMECH_OWNER_MISMATCH,
+        target="thermo",
+        context="same owner",
+        species_entry_id=7,
+    )
+
+    with pytest.raises(ValueError, match="statmech record belongs") as excinfo:
+        assert_statmech_owned_by(
+            statmech,  # type: ignore[arg-type]
+            code=W_THERMO_STATMECH_OWNER_MISMATCH,
+            target="thermo",
+            context="cross-owner",
+            species_entry_id=8,
+        )
+    assert excinfo.value.code == "thermo_statmech_owner_mismatch"
+    # The noun is a parameter, so the calculation wording must not have
+    # followed it.
+    assert "calculation" not in str(excinfo.value)
+
+
+def test_owner_guard_refuses_a_vacuous_call_whatever_the_noun() -> None:
+    """The "nothing to compare against" guard survived being parameterised.
+
+    ``assert_calculation_owned_by`` is covered above; this is the core
+    function the two wrappers now delegate to, reached with a noun neither
+    of them uses. Without it the check could be lost for every caller that
+    does not go through a wrapper -- which is the conformer-selection call
+    site in ``app.workflows.kinetics``.
+    """
+    with pytest.raises(ValueError, match="guard nothing"):
+        assert_owned_by(
+            subject_noun="conformer selection",
+            row_id=1,
+            row_species_entry_id=7,
+            row_transition_state_entry_id=None,
+            code=W_KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
+            target="reactant 1",
+            context="no owner supplied",
+        )
+
+
 def test_every_product_routes_its_owner_check_through_one_implementation() -> None:
     """#162: the rule was written five times and pinned once.
 
@@ -279,6 +338,11 @@ def test_every_product_routes_its_owner_check_through_one_implementation() -> No
     invariant is now the consolidation itself: no workflow may hold a
     private owner-consistency comparison, and every module that needs one
     must reach the shared implementation.
+
+    ``app/workflows/kinetics.py`` joined the list in #195. It cites
+    statmech records and conformer selections rather than calculations, so
+    it reaches the module by a different name -- which is why the check is
+    on the *import* rather than on one function's name.
     """
     modules = [
         "app/workflows/thermo.py",
@@ -286,15 +350,113 @@ def test_every_product_routes_its_owner_check_through_one_implementation() -> No
         "app/workflows/transport.py",
         "app/workflows/computed_species.py",
         "app/workflows/computed_reaction.py",
+        "app/workflows/kinetics.py",
         "app/services/statmech_resolution.py",
     ]
     root = Path(__file__).resolve().parents[2]
     for relative in modules:
         source = (root / relative).read_text()
-        assert "assert_calculation_owned_by" in source, relative
+        assert "from app.services.calculation_ownership import" in source, relative
         # The private per-product copies this consolidated (#162).
         assert "def _assert_calculation_owned_by" not in source, relative
         assert "def assert_statmech_calculation_owned_by" not in source, relative
+
+
+def _uncoded_owner_comparisons(source: str) -> list[tuple[int, str]]:
+    """``(line, code)`` for every ``if x._entry_id != y:`` that bare-raises.
+
+    The shape all seven #195 sites had: compare an owner column, then
+    ``raise ValueError`` -- which reaches a depositor as
+    ``validation_error`` and cannot be branched on. Detected structurally
+    rather than by message, because the messages were all different and
+    that is precisely why nothing caught them.
+    """
+    import ast
+
+    tree = ast.parse(source)
+    found: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        compares = [
+            inner
+            for inner in ast.walk(node.test)
+            if isinstance(inner, ast.Compare)
+            and any(isinstance(op, ast.NotEq) for op in inner.ops)
+            and isinstance(inner.left, ast.Attribute)
+            and inner.left.attr.endswith("_entry_id")
+        ]
+        if not compares:
+            continue
+        for inner in ast.walk(node):
+            if not isinstance(inner, ast.Raise) or not isinstance(inner.exc, ast.Call):
+                continue
+            name = getattr(inner.exc.func, "id", None) or getattr(
+                inner.exc.func, "attr", None
+            )
+            if name in {"ValueError", "AssertionError"}:
+                found.append((inner.lineno, name))
+    return found
+
+
+def test_the_uncoded_comparison_detector_can_say_no() -> None:
+    """Guard the guard: it must fire on the shape and not on its repair.
+
+    The same discipline as ``test_the_origin_detector_can_say_no`` in the
+    catalogue tests. A detector that matches nothing passes the invariant
+    below over an empty set, which is this repository's dominant defect.
+    """
+    offending = _uncoded_owner_comparisons(
+        "def f(row, owner):\n"
+        "    if row.species_entry_id != owner:\n"
+        "        raise ValueError('not owned by this species entry.')\n"
+    )
+    assert offending, "the detector cannot see the shape it was written for"
+
+    assert not _uncoded_owner_comparisons(
+        "def f(row, owner):\n"
+        "    assert_calculation_owned_by(row, species_entry_id=owner)\n"
+    )
+    # A coded refusal in the same shape is the *repair*, not the defect.
+    assert not _uncoded_owner_comparisons(
+        "def f(row, owner):\n"
+        "    if row.species_entry_id != owner:\n"
+        "        raise CodedValueError('some_code', 'not owned.')\n"
+    )
+
+
+def test_no_workflow_refuses_an_owner_mismatch_without_a_code() -> None:
+    """#195: seven guards compared an owner column and bare-raised.
+
+    Each reached a client as ``validation_error``, so a depositor could
+    not tell "you cited another species' partition function" from a
+    malformed number, and three earlier changes each coded a subset and
+    left the rest. The invariant closes the class rather than the
+    instances: in any module that carries the rule, comparing an owner
+    column and raising an uncoded exception is the defect.
+    """
+    modules = [
+        "app/workflows/thermo.py",
+        "app/workflows/statmech.py",
+        "app/workflows/transport.py",
+        "app/workflows/computed_species.py",
+        "app/workflows/computed_reaction.py",
+        "app/workflows/kinetics.py",
+        "app/services/statmech_resolution.py",
+        "app/services/calculation_ownership.py",
+    ]
+    root = Path(__file__).resolve().parents[2]
+    problems: list[str] = []
+    for relative in modules:
+        for line, name in _uncoded_owner_comparisons(
+            (root / relative).read_text()
+        ):
+            problems.append(f"{relative}:{line} raises a bare {name}")
+    assert not problems, (
+        "these compare an owner column and refuse without a machine-readable "
+        "code, so a client receives validation_error and cannot branch on "
+        "them: " + "; ".join(problems)
+    )
 
 
 def test_thermo_upload_schema_rejects_source_calc_key_with_no_declared_calc() -> None:

@@ -7,6 +7,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArrheniusAUnits,
@@ -275,8 +276,15 @@ def test_computed_kinetics_round_trips_explicit_subject_assignments_and_wigner(
         invalid_payload = request.model_dump(mode="json")
         invalid_payload["interpretation_assignments"][1]["statmech_ref"] = reactant_sm.public_ref
         before = session.scalar(select(func.count(Kinetics.id)))
-        with pytest.raises(ValueError, match="must belong to its declared reaction participant"):
+        # #195: this was a bare ValueError matched on "must belong to its
+        # declared reaction participant", so it reached a client as
+        # validation_error. It now names the field it refused and carries
+        # a code, which is what a client can branch on.
+        with pytest.raises(CodedValueError) as mismatched:
             persist_kinetics_upload(session, KineticsUploadRequest.model_validate(invalid_payload), created_by=77)
+        assert mismatched.value.code == "kinetics_interpretation_statmech_owner_mismatch"
+        assert mismatched.value.context["field"] == "interpretation_assignments[1].statmech_ref"
+        assert mismatched.value.context["owner_kind"] == "species_entry"
         assert session.scalar(select(func.count(Kinetics.id))) == before
 
         wrong_direction = request.model_dump(mode="json")
