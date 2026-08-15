@@ -14,6 +14,13 @@ on:
       # workflow and therefore started no job at all. Covered by a gate you
       # cannot trigger is not covered.
       - "integrations/mcp/**"
+      # Same reasoning, for a guard's *inputs* rather than its own file.
+      # backend/tests/scripts/test_read_spec_names_resolve.py reads every
+      # spec under docs/specs/ as well as backend/docs/specs/, and a stale
+      # symbol name is introduced by editing the document, not the test. A
+      # pull request touching only docs/specs/ matched no filter in any
+      # workflow, so the one gate that could have caught it never started.
+      - "docs/specs/**"
   push:
     branches:
       - main
@@ -24,6 +31,7 @@ on:
       - "backend/**"
       - "schemas/python/tckdb-schemas/**"
       - "integrations/mcp/**"
+      - "docs/specs/**"
   workflow_dispatch:
 
 permissions:

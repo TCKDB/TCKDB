@@ -379,9 +379,9 @@ persistence.
 ### Files
 
 ```text
-frontend/src/types/machineReviewInspection.ts   zod schema + types mirroring the
-                                                 backend AdminSubmissionMachineReview
-                                                 InspectionResponse; overallHighestSeverity()
+frontend/src/types/machineReviewInspection.ts   zod schema + types mirroring the backend
+                                                 AdminSubmissionMachineReviewInspectionResponse;
+                                                 overallHighestSeverity()
 frontend/src/api/machineReviewInspection.ts      fetch() client; credentials:"include";
                                                  validates the payload with zod
 frontend/src/pages/MachineReviewInspectionPage.tsx

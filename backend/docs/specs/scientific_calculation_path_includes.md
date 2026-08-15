@@ -301,10 +301,21 @@ class ScientificCalculationScanResponse(BaseModel):
     calculation_ref: str
     calculation_id: int | None = None        # policy-gated
     summary: CalculationScanIncludeSummary   # same shape as the include
-    coordinates: list[CalculationScanCoordinateFullSummary]
+    coordinates: list[CalculationScanCoordinateBriefSummary]
     points: list[CalculationScanPointSummary]
     pagination: Pagination | None = None     # only when limit/offset supplied
 ```
+
+> **What actually shipped.** An earlier draft of this block named a
+> separate `CalculationScanCoordinateFullSummary` here, but no
+> richer-than-brief coordinate shape was ever written: the specialized
+> endpoint reuses the same coordinate projection as the include, which
+> is why the sketch above names the brief shape in both places. The
+> shipped classes are `ScanCoordinateSummary` and `ScanPointDetail` in
+> [`scientific_calculation.py`](../../app/schemas/reads/scientific_calculation.py)
+> and [`scientific_calculation_paths.py`](../../app/schemas/reads/scientific_calculation_paths.py);
+> the `CalculationScanCoordinate*` / `CalculationScanPointSummary` names
+> in this document are the proposal's vocabulary, not the code's.
 
 `CalculationScanPointSummary` carries `point_index`, energy fields,
 optional `geometry_ref` (loaded by default; integer `geometry_id` is

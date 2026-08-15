@@ -97,7 +97,7 @@ class CalculationInBundle(SchemaBase):
     sp_result: SPResultPayload | None = None
     irc_result: IRCResultPayload | None = None
     path_search_result: PathSearchResultPayload | None = None
-    scan_result: ScanResultPayload | None = None
+    scan_result: CalculationScanResultCreate | None = None
 
     # Calc-level dependencies referenced by local key (non-auto edges)
     depends_on: list[CalculationDependencyInBundle] = Field(default_factory=list)
@@ -359,9 +359,9 @@ The response is structured per local key so consumers can map back. Order of `co
 | 5 | Calculation result block matches `type` (one-of) | Per-calc `validate_result_matches_type` (mirrors `CalculationWithResultsPayload`) |
 | 6 | Exactly one result block per calc type | Same validator as #5 |
 | 7 | `depends_on.parent_calculation_key` exists | `validate_dependency_keys_resolve` model_validator |
-| 8 | Dependency role/type compatibility (per DR-0028) | **Workflow-level**, after key resolution to actual `Calculation.type`. Helper `_assert_dependency_role_type_compatible(parent_calc, role)` mirrors DR-0028 Requirement 1. |
+| 8 | Dependency role/type compatibility (per DR-0028) | **Workflow-level**, after key resolution to actual `Calculation.type`. Helper `assert_dependency_role_type_compatible(parent_calc, role)` from `app/services/calculation_resolution.py` mirrors DR-0028 Requirement 1. |
 | 9 | `thermo.source_calculations[*].calculation_key` exists | `validate_thermo_source_keys_resolve` model_validator |
-| 10 | Thermo source role/type compatibility (per DR-0028) | **Workflow-level**, same helper as #8 against `ThermoCalculationRole` mapping. |
+| 10 | Thermo source role/type compatibility (per DR-0028) | **Workflow-level**, `assert_thermo_role_matches_calculation_type` from `app/workflows/thermo.py` against the `ThermoCalculationRole` mapping. (This is a sibling of #8's helper, not the same function.) |
 | 11 | Artifact aggregate size cap (whole bundle) | **Workflow-level**, before any storage write — `validate_total_upload_size(declared_or_actual_bytes_for_all_artifacts)` from `app/services/artifact_storage.py`. |
 | 12 | Artifact validation pass before storage writes | **Workflow-level**, `validate_and_decode_all_artifacts(all_artifacts)` from `app/services/artifact_persistence.py` (DR-0027 two-pass batch). |
 | 13 | NASA low/high midpoint consistency | `validate_nasa_midpoint_consistency` on `ThermoInBundle` |
@@ -439,7 +439,7 @@ PASS 2 (DB writes; transaction wraps everything from here)
       a. For each CalculationDependencyInBundle:
          - Look up parent: parent_calc = calc_keys_to_id[dep.parent_calculation_key].
          - Validate role/type compatibility (per DR-0028 Requirement 1):
-           _assert_dependency_role_type_compatible(parent_calc, dep.role).
+           assert_dependency_role_type_compatible(parent_calc, dep.role).
            → On failure: 422.
          - Insert CalculationDependency(parent=parent_calc, child=calc,
                                         role=dep.role).
@@ -469,7 +469,7 @@ PASS 2 (DB writes; transaction wraps everything from here)
       a. For each ThermoSourceCalcInBundle:
          - parent_calc = calc_keys_to_id[sc.calculation_key].
          - Validate role/type compatibility (per DR-0028 Requirement 1):
-           _assert_thermo_role_type_compatible(parent_calc, sc.role).
+           assert_thermo_role_matches_calculation_type(parent_calc, sc.role).
            → On failure: 422.
          - Build ThermoSourceCalculationCreate(calculation_id=parent_calc.id,
                                                role=sc.role).
@@ -629,7 +629,7 @@ The order isolates risk: refactors first (none needed for v0), schemas and valid
 
 1. **Schemas in `app/schemas/workflows/computed_species_upload.py`.** All Pydantic models with full validators. Unit tests against these schemas alone (no DB) for cases 5-9, 17, 23. Run `pytest backend/tests/schemas/test_computed_species_upload_schema.py -v`.
 
-2. **Workflow in `app/workflows/computed_species.py`.** The orchestrator function plus the two role/type compatibility helpers (`_assert_dependency_role_type_compatible`, `_assert_thermo_role_type_compatible` — both reuse DR-0028's mapping table). Workflow-level tests against an in-memory session for cases 1, 2, 3, 4, 10, 11, 18, 19, 20, 21.
+2. **Workflow in `app/workflows/computed_species.py`.** The orchestrator function plus the two role/type compatibility helpers (`assert_dependency_role_type_compatible` in `app/services/calculation_resolution.py` and `assert_thermo_role_matches_calculation_type` in `app/workflows/thermo.py` — both reuse DR-0028's mapping table). Workflow-level tests against an in-memory session for cases 1, 2, 3, 4, 10, 11, 18, 19, 20, 21.
 
 3. **Route in `app/api/routes/uploads.py`.** Thin wrapper around the workflow. API-level tests for cases 12, 13, 14, 15, 16, 22 (these need the FastAPI test client + fixture stubs).
 
@@ -645,7 +645,7 @@ These are not blocking the spec but worth implementer judgment.
 
 1. **Should `depends_on` be allowed to reference cross-conformer calcs?** Today the design allows it via the global key namespace. The workflow doesn't actively prevent it. Use case: an opt restart in conformer B that started from conformer A's converged geometry. Recommend: allow, no validator restriction. If a real abuse case appears, restrict it later.
 
-2. **Should `applied_energy_corrections` validate that `source_calculation_key` references a calc owned by the same species_entry as the thermo?** Today the schema doesn't enforce this. The workflow could add the check. Recommend: yes, mirror DR-0028 Requirement 1's owner check via `_assert_calculation_owned_by`. Belt-and-braces against producer typos.
+2. **Should `applied_energy_corrections` validate that `source_calculation_key` references a calc owned by the same species_entry as the thermo?** Today the schema doesn't enforce this. The workflow could add the check. Recommend: yes, mirror DR-0028 Requirement 1's owner check via `assert_calculation_owned_by`. Belt-and-braces against producer typos.
 
 3. **Should the response include the `calculation_dependency` rows that were created (auto + explicit)?** The DR-0029 example response doesn't. Adding it would help curators verify the DAG was built as expected. Recommend: defer; consumers can `GET /calculations/{id}/dependencies` if they need to inspect.
 
