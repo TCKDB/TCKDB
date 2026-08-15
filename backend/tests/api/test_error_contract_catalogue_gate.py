@@ -51,6 +51,15 @@ answer that, and only the third lives here:
 Every assertion below runs over something non-empty and is stated in both
 directions, because a gate that can only say yes -- or only say no -- passes
 while proving nothing.
+
+#192 audited that claim rather than trusting it, and it was not true of
+four assertions here: three asserted an *absence* over a set nothing
+required to be populated, and ``_assert_no_token_in_the_code_position``
+ran a pattern nothing required to match. Each now states its floor where
+it makes its claim, rather than relying on a neighbour that happens to
+share a constant. The floors are measured, and the measurements are in
+the messages so the next reader can tell a real shrinkage from a broken
+scan.
 """
 
 from __future__ import annotations
@@ -84,6 +93,31 @@ def _promoted(message: str) -> str:
     return validation_detail_code(message, fallback="validation_error")
 
 
+#: A message that must be read as opening with a token in the code
+#: position. It is the exact shape #178 reworded out of ``keyset.py`` --
+#: see this module's docstring -- and it exists so that
+#: :func:`_opens_with_a_token` can be caught saying no to it.
+_A_REFUSAL_THAT_DOES_OPEN_WITH_A_TOKEN = (
+    "keyset_predicate: at least one sort key is required."
+)
+
+#: The shortest a real refusal gets. Measured against the two this file
+#: provokes, which are 11 and 17 words; the floor is well under both and
+#: exists only to reject the degenerate input, not to police wording.
+_MINIMUM_WORDS_IN_A_REFUSAL = 5
+
+
+def _opens_with_a_token(message: str) -> bool:
+    """Does *message* put a token in the code position?
+
+    One expression, used for both the positive control and the assertion
+    below, so that blinding the detector cannot blind only the half that
+    says no. Two spellings of the same question drift apart, and the
+    drift is invisible: both stay green.
+    """
+    return bool(_CODE_POSITION.match(message))
+
+
 def _assert_no_token_in_the_code_position(message: str) -> None:
     """The message must not open with ``some_token: ``.
 
@@ -93,8 +127,32 @@ def _assert_no_token_in_the_code_position(message: str) -> None:
     uncatalogued, and the test that was meant to hold the wording would
     stay green. #177 is the same lesson one layer down -- a guard that
     passes for a second reason stops guarding the first.
+
+    #192: this helper used to be that same failure one layer down again.
+    It matched a pattern and asserted the match was empty, so a blinded
+    pattern made it report success having read nothing -- measured, both
+    callers green with the detector replaced by one that matches nothing.
+    The file did go red, but in ``TestOneMessageDeclaresOneCode``, whose
+    floor happens to share this module constant; that coupling is an
+    accident of spelling, not a guard, and it is how the defect surfaced
+    at all. So the detector is now run against a message it must accept
+    before it is trusted to reject one, and the message has to be a
+    sentence -- ``""`` opens with no token either.
     """
-    assert not _CODE_POSITION.match(message), (
+    assert _opens_with_a_token(_A_REFUSAL_THAT_DOES_OPEN_WITH_A_TOKEN), (
+        "the code-position detector no longer recognises "
+        f"{_A_REFUSAL_THAT_DOES_OPEN_WITH_A_TOKEN!r}, which is the exact "
+        "shape it exists to reject. Every assertion it makes below is "
+        "therefore vacuous: it would pass over a refusal that had gone "
+        "back to naming the function it was raised in."
+    )
+    assert len(message.split()) >= _MINIMUM_WORDS_IN_A_REFUSAL, (
+        f"the refusal is {message!r}, which is too short to be the prose "
+        "this guard is written over. A message with no words opens with no "
+        "token, so the assertion below would pass without examining a "
+        "refusal at all."
+    )
+    assert not _opens_with_a_token(message), (
         f"the refusal opens with a token in the code position: {message!r}. "
         "A message says what went wrong; it does not name the function it "
         "went wrong in, and a leading token is read as a code by anyone "
@@ -183,11 +241,28 @@ class TestTheGateIsTheCatalogue:
     """The set consulted is derived, not a second hand-written list."""
 
     def test_it_is_exactly_the_catalogue_message_prefix_codes(self):
-        assert MESSAGE_PREFIX_CODES == {
+        """Both sides are read from ``CATALOGUE``, so both empty is equal.
+
+        #192: an equality between two derivations of one source is
+        satisfied when that source is empty, and this is the assertion
+        that says the gate *is* the catalogue. The floor is repeated here
+        rather than left to ``test_it_is_large_enough_to_be_the_read_api``
+        below, in the same style as the ``>= 6`` floor that appears in
+        both of ``TestTheShapeTheRaiseSiteScanCannotRead``'s assertions:
+        a test that can only fail because of its neighbour is a test that
+        stops working when its neighbour moves.
+        """
+        derived = {
             entry.code
             for entry in CATALOGUE
             if entry.surface is Surface.message_prefix
         }
+        assert len(derived) > 50, (
+            f"only {len(derived)} codes carry Surface.message_prefix, so this "
+            "equality is comparing two nearly-empty sets and would hold "
+            "however badly the derivation had broken"
+        )
+        assert MESSAGE_PREFIX_CODES == derived
 
     def test_it_is_large_enough_to_be_the_read_api(self):
         """A gate over a nearly-empty set would degrade the whole read API.
@@ -227,6 +302,12 @@ class TestTheGateIsTheCatalogue:
         gone back to naming the function it was raised in.
         """
         catalogued = {entry.code for entry in CATALOGUE}
+        assert len(catalogued) > 100, (
+            f"only {len(catalogued)} codes are catalogued at all (measured: "
+            "149). Absence from a set this small says nothing about whether "
+            "these two names came back -- the assertions below would pass "
+            "over an empty catalogue."
+        )
         for name in ("create_applied_group_additivity", "keyset_predicate"):
             assert name not in catalogued
             assert name not in MESSAGE_PREFIX_CODES
@@ -504,9 +585,21 @@ class TestOneMessageDeclaresOneCode:
             assert expected in codes, sorted(codes)
 
     def test_no_coded_message_names_a_second_code(self):
+        """The floor is repeated here, not borrowed from the test above.
+
+        #192: this is an absence asserted over a scan, and the scan's own
+        floor lives in a different test. Carrying it here too costs a line
+        and means the assertion cannot be made vacuous by an edit that
+        leaves its neighbour untouched.
+        """
+        messages = _messages_opening_with_a_promotable_code()
+        assert len(messages) > 40, (
+            f"only {len(messages)} coded messages found (measured: 125), so "
+            "there is nothing to be ambiguous and this test proves nothing"
+        )
         ambiguous = [
             (path, line, text)
-            for path, line, text in _messages_opening_with_a_promotable_code()
+            for path, line, text in messages
             if len(set(_NESTED_CODE_PATTERN.findall(text))) > 1
         ]
         assert not ambiguous, (

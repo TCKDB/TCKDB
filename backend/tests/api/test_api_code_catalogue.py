@@ -554,10 +554,21 @@ def test_client_facing_excludes_what_a_client_cannot_use() -> None:
 
 
 def test_the_status_fallback_family_is_not_exported() -> None:
-    """``http_404`` and friends are the status line, spelled twice."""
+    """``http_404`` and friends are the status line, spelled twice.
+
+    The pattern is exercised in both directions before it is trusted, and
+    #192 added the floor under ``exported``: the final assertion is an
+    absence over a derived set, and an empty ``client_facing()`` would
+    satisfy it while the client enum published nothing at all.
+    """
     assert STATUS_FALLBACK_PATTERN.match("http_404")
     assert not STATUS_FALLBACK_PATTERN.match("handle_not_found")
     exported = {entry.code for entry in client_facing()}
+    assert len(exported) > 50, (
+        f"only {len(exported)} codes are exported (measured: 136); an "
+        "exclusion asserted over a set this small has stopped saying that "
+        "the status-fallback family in particular is kept out"
+    )
     assert not [code for code in exported if STATUS_FALLBACK_PATTERN.match(code)]
 
 
