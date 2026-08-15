@@ -8554,16 +8554,15 @@
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryRef"
           },
-          "literature_id": {
+          "literature": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Literature Id"
+            ]
           },
           "opt_result": {
             "anyOf": [
@@ -10476,16 +10475,15 @@
           "level_of_theory": {
             "$ref": "#/components/schemas/LevelOfTheoryRef"
           },
-          "literature_id": {
+          "literature": {
             "anyOf": [
               {
-                "type": "integer"
+                "$ref": "#/components/schemas/LiteratureUploadRequest"
               },
               {
                 "type": "null"
               }
-            ],
-            "title": "Literature Id"
+            ]
           },
           "opt_result": {
             "anyOf": [

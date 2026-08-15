@@ -25,6 +25,7 @@ from tckdb_schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.stationary_point import (
     ImaginaryMode,
     StationaryPointFinding,
@@ -104,7 +105,8 @@ class CalculationPayload(SchemaBase):
     :param software_release: Required software release reference.
     :param workflow_tool_release: Optional workflow tool provenance reference.
     :param level_of_theory: Required level-of-theory reference.
-    :param literature_id: Optional literature provenance id.
+    :param literature: Optional inline literature provenance, resolved (or
+        created) by the workflow.
     """
 
     type: CalculationType
@@ -114,7 +116,15 @@ class CalculationPayload(SchemaBase):
     workflow_tool_release: WorkflowToolReleaseRef | None = None
     level_of_theory: LevelOfTheoryRef
 
-    literature_id: int | None = None
+    #: Replaces the former ``literature_id``, a raw database primary key on
+    #: a depositor-facing surface. Only a client that had already queried
+    #: this database could supply one, which is the client we do not design
+    #: for (``.claude/rules/schema-rules.md``, DR-0029 Req 1). The species
+    #: bundle took the inline fragment from the start and ``CalculationIn``
+    #: was converted in #172; this is the same conversion for the five
+    #: routes that reach the shared payload directly — conformers,
+    #: transition-states, statmech, thermo and transport.
+    literature: LiteratureUploadRequest | None = None
 
 
 # ---------------------------------------------------------------------------

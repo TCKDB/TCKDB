@@ -145,19 +145,11 @@ def _persist_calculation(
     if calc_in.geometry_key is not None:
         effective_geometry_id = geometry_key_map[calc_in.geometry_key]
 
-    # Same inline-literature resolution the computed-reaction workflow
-    # does: the shared ``CalculationIn`` no longer accepts a raw
-    # ``literature_id``, so the citation is resolved here and the id handed
-    # to the adapter. This route reaches the same shared model, so the FK
-    # leak the network-PDep no-FK gate used to exempt is gone with it.
-    literature_id = (
-        resolve_or_create_literature(session, calc_in.literature).id
-        if calc_in.literature is not None
-        else None
-    )
-    shared_payload = calculation_in_to_with_results_payload(
-        calc_in, literature_id=literature_id
-    )
+    # The inline literature fragment is forwarded unresolved; the shared
+    # persistence seam resolves it (#194). This route reaches the same
+    # shared model as every other upload root, so the FK leak the
+    # network-PDep no-FK gate used to exempt is gone with it.
+    shared_payload = calculation_in_to_with_results_payload(calc_in)
     calculation = resolve_and_persist_calculation_with_results(
         session,
         shared_payload,

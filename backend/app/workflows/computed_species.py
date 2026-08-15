@@ -145,15 +145,15 @@ class ComputedSpeciesUploadOutcome:
 
 def _to_calc_with_results_payload(
     calc_in: CalculationInBundle,
-    *,
-    literature_id: int | None,
 ) -> CalculationWithResultsPayload:
     """Build the existing primitive payload from a bundle calc block.
 
-    Drops bundle-only fields (``key``, ``depends_on``, ``artifacts``,
-    inline ``literature``) and substitutes the resolved ``literature_id``
-    so the existing ``resolve_and_persist_calculation_with_results``
-    service can be reused unchanged.
+    Drops bundle-only fields (``key``, ``depends_on``, ``artifacts``) and
+    forwards everything else — including the inline ``literature``
+    fragment, which the shared payload now carries in place of a raw
+    ``literature_id`` (#194) — so the existing
+    ``resolve_and_persist_calculation_with_results`` service can be reused
+    unchanged. The citation is resolved there, once, rather than here.
     """
     return CalculationWithResultsPayload(
         type=calc_in.type,
@@ -161,7 +161,7 @@ def _to_calc_with_results_payload(
         software_release=calc_in.software_release,
         workflow_tool_release=calc_in.workflow_tool_release,
         level_of_theory=calc_in.level_of_theory,
-        literature_id=literature_id,
+        literature=calc_in.literature,
         execution_environment=calc_in.execution_environment,
         opt_result=calc_in.opt_result,
         freq_result=calc_in.freq_result,
@@ -184,15 +184,6 @@ def _to_calc_with_results_payload(
         parameters_extracted_at=calc_in.parameters_extracted_at,
         constraints=calc_in.constraints,
     )
-
-
-def _resolve_inline_literature_id(
-    session: Session, calc_in: CalculationInBundle
-) -> int | None:
-    if calc_in.literature is None:
-        return None
-    lit = resolve_or_create_literature(session, calc_in.literature)
-    return lit.id
 
 
 def _build_synthetic_thermo_upload_request(
@@ -320,14 +311,9 @@ def persist_computed_species_upload(
         # Step 4: primary opt + additionals. We replicate the
         # /uploads/conformers anchor-and-link logic here because the
         # bundle wraps multiple conformers in one transaction.
-        primary_lit_id = _resolve_inline_literature_id(
-            session, conf_in.primary_calculation
-        )
         primary_calc = resolve_and_persist_calculation_with_results(
             session,
-            _to_calc_with_results_payload(
-                conf_in.primary_calculation, literature_id=primary_lit_id
-            ),
+            _to_calc_with_results_payload(conf_in.primary_calculation),
             species_entry_id=species_entry.id,
             created_by=created_by,
         )
@@ -378,12 +364,9 @@ def persist_computed_species_upload(
         # acceptable as v0 inline duplication.
         additional_calcs: list[Calculation] = []
         for additional_in in conf_in.additional_calculations:
-            child_lit_id = _resolve_inline_literature_id(session, additional_in)
             child_calc = resolve_and_persist_calculation_with_results(
                 session,
-                _to_calc_with_results_payload(
-                    additional_in, literature_id=child_lit_id
-                ),
+                _to_calc_with_results_payload(additional_in),
                 species_entry_id=species_entry.id,
                 created_by=created_by,
             )

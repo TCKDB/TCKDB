@@ -23,7 +23,6 @@ citation.
 
 from __future__ import annotations
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
@@ -209,13 +208,23 @@ def test_the_shared_calculation_model_no_longer_declares_literature_id():
         assert "literature" in model.model_fields, model.__name__
 
 
-def test_the_adapter_refuses_to_drop_a_citation_it_was_not_given_an_id_for():
-    """The guard on the seam that could otherwise lose a citation silently.
+def test_the_adapter_carries_the_citation_through_without_resolving_it():
+    """The seam that could otherwise lose a citation silently.
 
-    ``calculation_in_to_with_results_payload`` cannot resolve literature —
-    the wire package has no database. If it defaulted the id to ``None``,
-    a workflow that forgot to resolve would produce a valid payload with
-    the citation missing and nothing would fail. It raises instead.
+    This test used to assert a *guard*: the adapter took a resolved
+    ``literature_id`` keyword and raised if handed a fragment without one,
+    because the shared payload it produced carried a raw ``literature_id``
+    and only the caller had a session to resolve with. Three workflows
+    each did that resolution, and the shared payload's raw id was itself
+    reachable from five other upload roots — which is how #194 found the
+    same FK leak on ``/uploads/conformers`` and friends.
+
+    The shared payload now carries the inline fragment too, so the adapter
+    forwards it untouched and one seam
+    (``resolve_and_persist_calculation_with_results``) resolves it. The
+    assertion is correspondingly stronger: not "it refuses to lose the
+    citation", but "the citation is still here, unresolved and intact, and
+    there is no id-shaped field left for anyone to forget to populate".
     """
     from tckdb_schemas.shared.calculation_in import (
         CalculationIn,
@@ -229,9 +238,14 @@ def test_the_adapter_refuses_to_drop_a_citation_it_was_not_given_an_id_for():
         level_of_theory=_LOT,
         literature=_LITERATURE,
     )
-    with pytest.raises(ValueError, match="literature_id"):
-        calculation_in_to_with_results_payload(calc)
+    payload = calculation_in_to_with_results_payload(calc)
 
-    # With the id supplied it converts, and carries the id through.
-    payload = calculation_in_to_with_results_payload(calc, literature_id=7)
-    assert payload.literature_id == 7
+    assert payload.literature == calc.literature
+    assert payload.literature is not None
+    assert "literature_id" not in type(payload).model_fields
+
+    # And a calculation citing nothing still cites nothing.
+    uncited = CalculationIn(
+        key="c2", type="sp", software_release=_SOFTWARE, level_of_theory=_LOT
+    )
+    assert calculation_in_to_with_results_payload(uncited).literature is None
