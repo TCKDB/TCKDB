@@ -57,7 +57,7 @@ _OTHER_OLD = "ck_calc_freq_mode_ck_calc_freq_mode_imaginary_dispositi_ddc2"
 
 
 @pytest.fixture
-def alembic_at_previous_head(db_engine, monkeypatch):
+def alembic_at_previous_head(db_engine, monkeypatch, alembic_head):
     """Hold the database one revision below head for the duration.
 
     Restores head in teardown whatever the test did to the catalog, so a
@@ -74,6 +74,14 @@ def alembic_at_previous_head(db_engine, monkeypatch):
     did, and ``test_constraint_names_match_the_model.py`` caught it in CI
     as a schema-wide sweep failure with no obvious author. Forcing the
     version back down first makes the final ``upgrade`` real work again.
+
+    The final ``upgrade`` targets ``head``, not ``_CURRENT_HEAD``.
+    ``_CURRENT_HEAD`` is the revision under test, and it is head only until
+    the next revision lands; upgrading to it would leave every revision after
+    it un-applied on the database the rest of the process is sharing. Also
+    not hypothetical: it is what
+    ``test_imaginary_mode_tau_basis_constraint.py`` did to *this file's*
+    subject the day ``b7e4d1a9c026`` landed on top of the revision it named.
     """
     url = db_engine.url.render_as_string(hide_password=False)
     for key, value in (
@@ -97,8 +105,8 @@ def alembic_at_previous_head(db_engine, monkeypatch):
         # so the final upgrade actually runs the rename.
         _restore_pre_upgrade_names(engine)
         command.downgrade(config, _PREVIOUS_HEAD)
-        command.upgrade(config, _CURRENT_HEAD)
-        _assert_left_at_head(engine)
+        command.upgrade(config, "head")
+        _assert_left_at_head(engine, alembic_head)
         engine.dispose()
 
 
@@ -138,7 +146,7 @@ def _restore_pre_upgrade_names(engine) -> None:
         )
 
 
-def _assert_left_at_head(engine) -> None:
+def _assert_left_at_head(engine, alembic_head: str) -> None:
     """Fail loudly here rather than quietly somewhere downstream.
 
     This file is the only thing in the suite that alters the schema of
@@ -155,8 +163,9 @@ def _assert_left_at_head(engine) -> None:
     )
     with engine.connect() as connection:
         version = connection.scalar(text("SELECT version_num FROM alembic_version"))
-    assert version == _CURRENT_HEAD, (
-        f"teardown left alembic_version at {version!r}, not {_CURRENT_HEAD!r}"
+    assert version == alembic_head, (
+        f"teardown left alembic_version at {version!r}, not head "
+        f"({alembic_head!r})"
     )
 
 

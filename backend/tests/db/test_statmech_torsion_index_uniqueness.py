@@ -21,7 +21,13 @@ the invariant came to be reported as unenforced below the request layer.
 This file settles it by provocation rather than by reading either the
 name or the declaration:
 
-1. The database refuses the duplicate.
+1. The database refuses the duplicate -- and refuses it *on
+   ``(statmech_id, torsion_index)``*, read off the key columns PostgreSQL
+   reports in the violation rather than off the constraint's name. "An
+   ``IntegrityError`` was raised" would pass against a NOT NULL or a
+   foreign key; "the message mentions this name" would pass against a
+   rule of that name covering different columns, and fails for the
+   uninteresting reason whenever something renames it.
 2. It refuses it under ``session_replication_role = replica`` -- the mode
    bulk loaders, importers and ``pg_restore`` run in, which suspends
    triggers and foreign keys. Those are exactly the writers that do not
@@ -37,6 +43,8 @@ name or the declaration:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
@@ -50,6 +58,47 @@ from tests.services.scientific_read._factories import (
 )
 
 _INDEX = "uq_statmech_torsion_statmech_id_torsion_index"
+_COLUMNS = ["statmech_id", "torsion_index"]
+
+#: ``DETAIL:  Key (statmech_id, torsion_index)=(299, 1) already exists.``
+_KEY_COLUMNS = re.compile(r"Key \(([^)]*)\)=")
+
+
+def _violated(excinfo) -> tuple[str, list[str]]:
+    """The name *and* the key columns of the constraint that refused.
+
+    Both come out of the error itself, from ``psycopg``'s structured
+    diagnostics rather than from a substring search of the rendered
+    message. The columns are the point: an assertion that only names the
+    constraint passes for any constraint of that name, and an assertion
+    that only catches ``IntegrityError`` passes for a NOT NULL, a foreign
+    key, or a uniqueness rule on the wrong column -- which is the failure
+    mode this file exists to rule out.
+    """
+    diagnostic = excinfo.value.orig.diag
+    match = _KEY_COLUMNS.search(diagnostic.message_detail or "")
+    assert match is not None, (
+        "the violation reported no key columns, so what it refused on "
+        f"cannot be checked: {diagnostic.message_detail!r}"
+    )
+    return diagnostic.constraint_name, [
+        column.strip() for column in match.group(1).split(",")
+    ]
+
+
+def _assert_refused_on_the_rotor_key(excinfo) -> None:
+    name, columns = _violated(excinfo)
+    assert columns == _COLUMNS, (
+        f"the duplicate was refused on {columns}, not {_COLUMNS}: a rule "
+        "that is not 'one rotor per (statmech record, torsion index)' "
+        f"stopped this insert ({name})"
+    )
+    assert name == _INDEX, (
+        f"the rule was enforced, but by {name!r} rather than {_INDEX!r}. "
+        "Something renamed it; see test_the_index_is_unique_and_spans_"
+        "both_columns, and check nothing in this session left the "
+        "database below alembic head"
+    )
 
 
 @pytest.fixture
@@ -83,10 +132,7 @@ def test_a_repeated_torsion_index_is_refused(db_session, statmech_ids):
         _add_torsion(db_session, statmech_id, 1)
         with pytest.raises(IntegrityError) as excinfo:
             _add_torsion(db_session, statmech_id, 1)
-        assert _INDEX in str(excinfo.value), (
-            "the duplicate was refused by something other than "
-            f"{_INDEX}: {excinfo.value}"
-        )
+        _assert_refused_on_the_rotor_key(excinfo)
     finally:
         savepoint.rollback()
 
@@ -150,7 +196,7 @@ def test_the_index_holds_under_a_bulk_load_session(db_session, statmech_ids):
                 )
             )
             db_session.flush()
-        assert _INDEX in str(excinfo.value)
+        _assert_refused_on_the_rotor_key(excinfo)
     finally:
         savepoint.rollback()
 
