@@ -425,33 +425,38 @@ def test_the_uncoded_comparison_detector_can_say_no() -> None:
     )
 
 
-def test_no_workflow_refuses_an_owner_mismatch_without_a_code() -> None:
+def test_no_module_refuses_an_owner_mismatch_without_a_code() -> None:
     """#195: seven guards compared an owner column and bare-raised.
 
     Each reached a client as ``validation_error``, so a depositor could
     not tell "you cited another species' partition function" from a
     malformed number, and three earlier changes each coded a subset and
-    left the rest. The invariant closes the class rather than the
-    instances: in any module that carries the rule, comparing an owner
-    column and raising an uncoded exception is the defect.
+    left the rest -- which is how there came to be seven.
+
+    Scanned over the whole of ``app/`` rather than a list of the modules
+    that carry the rule today, deliberately. A list is the mechanism that
+    produced this defect: the module that gained the eighth copy would not
+    be on it, and nothing would go red. The scan lands green on the whole
+    tree, so there is no cost to the wider net -- measured, not assumed.
+
+    ``_uncoded_owner_comparisons`` is exercised in both directions by the
+    test above; the floor below is the other half of keeping this
+    non-vacuous, since an assertion that nothing was found is satisfied
+    perfectly by a walker that read nothing.
     """
-    modules = [
-        "app/workflows/thermo.py",
-        "app/workflows/statmech.py",
-        "app/workflows/transport.py",
-        "app/workflows/computed_species.py",
-        "app/workflows/computed_reaction.py",
-        "app/workflows/kinetics.py",
-        "app/services/statmech_resolution.py",
-        "app/services/calculation_ownership.py",
-    ]
-    root = Path(__file__).resolve().parents[2]
+    root = Path(__file__).resolve().parents[2] / "app"
+    scanned = 0
     problems: list[str] = []
-    for relative in modules:
-        for line, name in _uncoded_owner_comparisons(
-            (root / relative).read_text()
-        ):
+    for path in sorted(root.rglob("*.py")):
+        source = path.read_text()
+        scanned += 1
+        relative = path.relative_to(root.parent)
+        for line, name in _uncoded_owner_comparisons(source):
             problems.append(f"{relative}:{line} raises a bare {name}")
+    assert scanned > 200, (
+        f"only {scanned} modules were scanned; the walk is broken and a "
+        "broken walk passes this test by finding nothing"
+    )
     assert not problems, (
         "these compare an owner column and refuse without a machine-readable "
         "code, so a client receives validation_error and cannot branch on "
