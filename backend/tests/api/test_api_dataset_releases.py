@@ -19,6 +19,7 @@ import json
 
 import pytest
 
+from app.api.config import settings
 from app.db.models.app_user import AppUser
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.services.record_review import set_record_review_status
@@ -855,3 +856,84 @@ def test_superseding_through_the_wrong_release_is_a_404(
         ]["total"]
         == 0
     )
+
+
+# ---------------------------------------------------------------------------
+# Abuse controls: the release reads page like every other read surface
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "route",
+    [
+        "/api/v1/scientific/releases",
+        f"/api/v1/scientific/releases/{RELEASE['tag']}/selections",
+    ],
+)
+def test_release_reads_refuse_deep_offsets(
+    client, login_as, _api_curator_user, corpus, route
+):
+    """Deep paging is refused here with the same code as everywhere else.
+
+    These two reads used to materialise every row into Python and slice it,
+    so ``offset=10001`` returned a cheerful empty 200 while every other read
+    surface refused it. Nothing was ever incorrect -- ``limit`` is bounded by
+    the route, so no unbounded body was ever returned -- but one family of
+    reads answered a question the hosted abuse-control policy says is not
+    answerable, and the difference was invisible until somebody paged deeply.
+
+    Both sides of the boundary are asserted. An expected value derived from
+    the same setting the guard reads follows that setting wherever it moves;
+    pinning the cap itself as *accepted* is what stops this passing if the
+    comparison is widened. ``offset`` carries no ``le`` on either route, so
+    this is reachable against the configuration TCKDB actually runs.
+    """
+    _as_curator(client, login_as, _api_curator_user)
+    _publish(client, corpus)
+
+    allowed = client.get(f"{route}?offset={settings.public_max_offset}")
+    assert allowed.status_code == 200, allowed.text
+
+    refused = client.get(f"{route}?offset={settings.public_max_offset + 1}")
+    assert refused.status_code == 422, refused.text
+    assert refused.json()["code"] == "offset_too_large"
+
+
+def test_ledger_page_resolves_a_supersession_outside_the_page(
+    client, login_as, _api_curator_user, _api_admin_user, corpus
+):
+    """``supersedes_selection_ref`` still resolves when the parent is off-page.
+
+    A page is not self-contained: the row a selection supersedes is by
+    construction *older*, so on any page but the first it lives behind the
+    offset. The ledger used to have the whole release in memory and could not
+    get this wrong; paging in SQL is exactly what makes it possible to.
+    """
+    _entry, chosen, other = corpus
+    _as_curator(client, login_as, _api_curator_user)
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+    assert client.post("/api/v1/releases", json=RELEASE).status_code == 201
+    first = client.post(
+        f"/api/v1/releases/{RELEASE['tag']}/selections",
+        json={"record_ref": chosen.public_ref, "rationale": "Initial pick."},
+    ).json()
+
+    login_as(_api_admin_user)
+    assert (
+        client.post(
+            f"/api/v1/releases/{RELEASE['tag']}/selections/{first['selection_ref']}/supersede",
+            json={"record_ref": other.public_ref, "rationale": "Rescaled."},
+        ).status_code
+        == 201
+    )
+
+    second_page = client.get(
+        f"/api/v1/scientific/releases/{RELEASE['tag']}/selections?offset=1&limit=1"
+    ).json()
+
+    assert second_page["pagination"]["total"] == 2
+    assert second_page["pagination"]["returned"] == 1
+    (row,) = second_page["records"]
+    assert row["action"] == "supersede"
+    assert row["stands"] is True
+    assert row["supersedes_selection_ref"] == first["selection_ref"]
