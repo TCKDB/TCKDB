@@ -28,11 +28,17 @@ from app.services.local_key_resolution import (
 
 _WORKFLOWS = Path(__file__).resolve().parents[2] / "app" / "workflows"
 
-#: The three bundle workflows and the name each gives its calc-key map.
+#: Every workflow that resolves a calculation by local key, and the name
+#: it gives that namespace. The two standalone product workflows are on
+#: the list for the same reason as the three bundle ones: the issue was
+#: filed against the bundles, and stopping there would have left two raw
+#: subscripts behind a PR whose title says there are none.
 _CALC_KEY_MAPS = {
     "computed_species.py": "calc_keys_to_id",
     "computed_reaction.py": "calculation_key_to_id",
     "network_pdep.py": "calculation_key_to_id",
+    "thermo.py": "calculations_by_key",
+    "transport.py": "calculations_by_key",
 }
 
 

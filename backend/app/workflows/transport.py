@@ -18,6 +18,7 @@ from app.services.calculation_ownership import (
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
+from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -81,10 +82,14 @@ def persist_transport_upload(
 
     resolved_source_calcs = [
         TransportSourceCalculationCreate(
-            calculation_id=calculations_by_key[sc.calculation_key].id,
+            calculation_id=resolve_calculation_key(
+                sc.calculation_key,
+                calculations_by_key,
+                field=f"source_calculations[{index}].calculation_key",
+            ).id,
             role=sc.role,
         )
-        for sc in request.source_calculations
+        for index, sc in enumerate(request.source_calculations)
     ]
 
     transport = resolve_and_create_transport(
