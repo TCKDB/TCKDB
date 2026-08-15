@@ -73,6 +73,7 @@ from app.services.calculation_resolution import (
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.local_key_resolution import resolve_calculation_key
 from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
     collect_network_solve_kind_warnings,
@@ -526,8 +527,15 @@ def persist_network_pdep_upload(
             ts_in.validation_evidence,
             transition_state_entry_id=ts_entry.id,
             reconstruction_calculation_ids=[
-                calculation_key_to_id[evidence_in.source_calculation_key]
-                for evidence_in in ts_in.validation_evidence
+                resolve_calculation_key(
+                    evidence_in.source_calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"transition_states['{ts_in.key}']."
+                        f"validation_evidence[{index}].source_calculation_key"
+                    ),
+                )
+                for index, evidence_in in enumerate(ts_in.validation_evidence)
             ],
             subject_label=ts_in.key,
             field_path=f"transition_states[{ts_in.key}].validation_evidence",
@@ -794,7 +802,7 @@ def persist_network_pdep_upload(
         )
         warning_sink.extend(collect_network_solve_kind_warnings(solve_in))
 
-        for energy_in in solve_in.state_energies:
+        for energy_index, energy_in in enumerate(solve_in.state_energies):
             session.add(NetworkSolveStateEnergy(
                 solve_id=solve.id,
                 state_id=state_key_to_row[energy_in.state_key].id,
@@ -802,11 +810,19 @@ def persist_network_pdep_upload(
                 energy_zero_convention=energy_in.energy_zero_convention,
                 correction_convention=energy_in.correction_convention,
                 convention_note=energy_in.convention_note,
-                source_calculation_id=(calculation_key_to_id[energy_in.source_calculation_key]
+                source_calculation_id=(
+                    resolve_calculation_key(
+                        energy_in.source_calculation_key,
+                        calculation_key_to_id,
+                        field=(
+                            f"solve.state_energies[{energy_index}]."
+                            f"source_calculation_key"
+                        ),
+                    )
                     if energy_in.source_calculation_key else None),
             ))
 
-        for barrier_in in solve_in.channel_barriers:
+        for barrier_index, barrier_in in enumerate(solve_in.channel_barriers):
             session.add(NetworkSolveChannelBarrier(
                 solve_id=solve.id,
                 channel_id=channel_key_to_row[barrier_in.channel_key].id,
@@ -817,16 +833,31 @@ def persist_network_pdep_upload(
                 energy_zero_convention=barrier_in.energy_zero_convention,
                 correction_convention=barrier_in.correction_convention,
                 convention_note=barrier_in.convention_note,
-                source_calculation_id=(calculation_key_to_id[barrier_in.source_calculation_key]
+                source_calculation_id=(
+                    resolve_calculation_key(
+                        barrier_in.source_calculation_key,
+                        calculation_key_to_id,
+                        field=(
+                            f"solve.channel_barriers[{barrier_index}]."
+                            f"source_calculation_key"
+                        ),
+                    )
                     if barrier_in.source_calculation_key else None),
             ))
 
         # Source calculations
-        for sc in solve_in.source_calculations:
+        for sc_index, sc in enumerate(solve_in.source_calculations):
             session.add(
                 NetworkSolveSourceCalculation(
                     solve_id=solve.id,
-                    calculation_id=calculation_key_to_id[sc.calculation_key],
+                    calculation_id=resolve_calculation_key(
+                        sc.calculation_key,
+                        calculation_key_to_id,
+                        field=(
+                            f"solve.source_calculations[{sc_index}]."
+                            f"calculation_key"
+                        ),
+                    ),
                     role=sc.role,
                 )
             )

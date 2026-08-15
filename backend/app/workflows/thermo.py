@@ -33,6 +33,7 @@ from app.services.calculation_resolution import (
 )
 from app.services.energy_correction_resolution import create_applied_energy_correction
 from app.services.group_additivity_resolution import create_applied_group_additivity
+from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
     RecordRef,
     ReviewPolicy,
@@ -155,7 +156,11 @@ def _resolve_source_calculation(
     """
     field_path = f"source_calculations[{index}]"
     if entry.calculation_key is not None:
-        calc_row = calculations_by_key[entry.calculation_key]
+        calc_row = resolve_calculation_key(
+            entry.calculation_key,
+            calculations_by_key,
+            field=f"{field_path}.calculation_key",
+        )
         context = f"{field_path}.calculation_key='{entry.calculation_key}'"
     else:
         calc_row = session.get(Calculation, entry.existing_calculation_id)

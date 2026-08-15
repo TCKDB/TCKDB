@@ -85,6 +85,7 @@ from app.services.hessian_extraction import (
     try_extract_hessian_from_artifact_upload,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.local_key_resolution import resolve_calculation_key
 from app.services.provenance_warnings import (
     collect_provenance_warnings,
     collect_statmech_content_warnings,
@@ -109,6 +110,16 @@ from app.workflows.thermo import assert_thermo_role_matches_calculation_type
 _BUNDLE_CONFORMER_KEY_REMEDY = (
     "Every conformer in this bundle carries a required 'key'; "
     "'source_conformer_key' must match one of them."
+)
+
+#: The same, for the calculation namespace. A correction's source key is
+#: one repair whichever kind of name it uses, so it keeps
+#: ``resolve_applied_correction_source_key`` and its published code
+#: rather than the bundle-wide ``calculation_key_undeclared``; only the
+#: remedy sentence changes.
+_BUNDLE_CALCULATION_KEY_REMEDY = (
+    "Every calculation in this bundle carries a required 'key'; "
+    "'source_calculation_key' must match one of them."
 )
 
 
@@ -510,7 +521,14 @@ def persist_computed_species_upload(
             ),
         ):
             for dep in child_in.depends_on:
-                parent_calc = calc_keys_to_id[dep.parent_calculation_key]
+                parent_calc = resolve_calculation_key(
+                    dep.parent_calculation_key,
+                    calc_keys_to_id,
+                    field=(
+                        f"calculations['{child_in.key}'].depends_on."
+                        f"parent_calculation_key"
+                    ),
+                )
                 context = (
                     f"calculation '{child_in.key}'.depends_on "
                     f"parent='{dep.parent_calculation_key}'"
@@ -758,8 +776,12 @@ def _persist_thermo_block(
 
     # Resolve source_calculations by local key with role/type checks.
     resolved_sources: list[ThermoSourceCalculationCreate] = []
-    for sc in thermo_in.source_calculations:
-        calc_row = calc_keys_to_id[sc.calculation_key]
+    for index, sc in enumerate(thermo_in.source_calculations):
+        calc_row = resolve_calculation_key(
+            sc.calculation_key,
+            calc_keys_to_id,
+            field=f"thermo.source_calculations[{index}].calculation_key",
+        )
         assert_calculation_owned_by(
             calc_row,
             code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -805,7 +827,15 @@ def _persist_thermo_block(
     for i, ac in enumerate(thermo_in.applied_energy_corrections):
         source_calc_id: int | None = None
         if ac.source_calculation_key is not None:
-            calc_row = calc_keys_to_id[ac.source_calculation_key]
+            calc_row = resolve_applied_correction_source_key(
+                ac.source_calculation_key,
+                calc_keys_to_id,
+                field=(
+                    f"thermo.applied_energy_corrections[{i}]."
+                    f"source_calculation_key"
+                ),
+                declares=_BUNDLE_CALCULATION_KEY_REMEDY,
+            )
             assert_calculation_owned_by(
                 calc_row,
                 code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -869,7 +899,15 @@ def _persist_top_level_applied_corrections(
     for i, ac in enumerate(request.applied_energy_corrections):
         source_calc_id: int | None = None
         if ac.source_calculation_key is not None:
-            calc_row = calc_keys_to_id[ac.source_calculation_key]
+            calc_row = resolve_applied_correction_source_key(
+                ac.source_calculation_key,
+                calc_keys_to_id,
+                field=(
+                    f"applied_energy_corrections[{i}]."
+                    f"source_calculation_key"
+                ),
+                declares=_BUNDLE_CALCULATION_KEY_REMEDY,
+            )
             assert_calculation_owned_by(
                 calc_row,
                 code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -994,8 +1032,21 @@ def _persist_statmech_block(
             )
         )
 
-    for sc in s.source_calculations:
-        calc_row = calc_keys_to_id[sc.calculation_key]
+    # The one seam in this file that two routes reach with two different
+    # namespaces, and the reason the lookup below cannot be a subscript.
+    # ``/uploads/computed-species`` hands it one species entry's own keys
+    # and its schema has already refused an undeclared one;
+    # ``/uploads/networks/pdep`` hands it a map spanning every species and
+    # every transition state, and ``NetworkPDepUploadRequest`` narrows a
+    # *species* statmech's keys and not a *transition state*'s. So a TS
+    # statmech naming nothing declared arrives here, and used to leave as
+    # a ``KeyError``.
+    for index, sc in enumerate(s.source_calculations):
+        calc_row = resolve_calculation_key(
+            sc.calculation_key,
+            calc_keys_to_id,
+            field=f"statmech.source_calculations[{index}].calculation_key",
+        )
         assert_calculation_owned_by(
             calc_row,
             code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -1027,10 +1078,17 @@ def _persist_statmech_block(
             )
         )
 
-    for torsion_in in s.torsions:
+    for torsion_index, torsion_in in enumerate(s.torsions):
         scan_calc_id: int | None = None
         if torsion_in.source_scan_calculation_key is not None:
-            scan_calc_row = calc_keys_to_id[torsion_in.source_scan_calculation_key]
+            scan_calc_row = resolve_calculation_key(
+                torsion_in.source_scan_calculation_key,
+                calc_keys_to_id,
+                field=(
+                    f"statmech.torsions[{torsion_index}]."
+                    f"source_scan_calculation_key"
+                ),
+            )
             assert_calculation_owned_by(
                 scan_calc_row,
                 code=W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,

@@ -378,6 +378,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
+    ApiCode("calculation_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py",
+            note=(
+                "One code for every bundle field that names a calculation by "
+                "local key -- thermo and statmech source links, a torsion's "
+                "rotor scan, a dependency's parent, IRC evidence, a PDep "
+                "solve's energies, barriers and source calculations -- "
+                "because they resolve against one namespace and are repaired "
+                "one way: declare the calculation, or fix the spelling "
+                "against the list the refusal prints. context['field'] says "
+                "which one asked. That is the test the ownership family "
+                "fails, where two fields need two different right answers. "
+                "An applied energy correction's source key keeps its own "
+                "older code for the same reason in reverse: there, a "
+                "conformer name and a calculation name are one repair."
+            )),
     ApiCode("canonical_parameter_value_requires_key", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations_search.py"),
     ApiCode("client_sort_not_supported", 422, Surface.message_prefix,
