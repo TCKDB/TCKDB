@@ -71,6 +71,7 @@ class RejectionCode(str, Enum):
     can be used wherever the raw code was.
     """
 
+    APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
     ATOM_MAP_ATOMS_UNACCOUNTED_FOR = "atom_map_atoms_unaccounted_for"
@@ -113,6 +114,8 @@ class RejectionCode(str, Enum):
     INVALID_STRUCTURE_QUERY = "invalid_structure_query"
     INVALID_TEMPERATURE_RANGE = "invalid_temperature_range"
     IRC_RESULT_NOT_FOUND = "irc_result_not_found"
+    KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH = "kinetics_interpretation_conformer_selection_owner_mismatch"
+    KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH = "kinetics_interpretation_statmech_owner_mismatch"
     LEVEL_OF_THEORY_HANDLE_CONFLICT = "level_of_theory_handle_conflict"
     LIMIT_TOO_LARGE = "limit_too_large"
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
@@ -179,6 +182,7 @@ class RejectionCode(str, Enum):
     TCKDB_CLIENT_VERSION_UNSUPPORTED = "tckdb_client_version_unsupported"
     THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = "thermo_source_calculation_owner_mismatch"
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
+    THERMO_STATMECH_OWNER_MISMATCH = "thermo_statmech_owner_mismatch"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
     TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
     TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH = "transition_state_irc_mapping_element_mismatch"
@@ -207,6 +211,7 @@ class RejectionCode(str, Enum):
 #: payload may be sent again under the same idempotency key.
 VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
     {
+        RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
         RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR,
@@ -242,6 +247,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.INVALID_RANGE,
         RejectionCode.INVALID_STRUCTURE_QUERY,
         RejectionCode.INVALID_TEMPERATURE_RANGE,
+        RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
+        RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH,
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
         RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
@@ -295,6 +302,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SUPERSEDES_SAME_RECORD,
         RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
+        RejectionCode.THERMO_STATMECH_OWNER_MISMATCH,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,
         RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH,
@@ -349,6 +357,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
 #: wire boundary and again in the schema reports the same code from
 #: both, at two different statuses.
 REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
+    RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
     RejectionCode.ATOM_MAP_ATOMS_UNACCOUNTED_FOR: frozenset({422}),
@@ -391,6 +400,8 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.INVALID_STRUCTURE_QUERY: frozenset({422}),
     RejectionCode.INVALID_TEMPERATURE_RANGE: frozenset({422}),
     RejectionCode.IRC_RESULT_NOT_FOUND: frozenset({404}),
+    RejectionCode.KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.KINETICS_INTERPRETATION_STATMECH_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
@@ -457,6 +468,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TCKDB_CLIENT_VERSION_UNSUPPORTED: frozenset({426}),
     RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
+    RejectionCode.THERMO_STATMECH_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH: frozenset({422}),

@@ -46,6 +46,8 @@ from app.schemas.workflows.computed_reaction_upload import (
 )
 from app.services.artifact_persistence import persist_artifact
 from app.services.calculation_ownership import (
+    W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+    W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
     W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_owned_by,
@@ -811,13 +813,16 @@ def persist_computed_reaction_upload(
             if ac.source_calculation_key is not None:
                 source_calc_id = calculation_key_to_id[ac.source_calculation_key]
                 source_calc = session.get(Calculation, source_calc_id)
-                if source_calc.species_entry_id != species_entry.id:
-                    raise ValueError(
+                assert_calculation_owned_by(
+                    source_calc,
+                    code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    target="applied energy correction",
+                    context=(
                         f"species[{sp.key!r}].applied_energy_corrections[{i}]."
-                        f"source_calculation_key='{ac.source_calculation_key}': "
-                        f"refers to a calculation that is not owned by this "
-                        f"species entry."
-                    )
+                        f"source_calculation_key='{ac.source_calculation_key}'"
+                    ),
+                    species_entry_id=species_entry.id,
+                )
             source_conf_id = resolve_applied_correction_source_key(
                 ac.source_conformer_key,
                 observation_id_by_conformer_key.get(sp.key, {}),
@@ -851,13 +856,16 @@ def persist_computed_reaction_upload(
             if ac.source_calculation_key is not None:
                 source_calc_id = calculation_key_to_id[ac.source_calculation_key]
                 source_calc = session.get(Calculation, source_calc_id)
-                if source_calc.transition_state_entry_id != ts_entry.id:
-                    raise ValueError(
+                assert_calculation_owned_by(
+                    source_calc,
+                    code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    target="applied energy correction",
+                    context=(
                         f"transition_state.applied_energy_corrections[{i}]."
-                        f"source_calculation_key='{ac.source_calculation_key}': "
-                        f"refers to a calculation that is not owned by this "
-                        f"transition state entry."
-                    )
+                        f"source_calculation_key='{ac.source_calculation_key}'"
+                    ),
+                    transition_state_entry_id=ts_entry.id,
+                )
             # A transition state in this bundle declares no conformers at
             # all -- it carries one geometry and its calculations, and no
             # ``ConformerObservation`` is written for it. So the namespace
@@ -1099,17 +1107,16 @@ def persist_computed_reaction_upload(
             for i, sc in enumerate(s.source_calculations):
                 calc_id = calculation_key_to_id[sc.calculation_key]
                 calc_row = session.get(Calculation, calc_id)
-                if calc_row.species_entry_id != species_entry.id:
-                    flavor = (
-                        "owned by a transition state"
-                        if calc_row.transition_state_entry_id is not None
-                        else "owned by a different species entry"
-                    )
-                    raise ValueError(
+                assert_calculation_owned_by(
+                    calc_row,
+                    code=W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
+                    target="statmech",
+                    context=(
                         f"species[{sp.key!r}].statmech.source_calculations[{i}]."
-                        f"calculation_key='{sc.calculation_key}': "
-                        f"refers to a calculation {flavor}."
-                    )
+                        f"calculation_key='{sc.calculation_key}'"
+                    ),
+                    species_entry_id=species_entry.id,
+                )
                 # The fourth statmech write path, and the one ARC actually
                 # deposits through. Same DR-0028 Requirement 1 as the other
                 # three, from the same shared service.

@@ -1633,12 +1633,22 @@ def test_thermo_upload_statmech_not_found_raises_not_found(db_conn) -> None:
 
 
 def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
-    """A statmech owned by a different species entry is rejected (422) and
-    the message must not leak internal ids."""
+    """A statmech owned by a different species entry is rejected (422),
+    names its own code, and leaks no internal ids.
+
+    The code assertion is new in #195. This refusal was a bare
+    ``ValueError`` matched on the substring "different species entry", so
+    a client received ``validation_error`` and could not tell it from any
+    other malformed thermo upload. The id assertions are kept unchanged --
+    they are a separate property and the one most likely to regress
+    silently.
+    """
+    from app.api.error_contract import CodedValueError
+
     species_a = {"smiles": "[NH2]", "charge": 0, "multiplicity": 2}
     species_b = {"smiles": "[CH3]", "charge": 0, "multiplicity": 2}
 
-    with pytest.raises(ValueError, match="different species entry") as exc_info:
+    with pytest.raises(CodedValueError) as exc_info:
         with Session(db_conn) as session, session.begin():
             entry_a = resolve_species_entry(
                 session, SpeciesEntryIdentityPayload(**species_a),
@@ -1653,9 +1663,13 @@ def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:
                     existing_statmech_id=statmech_a.id,
                 ),
             )
+    assert exc_info.value.code == "thermo_statmech_owner_mismatch"
+    assert exc_info.value.context["field"] == "thermo existing_statmech_id"
+    assert exc_info.value.context["owner_kind"] == "species_entry"
     detail = str(exc_info.value)
     assert "species_entry_id=" not in detail
     assert "id=" not in detail
+    assert str(statmech_a.id) not in detail
 
 
 def test_schema_rejects_negative_enthalpy_formation_0k_uncertainty() -> None:

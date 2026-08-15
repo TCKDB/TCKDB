@@ -1209,10 +1209,24 @@ def test_statmech_source_calculations_persist_for_species_owned_calcs(db_conn) -
         }
 
 
-def test_statmech_source_calculation_referencing_ts_calc_rejects_with_owned_by_ts_message(
+def test_statmech_source_calculation_referencing_ts_calc_is_coded(
     db_conn,
 ) -> None:
-    """A species statmech referencing a TS-owned calc rejects 422."""
+    """A species statmech referencing a TS-owned calc rejects 422.
+
+    Used to assert the substring "owned by a transition state", produced
+    by an inline comparison that raised a bare ``ValueError``. #195 routed
+    this site through the shared ownership guard, so the refusal now
+    carries ``statmech_source_calculation_owner_mismatch`` -- the same
+    code the other three statmech write paths already reported -- and the
+    sentence no longer names what the calculation *was* owned by, only
+    that it was not owned by this species entry.
+
+    That is a real narrowing of the prose, and it is why this test now
+    asserts the code and the ``context`` instead: those are what a client
+    branches on, and they identify the offending field exactly, which
+    the old substring did not.
+    """
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
         "is_linear": False,
@@ -1221,20 +1235,28 @@ def test_statmech_source_calculation_referencing_ts_calc_rejects_with_owned_by_t
             {"calculation_key": "ts-freq", "role": "freq"},
         ],
     }
-    import pytest
 
     with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
-        with pytest.raises(
-            ValueError, match=r"refers to a calculation owned by a transition state"
-        ):
+        with pytest.raises(CodedValueError) as raised:
             persist_computed_reaction_upload(session, request)
+    assert raised.value.code == "statmech_source_calculation_owner_mismatch"
+    assert raised.value.context["owner_kind"] == "species_entry"
+    assert "ts-freq" in raised.value.context["field"]
+    # The row ids belong in the log, not the body (DR-0028 Requirement 2).
+    assert "species_entry_id=" not in str(raised.value)
 
 
-def test_statmech_source_calculation_referencing_sibling_species_rejects_with_other_species_message(
+def test_statmech_source_calculation_referencing_sibling_species_is_coded(
     db_conn,
 ) -> None:
-    """A species statmech referencing a sibling-species-owned calc rejects 422."""
+    """A species statmech referencing a sibling-species-owned calc rejects 422.
+
+    The sibling-species half of the test above. Kept separate because the
+    two used to produce *different sentences* from the same site, and a
+    single test would not have noticed one of them regressing; they now
+    produce the same code, and the ``field`` is what tells them apart.
+    """
     payload = _minimal_payload()
     payload["species"][0]["statmech"] = {
         "is_linear": False,
@@ -1245,15 +1267,35 @@ def test_statmech_source_calculation_referencing_sibling_species_rejects_with_ot
             {"calculation_key": "h-sp", "role": "sp"},
         ],
     }
-    import pytest
 
     with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
-        with pytest.raises(
-            ValueError,
-            match=r"refers to a calculation owned by a different species entry",
-        ):
+        with pytest.raises(CodedValueError) as raised:
             persist_computed_reaction_upload(session, request)
+    assert raised.value.code == "statmech_source_calculation_owner_mismatch"
+    assert "h-sp" in raised.value.context["field"]
+
+
+def test_a_statmech_citing_its_own_species_calculation_is_accepted(
+    db_conn,
+) -> None:
+    """The negative half of the two tests above.
+
+    Without it, both would still pass if the fixture had drifted into
+    being invalid for an unrelated reason and every bundle were refused.
+    """
+    payload = _minimal_payload()
+    payload["species"][0]["statmech"] = {
+        "is_linear": False,
+        "statmech_treatment": "rrho",
+        "source_calculations": [{"calculation_key": "ch3-freq", "role": "freq"}],
+    }
+
+    with _isolated_session(db_conn) as session:
+        summary = persist_computed_reaction_upload(
+            session, ComputedReactionUploadRequest(**payload)
+        )
+        assert summary["statmech_ids"]
 
 
 def test_statmech_source_calculation_undefined_key_rejects_at_schema_layer() -> None:
@@ -3266,9 +3308,15 @@ def test_target_exclusivity_enforced_by_check_constraint(db_conn) -> None:
 
 def test_species_correction_referencing_ts_calc_returns_422(db_conn) -> None:
     """Species-side correction whose ``source_calculation_key`` names a
-    TS-owned calc rejects with 422."""
-    import pytest
+    TS-owned calc rejects with 422.
 
+    Asserted on the code since #195: this site raised a bare
+    ``ValueError`` matched by the substring "not owned by this species
+    entry", so the refusal reached a client as ``validation_error``. It
+    now reports ``applied_energy_correction_source_calculation_owner_
+    mismatch``, which is also what made that catalogue entry stop being
+    ``Reach.guard``.
+    """
     payload = _payload_with_aec_carriers()
     payload["species"][0]["applied_energy_corrections"] = [
         {
@@ -3282,15 +3330,24 @@ def test_species_correction_referencing_ts_calc_returns_422(db_conn) -> None:
 
     with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
-        with pytest.raises(ValueError, match="not owned by this species entry"):
+        with pytest.raises(CodedValueError) as raised:
             persist_computed_reaction_upload(session, request)
+    assert raised.value.code == (
+        "applied_energy_correction_source_calculation_owner_mismatch"
+    )
+    assert raised.value.context["owner_kind"] == "species_entry"
+    assert "ts-sp" in raised.value.context["field"]
 
 
 def test_ts_correction_referencing_species_calc_returns_422(db_conn) -> None:
     """TS-side correction whose ``source_calculation_key`` names a
-    species-owned calc rejects with 422."""
-    import pytest
+    species-owned calc rejects with 422.
 
+    Same code as its species-side sibling, distinguished by
+    ``owner_kind``: a depositor repairs both by naming a calculation the
+    target owns, so it is one contract with two owner kinds rather than
+    two codes.
+    """
     payload = _payload_with_aec_carriers()
     payload["transition_state"]["applied_energy_corrections"] = [
         {
@@ -3304,10 +3361,13 @@ def test_ts_correction_referencing_species_calc_returns_422(db_conn) -> None:
 
     with _isolated_session(db_conn) as session:
         request = ComputedReactionUploadRequest(**payload)
-        with pytest.raises(
-            ValueError, match="not owned by this transition state entry"
-        ):
+        with pytest.raises(CodedValueError) as raised:
             persist_computed_reaction_upload(session, request)
+    assert raised.value.code == (
+        "applied_energy_correction_source_calculation_owner_mismatch"
+    )
+    assert raised.value.context["owner_kind"] == "transition_state_entry"
+    assert "ch3-sp" in raised.value.context["field"]
 
 
 def test_ts_side_scheme_atom_params_persist(db_conn) -> None:

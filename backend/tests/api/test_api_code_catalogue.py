@@ -663,15 +663,30 @@ def test_a_refusal_that_is_not_science_is_importable_by_a_client() -> None:
         )
 
 
-#: The three codes #184 and #186 classified as guards. Named here rather
-#: than derived, because the value of the classification is that flipping
-#: one back is a deliberate act with a test to change, not a silent
-#: widening of the client contract.
+#: The codes #184 and #186 classified as guards. Named here rather than
+#: derived, because the value of the classification is that flipping one
+#: back is a deliberate act with a test to change, not a silent widening
+#: of the client contract.
+#:
+#: It was three until #195, and the removal is the mechanism working.
+#: ``applied_energy_correction_source_calculation_owner_mismatch`` was
+#: classified a guard because its three call sites all read a calculation
+#: the enclosing block had scoped to the target -- and its note named the
+#: fourth and fifth, in ``/uploads/computed-reaction``, which resolve the
+#: same key across the whole bundle and refused with a bare ``ValueError``.
+#: Routing those through the shared guard made the code reachable, so it
+#: left this tuple, gained ``Reach.request``, and is now exported.
 _GUARD_CODES = (
-    "applied_energy_correction_source_calculation_owner_mismatch",
     "idempotency_in_progress",
     "transport_source_calculation_owner_mismatch",
 )
+
+#: Codes that were ``Reach.guard`` and are not any more. Kept so the
+#: reclassification cannot silently reverse: a code that goes back to
+#: being a guard has stopped being reachable, which means a write path
+#: was removed, and that deserves the same deliberate edit the promotion
+#: did.
+_PROMOTED_FROM_GUARD = ("applied_energy_correction_source_calculation_owner_mismatch",)
 
 
 def test_the_reach_rule_can_say_no() -> None:
@@ -736,30 +751,48 @@ def test_every_guard_entry_is_catalogued_annotated_and_unexported() -> None:
             "deliberately -- together with the client version bump that "
             "re-exports it."
         )
+    for code in _PROMOTED_FROM_GUARD:
+        assert code not in named, (
+            f"{code} is classified as a guard again. It was promoted in #195 "
+            "because /uploads/computed-reaction resolves the key it guards "
+            "in a bundle-wide namespace; going back means that write path is "
+            "gone, which is a deliberate change, not a reclassification."
+        )
+        assert code in exported, (
+            f"{code} is reachable but not exported, so a client still cannot "
+            "branch on a refusal it can receive"
+        )
 
 
 def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
     """The classification rests on live schemas, so it is checked against them.
 
     An ownership guard can fire only when the field it guards can name a
-    calculation the enclosing block did not itself scope to the target:
-    a foreign row id, or a key resolved in a namespace wider than the
-    target's owner. The two ownership codes classified ``Reach.guard``
-    are classified that way because their fields carry no
-    ``existing_*_id`` -- a property of these payload models, not of the
-    test suite. Asserting it here means the day somebody adds the field,
-    this fails and names the entry to reclassify, instead of the
-    catalogue telling clients the wrong thing for another year.
+    record the enclosing block did not itself scope to the target: a
+    foreign row id, **or** a key resolved in a namespace wider than the
+    target's owner. Both clauses matter, and the second one is what #173
+    added after the first misclassified a guard that turned out to be
+    measurable on the wire.
 
-    The third ownership code with the same *shape*,
-    ``statmech_torsion_scan_calculation_owner_mismatch``, is deliberately
-    absent: its key is resolved in a bundle-wide namespace on two paths,
-    so it is reachable and stays exported. See
-    ``tests/api/test_api_network_pdep_ownership.py`` for the PDep route
-    and ``tests/api/test_api_bundle_torsion_scan_ownership.py`` for
-    ``/uploads/computed-reaction`` (#193), where the same wide namespace
-    had no owner check at all until the call site was routed through the
-    shared guard.
+    ``transport_source_calculation_owner_mismatch`` is the last ownership
+    code where neither clause holds: its payload carries no
+    ``existing_*_id``, and its one write path reads a calculation the same
+    loop persisted against the transport target's own species entry. That
+    first half is a property of a live model, so it is asserted against
+    the model rather than described -- the day somebody adds the field,
+    this fails and names the entry to reclassify.
+
+    Two ownership codes with the same *shape* are deliberately not here.
+    ``statmech_torsion_scan_calculation_owner_mismatch`` is reachable on
+    two bundle routes (``tests/api/test_api_network_pdep_ownership.py``,
+    ``tests/api/test_api_bundle_torsion_scan_ownership.py``), and #195
+    moved ``applied_energy_correction_source_calculation_owner_mismatch``
+    into the same company: its payload still carries no foreign id, so
+    the first clause still fails, and it is reachable anyway because
+    ``/uploads/computed-reaction`` resolves ``source_calculation_key``
+    across every species and the transition state. That is asserted below
+    as the field's continued existence, and measured on the wire in
+    ``tests/api/test_api_bundle_ownership_codes.py``.
     """
     from tckdb_schemas.energy_correction import (
         AppliedEnergyCorrectionUploadPayload,
@@ -769,18 +802,37 @@ def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
         TransportSourceCalculationIn,
     )
 
-    for model in (
-        TransportSourceCalculationIn,
-        AppliedEnergyCorrectionUploadPayload,
-    ):
-        foreign = sorted(
+    def _foreign_row_fields(model) -> list[str]:
+        return sorted(
             name
             for name in model.model_fields
             if name.endswith("_id") or name.startswith("existing_")
         )
-        assert not foreign, (
-            f"{model.__name__} now carries {foreign}. A field that accepts a "
-            "row this request did not create is exactly what makes an "
-            "ownership guard reachable, so the matching catalogue entry is "
-            "no longer Reach.guard and the client enum must re-export it."
-        )
+
+    assert not _foreign_row_fields(TransportSourceCalculationIn), (
+        f"TransportSourceCalculationIn now carries "
+        f"{_foreign_row_fields(TransportSourceCalculationIn)}. A field that "
+        "accepts a row this request did not create is exactly what makes an "
+        "ownership guard reachable, so transport_source_calculation_owner_"
+        "mismatch is no longer Reach.guard and the client enum must "
+        "re-export it."
+    )
+
+    # The second clause, for the code that is reachable by it alone. The
+    # first clause is still false here -- the payload has no foreign id --
+    # so asserting only that would say the opposite of the truth.
+    assert not _foreign_row_fields(AppliedEnergyCorrectionUploadPayload), (
+        "AppliedEnergyCorrectionUploadPayload has gained a foreign row "
+        "field. That is a wider change than the wide-namespace "
+        "reachability this entry rests on, and the note on "
+        "applied_energy_correction_source_calculation_owner_mismatch "
+        "needs rewriting to say so."
+    )
+    assert "source_calculation_key" in AppliedEnergyCorrectionUploadPayload.model_fields, (
+        "the field whose bundle-wide resolution makes "
+        "applied_energy_correction_source_calculation_owner_mismatch "
+        "reachable is gone; the entry is a guard again"
+    )
+    exported = {entry.code for entry in client_facing()}
+    assert "applied_energy_correction_source_calculation_owner_mismatch" in exported
+    assert "transport_source_calculation_owner_mismatch" not in exported

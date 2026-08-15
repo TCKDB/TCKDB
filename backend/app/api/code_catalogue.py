@@ -68,13 +68,17 @@ this file by four different routes, and no one of them is enough:
   where the refusal is raised. It is the bulk of the catalogue and it is
   closed under inspection.
 * **A scan cannot see a code minted from a variable.** Four mechanisms do
-  exactly that: :func:`app.services.calculation_ownership.assert_calculation_owned_by`
+  exactly that: the :mod:`app.services.calculation_ownership` guards
+  (:func:`~app.services.calculation_ownership.assert_owned_by` and its two
+  typed wrappers)
   and ``scientific_read.handles.reconcile_id_ref`` both take their code as
   a *parameter*, ``tckdb_schemas.stationary_point`` raises with whichever
   code its blocking finding carries, and the integrity handler looks its
-  code up by PostgreSQL constraint name. That is nineteen codes the scan
-  is blind to, and the ``*_handle_conflict`` family was found only by the
-  observer below. Six of the nineteen have since been brought back into
+  code up by PostgreSQL constraint name. That is twenty-two codes the scan
+  is blind to — nineteen until #195 gave the ownership family its three
+  statmech-and-selection codes — and the ``*_handle_conflict`` family was
+  found only by the
+  observer below. Six of them have since been brought back into
   static view: #177 widened the scan to read a ``*_code=`` argument at
   any call, not only at a ``raise``, so the codes handed to
   ``reconcile_id_ref`` are seen where they are written. That matters
@@ -304,21 +308,18 @@ class ApiCode:
 CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
-            reach=Reach.guard,
             note=(
-                "No request produces this code. All three call sites "
-                "(workflows/thermo.py once, workflows/computed_species.py "
-                "twice) read the calculation out of a key map the enclosing "
-                "block built for the target's own owner, and no applied "
-                "correction anywhere carries an existing_calculation_id, so "
-                "nothing can name a foreign row. The condition itself is not "
-                "unreachable: the reaction bundle resolves the same key in a "
-                "namespace spanning every species and the transition state. "
-                "It checks ownership with an inline comparison that raises a "
-                "bare ValueError instead of calling this guard, so a "
-                "depositor who makes that mistake there receives "
-                "validation_error. Converting those two copies is what would "
-                "make this code reachable, and is why the guard stays."
+                "Reach.guard until #195, and the note it carried named the "
+                "repair that ended it: /uploads/computed-reaction resolves "
+                "source_calculation_key in a namespace spanning every "
+                "species and the transition state, then attaches the "
+                "correction to one of them. Both of its ownership "
+                "comparisons were inline and raised a bare ValueError, so "
+                "the mistake answered validation_error; both now call the "
+                "shared guard. The three older call sites still cannot "
+                "produce it -- they read from a key map built for the "
+                "target's own owner -- but reachability is a property of "
+                "the code, not of every site that raises it."
             )),
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "backend/app/services/energy_correction_resolution.py"),
@@ -475,6 +476,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/common.py"),
     ApiCode("irc_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
+    ApiCode("kinetics_interpretation_conformer_selection_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py"),
+    ApiCode("kinetics_interpretation_statmech_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py",
+            note=(
+                "One code, two comparisons: a reactant/product assignment "
+                "is held to the participant's species entry and a "
+                "transition-state one to the declared TS entry. Not two "
+                "entries, because the field and the repair are the same "
+                "-- name the statmech belonging to this subject -- and "
+                "which owner disagreed is already in context['owner_kind']."
+            )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
     ApiCode("limit_too_large", 422, Surface.message_prefix,
@@ -642,6 +655,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/calculation_ownership.py"),
     ApiCode("thermo_source_role_type_mismatch", 422, Surface.coded_exception,
             "backend/app/workflows/thermo.py"),
+    ApiCode("thermo_statmech_owner_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_ownership.py",
+            note=(
+                "The ownership family's first code over a cited row that "
+                "is not a calculation. Distinct from "
+                "thermo_source_calculation_owner_mismatch because the "
+                "field is: existing_statmech_id names a partition "
+                "function, source_calculations name jobs, and a depositor "
+                "repairs them in different places."
+            )),
     ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),
     ApiCode("transition_state_composition_mismatch", 422, Surface.coded_exception,
