@@ -211,13 +211,13 @@ chemistry seam's `is_isomorphic=False` verdict by direct call, so the
 
 ## Fixture rot the rule found on its first run
 
-Three test fixtures were chemically incoherent in the way the conformer rule
-found in the pressure-dependent fixtures ("ethyl as three atoms, HO2 as two"),
-and nothing had looked:
+Five geometry fixtures across two files were chemically incoherent in the way
+the conformer rule found in the pressure-dependent fixtures ("ethyl as three
+atoms, HO2 as two"), and nothing had looked:
 
-* `tests/workflows/test_transition_state_upload.py` — the IRC endpoints and
-  NEB images of an H + H2 → H2 + H saddle point were **single hydrogen atoms**.
-  One atom on the reaction path of a three-atom system.
+* `tests/workflows/test_transition_state_upload.py` — the two IRC endpoints and
+  the two NEB images of an H + H2 → H2 + H saddle point were **single hydrogen
+  atoms**. One atom on the reaction path of a three-atom system.
 * `tests/workflows/test_computed_reaction_upload.py` — the `irc_reverse`
   endpoint of a CH3 + H → CH4 path was `_XYZ_CH3`, four atoms where every
   point on that path has five.
@@ -247,6 +247,23 @@ Deliberately **out of scope**, and stated rather than left to be discovered:
 Both are real remaining holes. They are narrower than the one closed here,
 they reach different tables, and folding them in would mean four more call
 sites checked less carefully rather than eight checked properly.
+
+## Found while tracing the seam, not fixed here
+
+`persist_ts_calculations` (`app/services/transition_state_resolution.py`) is
+the only caller that links the primary calculation's geometry directly instead
+of going through `attach_calculation_output_geometries`. A consequence, which
+is nothing to do with composition and predates this change: on
+`/uploads/transition-state`, `primary_opt.input_geometries` and
+`primary_opt.output_geometries` **are never read**. A producer declaring a
+pre-optimisation TS guess gets zero rows and no warning — verified by direct
+probe: *"primary_opt declared 1 input_geometry; calculation_input_geometry rows
+persisted = 0"*. Every other upload root routes its primary calculation through
+the shared attach helpers, so this route is the odd one out.
+
+Silent field loss is its own defect with its own repair and its own test, and
+it is a behaviour change to a write path, so it is reported rather than folded
+in here.
 
 ## Schema and migration impact
 
