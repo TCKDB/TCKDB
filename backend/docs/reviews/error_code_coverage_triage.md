@@ -401,6 +401,19 @@ the test is to write.
 All reachable through `/api/v1/releases/*`; each was produced on the wire
 during triage.
 
+> **All nine are now provoked by a test.** The first two landed with #170;
+> the other seven are in
+> `backend/tests/api/test_api_untested_refusals_tier_bc.py`, which asserts the
+> `(status, code)` pair through the route and, for each, that a neighbouring
+> valid request is still accepted. Every pair agreed with the catalogue on
+> first run — checked by deliberately mis-stating one status and confirming
+> the runtime observer fails the test, so the agreement is measured rather
+> than assumed. Two corrections to the rows below: the first two rows'
+> "arrives at 409, not 422" note describes the catalogue *before* #170 and no
+> longer holds — both entries say 409 — and `rationale_required`'s three
+> sites need three different routes (select, supersede, withdraw-a-selection),
+> not three payloads on one.
+
 | code | anchor | provoke with |
 |---|---|---|
 | `release_tag_taken` | `services/release/curation.py:136` | `POST /releases` twice with the same `tag` — **arrives at 409**, not 422 |
@@ -414,6 +427,23 @@ during triage.
 | `selection_already_superseded` | `services/release/curation.py:640` | supersede the same selection twice |
 
 ### Tier C — needs a second record or a state change (4; all but the last provoked)
+
+> **All four are now provoked by a test**, in the same file — including
+> `release_artifact_corrupt`, which the last row calls "not payload-provokable".
+> That is true and is not the same as untestable: the test publishes, suspends
+> `trg_release_artifact_immutable` with `session_replication_role = replica`,
+> rewrites the stored bytes, and downloads. Two corrections: the
+> `selection_no_longer_approved` row says "demote its `RecordReview`", and
+> `approved → rejected` is **not** an allowed review transition
+> (`services/record_review.py:75`) — it must route through `under_review`.
+> `approved → deprecated` is allowed, is below the same curated floor, and is
+> what the test uses. And `non_finite_value` raises *after* `publish_release`
+> has flushed `status = published` — `freeze_manifest` is the failing step —
+> so the release is left published in the session. In production
+> `get_write_db` rolls that back (`api/deps.py:143`) and the release stays a
+> draft; under the test harness, whose session is dependency-overridden and
+> has no such rollback, it does not, so the test's accepted neighbour is a
+> *different* release published first.
 
 | code | anchor | provoke with |
 |---|---|---|
