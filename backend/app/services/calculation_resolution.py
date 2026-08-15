@@ -62,6 +62,7 @@ from app.schemas.fragments.refs import (
 )
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
     reconcile_software_provenance,
@@ -1377,6 +1378,18 @@ def resolve_and_persist_calculation_with_results(
     :returns: Persisted ``Calculation`` row.
     """
 
+    # The citation arrives as an inline fragment, never as a row id: a
+    # depositor knows their paper's DOI, not our ``literature.id`` (#194,
+    # .claude/rules/schema-rules.md). This is the single place it is
+    # resolved — every upload root that persists a calculation comes
+    # through here, so putting the resolution at any earlier seam would
+    # mean doing it once per caller and getting it wrong in one of them,
+    # which is how the raw id survived on five routes in the first place.
+    literature_id = (
+        resolve_or_create_literature(session, calc_upload.literature).id
+        if calc_upload.literature is not None
+        else None
+    )
     request = CalculationCreateRequest(
         type=calc_upload.type,
         quality=calc_upload.quality,
@@ -1385,7 +1398,7 @@ def resolve_and_persist_calculation_with_results(
         software_release=calc_upload.software_release,
         workflow_tool_release=calc_upload.workflow_tool_release,
         level_of_theory=calc_upload.level_of_theory,
-        literature_id=calc_upload.literature_id,
+        literature_id=literature_id,
         execution_environment=calc_upload.execution_environment,
     )
     resolved = resolve_calculation_create_request(session, request)

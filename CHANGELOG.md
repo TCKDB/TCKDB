@@ -114,6 +114,37 @@ wrapper over a contract that is itself still moving.
 
 ### Changed
 
+- **A calculation's citation is a paper on every upload root, not a row id on
+  five of them.** `CalculationPayload.literature_id` is replaced by an inline
+  `literature` fragment, resolved to a `literature` row by the workflow layer.
+  The field was the calculation block of `/uploads/conformers`,
+  `/uploads/transition-states`, `/uploads/statmech`, `/uploads/thermo` and
+  `/uploads/transport` (and their `/jobs/*` twins). A depositor has a DOI, not
+  our primary key: supplying one required having already queried this database.
+  Resolution moves to `resolve_and_persist_calculation_with_results`, the one
+  seam every upload root reaches, instead of being repeated in three
+  workflows.
+
+  **`tckdb-schemas` 0.32.0 → 0.33.0.** Breaking: `literature_id` no longer
+  validates on those roots. `SchemaBase` is `extra="forbid"`, so an old payload
+  gets a 422 naming the field rather than a 201 with the citation silently
+  dropped. **No stored value changes** — `calculation.literature_id` is
+  unaffected and no migration is involved.
+
+  The same field had already been removed from the reaction bundle, the
+  network-PDep route and `CalculationIn`, each time by hand, each time on one
+  root. The reason it kept surviving is that the no-FK-ids invariant was
+  asserted by exactly one test over exactly one upload root. That walker now
+  runs over **every** upload root, discovered from the live route table so a
+  new route is covered the moment it is registered
+  (`backend/tests/schemas/test_upload_roots_expose_no_fk_ids.py`). Generalising
+  it surfaced four further FK-shaped fields on depositor-facing surfaces
+  (`SCFStabilityPayload.source_calculation_id` / `source_artifact_id`,
+  `CalculationScanPointCreate.geometry_id`,
+  `ReactionParticipantUpload.species_entry_id`); each is read by the server
+  today, so each is frozen in a documented inventory with its reason rather
+  than removed unreviewed.
+
 - **Three codes a client could import but never receive are no longer
   exported.** `app/api/code_catalogue.py` gains a `Reach` field, so an entry
   can now record that no request produces it — the middle case of a three-way

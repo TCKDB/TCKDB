@@ -149,17 +149,11 @@ def _persist_calculation(
 
     # The calculation's citation arrives as an inline literature fragment
     # (it used to arrive as a raw ``literature_id``, which only a client
-    # that had already queried this database could supply). Resolve it to a
-    # row here — the wire package has no session — and hand the id to the
-    # adapter, which refuses the pair "fragment present, id absent".
-    literature_id = (
-        resolve_or_create_literature(session, calc_in.literature).id
-        if calc_in.literature is not None
-        else None
-    )
-    shared_payload = calculation_in_to_with_results_payload(
-        calc_in, literature_id=literature_id
-    )
+    # that had already queried this database could supply). It is carried
+    # through unresolved: the shared payload now takes the fragment too, so
+    # ``resolve_and_persist_calculation_with_results`` resolves it once,
+    # rather than each workflow resolving it for itself (#194).
+    shared_payload = calculation_in_to_with_results_payload(calc_in)
     calculation = resolve_and_persist_calculation_with_results(
         session,
         shared_payload,

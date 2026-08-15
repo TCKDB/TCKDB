@@ -269,8 +269,6 @@ def frequency_completeness_findings(
 
 def calculation_in_to_with_results_payload(
     calc_in: "CalculationIn",
-    *,
-    literature_id: int | None = None,
 ) -> CalculationWithResultsPayload:
     """Adapt a bundle-local ``CalculationIn`` to the shared upload shape.
 
@@ -281,29 +279,16 @@ def calculation_in_to_with_results_payload(
     ``geometry_key``, ``artifacts``) are consumed by the workflow directly and
     are not part of the shared payload.
 
-    ``literature_id`` is passed *in* rather than read off ``calc_in``: the
-    upload now carries an inline ``literature`` fragment, and resolving it
-    to a row needs a database session, which this package deliberately
-    cannot reach. The caller resolves and hands the id down — the same
-    split ``computed_species._to_calc_with_results_payload`` has always
-    used.
-
-    A caller that supplies a ``literature`` fragment but no resolved id is
-    refused rather than quietly losing the citation. Defaulting to ``None``
-    would make "this upload cited nothing" and "the workflow forgot to
-    resolve the citation" the same value, which is the class of silent drop
-    this change exists to remove.
-
-    :raises ValueError: if ``calc_in.literature`` is set and
-        ``literature_id`` is not.
+    The citation is forwarded as the inline ``literature`` fragment, not as
+    a resolved id. This function used to take a ``literature_id`` keyword
+    and refuse the pair "fragment present, id absent", because the shared
+    payload carried a raw ``literature_id`` and only the caller had a
+    database session to produce one. The shared payload now carries the
+    fragment too (#194), so there is no id to lose here and no seam at
+    which to lose it: resolution happens once, in
+    ``resolve_and_persist_calculation_with_results``, which has the
+    session. The guard is gone because the failure mode it guarded is.
     """
-    if calc_in.literature is not None and literature_id is None:
-        raise ValueError(
-            "calculation_in_to_with_results_payload was given a calculation "
-            "carrying an inline 'literature' fragment but no resolved "
-            "literature_id. Resolve it in the workflow and pass it in; "
-            "dropping it here would discard a depositor's citation."
-        )
 
     opt_result: OptResultPayload | None = None
     freq_result: FreqResultPayload | None = None
@@ -340,7 +325,7 @@ def calculation_in_to_with_results_payload(
         software_release=calc_in.software_release,
         workflow_tool_release=calc_in.workflow_tool_release,
         level_of_theory=calc_in.level_of_theory,
-        literature_id=literature_id,
+        literature=calc_in.literature,
         execution_environment=calc_in.execution_environment,
         opt_result=opt_result,
         freq_result=freq_result,

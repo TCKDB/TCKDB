@@ -2520,41 +2520,23 @@ def test_upload_schema_exposes_no_fk_ids_or_hashes() -> None:
     local keys and the workflow resolves them, so a database id or a derived
     hash appearing in an upload schema means someone has to know our primary
     keys to contribute.
+
+    The walker itself no longer lives here. It was the *only* copy of this
+    check in the tree and it pointed at this one root, which is why the
+    same ``literature_id`` leak was found by hand on three other roots over
+    three weeks (#118, #154, #194). It now lives in
+    ``tests/schemas/test_upload_roots_expose_no_fk_ids.py`` and runs over
+    every upload root discovered from the live route table.
+
+    This case stays because it is the strictest one: PDep is checked with
+    **no allowlist at all**, where the shared module tolerates a frozen
+    inventory of pre-existing leaks on other roots. This root has none and
+    must keep having none — do not add an exemption here; widen the schema
+    or fix it.
     """
+    from tests.schemas.test_upload_roots_expose_no_fk_ids import fk_shaped_fields
 
-    def _nested_models(annotation) -> list:
-        found = []
-        stack = [annotation]
-        while stack:
-            current = stack.pop()
-            if isinstance(current, type) and hasattr(current, "model_fields"):
-                found.append(current)
-                continue
-            stack.extend(getattr(current, "__args__", ()) or ())
-        return found
-
-    def _walk(model_cls, seen: set) -> list[str]:
-        if model_cls in seen:
-            return []
-        seen.add(model_cls)
-        offenders: list[str] = []
-        for name, field in model_cls.model_fields.items():
-            if name.endswith("_hash") or name in {"id", "public_ref"}:
-                offenders.append(f"{model_cls.__name__}.{name}")
-            elif name.endswith("_id") and not name.endswith("_uuid"):
-                offenders.append(f"{model_cls.__name__}.{name}")
-            for sub in _nested_models(field.annotation):
-                offenders.extend(_walk(sub, seen))
-        return offenders
-
-    offenders = _walk(NetworkPDepUploadRequest, set())
-    # This assertion used to carry one exemption: ``CalculationIn.literature_id``,
-    # an FK leak inherited from the shared calculation fragment rather than
-    # introduced here. That field is gone — the shared ``CalculationIn`` now
-    # takes an inline ``literature`` fragment, which the workflow resolves —
-    # so the gate is unconditional again. Do not re-add an exemption; widen
-    # the schema or fix it.
-    assert offenders == []
+    assert fk_shaped_fields(NetworkPDepUploadRequest) == []
 
 
 def test_chebyshev_grid_dimensions_must_match_declared_orders() -> None:
