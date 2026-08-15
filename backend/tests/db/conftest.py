@@ -33,15 +33,12 @@ command line and in deployment, where ``env.py`` is untouched.
 from __future__ import annotations
 
 import logging.config
-from pathlib import Path
 from typing import Iterator
 
 import pytest
-from alembic.config import Config
-from alembic.script import ScriptDirectory
 from sqlalchemy import text
 
-_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+from tests.db._migration_chain import current_head
 
 #: Node id of the first test observed to finish with the shared database
 #: below alembic head, so later failures can point at it instead of each
@@ -70,14 +67,13 @@ def _alembic_must_not_reconfigure_logging(monkeypatch) -> Iterator[None]:
 def alembic_head() -> str:
     """The revision ``alembic upgrade head`` would stop at, read from disk.
 
-    Read rather than written down. Every hard-coded copy of "the current
-    head" in this tree has gone stale within days of being typed, because
-    the thing that makes it stale is the next revision landing — which is
-    the one event nobody grepping for the old hash is present for.
+    See ``_migration_chain.current_head``, which this exposes as a fixture
+    and which explains why it is read rather than written down. A test that
+    needs its own *subject* wants ``_migration_chain.revision_under_test``
+    instead: that is a different concept, and conflating the two is the
+    mistake ``_must_leave_the_database_at_head`` below exists to catch.
     """
-    return ScriptDirectory.from_config(
-        Config(str(_BACKEND_ROOT / "alembic.ini"))
-    ).get_current_head()
+    return current_head()
 
 
 @pytest.fixture(autouse=True)

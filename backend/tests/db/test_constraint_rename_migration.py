@@ -35,10 +35,13 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from alembic import command
+from tests.db._migration_chain import revision_under_test
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_PREVIOUS_HEAD = "e2a7c9d4b615"
-_CURRENT_HEAD = "b7e4d1a9c026"
+
+#: The subject of this file, and the revision below it -- read from the
+#: chain rather than written down twice. See ``_migration_chain``.
+_MIGRATION = revision_under_test("b7e4d1a9c026")
 
 #: The pair exercised here. ``calculation_artifact.bytes > 0`` is chosen
 #: for having a one-clause definition that can be spelled out below
@@ -57,8 +60,12 @@ _OTHER_OLD = "ck_calc_freq_mode_ck_calc_freq_mode_imaginary_dispositi_ddc2"
 
 
 @pytest.fixture
-def alembic_at_previous_head(db_engine, monkeypatch, alembic_head):
-    """Hold the database one revision below head for the duration.
+def database_below_the_migration(db_engine, monkeypatch, alembic_head):
+    """Hold the database at the migration's parent for the duration.
+
+    "Below the migration", not "below head": those coincide only while
+    ``_MIGRATION`` happens to be the newest revision, and this fixture
+    wants the former whatever the chain does afterwards.
 
     Restores head in teardown whatever the test did to the catalog, so a
     failure here fails this test rather than every test that follows it.
@@ -75,13 +82,15 @@ def alembic_at_previous_head(db_engine, monkeypatch, alembic_head):
     as a schema-wide sweep failure with no obvious author. Forcing the
     version back down first makes the final ``upgrade`` real work again.
 
-    The final ``upgrade`` targets ``head``, not ``_CURRENT_HEAD``.
-    ``_CURRENT_HEAD`` is the revision under test, and it is head only until
-    the next revision lands; upgrading to it would leave every revision after
-    it un-applied on the database the rest of the process is sharing. Also
-    not hypothetical: it is what
+    The final ``upgrade`` targets ``head``, not ``_MIGRATION.revision``.
+    Those are two different things: the revision under test is head only
+    until the next revision lands, and upgrading to it would leave every
+    revision after it un-applied on the database the rest of the process
+    is sharing. Also not hypothetical: it is what
     ``test_imaginary_mode_tau_basis_constraint.py`` did to *this file's*
-    subject the day ``b7e4d1a9c026`` landed on top of the revision it named.
+    subject the day ``b7e4d1a9c026`` landed on top of the revision it named
+    -- while that revision was still called ``_CURRENT_HEAD``, which is why
+    it no longer is.
     """
     url = db_engine.url.render_as_string(hide_password=False)
     for key, value in (
@@ -96,7 +105,7 @@ def alembic_at_previous_head(db_engine, monkeypatch, alembic_head):
 
     config = Config(str(_BACKEND_ROOT / "alembic.ini"))
     engine = create_engine(url)
-    command.downgrade(config, _PREVIOUS_HEAD)
+    command.downgrade(config, _MIGRATION.parent)
     try:
         yield config, engine
     finally:
@@ -104,7 +113,7 @@ def alembic_at_previous_head(db_engine, monkeypatch, alembic_head):
         # meets a catalog it can act on, then the version stamp back down
         # so the final upgrade actually runs the rename.
         _restore_pre_upgrade_names(engine)
-        command.downgrade(config, _PREVIOUS_HEAD)
+        command.downgrade(config, _MIGRATION.parent)
         command.upgrade(config, "head")
         _assert_left_at_head(engine, alembic_head)
         engine.dispose()
@@ -169,16 +178,16 @@ def _assert_left_at_head(engine, alembic_head: str) -> None:
     )
 
 
-def test_a_constraint_already_correctly_named_is_left_alone(alembic_at_previous_head):
+def test_a_constraint_already_correctly_named_is_left_alone(database_below_the_migration):
     """The re-run and the built-from-scratch host: no-op, deploy proceeds.
 
     Refusing here would block an upgrade on a database that is already in
     the state this revision exists to produce.
     """
-    config, engine = alembic_at_previous_head
+    config, engine = database_below_the_migration
     _execute(engine, f'ALTER TABLE {_TABLE} RENAME CONSTRAINT "{_OLD}" TO "{_NEW}"')
 
-    command.upgrade(config, _CURRENT_HEAD)
+    command.upgrade(config, _MIGRATION.revision)
 
     names = _constraint_names(engine)
     assert _NEW in names, "the correctly named constraint was disturbed"
@@ -189,7 +198,7 @@ def test_a_constraint_already_correctly_named_is_left_alone(alembic_at_previous_
 
 
 def test_a_missing_constraint_is_refused_rather_than_recreated(
-    alembic_at_previous_head,
+    database_below_the_migration,
 ):
     """Neither name present means a rule was dropped, not renamed.
 
@@ -197,11 +206,11 @@ def test_a_missing_constraint_is_refused_rather_than_recreated(
     report success -- leaving an operator believing the schema is intact
     when something in their environment is dropping constraints.
     """
-    config, engine = alembic_at_previous_head
+    config, engine = database_below_the_migration
     _execute(engine, f'ALTER TABLE {_TABLE} DROP CONSTRAINT "{_OLD}"')
 
     with pytest.raises(RuntimeError) as excinfo:
-        command.upgrade(config, _CURRENT_HEAD)
+        command.upgrade(config, _MIGRATION.revision)
 
     message = str(excinfo.value)
     assert _OLD in message and _NEW in message, (
@@ -228,25 +237,25 @@ def test_a_missing_constraint_is_refused_rather_than_recreated(
         engine,
         f'ALTER TABLE {_TABLE} ADD CONSTRAINT "{_OLD}" CHECK ({_DEFINITION})',
     )
-    command.upgrade(config, _CURRENT_HEAD)
+    command.upgrade(config, _MIGRATION.revision)
     assert _NEW in _constraint_names(engine)
 
 
-def test_both_names_present_is_refused_rather_than_merged(alembic_at_previous_head):
+def test_both_names_present_is_refused_rather_than_merged(database_below_the_migration):
     """A rename cannot merge two constraints, so it declines to try.
 
     Which of the two to keep depends on how the second one arrived, and
     the migration has no way to find that out. Dropping either would
     discard a rule somebody added on purpose.
     """
-    config, engine = alembic_at_previous_head
+    config, engine = database_below_the_migration
     _execute(
         engine,
         f'ALTER TABLE {_TABLE} ADD CONSTRAINT "{_NEW}" CHECK ({_DEFINITION})',
     )
 
     with pytest.raises(RuntimeError) as excinfo:
-        command.upgrade(config, _CURRENT_HEAD)
+        command.upgrade(config, _MIGRATION.revision)
 
     message = str(excinfo.value)
     assert _OLD in message and _NEW in message, (
@@ -258,5 +267,5 @@ def test_both_names_present_is_refused_rather_than_merged(alembic_at_previous_he
     assert _OLD in names and _NEW in names
 
     _execute(engine, f'ALTER TABLE {_TABLE} DROP CONSTRAINT "{_NEW}"')
-    command.upgrade(config, _CURRENT_HEAD)
+    command.upgrade(config, _MIGRATION.revision)
     assert _NEW in _constraint_names(engine)

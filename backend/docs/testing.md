@@ -458,6 +458,29 @@ the offender at its own teardown, so the class no longer depends on a serial run
 to be seen. Re-audit after adding a revision; do not treat the seed list as a
 standing guarantee.
 
+**The constant that caused it is gone, not annotated.** All three occurrences
+restored the database to a module constant named `_CURRENT_HEAD`, which never
+meant head — it meant *the revision under test*, and it read as head to each
+author in turn. The first two were fixed in place and left comments warning
+about it; the third happened anyway. So a migration test now names exactly one
+thing, its subject, and reads the rest of the chain from disk:
+
+```python
+from tests.db._migration_chain import revision_under_test
+
+_MIGRATION = revision_under_test("b7e4d1a9c026")
+
+command.downgrade(config, _MIGRATION.parent)     # its down_revision, not a copy
+command.upgrade(config, _MIGRATION.revision)     # the thing under test
+command.upgrade(config, "head")                  # putting the shared DB back
+```
+
+There is no way to spell "head" through that helper, and
+`tests/test_migration_revision_names.py` fails any test that binds a revision id
+to a name containing "head". `_PREVIOUS_HEAD` is gone for the same reason plus
+one more: a revision's parent is declared in the migration file, so copying it
+into a test creates a second place that can disagree with the first, silently.
+
 **Set `TCKDB_TEST_SEED=random` for an unpinned order.** The script draws a
 fresh seed per invocation and echoes it:
 
