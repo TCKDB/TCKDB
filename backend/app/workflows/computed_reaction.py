@@ -46,6 +46,7 @@ from app.schemas.workflows.computed_reaction_upload import (
 )
 from app.services.artifact_persistence import persist_artifact
 from app.services.calculation_ownership import (
+    W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
     W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
     assert_calculation_owned_by,
 )
@@ -1134,12 +1135,33 @@ def persist_computed_reaction_upload(
                     )
                 )
 
-            for torsion_in in s.torsions:
+            for ti, torsion_in in enumerate(s.torsions):
                 scan_calc_id: int | None = None
                 if torsion_in.source_scan_calculation_key is not None:
                     scan_calc_id = calculation_key_to_id[
                         torsion_in.source_scan_calculation_key
                     ]
+                    # ``calculation_key_to_id`` spans the whole bundle --
+                    # every species and the transition state -- so a key
+                    # resolving here says nothing about who owns what it
+                    # resolved to. Without this, one species' hindered
+                    # rotor can be parameterised by another species' scan
+                    # and the record looks entirely well-formed. A torsion
+                    # is a result and its scan is that result's
+                    # provenance; a rotor potential borrowed from a
+                    # different molecule is not weaker evidence, it is
+                    # evidence about something else.
+                    assert_calculation_owned_by(
+                        session.get(Calculation, scan_calc_id),
+                        code=W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH,
+                        target="statmech torsion",
+                        context=(
+                            f"species[{sp.key!r}].statmech.torsions[{ti}]."
+                            f"source_scan_calculation_key="
+                            f"'{torsion_in.source_scan_calculation_key}'"
+                        ),
+                        species_entry_id=species_entry.id,
+                    )
 
                 torsion = StatmechTorsion(
                     statmech_id=statmech.id,
