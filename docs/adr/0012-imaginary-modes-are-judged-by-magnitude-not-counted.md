@@ -10,9 +10,11 @@ The case that forces the question is ordinary. A transition state optimises clea
 
 "Exactly one negative eigenvalue" is a statement about the exact Hessian, at the exact stationary point, on a continuous and analytic potential energy surface. A deposit contains none of those. It contains a finite-precision Hessian, evaluated at an approximately converged geometry, on a surface that is only piecewise smooth. Five things separate the two, and they are not all the same kind of thing.
 
-The geometry is not quite at the stationary point; along a stiff mode that is irrelevant, and along a mode of near-zero curvature the residual displacement is enough for cubic anharmonicity to flip the sign of the second derivative. Hessians built from gradient differences inherit SCF noise divided by the displacement step. DFT exchange-correlation quadrature is not a smooth function of nuclear coordinates on a finite grid, which is the single most-cited source of spurious small imaginary modes — moving from Gaussian's `FineGrid` to `UltraFine` routinely shifts low-frequency modes by 5–30 cm⁻¹ and flips the sign of anything below about 40. Rotational invariance of the Hessian is exact only *at* a stationary point, so projection of translations and rotations leaves residue that surfaces as vibrational modes at ±5 to ±30 cm⁻¹.
+The geometry is not quite at the stationary point; along a stiff mode that is irrelevant, and along a mode of near-zero curvature the residual displacement is enough for cubic anharmonicity to flip the sign of the second derivative. Hessians built from gradient differences inherit SCF noise divided by the displacement step. DFT exchange-correlation quadrature is not a smooth function of nuclear coordinates on a finite grid, and both major codes' own documentation says grid choice bears on exactly the modes at issue: Gaussian recommends `UltraFine` (99,590) over `FineGrid` (75,302) *"for computing very low frequency modes of systems"* and for optimising molecules with many soft modes, and notes that larger grids have better rotational-invariance properties; ORCA raises the Hessian's XC grid one step above the SCF grid by default because "second derivative terms" want it tighter. Foresman & Frisch call the integration grid *"an essential component of the model chemistry"* and one of the largest sources of numerical error, and give a worked case where merely reorienting a molecule shifts its energy by 0.31 kJ/mol on `FineGrid` against 0.02 on `UltraFine`. Rotational invariance of the Hessian is exact only *at* a stationary point, so projection of translations and rotations leaves residue that surfaces as vibrational modes at ±5 to ±30 cm⁻¹.
 
-The fifth is not numerical error at all, and it is the one that decides this record. **A harmonic model is simply inapplicable to a torsion, a hindered rotor, a ring pucker, or an intermolecular mode in a loose complex.** A transition state can sit at a maximum of a torsional profile while being a perfectly correct reactive bottleneck, in which case the extra negative eigenvalue is not an artefact — it is exactly right, and the structure genuinely is a higher-order saddle. Treated as a hindered rotor, the partition function integrates over the whole torsional profile and never asks about the curvature sign at that one point.
+The fifth is not numerical error at all, and it is the one that decides this record. **A harmonic model is simply inapplicable to a torsion, a hindered rotor, a ring pucker, or an intermolecular mode in a loose complex.** A transition state can sit at a maximum of a torsional profile while being a perfectly correct reactive bottleneck, in which case the extra negative eigenvalue is not an artefact — it is exactly right, and the structure genuinely is a higher-order saddle. Treated as a hindered rotor **from an explicit scan**, the partition function integrates over the whole torsional profile and never asks about the curvature sign at that one point.
+
+> **Qualified 2026-08-15.** That is true of a scanned rotor and false of the scan-free methods. MS-T infers each torsion's effective barrier from the force constant *at the stationary point itself* (Zheng & Truhlar, *J. Chem. Theory Comput.* **2013**, *9*, 1356, eq 10), so a negative force constant does not become irrelevant — it makes the reference partition function diverge. The escape from the curvature sign is bought by the scan, not by the hindered-rotor model.
 
 The consequence is that `n_imag` is not a property of a structure. It is a property of the structure *together with* the method, basis, integration grid, Hessian algorithm, optimisation tolerance and coordinate treatment. Two scientifically correct calculations of the same transition state can return `n_imag == 1` and `n_imag == 3`. **A gate a depositor can pass by changing `Int=UltraFine` is not a gate on science.**
 
@@ -56,15 +58,53 @@ Magnitude does not turn an expectation into a definition. It decides whether cla
 | an extra imaginary mode at or above τ, with a declared disposition | **warn**, plus a structural flag |
 | a single imaginary mode below 100 cm⁻¹ | **warn** — unchanged, suspiciously soft |
 
-τ is **protocol-dependent**, because §2 says it must be:
+**τ = 100 cm⁻¹, one constant, for every protocol.**
 
-| protocol | τ / cm⁻¹ |
-|---|---|
-| analytic Hessian, ultrafine grid, tight optimisation | 15 |
-| analytic Hessian, default grid and tolerances | 30 |
-| finite-difference Hessian from gradients, default settings | 50 |
-| finite-difference from energies; semi-empirical; numerical composite | 80 |
-| protocol not recorded | 50 |
+> **Amended 2026-08-15.** τ was originally a five-row table keyed on the
+> Hessian algorithm, integration grid and optimisation tightness. The table
+> is withdrawn. Three findings retired it, in increasing order of weight.
+>
+> **It was never calibrated.** The table's rows rest on the claim in §2 that
+> changing grid "routinely shifts low-frequency modes by 5–30 cm⁻¹ and flips
+> the sign of anything below about 40". That sentence has since been hunted
+> through six documents — the four papers this ADR draws on, Foresman &
+> Frisch 3rd ed. (551 pages, index read), Gaussian's `Int` documentation and
+> both ORCA manuals. **No wavenumber-valued figure for any grid change exists
+> in any of them.** Every accuracy number in the vendor documentation is an
+> energy. The rows were plausible, and that is all they were.
+>
+> **It had no consequence to be precise about.** The paragraph below already
+> established that τ never decides between blocking and warning. A wrong τ
+> costs a differently-loud warning and nothing else. Precision without
+> consequence is complexity without benefit, and it was buying a dependency
+> on parsing each program's frequency method.
+>
+> **The premise behind its ordering is unsourced.** The table ranked analytic
+> Hessians above finite-difference ones. That ordering is probably right —
+> finite differencing divides the underlying noise by the displacement step —
+> but ORCA's thermochemistry documentation never compares the two for
+> accuracy, only for cost, and no source we read quantifies the difference.
+> The distinction is preserved as *provenance* rather than as *judgement*:
+> `freq.hessian_method` is still parsed and stored whenever a job states it,
+> so a consumer who believes analytic Hessians deserve more trust can filter
+> on it. The argument is kept at
+> `paper/notes/orca_vs_gaussian_hessian_provenance.md`, including the open
+> question of whether "method unstated" should be read as "possibly
+> numerical" at all, given Gaussian computes analytic second derivatives by
+> default for most functionals.
+>
+> **Why 100 rather than a rounder guess.** It is the one value in this region
+> with independent published anchors, all three verified against their primary
+> sources: it is the quasiharmonic floor of Ribeiro, Marenich, Cramer &
+> Truhlar (*J. Phys. Chem. B* **2011**, *115*, 14556), it is Grimme's
+> quasi-RRHO crossover ω₀ (*Chem. Eur. J.* **2012**, *18*, 9955), and it is
+> ORCA's `QRRHORefFreq` default. Three independent groups placed a
+> soft-mode boundary at the same wavenumber. A constant we can cite beats a
+> table we calibrated by assertion.
+>
+> Records deposited before this amendment retain the τ they were judged
+> under, which is why §"What was actually built" stores τ per record rather
+> than recomputing it. Changing this rule does not re-decide history.
 
 The motivating record — −1300, −42, −13 — is accepted with a warning under every τ.
 
@@ -92,7 +132,7 @@ Both are deterministic, cheap, and computed from the eigenvectors the record sho
 
 The case for keeping the block is not weak, and it deserves stating.
 
-A small imaginary mode can be a genuine symmetry-breaking coordinate, in which case the true transition state has a different symmetry number and a different count of equivalent structures — an integer factor on the rate, silently wrong. It can be a torsional maximum, in which case the deposited electronic energy is too high by the torsional barrier, 2–15 kJ/mol, which at 298 K is up to a factor of 55 in *k*; "it's just a soft torsion" is a diagnosis, not an absolution. It can be the signature of a valley–ridge inflection, downstream of which the IRC bifurcates and transition-state theory is qualitatively inapplicable — storing that as a TST-usable transition state is a category error about the mechanism, not a quality issue. And `n_imag == 1` is the one cheap universal check every referee applies; downgrading it risks a transition-state table that is an unseparable mixture of first-order saddles, torsional maxima and symmetry-constrained higher-order saddles, harming exactly the automated consumers least likely to read a warning field.
+A small imaginary mode can be a genuine symmetry-breaking coordinate, in which case the true transition state has a different symmetry number and a different count of equivalent structures — an integer factor on the rate, silently wrong. It can be a torsional maximum, in which case the deposited electronic energy is too high by the torsional barrier, 2–15 kJ/mol, which at 298 K is a factor of 2.2 to 425 in *k*; "it's just a soft torsion" is a diagnosis, not an absolution. It can be the signature of a valley–ridge inflection, downstream of which the IRC bifurcates and transition-state theory is qualitatively inapplicable — storing that as a TST-usable transition state is a category error about the mechanism, not a quality issue. And `n_imag == 1` is the one cheap universal check every referee applies; downgrading it risks a transition-state table that is an unseparable mixture of first-order saddles, torsional maxima and symmetry-constrained higher-order saddles, harming exactly the automated consumers least likely to read a warning field.
 
 Three things answer it.
 
@@ -108,13 +148,21 @@ Accepting these structures is only defensible if the record lets a reader reach 
 
 The mode identities matter more than the numbers. The designated reaction coordinate needs its index, frequency, reduced mass and **displacement vector** — without the eigenvector nobody can confirm that −1300 cm⁻¹ is the intended chemistry rather than a different reaction entirely. The extra imaginary modes need their vectors too, with an assignment (`rigid_body_residue`, `torsion`, `ring_pucker`, `intermolecular`, `symmetry_breaking`, `unassigned`) and the overlaps supporting it.
 
-The numerical protocol must be recorded, because the classification is undecidable without it: integration grid, SCF threshold, whether the Hessian was analytic or finite-difference and with what step, the optimisation criteria *actually achieved*, the coordinate system, whether translations and rotations were projected, and whether the frequency job used the same grid as the optimisation — a mismatch there is a classic and otherwise invisible source of spurious modes. Point group and whether symmetry was enforced belong here too, since they are what make the symmetry-breaking risk assessable.
+The numerical protocol must be recorded, because the classification is undecidable without it: integration grid, SCF threshold, whether the Hessian was analytic or finite-difference and with what step, the optimisation criteria *actually achieved*, the coordinate system, whether translations and rotations were projected, and whether the frequency job used the same grid as the optimisation — a mismatch there is a classic and otherwise invisible source of spurious modes. **Record the direction, not merely the inequality:** ORCA raises the Hessian's XC grid one step above the SCF grid *by default*, on the stated grounds that second derivatives want the tighter grid, so a bare "grids differed" flag would fire on every default ORCA deposit while missing the case that matters — a frequency job run *looser* than the optimisation that produced its geometry. Point group and whether symmetry was enforced belong here too, since they are what make the symmetry-breaking risk assessable.
 
 Because two records with identical geometries and different thermochemical treatments are different scientific objects, the record must also state what was done with each imaginary mode — dropped, taken as \|ω\|, floored, or replaced by a hindered rotor — along with rotor potentials, symmetry numbers, scaling factors, and **the imaginary frequency actually used for the tunnelling correction**. That last one is not bookkeeping: if a downstream tool takes −42 cm⁻¹ instead of −1300, Wigner κ falls from 2.64 to 1.002, a 2.6× error in the rate, silently.
 
 ## Downstream, and where this actually bites
 
-The extra modes barely touch the zero-point energy — 42 and 13 cm⁻¹ contribute 0.33 kJ/mol together, against a chemical-accuracy target near 4. They land on the partition function instead. For the 42 cm⁻¹ mode at 298 K: discarding it gives q = 1.00, treating it harmonically at \|ω\| gives 5.45, flooring to 100 cm⁻¹ gives 2.61, and a free rotor gives 3.72. Since the free rotor is the *upper* limit for any bounded torsion, the harmonic treatment is provably an over-count; discarding is worse still. A hindered rotor from an explicit scan is least wrong, and quasi-RRHO or a 100 cm⁻¹ floor is the least-wrong cheap option.
+The extra modes barely touch the zero-point energy — 42 and 13 cm⁻¹ contribute 0.33 kJ/mol together, against a chemical-accuracy target near 4. They land on the partition function instead. For the 42 cm⁻¹ mode at 298 K, all referenced to the zero-point level: discarding it gives q = 1.00, treating it harmonically at \|ω\| gives 5.45, and flooring to 100 cm⁻¹ gives 2.61. The spread across treatments is the point — a factor of five on one mode, chosen rather than computed.
+
+> **Corrected 2026-08-15.** This paragraph previously added "a free rotor gives 3.72" and concluded that "since the free rotor is the *upper* limit for any bounded torsion, the harmonic treatment is provably an over-count". Both the number and the inference were wrong.
+>
+> The **bound itself holds**: a hindered rotor's partition function never exceeds the free rotor's, by the min–max principle — but only for the *same* moment of inertia, the *same* symmetry number, and both referred to the potential minimum. **The inference does not follow.** q_free is fixed by I and σ, which a 42 cm⁻¹ frequency does not determine. The quoted 3.72 assumed I = 3.2 amu Å² and σ = 3, an assumption stated nowhere — and those values actually give 3.71; 3.72 needs I = 3.225. For a heavy top of the same 42 cm⁻¹ curvature (I = 20 amu Å², σ = 3) the free-rotor value is 9.26, above the harmonic value, so the ceiling constrains nothing; a worked case there gives a hindered rotor at 5.71 against harmonic 5.45, harmonic **under**-counting. The crossover is at I = 5.673 amu Å².
+>
+> The comparison also mixed energy zeros — 5.45 counted from the zero-point level, 3.72 from the potential minimum. Referenced consistently the harmonic value is 4.93, which removes a third of the claimed gap before any physics is argued. Fixing only that does not rescue the claim.
+>
+> What survives, and is enough: **the treatment of a soft mode is a choice, it moves the partition function by a factor of several, and the record must therefore say which choice was made.** A hindered rotor from an explicit scan is the best of the cheap options; quasi-RRHO (Grimme, *Chem. Eur. J.* **2012**, *18*, 9955 — entropy only) and a 100 cm⁻¹ floor (Ribeiro et al., *J. Phys. Chem. B* **2011**, *115*, 14556) are the two documented cheap ones. Neither is claimed here to be nearer the truth in any given case; a floor bounds a mode's contribution, not the error.
 
 Much of that error cancels in Q‡/Q_R when the reactant carries a corresponding soft mode. **It does not cancel for bimolecular reactions**, where five new low-frequency modes appear that have no counterpart in the separated reactants — precisely the modes that come out at 10–80 cm⁻¹ or imaginary. Uncancelled, across several modes, that is an order of magnitude in *k*. Molecularity is already stored, so this case can be flagged specifically rather than left to the reader.
 
