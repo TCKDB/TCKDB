@@ -83,6 +83,7 @@ from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.local_key_resolution import resolve_calculation_key
 from app.services.provenance_warnings import (
     NOT_APPLICABLE,
     collect_provenance_warnings,
@@ -112,6 +113,18 @@ from app.services.transition_state_validation import (
     persist_transition_state_validation_evidence,
 )
 from app.workflows.thermo import assert_thermo_role_matches_calculation_type
+
+#: How a computed-reaction bundle declares a name in the calculation
+#: namespace, phrased as the object of the remedy sentence in
+#: ``resolve_applied_correction_source_key``. A correction's source key
+#: keeps that function's published code whichever kind of name it
+#: carries; only the remedy sentence changes.
+_BUNDLE_CALCULATION_KEY_REMEDY = (
+    "Every calculation in this bundle carries a required 'key'; "
+    "'source_calculation_key' must match one of them. The namespace "
+    "spans every species and the transition state, so a key that "
+    "resolves may still be refused for ownership."
+)
 
 
 def _persist_calculation(
@@ -262,11 +275,21 @@ def _index_species_sp_calcs(
     not declare ``source_calculations`` explicitly. Each species's
     ``calculations`` list is scanned for ``type=sp`` entries and their
     persisted calculation ids are returned in declaration order.
+
+    The keys read here are the bundle's *own* declarations rather than a
+    cross-reference, so the map cannot miss one unless persistence
+    skipped a calculation it was handed. It still goes through the coded
+    seam: the failure that says a workflow lost one of its own rows is
+    exactly the one that should not surface as ``KeyError``.
     """
     by_species: dict[str, list[int]] = {}
     for sp in request.species:
         sp_ids = [
-            calculation_key_to_id[calc.key]
+            resolve_calculation_key(
+                calc.key,
+                calculation_key_to_id,
+                field=f"species['{sp.key}'].calculations[].key",
+            )
             for calc in sp.calculations
             if calc.type == CalculationType.sp
         ]
@@ -693,8 +716,15 @@ def persist_computed_reaction_upload(
             ts_in.validation_evidence,
             transition_state_entry_id=ts_entry.id,
             reconstruction_calculation_ids=[
-                calculation_key_to_id[record.source_calculation_key]
-                for record in ts_in.validation_evidence
+                resolve_calculation_key(
+                    record.source_calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"transition_state.validation_evidence[{index}]."
+                        f"source_calculation_key"
+                    ),
+                )
+                for index, record in enumerate(ts_in.validation_evidence)
             ],
             subject_label=ts_in.label or "transition state",
             field_path="transition_state.validation_evidence",
@@ -714,15 +744,28 @@ def persist_computed_reaction_upload(
     # helper rejects self-edges, role mismatches against existing edges,
     # and per-role one-parent-per-child violations.
     # ------------------------------------------------------------------
-    def _persisted_calc(calc_key: str) -> Calculation:
-        return session.get(Calculation, calculation_key_to_id[calc_key])
+    def _persisted_calc(calc_key: str, *, field: str) -> Calculation:
+        return session.get(
+            Calculation,
+            resolve_calculation_key(
+                calc_key, calculation_key_to_id, field=field
+            ),
+        )
 
     def _wire_depends_on(calc_in: ComputedReactionCalculationIn) -> None:
         if not calc_in.depends_on:
             return
-        child_calc = _persisted_calc(calc_in.key)
+        child_calc = _persisted_calc(
+            calc_in.key, field=f"calculations['{calc_in.key}'].key"
+        )
         for dep in calc_in.depends_on:
-            parent_calc = _persisted_calc(dep.parent_calculation_key)
+            parent_calc = _persisted_calc(
+                dep.parent_calculation_key,
+                field=(
+                    f"calculations['{calc_in.key}'].depends_on."
+                    f"parent_calculation_key"
+                ),
+            )
             context = (
                 f"calculation '{calc_in.key}'.depends_on "
                 f"parent='{dep.parent_calculation_key}'"
@@ -811,7 +854,15 @@ def persist_computed_reaction_upload(
         for i, ac in enumerate(sp.applied_energy_corrections):
             source_calc_id: int | None = None
             if ac.source_calculation_key is not None:
-                source_calc_id = calculation_key_to_id[ac.source_calculation_key]
+                source_calc_id = resolve_applied_correction_source_key(
+                    ac.source_calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"species['{sp.key}'].applied_energy_corrections[{i}]."
+                        f"source_calculation_key"
+                    ),
+                    declares=_BUNDLE_CALCULATION_KEY_REMEDY,
+                )
                 source_calc = session.get(Calculation, source_calc_id)
                 assert_calculation_owned_by(
                     source_calc,
@@ -854,7 +905,15 @@ def persist_computed_reaction_upload(
         ):
             source_calc_id = None
             if ac.source_calculation_key is not None:
-                source_calc_id = calculation_key_to_id[ac.source_calculation_key]
+                source_calc_id = resolve_applied_correction_source_key(
+                    ac.source_calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"transition_state.applied_energy_corrections[{i}]."
+                        f"source_calculation_key"
+                    ),
+                    declares=_BUNDLE_CALCULATION_KEY_REMEDY,
+                )
                 source_calc = session.get(Calculation, source_calc_id)
                 assert_calculation_owned_by(
                     source_calc,
@@ -977,12 +1036,21 @@ def persist_computed_reaction_upload(
             thermo_ids.append(thermo.id)
             thermo_by_species_key[sp.key] = thermo
 
-            # Which calculations produced this number. The schema already
-            # refused a key that names nothing in the bundle; ownership is
+            # Which calculations produced this number. The schema also
+            # refuses a key that names nothing in the bundle; the refusal
+            # is stated here too because the schema lives in a different
+            # package and the two have drifted before. Ownership is
             # checked here because this is the layer that knows which
             # species entry each key resolved to.
             for index, sc in enumerate(t.source_calculations):
-                source_calc_id = calculation_key_to_id[sc.calculation_key]
+                source_calc_id = resolve_calculation_key(
+                    sc.calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"species['{sp.key}'].thermo.source_calculations"
+                        f"[{index}].calculation_key"
+                    ),
+                )
                 source_calc = session.get(Calculation, source_calc_id)
                 assert_calculation_owned_by(
                     source_calc,
@@ -1105,7 +1173,14 @@ def persist_computed_reaction_upload(
             # calc is rejected with 422 (mirrors the AEC ownership
             # check above).
             for i, sc in enumerate(s.source_calculations):
-                calc_id = calculation_key_to_id[sc.calculation_key]
+                calc_id = resolve_calculation_key(
+                    sc.calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"species['{sp.key}'].statmech.source_calculations"
+                        f"[{i}].calculation_key"
+                    ),
+                )
                 calc_row = session.get(Calculation, calc_id)
                 assert_calculation_owned_by(
                     calc_row,
@@ -1139,9 +1214,14 @@ def persist_computed_reaction_upload(
             for ti, torsion_in in enumerate(s.torsions):
                 scan_calc_id: int | None = None
                 if torsion_in.source_scan_calculation_key is not None:
-                    scan_calc_id = calculation_key_to_id[
-                        torsion_in.source_scan_calculation_key
-                    ]
+                    scan_calc_id = resolve_calculation_key(
+                        torsion_in.source_scan_calculation_key,
+                        calculation_key_to_id,
+                        field=(
+                            f"species['{sp.key}'].statmech.torsions[{ti}]."
+                            f"source_scan_calculation_key"
+                        ),
+                    )
                     # ``calculation_key_to_id`` spans the whole bundle --
                     # every species and the transition state -- so a key
                     # resolving here says nothing about who owns what it
@@ -1328,8 +1408,15 @@ def persist_computed_reaction_upload(
         # we run the legacy auto-link to preserve existing behavior for
         # producers that haven't migrated to declaring source calcs.
         if kin.source_calculations:
-            for entry in kin.source_calculations:
-                calc_id = calculation_key_to_id[entry.calculation_key]
+            for entry_index, entry in enumerate(kin.source_calculations):
+                calc_id = resolve_calculation_key(
+                    entry.calculation_key,
+                    calculation_key_to_id,
+                    field=(
+                        f"kinetics.source_calculations[{entry_index}]."
+                        f"calculation_key"
+                    ),
+                )
                 source_calc = session.get(Calculation, calc_id)
                 assert_kinetics_source_role_compatible(
                     calculation=source_calc,

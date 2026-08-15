@@ -7,11 +7,11 @@ and creates applied correction rows with resolved FK IDs.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.error_contract import CodedValueError
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
     AppliedEnergyCorrectionComponent,
@@ -31,12 +31,15 @@ from app.services.calculation_resolution import (
     resolve_workflow_tool_release_ref,
 )
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.local_key_resolution import resolve_declared_key
 from app.services.software_resolution import resolve_software
 
 #: An applied correction names a source the enclosing upload never declared.
 W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED = (
     "applied_energy_correction_source_key_undeclared"
 )
+
+T = TypeVar("T")
 
 
 # ---------------------------------------------------------------------------
@@ -46,11 +49,11 @@ W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED = (
 
 def resolve_applied_correction_source_key(
     key: str | None,
-    declared: Mapping[str, int],
+    declared: Mapping[str, T],
     *,
     field: str,
     declares: str,
-) -> int | None:
+) -> T | None:
     """Turn one applied-correction source key into the row it names.
 
     Blocking, and ADR 0008 permits it because this asserts a *contract*
@@ -67,37 +70,42 @@ def resolve_applied_correction_source_key(
     the refusal into something fixable. Row ids never appear -- they are
     values of this map, not part of any message.
 
+    The lookup itself moved to
+    :func:`app.services.local_key_resolution.resolve_declared_key` when
+    nineteen raw subscripts in the bundle workflows were routed through
+    the same seam; what stays here is this field's *code* and its closing
+    sentence. The code stays because it was published before that seam
+    existed and is pinned on ``/uploads/conformers``, and because a
+    correction's source is one repair whether the key names a conformer
+    or a calculation -- splitting it by which kind of name the depositor
+    used would answer the same question two ways on two routes.
+
+    Generic in the value type: ``computed_species`` hands this a map of
+    ``Calculation`` rows because its next move is an ownership check that
+    needs one, while the other callers hand it ids.
+
     :param key: The key the payload wrote, or ``None`` for no link.
-    :param declared: Declared local name -> persisted row id.
+    :param declared: Declared local name -> the row or id it names.
     :param field: Field path naming the offending key, echoed verbatim.
     :param declares: How a depositor declares a name in this namespace,
         phrased as the remedy sentence's object.
-    :returns: The row id the key names, or ``None`` when ``key`` is
-        ``None``.
+    :returns: What ``declared`` holds for ``key``, or ``None`` when
+        ``key`` is ``None``.
     :raises CodedValueError: if ``key`` is set but names nothing declared.
     """
     if key is None:
         return None
-    row_id = declared.get(key)
-    if row_id is not None:
-        return row_id
-
-    known = sorted(declared)
-    if known:
-        available = "Declared names here: " + ", ".join(repr(k) for k in known) + "."
-    else:
-        available = "This upload declares no such name at all."
-    raise CodedValueError(
-        W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
-        f"{field}='{key}' does not name anything declared in this upload. "
-        f"{available} {declares} An energy correction whose source cannot be "
-        f"named is a correction nobody can trace back to what it corrected.",
-        context={
-            "field": field,
-            "key": key,
-            "declared_keys": known,
-        },
-        message_prefix=False,
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
+        subject="anything",
+        remedy=(
+            f"{declares} An energy correction whose source cannot be "
+            f"named is a correction nobody can trace back to what it "
+            f"corrected."
+        ),
     )
 
 

@@ -85,6 +85,7 @@ class RejectionCode(str, Enum):
     ATOM_MAP_WITHOUT_TRANSITION_STATE = "atom_map_without_transition_state"
     CALCULATION_GEOMETRY_COMPOSITION_MISMATCH = "calculation_geometry_composition_mismatch"
     CALCULATION_HANDLE_CONFLICT = "calculation_handle_conflict"
+    CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
     CANONICAL_PARAMETER_VALUE_REQUIRES_KEY = "canonical_parameter_value_requires_key"
     CLIENT_SORT_NOT_SUPPORTED = "client_sort_not_supported"
     COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED = "composed_search_candidate_limit_exceeded"
@@ -226,6 +227,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ATOM_MAP_WITHOUT_TRANSITION_STATE,
         RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.CALCULATION_HANDLE_CONFLICT,
+        RejectionCode.CALCULATION_KEY_UNDECLARED,
         RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY,
         RejectionCode.CLIENT_SORT_NOT_SUPPORTED,
         RejectionCode.COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED,
@@ -373,6 +375,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ATOM_MAP_WITHOUT_TRANSITION_STATE: frozenset({422}),
     RejectionCode.CALCULATION_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.CALCULATION_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.CALCULATION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CANONICAL_PARAMETER_VALUE_REQUIRES_KEY: frozenset({422}),
     RejectionCode.CLIENT_SORT_NOT_SUPPORTED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_CANDIDATE_LIMIT_EXCEEDED: frozenset({422}),

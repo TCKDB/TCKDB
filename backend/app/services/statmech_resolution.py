@@ -48,6 +48,7 @@ from app.services.calculation_ownership import (
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.energy_correction_resolution import resolve_or_create_freq_scale_factor_ref
 from app.services.literature_resolution import resolve_or_create_literature
+from app.services.local_key_resolution import resolve_calculation_key
 from app.services.software_resolution import resolve_software_release_ref
 
 logger = logging.getLogger(__name__)
@@ -98,22 +99,23 @@ def _resolve_calculation_key(
     map. It is still raised rather than allowed to ``KeyError``: a missing
     provenance link must be a named failure, not a 500.
 
+    The lookup delegates to
+    :func:`app.services.local_key_resolution.resolve_calculation_key`,
+    which is the same seam the three bundle workflows use. This keeps its
+    own code — published, and catalogued against this module — and gains
+    what the shared seam adds: the refusal now prints the keys that *are*
+    declared, which is the difference between a message that names the
+    mistake and one that also fixes it.
+
     :raises CodedValueError: if the key is absent from
-        ``calculations_by_key``. The sentence is unchanged from when this
-        rejection carried no code; only the envelope's ``code`` moves,
-        from the generic ``validation_error`` to one a client can branch
-        on.
+        ``calculations_by_key``.
     """
-    calculation_id = calculations_by_key.get(key)
-    if calculation_id is None:
-        raise CodedValueError(
-            W_STATMECH_CALCULATION_KEY_UNDECLARED,
-            f"{context}: calculation_key '{key}' does not name a calculation "
-            f"declared in this upload.",
-            context={"field": context, "calculation_key": key},
-            message_prefix=False,
-        )
-    return calculation_id
+    return resolve_calculation_key(
+        key,
+        calculations_by_key,
+        field=context,
+        code=W_STATMECH_CALCULATION_KEY_UNDECLARED,
+    )
 
 
 def _chained_calculation_id(source: object) -> int | None:
