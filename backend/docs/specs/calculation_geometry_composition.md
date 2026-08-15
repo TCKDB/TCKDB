@@ -281,8 +281,10 @@ the evidence available:
   no species entry's calculation geometries disagree among themselves. The
   check is preventative there.
 * Every calculation geometry in the repository's thirteen ARC-derived fixture
-  payloads passes (31 of 31, all TS-owned).
-* The only deposits the rule refuses on re-run are the three incoherent test
+  payloads passes (31 of 31, all TS-owned). Not only against a reimplementation
+  of the rule: `tests/api/test_api_arc_run_fixtures.py` uploads those payloads
+  through the real API, and all fourteen of its tests pass with the check live.
+* The only deposits the rule refuses on re-run are the incoherent test
   fixtures above and the deliberately-mismatched payload in the
   geometry-validation wiring test.
 
