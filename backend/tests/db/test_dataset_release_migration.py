@@ -18,10 +18,13 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from alembic import command
+from tests.db._migration_chain import revision_under_test
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PREVIOUS_HEAD = "d2e3f4a5b6c7"
-CURRENT_HEAD = "e3f4a5b6c7d8"
+
+#: The subject of this file, and the revision below it -- read from the
+#: chain rather than written down twice. See ``_migration_chain``.
+_MIGRATION = revision_under_test("e3f4a5b6c7d8")
 
 _NEW_TABLES = (
     "curation_policy",
@@ -50,15 +53,15 @@ def _configure(db_engine, monkeypatch) -> Config:
 
 
 def _restore_head(config: Config) -> None:
-    """Put the shared test database back at ``head``, not at ``CURRENT_HEAD``.
+    """Put the shared database back at ``head``, not at the revision under test.
 
     These tests downgrade the *per-run database every other test in the process
-    is using*, so restoring it is not optional. Restoring to ``CURRENT_HEAD``
-    is not enough either: that is a historical revision, and every migration
-    after it stays un-applied, which is how one file in ``tests/db/`` used to
-    take the rest of the suite down with it — ``species_entry.isotope_key does
-    not exist`` and similar, hundreds of tests later, in files that had nothing
-    to do with releases.
+    is using*, so restoring it is not optional. Restoring to
+    ``_MIGRATION.revision`` is not enough either: that is a historical revision,
+    and every migration after it stays un-applied, which is how one file in
+    ``tests/db/`` used to take the rest of the suite down with it —
+    ``species_entry.isotope_key does not exist`` and similar, hundreds of tests
+    later, in files that had nothing to do with releases.
     """
     command.upgrade(config, "head")
 
@@ -86,7 +89,7 @@ def test_downgrade_then_upgrade_round_trips(db_engine, monkeypatch):
         with engine.connect() as connection:
             assert set(_NEW_TABLES) <= _table_names(connection)
 
-        command.downgrade(config, PREVIOUS_HEAD)
+        command.downgrade(config, _MIGRATION.parent)
         with engine.connect() as connection:
             assert not (set(_NEW_TABLES) & _table_names(connection))
             # The revision owns these enums and must clean them up, or a
@@ -95,7 +98,7 @@ def test_downgrade_then_upgrade_round_trips(db_engine, monkeypatch):
             # …but not the pre-existing vocabulary it merely reuses.
             assert "submission_record_type" in _enum_names(connection)
 
-        command.upgrade(config, CURRENT_HEAD)
+        command.upgrade(config, _MIGRATION.revision)
         with engine.connect() as connection:
             assert set(_NEW_TABLES) <= _table_names(connection)
             assert set(_OWNED_ENUMS) <= _enum_names(connection)
@@ -137,7 +140,7 @@ def test_downgrade_refuses_to_orphan_a_published_citation(db_engine, monkeypatch
             )
 
         with pytest.raises(RuntimeError, match="released datasets"):
-            command.downgrade(config, PREVIOUS_HEAD)
+            command.downgrade(config, _MIGRATION.parent)
 
         # Still at head, still intact.
         with engine.connect() as connection:
@@ -200,7 +203,7 @@ def test_downgrade_also_refuses_when_the_release_was_withdrawn(
             )
 
         with pytest.raises(RuntimeError, match="released datasets"):
-            command.downgrade(config, PREVIOUS_HEAD)
+            command.downgrade(config, _MIGRATION.parent)
 
         with engine.connect() as connection:
             assert set(_NEW_TABLES) <= _table_names(connection)

@@ -49,6 +49,7 @@ from tckdb_schemas.stationary_point import TauBasis
 
 from alembic import command
 from app.db.models.common import IMAGINARY_MODE_TAU_BASIS_VALUES, CalculationType
+from tests.db._migration_chain import revision_under_test
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_lot,
@@ -58,8 +59,10 @@ from tests.services.scientific_read._factories import (
 )
 
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
-_PREVIOUS_HEAD = "d4e9b1c7a253"
-_CURRENT_HEAD = "e2a7c9d4b615"
+
+#: The subject of this file, and the revision below it -- read from the
+#: chain rather than written down twice. See ``_migration_chain``.
+_MIGRATION = revision_under_test("e2a7c9d4b615")
 _CONSTRAINT = "ck_calc_freq_result_imaginary_mode_tau_basis_known"
 
 #: Values that are not rows of ADR 0012's protocol table. The first three
@@ -277,7 +280,7 @@ def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
     planted = "DELETE FROM calc_freq_result WHERE calculation_id IN (-901, -902)"
 
     try:
-        command.downgrade(config, _PREVIOUS_HEAD)
+        command.downgrade(config, _MIGRATION.parent)
 
         # One unclassifiable value and one legitimate one. The foreign key
         # onto ``calculation`` is suspended rather than satisfied: what is
@@ -295,7 +298,7 @@ def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
             )
 
         with pytest.raises(RuntimeError) as excinfo:
-            command.upgrade(config, _CURRENT_HEAD)
+            command.upgrade(config, _MIGRATION.revision)
         message = str(excinfo.value)
         assert "nonsense-basis" in message, (
             "the migration must name what it refused to classify; it said: "
@@ -320,17 +323,17 @@ def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
         # Repaired the way an operator would -- by deciding what the row
         # meant -- the same migration goes through.
         _purge_planted_rows(engine, planted)
-        command.upgrade(config, _CURRENT_HEAD)
+        command.upgrade(config, _MIGRATION.revision)
         with engine.connect() as connection:
             assert _constraint_count(connection) == 1
     finally:
         # Leave the database at head whatever happened, so a failure here
         # fails this test and not every test that follows it.
         #
-        # ``head``, not ``_CURRENT_HEAD``. This test downgrades the *per-run
-        # database every other test in the process is using*, and
-        # ``_CURRENT_HEAD`` is the revision under test, which stops being head
-        # the moment anything lands on top of it. It did, one day later:
+        # ``head``, not ``_MIGRATION.revision``. This test downgrades the
+        # *per-run database every other test in the process is using*, and the
+        # revision under test stops being head the moment anything lands on
+        # top of it. It did, one day later:
         # ``b7e4d1a9c026`` renames a unique index and six CHECK constraints, so
         # stopping at ``e2a7c9d4b615`` handed every later test a
         # ``statmech_torsion`` whose unique index was still called
@@ -338,6 +341,10 @@ def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
         # in ``test_statmech_torsion_index_uniqueness.py`` -- a file with
         # nothing to do with tau bases -- claiming the wrong constraint had
         # refused a duplicate, when the only thing wrong was its name.
+        #
+        # This line said ``_CURRENT_HEAD`` when it did that, and the constant
+        # read as head to whoever wrote it. That name is gone from the tree
+        # for exactly that reason; see ``_migration_chain``.
         _purge_planted_rows(engine, planted)
         command.upgrade(config, "head")
         engine.dispose()

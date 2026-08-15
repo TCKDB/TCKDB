@@ -8,10 +8,13 @@ from alembic.config import Config
 from sqlalchemy import create_engine, text
 
 from alembic import command
+from tests.db._migration_chain import revision_under_test
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PREVIOUS_HEAD = "a8b9c0d1e2f3"
-CURRENT_HEAD = "b1c2d3e4f5a6"
+
+#: The subject of this file, and the revision below it -- read from the
+#: chain rather than written down twice. See ``_migration_chain``.
+_MIGRATION = revision_under_test("b1c2d3e4f5a6")
 
 
 def test_lease_upgrade_recovers_processing_rows_and_creates_index(db_engine, monkeypatch):
@@ -24,7 +27,7 @@ def test_lease_upgrade_recovers_processing_rows_and_creates_index(db_engine, mon
     monkeypatch.setenv("DB_HOST", "127.0.0.1")
     monkeypatch.setenv("DB_PORT", "5432")
     config = Config(str(REPO_ROOT / "alembic.ini"))
-    command.downgrade(config, PREVIOUS_HEAD)
+    command.downgrade(config, _MIGRATION.parent)
 
     engine = create_engine(db_engine.url.render_as_string(hide_password=False))
     inserted_ids = []
@@ -40,7 +43,7 @@ def test_lease_upgrade_recovers_processing_rows_and_creates_index(db_engine, mon
             """)
                 )
             )
-        command.upgrade(config, CURRENT_HEAD)
+        command.upgrade(config, _MIGRATION.revision)
         with engine.connect() as connection:
             rows = connection.execute(
                 text("""
@@ -72,7 +75,7 @@ def test_lease_upgrade_recovers_processing_rows_and_creates_index(db_engine, mon
         engine.dispose()
         # Put the schema back where this test found it. It downgrades the
         # *per-run database every other test in the process is using*, and
-        # ``CURRENT_HEAD`` above is a historical revision — stopping there
+        # ``_MIGRATION.revision`` above is a historical revision — stopping there
         # leaves every later migration un-applied, which is how this one file
         # used to take the rest of the suite down with it
         # (``species_entry.isotope_key does not exist``, hundreds of tests
