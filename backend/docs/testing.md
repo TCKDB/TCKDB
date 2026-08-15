@@ -441,6 +441,23 @@ full suite is verified green at seeds **1, 2, 3, 4, 5, 7, 11, 90210 and
 since it puts all ~6,770 tests in one process against one database and so
 exercises every cross-file adjacency the sharded runs hide.
 
+**That audit is a measurement of a commit, not a property of the suite.** One
+real order dependence appeared four days after it was taken, and it is worth
+knowing its shape because the shape recurs:
+`tests/db/test_imaginary_mode_tau_basis_constraint.py` downgraded the shared
+database and restored it to the revision it was written against rather than to
+`head`. That revision stopped being `head` the day `b7e4d1a9c026` landed on top
+of it, so from then on the file left every later test in its process running
+against a schema one revision old — surfacing as three failures in
+`tests/db/test_statmech_torsion_index_uniqueness.py` asserting that a unique
+constraint had the wrong name. The eight-way gates stayed green throughout: with
+eight workers and eight databases, the offender and its victim only share a
+process about one run in eight, which is exactly the blind spot the paragraph
+above names. `tests/db/conftest.py::_must_leave_the_database_at_head` now fails
+the offender at its own teardown, so the class no longer depends on a serial run
+to be seen. Re-audit after adding a revision; do not treat the seed list as a
+standing guarantee.
+
 **Set `TCKDB_TEST_SEED=random` for an unpinned order.** The script draws a
 fresh seed per invocation and echoes it:
 

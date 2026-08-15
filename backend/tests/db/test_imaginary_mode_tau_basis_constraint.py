@@ -326,8 +326,20 @@ def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
     finally:
         # Leave the database at head whatever happened, so a failure here
         # fails this test and not every test that follows it.
+        #
+        # ``head``, not ``_CURRENT_HEAD``. This test downgrades the *per-run
+        # database every other test in the process is using*, and
+        # ``_CURRENT_HEAD`` is the revision under test, which stops being head
+        # the moment anything lands on top of it. It did, one day later:
+        # ``b7e4d1a9c026`` renames a unique index and six CHECK constraints, so
+        # stopping at ``e2a7c9d4b615`` handed every later test a
+        # ``statmech_torsion`` whose unique index was still called
+        # ``uq_statmech_torsion_statmech_id``. That surfaced as three failures
+        # in ``test_statmech_torsion_index_uniqueness.py`` -- a file with
+        # nothing to do with tau bases -- claiming the wrong constraint had
+        # refused a duplicate, when the only thing wrong was its name.
         _purge_planted_rows(engine, planted)
-        command.upgrade(config, _CURRENT_HEAD)
+        command.upgrade(config, "head")
         engine.dispose()
 
 
