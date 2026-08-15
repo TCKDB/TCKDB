@@ -753,9 +753,13 @@ def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
 
     The third ownership code with the same *shape*,
     ``statmech_torsion_scan_calculation_owner_mismatch``, is deliberately
-    absent: its key is resolved in a bundle-wide namespace on the PDep
-    path, so it is reachable and stays exported. See
-    ``tests/api/test_api_network_pdep_ownership.py``.
+    absent: its key is resolved in a bundle-wide namespace on two paths,
+    so it is reachable and stays exported. See
+    ``tests/api/test_api_network_pdep_ownership.py`` for the PDep route
+    and ``tests/api/test_api_bundle_torsion_scan_ownership.py`` for
+    ``/uploads/computed-reaction`` (#193), where the same wide namespace
+    had no owner check at all until the call site was routed through the
+    shared guard.
     """
     from tckdb_schemas.energy_correction import (
         AppliedEnergyCorrectionUploadPayload,

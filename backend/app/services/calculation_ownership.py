@@ -62,19 +62,29 @@ W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH = (
 #: is a different field with a different repair — the depositor picked the
 #: wrong rotor scan, not the wrong supporting job.
 #:
-#: Reachable, and by exactly one route, which is worth writing down
-#: because it was read as unreachable once. ``_persist_statmech_block`` is
-#: shared by the species bundle and the PDep bundle. Under
-#: ``/uploads/computed-species`` the calc-key map is one species entry's
-#: own, so the comparison is against a value just assigned; under
-#: ``/uploads/networks/pdep`` the map handed to the same seam spans every
-#: species *and* every transition state. The PDep payload schema narrows
-#: a **species** torsion's scan key to that species's own calculations
-#: before the seam ever sees it — and does not do the same for a
-#: **transition state**'s. So a TS torsion naming a species scan
-#: calculation reaches this guard, and
+#: Reachable by two routes, which is worth writing down because it was
+#: read as unreachable once and then as reachable by exactly one.
+#:
+#: ``_persist_statmech_block`` is shared by the species bundle and the
+#: PDep bundle. Under ``/uploads/computed-species`` the calc-key map is
+#: one species entry's own, so the comparison is against a value just
+#: assigned; under ``/uploads/networks/pdep`` the map handed to the same
+#: seam spans every species *and* every transition state. The PDep
+#: payload schema narrows a **species** torsion's scan key to that
+#: species's own calculations before the seam ever sees it — and does not
+#: do the same for a **transition state**'s. So a TS torsion naming a
+#: species scan calculation reaches this guard, and
 #: ``tests/api/test_api_network_pdep_ownership.py`` provokes it on the
 #: wire.
+#:
+#: ``/uploads/computed-reaction`` is the second route (#193). It does not
+#: use the shared seam — it persists torsions inline — and resolved the
+#: scan key against the bundle-global map with no owner check at all, so
+#: one species' rotor could be parameterised by another's scan and the
+#: deposit succeeded. That call site now routes through this function;
+#: ``tests/api/test_api_bundle_torsion_scan_ownership.py`` provokes it.
+#: A transition state cannot reach the rule on that route at all —
+#: ``BundleTransitionStateIn`` carries no statmech, hence no torsions.
 W_STATMECH_TORSION_SCAN_CALCULATION_OWNER_MISMATCH = (
     "statmech_torsion_scan_calculation_owner_mismatch"
 )
