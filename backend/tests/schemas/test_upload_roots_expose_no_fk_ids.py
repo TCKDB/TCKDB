@@ -59,8 +59,11 @@ from app.api.app import create_app
 #: Path prefixes whose POST bodies are depositor-facing upload payloads.
 #: ``/uploads`` is the synchronous surface; ``/jobs`` is the async twin and
 #: takes the same models, so it is included for the case where the two ever
-#: diverge.
-_UPLOAD_PREFIXES = ("/api/v1/uploads/", "/api/v1/jobs/")
+#: diverge. ``/bundles`` is the contribution-bundle root — the surface a
+#: contributor is actually pointed at — and it reaches many of the same
+#: nested models, so leaving it out would have reproduced this issue's own
+#: mistake at the level of the guard.
+_UPLOAD_PREFIXES = ("/api/v1/uploads/", "/api/v1/jobs/", "/api/v1/bundles/")
 
 
 def _upload_root_models() -> dict[str, type]:
@@ -199,13 +202,18 @@ def test_upload_roots_were_actually_discovered() -> None:
     every parametrised case below into a vacuous pass. Assert the surface is
     non-trivial and that the roots #194 was about are in it.
     """
-    assert len(UPLOAD_ROOTS) >= 11, sorted(UPLOAD_ROOTS)
+    assert len(UPLOAD_ROOTS) >= 12, sorted(UPLOAD_ROOTS)
     for expected in (
         "ConformerUploadRequest",
         "TransitionStateUploadRequest",
         "ComputedSpeciesUploadRequest",
         "ComputedReactionUploadRequest",
         "NetworkPDepUploadRequest",
+        # The contribution-bundle root. Named explicitly because it is the
+        # surface contributors are documented towards, and because it lives
+        # under a different prefix from the rest — the exact way a root gets
+        # left out of a check that looks complete.
+        "ContributionBundleV0",
     ):
         assert expected in UPLOAD_ROOTS, sorted(UPLOAD_ROOTS)
 
