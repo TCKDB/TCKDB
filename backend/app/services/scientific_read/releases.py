@@ -10,8 +10,8 @@ a superseded selection would defeat the point of publishing the audit trail.
 
 from __future__ import annotations
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import Session, aliased
 
 from app.db.models.app_user import AppUser
 from app.db.models.common import DatasetReleaseStatus, ReleaseSelectionAction
@@ -45,6 +45,7 @@ from app.services.release.manifest import (
     verify_release,
 )
 from app.services.release.records import encode_scalar, public_refs_for
+from app.services.scientific_read.common import validate_pagination
 
 
 class UnknownReleaseError(ValueError):
@@ -169,12 +170,21 @@ def list_releases(
     offset: int = 0,
     limit: int = 50,
 ) -> ScientificReleaseListResponse:
-    """List releases, newest first. Withdrawn releases are listed, not hidden."""
+    """List releases, newest first. Withdrawn releases are listed, not hidden.
+
+    :raises ValueError: 422 when ``offset``/``limit`` are outside the hosted
+        pagination bounds.
+    """
+    offset, limit = validate_pagination(offset, limit)
     stmt = select(DatasetRelease)
     if status is not None:
         stmt = stmt.where(DatasetRelease.status == status)
-    rows = list(session.scalars(stmt.order_by(DatasetRelease.id.desc())))
-    page = rows[offset : offset + limit]
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    page = list(
+        session.scalars(
+            stmt.order_by(DatasetRelease.id.desc()).offset(offset).limit(limit)
+        )
+    )
     return ScientificReleaseListResponse(
         request=RequestEcho(
             filter={"status": status.value if status else None},
@@ -184,8 +194,8 @@ def list_releases(
             offset=offset,
             limit=limit,
             returned=len(page),
-            total=len(rows),
-            post_collapse_total=len(rows),
+            total=total,
+            post_collapse_total=total,
         ),
     )
 
@@ -336,15 +346,72 @@ def get_release_selections(
     recommendation was reasoned about and revised — filtering it down to only
     what currently stands would hand back the same opaque answer the selection
     layer exists to replace.
+
+    Paging happens in SQL. A mature release publishes thousands of selections,
+    and this endpoint exists precisely to be read a page at a time; reading the
+    whole ledger to hand back fifty rows made every page cost the same as the
+    largest one. ``stands`` is the reason that was ever tempting — it is a
+    property of the supersession chain, not of the row — but "nothing
+    supersedes me" is a correlated ``NOT EXISTS``, so the whole-set question
+    is answerable per row without the whole set in memory.
+
+    :raises ValueError: 422 when ``offset``/``limit`` are outside the hosted
+        pagination bounds.
     """
     release = resolve_release(session, handle)
-    state = load_selection_state(session, release)
-    standing = {row.id for row in state.active}
-    rows = state.all_selections
-    if not include_superseded:
-        rows = [row for row in rows if row.id in standing]
+    offset, limit = validate_pagination(offset, limit)
 
-    by_id = {row.id: row for row in state.all_selections}
+    superseder = aliased(ReleaseSelection)
+    stands = and_(
+        ~(
+            select(1)
+            .where(
+                superseder.dataset_release_id == release.id,
+                superseder.supersedes_selection_id == ReleaseSelection.id,
+            )
+            .exists()
+        ),
+        ReleaseSelection.action != ReleaseSelectionAction.withdraw,
+    )
+
+    stmt = select(ReleaseSelection).where(
+        ReleaseSelection.dataset_release_id == release.id
+    )
+    if not include_superseded:
+        stmt = stmt.where(stands)
+
+    total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    page_rows = list(
+        session.execute(
+            stmt.add_columns(stands.label("stands"))
+            .order_by(ReleaseSelection.id)
+            .offset(offset)
+            .limit(limit)
+        ).all()
+    )
+    rows = [row for row, _stands in page_rows]
+    stands_by_id = {row.id: bool(flag) for row, flag in page_rows}
+
+    # The row a page row supersedes may live outside the page, so resolve those
+    # refs by id rather than assuming the page is self-contained.
+    parent_ids = {
+        row.supersedes_selection_id
+        for row in rows
+        if row.supersedes_selection_id is not None
+    }
+    by_id: dict[int, str] = (
+        dict(
+            session.execute(
+                select(ReleaseSelection.id, ReleaseSelection.public_ref).where(
+                    ReleaseSelection.dataset_release_id == release.id,
+                    ReleaseSelection.id.in_(parent_ids),
+                )
+            ).all()
+        )
+        if parent_ids
+        else {}
+    )
+
     policies = {
         policy.id: policy
         for policy in session.scalars(
@@ -360,28 +427,22 @@ def get_release_selections(
         )
     }
 
-    # Resolve refs one query per record type, not one per row: a mature
-    # release has thousands of selections and a per-row lookup would make the
-    # ledger endpoint quadratic in the thing it exists to publish.
+    # Resolve refs one query per record type, not one per row: a per-row lookup
+    # would make the ledger endpoint quadratic in the thing it exists to
+    # publish. Scoped to the page, because that is all this response renders.
     record_refs = _refs_by_type(session, [(r.record_type, r.record_id) for r in rows])
     subject_refs = _refs_by_type(session, [(r.subject_type, r.subject_id) for r in rows])
 
-    page = rows[offset : offset + limit]
     records = [
         ReleaseSelectionRecord(
             selection_ref=row.public_ref,
             action=row.action,
-            stands=row.id in standing
-            and row.action is not ReleaseSelectionAction.withdraw,
+            stands=stands_by_id[row.id],
             record_type=row.record_type.value,
             record_ref=record_refs.get((row.record_type, row.record_id)),
             subject_type=row.subject_type.value,
             subject_ref=subject_refs.get((row.subject_type, row.subject_id)),
-            supersedes_selection_ref=(
-                by_id[row.supersedes_selection_id].public_ref
-                if row.supersedes_selection_id in by_id
-                else None
-            ),
+            supersedes_selection_ref=by_id.get(row.supersedes_selection_id),
             rationale=row.rationale,
             created_at=encode_scalar(row.created_at),
             curator=(
@@ -400,7 +461,7 @@ def get_release_selections(
                 else None
             ),
         )
-        for row in page
+        for row in rows
     ]
 
     return ScientificReleaseSelectionsResponse(
@@ -413,9 +474,9 @@ def get_release_selections(
         pagination=Pagination(
             offset=offset,
             limit=limit,
-            returned=len(page),
-            total=len(rows),
-            post_collapse_total=len(rows),
+            returned=len(rows),
+            total=total,
+            post_collapse_total=total,
         ),
     )
 
