@@ -12,10 +12,11 @@ the payload is resolved through it.
 
 Why the lookup is a function and not a subscript
 ------------------------------------------------
-It was a subscript, nineteen times, across three bundle workflows. A key
-naming nothing was a ``KeyError``: an unhandled 500 with nothing in it
-saying which key was wrong, where the honest answer is a 422 naming the
-key and the keys that *are* declared.
+It was a subscript, twenty-one times: nineteen across the three bundle
+workflows and one each in the standalone thermo and transport product
+workflows. A key naming nothing was a ``KeyError``: an unhandled 500
+with nothing in it saying which key was wrong, where the honest answer
+is a 422 naming the key and the keys that *are* declared.
 
 The usual defence was that the request schema already refuses an
 undeclared key before the workflow runs. That defence was true of most
@@ -92,13 +93,13 @@ def resolve_declared_key(
 ) -> T:
     """Turn one local key into whatever the request declared under it.
 
-    Generic in the value type on purpose. The three bundle workflows do
-    not agree on what their calc-key map holds — ``computed_species``
+    Generic in the value type on purpose. The workflows do not agree on
+    what their calc-key map holds — ``computed_species``
     keeps ``Calculation`` rows because its next move is an ownership
     check that needs one, ``computed_reaction`` and ``network_pdep`` keep
     ids — and a helper that forced one shape would have been adopted by
     whichever workflows it happened to fit, which is how there came to be
-    nineteen subscripts instead of one lookup.
+    twenty-one subscripts instead of one lookup.
 
     :param key: The key the payload wrote. Never ``None`` — a caller
         with an optional field decides for itself what absence means,
@@ -145,10 +146,14 @@ def resolve_calculation_key(
     field: str,
     code: str = W_CALCULATION_KEY_UNDECLARED,
 ) -> T:
-    """Resolve one bundle-local *calculation* key, or refuse with a code.
+    """Resolve one upload-local *calculation* key, or refuse with a code.
 
-    The seam every raw ``calc_keys_to_id[...]`` subscript in the three
-    bundle workflows now goes through.
+    The seam every raw calc-key subscript now goes through, in all five
+    workflows that resolve a calculation by local key —
+    ``computed_species``, ``computed_reaction``, ``network_pdep``,
+    ``thermo`` and ``transport``.
+    ``tests/services/test_local_key_resolution.py`` fails if a raw one
+    comes back to any of them.
 
     :param key: The calculation key the payload wrote.
     :param declared: The workflow's calc-key namespace.
