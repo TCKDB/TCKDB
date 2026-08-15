@@ -360,10 +360,22 @@ def test_schema_allows_irc_additional():
 # ---------------------------------------------------------------------------
 
 
-_XYZ_IRC_F = "1\nF1\nH  0.0  0.0  1.2\n"
-_XYZ_IRC_R = "1\nR1\nH  0.0  0.0  0.8\n"
-_XYZ_PS_0 = "1\nI0\nH  0.0  0.0  0.0\n"
-_XYZ_PS_2 = "1\nI2\nH  0.0  0.0  1.5\n"
+# Points along the H + H2 -> H2 + H path. Each is the whole three-atom
+# reacting system at a different path coordinate, because that is what a point
+# on an IRC or a NEB string is: the same nuclei, moved. These used to be
+# *single* hydrogen atoms — one atom on the reaction path of a three-atom
+# saddle point, which no calculation can produce — and nothing looked until
+# ``assert_calculation_geometry_composition`` compared them against the
+# reaction they belong to. Same fixture-rot shape the conformer composition
+# check found in the pressure-dependent fixtures.
+#: Reactant side: H2 bonded at left, the transferring atom far right.
+_XYZ_IRC_R = "3\nR1\nH  0.0  0.0  0.00\nH  0.0  0.0  0.74\nH  0.0  0.0  2.50\n"
+#: Product side: the transferring atom far left, H2 bonded at right.
+_XYZ_IRC_F = "3\nF1\nH  0.0  0.0  0.00\nH  0.0  0.0  1.76\nH  0.0  0.0  2.50\n"
+#: NEB image 0, reactant-like but not identical to the IRC endpoint.
+_XYZ_PS_0 = "3\nI0\nH  0.0  0.0  0.00\nH  0.0  0.0  0.78\nH  0.0  0.0  2.40\n"
+#: NEB image 2, product-like.
+_XYZ_PS_2 = "3\nI2\nH  0.0  0.0  0.00\nH  0.0  0.0  1.62\nH  0.0  0.0  2.40\n"
 
 
 def test_ts_upload_with_irc_additional_persists_irc_result(db_conn) -> None:

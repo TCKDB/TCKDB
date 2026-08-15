@@ -598,7 +598,10 @@ def canonical_species_identity(
 
 CHECK_SMILES_CHARGE_MATCHES_DECLARED = ScientificCheck(
     group="A structure against its own label",
-    sort_key=3,
+    # Shifted from 3 to 4 by #143 so that the calculation-geometry composition
+    # rule sits beside the two conformer-geometry rules it mirrors, rather
+    # than after the charge rules that have nothing to do with it.
+    sort_key=4,
     code=W_SPECIES_SMILES_CHARGE_MISMATCH,
     asserts=(
         "A species entry's declared charge equals the summed formal charge of "

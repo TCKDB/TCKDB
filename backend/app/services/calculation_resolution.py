@@ -60,6 +60,9 @@ from app.schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from app.services.calculation_geometry_composition import (
+    assert_calculation_geometry_composition,
+)
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
@@ -579,6 +582,12 @@ def _persist_irc_result(
             and role is not None
             and geometry_id not in linked_geometry_ids
         ):
+            assert_calculation_geometry_composition(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=f"irc_result.points[{point.point_index}].geometry",
+            )
             session.add(
                 CalculationOutputGeometry(
                     calculation_id=calculation.id,
@@ -650,6 +659,12 @@ def _persist_path_search_result(
         )
 
         if geometry_id is not None and geometry_id not in linked_geometry_ids:
+            assert_calculation_geometry_composition(
+                session,
+                calc=calculation,
+                geometry_id=geometry_id,
+                field=f"path_search_result.points[{point.point_index}].geometry",
+            )
             session.add(
                 CalculationOutputGeometry(
                     calculation_id=calculation.id,
@@ -1271,6 +1286,12 @@ def attach_calculation_input_geometries(
                     f"geometry at most once per calculation."
                 )
             seen_geometry_ids.add(geom.id)
+            assert_calculation_geometry_composition(
+                session,
+                calc=calc,
+                geometry_id=geom.id,
+                field=f"{context}: input_geometries[{input_order - 1}]",
+            )
             session.add(
                 CalculationInputGeometry(
                     calculation_id=calc.id,
@@ -1281,6 +1302,12 @@ def attach_calculation_input_geometries(
         return
 
     if fallback_geometry_id is not None and calc.type in _INPUT_GEOMETRY_TYPES:
+        assert_calculation_geometry_composition(
+            session,
+            calc=calc,
+            geometry_id=fallback_geometry_id,
+            field=f"{context}: geometry_key",
+        )
         session.add(
             CalculationInputGeometry(
                 calculation_id=calc.id,
@@ -1336,6 +1363,12 @@ def attach_calculation_output_geometries(
                     f"geometry at most once per calculation."
                 )
             seen_geometry_ids.add(geom.id)
+            assert_calculation_geometry_composition(
+                session,
+                calc=calc,
+                geometry_id=geom.id,
+                field=f"{context}: output_geometries[{output_order - 1}].geometry",
+            )
             session.add(
                 CalculationOutputGeometry(
                     calculation_id=calc.id,
@@ -1350,6 +1383,12 @@ def attach_calculation_output_geometries(
         if fallback_geometry_id not in _pending_output_geometry_ids(
             session, calc.id
         ):
+            assert_calculation_geometry_composition(
+                session,
+                calc=calc,
+                geometry_id=fallback_geometry_id,
+                field=f"{context}: geometry_key",
+            )
             session.add(
                 CalculationOutputGeometry(
                     calculation_id=calc.id,

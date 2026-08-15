@@ -399,19 +399,25 @@ def assert_geometry_composition_matches_identity(
     computed-reaction bundle and the PDep bundle, because all four resolve
     their conformer geometries through this one seam.
 
-    **Calculation geometries are not reached, on any path.**
+    **Calculation geometries are reached by a sibling rule, not by this one.**
     ``CalculationIn.input_geometries`` and ``output_geometries`` are attached
-    to a ``calculation`` row, never resolved through
-    :func:`resolve_species_entry`, and no composition check runs on them
-    anywhere: benzene coordinates can be attached as a calculation geometry
-    under a ``smiles: "C"`` species entry and the deposit is accepted. The
-    only comparison they get is
-    :mod:`app.services.geometry_validation`, which is advisory rather than
-    blocking, runs only for ``opt`` calculations, and — despite its
-    ``is_isomorphic`` field name — compares formulas too (see that module's
-    docstring). Closing that gap for *output* geometries would be wrong: an
-    optimisation that dissociated is science to record. Closing it for *input*
-    geometries is a genuine open gap and is not attempted here.
+    to a ``calculation`` row and never resolved through
+    :func:`resolve_species_entry`, so this function does not see them. Until
+    #143 nothing else did either, and benzene coordinates could be attached as
+    a calculation geometry under a ``smiles: "C"`` species entry. They are now
+    owned by
+    :func:`app.services.calculation_geometry_composition.assert_calculation_geometry_composition`,
+    which applies the same comparison against whichever subject the
+    calculation is filed under — this entry's own formula for a species-owned
+    calculation, the reaction's reactant sum for a transition-state-owned one.
+
+    The note that stood here said closing the gap for *output* geometries
+    would be wrong because "an optimisation that dissociated is science to
+    record". That is true of connectivity and false of composition: every
+    calculation type is a map over a fixed set of nuclei, so a dissociated
+    optimisation has exactly the atoms it started with. The sibling rule
+    therefore covers both directions; see
+    ``backend/docs/specs/calculation_geometry_composition.md``.
 
     What is compared, and what deliberately is not
     ----------------------------------------------

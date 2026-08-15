@@ -157,6 +157,27 @@ class TestAStructureAgainstItsOwnLabel:
         body = _assert_code(response, "species_geometry_composition_mismatch")
         assert "species_geometry_composition_mismatch" in str(body["detail"])
 
+    def test_a_calculation_geometry_of_another_molecule_names_its_own_code(
+        self, client
+    ):
+        """The conformer geometry is right; the calculation's is not.
+
+        Deliberately a *different* code from the check above, and this is the
+        payload that shows why one would not do: the species entry's own
+        structure is correct methane, so ``species_geometry_composition_mismatch``
+        cannot fire, and the only thing wrong is a geometry attached to a
+        calculation. A client repairing that edits a calculation's
+        ``input_geometries``; a client repairing the other edits the
+        conformer. Different fields, different repairs, different codes.
+        """
+        payload = _conformer_payload(
+            species_entry=_METHANE, xyz_text=_METHANE_XYZ
+        )
+        payload["calculation"]["input_geometries"] = [{"xyz_text": _METHYL_XYZ}]
+        response = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(response, "calculation_geometry_composition_mismatch")
+        assert "calculation_geometry_composition_mismatch" in str(body["detail"])
+
     def test_isotope_labels_that_disagree_name_the_isotope_check(self, client):
         # CH3D by SMILES, all-protium by geometry. Same formula, so the
         # composition check above passes and only the isotope one can fire.

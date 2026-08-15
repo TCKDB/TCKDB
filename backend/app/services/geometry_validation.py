@@ -42,13 +42,27 @@ Where the formula rule blocks
 -----------------------------
 Per ADR 0008 §9, where the same fact is checked in more than one tier the
 blocking tier owns it and the others cite it. Formula agreement between a
-structure and the identity it is deposited under is owned by
-:func:`app.services.species_resolution.assert_geometry_composition_matches_identity`,
-which refuses the upload outright — but only for **conformer** geometries. A
-calculation's input and output geometries reach no composition check on any
-upload path, so for those this service's advisory row is the only place the
-comparison happens at all. That is deliberate for an *output* geometry: an
-optimisation that drifted is science to record, not a payload to refuse.
+structure and the identity it is deposited under is owned by two blocking
+rules that between them cover every geometry:
+:func:`app.services.species_resolution.assert_geometry_composition_matches_identity`
+for a **conformer** geometry, and
+:func:`app.services.calculation_geometry_composition.assert_calculation_geometry_composition`
+for every geometry linked to a **calculation** (#143). Both refuse outright.
+
+**Consequence for this service: ``validation_status=fail`` is no longer
+reachable through any upload path.** The ``fail`` branch fires when
+``is_isomorphic`` is false, and — as the verified consequences above record —
+that happens only when the element counts disagree. No calculation can change
+an element count, so that verdict was only ever reachable by depositing a
+geometry no calculation could have produced, and such a deposit is now refused
+before this service runs. What stays live, and is why the row still exists, is
+the RMSD signal: a ``warning`` on a converged structure that moved further
+than the threshold from its input is a suspicion about a *correct-formula*
+deposit, which is exactly the expectation tier this service belongs to. The
+note that used to stand here — that refusing an output geometry would wrongly
+reject "an optimisation that drifted" — confused connectivity with
+composition. A drifted or dissociated optimisation keeps its atoms and passes
+the blocking rule, as the methane-at-5-A case above shows.
 
 Not in scope here:
 
@@ -426,7 +440,7 @@ def run_and_persist_geometry_validation(
 
 CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
     group="A structure against its own label",
-    sort_key=5,
+    sort_key=6,  # Shifted from 5 by #143; see CHECK_SMILES_CHARGE_MATCHES_DECLARED.
     code=None,
     asserts=(
         "An optimisation's output geometry still describes the species it was "
@@ -441,7 +455,12 @@ CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
         "unreliable for exactly the weak complexes, radicals, ions and "
         "stretched geometries where a genuine rearrangement would matter. The "
         "result is written as an evidence row that grades the record at read "
-        "time; it never refuses an upload."
+        "time; it never refuses an upload. Since #143 the tier is also the "
+        "only one left to it: the *composition* half of what this row reports "
+        "is owned by ``calculation_geometry_composition_mismatch``, which "
+        "blocks, so what this row can still say on its own is the RMSD "
+        "suspicion — a correct-formula structure that moved further than "
+        "expected, which is an expectation by construction."
     ),
     adr="0008, 0002",
     emitted=False,
@@ -455,7 +474,14 @@ CHECK_OPT_GEOMETRY_MATCHES_DECLARED_SPECIES = ScientificCheck(
                 "missing output geometry, unparseable coordinates or a raising "
                 "chemistry layer all write nothing and let the upload "
                 "continue. A Kabsch RMSD above 1.0 A against the input "
-                "geometry is recorded as a separate suspicion signal."
+                "geometry is recorded as a separate suspicion signal. Its "
+                "``fail`` outcome is no longer reachable through an upload "
+                "path: ``is_isomorphic=False`` fires only on an element-count "
+                "mismatch, no calculation can change an element count, and "
+                "``assert_calculation_geometry_composition`` refuses such a "
+                "deposit before this runs. The pure seam keeps the verdict "
+                "and is pinned directly by "
+                "``tests/workflows/test_geometry_validation_wiring.py``."
             ),
         ),
     ),

@@ -320,7 +320,7 @@ def reconcile_charge_multiplicity(
 
 CHECK_CHARGE_MULTIPLICITY_VS_LOG = ScientificCheck(
     group="A structure against its own label",
-    sort_key=4,
+    sort_key=5,  # Shifted from 4 by #143; see CHECK_SMILES_CHARGE_MATCHES_DECLARED.
     code=(W_CHARGE_MISMATCH, W_MULTIPLICITY_MISMATCH),
     asserts=(
         "The charge and spin multiplicity a depositor declares match the ones "

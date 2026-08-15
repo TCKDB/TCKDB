@@ -360,6 +360,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_without_transition_state", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+    ApiCode("calculation_geometry_composition_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/calculation_geometry_composition.py",
+            note=(
+                "A geometry linked to a calculation is not made of the atoms "
+                "of the subject the calculation is filed under. One code "
+                "across both owner kinds -- a species entry's own formula, or "
+                "a transition state's reaction reactant sum -- because the "
+                "field is the same geometry link and the repair is the same "
+                "sentence; context['owner_kind'] says which reference "
+                "disagreed. Distinct from "
+                "species_geometry_composition_mismatch (a conformer geometry "
+                "against its species entry) and "
+                "transition_state_composition_mismatch (the saddle point a "
+                "TS entry is resolved from): those are repaired in a "
+                "payload's identity block, this one on a calculation."
+            )),
     ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
     ApiCode("canonical_parameter_value_requires_key", 422, Surface.message_prefix,

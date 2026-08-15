@@ -124,6 +124,17 @@ _XYZ_TS_CH3H = (
     "H -0.629  0.629 -0.629\n"
     "H  0.000  0.000  1.400"
 )
+#: The reactant end of that IRC: methyl with the transferring hydrogen 3 A
+#: away. Five atoms, like every other point on the path — an IRC endpoint is
+#: the same nuclei as the saddle point, separated, not a smaller molecule.
+_XYZ_IRC_CH3_PLUS_H = (
+    "5\nCH3 + H, separated\n"
+    "C  0.000  0.000  0.000\n"
+    "H  1.080  0.000  0.000\n"
+    "H -0.540  0.935  0.000\n"
+    "H -0.540 -0.935  0.000\n"
+    "H  0.000  0.000  3.000"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -2305,9 +2316,14 @@ def test_output_geometries_persist_with_declared_role_and_order(db_conn) -> None
     # Attach an explicit output_geometries to the TS-IRC calc with two
     # entries (forward + reverse). These must canonicalize to *distinct*
     # Geometry rows, so we use two different xyz texts.
+    #
+    # Both ends carry all five atoms of the CH3 + H -> CH4 system. The
+    # reverse end used to be ``_XYZ_CH3`` — four atoms as an endpoint of a
+    # five-atom reaction path, which no IRC can produce and which
+    # ``assert_calculation_geometry_composition`` now refuses.
     payload["transition_state"]["calculations"][1]["output_geometries"] = [
-        {"geometry": {"xyz_text": _XYZ_CH3}, "role": "irc_forward"},
-        {"geometry": {"xyz_text": _XYZ_CH4}, "role": "irc_reverse"},
+        {"geometry": {"xyz_text": _XYZ_CH4}, "role": "irc_forward"},
+        {"geometry": {"xyz_text": _XYZ_IRC_CH3_PLUS_H}, "role": "irc_reverse"},
     ]
     # Note: index 1 above is "ts-irc" (index 0 is "ts-freq", index 1 is "ts-irc",
     # index 2 is "ts-sp" since _payload_with_ts_irc appends them in that order).

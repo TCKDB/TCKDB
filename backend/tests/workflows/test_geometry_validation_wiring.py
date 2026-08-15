@@ -5,7 +5,7 @@ computed-species and computed-reaction upload workflows for opt
 calculations only. These tests verify the wiring contract:
 
 * matching identity → ``passed`` row written
-* mismatched identity → ``fail`` row written (evidence, not a gate)
+* mismatched identity → the deposit is **refused** before any row is written
 * missing data → upload still succeeds, no row written
 * non-opt calcs → no row written in this phase
 * TS opt → deferred (no row written)
@@ -13,15 +13,24 @@ calculations only. These tests verify the wiring contract:
 The pure chemistry seam is exercised separately in
 ``tests/services/test_geometry_validation.py``.
 
-**How narrow ``is_isomorphic=False`` really is.** ``resolve_atom_mapping``
+**The ``fail`` status is no longer reachable through any upload path, and
+that is a conclusion rather than a regression.** ``resolve_atom_mapping``
 falls back to ``_find_matches_using_smiles_graph`` whenever bond perception
-from coordinates yields no substructure match, and that fallback bails out
-only on an element-count mismatch. So the ``fail`` branch here fires on a
-*formula* disagreement, not on a connectivity one: ethanol and dimethyl ether,
-constitutional isomers with identical element counts, are reported isomorphic.
-Since ``assert_geometry_composition_matches_identity`` now blocks a formula
-disagreement on the species entry's own geometry, an explicitly declared
-output geometry is the last place this row's ``fail`` status is reachable.
+from coordinates yields no substructure match, and that fallback bails out on
+one condition only: an element-count mismatch. So ``is_isomorphic=False`` has
+only ever meant *the formula disagrees* — ethanol and dimethyl ether,
+constitutional isomers with identical element counts, are reported isomorphic;
+methane with one hydrogen pulled to 5 A is reported isomorphic.
+
+But no calculation can change an element count. Every ``CalculationType`` is a
+map over a fixed set of nuclei, so a formula disagreement between a
+calculation's geometry and its subject is not a result, it is a contradiction
+— which is why ``assert_calculation_geometry_composition`` now blocks it, and
+why the advisory row's ``fail`` branch was only ever reachable by depositing
+something no calculation could have produced. Per ADR 0008 §9 the blocking
+tier owns the fact; this row keeps its ``passed``/``warning`` outcomes, where
+the RMSD signal still lives, and the test below records the refusal that
+replaced the ``fail`` row.
 """
 
 from __future__ import annotations
@@ -29,9 +38,11 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import Iterator
 
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.calculation import (
     Calculation,
     CalculationGeometryValidation,
@@ -248,48 +259,80 @@ def test_computed_species_opt_persists_passed_row(db_conn) -> None:
 
 
 # ---------------------------------------------------------------------------
-# 2. computed-species opt: mismatched identity → fail row, upload still OK
+# 2. computed-species opt: mismatched identity → the deposit is refused
 # ---------------------------------------------------------------------------
 
 
-def test_computed_species_opt_records_fail_when_identity_mismatch(
+def test_computed_species_opt_refuses_an_output_geometry_of_another_molecule(
     db_conn,
 ) -> None:
-    """The declared species is ethanol and the opt calculation reports a
-    methane output geometry — the chemistry layer must reject isomorphism, and
-    the wiring layer must persist that as evidence (validation_status=fail)
-    rather than abort the upload. This is the policy: phase-1 is non-blocking.
+    """Ethanol's opt calculation reporting a methane output geometry.
 
-    The mismatch is on the *output* geometry, not the conformer geometry.
-    This test used to declare water and deposit methane as the conformer
-    geometry, which is now refused outright by
-    ``assert_geometry_composition_matches_identity``: a species entry's own
-    structure must be made of the atoms its own identifier declares, and H2O
-    is not CH4. That blocking rule owns the species entry's geometry, so the
-    non-blocking evidence rule is exercised where it still applies — an output
-    geometry, which the species entry is deliberately *not* checked against
-    because an optimisation that rearranged or dissociated the molecule is
-    exactly the science this row exists to record rather than refuse.
+    This used to be accepted and recorded as ``validation_status=fail`` on the
+    advisory ``calc_geometry_validation`` row, on the reasoning that "an
+    optimisation that rearranged or dissociated the molecule is exactly the
+    science this row exists to record rather than refuse".
 
-    Ethanol is nine atoms (C2H6O); methane is five (CH4). The atom counts
-    differ, which is what ``resolve_atom_mapping`` actually detects — see the
-    note in this module's docstring about how narrow ``is_isomorphic=False``
-    has become."""
+    That reasoning is right about *connectivity* and does not survive contact
+    with *composition*. A rearrangement keeps its atoms; a dissociation keeps
+    its atoms; a proton transfer keeps its atoms. Ethanol is nine atoms and
+    methane is five, and no optimisation of ethanol has ever returned five
+    atoms, because no electronic-structure program removes a nucleus. So the
+    payload this test deposits is not a rearranged ethanol — it is a
+    calculation filed under the wrong species, or coordinates from the wrong
+    job, and ``assert_calculation_geometry_composition`` refuses it.
+
+    That is also, precisely, the whole reachable surface of the advisory row's
+    ``fail`` verdict: ``is_isomorphic=False`` fires on an element-count
+    mismatch and on nothing else (see this module's docstring), so the only
+    deposits it ever caught were the impossible ones.
+    """
     with _isolated_session(db_conn) as session:
         bundle = _species_bundle(
             smiles="CCO", xyz=_XYZ_ETHANOL, output_xyz=_XYZ_METHANE
         )
-        outcome = persist_computed_species_upload(session, bundle)
-        primary_id = outcome.conformers[0].primary_calculation.id
-        row = session.scalar(
-            select(CalculationGeometryValidation).where(
-                CalculationGeometryValidation.calculation_id == primary_id
-            )
-        )
-        assert row is not None
-        assert row.is_isomorphic is False
-        assert row.validation_status == ValidationStatus.fail
-        assert row.validation_reason is not None
+        with pytest.raises(CodedValueError) as excinfo:
+            persist_computed_species_upload(session, bundle)
+
+    assert excinfo.value.code == "calculation_geometry_composition_mismatch"
+    assert excinfo.value.context["owner_kind"] == "species_entry"
+    assert excinfo.value.context["geometry_formula"] == "CH4"
+    assert excinfo.value.context["subject_formula"] == "C2H6O"
+    # The field the depositor wrote, not a row id (DR-0028 Requirement 2).
+    assert "output_geometries[0]" in excinfo.value.context["field"]
+    assert not any(
+        str(value).isdigit() for value in excinfo.value.context.values()
+    )
+
+
+def test_the_chemistry_layer_still_reports_a_formula_mismatch(db_conn) -> None:
+    """The pure seam keeps its verdict even though no upload can reach it.
+
+    The blocking rule owns the *consequence*; it does not delete the
+    chemistry. ``validate_calculation_geometry`` is a pure function over
+    parsed atoms and a SMILES, and it must keep returning
+    ``is_isomorphic=False`` for a formula disagreement — otherwise the
+    ``passed`` verdict on every accepted deposit would be vacuous, since a
+    predicate that never says no says nothing when it says yes.
+    """
+    from app.chemistry.geometry import parse_xyz
+    from app.schemas.fragments.geometry import GeometryPayload
+    from app.services.geometry_validation import validate_calculation_geometry
+
+    methane_atoms = parse_xyz(GeometryPayload(xyz_text=_XYZ_METHANE)).atoms
+    ethanol_atoms = parse_xyz(GeometryPayload(xyz_text=_XYZ_ETHANOL)).atoms
+
+    mismatch = validate_calculation_geometry(
+        output_atoms=methane_atoms, species_smiles="CCO"
+    )
+    assert mismatch.is_isomorphic is False
+    assert mismatch.validation_status == ValidationStatus.fail
+
+    match = validate_calculation_geometry(
+        output_atoms=ethanol_atoms, species_smiles="CCO"
+    )
+    assert match.is_isomorphic is True
+    assert match.validation_status == ValidationStatus.passed
 
 
 # ---------------------------------------------------------------------------
