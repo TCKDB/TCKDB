@@ -131,11 +131,21 @@ ValueError(message)``). No such site exists — a census of every string
 literal in both trees beginning with a ``token: `` prefix found 71 tokens
 (re-measured after #178), of which 66 are catalogued as ``message_prefix``
 and 5 are logger format strings that reach no response body
-(``geometry_validation``, ``manifest``, ``readyz``, ``startup``,
-``status``). The two accidental prefixes that made the count 73 are gone:
-they were reworded, not reclassified. So the set of error-reachable
-prefixes the catalogue does not cover is presently empty — measured, and
-re-measurable, rather than asserted.
+(``manifest``, ``readyz``, ``startup``, ``status``, and — until it was
+reworded — ``geometry_validation``). The two accidental prefixes that made
+the count 73 are gone: they were reworded, not reclassified. So the set of
+error-reachable prefixes the catalogue does not cover is presently empty —
+measured, and re-measurable, rather than asserted.
+
+One of those five was itself repaired rather than merely recorded. Only
+``geometry_validation`` contained an underscore, so it was the only logger
+prefix ``_CODE_POSITION_PATTERN`` could match — a string carrying the
+shape of a declaration while declaring nothing. It now reads ``"geometry
+validation: …"``, and
+``backend/tests/api/test_error_contract_catalogue_gate.py::
+TestNoLoggerFormatStringSitsInTheCodePosition`` fails on the next one
+written the old way. The remaining four cannot match that pattern and were
+left as they are.
 """
 
 from __future__ import annotations
