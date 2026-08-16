@@ -94,6 +94,7 @@ _CALC_KEY_MAPS = {
 _NAMESPACE_MAPS = {
     ("computed_reaction.py", "species_key_to_entry"),
     ("network_pdep.py", "species_key_to_entry"),
+    ("network_pdep.py", "state_key_to_row"),
 }
 
 

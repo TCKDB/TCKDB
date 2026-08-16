@@ -697,11 +697,19 @@ def persist_network_pdep_upload(
     # 8. Create channels
     # ------------------------------------------------------------------
     channel_key_to_row: dict[str, NetworkChannel] = {}
-    for ch_in in request.channels:
+    for ch_index, ch_in in enumerate(request.channels):
         channel_row = NetworkChannel(
             network_id=network.id,
-            source_state_id=state_key_to_row[ch_in.source_state_key].id,
-            sink_state_id=state_key_to_row[ch_in.sink_state_key].id,
+            source_state_id=resolve_network_state_key(
+                ch_in.source_state_key,
+                state_key_to_row,
+                field=f"channels[{ch_index}].source_state_key",
+            ).id,
+            sink_state_id=resolve_network_state_key(
+                ch_in.sink_state_key,
+                state_key_to_row,
+                field=f"channels[{ch_index}].sink_state_key",
+            ).id,
             kind=ch_in.kind,
             mechanism=ch_in.mechanism,
             channel_key=ch_in.key,
@@ -852,7 +860,13 @@ def persist_network_pdep_upload(
                     solve_id=solve.id,
                     scope=et.scope,
                     state_id=(
-                        state_key_to_row[et.state_key].id
+                        resolve_network_state_key(
+                            et.state_key,
+                            state_key_to_row,
+                            field=(
+                                f"solve.energy_transfer[{et_index}].state_key"
+                            ),
+                        ).id
                         if et.state_key is not None
                         else None
                     ),
