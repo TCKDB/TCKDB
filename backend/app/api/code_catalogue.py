@@ -327,8 +327,38 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/chemistry/units.py"),
     ApiCode("artifact_integrity_failed", 502, Surface.response_literal,
             "backend/app/api/errors.py"),
+    ApiCode("artifact_object_missing", 502, Surface.response_literal,
+            "backend/app/api/errors.py",
+            note=(
+                "Split from artifact_storage_unavailable in #226, which "
+                "carried both 'the store did not answer' and 'the store "
+                "answered and the object is not there' — opposite retry "
+                "advice under one code. Told apart by "
+                "ArtifactStorageUnavailable.missing, set from the S3 error "
+                "code in load_artifact_bytes; the exception type is "
+                "deliberately not split, so every opportunistic "
+                "'except ArtifactStorageUnavailable' still catches both. "
+                "502 rather than 404 or 410 although the bytes are gone: "
+                "the request was well formed and the artifact record is "
+                "still published, so the failure is TCKDB's custody and "
+                "not the caller's mistake. 404 would also collide with "
+                "this route's deliberate unknown-or-unapproved-digest "
+                "answer, and 410 would invite a client to drop the "
+                "reference that makes reclaim_restore possible. Its "
+                "sibling artifact_integrity_failed sits at the same "
+                "status for the same reason; the two differ in which "
+                "artifact_integrity_event finding was recorded "
+                "(object_missing vs digest/size mismatch) and therefore "
+                "in what an operator does next."
+            )),
     ApiCode("artifact_storage_unavailable", 503, Surface.response_literal,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            note=(
+                "Now means only what its sentence says: the store did not "
+                "answer, and retrying is the right response. The case "
+                "where it answered 'no such key' left this code in #226 — "
+                "see artifact_object_missing."
+            )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_contradicts_irc_mapping", 422, Surface.coded_exception,

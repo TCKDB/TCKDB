@@ -914,6 +914,14 @@ def test_a_missing_object_names_the_storage_subsystem_too(
 
     Two typed exceptions, one function, one defect: fixing only the one
     with a task number would have left the other exactly as it was.
+
+    The code then moved once more. #226 found that naming the subsystem
+    was necessary and not sufficient: ``artifact_storage_unavailable``
+    was still carrying both "the store did not answer" and this — "the
+    store answered, and the object is not at its key" — which need
+    opposite retry advice. This case is now ``artifact_object_missing``
+    at 502. The provocation is unchanged and is the strong one: a real
+    empty store, reached through the wire, not a patched loader.
     """
     artifact = _an_approved_artifact(db_session)
 
@@ -922,8 +930,8 @@ def test_a_missing_object_names_the_storage_subsystem_too(
     _use_object_store(monkeypatch, db_session, _InMemoryObjectStore())
     body = _assert_code(
         client.get(f"/api/v1/scientific/artifacts/{_ARTIFACT_SHA256}/download"),
-        "artifact_storage_unavailable",
-        status=503,
+        "artifact_object_missing",
+        status=502,
     )
     assert body["context"] == {}, body
     assert str(artifact.id) not in str(body.get("detail")), body

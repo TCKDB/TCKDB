@@ -271,11 +271,18 @@ def artifact_integrity_detail(
         404: {"description": "No approved artifact has this digest."},
         502: {
             "description": (
-                "Stored bytes failed integrity verification. Recorded "
-                "durably; retrying will not clear it."
+                "A recorded break in custody, and retrying will not clear "
+                "either: `artifact_integrity_failed` when stored bytes "
+                "failed verification, `artifact_object_missing` when the "
+                "store answered and the object is not at its key."
             )
         },
-        503: {"description": "Artifact storage is unavailable."},
+        503: {
+            "description": (
+                "`artifact_storage_unavailable` — the object store did "
+                "not answer. Transient; retry."
+            )
+        },
     },
 )
 def download_approved_artifact(
@@ -340,6 +347,13 @@ def download_approved_artifact(
         # be recorded as a custody break — but a store that answered and
         # said the object is *not there*, for a digest a row still
         # references, has told us something durable.
+        #
+        # The same discriminator decides the answer: the handler in
+        # app.api.errors reads ``exc.missing`` and mints
+        # ``artifact_object_missing`` (502) instead of
+        # ``artifact_storage_unavailable`` (503), because the two need
+        # opposite retry advice. Recorded here, before the re-raise, which
+        # is what makes the response's "this has been recorded" true.
         if getattr(exc, "missing", False):
             record_integrity_observation(
                 sha256=sha256,

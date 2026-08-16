@@ -61175,10 +61175,10 @@
             "description": "Validation Error"
           },
           "502": {
-            "description": "Stored bytes failed integrity verification. Recorded durably; retrying will not clear it."
+            "description": "A recorded break in custody, and retrying will not clear either: `artifact_integrity_failed` when stored bytes failed verification, `artifact_object_missing` when the store answered and the object is not at its key."
           },
           "503": {
-            "description": "Artifact storage is unavailable."
+            "description": "`artifact_storage_unavailable` — the object store did not answer. Transient; retry."
           }
         },
         "summary": "Download Approved Artifact",
