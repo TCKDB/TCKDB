@@ -83,7 +83,10 @@ from app.services.kinetics_resolution import (
     assert_kinetics_source_role_compatible,
 )
 from app.services.literature_resolution import resolve_or_create_literature
-from app.services.local_key_resolution import resolve_calculation_key
+from app.services.local_key_resolution import (
+    resolve_calculation_key,
+    resolve_species_key,
+)
 from app.services.provenance_warnings import (
     NOT_APPLICABLE,
     collect_provenance_warnings,
@@ -587,8 +590,14 @@ def persist_computed_reaction_upload(
     # ------------------------------------------------------------------
     # 2. Resolve reaction
     # ------------------------------------------------------------------
-    reactant_entries = [species_key_to_entry[k] for k in request.reactant_keys]
-    product_entries = [species_key_to_entry[k] for k in request.product_keys]
+    reactant_entries = [
+        resolve_species_key(k, species_key_to_entry, field=f"reactant_keys[{i}]")
+        for i, k in enumerate(request.reactant_keys)
+    ]
+    product_entries = [
+        resolve_species_key(k, species_key_to_entry, field=f"product_keys[{i}]")
+        for i, k in enumerate(request.product_keys)
+    ]
 
     chem_reaction = resolve_chem_reaction(
         session,
@@ -623,7 +632,11 @@ def persist_computed_reaction_upload(
         for idx, key in enumerate(keys, start=1):
             participant_row = ReactionEntryStructureParticipant(
                 reaction_entry_id=canonical_reaction_entry.id,
-                species_entry_id=species_key_to_entry[key].id,
+                species_entry_id=resolve_species_key(
+                    key,
+                    species_key_to_entry,
+                    field=f"{role.value}_keys[{idx - 1}]",
+                ).id,
                 role=role,
                 participant_index=idx,
                 created_by=created_by,
@@ -847,10 +860,12 @@ def persist_computed_reaction_upload(
     # Frequency scale factors are intentionally not modeled here; they
     # continue to flow through ``statmech.frequency_scale_factor_id``.
     # ------------------------------------------------------------------
-    for sp in request.species:
+    for sp_index, sp in enumerate(request.species):
         if not sp.applied_energy_corrections:
             continue
-        species_entry = species_key_to_entry[sp.key]
+        species_entry = resolve_species_key(
+            sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+        )
         for i, ac in enumerate(sp.applied_energy_corrections):
             source_calc_id: int | None = None
             if ac.source_calculation_key is not None:
@@ -980,9 +995,11 @@ def persist_computed_reaction_upload(
     # linked to the statmech it was derived from. Keyed by species
     # participant local key, which is used consistently in both loops.
     thermo_by_species_key: dict[str, Thermo] = {}
-    for sp in request.species:
+    for sp_index, sp in enumerate(request.species):
         if sp.thermo is not None:
-            species_entry = species_key_to_entry[sp.key]
+            species_entry = resolve_species_key(
+                sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+            )
             t = sp.thermo
 
             # Per-thermo provenance overrides the bundle-level default.
@@ -1090,9 +1107,11 @@ def persist_computed_reaction_upload(
     # 4b. Statmech (per species, if provided)
     # ------------------------------------------------------------------
     statmech_ids = []
-    for sp in request.species:
+    for sp_index, sp in enumerate(request.species):
         if sp.statmech is not None:
-            species_entry = species_key_to_entry[sp.key]
+            species_entry = resolve_species_key(
+                sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+            )
             s = sp.statmech
 
             fsf_id = None
@@ -1277,7 +1296,7 @@ def persist_computed_reaction_upload(
     canonical_product_keys = list(request.product_keys)
 
     kinetics_ids = []
-    for kin in request.kinetics:
+    for kin_index, kin in enumerate(request.kinetics):
         # If the fit's participant ordering matches the bundle's canonical
         # direction exactly, reuse ``canonical_reaction_entry`` rather than
         # producing a duplicate row with identical participants. Reverse
@@ -1295,10 +1314,20 @@ def persist_computed_reaction_upload(
             kin_entry = canonical_reaction_entry
         else:
             kin_reactant_entries = [
-                species_key_to_entry[k] for k in kin.reactant_keys
+                resolve_species_key(
+                    k,
+                    species_key_to_entry,
+                    field=f"kinetics[{kin_index}].reactant_keys[{i}]",
+                )
+                for i, k in enumerate(kin.reactant_keys)
             ]
             kin_product_entries = [
-                species_key_to_entry[k] for k in kin.product_keys
+                resolve_species_key(
+                    k,
+                    species_key_to_entry,
+                    field=f"kinetics[{kin_index}].product_keys[{i}]",
+                )
+                for i, k in enumerate(kin.product_keys)
             ]
 
             kin_chem_rxn = resolve_chem_reaction(
@@ -1324,7 +1353,14 @@ def persist_computed_reaction_upload(
                 session.add(
                     ReactionEntryStructureParticipant(
                         reaction_entry_id=kin_entry.id,
-                        species_entry_id=species_key_to_entry[key].id,
+                        species_entry_id=resolve_species_key(
+                            key,
+                            species_key_to_entry,
+                            field=(
+                                f"kinetics[{kin_index}].reactant_keys"
+                                f"[{idx - 1}]"
+                            ),
+                        ).id,
                         role=ReactionRole.reactant,
                         participant_index=idx,
                         created_by=created_by,
@@ -1334,7 +1370,14 @@ def persist_computed_reaction_upload(
                 session.add(
                     ReactionEntryStructureParticipant(
                         reaction_entry_id=kin_entry.id,
-                        species_entry_id=species_key_to_entry[key].id,
+                        species_entry_id=resolve_species_key(
+                            key,
+                            species_key_to_entry,
+                            field=(
+                                f"kinetics[{kin_index}].product_keys"
+                                f"[{idx - 1}]"
+                            ),
+                        ).id,
                         role=ReactionRole.product,
                         participant_index=idx,
                         created_by=created_by,

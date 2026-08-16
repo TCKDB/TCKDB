@@ -75,6 +75,27 @@ _CALC_KEY_MAPS = {
     "transport.py": "calculations_by_key",
 }
 
+#: The other local-key namespaces, and the workflows that hold them.
+#:
+#: Kept as a separate table from ``_CALC_KEY_MAPS`` rather than merged
+#: into it, because the two were closed at different times and by
+#: different arguments -- and a single table would let a future reader
+#: assume the whole family was audited in one pass, which is the
+#: assumption this work was filed to refute.
+#:
+#: Every read is routed, including the ones that look safe by
+#: construction -- ``species_key_to_entry[sp.key]`` immediately after the
+#: loop that wrote every ``sp.key``. "Safe because of the order the loops
+#: run in" is precisely the reasoning that was false for
+#: ``geometry_key_to_id``, where a transition state's calculation could
+#: name a geometry declared by a later transition state. A guard that
+#: admits exceptions has to be argued about every time it fires; this one
+#: does not.
+_NAMESPACE_MAPS = {
+    ("computed_reaction.py", "species_key_to_entry"),
+    ("network_pdep.py", "species_key_to_entry"),
+}
+
 
 def test_a_declared_key_returns_what_the_workflow_stored() -> None:
     """The half that makes every refusal below mean something."""
@@ -287,4 +308,28 @@ def test_no_raw_subscript_reads_a_calc_key_namespace(
         f"cross-reference must go through "
         f"app.services.local_key_resolution.resolve_calculation_key, or "
         f"an undeclared key is a 500 again."
+    )
+
+
+@pytest.mark.parametrize(("module", "map_name"), sorted(_NAMESPACE_MAPS))
+def test_no_raw_subscript_reads_a_namespace(module: str, map_name: str) -> None:
+    """The same structural guard, for the other six namespaces.
+
+    Written to be falsifiable the same way: it also asserts the pattern
+    still finds the *writes*, so a regex that stopped matching anything
+    at all fails instead of passing forever.
+    """
+    source = (_WORKFLOWS / module).read_text(encoding="utf-8")
+    assert source, f"{module} is empty"
+    writes, reads = _map_accesses(source, map_name)
+    assert writes, (
+        f"{module} has no `{map_name}[...] = ...` at all, so this test "
+        f"is not looking at the namespace it thinks it is -- the map was "
+        f"probably renamed. Fix the name in _NAMESPACE_MAPS."
+    )
+    assert reads == [], (
+        f"{module} reads {map_name} by raw subscript: {reads}. Every "
+        f"cross-reference must go through the matching resolver in "
+        f"app.services.local_key_resolution, or an undeclared key is a "
+        f"500 again."
     )

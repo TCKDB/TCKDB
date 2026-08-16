@@ -79,6 +79,7 @@ from app.services.local_key_resolution import (
     resolve_micro_reaction_key,
     resolve_network_channel_key,
     resolve_network_state_key,
+    resolve_species_key,
     resolve_transition_state_key,
 )
 from app.services.provenance_warnings import (
@@ -303,8 +304,10 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 2. Process conformers (geometry + opt calc + conformer observation)
     # ------------------------------------------------------------------
-    for sp in request.species:
-        species_entry = species_key_to_entry[sp.key]
+    for sp_index, sp in enumerate(request.species):
+        species_entry = resolve_species_key(
+            sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+        )
         for conf in sp.conformers:
             # Resolve geometry
             geom_payload = conf.geometry.to_payload()
@@ -364,8 +367,10 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 3. Process species-level additional calculations (sp, freq, etc.)
     # ------------------------------------------------------------------
-    for sp in request.species:
-        species_entry = species_key_to_entry[sp.key]
+    for sp_index, sp in enumerate(request.species):
+        species_entry = resolve_species_key(
+            sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+        )
         for calc_in in sp.calculations:
             calculation = _persist_calculation(
                 session,
@@ -388,12 +393,16 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 3b. Process species-level transport
     # ------------------------------------------------------------------
-    for sp in request.species:
+    for sp_index, sp in enumerate(request.species):
         if sp.transport is not None:
             transport_row = resolve_and_create_transport(
                 session,
                 sp.transport,
-                species_entry_id=species_key_to_entry[sp.key].id,
+                species_entry_id=resolve_species_key(
+                    sp.key,
+                    species_key_to_entry,
+                    field=f"species[{sp_index}].key",
+                ).id,
                 created_by=created_by,
             )
             review_targets.append(
@@ -403,13 +412,15 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 3c. Process species-level statmech (reuses the bundle's shared seam)
     # ------------------------------------------------------------------
-    for sp in request.species:
+    for sp_index, sp in enumerate(request.species):
         if sp.statmech is None:
             continue
         statmech_row = _persist_statmech_block(
             session,
             sp.statmech,
-            species_entry_id=species_key_to_entry[sp.key].id,
+            species_entry_id=resolve_species_key(
+                sp.key, species_key_to_entry, field=f"species[{sp_index}].key"
+            ).id,
             calc_keys_to_id=calculation_key_to_calc,
             created_by=created_by,
             warnings=warning_sink,
@@ -422,24 +433,38 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 4. Resolve micro reactions
     # ------------------------------------------------------------------
-    for rxn in request.micro_reactions:
+    for rxn_index, rxn in enumerate(request.micro_reactions):
         reaction_upload = ReactionUploadRequest(
             reversible=rxn.reversible,
             reaction_family=rxn.reaction_family,
             reaction_family_source_note=rxn.reaction_family_source_note,
             reactants=[
                 ReactionParticipantUpload(
-                    species_entry_id=species_key_to_entry[p.species_key].id,
+                    species_entry_id=resolve_species_key(
+                        p.species_key,
+                        species_key_to_entry,
+                        field=(
+                            f"micro_reactions[{rxn_index}].reactants[{i}]."
+                            f"species_key"
+                        ),
+                    ).id,
                     note=p.note,
                 )
-                for p in rxn.reactants
+                for i, p in enumerate(rxn.reactants)
             ],
             products=[
                 ReactionParticipantUpload(
-                    species_entry_id=species_key_to_entry[p.species_key].id,
+                    species_entry_id=resolve_species_key(
+                        p.species_key,
+                        species_key_to_entry,
+                        field=(
+                            f"micro_reactions[{rxn_index}].products[{i}]."
+                            f"species_key"
+                        ),
+                    ).id,
                     note=p.note,
                 )
-                for p in rxn.products
+                for i, p in enumerate(rxn.products)
             ],
         )
         reaction_entry = persist_reaction_upload(
@@ -623,10 +648,19 @@ def persist_network_pdep_upload(
     # 7. Create network states + participants
     # ------------------------------------------------------------------
     state_key_to_row: dict[str, NetworkState] = {}
-    for state_in in request.states:
+    for state_index, state_in in enumerate(request.states):
         participants = [
-            (species_key_to_entry[p.species_key].id, p.stoichiometry)
-            for p in state_in.participants
+            (
+                resolve_species_key(
+                    p.species_key,
+                    species_key_to_entry,
+                    field=(
+                        f"states[{state_index}].participants[{i}].species_key"
+                    ),
+                ).id,
+                p.stoichiometry,
+            )
+            for i, p in enumerate(state_in.participants)
         ]
         comp_hash = _composition_hash(participants)
 
@@ -639,11 +673,18 @@ def persist_network_pdep_upload(
         session.add(state)
         session.flush()
 
-        for p in state_in.participants:
+        for i, p in enumerate(state_in.participants):
             session.add(
                 NetworkStateParticipant(
                     state_id=state.id,
-                    species_entry_id=species_key_to_entry[p.species_key].id,
+                    species_entry_id=resolve_species_key(
+                        p.species_key,
+                        species_key_to_entry,
+                        field=(
+                            f"states[{state_index}].participants[{i}]."
+                            f"species_key"
+                        ),
+                    ).id,
                     stoichiometry=p.stoichiometry,
                 )
             )
@@ -689,15 +730,19 @@ def persist_network_pdep_upload(
     sink_state_keys = {ch.sink_state_key for ch in request.channels}
 
     seen_species_roles: set[tuple[int, NetworkSpeciesRole]] = set()
-    for state_in in request.states:
+    for state_index, state_in in enumerate(request.states):
         role = _infer_species_role(
             state_in.kind,
             state_in.key,
             source_state_keys=source_state_keys,
             sink_state_keys=sink_state_keys,
         )
-        for p in state_in.participants:
-            se_id = species_key_to_entry[p.species_key].id
+        for i, p in enumerate(state_in.participants):
+            se_id = resolve_species_key(
+                p.species_key,
+                species_key_to_entry,
+                field=f"states[{state_index}].participants[{i}].species_key",
+            ).id
             pair = (se_id, role)
             if pair not in seen_species_roles:
                 seen_species_roles.add(pair)
@@ -711,8 +756,12 @@ def persist_network_pdep_upload(
 
     # Bath gas species
     if request.solve:
-        for bg in request.solve.bath_gas:
-            se_id = species_key_to_entry[bg.species_key].id
+        for bg_index, bg in enumerate(request.solve.bath_gas):
+            se_id = resolve_species_key(
+                bg.species_key,
+                species_key_to_entry,
+                field=f"solve.bath_gas[{bg_index}].species_key",
+            ).id
             pair = (se_id, NetworkSpeciesRole.bath_gas)
             if pair not in seen_species_roles:
                 seen_species_roles.add(pair)
@@ -781,11 +830,15 @@ def persist_network_pdep_upload(
         )
 
         # Bath gas
-        for bg in solve_in.bath_gas:
+        for bg_index, bg in enumerate(solve_in.bath_gas):
             session.add(
                 NetworkSolveBathGas(
                     solve_id=solve.id,
-                    species_entry_id=species_key_to_entry[bg.species_key].id,
+                    species_entry_id=resolve_species_key(
+                        bg.species_key,
+                        species_key_to_entry,
+                        field=f"solve.bath_gas[{bg_index}].species_key",
+                    ).id,
                     mole_fraction=bg.mole_fraction,
                 )
             )
@@ -793,7 +846,7 @@ def persist_network_pdep_upload(
         # Energy transfer. A network-wide declaration carries no state and no
         # collider by declaration; ``scope`` is what tells a later reader that
         # the NULLs are the record, not a dropped field (ADR 0009).
-        for et in solve_in.energy_transfer:
+        for et_index, et in enumerate(solve_in.energy_transfer):
             session.add(
                 NetworkSolveEnergyTransfer(
                     solve_id=solve.id,
@@ -804,7 +857,14 @@ def persist_network_pdep_upload(
                         else None
                     ),
                     collider_species_entry_id=(
-                        species_key_to_entry[et.collider_species_key].id
+                        resolve_species_key(
+                            et.collider_species_key,
+                            species_key_to_entry,
+                            field=(
+                                f"solve.energy_transfer[{et_index}]."
+                                f"collider_species_key"
+                            ),
+                        ).id
                         if et.collider_species_key is not None
                         else None
                     ),
