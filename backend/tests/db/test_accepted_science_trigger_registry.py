@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import ast
+import re
 import runpy
+from collections import defaultdict
 from pathlib import Path
 
 from sqlalchemy import text
@@ -59,6 +62,192 @@ def _removed_children() -> set[tuple[str, str, str]]:
     for path in _CORRECTION_REVISIONS:
         removed.update(runpy.run_path(str(path))["_REMOVED_CHILDREN"])
     return removed
+
+
+#: A ``CREATE TRIGGER`` / ``CREATE OR REPLACE TRIGGER`` site and the name it
+#: mints. The name is frequently an f-string placeholder rather than a literal,
+#: which is the whole reason this scan resolves module constants below.
+_TRIGGER_SITE = re.compile(r"CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+(\S+)", re.IGNORECASE)
+
+#: ``{_TRIGGER}`` — a whole name supplied by one module-level constant.
+_PLACEHOLDER = re.compile(r"^\{([A-Za-z_][A-Za-z0-9_]*)\}$")
+
+#: ``trg_as_child_{index:02d}`` — a name minted from a positional sequence.
+_POSITIONAL_FAMILY = re.compile(r"^(trg_as_(?:child|via|truncate))_\{[a-z_]*index")
+
+#: ``trg_as_child_19`` — a single member of such a sequence, named outright.
+_POSITIONAL_MEMBER = re.compile(r"^(trg_as_(?:child|via|truncate))_\d{2}$")
+
+_LITERAL_NAME = re.compile(r"^trg_[a-z0-9_]+$")
+
+#: The revision that owns the positional sequences. Named once so the assertion
+#: below reads as the convention it enforces rather than as a filename match.
+_POSITIONAL_OWNER = _REVISION.name
+
+#: Trigger names deliberately minted by more than one revision, each mapped to
+#: the exact set of revisions allowed to mint it. Anything else that appears
+#: twice is the defect this test exists to catch: a second revision silently
+#: taking over a name an earlier one already installed, which PostgreSQL
+#: accepts without complaint when the second drops before it creates.
+#:
+#: Both entries are checked for staleness as well as for breadth — a name
+#: listed here that is no longer minted twice fails, so an allowance cannot
+#: outlive the reuse that justified it.
+_DECLARED_REUSE: dict[str, frozenset[str]] = {
+    # ``d4e9b1c7a253`` narrows this guard to the ownership column alone. It
+    # reuses ``c6f2a9d4e7b1``'s name on purpose, and says why in its docstring:
+    # minting a new one would make the positional sequence depend on two files
+    # at once. This is the reuse that motivated the whole check.
+    "trg_as_child_19": frozenset(
+        {
+            _POSITIONAL_OWNER,
+            "d4e9b1c7a253_scf_stability_provenance_is_not_ownership.py",
+        }
+    ),
+    # ``6a9d2e4c7b1f`` drops this trigger for the duration of a public-ref
+    # backfill and recreates it identically before the upgrade finishes. The
+    # name is reused because it is the same guard, restored.
+    "trg_repro_assessment_append_only": frozenset(
+        {
+            "b4e8c1f6a2d9_add_reproducibility_assessments.py",
+            "6a9d2e4c7b1f_add_repro_assessment_public_ref.py",
+        }
+    ),
+}
+
+
+def _module_string_constants(tree: ast.Module) -> dict[str, str]:
+    """Module-level ``NAME = "..."`` bindings, annotated or not."""
+
+    constants: dict[str, str] = {}
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+            for target in node.targets:
+                if isinstance(target, ast.Name):
+                    constants[target.id] = node.value.value
+        elif (
+            isinstance(node, ast.AnnAssign)
+            and isinstance(node.target, ast.Name)
+            and isinstance(node.value, ast.Constant)
+            and isinstance(node.value.value, str)
+        ):
+            constants[node.target.id] = node.value.value
+    return constants
+
+
+def _minted_trigger_names() -> tuple[dict[str, set[str]], dict[str, set[str]], int, int]:
+    """Scan every revision for the trigger names it creates.
+
+    Returns ``(names, families, sites, files)`` where ``names`` maps a resolved
+    trigger name to the revision filenames that create it, and ``families``
+    maps a positional prefix such as ``trg_as_child`` to the revisions that
+    mint names from its sequence.
+
+    Names are resolved from string literals and from module-level string
+    constants. They are deliberately *not* resolved by executing the revision:
+    a name built inside a loop from table names cannot be recovered statically,
+    and those are exactly the names the table-suffixed convention makes safe
+    anyway. ``sites`` and ``files`` are returned so the caller can prove the
+    scan found the corpus before asserting anything about it.
+    """
+
+    names: dict[str, set[str]] = defaultdict(set)
+    families: dict[str, set[str]] = defaultdict(set)
+    sites = 0
+    files = 0
+
+    for path in sorted(_VERSIONS.glob("*.py")):
+        source = path.read_text()
+        targets = _TRIGGER_SITE.findall(source)
+        if not targets:
+            continue
+        files += 1
+        sites += len(targets)
+        constants = _module_string_constants(ast.parse(source))
+        for target in targets:
+            if _LITERAL_NAME.fullmatch(target):
+                names[target].add(path.name)
+                continue
+            placeholder = _PLACEHOLDER.match(target)
+            if placeholder and placeholder.group(1) in constants:
+                resolved = constants[placeholder.group(1)]
+                if _LITERAL_NAME.fullmatch(resolved):
+                    names[resolved].add(path.name)
+                continue
+            family = _POSITIONAL_FAMILY.match(target)
+            if family:
+                families[family.group(1)].add(path.name)
+
+    # A revision that mints a whole positional sequence mints every member of
+    # it, but never spells one: ``c6f2a9d4e7b1`` writes
+    # ``trg_as_child_{index:02d}``, so the string ``trg_as_child_19`` appears
+    # in that file only inside a comment. Crediting the sequence's owner with
+    # each member found elsewhere is what lets the reuse show up as a reuse.
+    # Without this the scan sees ``trg_as_child_19`` claimed by one revision
+    # and reports no collision at all — the vacuous answer.
+    for name in list(names):
+        member = _POSITIONAL_MEMBER.fullmatch(name)
+        if member:
+            names[name].update(families.get(member.group(1), set()))
+
+    return dict(names), dict(families), sites, files
+
+
+def test_trigger_names_have_exactly_one_minting_revision() -> None:
+    """No revision may take over a trigger name another revision installed.
+
+    ``c6f2a9d4e7b1`` names its accepted-science child guards
+    ``trg_as_child_NN``, where ``NN`` is the position of a ``(table,
+    record_type)`` group in its own registry. ``b6c1f4a8e703`` and
+    ``a1f6c3e9b527`` both decline to extend that sequence and say why in their
+    ``_trigger_name`` docstrings: appending to it from a second file would make
+    each revision's numbering depend on the other's registry. Until now that
+    convention was written down in three places and enforced in none.
+
+    PostgreSQL only refuses the collision when the second revision uses a plain
+    ``CREATE TRIGGER`` against a name already present *on the same table*. It
+    accepts a drop-then-create, which is how a guard gets silently replaced
+    with one that enforces something else, and it accepts the same name on a
+    different table outright. This test refuses the reuse at the source, before
+    either migration runs, so the answer does not depend on which of those
+    three paths a future revision happens to take.
+    """
+
+    names, families, sites, files = _minted_trigger_names()
+
+    # Prove the scan found the corpus before asserting anything about it. A
+    # regex that silently stopped matching would otherwise turn every
+    # assertion below into a pass over an empty set. Floors sit below the
+    # measured 27 sites across 11 files minting 11 statically resolvable
+    # names, so ordinary growth does not touch them.
+    assert sites >= 20, sites
+    assert files >= 9, files
+    assert len(names) >= 9, sorted(names)
+
+    # The positional sequences belong to one revision each, and that revision
+    # is ``c6f2a9d4e7b1``. This is the convention stated in the two
+    # ``_trigger_name`` docstrings, asserted.
+    assert families == {
+        "trg_as_child": {_POSITIONAL_OWNER},
+        "trg_as_via": {_POSITIONAL_OWNER},
+        "trg_as_truncate": {_POSITIONAL_OWNER},
+    }, families
+
+    # A name minted by two revisions must be one of the declared reuses, and a
+    # declared reuse must still be minted by exactly the revisions it names.
+    # The second half is what keeps this list from outliving its reasons.
+    reused = {name: owners for name, owners in names.items() if len(owners) > 1}
+    assert reused == {name: set(owners) for name, owners in _DECLARED_REUSE.items()}, reused
+
+    # A member of a positional sequence spelled out in some other revision is
+    # the specific hazard: the number has to be counted out of
+    # ``c6f2a9d4e7b1``'s registry by hand, and nothing re-counts it if that
+    # registry ever moves. Allowed only where declared.
+    for name, owners in names.items():
+        if not _POSITIONAL_MEMBER.fullmatch(name):
+            continue
+        outsiders = owners - {_POSITIONAL_OWNER}
+        assert not outsiders or name in _DECLARED_REUSE, (name, sorted(outsiders))
 
 
 def _referenced_tables(tables, table: str, column: str, *, hops: int) -> set[str]:
@@ -265,3 +454,114 @@ def test_database_trigger_set_matches_registry(db_session) -> None:
     }
     assert actual == expected
     assert all(len(name) <= 63 for _, name in actual)
+
+
+def _corrected_direct_groups(
+    revision: dict, removed: set[tuple[str, str, str]]
+) -> list[tuple[str, str, tuple[str, ...]]]:
+    """``c6f2a9d4e7b1``'s child groups with the corrections' entries taken out.
+
+    The grouping — and therefore every ``trg_as_child_NN`` index — is computed
+    from the *original* registry, because a correction that narrows a group's
+    argument list must not renumber the triggers either side of it. Only the
+    columns inside a group shrink.
+    """
+
+    grouped: dict[tuple[str, str], list[str]] = {}
+    for entry in revision["_DIRECT_CHILDREN"]:
+        table, record_type, column = entry
+        columns = grouped.setdefault((table, record_type), [])
+        if entry not in removed:
+            columns.append(column)
+    return [(table, record_type, tuple(columns)) for (table, record_type), columns in grouped.items()]
+
+
+def _guard_call(function: str, arguments: tuple[str, ...]) -> str:
+    return f"{function}({', '.join(repr(argument) for argument in arguments)})"
+
+
+def test_database_trigger_definitions_match_registry(db_session) -> None:
+    """Pin what each child guard *enforces*, not merely that it exists.
+
+    ``test_database_trigger_set_matches_registry`` compares ``(table, name)``
+    pairs. That catches a guard added or removed, and it catches a name
+    appearing on a table it does not belong to. It cannot catch a guard being
+    replaced by a different one under the same name on the same table, because
+    the pair is unchanged — and a drop-then-create is precisely how
+    ``d4e9b1c7a253`` legitimately rewrote ``trg_as_child_19``'s argument list.
+    Run that way by mistake, or by a revision that miscounts the positional
+    sequence and lands on an occupied number, the registry and the database
+    disagree about which columns are guarded and every existing test passes.
+
+    The argument list is the guard. ``tckdb_guard_accepted_child`` treats each
+    argument as a column that binds the row to an accepted root, so adding one
+    refuses writes that should be allowed and dropping one allows writes that
+    should be refused. Both are silent until a contributor hits them.
+    """
+
+    revision = _revision_namespace()
+    removed = _removed_children()
+
+    expected: dict[tuple[str, str], str] = {}
+    for index, (table, record_type, columns) in enumerate(_corrected_direct_groups(revision, removed)):
+        # A group emptied by a correction would mean the trigger should have
+        # been dropped rather than narrowed; it would also render an empty
+        # argument list, which the guard function cannot act on.
+        assert columns, (table, record_type)
+        expected[(table, f"trg_as_child_{index:02d}")] = _guard_call(
+            "tckdb_guard_accepted_child", (record_type, *columns)
+        )
+    for index, item in enumerate(revision["_VIA_CHILDREN"]):
+        table, record_type, child_column, parent_table, parent_pk, root_column = item
+        expected[(table, f"trg_as_via_{index:02d}")] = _guard_call(
+            "tckdb_guard_accepted_via_child",
+            (record_type, child_column, parent_table, parent_pk, root_column),
+        )
+
+    for extension in _extension_namespaces():
+        trigger_name = extension["_trigger_name"]
+        for table, record_type, columns in extension["_child_groups"]():
+            assert columns, (table, record_type)
+            expected[(table, trigger_name("as_child", table))] = _guard_call(
+                "tckdb_guard_accepted_child", (record_type, *columns)
+            )
+        for item in extension["_VIA_CHILDREN"]:
+            table, record_type, child_column, parent_table, parent_pk, root_column = item
+            expected[(table, trigger_name("as_via", table))] = _guard_call(
+                "tckdb_guard_accepted_via_child",
+                (record_type, child_column, parent_table, parent_pk, root_column),
+            )
+
+    actual = {
+        (row.table_name, row.trigger_name): re.sub(
+            r"\s+", " ", row.definition.split("EXECUTE FUNCTION ", 1)[1]
+        ).strip()
+        for row in db_session.execute(
+            text(
+                """
+                SELECT relation.relname AS table_name,
+                       trigger.tgname AS trigger_name,
+                       pg_get_triggerdef(trigger.oid) AS definition
+                FROM pg_trigger AS trigger
+                JOIN pg_class AS relation ON relation.oid = trigger.tgrelid
+                JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+                WHERE NOT trigger.tgisinternal
+                  AND namespace.nspname = 'public'
+                  AND (
+                      trigger.tgname LIKE 'trg_as_child_%'
+                      OR trigger.tgname LIKE 'trg_as_via_%'
+                  )
+                """
+            )
+        )
+    }
+
+    # Prove the query found the guards before comparing what they say. A
+    # predicate that stopped matching would make the comparison below a pass
+    # over two empty dicts. The measured population is 61 child and via
+    # guards; the floor sits under it so the registry can grow without
+    # touching this number.
+    assert len(actual) >= 55, len(actual)
+    assert len(expected) >= 55, len(expected)
+
+    assert actual == expected
