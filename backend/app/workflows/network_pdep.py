@@ -73,7 +73,14 @@ from app.services.calculation_resolution import (
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
-from app.services.local_key_resolution import resolve_calculation_key
+from app.services.local_key_resolution import (
+    resolve_calculation_key,
+    resolve_geometry_key,
+    resolve_micro_reaction_key,
+    resolve_network_channel_key,
+    resolve_network_state_key,
+    resolve_transition_state_key,
+)
 from app.services.provenance_warnings import (
     collect_network_energy_transfer_warnings,
     collect_network_solve_kind_warnings,
@@ -147,7 +154,18 @@ def _persist_calculation(
 
     effective_geometry_id = geometry_id
     if calc_in.geometry_key is not None:
-        effective_geometry_id = geometry_key_map[calc_in.geometry_key]
+        # Not merely defensive. ``validate_key_references`` checks a
+        # calculation's geometry_key against the payload's *global* geometry
+        # namespace, while this map holds only what the workflow has resolved
+        # so far -- and ``TransitionStateIn``, unlike ``NetworkSpeciesIn``,
+        # has no validator narrowing a TS calculation's geometry_key to its
+        # own transition state. A TS naming a later TS's geometry therefore
+        # passed the schema and reached a raw subscript here.
+        effective_geometry_id = resolve_geometry_key(
+            calc_in.geometry_key,
+            geometry_key_map,
+            field=f"calculations['{calc_in.key}'].geometry_key",
+        )
 
     # The inline literature fragment is forwarded unresolved; the shared
     # persistence seam resolves it (#194). This route reaches the same
@@ -802,10 +820,21 @@ def persist_network_pdep_upload(
         )
         warning_sink.extend(collect_network_solve_kind_warnings(solve_in))
 
+        # The four lookups in this block and the next were guarded only
+        # inside the ``kind == 'computed'`` branch of
+        # ``validate_mechanistic_channel_evidence``: the coverage rules there
+        # compare the supplied state/path keys against the topology, which
+        # catches an undefined key as a side effect. A ``reported`` solve
+        # (ADR 0010) is exempt from those rules and so was exempt from the
+        # side effect, and reached these subscripts with whatever it wrote.
         for energy_index, energy_in in enumerate(solve_in.state_energies):
             session.add(NetworkSolveStateEnergy(
                 solve_id=solve.id,
-                state_id=state_key_to_row[energy_in.state_key].id,
+                state_id=resolve_network_state_key(
+                    energy_in.state_key,
+                    state_key_to_row,
+                    field=f"solve.state_energies[{energy_index}].state_key",
+                ).id,
                 energy_kj_mol=energy_in.energy_kj_mol,
                 energy_zero_convention=energy_in.energy_zero_convention,
                 correction_convention=energy_in.correction_convention,
@@ -825,9 +854,27 @@ def persist_network_pdep_upload(
         for barrier_index, barrier_in in enumerate(solve_in.channel_barriers):
             session.add(NetworkSolveChannelBarrier(
                 solve_id=solve.id,
-                channel_id=channel_key_to_row[barrier_in.channel_key].id,
-                reaction_entry_id=reaction_key_to_entry[barrier_in.micro_reaction_key].id,
-                transition_state_entry_id=ts_key_to_entry[barrier_in.transition_state_key].id,
+                channel_id=resolve_network_channel_key(
+                    barrier_in.channel_key,
+                    channel_key_to_row,
+                    field=f"solve.channel_barriers[{barrier_index}].channel_key",
+                ).id,
+                reaction_entry_id=resolve_micro_reaction_key(
+                    barrier_in.micro_reaction_key,
+                    reaction_key_to_entry,
+                    field=(
+                        f"solve.channel_barriers[{barrier_index}]."
+                        f"micro_reaction_key"
+                    ),
+                ).id,
+                transition_state_entry_id=resolve_transition_state_key(
+                    barrier_in.transition_state_key,
+                    ts_key_to_entry,
+                    field=(
+                        f"solve.channel_barriers[{barrier_index}]."
+                        f"transition_state_key"
+                    ),
+                ).id,
                 forward_barrier_kj_mol=barrier_in.forward_barrier_kj_mol,
                 reverse_barrier_kj_mol=barrier_in.reverse_barrier_kj_mol,
                 energy_zero_convention=barrier_in.energy_zero_convention,
