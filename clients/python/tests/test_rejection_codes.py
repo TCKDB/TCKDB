@@ -125,3 +125,29 @@ def test_the_enum_is_not_empty_and_covers_the_conservation_laws() -> None:
     assert RejectionCode.REACTION_MASS_BALANCE_FAILED in VALIDATION_REJECTION_CODES
     assert RejectionCode.REACTION_CHARGE_NOT_CONSERVED in VALIDATION_REJECTION_CODES
     assert RejectionCode.ATOM_MAP_ELEMENT_NOT_CONSERVED in CONFLICT_REJECTION_CODES
+
+
+def test_registration_says_which_field_was_taken() -> None:
+    """Two codes, not one, and each carrying its own retry advice.
+
+    The single obvious code for this refusal is ``UNIQUE_CONFLICT``, and
+    the server can still send it -- both of these arrive as the same
+    SQLSTATE, so anything classifying by SQLSTATE alone cannot do better.
+    That is precisely why the pair has to be checked as a *pair*: a
+    client branching on one of them is highlighting a field on a sign-up
+    form, and collapsing them back into one code, or letting one drift to
+    422, turns a correct highlight into the wrong one rather than into an
+    error anybody sees.
+
+    409 is the retry advice that matters here. 422 would tell a caller
+    "the payload was malformed, correct it and resend"; the payload was
+    fine and the name is simply spoken for, so the only useful retry is
+    with a *different* username or address.
+    """
+    assert RejectionCode.USERNAME_TAKEN != RejectionCode.EMAIL_TAKEN
+    for member in (RejectionCode.USERNAME_TAKEN, RejectionCode.EMAIL_TAKEN):
+        assert member in CONFLICT_REJECTION_CODES
+        assert member not in VALIDATION_REJECTION_CODES
+        assert REJECTION_STATUSES[member] == frozenset({409})
+        # A caller comparing against the raw ``code`` field must match.
+        assert rejection_code(member.value) is member
