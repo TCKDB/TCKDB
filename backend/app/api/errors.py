@@ -386,18 +386,73 @@ def _artifact_integrity_handler(
 def _artifact_storage_unavailable_handler(
     request: Request, exc: ArtifactStorageUnavailable
 ) -> JSONResponse:
-    """503 for the client; the actual reason for the operator.
+    """503 for a store that did not answer; 502 for one that said "not there".
+
+    One exception type, two facts, and opposite retry advice. Until #226
+    both left here as ``503 artifact_storage_unavailable`` with "Retry
+    later." — true of an outage, and a false instruction for the other
+    case: a store that answered ``NoSuchKey`` for a digest a committed
+    row still points at will keep saying so no matter how long the client
+    waits. ``exc.missing`` is the discriminator, set at the one place that
+    can tell the two apart (:func:`app.services.artifact_storage.
+    load_artifact_bytes`, from the S3 error code); reading it here rather
+    than at each raise site is the same shape as the constraint-name split
+    behind ``username_taken``/``email_taken``.
+
+    Why the missing case is a **5xx and not a 404 or a 410**: the caller
+    did nothing wrong. The artifact record exists, is findable, and is
+    still published; what is gone are bytes TCKDB undertook to keep. A
+    404 would additionally be indistinguishable from this route's
+    deliberate "unknown or unapproved digest" answer, which would recreate
+    the very ambiguity this split removes — one pair meaning both "you may
+    not see this" and "we lost it". A 410 carries the right retry advice
+    but the wrong instruction: it tells a client the resource was
+    withdrawn and its references may be dropped, and that reference is
+    what lets an operator put the object back (see ``restore_held_object``
+    and ``reclaim_restore``). ``ApiCode.is_client_facing`` states the same
+    rule from the other end — a 5xx is not a refusal of anything the
+    caller did — which is why neither code is in the client's
+    ``RejectionCode`` enum.
 
     The public body stays deliberately vague -- it names a subsystem and
-    says retry. That is right for a caller and useless for whoever has to
-    fix it: before this log line, a storage outage appeared in the journal
-    as a bare access-log ``503`` with no traceback and no cause, and
-    finding out *why* meant reading source to locate the raise site. The
-    raised message already carries the underlying botocore error (see
+    says what to do. That is right for a caller and useless for whoever
+    has to fix it: before this log line, a storage outage appeared in the
+    journal as a bare access-log ``503`` with no traceback and no cause,
+    and finding out *why* meant reading source to locate the raise site.
+    The raised message already carries the underlying botocore error (see
     :func:`app.services.artifact_persistence._store_and_record`), which
     names the endpoint it failed to reach; the only thing missing was
-    somewhere to put it. Response shape is unchanged.
+    somewhere to put it.
+
+    "This has been recorded" is not a courtesy on the missing branch, and
+    it is not asserted from here. The route that reads stored bytes writes
+    the ``object_missing`` custody row *before* re-raising (ADR 0014), so
+    the sentence is true of every path that can reach this branch with a
+    request attached; a caller that reaches it opportunistically never
+    sees a response at all.
     """
+    if getattr(exc, "missing", False):
+        # A break in custody, so ``error`` and not ``warning`` — the same
+        # level ``_artifact_integrity_handler`` uses for the sibling break.
+        logger.error(
+            "ArtifactStorageUnavailable (object missing) on %s %s: %s",
+            request.method,
+            request.url.path,
+            exc,
+            exc_info=exc,
+        )
+        return JSONResponse(
+            status_code=502,
+            content={
+                "detail": (
+                    "The stored bytes for this artifact are not in the "
+                    "object store. This has been recorded; retrying will "
+                    "not clear it."
+                ),
+                "code": "artifact_object_missing",
+                "context": {},
+            },
+        )
     logger.warning(
         "ArtifactStorageUnavailable on %s %s: %s",
         request.method,
