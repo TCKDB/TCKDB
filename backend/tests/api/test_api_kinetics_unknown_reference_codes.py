@@ -413,11 +413,13 @@ def test_the_thermo_root_already_answered_404_for_the_same_condition(
     holds the half that did *not* change, so a later edit cannot restore
     the split by moving thermo instead of kinetics.
 
-    It also records what is still owed: this 404 carries the generic
-    ``resource_not_found`` rather than a code of its own, so a client can
-    read the status but not branch on the field. Giving the ``existing_*_id``
-    404s real codes is a separate pass — asserting the current answer here
-    is what keeps it from being forgotten.
+    What this test used to record as still owed is now paid. #230 gave the
+    ``existing_*_id`` 404s the same codes their public-ref counterparts
+    carry — the *status* is untouched, only the code and ``context`` — so
+    the code asserted here is ``unknown_statmech_ref`` and not the generic
+    ``resource_not_found``. The full assertions for that root live in
+    ``test_api_upload_existing_id_reference_codes.py``; this one keeps the
+    cross-root agreement pinned from the kinetics side.
     """
     refused = client.post(
         _THERMO,
@@ -429,7 +431,9 @@ def test_the_thermo_root_already_answered_404_for_the_same_condition(
         },
     )
     assert refused.status_code == 404, refused.text[:800]
-    assert refused.json()["code"] == "resource_not_found", refused.json()
+    body = refused.json()
+    assert body["code"] == "unknown_statmech_ref", body
+    assert body["context"]["field"] == "existing_statmech_id", body
 
     accepted = client.post(
         _THERMO,

@@ -963,7 +963,15 @@ def test_statmech_upload_links_existing_calculation_without_duplicating_it(
 def test_statmech_upload_chained_id_that_does_not_exist_raises_not_found(
     db_conn,
 ) -> None:
-    """A missing row is a named 404, never a ``KeyError`` or a raw FK error."""
+    """A missing row is a named 404, never a ``KeyError`` or a raw FK error.
+
+    Asserted on the ``code`` since #230, not on a substring of the
+    sentence. The prose was the only thing this could check while the
+    refusal carried the generic ``resource_not_found``; now that it
+    declares ``unknown_calculation_ref`` there is a real contract to hold,
+    and the id the caller supplied must stay out of the message
+    (DR-0028 Requirement 2).
+    """
     request = StatmechUploadRequest(
         species_entry={"smiles": "CCOCCC", "charge": 0, "multiplicity": 1},
         scientific_origin="computed",
@@ -972,9 +980,15 @@ def test_statmech_upload_chained_id_that_does_not_exist_raises_not_found(
             {"existing_calculation_id": 999_999_999, "role": "sp"}
         ],
     )
-    with pytest.raises(NotFoundError, match="does not exist"):
+    with pytest.raises(NotFoundError) as excinfo:
         with Session(db_conn) as session, session.begin():
             persist_statmech_upload(session, request)
+    assert excinfo.value.code == "unknown_calculation_ref"
+    assert excinfo.value.context == {
+        "field": "statmech.source_calculations[0].existing_calculation_id",
+        "kind": "calculation",
+    }
+    assert "999999999" not in str(excinfo.value)
 
 
 def test_statmech_upload_chained_id_from_another_species_entry_raises(

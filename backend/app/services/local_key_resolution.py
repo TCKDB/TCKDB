@@ -36,6 +36,47 @@ they run in a client that never talks to a server, and a duplicated
 check costs nothing while a missing one costs a 500. What changes here is
 that the workflow no longer *depends* on them being right.
 
+The other six namespaces, and what measuring them found
+--------------------------------------------------------
+Calculation keys were done first and the work deliberately stopped
+there, because a species key and a channel key are different keys with
+different remedies. Six more namespaces were then measured across
+``computed_reaction`` and ``network_pdep`` — species, network state,
+network channel, micro reaction, transition state, geometry — for 27
+cross-reference reads. The expectation going in was that the schema
+coverage would be uneven. It was, and worse than the calculation-key
+pass found:
+
+* ``computed_reaction`` was clean. Every one of its cross-references is
+  narrowed by ``ComputedReactionUploadRequest.validate_species_key_refs``
+  before the workflow runs.
+* ``network_pdep`` had **five** wire-reachable 500s, in five of the six
+  namespaces. Four of them — a solve's ``state_energies[].state_key``
+  and its ``channel_barriers[]`` channel, micro-reaction and
+  transition-state keys — are guarded only inside the
+  ``kind == 'computed'`` branch of
+  ``validate_mechanistic_channel_evidence``, so a ``reported`` solve
+  (ADR 0010: k(T,P) transcribed from a paper, holding none of the
+  master-equation inputs) walked straight past them into a ``KeyError``.
+  The comment above that branch says a reported solve "still has to point
+  it at a real path"; for three of those four fields it did not.
+* The fifth is the #218 asymmetry again, on a different field.
+  ``NetworkSpeciesIn`` narrows a species calculation's ``geometry_key``
+  to that species's own conformer geometries; ``TransitionStateIn`` has
+  no such validator, and ``validate_key_references`` checks TS
+  calculations against the *global* geometry namespace. So a transition
+  state's calculation could legally name a later transition state's
+  geometry, which the workflow had not resolved yet. The same shape of
+  gap, found the same way: by asking whether the guard covers *both*
+  branches rather than assuming that one implies the other.
+
+The lesson the calculation-key pass drew — that a guard in a different
+distributable package drifts silently — is only half of it. Four of these
+five gaps are in ``backend/app/schemas``, the *same* package as the
+workflow. What they have in common is not distance but conditionality:
+a guard that runs for one member of an enum and not the other, and a
+workflow that runs for both.
+
 What the refusal carries
 ------------------------
 The offending field, the key as the depositor wrote it, and the keys that
@@ -79,6 +120,80 @@ CALCULATION_KEY_REMEDY = (
     "calculation key must match one of them."
 )
 
+# ---------------------------------------------------------------------------
+# The other five namespaces
+# ---------------------------------------------------------------------------
+#
+# One code each, and deliberately not one code between them. A calculation
+# key and a species key are both "a name this upload declared", but they are
+# not the same repair: an undeclared species key is fixed in the ``species``
+# list, an undeclared state key in ``states``, an undeclared channel key in
+# ``channels``. A client that wants to point the depositor at the right block
+# of their own payload can only do that if the code says which block, and a
+# single ``local_key_undeclared`` would have made ``context['field']`` the
+# only way to tell — which is a string a client would have to parse.
+#
+# The remedy sentences all have the same shape because the payload does: every
+# one of these collections gives its members a required ``key``. That shared
+# shape is the reason these are five parameterizations of one lookup rather
+# than five lookups.
+
+#: A payload names a species key that the same upload never declared.
+W_SPECIES_KEY_UNDECLARED = "species_key_undeclared"
+
+#: A payload names a network state key that the same upload never declared.
+W_NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
+
+#: A payload names a network channel key that the same upload never declared.
+W_NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
+
+#: A payload names a micro reaction key that the same upload never declared.
+W_MICRO_REACTION_KEY_UNDECLARED = "micro_reaction_key_undeclared"
+
+#: A payload names a transition state key that the same upload never declared.
+W_TRANSITION_STATE_KEY_UNDECLARED = "transition_state_key_undeclared"
+
+#: A calculation's ``geometry_key`` names no geometry this upload has resolved
+#: for it.
+#:
+#: The one code in this module that does not say *undeclared*, because it is
+#: the one namespace where the key can be real and still unusable. A geometry
+#: key is declared on a species conformer or on a transition state, and the
+#: workflow resolves geometries as it walks those owners in order — so a
+#: transition state's calculation naming a *later* transition state's geometry
+#: names something the payload genuinely contains and the workflow genuinely
+#: cannot resolve. Calling that "undeclared" would be a refusal telling the
+#: depositor something false about their own file. The repair is the same
+#: either way and it is one repair: point the calculation at a geometry its
+#: own species or transition state declares.
+W_GEOMETRY_KEY_UNRESOLVED = "geometry_key_unresolved"
+
+_SPECIES_KEY_REMEDY = (
+    "Every species in an upload carries a required 'key'; a species key must "
+    "match one of them."
+)
+_NETWORK_STATE_KEY_REMEDY = (
+    "Every entry in 'states' carries a required 'key'; a state key must match "
+    "one of them."
+)
+_NETWORK_CHANNEL_KEY_REMEDY = (
+    "Every entry in 'channels' carries a required 'key'; a channel key must "
+    "match one of them."
+)
+_MICRO_REACTION_KEY_REMEDY = (
+    "Every entry in 'micro_reactions' carries a required 'key'; a micro "
+    "reaction key must match one of them."
+)
+_TRANSITION_STATE_KEY_REMEDY = (
+    "Every entry in 'transition_states' carries a required 'key'; a "
+    "transition state key must match one of them."
+)
+_GEOMETRY_KEY_REMEDY = (
+    "A calculation's 'geometry_key' must name a geometry declared by the "
+    "species or transition state that owns the calculation, and declared "
+    "before it."
+)
+
 T = TypeVar("T")
 
 
@@ -90,6 +205,7 @@ def resolve_declared_key(
     code: str,
     subject: str,
     remedy: str,
+    scope: str = "declared in this upload",
 ) -> T:
     """Turn one local key into whatever the request declared under it.
 
@@ -111,9 +227,17 @@ def resolve_declared_key(
         energy correction's source key had its own published code before
         this function existed and keeping it is a contract, not a
         preference.
-    :param subject: Completes "does not name ``{subject}`` declared in
-        this upload" — ``"a calculation"``, or ``"anything"`` where the
-        field accepts more than one kind of name.
+    :param subject: Completes "does not name ``{subject}`` ``{scope}``" —
+        ``"a calculation"``, or ``"anything"`` where the field accepts
+        more than one kind of name.
+    :param scope: What the namespace *is*, completing the same sentence.
+        Defaults to "declared in this upload", which is true of every
+        namespace whose map is complete before anything reads it. The
+        geometry namespace is not one of those — it is filled as the
+        workflow walks the species and transition states that declare
+        geometries — so it overrides this rather than tell a depositor
+        their key was never declared when it was declared ten lines
+        further down their own file.
     :param remedy: Sentences appended after the list of declared names.
     :returns: The value ``declared`` holds for ``key``.
     :raises CodedValueError: if ``key`` names nothing declared.
@@ -128,7 +252,7 @@ def resolve_declared_key(
         available = "This upload declares no such name at all."
     raise CodedValueError(
         code,
-        f"{field}='{key}' does not name {subject} declared in this upload. "
+        f"{field}='{key}' does not name {subject} {scope}. "
         f"{available} {remedy}".rstrip(),
         context={
             "field": field,
@@ -169,4 +293,131 @@ def resolve_calculation_key(
         code=code,
         subject="a calculation",
         remedy=CALCULATION_KEY_REMEDY,
+    )
+
+
+def resolve_species_key(
+    key: str, declared: Mapping[str, T], *, field: str
+) -> T:
+    """Resolve one upload-local *species* key, or refuse with a code.
+
+    :param key: The species key the payload wrote.
+    :param declared: The workflow's species-key namespace.
+    :param field: Field path naming the offending key.
+    :raises CodedValueError: if ``key`` names no declared species.
+    """
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_SPECIES_KEY_UNDECLARED,
+        subject="a species",
+        remedy=_SPECIES_KEY_REMEDY,
+    )
+
+
+def resolve_network_state_key(
+    key: str, declared: Mapping[str, T], *, field: str
+) -> T:
+    """Resolve one upload-local network *state* key, or refuse with a code.
+
+    :param key: The state key the payload wrote.
+    :param declared: The workflow's state-key namespace.
+    :param field: Field path naming the offending key.
+    :raises CodedValueError: if ``key`` names no declared state.
+    """
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_NETWORK_STATE_KEY_UNDECLARED,
+        subject="a network state",
+        remedy=_NETWORK_STATE_KEY_REMEDY,
+    )
+
+
+def resolve_network_channel_key(
+    key: str, declared: Mapping[str, T], *, field: str
+) -> T:
+    """Resolve one upload-local network *channel* key, or refuse with a code.
+
+    :param key: The channel key the payload wrote.
+    :param declared: The workflow's channel-key namespace.
+    :param field: Field path naming the offending key.
+    :raises CodedValueError: if ``key`` names no declared channel.
+    """
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_NETWORK_CHANNEL_KEY_UNDECLARED,
+        subject="a network channel",
+        remedy=_NETWORK_CHANNEL_KEY_REMEDY,
+    )
+
+
+def resolve_micro_reaction_key(
+    key: str, declared: Mapping[str, T], *, field: str
+) -> T:
+    """Resolve one upload-local *micro reaction* key, or refuse with a code.
+
+    :param key: The micro reaction key the payload wrote.
+    :param declared: The workflow's micro-reaction-key namespace.
+    :param field: Field path naming the offending key.
+    :raises CodedValueError: if ``key`` names no declared micro reaction.
+    """
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_MICRO_REACTION_KEY_UNDECLARED,
+        subject="a micro reaction",
+        remedy=_MICRO_REACTION_KEY_REMEDY,
+    )
+
+
+def resolve_transition_state_key(
+    key: str, declared: Mapping[str, T], *, field: str
+) -> T:
+    """Resolve one upload-local *transition state* key, or refuse with a code.
+
+    :param key: The transition state key the payload wrote.
+    :param declared: The workflow's TS-key namespace.
+    :param field: Field path naming the offending key.
+    :raises CodedValueError: if ``key`` names no declared transition state.
+    """
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_TRANSITION_STATE_KEY_UNDECLARED,
+        subject="a transition state",
+        remedy=_TRANSITION_STATE_KEY_REMEDY,
+    )
+
+
+def resolve_geometry_key(
+    key: str, declared: Mapping[str, T], *, field: str
+) -> T:
+    """Resolve one upload-local *geometry* key, or refuse with a code.
+
+    The one resolver here whose subject is not "declared in this upload".
+    See :data:`W_GEOMETRY_KEY_UNRESOLVED` for why: the geometry namespace
+    is built as the workflow walks the owners that declare geometries, so
+    a key can be present in the payload and absent from this map, and a
+    refusal claiming it was never declared would be false.
+
+    :param key: The geometry key the payload wrote.
+    :param declared: The geometry keys resolved so far in this upload.
+    :param field: Field path naming the offending key.
+    :raises CodedValueError: if ``key`` names no resolved geometry.
+    """
+    return resolve_declared_key(
+        key,
+        declared,
+        field=field,
+        code=W_GEOMETRY_KEY_UNRESOLVED,
+        subject="a geometry",
+        scope="this upload has resolved at this point",
+        remedy=_GEOMETRY_KEY_REMEDY,
     )

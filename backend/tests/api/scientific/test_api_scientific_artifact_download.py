@@ -321,7 +321,15 @@ def test_integrity_502_writes_a_durable_record_not_just_a_log(
 def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
     client, db_session, monkeypatch
 ) -> None:
-    """A row referencing an object the store says is gone is a custody break."""
+    """A row referencing an object the store says is gone is a custody break.
+
+    And it answers as one. Until #226 this case and the outage below both
+    came back ``(503, artifact_storage_unavailable)`` with "Retry later.",
+    which is a false instruction here: the store has answered, it will
+    keep answering the same way, and no amount of backing off puts the
+    bytes back. The pair is asserted, not the status alone — a status on
+    its own cannot distinguish this from its sibling break.
+    """
     artifact, _content = _downloadable_artifact(
         db_session, status=RecordReviewStatus.approved
     )
@@ -342,7 +350,18 @@ def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
 
-    assert response.status_code == 503
+    body = response.json()
+    assert (response.status_code, body["code"]) == (502, "artifact_object_missing"), (
+        response.text
+    )
+    assert body["detail"] == (
+        "The stored bytes for this artifact are not in the object store. "
+        "This has been recorded; retrying will not clear it."
+    )
+    # No database primary key in a user-facing body (DR-0028 Req 2).
+    assert body["context"] == {}, body
+    assert str(artifact.id) not in body["detail"], body
+
     (event,) = _events_for(db_session, artifact.sha256)
     assert event.finding is ArtifactIntegrityFinding.object_missing
     assert event.observed_sha256 is None
@@ -351,9 +370,11 @@ def test_store_reporting_no_such_key_is_recorded_as_a_missing_object(
 def test_unreachable_store_records_nothing(client, db_session, monkeypatch) -> None:
     """An endpoint that never answered says nothing about the object.
 
-    Same 503 to the client as the case above, and the opposite fact for
-    custody: recording a break here would manufacture a hard fail out of
-    a network blip.
+    The opposite fact for custody: recording a break here would
+    manufacture a hard fail out of a network blip. And, since #226, the
+    opposite answer too — this is the branch that keeps
+    ``artifact_storage_unavailable`` and its "retry later", because here
+    retrying is exactly right.
     """
     artifact, _content = _downloadable_artifact(
         db_session, status=RecordReviewStatus.approved
@@ -373,8 +394,62 @@ def test_unreachable_store_records_nothing(client, db_session, monkeypatch) -> N
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
 
-    assert response.status_code == 503
+    body = response.json()
+    assert (response.status_code, body["code"]) == (
+        503,
+        "artifact_storage_unavailable",
+    ), response.text
+    assert "Retry later." in body["detail"], body
     assert _events_for(db_session, artifact.sha256) == []
+
+
+def test_the_two_storage_failures_do_not_answer_the_same_way(
+    client, db_session, monkeypatch
+) -> None:
+    """The whole point of #226, asserted as a contrast in one test.
+
+    The two tests above can both pass while the route answers identically
+    if either is edited to match the other; what has to hold is that the
+    answers *differ*, and differ in the direction that carries the retry
+    advice. So both situations are provoked here, through the wire,
+    against the same artifact, and the two ``(status, code)`` pairs are
+    compared to each other rather than to a literal.
+
+    A test that asserted only "an error arrived" would pass against a
+    handler that fails on everything; a test that asserted only two
+    literals would pass against a handler that had lost the branch and
+    been re-pinned. Comparing the pairs is what neither can survive.
+    """
+    artifact, _content = _downloadable_artifact(
+        db_session, status=RecordReviewStatus.approved
+    )
+    _record_into(monkeypatch, db_session)
+    url = f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+
+    def raising(**kwargs):
+        def fake_load(*_args, **_kw):
+            raise ArtifactStorageUnavailable("Artifact storage read failed", **kwargs)
+
+        return fake_load
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes",
+        raising(missing=True),
+    )
+    gone = client.get(url)
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", raising()
+    )
+    outage = client.get(url)
+
+    gone_pair = (gone.status_code, gone.json()["code"])
+    outage_pair = (outage.status_code, outage.json()["code"])
+    assert gone_pair != outage_pair, (gone.text, outage.text)
+    # And in the right direction: only one of them may say "retry".
+    assert outage_pair[0] == 503 and gone_pair[0] != 503, (gone_pair, outage_pair)
+    assert "Retry later." in outage.json()["detail"]
+    assert "will not clear it" in gone.json()["detail"]
 
 
 def test_a_failing_recorder_does_not_turn_the_502_into_a_500(

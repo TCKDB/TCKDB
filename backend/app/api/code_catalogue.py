@@ -327,8 +327,38 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/chemistry/units.py"),
     ApiCode("artifact_integrity_failed", 502, Surface.response_literal,
             "backend/app/api/errors.py"),
+    ApiCode("artifact_object_missing", 502, Surface.response_literal,
+            "backend/app/api/errors.py",
+            note=(
+                "Split from artifact_storage_unavailable in #226, which "
+                "carried both 'the store did not answer' and 'the store "
+                "answered and the object is not there' — opposite retry "
+                "advice under one code. Told apart by "
+                "ArtifactStorageUnavailable.missing, set from the S3 error "
+                "code in load_artifact_bytes; the exception type is "
+                "deliberately not split, so every opportunistic "
+                "'except ArtifactStorageUnavailable' still catches both. "
+                "502 rather than 404 or 410 although the bytes are gone: "
+                "the request was well formed and the artifact record is "
+                "still published, so the failure is TCKDB's custody and "
+                "not the caller's mistake. 404 would also collide with "
+                "this route's deliberate unknown-or-unapproved-digest "
+                "answer, and 410 would invite a client to drop the "
+                "reference that makes reclaim_restore possible. Its "
+                "sibling artifact_integrity_failed sits at the same "
+                "status for the same reason; the two differ in which "
+                "artifact_integrity_event finding was recorded "
+                "(object_missing vs digest/size mismatch) and therefore "
+                "in what an operator does next."
+            )),
     ApiCode("artifact_storage_unavailable", 503, Surface.response_literal,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            note=(
+                "Now means only what its sentence says: the store did not "
+                "answer, and retrying is the right response. The case "
+                "where it answered 'no such key' left this code in #226 — "
+                "see artifact_object_missing."
+            )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_contradicts_irc_mapping", 422, Surface.coded_exception,
@@ -500,6 +530,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+    ApiCode("geometry_key_unresolved", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py",
+            note=(
+                "The one member of the local-key family that does not say "
+                "'undeclared'. A geometry key is declared on a species "
+                "conformer or a transition state and resolved as the workflow "
+                "walks those owners, so a TS calculation naming a later TS's "
+                "geometry names something the payload really contains and the "
+                "workflow really cannot resolve -- calling that undeclared "
+                "would be false."
+            )),
     ApiCode("geometry_too_large", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/geometry.py"),
     ApiCode("handle_not_found", 404, Surface.coded_exception,
@@ -602,12 +643,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/ml_dataset.py"),
     ApiCode("ml_export_seed_unresolved", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("micro_reaction_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("multiple_structure_queries", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/structure_search.py"),
     ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
+    ApiCode("network_state_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("non_finite_value", 422, Surface.message_prefix,
             "backend/app/services/release/artifacts.py"),
     ApiCode("offset_too_large", 422, Surface.message_prefix,
@@ -728,6 +775,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/species_resolution.py"),
     ApiCode("species_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
+    ApiCode("species_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("species_kind_conflict", 422, Surface.coded_exception,
             "backend/app/services/species_resolution.py"),
     ApiCode("species_smiles_charge_mismatch", 422, Surface.coded_exception,
@@ -776,6 +825,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/reaction_resolution.py"),
     ApiCode("transition_state_irc_mapping_element_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),
+    ApiCode("transition_state_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("transition_state_no_imaginary_mode", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transition_state_reaction_coordinate_ambiguous", 422, Surface.coded_exception,
@@ -811,7 +862,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "digest. context carries both halves."
             )),
     ApiCode("unknown_calculation_ref", 404, Surface.coded_exception,
-            "backend/app/services/upload_reference.py"),
+            "backend/app/services/upload_reference.py",
+            note=(
+                "Three roots since #230, and two spellings. "
+                "/uploads/kinetics names the job by public ref; "
+                "/uploads/thermo and /uploads/statmech name it by row id in "
+                "source_calculations[i].existing_calculation_id, which "
+                "answered the generic resource_not_found with an empty "
+                "context until #230. One code because the missing row and "
+                "its repair are identical and only the spelling differs -- "
+                "splitting on spelling is the defect #195 removed from the "
+                "status. context['field'] separates them; context['ref'] is "
+                "present for the public-ref spelling only, because a row id "
+                "is logged and never echoed (DR-0028 Requirement 2)."
+            )),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),
     ApiCode("unknown_include_token", 422, Surface.message_prefix,
@@ -846,7 +910,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "status matched neither the condition nor the sibling roots: "
                 "/uploads/thermo and /uploads/statmech already answered 404 "
                 "when a caller-supplied existing_*_id named no row, so the "
-                "status depended on how the caller spelled the name."
+                "status depended on how the caller spelled the name. Those "
+                "sibling roots answered it with no code and no context, "
+                "which #230 fixed by pointing thermo's existing_statmech_id "
+                "at this same code -- same missing row, same repair, and a "
+                "code that differed by spelling would have rebuilt one "
+                "field down what #195 removed from the status."
             )),
     ApiCode("unknown_transition_state_entry_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
