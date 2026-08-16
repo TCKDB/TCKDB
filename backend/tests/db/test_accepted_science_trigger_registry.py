@@ -46,6 +46,30 @@ _EXTENSION_REVISIONS = (_ATOM_MAP_REVISION, _EVIDENCE_REVISION)
 #: adding to it. A second narrowing revision joins by being added here.
 _CORRECTION_REVISIONS = (_VERSIONS / "d4e9b1c7a253_scf_stability_provenance_is_not_ownership.py",)
 
+#: PostgreSQL's identifier limit. A ``CREATE TRIGGER`` naming anything longer
+#: does not fail — the server silently cuts the name to this length — which is
+#: why the limit has to be checked against the name a revision *meant* to mint
+#: rather than against the one that came back out of ``pg_trigger``.
+_IDENTIFIER_LIMIT = 63
+
+#: The two tables ``c6f2a9d4e7b1`` freezes with ``trg_append_only_<table>``.
+#: Spelled out because the revision holds them in an inline tuple rather than
+#: in a module constant the way it holds its other registries.
+#: ``test_database_trigger_set_matches_registry`` asserts set equality against
+#: the live database using these same two names, so drift here fails there.
+_APPEND_ONLY_TABLES = ("record_review_event", "scientific_record_supersession")
+
+#: The ``_trigger_name`` prefixes each revision is allowed to mint under.
+#: ``_generated_trigger_names`` below enumerates exactly these, and the test
+#: checks the enumeration against the revision sources — so a revision minting
+#: under a prefix nobody here knows about fails rather than going unmeasured,
+#: which is the way a length check quietly stops covering the corpus.
+_ROOT_PREFIXES = frozenset({"as_root", "append_only"})
+_EXTENSION_PREFIXES = frozenset({"as_child", "as_via", "as_truncate"})
+
+#: ``_trigger_name("as_child", table)`` — the prefix at a mint site.
+_TRIGGER_NAME_PREFIX = re.compile(r"""_trigger_name\(\s*["']([a-z_]+)["']""")
+
 
 def _revision_namespace() -> dict:
     return runpy.run_path(str(_REVISION))
@@ -453,7 +477,157 @@ def test_database_trigger_set_matches_registry(db_session) -> None:
         )
     }
     assert actual == expected
-    assert all(len(name) <= 63 for _, name in actual)
+
+    # This test used to end by asserting that no name in ``actual`` exceeded
+    # 63 characters. It could not fail: ``pg_trigger.tgname`` is a ``name``,
+    # which PostgreSQL has already cut to 63 on the way in, and every name on
+    # the ``expected`` side comes out of a ``_trigger_name`` ending in
+    # ``[:63]``. The question the limit actually poses — whether any name had
+    # to be cut to get there — is asked by
+    # ``test_trigger_names_need_no_truncation_to_fit`` below.
+
+
+def _generated_trigger_names() -> list[tuple[str, str, str, str, str]]:
+    """``(revision, prefix, table, untruncated, minted)`` per ``_trigger_name`` call.
+
+    ``untruncated`` is the name as it stands before ``_trigger_name``'s
+    ``[:63]`` reaches it. It cannot be read back out of the revision, so it is
+    rebuilt here — and the rebuild is pinned against the function itself by the
+    caller, which asserts ``minted == untruncated[:63]``. A revision that
+    changes how it spells a name therefore fails loudly instead of being
+    measured against a formula that has silently gone stale.
+    """
+
+    revision = _revision_namespace()
+    root_name = revision["_trigger_name"]
+
+    minted: list[tuple[str, str, str, object]] = []
+    for table in sorted(set(revision["_ROOT_TYPES"].values())):
+        minted.append((_REVISION.name, "as_root", table, root_name))
+    for table in _APPEND_ONLY_TABLES:
+        minted.append((_REVISION.name, "append_only", table, root_name))
+    for path, extension in zip(_EXTENSION_REVISIONS, _extension_namespaces(), strict=True):
+        extension_name = extension["_trigger_name"]
+        for table, _record_type, _columns in extension["_child_groups"]():
+            minted.append((path.name, "as_child", table, extension_name))
+        for item in extension["_VIA_CHILDREN"]:
+            minted.append((path.name, "as_via", item[0], extension_name))
+        for table in extension["_TRUNCATE_TABLES"]:
+            minted.append((path.name, "as_truncate", table, extension_name))
+
+    return [
+        (revision_name, prefix, table, f"trg_{prefix}_{table}", mint(prefix, table))
+        for revision_name, prefix, table, mint in minted
+    ]
+
+
+def test_trigger_names_need_no_truncation_to_fit(db_session) -> None:
+    """No guard name has to be cut to reach PostgreSQL's 63 characters.
+
+    The limit is real, and ``_trigger_name`` respects it by ending in
+    ``[:63]``. That truncation is correct and stays: a name must fit. But it
+    means "is this name within the limit?" is not a question worth asking of
+    the result — the answer is yes by construction, on both sides of every
+    comparison this file makes. The question worth asking is whether any name
+    was long enough to *need* cutting.
+
+    It matters because of what gets cut. These names end in the table they
+    guard, and ``[:63]`` takes from the end. A truncated name is one whose
+    table has been shortened or removed, and the table suffix is the entire
+    reason these names are unique: ``test_trigger_names_have_exactly_one_
+    minting_revision`` deliberately does not resolve them, on the stated
+    grounds that "the table-suffixed convention makes them safe". Cut the
+    suffix and it does not. Two tables sharing a long enough head then mint one
+    name, and a later revision guarding a table an earlier one already guards
+    mints the name that revision installed — a drop-then-create replaces the
+    guard and PostgreSQL says nothing, which is precisely the failure the
+    static scan exists to catch and cannot see here.
+
+    Nothing is close today: the longest name is 52 characters and the longest
+    table in the schema is 40. This closes the gap before the first long table
+    name makes it live, which is the moment nobody will be reading this file.
+    """
+
+    generated = _generated_trigger_names()
+
+    # Prove the enumeration found the corpus before asserting anything about
+    # it. A registry read that came back empty would otherwise turn every
+    # check below into a pass over nothing. The floor sits under the measured
+    # 26 names minted across the three revisions.
+    assert len(generated) >= 22, len(generated)
+
+    # ...and prove the enumeration covers every prefix the revisions mint
+    # under. A revision that grew a fourth prefix would otherwise be measured
+    # on only the part of its output this list happens to know about.
+    assert set(_TRIGGER_NAME_PREFIX.findall(_REVISION.read_text())) == _ROOT_PREFIXES
+    for path in _EXTENSION_REVISIONS:
+        prefixes = set(_TRIGGER_NAME_PREFIX.findall(path.read_text()))
+        assert prefixes, path.name
+        assert prefixes <= _EXTENSION_PREFIXES, (path.name, sorted(prefixes - _EXTENSION_PREFIXES))
+
+    # Pin the reconstructed untruncated name against the function that mints
+    # the real one. Without this the length assertion below would be measuring
+    # a formula of this test's own invention.
+    for revision_name, prefix, table, untruncated, name in generated:
+        assert name == untruncated[:_IDENTIFIER_LIMIT], (revision_name, prefix, table, untruncated, name)
+
+    # The invariant the old assertion only appeared to state.
+    for revision_name, prefix, table, untruncated, _name in generated:
+        assert len(untruncated) <= _IDENTIFIER_LIMIT, (revision_name, prefix, table, len(untruncated))
+
+    # Two mint inputs may not land on one name. Truncation is one way that
+    # happens; a second revision guarding a table an earlier one already
+    # guards is the other, and that one needs no truncation at all — it is
+    # invisible to ``test_trigger_names_have_exactly_one_minting_revision``,
+    # which cannot statically resolve a name built in a loop from a table.
+    owners: dict[str, set[tuple[str, str, str]]] = defaultdict(set)
+    for revision_name, prefix, table, _untruncated, name in generated:
+        owners[name].add((revision_name, prefix, table))
+    collided = {name: sorted(inputs) for name, inputs in owners.items() if len(inputs) > 1}
+    assert not collided, collided
+
+    # Today's mint inputs are not the only ones these templates will ever see.
+    # Asked of the whole schema, the same question turns red on the day a long
+    # table name is added rather than on the day someone gets round to
+    # guarding it. Measured headroom: the longest stem is ``trg_as_truncate_``
+    # at 16 and the longest table is 40, for 56 of 63.
+    stems = {f"trg_{prefix}_" for _revision_name, prefix, _table, _untruncated, _name in generated}
+    assert stems == {f"trg_{prefix}_" for prefix in _ROOT_PREFIXES | _EXTENSION_PREFIXES}, sorted(stems)
+    longest_table = max(Base.metadata.tables, key=len)
+    longest_stem = max(stems, key=len)
+    assert len(longest_stem) + len(longest_table) <= _IDENTIFIER_LIMIT, (longest_stem, longest_table)
+
+    # Hand-written names are subject to the same cut, and no ``[:63]`` stands
+    # between them and it. These are read from the revision sources, so unlike
+    # the old assertion the value being measured is the one the author wrote.
+    literals, _families, _sites, files = _minted_trigger_names()
+    assert files >= 9, files
+    assert len(literals) >= 9, sorted(literals)
+    over_limit = {name: sorted(revisions) for name, revisions in literals.items() if len(name) > _IDENTIFIER_LIMIT}
+    assert not over_limit, over_limit
+
+    # Finally, tie the enumeration to the database: every name reasoned about
+    # above is a trigger that exists. An enumeration that had drifted off the
+    # registries would otherwise satisfy every assertion in this test while
+    # describing guards nobody installed.
+    installed = {
+        (row.table_name, row.trigger_name)
+        for row in db_session.execute(
+            text(
+                """
+                SELECT relation.relname AS table_name, trigger.tgname AS trigger_name
+                FROM pg_trigger AS trigger
+                JOIN pg_class AS relation ON relation.oid = trigger.tgrelid
+                JOIN pg_namespace AS namespace ON namespace.oid = relation.relnamespace
+                WHERE NOT trigger.tgisinternal AND namespace.nspname = 'public'
+                """
+            )
+        )
+    }
+    # Floor under the measured 177 public triggers.
+    assert len(installed) >= 150, len(installed)
+    absent = {(table, name) for _revision_name, _prefix, table, _untruncated, name in generated} - installed
+    assert not absent, sorted(absent)
 
 
 def _corrected_direct_groups(
