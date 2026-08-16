@@ -484,6 +484,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+    ApiCode("geometry_key_unresolved", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py",
+            note=(
+                "The one member of the local-key family that does not say "
+                "'undeclared'. A geometry key is declared on a species "
+                "conformer or a transition state and resolved as the workflow "
+                "walks those owners, so a TS calculation naming a later TS's "
+                "geometry names something the payload really contains and the "
+                "workflow really cannot resolve -- calling that undeclared "
+                "would be false."
+            )),
     ApiCode("geometry_too_large", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/geometry.py"),
     ApiCode("handle_not_found", 404, Surface.coded_exception,
@@ -586,12 +597,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/ml_dataset.py"),
     ApiCode("ml_export_seed_unresolved", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("micro_reaction_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("multiple_structure_queries", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/structure_search.py"),
     ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
+    ApiCode("network_state_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("non_finite_value", 422, Surface.message_prefix,
             "backend/app/services/release/artifacts.py"),
     ApiCode("offset_too_large", 422, Surface.message_prefix,
@@ -712,6 +729,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/species_resolution.py"),
     ApiCode("species_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
+    ApiCode("species_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("species_kind_conflict", 422, Surface.coded_exception,
             "backend/app/services/species_resolution.py"),
     ApiCode("species_smiles_charge_mismatch", 422, Surface.coded_exception,
@@ -760,6 +779,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/reaction_resolution.py"),
     ApiCode("transition_state_irc_mapping_element_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),
+    ApiCode("transition_state_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("transition_state_no_imaginary_mode", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transition_state_reaction_coordinate_ambiguous", 422, Surface.coded_exception,

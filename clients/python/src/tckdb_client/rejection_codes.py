@@ -104,6 +104,7 @@ class RejectionCode(str, Enum):
     FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM = "freq_list_exceeds_geometry_degrees_of_freedom"
     FREQ_MODE_INDEX_NOT_UNIQUE = "freq_mode_index_not_unique"
     FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
+    GEOMETRY_KEY_UNRESOLVED = "geometry_key_unresolved"
     GEOMETRY_TOO_LARGE = "geometry_too_large"
     HANDLE_NOT_FOUND = "handle_not_found"
     HANDLE_TYPE_MISMATCH = "handle_type_mismatch"
@@ -124,6 +125,7 @@ class RejectionCode(str, Enum):
     LOWEST_ENERGY_UNAVAILABLE = "lowest_energy_unavailable"
     MANIFEST_ALREADY_FROZEN = "manifest_already_frozen"
     MANIFEST_NOT_FROZEN = "manifest_not_frozen"
+    MICRO_REACTION_KEY_UNDECLARED = "micro_reaction_key_undeclared"
     MISSING_FILTER = "missing_filter"
     MISSING_IDENTIFIER = "missing_identifier"
     MISSING_REACTION_SEARCH_FILTER = "missing_reaction_search_filter"
@@ -134,7 +136,9 @@ class RejectionCode(str, Enum):
     ML_EXPORT_SEED_UNRESOLVED = "ml_export_seed_unresolved"
     MULTIPLE_STRUCTURE_QUERIES = "multiple_structure_queries"
     N_IMAG_CONTRADICTS_MINIMUM = "n_imag_contradicts_minimum"
+    NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
     NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE = "network_solve_reported_requires_literature"
+    NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
     NON_FINITE_VALUE = "non_finite_value"
     OFFSET_TOO_LARGE = "offset_too_large"
     OWNER_MISSING = "owner_missing"
@@ -169,6 +173,7 @@ class RejectionCode(str, Enum):
     SPECIES_GEOMETRY_COMPOSITION_MISMATCH = "species_geometry_composition_mismatch"
     SPECIES_GEOMETRY_ISOTOPE_MISMATCH = "species_geometry_isotope_mismatch"
     SPECIES_HANDLE_CONFLICT = "species_handle_conflict"
+    SPECIES_KEY_UNDECLARED = "species_key_undeclared"
     SPECIES_KIND_CONFLICT = "species_kind_conflict"
     SPECIES_SMILES_CHARGE_MISMATCH = "species_smiles_charge_mismatch"
     STATE_CONFLICT = "state_conflict"
@@ -189,6 +194,7 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
     TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
     TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH = "transition_state_irc_mapping_element_mismatch"
+    TRANSITION_STATE_KEY_UNDECLARED = "transition_state_key_undeclared"
     TRANSITION_STATE_NO_IMAGINARY_MODE = "transition_state_no_imaginary_mode"
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
@@ -248,6 +254,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM,
         RejectionCode.FREQ_MODE_INDEX_NOT_UNIQUE,
         RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES,
+        RejectionCode.GEOMETRY_KEY_UNRESOLVED,
         RejectionCode.GEOMETRY_TOO_LARGE,
         RejectionCode.HANDLE_TYPE_MISMATCH,
         RejectionCode.INCLUDE_NOT_IMPLEMENTED_YET,
@@ -262,6 +269,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
         RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
+        RejectionCode.MICRO_REACTION_KEY_UNDECLARED,
         RejectionCode.MISSING_FILTER,
         RejectionCode.MISSING_IDENTIFIER,
         RejectionCode.MISSING_REACTION_SEARCH_FILTER,
@@ -272,6 +280,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ML_EXPORT_SEED_UNRESOLVED,
         RejectionCode.MULTIPLE_STRUCTURE_QUERIES,
         RejectionCode.N_IMAG_CONTRADICTS_MINIMUM,
+        RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED,
+        RejectionCode.NETWORK_STATE_KEY_UNDECLARED,
         RejectionCode.NON_FINITE_VALUE,
         RejectionCode.OFFSET_TOO_LARGE,
         RejectionCode.PARAMETER_VALUE_REQUIRES_KEY,
@@ -296,6 +306,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.SPECIES_GEOMETRY_COMPOSITION_MISMATCH,
         RejectionCode.SPECIES_GEOMETRY_ISOTOPE_MISMATCH,
         RejectionCode.SPECIES_HANDLE_CONFLICT,
+        RejectionCode.SPECIES_KEY_UNDECLARED,
         RejectionCode.SPECIES_KIND_CONFLICT,
         RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH,
         RejectionCode.STATMECH_CALCULATION_KEY_UNDECLARED,
@@ -311,6 +322,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,
         RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH,
+        RejectionCode.TRANSITION_STATE_KEY_UNDECLARED,
         RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
@@ -400,6 +412,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.FREQ_LIST_EXCEEDS_GEOMETRY_DEGREES_OF_FREEDOM: frozenset({422}),
     RejectionCode.FREQ_MODE_INDEX_NOT_UNIQUE: frozenset({422}),
     RejectionCode.FREQ_N_IMAG_DISAGREES_WITH_MODES: frozenset({422}),
+    RejectionCode.GEOMETRY_KEY_UNRESOLVED: frozenset({422}),
     RejectionCode.GEOMETRY_TOO_LARGE: frozenset({422}),
     RejectionCode.HANDLE_NOT_FOUND: frozenset({404}),
     RejectionCode.HANDLE_TYPE_MISMATCH: frozenset({422}),
@@ -420,6 +433,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
     RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({409}),
     RejectionCode.MANIFEST_NOT_FROZEN: frozenset({404}),
+    RejectionCode.MICRO_REACTION_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.MISSING_FILTER: frozenset({422}),
     RejectionCode.MISSING_IDENTIFIER: frozenset({422}),
     RejectionCode.MISSING_REACTION_SEARCH_FILTER: frozenset({422}),
@@ -430,7 +444,9 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.ML_EXPORT_SEED_UNRESOLVED: frozenset({422}),
     RejectionCode.MULTIPLE_STRUCTURE_QUERIES: frozenset({422}),
     RejectionCode.N_IMAG_CONTRADICTS_MINIMUM: frozenset({422}),
+    RejectionCode.NETWORK_CHANNEL_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE: frozenset({409}),
+    RejectionCode.NETWORK_STATE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.NON_FINITE_VALUE: frozenset({422}),
     RejectionCode.OFFSET_TOO_LARGE: frozenset({422}),
     RejectionCode.OWNER_MISSING: frozenset({404}),
@@ -465,6 +481,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.SPECIES_GEOMETRY_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.SPECIES_GEOMETRY_ISOTOPE_MISMATCH: frozenset({422}),
     RejectionCode.SPECIES_HANDLE_CONFLICT: frozenset({422}),
+    RejectionCode.SPECIES_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.SPECIES_KIND_CONFLICT: frozenset({422}),
     RejectionCode.SPECIES_SMILES_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.STATE_CONFLICT: frozenset({409}),
@@ -485,6 +502,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH: frozenset({422}),
+    RejectionCode.TRANSITION_STATE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
