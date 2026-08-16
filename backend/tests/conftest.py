@@ -26,13 +26,51 @@ from app.api.rate_limit import reset_rate_limit_store
 from app.db.models.api_key import ApiKey
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
-from tests import error_code_observer
+from tests import error_body_observer, error_code_observer
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 # Installed at import so it is in place before the first request of the
 # session, in the controller and in every xdist worker alike.
 error_code_observer.install()
+error_body_observer.install()
+
+
+def _check_error_bodies(item) -> None:
+    """Fail the test whose error body carried a database row id.
+
+    Two failures, in the order they matter. The first is the rule --
+    DR-0028 Requirement 2, no primary key in a user-facing body. The
+    second is the guard on the guard: a sweep that examines nothing
+    passes trivially, so a test whose client *received* a JSON error
+    while the sweep examined *no* body means one of the two patches in
+    ``tests/error_body_observer.py`` is dead, and every other test's
+    silence means nothing. It is checked here, per test, because that
+    needs no constant and holds under any gate selection, any ``-k`` and
+    any worker count -- unlike the floor below, which is the coarser
+    second net.
+    """
+    observed = error_body_observer.drain()
+    if observed.leaks:
+        raise AssertionError(
+            f"{item.nodeid} produced an error body containing a database row "
+            "id (DR-0028 Requirement 2): "
+            + "; ".join(leak.explain() for leak in observed.leaks)
+            + ". A row id is an implementation detail of one database "
+            "instance -- it does not survive a restore and does not agree "
+            "between the hosted deployment and a lab self-host. Log it "
+            "server-side and name the field the depositor wrote, or the "
+            "public ref they supplied, instead."
+        )
+    if observed.client_errors and not observed.bodies:
+        raise AssertionError(
+            f"{item.nodeid} received {observed.client_errors} JSON error "
+            "response(s) and the DR-0028 body sweep examined none of them. "
+            "The observer patches JSONResponse.__init__ and "
+            "TestClient.request; one of them is no longer in place, which "
+            "makes the sweep silent rather than clean. See "
+            "backend/tests/error_body_observer.py."
+        )
 
 
 def pytest_runtest_teardown(item) -> None:
@@ -43,7 +81,12 @@ def pytest_runtest_teardown(item) -> None:
     ``backend/tests/error_code_observer.py`` for why a source scan alone
     cannot make the catalogue's completeness falsifiable, and why the
     comparison is on the pair rather than on the code alone.
+
+    The body sweep is drained here too, and for the same reason: a row id
+    in an error body is a defect of the request that produced it, not of
+    the run. See ``backend/tests/error_body_observer.py``.
     """
+    _check_error_bodies(item)
     unlisted = error_code_observer.drain_unlisted()
     if unlisted:
         raise AssertionError(
@@ -808,6 +851,169 @@ def pytest_terminal_summary(terminalreporter) -> None:
         "defect in the code under test. Re-run serially before believing a "
         "red result."
     )
+
+
+# ---------------------------------------------------------------------------
+# DR-0028 body sweep: the floor
+# ---------------------------------------------------------------------------
+# The per-test check in ``_check_error_bodies`` is the strong net and needs no
+# numbers. This is the coarse second one, and it exists for the blinding the
+# first cannot see: an extractor whose *entry* still runs -- so every body is
+# still counted -- but whose walk visits nothing. Then no test ever notices,
+# because the sweep is examining bodies and simply finding nothing in them.
+#
+# The floor is per gate, because the three gates produce wildly different
+# numbers and one figure for all of them would be the smallest, which is 1.
+# Selection is read from the invocation's own arguments and matched against
+# what the gate scripts pass; anything else -- a ``-k``, a single file, a node
+# id -- is not a gate run and gets no floor, which is said out loud in the
+# summary rather than passing quietly.
+
+#: pytest options that consume the following token, so its value is not
+#: mistaken for a test path. Only the ones the gate scripts and CI use.
+_OPTIONS_TAKING_A_VALUE = frozenset({"-c", "-n", "-o", "-p", "-W", "--ignore", "--tb"})
+
+#: Options that narrow a selection. Their presence means this is not a whole
+#: gate, so no floor applies.
+_FILTERING_OPTIONS = ("-k", "-m", "--deselect", "--lf", "--last-failed", "--ff")
+
+#: ``(bodies swept, body fields examined)`` each selection must reach.
+#:
+#: Measured at seed 424242 with 8 workers, then rounded down by ~10% so that
+#: adding or removing a handful of refusal tests does not fail a run. The
+#: three gates were measured at ``38766219``; the whole-suite row at
+#: ``6d614cb1``, two commits earlier, which is why it is the smaller number:
+#:
+#:     whole suite   935 bodies / 1236 fields   (8,038 tests)
+#:     rest gate       1 body   /    1 field    (4,673 tests)
+#:     api gate      933 bodies / 1234 fields   (2,940 tests)
+#:     scientific    389 bodies /  401 fields   (2,056 tests)
+#:
+#: Re-measure rather than trust these: every run prints its own tally beside
+#: the floor it was held to.
+#:
+#: A drop below these is not "fewer tests"; it is the sweep having stopped
+#: looking. The rest gate's 1 is not a typo -- 4,630 tests there produce a
+#: single error body between them, and 96% of the suite's error bodies come
+#: from ``tests/api``. That lopsidedness is exactly why the per-test check
+#: in ``_check_error_bodies``, and not this table, is what the non-vacuity
+#: argument rests on: a floor of 1 forbids almost nothing.
+BODY_SWEEP_FLOORS: dict[tuple[str, ...], tuple[int, int]] = {
+    ("tests",): (830, 1_080),
+    ("tests", "!tests/api", "!tests/services/scientific_read"): (1, 1),
+    ("tests/api",): (830, 1_080),
+    ("tests/api/scientific", "tests/services/scientific_read"): (350, 360),
+}
+
+
+def _selection_key(config) -> tuple[str, ...] | None:
+    """The invocation reduced to "which subtree", or ``None`` if narrowed.
+
+    Positional paths and ``--ignore`` values only, normalised the way
+    ``tests/scripts/test_gate_coverage.py`` normalises them -- the scripts
+    and the workflows disagree about the trailing slash and that must not
+    change the answer. An ignore is spelled ``!path`` so one tuple can
+    carry both halves of the complement gate's subtraction.
+    """
+    paths: list[str] = []
+    ignored: list[str] = []
+    arguments = list(config.invocation_params.args)
+    skip_next = False
+    for index, argument in enumerate(arguments):
+        if skip_next:
+            skip_next = False
+            continue
+        if any(argument.startswith(option) for option in _FILTERING_OPTIONS):
+            return None
+        if argument == "--ignore":
+            if index + 1 < len(arguments):
+                ignored.append(arguments[index + 1])
+            skip_next = True
+            continue
+        if argument.startswith("--ignore="):
+            ignored.append(argument.split("=", 1)[1])
+            continue
+        if argument in _OPTIONS_TAKING_A_VALUE:
+            skip_next = True
+            continue
+        if argument.startswith("-"):
+            continue
+        paths.append(argument)
+    if not paths:
+        return None
+    return tuple(
+        sorted(path.rstrip("/") for path in paths)
+        + sorted("!" + path.rstrip("/") for path in ignored)
+    )
+
+
+def pytest_sessionfinish(session, exitstatus) -> None:
+    """Hand this worker's sweep totals up, or check them on the controller.
+
+    Under xdist the counters live in eight separate processes and the
+    controller's own are zero, so a floor asserted anywhere but here, after
+    the sum, would be asserting against a fraction that varies with how
+    ``--dist load`` happened to split the run.
+    """
+    totals = error_body_observer.session_totals()
+    workeroutput = getattr(session.config, "workeroutput", None)
+    if workeroutput is not None:
+        workeroutput["tckdb_body_sweep"] = totals
+        return
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+
+    bodies, fields, client_errors = totals
+    for worker_bodies, worker_fields, worker_client_errors in getattr(
+        session.config, "_tckdb_worker_sweeps", []
+    ):
+        bodies += worker_bodies
+        fields += worker_fields
+        client_errors += worker_client_errors
+
+    reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+    selection = _selection_key(session.config)
+    floor = BODY_SWEEP_FLOORS.get(selection) if selection is not None else None
+
+    def say(line: str) -> None:
+        if reporter is not None:
+            reporter.write_line(line)
+        else:  # pragma: no cover - only when -p no:terminal
+            print(line)
+
+    tally = (
+        f"tckdb: DR-0028 body sweep examined {bodies} error body/bodies, "
+        f"{fields} fields within them; {client_errors} JSON error responses "
+        "reached a client."
+    )
+    if floor is None:
+        say(f"{tally} No floor: this selection is not one of the gate scripts.")
+        return
+
+    say(f"{tally} Floor for this selection is {floor[0]}/{floor[1]}.")
+    if bodies >= floor[0] and fields >= floor[1]:
+        return
+    say(
+        f"ERROR: the DR-0028 body sweep fell below its floor for {selection}. "
+        f"Expected at least {floor[0]} bodies and {floor[1]} fields; saw "
+        f"{bodies} and {fields}. Either the sweep in "
+        "backend/tests/error_body_observer.py stopped examining what it "
+        "claims to, or this gate's selection genuinely shrank -- in which "
+        "case lower BODY_SWEEP_FLOORS in the same change that says why."
+    )
+    session.exitstatus = pytest.ExitCode.TESTS_FAILED
+
+
+def pytest_testnodedown(node, error) -> None:
+    """Collect a finished xdist worker's sweep totals on the controller."""
+    totals = getattr(node, "workeroutput", {}).get("tckdb_body_sweep")
+    if totals is None:
+        return
+    sweeps = getattr(node.config, "_tckdb_worker_sweeps", None)
+    if sweeps is None:
+        sweeps = []
+        node.config._tckdb_worker_sweeps = sweeps  # type: ignore[attr-defined]
+    sweeps.append(tuple(totals))
 
 
 #: Scratch-database names built by individual tests must be reclaimable by
