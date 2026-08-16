@@ -541,6 +541,12 @@ class TestThermoUpload:
         assert data["species_entry_id"] == species_entry_id
 
     def test_existing_calculation_id_not_found_returns_404(self, client):
+        """The status is unchanged; the code and context are new in #230.
+
+        This used to assert a substring of ``detail``, which was all there
+        was to assert while the refusal carried the generic
+        ``resource_not_found`` with an empty ``context``.
+        """
         payload = {
             "species_entry": {"smiles": "[H]", "charge": 0, "multiplicity": 2},
             "scientific_origin": "computed",
@@ -551,7 +557,13 @@ class TestThermoUpload:
         }
         resp = client.post("/api/v1/uploads/thermo", json=payload)
         assert resp.status_code == 404, resp.text
-        assert "does not exist" in resp.json()["detail"]
+        body = resp.json()
+        assert body["code"] == "unknown_calculation_ref", body
+        assert body["context"] == {
+            "field": "source_calculations[0].existing_calculation_id",
+            "kind": "calculation",
+        }, body
+        assert "999999999" not in str(body), body
 
     def test_existing_calc_wrong_species_entry_returns_422(self, client):
         """A cross-owner chained citation is refused, under a real code.

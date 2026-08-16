@@ -30,7 +30,6 @@ from collections.abc import Mapping
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
-from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, StatmechCalculationRole
 from app.db.models.statmech import (
@@ -50,6 +49,10 @@ from app.services.energy_correction_resolution import resolve_or_create_freq_sca
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.software_resolution import resolve_software_release_ref
+from app.services.upload_reference import (
+    W_UNKNOWN_CALCULATION_REF,
+    unknown_reference,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -162,11 +165,29 @@ def _resolve_existing_calculation(
     Returning the row rather than its id is deliberate: the caller needs
     it for :func:`assert_statmech_role_compatible`, and re-fetching would
     invite the two checks to run against different rows.
+
+    Since #230 the 404 carries ``unknown_calculation_ref`` and a
+    ``context`` naming this field, instead of the generic
+    ``resource_not_found`` with an empty one. It is the same code
+    ``/uploads/kinetics`` uses for a ``source_calculation_ref`` that names
+    nothing: the same kind of row is missing and the repair is the same,
+    so a code that differed by spelling would recreate one field down the
+    defect #195 removed from the status. The id is logged, not echoed —
+    the sentence above about not disclosing it is now enforced by the seam
+    rather than by this function remembering to omit it.
     """
     calculation = session.get(Calculation, calculation_id)
     if calculation is None:
-        raise NotFoundError(
-            f"{context} refers to a calculation that does not exist."
+        raise unknown_reference(
+            code=W_UNKNOWN_CALCULATION_REF,
+            field=context,
+            kind="calculation",
+            row_id=calculation_id,
+            remedy=(
+                "Declare the job inline in this request with a "
+                "calculation_key, or deposit it first and cite the id "
+                "this API returned for it."
+            ),
         )
     assert_calculation_owned_by(
         calculation,

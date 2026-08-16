@@ -1215,7 +1215,12 @@ def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
     db_conn,
 ) -> None:
     """DR-0028 Req 2: a missing existing_calculation_id must surface as 404
-    via NotFoundError (mapped to HTTP 404 by the API exception handler)."""
+    via NotFoundError (mapped to HTTP 404 by the API exception handler).
+
+    Since #230 the 404 also declares ``unknown_calculation_ref`` and names
+    the field in ``context``, so this asserts the contract rather than a
+    substring of the sentence. The status is unchanged.
+    """
     from app.api.errors import NotFoundError
 
     distinct = {"smiles": "CN", "charge": 0, "multiplicity": 1}
@@ -1228,9 +1233,15 @@ def test_thermo_upload_existing_calc_id_not_found_raises_not_found(
         ],
     )
 
-    with pytest.raises(NotFoundError, match="does not exist"):
+    with pytest.raises(NotFoundError) as excinfo:
         with Session(db_conn) as session, session.begin():
             persist_thermo_upload(session, request)
+    assert excinfo.value.code == "unknown_calculation_ref"
+    assert excinfo.value.context == {
+        "field": "source_calculations[0].existing_calculation_id",
+        "kind": "calculation",
+    }
+    assert "999999999" not in str(excinfo.value)
 
 
 def test_thermo_upload_existing_calc_id_wrong_species_entry_raises_422(
@@ -1615,11 +1626,16 @@ def test_thermo_upload_links_existing_statmech(db_conn) -> None:
 
 
 def test_thermo_upload_statmech_not_found_raises_not_found(db_conn) -> None:
-    """A missing existing_statmech_id surfaces as 404 (NotFoundError)."""
+    """A missing existing_statmech_id surfaces as 404 (NotFoundError).
+
+    Carrying ``unknown_statmech_ref`` since #230 — the same code the
+    public-ref spelling on ``/uploads/kinetics`` uses, because the missing
+    row and its repair are the same. The status did not move.
+    """
     from app.api.errors import NotFoundError
 
     distinct = {"smiles": "CCCCCCCCCC", "charge": 0, "multiplicity": 1}
-    with pytest.raises(NotFoundError, match="does not exist"):
+    with pytest.raises(NotFoundError) as excinfo:
         with Session(db_conn) as session, session.begin():
             persist_thermo_upload(
                 session,
@@ -1630,6 +1646,12 @@ def test_thermo_upload_statmech_not_found_raises_not_found(db_conn) -> None:
                     existing_statmech_id=999_999_999,
                 ),
             )
+    assert excinfo.value.code == "unknown_statmech_ref"
+    assert excinfo.value.context == {
+        "field": "existing_statmech_id",
+        "kind": "statmech",
+    }
+    assert "999999999" not in str(excinfo.value)
 
 
 def test_thermo_upload_statmech_wrong_species_entry_raises_422(db_conn) -> None:

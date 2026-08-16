@@ -45,11 +45,46 @@ depositing three different things through three different endpoints. Two
 fields needing two different right answers is what earns two codes.
 ``context['field']`` still says which ref asked, because a payload can
 cite several of the same kind.
+
+Two ways of naming a row, one code per kind
+-------------------------------------------
+``/uploads/kinetics`` names an already-stored record by **public ref**.
+``/uploads/thermo`` and ``/uploads/statmech`` name one by **row id**, in
+an ``existing_*_id`` field — programmatic chaining, a client quoting back
+an id this API issued it (see the schema rules' one sanctioned
+exception). Since #230 both spellings arrive here.
+
+They share a code per kind of row, and that is the point rather than an
+economy. #195 landed because the *status* used to depend on how the
+caller spelled the name — 404 for an id, 422 for a ref, for one condition
+— and "which spelling did you use" is not a distinction a depositor can
+act on. Splitting the *code* on the same axis would rebuild that defect
+one field down: a missing statmech is repaired by depositing a statmech,
+whether the payload asked for it by ``statmech_ref`` or by
+``existing_statmech_id``. ``context['field']`` says which field asked,
+which is the part a client actually branches on.
+
+What the two spellings do **not** share is disclosure. A public ref is
+echoed back, because the caller wrote it and quoting it is what makes the
+refusal diagnosable. A row id is **not**: DR-0028 Requirement 2 and
+:func:`app.api.errors.not_found` both refuse it, on the grounds that a row
+id is an implementation detail of one database instance which no public
+surface is keyed on, and a client that learns to read one builds against
+something TCKDB never promised to keep stable. Whoever needs it is the
+operator reading the log, so ``row_id=`` logs it and returns a body that
+does not contain it. That is why one function takes both parameters and
+insists on exactly one: the choice of spelling *is* the choice of
+disclosure rule, and separating them into two helpers would let a caller
+pick the wrong pair.
 """
 
 from __future__ import annotations
 
+import logging
+
 from app.api.errors import NotFoundError
+
+logger = logging.getLogger(__name__)
 
 #: An interpretation assignment's ``statmech_ref`` names no statmech row.
 W_UNKNOWN_STATMECH_REF = "unknown_statmech_ref"
@@ -86,11 +121,16 @@ def unknown_reference(
     code: str,
     field: str,
     kind: str,
-    ref: str,
+    ref: str | None = None,
+    row_id: int | None = None,
     remedy: str,
     **extra: object,
 ) -> NotFoundError:
-    """Build the 404 for a payload ref that resolves to nothing.
+    """Build the 404 for a payload reference that resolves to nothing.
+
+    Exactly one of ``ref`` and ``row_id`` must be given: they are the two
+    ways a payload can name an already-stored row, and they carry
+    different disclosure rules (see the module docstring).
 
     :param code: One of the ``W_UNKNOWN_*`` constants above.
     :param field: The payload path the depositor must look at, e.g.
@@ -99,21 +139,49 @@ def unknown_reference(
         can cite several refs of the same kind and "statmech not found"
         does not say which one.
     :param kind: The record kind, in the API's own vocabulary.
-    :param ref: The ref the caller supplied, echoed back — the caller
-        wrote it, so quoting it is what makes the refusal diagnosable.
+    :param ref: A **public ref** the caller supplied. Echoed into the
+        message and into ``context['ref']`` — the caller wrote it, so
+        quoting it is what makes the refusal diagnosable.
+    :param row_id: A **database row id** the caller supplied in an
+        ``existing_*_id`` field. Logged and never returned, because a row
+        id is not a public surface (DR-0028 Requirement 2). ``field``
+        already says which citation failed, which is the half a client
+        can act on.
     :param remedy: What to do about it, in one sentence.
     :param extra: Further structured context. Never a database primary
         key (DR-0028 Requirement 2); a public ref or a digest is fine.
+    :raises TypeError: If neither or both of ``ref`` and ``row_id`` are
+        given. A programming error rather than a refusal, so it is not a
+        coded 4xx: silently guessing which disclosure rule was meant is
+        how a row id ends up on the wire.
     """
+    if (ref is None) == (row_id is None):
+        raise TypeError(
+            "unknown_reference() takes exactly one of ref= (a public ref, "
+            "echoed) or row_id= (a database id, logged only)."
+        )
+    if row_id is not None:
+        # The operator's copy. Deliberately the only place the id appears:
+        # the returned body must be safe to hand a client verbatim.
+        logger.info(
+            "404 upload reference not found: code=%s field=%s kind=%s row_id=%s",
+            code,
+            field,
+            kind,
+            row_id,
+        )
+        named = f"{field} does not name a {kind} in this database."
+    else:
+        named = f"{field} {ref!r} does not name a {kind} in this database."
+    context: dict[str, object] = {"field": field, "kind": kind}
+    if ref is not None:
+        context["ref"] = ref
+    context.update(extra)
     # No ``"code: "`` prefix on the message: the exception carries the code
     # as an attribute and the handler passes it through unparsed, which is
     # the surface every new refusal should use. Writing it in the prose as
     # well would put a second copy where a reword can silently drop it.
-    return NotFoundError(
-        f"{field} {ref!r} does not name a {kind} in this database. {remedy}",
-        code=code,
-        context={"field": field, "kind": kind, "ref": ref, **extra},
-    )
+    return NotFoundError(f"{named} {remedy}", code=code, context=context)
 
 
 __all__ = [

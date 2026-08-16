@@ -67,7 +67,10 @@ def persist_statmech_upload(
     :raises ValueError: If a resolved supporting calculation does not
         belong to the statmech target's species entry.
     :raises NotFoundError: If an ``existing_calculation_id`` names a
-        calculation row that does not exist.
+        calculation row that does not exist. 404 carrying
+        ``unknown_calculation_ref`` since #230 — the same code the
+        public-ref spelling on ``/uploads/kinetics`` uses, since the
+        missing row and its repair are the same.
     """
     species_entry = resolve_species_entry(
         session, request.species_entry, created_by=created_by

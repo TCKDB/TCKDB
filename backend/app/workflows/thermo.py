@@ -7,7 +7,6 @@ import logging
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
-from app.api.errors import NotFoundError
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     CalculationType,
@@ -42,6 +41,11 @@ from app.services.record_review import (
 from app.services.species_resolution import resolve_species_entry
 from app.services.statmech_resolution import accepted_types_phrase
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
+from app.services.upload_reference import (
+    W_UNKNOWN_CALCULATION_REF,
+    W_UNKNOWN_STATMECH_REF,
+    unknown_reference,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -153,6 +157,15 @@ def _resolve_source_calculation(
     map of just-persisted calculations. Existing ids are loaded from the
     database; missing rows produce 404, cross-species or role/type
     mismatches produce 422 (DR-0028 Requirement 2).
+
+    Since #230 the 404 carries ``unknown_calculation_ref`` and a
+    ``context`` naming this field, rather than the generic
+    ``resource_not_found`` with nothing in it. Same code as the public-ref
+    spelling on ``/uploads/kinetics``, on purpose: the row that is missing
+    is the same kind of row and the repair is the same, so making the code
+    depend on the spelling would rebuild the defect #195 removed from the
+    status. The id the caller supplied is *not* echoed — it goes to the
+    log, per :func:`app.services.upload_reference.unknown_reference`.
     """
     field_path = f"source_calculations[{index}]"
     if entry.calculation_key is not None:
@@ -163,13 +176,20 @@ def _resolve_source_calculation(
         )
         context = f"{field_path}.calculation_key='{entry.calculation_key}'"
     else:
+        context = f"{field_path}.existing_calculation_id"
         calc_row = session.get(Calculation, entry.existing_calculation_id)
         if calc_row is None:
-            raise NotFoundError(
-                f"{field_path}.existing_calculation_id refers to a "
-                f"calculation that does not exist."
+            raise unknown_reference(
+                code=W_UNKNOWN_CALCULATION_REF,
+                field=context,
+                kind="calculation",
+                row_id=entry.existing_calculation_id,
+                remedy=(
+                    "Declare the job inline in this request with a "
+                    "calculation_key, or deposit it first and cite the id "
+                    "this API returned for it."
+                ),
             )
-        context = f"{field_path}.existing_calculation_id"
         assert_calculation_owned_by(
             calc_row,
             code=W_THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -199,6 +219,11 @@ def _resolve_statmech_id(
     different species entry produces 422. The error detail names the field
     but does not leak internal identifiers.
 
+    The 404 carries ``unknown_statmech_ref`` since #230 — the same code
+    ``/uploads/kinetics`` uses for a ``statmech_ref`` that names nothing,
+    because the missing row and its repair are identical and only the
+    spelling differs. ``context['field']`` is what tells the two apart.
+
     The 422 goes through the shared ownership guard rather than an inline
     comparison, which is what gives it
     ``thermo_statmech_owner_mismatch`` instead of the generic
@@ -211,9 +236,15 @@ def _resolve_statmech_id(
         return None
     statmech = session.get(Statmech, existing_statmech_id)
     if statmech is None:
-        raise NotFoundError(
-            "existing_statmech_id refers to a statmech record that does "
-            "not exist."
+        raise unknown_reference(
+            code=W_UNKNOWN_STATMECH_REF,
+            field="existing_statmech_id",
+            kind="statmech",
+            row_id=existing_statmech_id,
+            remedy=(
+                "Deposit the partition function through /uploads/statmech "
+                "first, then cite the id this API returned for it."
+            ),
         )
     assert_statmech_owned_by(
         statmech,
