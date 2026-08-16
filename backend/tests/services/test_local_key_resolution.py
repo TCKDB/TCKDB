@@ -93,7 +93,9 @@ _CALC_KEY_MAPS = {
 #: does not.
 _NAMESPACE_MAPS = {
     ("computed_reaction.py", "species_key_to_entry"),
+    ("computed_reaction.py", "geometry_key_to_id"),
     ("network_pdep.py", "species_key_to_entry"),
+    ("network_pdep.py", "geometry_key_to_id"),
     ("network_pdep.py", "state_key_to_row"),
     ("network_pdep.py", "channel_key_to_row"),
     ("network_pdep.py", "reaction_key_to_entry"),

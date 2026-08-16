@@ -85,6 +85,7 @@ from app.services.kinetics_resolution import (
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.local_key_resolution import (
     resolve_calculation_key,
+    resolve_geometry_key,
     resolve_species_key,
 )
 from app.services.provenance_warnings import (
@@ -822,7 +823,11 @@ def persist_computed_reaction_upload(
         reaction_entry_id=canonical_reaction_entry.id,
         transition_state_entry_id=ts_entry.id if ts_entry is not None else None,
         transition_state_geometry_id=(
-            geometry_key_to_id[request.transition_state.geometry.key]
+            resolve_geometry_key(
+                request.transition_state.geometry.key,
+                geometry_key_to_id,
+                field="transition_state.geometry.key",
+            )
             if request.transition_state is not None
             else None
         ),
