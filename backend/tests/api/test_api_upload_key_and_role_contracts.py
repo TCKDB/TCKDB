@@ -851,7 +851,13 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
         assert body["context"]["accepted_calculation_types"] == ["opt"]
 
     def test_an_id_that_does_not_exist_is_a_clean_404(self, client):
-        """Not a 500, and not a foreign-key error leaking out of psycopg."""
+        """Not a 500, and not a foreign-key error leaking out of psycopg.
+
+        The status has not moved. What moved (#230) is the code: this used
+        to answer the generic ``resource_not_found`` with an empty
+        ``context``, so a depositor learned that *something* was missing
+        and had to read English prose to find out which citation named it.
+        """
         resp = client.post(
             "/api/v1/uploads/statmech",
             json=_standalone_statmech_payload(
@@ -864,10 +870,14 @@ class TestChainedCitationPassesEveryCheckALocalOneDoes:
         assert resp.status_code == 404, resp.text
         body = resp.json()
         assert set(body) >= {"code", "detail"}, body
-        assert body["code"] == "resource_not_found", body
-        assert "does not exist" in body["detail"]
+        assert body["code"] == "unknown_calculation_ref", body
+        assert body["context"]["kind"] == "calculation", body
         # The field the depositor wrote is named; nothing else is.
-        assert "existing_calculation_id" in body["detail"]
+        assert (
+            body["context"]["field"]
+            == "statmech.source_calculations[0].existing_calculation_id"
+        ), body
+        assert "999999999" not in str(body), body
 
     def test_a_calculation_owned_by_another_species_entry_is_refused(
         self, client

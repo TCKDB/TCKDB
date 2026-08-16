@@ -862,7 +862,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "digest. context carries both halves."
             )),
     ApiCode("unknown_calculation_ref", 404, Surface.coded_exception,
-            "backend/app/services/upload_reference.py"),
+            "backend/app/services/upload_reference.py",
+            note=(
+                "Three roots since #230, and two spellings. "
+                "/uploads/kinetics names the job by public ref; "
+                "/uploads/thermo and /uploads/statmech name it by row id in "
+                "source_calculations[i].existing_calculation_id, which "
+                "answered the generic resource_not_found with an empty "
+                "context until #230. One code because the missing row and "
+                "its repair are identical and only the spelling differs -- "
+                "splitting on spelling is the defect #195 removed from the "
+                "status. context['field'] separates them; context['ref'] is "
+                "present for the public-ref spelling only, because a row id "
+                "is logged and never echoed (DR-0028 Requirement 2)."
+            )),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),
     ApiCode("unknown_include_token", 422, Surface.message_prefix,
@@ -897,7 +910,12 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "status matched neither the condition nor the sibling roots: "
                 "/uploads/thermo and /uploads/statmech already answered 404 "
                 "when a caller-supplied existing_*_id named no row, so the "
-                "status depended on how the caller spelled the name."
+                "status depended on how the caller spelled the name. Those "
+                "sibling roots answered it with no code and no context, "
+                "which #230 fixed by pointing thermo's existing_statmech_id "
+                "at this same code -- same missing row, same repair, and a "
+                "code that differed by spelling would have rebuilt one "
+                "field down what #195 removed from the status."
             )),
     ApiCode("unknown_transition_state_entry_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
