@@ -95,6 +95,9 @@ _NAMESPACE_MAPS = {
     ("computed_reaction.py", "species_key_to_entry"),
     ("network_pdep.py", "species_key_to_entry"),
     ("network_pdep.py", "state_key_to_row"),
+    ("network_pdep.py", "channel_key_to_row"),
+    ("network_pdep.py", "reaction_key_to_entry"),
+    ("network_pdep.py", "ts_key_to_entry"),
 }
 
 
@@ -312,22 +315,40 @@ def test_no_raw_subscript_reads_a_calc_key_namespace(
     )
 
 
+def _is_bound(source: str, name: str) -> bool:
+    """Whether ``name`` is assigned anywhere in ``source``.
+
+    The anti-vacuity anchor for the namespace guard below, and it is
+    deliberately not ``_CALC_KEY_MAPS``'s "does it have subscript
+    writes?". Two of these namespaces are never written by subscript at
+    all: ``channel_key_to_row`` is rebuilt wholesale from the rows the
+    flush returned, and a future one may well be a comprehension too.
+    Requiring a subscript write there would fail an honest map, and the
+    natural repair -- dropping the anchor -- is what would make the guard
+    vacuous. Asking "is this name bound here?" catches the rename this
+    exists to catch without caring how the map is filled.
+    """
+    return re.search(
+        rf"^\s*{re.escape(name)}\s*(?::[^=\n]+)?=(?!=)", source, re.MULTILINE
+    ) is not None
+
+
 @pytest.mark.parametrize(("module", "map_name"), sorted(_NAMESPACE_MAPS))
 def test_no_raw_subscript_reads_a_namespace(module: str, map_name: str) -> None:
     """The same structural guard, for the other six namespaces.
 
-    Written to be falsifiable the same way: it also asserts the pattern
-    still finds the *writes*, so a regex that stopped matching anything
-    at all fails instead of passing forever.
+    Falsifiable the same way, by a different anchor: it asserts the map
+    is still *bound* in the module, so a rename fails here instead of
+    silently reporting zero raw reads forever.
     """
     source = (_WORKFLOWS / module).read_text(encoding="utf-8")
     assert source, f"{module} is empty"
-    writes, reads = _map_accesses(source, map_name)
-    assert writes, (
-        f"{module} has no `{map_name}[...] = ...` at all, so this test "
-        f"is not looking at the namespace it thinks it is -- the map was "
-        f"probably renamed. Fix the name in _NAMESPACE_MAPS."
+    assert _is_bound(source, map_name), (
+        f"{module} never assigns `{map_name}` at all, so this test is not "
+        f"looking at the namespace it thinks it is -- the map was probably "
+        f"renamed. Fix the name in _NAMESPACE_MAPS."
     )
+    _writes, reads = _map_accesses(source, map_name)
     assert reads == [], (
         f"{module} reads {map_name} by raw subscript: {reads}. Every "
         f"cross-reference must go through the matching resolver in "

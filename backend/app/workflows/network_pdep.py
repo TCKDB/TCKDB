@@ -478,8 +478,12 @@ def persist_network_pdep_upload(
     # ------------------------------------------------------------------
     # 5. Process transition states
     # ------------------------------------------------------------------
-    for ts_in in request.transition_states:
-        reaction_entry = reaction_key_to_entry[ts_in.micro_reaction_key]
+    for ts_index, ts_in in enumerate(request.transition_states):
+        reaction_entry = resolve_micro_reaction_key(
+            ts_in.micro_reaction_key,
+            reaction_key_to_entry,
+            field=f"transition_states[{ts_index}].micro_reaction_key",
+        )
 
         # Create TransitionState (concept level)
         ts = TransitionState(
@@ -718,14 +722,33 @@ def persist_network_pdep_upload(
     session.flush()
     channel_rows = session.query(NetworkChannel).filter(NetworkChannel.network_id == network.id).all()
     channel_key_to_row = {row.channel_key: row for row in channel_rows}
-    for ch_in in request.channels:
-        channel_row = channel_key_to_row[ch_in.key]
-        for path in ch_in.microreaction_paths:
+    for ch_index, ch_in in enumerate(request.channels):
+        # Read back from the rows just inserted rather than from the payload,
+        # so a channel the flush dropped is a named refusal and not a silent
+        # miss.
+        channel_row = resolve_network_channel_key(
+            ch_in.key, channel_key_to_row, field=f"channels[{ch_index}].key"
+        )
+        for path_index, path in enumerate(ch_in.microreaction_paths):
             session.add(NetworkChannelMicroReaction(
                 channel_id=channel_row.id,
-                reaction_entry_id=reaction_key_to_entry[path.micro_reaction_key].id,
+                reaction_entry_id=resolve_micro_reaction_key(
+                    path.micro_reaction_key,
+                    reaction_key_to_entry,
+                    field=(
+                        f"channels[{ch_index}].microreaction_paths"
+                        f"[{path_index}].micro_reaction_key"
+                    ),
+                ).id,
                 transition_state_entry_id=(
-                    ts_key_to_entry[path.transition_state_key].id
+                    resolve_transition_state_key(
+                        path.transition_state_key,
+                        ts_key_to_entry,
+                        field=(
+                            f"channels[{ch_index}].microreaction_paths"
+                            f"[{path_index}].transition_state_key"
+                        ),
+                    ).id
                     if path.transition_state_key is not None
                     else None
                 ),
@@ -986,8 +1009,12 @@ def persist_network_pdep_upload(
         # Fitted phenomenological k(T,P) per channel. Schema validation
         # guarantees exactly one model sub-block matching ``model_kind``
         # (Chebyshev or PLOG); tabulated is rejected upstream.
-        for nk_in in solve_in.channel_kinetics:
-            channel_row = channel_key_to_row[nk_in.channel_key]
+        for nk_index, nk_in in enumerate(solve_in.channel_kinetics):
+            channel_row = resolve_network_channel_key(
+                nk_in.channel_key,
+                channel_key_to_row,
+                field=f"solve.channel_kinetics[{nk_index}].channel_key",
+            )
             network_kinetics = NetworkKinetics(
                 channel_id=channel_row.id,
                 solve_id=solve.id,
