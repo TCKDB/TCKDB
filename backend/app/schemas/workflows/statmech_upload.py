@@ -16,6 +16,10 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.local_key_codes import (
+    W_STATMECH_CALCULATION_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
@@ -273,13 +277,17 @@ class StatmechUploadRequest(SchemaBase):
         which is the only place that can check them.
         """
         defined = {c.key for c in self.calculations}
-        for sc in self.source_calculations:
+        for index, sc in enumerate(self.source_calculations):
             if sc.calculation_key is None:
                 continue
             if sc.calculation_key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_STATMECH_CALCULATION_KEY_UNDECLARED,
                     f"source_calculations references undefined "
-                    f"calculation_key '{sc.calculation_key}'."
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"statmech.source_calculations[{index}]",
+                    key=sc.calculation_key,
+                    declared=defined,
                 )
         return self
 
@@ -360,8 +368,14 @@ class StatmechUploadRequest(SchemaBase):
         for i, torsion in enumerate(self.torsions):
             key = torsion.source_scan_calculation_key
             if key is not None and key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_STATMECH_CALCULATION_KEY_UNDECLARED,
                     f"torsions[{i}].source_scan_calculation_key '{key}' "
-                    f"does not reference a declared calculation."
+                    f"does not reference a declared calculation.",
+                    field=(
+                        f"statmech.torsions[{i}].source_scan_calculation_key"
+                    ),
+                    key=key,
+                    declared=defined,
                 )
         return self

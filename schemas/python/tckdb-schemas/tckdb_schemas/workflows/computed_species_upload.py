@@ -44,6 +44,11 @@ from tckdb_schemas.fragments.calculation import (
 from tckdb_schemas.frequency_completeness import evaluate_deposited_frequency_list
 from tckdb_schemas.fragments.geometry import GeometryPayload
 from tckdb_schemas.fragments.identity import SpeciesEntryIdentityPayload
+from tckdb_schemas.local_key_codes import (
+    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
+    W_CALCULATION_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.fragments.refs import (
     FreqScaleFactorRef,
     LevelOfTheoryRef,
@@ -692,14 +697,28 @@ class ComputedSpeciesUploadRequest(SchemaBase):
 
     @model_validator(mode="after")
     def validate_dependency_keys_resolve(self) -> Self:
+        """Every ``depends_on`` edge must name a calculation this bundle declares.
+
+        Answers with the same code and the same ``context`` keys as
+        ``app.workflows.computed_species``'s seam does for the identical
+        mistake, so a depositor cannot tell which layer caught them
+        (ADR 0017). The prose is unchanged from before it had a code.
+        """
         defined = self._all_calc_keys()
         for conf in self.conformers:
             for calc in (conf.primary_calculation, *conf.additional_calculations):
                 for dep in calc.depends_on:
                     if dep.parent_calculation_key not in defined:
-                        raise ValueError(
+                        raise undeclared_key_error(
+                            W_CALCULATION_KEY_UNDECLARED,
                             f"calculation '{calc.key}' depends_on undefined "
-                            f"calculation_key '{dep.parent_calculation_key}'."
+                            f"calculation_key '{dep.parent_calculation_key}'.",
+                            field=(
+                                f"calculations['{calc.key}'].depends_on."
+                                f"parent_calculation_key"
+                            ),
+                            key=dep.parent_calculation_key,
+                            declared=defined,
                         )
         return self
 
@@ -751,21 +770,36 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         if self.thermo is None:
             return self
         defined = self._all_calc_keys()
-        for sc in self.thermo.source_calculations:
+        for index, sc in enumerate(self.thermo.source_calculations):
             if sc.calculation_key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
                     f"thermo.source_calculations references undefined "
-                    f"calculation_key '{sc.calculation_key}'."
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"thermo.source_calculations[{index}].calculation_key",
+                    key=sc.calculation_key,
+                    declared=defined,
                 )
         for i, ac in enumerate(self.thermo.applied_energy_corrections):
             if (
                 ac.source_calculation_key is not None
                 and ac.source_calculation_key not in defined
             ):
-                raise ValueError(
+                # An applied correction's source keeps its own older code:
+                # the same field also accepts a conformer key, and one
+                # repair should not become two because of which kind of
+                # name the depositor reached for.
+                raise undeclared_key_error(
+                    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
                     f"thermo.applied_energy_corrections[{i}].source_calculation_key "
                     f"references undefined calculation_key "
-                    f"'{ac.source_calculation_key}'."
+                    f"'{ac.source_calculation_key}'.",
+                    field=(
+                        f"thermo.applied_energy_corrections[{i}]."
+                        f"source_calculation_key"
+                    ),
+                    key=ac.source_calculation_key,
+                    declared=defined,
                 )
         return self
 
@@ -774,11 +808,15 @@ class ComputedSpeciesUploadRequest(SchemaBase):
         if self.statmech is None:
             return self
         defined = self._all_calc_keys()
-        for sc in self.statmech.source_calculations:
+        for index, sc in enumerate(self.statmech.source_calculations):
             if sc.calculation_key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
                     f"statmech.source_calculations references undefined "
-                    f"calculation_key '{sc.calculation_key}'."
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"statmech.source_calculations[{index}].calculation_key",
+                    key=sc.calculation_key,
+                    declared=defined,
                 )
         return self
 
@@ -792,10 +830,21 @@ class ComputedSpeciesUploadRequest(SchemaBase):
             if key is None:
                 continue
             if key not in keys_to_types:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
                     f"statmech.torsions[{i}].source_scan_calculation_key "
-                    f"'{key}' references undefined calculation_key."
+                    f"'{key}' references undefined calculation_key.",
+                    field=(
+                        f"statmech.torsions[{i}].source_scan_calculation_key"
+                    ),
+                    key=key,
+                    declared=keys_to_types,
                 )
+            # Deliberately *not* an undeclared-key refusal: the key names a
+            # calculation this bundle really declares, and the repair is to
+            # point at a different one (or to change that job's type). A
+            # different mistake gets a different code -- here, none, because
+            # no seam offers a better answer for it.
             if keys_to_types[key] != CalculationType.scan:
                 raise ValueError(
                     f"statmech.torsions[{i}].source_scan_calculation_key "
@@ -815,10 +864,17 @@ class ComputedSpeciesUploadRequest(SchemaBase):
                 ac.source_calculation_key is not None
                 and ac.source_calculation_key not in defined
             ):
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
                     f"applied_energy_corrections[{i}].source_calculation_key "
                     f"references undefined calculation_key "
-                    f"'{ac.source_calculation_key}'."
+                    f"'{ac.source_calculation_key}'.",
+                    field=(
+                        f"applied_energy_corrections[{i}]."
+                        f"source_calculation_key"
+                    ),
+                    key=ac.source_calculation_key,
+                    declared=defined,
                 )
         return self
 

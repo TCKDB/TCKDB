@@ -64,6 +64,13 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
     validate_ts_evidence_set,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.local_key_codes import (
+    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
+    W_CALCULATION_KEY_UNDECLARED,
+    W_GEOMETRY_KEY_UNRESOLVED,
+    W_SPECIES_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.reaction_family import find_canonical_reaction_family
 from tckdb_schemas.shared.calculation_in import (
     CalculationIn as _BaseCalculationIn,
@@ -693,9 +700,13 @@ class BundleSpeciesIn(SchemaBase):
             if calc.geometry_key is None:
                 continue
             if calc.geometry_key not in conformer_geometry_keys:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_GEOMETRY_KEY_UNRESOLVED,
                     f"Species '{self.key}' calculation '{calc.key}' geometry_key "
-                    f"must reference one of that species's conformer geometries."
+                    f"must reference one of that species's conformer geometries.",
+                    field=f"calculations['{calc.key}'].geometry_key",
+                    key=calc.geometry_key,
+                    declared=conformer_geometry_keys,
                 )
         return self
 
@@ -901,7 +912,10 @@ class BundleTransitionStateIn(SchemaBase):
             self.calculation.key: self.calculation.type,
             **{calc.key: calc.type for calc in self.calculations},
         }
-        for record in self.validation_evidence:
+        for index, record in enumerate(self.validation_evidence):
+            # No key written at all: nothing to list alternatives against,
+            # and a different repair. Keeps the generic code (ADR 0017
+            # corollary 3).
             if record.source_calculation_key is None:
                 raise ValueError(
                     "transition_state.validation_evidence requires "
@@ -909,10 +923,17 @@ class BundleTransitionStateIn(SchemaBase):
                 )
             calculation_type = own_types.get(record.source_calculation_key)
             if calculation_type is None:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
                     "transition_state.validation_evidence references "
                     f"calculation_key '{record.source_calculation_key}', which is "
-                    "not one of this transition state's own calculations."
+                    "not one of this transition state's own calculations.",
+                    field=(
+                        f"transition_state.validation_evidence[{index}]."
+                        f"source_calculation_key"
+                    ),
+                    key=record.source_calculation_key,
+                    declared=own_types,
                 )
             if calculation_type != CalculationType.irc:
                 raise ValueError(
@@ -1411,19 +1432,29 @@ class ComputedReactionUploadRequest(SchemaBase):
     @model_validator(mode="after")
     def validate_species_key_refs(self) -> Self:
         species_keys = {s.key for s in self.species}
-        for key in self.reactant_keys + self.product_keys:
-            if key not in species_keys:
-                raise ValueError(
-                    f"Reaction references species key '{key}' which is not "
-                    f"defined in the species list."
-                )
-        for kin in self.kinetics:
-            for key in kin.reactant_keys + kin.product_keys:
+        for role in ("reactant", "product"):
+            for index, key in enumerate(getattr(self, f"{role}_keys")):
                 if key not in species_keys:
-                    raise ValueError(
-                        f"Kinetics fit references species key '{key}' which "
-                        f"is not defined in the species list."
+                    raise undeclared_key_error(
+                        W_SPECIES_KEY_UNDECLARED,
+                        f"Reaction references species key '{key}' which is not "
+                        f"defined in the species list.",
+                        field=f"{role}_keys[{index}]",
+                        key=key,
+                        declared=species_keys,
                     )
+        for kin_index, kin in enumerate(self.kinetics):
+            for role in ("reactant", "product"):
+                for index, key in enumerate(getattr(kin, f"{role}_keys")):
+                    if key not in species_keys:
+                        raise undeclared_key_error(
+                            W_SPECIES_KEY_UNDECLARED,
+                            f"Kinetics fit references species key '{key}' which "
+                            f"is not defined in the species list.",
+                            field=f"kinetics[{kin_index}].{role}_keys[{index}]",
+                            key=key,
+                            declared=species_keys,
+                        )
         return self
 
     @model_validator(mode="after")
@@ -1458,11 +1489,21 @@ class ComputedReactionUploadRequest(SchemaBase):
         def _check_depends_on(calc: ComputedReactionCalculationIn) -> None:
             for dep in calc.depends_on:
                 if dep.parent_calculation_key not in all_calc_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"Calculation '{calc.key}' depends_on references "
                         f"unknown parent_calculation_key="
-                        f"'{dep.parent_calculation_key}'."
+                        f"'{dep.parent_calculation_key}'.",
+                        field=(
+                            f"calculations['{calc.key}'].depends_on."
+                            f"parent_calculation_key"
+                        ),
+                        key=dep.parent_calculation_key,
+                        declared=all_calc_keys,
                     )
+                # A self-edge names a key the bundle really declares, so it
+                # is a different mistake with a different repair and keeps
+                # the generic code (ADR 0017 corollary 3).
                 if dep.parent_calculation_key == calc.key:
                     raise ValueError(
                         f"Calculation '{calc.key}' depends_on cannot "
@@ -1480,12 +1521,19 @@ class ComputedReactionUploadRequest(SchemaBase):
                 _check_depends_on(calc)
 
         for kin in self.kinetics:
-            for entry in kin.source_calculations:
+            for entry_index, entry in enumerate(kin.source_calculations):
                 if entry.calculation_key not in all_calc_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"Kinetics source_calculations references "
                         f"unknown calculation_key="
-                        f"'{entry.calculation_key}'."
+                        f"'{entry.calculation_key}'.",
+                        field=(
+                            f"kinetics.source_calculations[{entry_index}]."
+                            f"calculation_key"
+                        ),
+                        key=entry.calculation_key,
+                        declared=all_calc_keys,
                     )
 
         # Per-species statmech source_calculation keys must resolve into
@@ -1515,10 +1563,17 @@ class ComputedReactionUploadRequest(SchemaBase):
                 continue
             for i, sc in enumerate(sp.thermo.source_calculations):
                 if sc.calculation_key not in all_calc_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"species[{sp.key!r}].thermo.source_calculations[{i}]."
                         f"calculation_key references undefined "
-                        f"calculation_key '{sc.calculation_key}'."
+                        f"calculation_key '{sc.calculation_key}'.",
+                        field=(
+                            f"species['{sp.key}'].thermo.source_calculations"
+                            f"[{i}].calculation_key"
+                        ),
+                        key=sc.calculation_key,
+                        declared=all_calc_keys,
                     )
 
         for sp in self.species:
@@ -1526,21 +1581,37 @@ class ComputedReactionUploadRequest(SchemaBase):
                 continue
             for i, sc in enumerate(sp.statmech.source_calculations):
                 if sc.calculation_key not in all_calc_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"species[{sp.key!r}].statmech.source_calculations[{i}]."
                         f"calculation_key references undefined "
-                        f"calculation_key '{sc.calculation_key}'."
+                        f"calculation_key '{sc.calculation_key}'.",
+                        field=(
+                            f"species['{sp.key}'].statmech.source_calculations"
+                            f"[{i}].calculation_key"
+                        ),
+                        key=sc.calculation_key,
+                        declared=all_calc_keys,
                     )
             for i, t in enumerate(sp.statmech.torsions):
                 key = t.source_scan_calculation_key
                 if key is None:
                     continue
                 if key not in all_calc_keys_to_types:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"species[{sp.key!r}].statmech.torsions[{i}]."
                         f"source_scan_calculation_key '{key}' references "
-                        f"undefined calculation_key."
+                        f"undefined calculation_key.",
+                        field=(
+                            f"species['{sp.key}'].statmech.torsions[{i}]."
+                            f"source_scan_calculation_key"
+                        ),
+                        key=key,
+                        declared=all_calc_keys_to_types,
                     )
+                # Declared, but the wrong kind of job: a different repair,
+                # and no seam answers it, so it keeps the generic code.
                 if all_calc_keys_to_types[key] != CalculationType.scan:
                     raise ValueError(
                         f"species[{sp.key!r}].statmech.torsions[{i}]."
@@ -1560,10 +1631,17 @@ class ComputedReactionUploadRequest(SchemaBase):
                     ac.source_calculation_key is not None
                     and ac.source_calculation_key not in all_calc_keys
                 ):
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
                         f"species[{sp.key!r}].applied_energy_corrections[{i}]."
                         f"source_calculation_key references undefined "
-                        f"calculation_key '{ac.source_calculation_key}'."
+                        f"calculation_key '{ac.source_calculation_key}'.",
+                        field=(
+                            f"species['{sp.key}'].applied_energy_corrections"
+                            f"[{i}].source_calculation_key"
+                        ),
+                        key=ac.source_calculation_key,
+                        declared=all_calc_keys,
                     )
         if self.transition_state is not None:
             for i, ac in enumerate(
@@ -1573,9 +1651,16 @@ class ComputedReactionUploadRequest(SchemaBase):
                     ac.source_calculation_key is not None
                     and ac.source_calculation_key not in all_calc_keys
                 ):
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
                         f"transition_state.applied_energy_corrections[{i}]."
                         f"source_calculation_key references undefined "
-                        f"calculation_key '{ac.source_calculation_key}'."
+                        f"calculation_key '{ac.source_calculation_key}'.",
+                        field=(
+                            f"transition_state.applied_energy_corrections[{i}]."
+                            f"source_calculation_key"
+                        ),
+                        key=ac.source_calculation_key,
+                        declared=all_calc_keys,
                     )
         return self

@@ -84,6 +84,22 @@ are declared — because naming the alternatives is what turns a refusal
 into a mechanical fix. Never a row id: the ids are the *values* of these
 maps and they stay there, out of anything a depositor reads (DR-0028
 Requirement 2).
+
+Where the codes live now, and why not here
+------------------------------------------
+The codes this module raises are *defined* in
+:mod:`tckdb_schemas.local_key_codes` and re-exported below. ADR 0017: a
+refusal's code and context belong to the check, not to the layer that
+happens to run it. The request-schema validators that refuse these same
+mistakes one layer earlier may not import ``app`` (the wire package's
+import-boundary test forbids it, statically and at runtime), so before
+#219 they raised a bare ``ValueError`` and a client received the generic
+``request_validation_error`` with an empty ``context`` — for the very
+same mistake this module answers with a code and the list of names that
+would have worked. Which layer fired decided what the depositor was told.
+Moving the constants into the wire package is what makes both layers able
+to say the same thing; :func:`tckdb_schemas.local_key_codes.undeclared_key_context`
+is what stops them saying it differently.
 """
 
 from __future__ import annotations
@@ -91,82 +107,53 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TypeVar
 
+from tckdb_schemas.local_key_codes import (
+    W_CALCULATION_KEY_UNDECLARED,
+    W_GEOMETRY_KEY_UNRESOLVED,
+    W_MICRO_REACTION_KEY_UNDECLARED,
+    W_NETWORK_CHANNEL_KEY_UNDECLARED,
+    W_NETWORK_STATE_KEY_UNDECLARED,
+    W_SPECIES_KEY_UNDECLARED,
+    W_TRANSITION_STATE_KEY_UNDECLARED,
+    undeclared_key_context,
+)
+
 from app.api.error_contract import CodedValueError
 
-#: A payload names a calculation key that the same upload never declared.
-#:
-#: One code for every such field, and the field is in ``context``. An
-#: undeclared key on a thermo source link and on a torsion's rotor scan
-#: are the *same* repair — declare the calculation, or fix the spelling
-#: against the list the refusal prints — resolved against the *same*
-#: bundle-global namespace. That is the test the ownership family
-#: (:mod:`app.services.calculation_ownership`) fails and this one passes:
-#: there, a thermo link and a torsion's scan are repaired by finding two
-#: different right answers, so they get two codes; here there is one
-#: right answer and it is spelled the same way whichever field asked.
-#:
-#: Deliberately *not* used for an applied energy correction's source key.
-#: That field already had a code before this one existed
-#: (``applied_energy_correction_source_key_undeclared``), it is pinned by
-#: ``tests/api/test_api_upload_key_and_role_contracts.py`` on
-#: ``/uploads/conformers``, and it spans a conformer key as well as a
-#: calculation key — so a correction's source is one repair on that
-#: route and would become two if the bundle routes answered differently.
-W_CALCULATION_KEY_UNDECLARED = "calculation_key_undeclared"
+#: Re-exported so no backend import had to move when the codes did, and so
+#: this module still reads as the place the seam's codes come from. They are
+#: *defined* in :mod:`tckdb_schemas.local_key_codes` — see ADR 0017 and that
+#: module's docstring — because a request-schema validator refuses the same
+#: mistake one layer earlier and may not import ``app``.
+__all__ = [
+    "CALCULATION_KEY_REMEDY",
+    "W_CALCULATION_KEY_UNDECLARED",
+    "W_GEOMETRY_KEY_UNRESOLVED",
+    "W_MICRO_REACTION_KEY_UNDECLARED",
+    "W_NETWORK_CHANNEL_KEY_UNDECLARED",
+    "W_NETWORK_STATE_KEY_UNDECLARED",
+    "W_SPECIES_KEY_UNDECLARED",
+    "W_TRANSITION_STATE_KEY_UNDECLARED",
+    "resolve_calculation_key",
+    "resolve_declared_key",
+    "resolve_geometry_key",
+    "resolve_micro_reaction_key",
+    "resolve_network_channel_key",
+    "resolve_network_state_key",
+    "resolve_species_key",
+    "resolve_transition_state_key",
+]
 
 #: How a depositor declares a calculation key in a bundle namespace.
+#:
+#: The remedy sentences all have the same shape because the payload does:
+#: every one of these collections gives its members a required ``key``. That
+#: shared shape is the reason these are parameterizations of one lookup
+#: rather than several lookups.
 CALCULATION_KEY_REMEDY = (
     "Every calculation in an upload carries a required 'key'; a "
     "calculation key must match one of them."
 )
-
-# ---------------------------------------------------------------------------
-# The other five namespaces
-# ---------------------------------------------------------------------------
-#
-# One code each, and deliberately not one code between them. A calculation
-# key and a species key are both "a name this upload declared", but they are
-# not the same repair: an undeclared species key is fixed in the ``species``
-# list, an undeclared state key in ``states``, an undeclared channel key in
-# ``channels``. A client that wants to point the depositor at the right block
-# of their own payload can only do that if the code says which block, and a
-# single ``local_key_undeclared`` would have made ``context['field']`` the
-# only way to tell — which is a string a client would have to parse.
-#
-# The remedy sentences all have the same shape because the payload does: every
-# one of these collections gives its members a required ``key``. That shared
-# shape is the reason these are five parameterizations of one lookup rather
-# than five lookups.
-
-#: A payload names a species key that the same upload never declared.
-W_SPECIES_KEY_UNDECLARED = "species_key_undeclared"
-
-#: A payload names a network state key that the same upload never declared.
-W_NETWORK_STATE_KEY_UNDECLARED = "network_state_key_undeclared"
-
-#: A payload names a network channel key that the same upload never declared.
-W_NETWORK_CHANNEL_KEY_UNDECLARED = "network_channel_key_undeclared"
-
-#: A payload names a micro reaction key that the same upload never declared.
-W_MICRO_REACTION_KEY_UNDECLARED = "micro_reaction_key_undeclared"
-
-#: A payload names a transition state key that the same upload never declared.
-W_TRANSITION_STATE_KEY_UNDECLARED = "transition_state_key_undeclared"
-
-#: A calculation's ``geometry_key`` names no geometry this upload has resolved
-#: for it.
-#:
-#: The one code in this module that does not say *undeclared*, because it is
-#: the one namespace where the key can be real and still unusable. A geometry
-#: key is declared on a species conformer or on a transition state, and the
-#: workflow resolves geometries as it walks those owners in order — so a
-#: transition state's calculation naming a *later* transition state's geometry
-#: names something the payload genuinely contains and the workflow genuinely
-#: cannot resolve. Calling that "undeclared" would be a refusal telling the
-#: depositor something false about their own file. The repair is the same
-#: either way and it is one repair: point the calculation at a geometry its
-#: own species or transition state declares.
-W_GEOMETRY_KEY_UNRESOLVED = "geometry_key_unresolved"
 
 _SPECIES_KEY_REMEDY = (
     "Every species in an upload carries a required 'key'; a species key must "
@@ -254,11 +241,10 @@ def resolve_declared_key(
         code,
         f"{field}='{key}' does not name {subject} {scope}. "
         f"{available} {remedy}".rstrip(),
-        context={
-            "field": field,
-            "key": key,
-            "declared_keys": known,
-        },
+        # Built by the wire package's helper, not spelled out here, so the
+        # request-schema validator that refuses this same mistake one layer
+        # earlier cannot report a different set of facts (ADR 0017).
+        context=undeclared_key_context(field=field, key=key, declared=known),
         message_prefix=False,
     )
 
