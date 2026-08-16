@@ -39,6 +39,42 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+#: The ``app_user`` uniqueness rules registration can trip, mapped to the
+#: refusal each one produces, keyed on the name PostgreSQL reports for the
+#: constraint. ``NAMING_CONVENTION`` spells these
+#: ``uq_%(table_name)s_%(column_0_name)s``; the model declares both in
+#: :class:`app.db.models.app_user.AppUser.__table_args__`.
+#:
+#: Two codes rather than one is the whole point. A taken username and a
+#: taken email address raise the same SQLSTATE (23505), so anything
+#: derived from the SQLSTATE alone can only say ``unique_conflict`` --
+#: which is *less* than the English sentence this replaced, because a
+#: form has two fields and no way to tell which one to highlight. The
+#: constraint name is the only thing in the error that distinguishes
+#: them.
+#:
+#: Read from ``exc.orig.diag.constraint_name`` -- psycopg's structured
+#: diagnostics -- and never from the driver's message text, matching
+#: :func:`app.services.idempotency._is_idempotency_unique_violation` and
+#: :func:`app.api.errors._integrity_error_handler`. The message text is
+#: prose PostgreSQL is free to reword between versions and locales; the
+#: diagnostic field is part of the wire protocol.
+#:
+#: ``backend/tests/db/test_auth_registration_constraint_names.py`` checks
+#: both names against live ``pg_constraint``, so renaming one in a
+#: migration fails there rather than silently demoting a registration
+#: refusal back to the generic sentence.
+REGISTRATION_CONFLICTS: dict[str, str] = {
+    "uq_app_user_username": "username_taken: That username is already in use.",
+    "uq_app_user_email": "email_taken: That email address is already in use.",
+}
+
+#: What registration says when the write was refused by something other
+#: than the two rules above. Deliberately the sentence that was there
+#: before: an unrecognised constraint is exactly the case where naming a
+#: field would be a guess.
+REGISTRATION_CONFLICT_FALLBACK = "Username or email already in use."
+
 
 # ---------------------------------------------------------------------------
 # Schemas
@@ -150,6 +186,45 @@ def _migrate_password_hash(session: Session, user: AppUser, plain: str) -> None:
 # ---------------------------------------------------------------------------
 
 
+def _registration_conflict_detail(exc: IntegrityError) -> str:
+    """Name the field registration refused, when the driver named it.
+
+    Returns a ``"code: message"`` detail, which
+    :func:`app.api.error_contract.error_envelope` promotes into the
+    ``code`` field of the body. Before this, both refusals arrived as
+    ``http_409`` with one sentence covering two fields, so a sign-up form
+    could not highlight the offending input without string-matching
+    English.
+
+    Call this *before* ``session.rollback()``. Rollback does not clear
+    ``exc.orig``, but reading the classification off the exception while
+    it is still the live failure keeps the two from drifting apart if the
+    rollback ever grows a retry.
+
+    Discloses nothing registration did not already disclose. Refusing a
+    taken username is inherent to letting anyone choose one, and the same
+    is true of an address the deployment has agreed to hold at most once.
+    That is an argument about *this* endpoint only: no other route may
+    grow a "does this account exist" answer on the strength of it.
+    """
+    constraint = getattr(getattr(exc.orig, "diag", None), "constraint_name", None)
+    detail = REGISTRATION_CONFLICTS.get(constraint or "")
+    if detail is not None:
+        return detail
+    # A 23505 on some other rule, or a driver that reported no constraint
+    # at all. The old sentence is the honest answer: something unique
+    # collided and this function cannot say which. Logged with the
+    # constraint name -- not returned with it -- so the next such refusal
+    # can be classified instead of guessed at.
+    logger.warning(
+        "registration refused by an unmapped integrity rule: constraint=%r "
+        "sqlstate=%r",
+        constraint,
+        getattr(exc.orig, "sqlstate", None),
+    )
+    return REGISTRATION_CONFLICT_FALLBACK
+
+
 @router.post("/register", response_model=MeResponse, status_code=201)
 def register(
     request: RegisterRequest,
@@ -178,11 +253,10 @@ def register(
     session.add(user)
     try:
         session.flush()
-    except IntegrityError:
+    except IntegrityError as exc:
+        detail = _registration_conflict_detail(exc)
         session.rollback()
-        raise HTTPException(
-            status_code=409, detail="Username or email already in use."
-        ) from None
+        raise HTTPException(status_code=409, detail=detail) from None
 
     ttl = session_ttl_for_role(user.role)
     _, token = create_session(session, user, ttl=ttl)
