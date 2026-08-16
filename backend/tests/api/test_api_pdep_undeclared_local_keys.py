@@ -30,15 +30,29 @@ therefore exempt from the side effect too. The comment above that branch
 says a reported solve "still has to point it at a real path"; for three of
 these four fields, it did not.
 
-**The fifth is the #218 asymmetry, on a new field.**
-``NetworkSpeciesIn.validate_calc_geometry_belongs_to_conformer`` narrows a
-species calculation's ``geometry_key`` to that species's own conformer
-geometries. ``TransitionStateIn`` has no counterpart, and
-``validate_key_references`` checks TS calculations against the *global*
-geometry namespace — so a transition state's calculation naming a *later*
-transition state's geometry passed validation and hit a workflow map that
-had not resolved it yet. Exactly the shape of #218's statmech gap: the
-species branch guarded, the transition-state branch not.
+**The fifth is the #218 asymmetry, on a field where it was already
+half-known.** ``NetworkSpeciesIn.validate_calc_geometry_belongs_to_
+conformer`` narrows a species calculation's ``geometry_key`` to that
+species's own conformer geometries. ``TransitionStateIn`` has no
+counterpart, and ``validate_key_references`` checks TS calculations
+against the *global* geometry namespace.
+
+That much was already on record: ``tests/services/test_calculation_
+geometry_composition.py::test_a_ts_calculation_may_not_borrow_a_
+reactants_geometry_by_key`` reproduces it on
+``/uploads/computed-reaction`` and pins the refusal that closed it —
+``calculation_geometry_composition_mismatch``, which catches the TS
+carrying the wrong *atoms*.
+
+What that defence cannot do is help when the key does not resolve at
+all, because it runs **downstream of the lookup**. On the PDep route the
+geometry map is filled as the workflow walks the transition states in
+order, so a TS calculation naming a *later* TS's geometry raised
+``KeyError`` before any composition check saw it. Same asymmetry, one
+layer earlier, and a 500 instead of a 422.
+``test_resolving_a_geometry_key_does_not_bypass_the_composition_rule``
+below pins the handoff: once the key resolves, the composition rule
+still owns the question of whether the geometry is the right molecule.
 
 How these assertions are written
 --------------------------------
@@ -256,11 +270,49 @@ def test_a_ts_calculation_naming_its_own_geometry_is_still_accepted(client) -> N
 def test_a_ts_calculation_may_still_name_an_already_resolved_geometry(client) -> None:
     """Species geometries are all resolved before any TS is persisted.
 
-    This is the control for the ``ts_isomer_geom`` test: it proves the
-    refusal there is about resolution order, not about a blanket ban on a
-    TS calculation citing a geometry it does not own.
+    The control for the ``ts_isomer_geom`` test: it proves the refusal
+    there is about resolution order, not a blanket ban on a TS
+    calculation citing a geometry it does not own.
+
+    ``etoo_geom`` is ethylperoxy and ``ts_elim`` is the C2H5O2 saddle
+    point, so the two agree on composition. That is deliberate and it is
+    what isolates *resolution* from the separate composition rule
+    exercised in the next test -- borrowing a geometry of the wrong
+    composition is refused, and this one is not being accepted because
+    the rule was skipped.
     """
     payload = _parallel_path_payload()
     payload["transition_states"][0]["calculations"][1]["geometry_key"] = "etoo_geom"
     response = _post(client, payload)
     assert response.status_code == 201, response.text
+
+
+def test_resolving_a_geometry_key_does_not_bypass_the_composition_rule(
+    client,
+) -> None:
+    """The geometry resolver hands off; it does not launder.
+
+    `calculation_geometry_composition_mismatch` is the existing,
+    scientific guard against a calculation carrying a geometry made of
+    the wrong atoms -- and on `/uploads/computed-reaction` it is what
+    already caught a TS calculation borrowing a reactant's geometry
+    (`tests/services/test_calculation_geometry_composition.py::
+    test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key`).
+
+    That guard sits *downstream* of the key lookup, which is exactly why
+    it could not defend the PDep 500 fixed above: a key that never
+    resolves never reaches it. Now that the key resolves or is refused by
+    code, this test pins the other half -- a geometry that resolves and
+    is still the wrong molecule is still refused, by the rule that owns
+    that question, and not silently accepted because a `KeyError` turned
+    into a return value.
+
+    `ethyl_geom` is C2H5; `ts_elim` is the C2H5O2 saddle point.
+    """
+    payload = _parallel_path_payload()
+    payload["transition_states"][0]["calculations"][1]["geometry_key"] = "ethyl_geom"
+    response = _post(client, payload)
+    assert (response.status_code, response.json().get("code")) == (
+        422,
+        "calculation_geometry_composition_mismatch",
+    ), response.text
