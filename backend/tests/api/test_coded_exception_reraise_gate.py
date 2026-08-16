@@ -76,7 +76,21 @@ That **passes** the rule above -- the message goes through -- and it is
 still a loss. ``CodedValidationError`` is a ``ValueError``, so this clause
 catches every coded refusal raised anywhere beneath it; ``detail=str(exc)``
 carries the code only where the catalogue lists it as ``message_prefix``,
-and it drops ``context`` and the handler's chosen status either way. It sat
+and drops ``context`` unconditionally.
+
+What is at stake depends on how broad the clause is, and the two cases are
+worth keeping straight:
+
+* ``except ValueError`` costs the ``code`` and the ``context``, but not
+  the status -- ``_value_error_handler`` answers 422 and so does the
+  ``HTTPException`` above.
+* ``except Exception`` costs the status as well. ``NotFoundError``,
+  ``DomainError`` and ``DataIntegrityError`` are **not** ``ValueError``
+  subclasses (verified by ``issubclass``); they have their own handlers
+  answering 404, 400 and 500. A broad clause that re-answers them as 422
+  changes what the response *means*, not only what it is called.
+
+The site that prompted this rule sat
 on ``GET /scientific/artifacts/integrity`` wrapping
 :func:`~app.services.scientific_read.artifact_integrity.search_artifact_integrity`,
 and the #176 census verdict on it -- "cannot receive a coded error" -- was
