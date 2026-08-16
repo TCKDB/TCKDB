@@ -20,7 +20,7 @@ from app.api.app import create_app
 from app.api.code_catalogue import CATALOGUE
 from app.api.config import settings
 from app.api.deps import get_db, get_write_db
-from app.api.error_contract import _CODE_POSITION_PATTERN as _CODE_POSITION
+from app.api.error_contract import detail_code
 from app.api.routes import auth as auth_routes
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
@@ -820,9 +820,11 @@ class TestRegistrationConflictCodes:
         detail = auth_routes._registration_conflict_detail(exc)
         assert detail == auth_routes.REGISTRATION_CONFLICT_FALLBACK
         assert "uq_app_user_something_new" not in detail
-        # Nothing in the code position, so the envelope reports http_409
-        # rather than inventing a code for a rule nobody classified.
-        assert not _CODE_POSITION.match(detail)
+        # Nothing in the code position, so the envelope reports the
+        # status fallback rather than inventing a code for a rule nobody
+        # classified. Asserted through the promotion helper the handler
+        # actually uses, not against a copy of its regex.
+        assert detail_code(detail, fallback="http_409") == "http_409"
 
     def test_a_driver_reporting_no_constraint_falls_back(self):
         """``diag`` is absent on some wrapped errors; that must not raise."""
@@ -840,17 +842,21 @@ class TestRegistrationConflictCodes:
         code, and break no other assertion in this file that a wire test
         happens not to cover.
 
+        Read through :func:`~app.api.error_contract.detail_code`, the
+        helper the ``HTTPException`` handler itself calls, so this also
+        covers the half a regex cannot see: promotion is gated on the
+        catalogue, so a code present in the sentence but *absent from*
+        ``CATALOGUE`` as ``message_prefix`` is silently not promoted.
+
         The codes are also required to be *distinct*, which is the whole
         premise: two constraints answering one code is exactly the
         under-specified ``unique_conflict`` this replaced, wearing a more
         specific name.
         """
-        codes = {}
-        for constraint, detail in auth_routes.REGISTRATION_CONFLICTS.items():
-            match = _CODE_POSITION.match(detail)
-            assert match is not None, (constraint, detail)
-            codes[constraint] = match.group(1)
-
+        codes = {
+            constraint: detail_code(detail, fallback="http_409")
+            for constraint, detail in auth_routes.REGISTRATION_CONFLICTS.items()
+        }
         assert codes == {
             "uq_app_user_username": "username_taken",
             "uq_app_user_email": "email_taken",

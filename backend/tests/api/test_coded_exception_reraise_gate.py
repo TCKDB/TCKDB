@@ -81,16 +81,28 @@ API_ROOT = REPO_ROOT / "backend" / "app" / "api"
 #: Keep this small. An entry is a standing claim that a client loses
 #: nothing, and every one of them should name the test that checked it.
 JUDGED_SITES: dict[str, str] = {
-    "backend/app/api/routes/auth.py:181": (
-        "Registration catches IntegrityError to roll back before answering. "
-        "Letting it through would reach the IntegrityError handler and "
-        "publish `unique_conflict` -- a real code, but one that says less "
-        "than the message it would replace ('Username or email already in "
-        "use'), because a duplicate username and a duplicate email are the "
-        "same SQLSTATE. The honest repair is a code of its own for this "
-        "condition, which needs a catalogue entry and a client release; it "
-        "is filed separately rather than smuggled in here. Deliberately "
-        "left as `http_409`."
+    "backend/app/api/routes/auth.py:256": (
+        "Registration catches IntegrityError to roll back before answering, "
+        "and this entry is the *completed* half of the one it replaces. "
+        "That entry said letting the exception through would publish "
+        "`unique_conflict` -- a real code that says less than the sentence "
+        "it replaced, because a duplicate username and a duplicate email "
+        "are the same SQLSTATE -- and that the honest repair was a code of "
+        "its own, filed separately rather than smuggled in. #225 is that "
+        "repair: the site now reads `exc.orig.diag.constraint_name` and "
+        "raises `username_taken` or `email_taken`, so it mints a *stricter* "
+        "code than the handler it bypasses rather than losing one. "
+        "Still listed, and still a replaced message, because the scan's "
+        "question is mechanical -- `detail=` is not built from `str(exc)` "
+        "-- and answering it by inlining the call into the `raise` would "
+        "reorder the classification after `session.rollback()` to satisfy a "
+        "text match. What a client loses: nothing, and it gains the field "
+        "name. Checked by test_api_auth.py::TestRegistrationConflictCodes "
+        "on the wire, and by "
+        "test_auth_registration_constraint_names.py against pg_constraint. "
+        "An unrecognised constraint still answers `http_409`, which is the "
+        "old behaviour kept deliberately for the case where naming a field "
+        "would be a guess."
     ),
 }
 
