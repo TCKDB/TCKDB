@@ -139,6 +139,98 @@ def test_a_correctly_numbered_frequency_list_is_still_accepted(client) -> None:
     assert resp.json()["warnings"] == [], resp.text[:800]
 
 
+def _two_bad_freq_calculations() -> dict:
+    """A conformer whose *two* freq results each repeat a mode index.
+
+    Deliberately different in both facts they report — ``[2]`` in a
+    three-mode list against ``[7]`` in a two-mode one — so that a context
+    built by merging the two is not merely wrong but says which of them
+    it kept.
+    """
+    payload = _payload(indices=[1, 2, 2], label="two-dup-index")
+    second = {
+        "type": "freq",
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT,
+        "freq_result": {
+            "n_imag": 0,
+            "zpe_hartree": 0.02,
+            "modes": [
+                {"mode_index": 7, "frequency_cm1": 1595.0, "is_imaginary": False},
+                {"mode_index": 7, "frequency_cm1": 3657.0, "is_imaginary": False},
+            ],
+        },
+    }
+    payload["additional_calculations"].append(second)
+    return payload
+
+
+def test_two_repeated_mode_indices_report_no_single_code_and_no_facts(
+    client,
+) -> None:
+    """#236, on the wire: ``code`` and ``context`` must agree.
+
+    A request that fails twice is two things to fix, so the envelope
+    declines to name one — ``validation_detail_code`` has always fallen
+    back on more than one failure, whatever codes they carry.
+    ``validation_detail_context`` used to fall back only on more than one
+    *distinct* code, so these two failures (same code, twice) produced
+    the generic code beside a populated ``context``: the facts of the
+    second freq result, ``{"duplicate_mode_indices": [7], "mode_count":
+    2}``, attached to a code naming neither result, with the first
+    result's ``[2]``/``3`` silently overwritten by ``merged.update()``
+    and reported nowhere.
+
+    ``detail`` still carries both failures in full — only the
+    single-failure summary is withheld, which is the whole of the
+    decision.
+    """
+    resp = client.post(_ROUTE, json=_two_bad_freq_calculations())
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+
+    assert body["code"] == "request_validation_error", body
+    assert body["context"] == {}, (
+        "facts about one failure reached a client under a code naming "
+        f"neither failure: {body['context']}"
+    )
+    # The premise: this really is the two-failure case, not a payload
+    # that happened to be refused once. Without it the assertions above
+    # would also pass on a single-failure request.
+    assert len(body["detail"]) == 2, body["detail"]
+    assert all(
+        "mode_index values must be unique within a freq result." in str(entry)
+        for entry in body["detail"]
+    ), body["detail"]
+
+
+def test_one_repeated_mode_index_still_names_the_code_and_the_facts(
+    client,
+) -> None:
+    """The other direction of the test above, one failure instead of two.
+
+    Same route, same builder, same refusal. Without this, a
+    ``validation_detail_context`` that returned ``{}`` unconditionally --
+    or a route that stopped promoting codes at all -- would leave the
+    two-failure assertions green while the envelope told a client
+    nothing.
+    """
+    payload = _two_bad_freq_calculations()
+    payload["additional_calculations"] = payload["additional_calculations"][:1]
+
+    resp = client.post(_ROUTE, json=payload)
+    assert resp.status_code == 422, resp.text[:800]
+    body = resp.json()
+
+    assert body["code"] == W_FREQ_MODE_INDEX_NOT_UNIQUE, body
+    assert body["context"] == {
+        "field": "modes",
+        "duplicate_mode_indices": [2],
+        "mode_count": 3,
+    }, body
+    assert len(body["detail"]) == 1, body["detail"]
+
+
 def test_out_of_order_indices_are_not_duplicates(client) -> None:
     """Order is not the rule; uniqueness is.
 

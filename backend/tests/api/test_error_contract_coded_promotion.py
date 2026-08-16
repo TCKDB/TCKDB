@@ -3,8 +3,11 @@
 The end-to-end proofs in ``test_api_scientific_rejection_codes.py`` show
 that twenty specific codes arrive. These pin the *rules* they arrive by,
 including the two that are decisions rather than plumbing: a refusal may
-attach a code without moving its message, and a failure carrying two
-different codes reports neither.
+attach a code without moving its message, and a request that failed more
+than once reports no single code — whether the failures carry two
+different codes or the same one twice. ``context`` follows that decision
+rather than making its own, because for a while it made its own and the
+two disagreed (#236).
 """
 
 from __future__ import annotations
@@ -255,3 +258,160 @@ class TestTwoCodesReportNeither:
             == "a_code"
         )
         assert validation_detail_context(failures) == {"field": "alpha"}
+
+
+class TestTwoFailuresWithOneCodeReportNeither:
+    """#236: the two functions used to ask *different* questions.
+
+    ``validation_detail_code`` falls back on more than one **failure**;
+    ``validation_detail_context`` used to fall back only on more than one
+    distinct **code**. Two failures carrying the same code slipped
+    between them: the envelope reported the generic
+    ``request_validation_error`` beside a populated ``context``
+    describing one of the failures it had just declined to name — and
+    ``merged.update()`` meant that for any key both errors set, the last
+    one silently won and the first fact was gone with nothing said.
+
+    ``TestTwoCodesReportNeither`` above never caught it because its two
+    failures carry *different* codes, which trips the old condition too.
+    The distinguishing case is the same code twice, and it is only rare
+    until #219 moves ~24 refusals into ``model_validator(mode="after")``,
+    which accumulates failures rather than stopping at the first.
+    """
+
+    def test_two_failures_sharing_a_code_report_no_context(self):
+        """The code falls back, so the facts must go with it.
+
+        Asserting emptiness alone would be satisfied by a
+        ``validation_detail_context`` that always returned ``{}``, so
+        every assertion here is paired with
+        :meth:`test_a_single_failure_still_carries_its_facts` below,
+        which uses the same ``_failure`` builder and the same code.
+        """
+        failures = [_failure("a_code", "alpha"), _failure("a_code", "beta")]
+        assert {
+            error["ctx"]["error"].code for error in failures
+        } == {"a_code"}, "the premise: one distinct code across two failures"
+        assert (
+            validation_detail_code(failures, fallback="request_validation_error")
+            == "request_validation_error"
+        )
+        assert validation_detail_context(failures) == {}
+
+    def test_a_single_failure_still_carries_its_facts(self):
+        """The other direction, with the identical code and builder.
+
+        This is what makes the assertion above a statement about *two
+        failures* rather than about ``a_code`` or about the function
+        having been emptied out.
+        """
+        failures = [_failure("a_code", "alpha")]
+        assert (
+            validation_detail_code(failures, fallback="request_validation_error")
+            == "a_code"
+        )
+        assert validation_detail_context(failures) == {"field": "alpha"}
+
+    def test_the_later_failures_facts_are_not_smuggled_through(self):
+        """Named separately, because the old behaviour was *specifically*
+        this: ``merged.update()`` left the second failure's ``field`` in
+        place of the first's. A reinstated merge fails here reporting the
+        value it kept, rather than only failing an ``== {}`` whose
+        message says nothing about which fact leaked.
+
+        Only the merge can produce a non-empty result in this shape --
+        the code falls back before any context is looked at -- so this
+        does not also guard "picks a winner".
+        ``TestOneCodeCarriedByTwoDeclaredErrors`` below does, on the one
+        shape where picking a winner is reachable.
+        """
+        failures = [_failure("a_code", "alpha"), _failure("a_code", "beta")]
+        context = validation_detail_context(failures)
+        assert context.get("field") != "beta", (
+            "the later failure's facts reached the envelope under a code "
+            "naming neither failure — this is the #236 defect"
+        )
+
+    def test_the_envelope_a_client_reads_is_consistent(self):
+        """Assembled the way ``errors.py`` assembles it.
+
+        The two functions are only ever read together, through
+        ``error_envelope``. Pinning the pair at the seam catches a future
+        change that keeps each function defensible alone while making the
+        body they build disagree with itself.
+        """
+        failures = [_failure("a_code", "alpha"), _failure("a_code", "beta")]
+        envelope = error_envelope(
+            failures,
+            code=validation_detail_code(
+                failures, fallback="request_validation_error"
+            ),
+            context=validation_detail_context(failures),
+            fallback_code="request_validation_error",
+        )
+        assert envelope["code"] == "request_validation_error"
+        assert envelope["context"] == {}
+        assert len(envelope["detail"]) == 2, (
+            "both failures must still be reported in full; withholding the "
+            "summary is not the same as hiding a failure"
+        )
+
+
+class TestOneCodeCarriedByTwoDeclaredErrors:
+    """A code *is* promoted, and two declared errors claim it.
+
+    This is the only shape in which the no-merge decision is reachable,
+    and it is deliberately contrived: Pydantic puts one exception in one
+    ``ctx["error"]``, so through ``ValidationError.errors()`` the number
+    of declared errors equals the number of failures, and two failures
+    make :func:`validation_detail_code` fall back before any context is
+    consulted. Nesting the two under a single outer entry is what gets
+    past the fallback.
+
+    It is tested rather than deleted because the branch is what stops a
+    silent winner from reappearing. #219 changes how failures accumulate,
+    and a defensive branch nothing exercises is a branch that quietly
+    stops working — which is the same defect one layer down as the one
+    this file is about.
+    """
+
+    @staticmethod
+    def _two_errors_under_one_entry() -> list:
+        return [[_failure("a_code", "alpha"), _failure("a_code", "beta")]]
+
+    def test_the_code_is_promoted_here(self):
+        """The premise. Without it the context assertion proves nothing.
+
+        If this ever falls back, the test below passes for the wrong
+        reason -- the early ``{}`` return -- and stops guarding the
+        merge at all.
+        """
+        assert (
+            validation_detail_code(
+                self._two_errors_under_one_entry(),
+                fallback="request_validation_error",
+            )
+            == "a_code"
+        )
+
+    def test_two_contexts_for_one_code_report_neither(self):
+        """No merge, and no winner picked from the two."""
+        context = validation_detail_context(self._two_errors_under_one_entry())
+        assert context == {}, (
+            "one of two declared errors' facts was reported as though it "
+            f"were the whole story: {context}"
+        )
+
+    def test_one_context_for_one_code_is_still_reported(self):
+        """The other direction, in the same nested shape.
+
+        Same nesting, same code, one declared error instead of two — so
+        the assertion above is about the *count*, not about the nesting
+        defeating :func:`_declared_errors`.
+        """
+        nested = [[_failure("a_code", "alpha")]]
+        assert (
+            validation_detail_code(nested, fallback="request_validation_error")
+            == "a_code"
+        )
+        assert validation_detail_context(nested) == {"field": "alpha"}

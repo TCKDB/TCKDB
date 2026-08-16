@@ -314,6 +314,14 @@ def _declared_errors(detail: object) -> list[CodedValidationError]:
     return found
 
 
+#: Handed to :func:`validation_detail_code` by
+#: :func:`validation_detail_context` so that "did it promote anything?"
+#: can be asked without a second copy of the promotion rule. Spelled with
+#: NULs because a code is ``snake_case``: no real code can equal this, so
+#: a fallback is never mistaken for a promotion.
+_NO_CODE_PROMOTED = "\x00no code promoted\x00"
+
+
 def validation_detail_context(detail: object) -> dict[str, Any]:
     """Structured facts from the coded error behind a validation failure.
 
@@ -325,18 +333,43 @@ def validation_detail_context(detail: object) -> dict[str, Any]:
     place, which is what makes "read ``context``, never ``detail``"
     advice a client can actually follow.
 
-    Empty unless exactly one code was promoted, for the same reason
-    :func:`validation_detail_code` falls back there: facts attached to a
-    code the envelope is not reporting would be facts about nothing.
+    Empty unless :func:`validation_detail_code` promoted a code *and*
+    exactly one declared error carries it: facts attached to a code the
+    envelope is not reporting would be facts about nothing.
+
+    That rule is not restated here, it is *asked* -- this function calls
+    :func:`validation_detail_code` rather than reimplementing its test.
+    The two used to spell the question differently: the code fell back on
+    more than one *failure*, the context only on more than one distinct
+    *code*. Two failures carrying the same code therefore produced the
+    generic ``request_validation_error`` beside a populated ``context``,
+    describing one of the failures the envelope had just declined to
+    name. #219 moves ~24 refusals into ``model_validator(mode="after")``,
+    which accumulates failures instead of stopping at the first, so that
+    combination stops being rare. One expression, one caller, no drift.
+
+    There is deliberately no merge. Two contexts for one promoted code
+    would have to be combined, and the loop that did it was
+    ``merged.update(...)``, where an overlapping key means the last error
+    silently wins and the earlier fact is gone with nothing said. Raising
+    on the collision instead is worse: this runs *inside* the 422
+    handler, so it would turn a malformed request into a 500. Reporting
+    no facts is the only honest third answer, and ``detail`` still
+    carries every failure in full.
     """
 
-    errors = _declared_errors(detail)
-    if len({error.code for error in errors}) != 1:
+    promoted = validation_detail_code(detail, fallback=_NO_CODE_PROMOTED)
+    carrying = [
+        error.context for error in _declared_errors(detail) if error.code == promoted
+    ]
+    if len(carrying) != 1:
+        # Empty in the two cases that are not one declared error's facts:
+        # nothing was promoted (``promoted`` is the sentinel, which no
+        # declared code equals), or the code came from a message and
+        # there are no structured facts to lift. More than one is the
+        # no-merge case in the docstring.
         return {}
-    merged: dict[str, Any] = {}
-    for error in errors:
-        merged.update(error.context)
-    return merged
+    return dict(carrying[0])
 
 
 def validation_detail_code(detail: object, *, fallback: str) -> str:
@@ -355,6 +388,11 @@ def validation_detail_code(detail: object, *, fallback: str) -> str:
     # outer list. Even if two failures happen to carry the same embedded
     # code, promoting that code would hide the fact that the request failed
     # in more than one place.
+    #
+    # ``validation_detail_context`` asks this function rather than
+    # repeating the test, so changing this line changes what ``context``
+    # reports too -- that coupling is deliberate. They were two separate
+    # conditions once, and the pair disagreed about exactly this case.
     if isinstance(detail, (list, tuple)) and len(detail) != 1:
         return fallback
 
