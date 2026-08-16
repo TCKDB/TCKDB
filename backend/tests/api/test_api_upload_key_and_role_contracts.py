@@ -1319,3 +1319,318 @@ class TestReactionBundleConformerSourceKeys:
         row = _latest_correction(db_session)
         assert row.source_conformer_observation_id is None
         assert row.target_transition_state_entry_id is not None
+
+
+# ---------------------------------------------------------------------------
+# ADR 0017: the same mistake gets the same answer from either layer
+# ---------------------------------------------------------------------------
+
+
+_CALC_KEY_UNDECLARED = "calculation_key_undeclared"
+_STATMECH_KEY_UNDECLARED = "statmech_calculation_key_undeclared"
+
+
+def _rxn_freq_with_geometry_key(key: str, geometry_key: str) -> dict:
+    """A species-level freq calc pointed at a geometry key of your choosing."""
+    return {
+        "key": key,
+        "type": "freq",
+        "geometry_key": geometry_key,
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT,
+        "freq_n_imag": 0,
+    }
+
+
+class TestALayerBoundaryIsNotAContract:
+    """The A/B that made #219 a task, run as a test so it stays fixed.
+
+    One route, one namespace, one repair, two spellings of the mistake:
+
+    * ``statmech.source_calculations[0].calculation_key`` is checked by
+      ``ConformerUploadRequest``, a *request schema*;
+    * ``applied_energy_corrections[0].source_calculation_key`` is not,
+      and reaches ``resolve_applied_correction_source_key``, a *workflow
+      seam*.
+
+    Before this change the first answered ``request_validation_error``
+    with ``context == {}`` and the second answered a specific code with
+    the field, the key and the declared alternatives. Same route, same
+    repair, two contracts -- decided by which layer happened to run
+    first, which is a published contract nobody declared and a refactor
+    can move.
+
+    These tests do not assert the two codes are *equal*. They are not,
+    and should not be: an applied correction's source key spans
+    conformers as well as calculations and keeps its own older, published
+    code. What they assert is that neither refusal falls back to the
+    generic code, and that both carry the same three ``context`` keys --
+    so a client reads one envelope shape whichever layer fired.
+    """
+
+    def test_the_schema_layer_names_the_mistake(self, client):
+        """The shadowed half: caught by a validator, before any transaction."""
+        payload = _conformer_payload(
+            "adr17-schema-layer",
+            statmech={
+                "statmech_treatment": "rrho",
+                "external_symmetry": 1,
+                "source_calculations": [
+                    {"calculation_key": "my_sp_jbo", "role": "sp"}
+                ],
+            },
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(resp, _STATMECH_KEY_UNDECLARED)
+        assert set(body["context"]) == {"field", "key", "declared_keys"}
+        assert body["context"]["key"] == "my_sp_jbo"
+        assert body["context"]["declared_keys"] == ["my_sp_job"]
+
+    def test_the_workflow_layer_names_the_same_mistake(self, client):
+        """The half that always worked, unchanged, for comparison."""
+        payload = _conformer_payload(
+            "adr17-workflow-layer",
+            applied_energy_corrections=[
+                _zpe_correction(source_calculation_key="my_sp_jbo")
+            ],
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert set(body["context"]) == {"field", "key", "declared_keys"}
+        assert body["context"]["key"] == "my_sp_jbo"
+        assert body["context"]["declared_keys"] == ["my_sp_job"]
+
+    def test_neither_spelling_falls_back_to_the_generic_code(self, client):
+        """Stated as one assertion, because it is the actual contract.
+
+        Written to fail loudly if a future refactor moves either check
+        across the layer boundary and the code changes with it.
+        """
+        seen = {}
+        for name, payload in (
+            (
+                "schema",
+                _conformer_payload(
+                    "adr17-ab-schema",
+                    statmech={
+                        "statmech_treatment": "rrho",
+                        "external_symmetry": 1,
+                        "source_calculations": [
+                            {"calculation_key": "typo", "role": "sp"}
+                        ],
+                    },
+                ),
+            ),
+            (
+                "seam",
+                _conformer_payload(
+                    "adr17-ab-seam",
+                    applied_energy_corrections=[
+                        _zpe_correction(source_calculation_key="typo")
+                    ],
+                ),
+            ),
+        ):
+            resp = client.post("/api/v1/uploads/conformers", json=payload)
+            body = resp.json()
+            seen[name] = (
+                resp.status_code,
+                body["code"],
+                sorted(body["context"]),
+            )
+
+        assert seen["schema"][0] == seen["seam"][0] == 422, seen
+        assert seen["schema"][1] != "request_validation_error", seen
+        assert seen["seam"][1] != "request_validation_error", seen
+        assert seen["schema"][2] == seen["seam"][2] == [
+            "declared_keys",
+            "field",
+            "key",
+        ], seen
+
+    def test_a_correctly_spelled_payload_is_still_accepted(self, client):
+        """The green half. A guard that only ever refuses proves nothing."""
+        payload = _conformer_payload(
+            "adr17-accepted",
+            statmech={
+                "statmech_treatment": "rrho",
+                "external_symmetry": 1,
+                "source_calculations": [
+                    {"calculation_key": "my_sp_job", "role": "sp"}
+                ],
+            },
+            applied_energy_corrections=[
+                _zpe_correction(source_calculation_key="my_sp_job")
+            ],
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        assert resp.status_code == 201, resp.text[:800]
+
+
+class TestTwoUndeclaredKeysInOnePayload:
+    """What a client sees when a payload gets it wrong more than once.
+
+    Worth pinning deliberately rather than discovering later, because
+    #219 moves a lot of refusals onto ``model_validator(mode="after")``
+    and makes multi-failure bodies less rare than they were.
+
+    #236 settled what happens: ``validation_detail_code`` refuses to
+    promote a code when the detail list holds more than one failure --
+    naming one would hide that the request failed in more than one place
+    -- and ``validation_detail_context`` now *calls* that function rather
+    than repeating its test, so the context empties with it. A generic
+    code beside a specific context was the lie that fix removed.
+
+    So: one failure gets a code and facts; several get the generic code
+    and no facts, with every failure still spelled out in ``detail``.
+    """
+
+    def test_one_undeclared_key_is_named(self, client):
+        payload = _conformer_payload(
+            "adr17-single-failure",
+            applied_energy_corrections=[
+                _zpe_correction(source_calculation_key="typo_a")
+            ],
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(resp, _KEY_UNDECLARED)
+        assert body["context"]["key"] == "typo_a"
+
+    def test_two_typos_in_one_model_still_report_only_the_first(self, client):
+        """Measured, not assumed: one model raises once and stops.
+
+        Every bundle's key-reference checks are ``model_validator(mode=
+        "after")`` on the *request* model, and Pydantic stops that chain
+        at the first raise. So "two mis-typed keys in one payload" is
+        usually still a single failure with a single code -- which is why
+        the multi-failure envelope is rarer than #219's brief expected.
+        The genuinely plural case is the next test.
+        """
+        payload = _conformer_payload(
+            "adr17-two-typos-one-model",
+            additional_calculations=[dict(_freq_calc(), key="my_freq_job")],
+            statmech={
+                "statmech_treatment": "rrho",
+                "external_symmetry": 1,
+                "source_calculations": [
+                    {"calculation_key": "typo_a", "role": "sp"}
+                ],
+            },
+            applied_energy_corrections=[
+                _zpe_correction(source_calculation_key="typo_b")
+            ],
+        )
+        resp = client.post("/api/v1/uploads/conformers", json=payload)
+        body = _assert_code(resp, _STATMECH_KEY_UNDECLARED)
+        assert len(body["detail"]) == 1, body["detail"]
+        assert body["context"]["key"] == "typo_a"
+
+    def test_two_sibling_models_fail_and_the_envelope_names_neither(
+        self, client
+    ):
+        """The real plural case: two species, each with a bad geometry key.
+
+        ``SpeciesIn`` validates its own calculations' ``geometry_key``, so
+        two sibling species produce two independent failures carrying the
+        *same* code. This is the combination #236 fixed: the envelope must
+        report the generic code **and an empty context**, because facts
+        about one of two offending keys, under a code the envelope has
+        just declined to name, describe nothing a client can act on.
+
+        ``detail`` still carries both failures in full, and -- as an
+        accident of ``jsonable_encoder`` rather than a declared surface --
+        each preserved exception renders its own ``code`` there.
+        """
+        bundle = _rxn_bundle()
+        bundle["species"][0]["calculations"] = [
+            _rxn_freq_with_geometry_key("h-freq", "no-such-geometry-a")
+        ]
+        bundle["species"][1]["calculations"] = [
+            _rxn_freq_with_geometry_key("h2-freq", "no-such-geometry-b")
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        assert resp.status_code == 422, resp.text[:400]
+        body = resp.json()
+
+        assert body["code"] == "request_validation_error", body["code"]
+        assert body["context"] == {}, body["context"]
+        assert len(body["detail"]) == 2, body["detail"]
+        assert [entry["loc"] for entry in body["detail"]] == [
+            ["body", "species", 0],
+            ["body", "species", 1],
+        ], body["detail"]
+
+        # Both failures really were the coded refusal, so the empty
+        # envelope context is a deliberate decision and not an absence of
+        # anything to report.
+        per_error_codes = [
+            entry["ctx"]["error"]["code"] for entry in body["detail"]
+        ]
+        assert per_error_codes == [
+            "geometry_key_unresolved",
+            "geometry_key_unresolved",
+        ], per_error_codes
+        assert [
+            entry["ctx"]["error"]["context"]["key"] for entry in body["detail"]
+        ] == ["no-such-geometry-a", "no-such-geometry-b"], body["detail"]
+
+    def test_a_reaction_naming_an_undeclared_species_says_so(self, client):
+        """``reactant_keys`` is its own namespace and its own code.
+
+        Added because a runtime sweep of the whole suite — recording every
+        site that raises one of these refusals — found this validator
+        reached by nothing. A converted branch no test enters is a branch
+        a mutation cannot make fail, which is the vacuous pass this
+        repository keeps finding. So it is entered here.
+        """
+        bundle = _rxn_bundle()
+        bundle["reactant_keys"] = ["h", "no-such-species"]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        body = _assert_code(resp, "species_key_undeclared")
+        assert body["context"]["key"] == "no-such-species"
+        assert body["context"]["field"] == "reactant_keys[1]"
+        assert body["context"]["declared_keys"] == ["h", "h2"]
+
+    def test_ts_evidence_naming_a_foreign_calculation_says_so(self, client):
+        """The nested TS model's own namespace: its *own* calculations.
+
+        Same reason as the test above — the sweep found this branch
+        unreached. The key here is refused even though it is spelled
+        correctly somewhere else in the bundle, because a transition
+        state's IRC evidence must come from that transition state's own
+        job.
+        """
+        bundle = _rxn_bundle_with_ts()
+        bundle["transition_state"]["validation_evidence"] = [
+            {
+                "kind": "irc",
+                "passed": True,
+                "rationale": "IRC connects H + H to H2.",
+                # A real key in this bundle, owned by a species.
+                "source_calculation_key": "h-opt",
+            }
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        body = _assert_code(resp, _CALC_KEY_UNDECLARED)
+        assert body["context"]["key"] == "h-opt"
+        assert body["context"]["field"] == (
+            "transition_state.validation_evidence[0].source_calculation_key"
+        )
+        # Only the TS's own calculations are offered as alternatives.
+        assert body["context"]["declared_keys"] == ["ts-freq", "ts-opt"]
+
+    def test_one_of_those_two_alone_is_named_in_full(self, client):
+        """The control. Fix one species and the envelope speaks again.
+
+        Without this, the test above is satisfied by a route that has
+        simply stopped producing codes at all.
+        """
+        bundle = _rxn_bundle()
+        bundle["species"][0]["calculations"] = [
+            _rxn_freq_with_geometry_key("h-freq", "no-such-geometry-a")
+        ]
+        resp = client.post("/api/v1/uploads/computed-reaction", json=bundle)
+        body = _assert_code(resp, "geometry_key_unresolved")
+        assert body["context"]["key"] == "no-such-geometry-a"
+        assert body["context"]["declared_keys"] == ["h-geom"]
+        assert body["context"]["field"] == "calculations['h-freq'].geometry_key"

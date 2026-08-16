@@ -8,6 +8,11 @@ NASA polynomials), and attaches it to the resolved species entry.
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.local_key_codes import (
+    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
+    W_CALCULATION_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
@@ -286,11 +291,15 @@ class ThermoUploadRequest(SchemaBase):
         ``existing_calculation_id`` instead are skipped — those are resolved
         against the database in the workflow layer."""
         defined = {c.key for c in self.calculations}
-        for sc in self.source_calculations:
+        for index, sc in enumerate(self.source_calculations):
             if sc.calculation_key is not None and sc.calculation_key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
                     f"source_calculations references undefined "
-                    f"calculation_key '{sc.calculation_key}'."
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"source_calculations[{index}].calculation_key",
+                    key=sc.calculation_key,
+                    declared=defined,
                 )
         return self
 
@@ -317,9 +326,16 @@ class ThermoUploadRequest(SchemaBase):
         for i, correction in enumerate(self.applied_energy_corrections):
             key = correction.source_calculation_key
             if key is not None and key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
                     f"applied_energy_corrections[{i}].source_calculation_key "
-                    f"'{key}' does not reference a declared calculation."
+                    f"'{key}' does not reference a declared calculation.",
+                    field=(
+                        f"applied_energy_corrections[{i}]."
+                        f"source_calculation_key"
+                    ),
+                    key=key,
+                    declared=defined,
                 )
         return self
 

@@ -28,6 +28,9 @@ import logging
 from collections.abc import Mapping
 
 from sqlalchemy.orm import Session
+from tckdb_schemas.local_key_codes import (
+    W_STATMECH_CALCULATION_KEY_UNDECLARED as _W_STATMECH_CALCULATION_KEY_UNDECLARED,
+)
 
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
@@ -57,7 +60,11 @@ from app.services.upload_reference import (
 logger = logging.getLogger(__name__)
 
 #: A statmech source link names a calculation the upload never declared.
-W_STATMECH_CALCULATION_KEY_UNDECLARED = "statmech_calculation_key_undeclared"
+#:
+#: Re-exported; *defined* in :mod:`tckdb_schemas.local_key_codes`, because
+#: the statmech and conformer request schemas refuse the same mistake one
+#: layer earlier and may not import ``app`` (ADR 0017).
+W_STATMECH_CALCULATION_KEY_UNDECLARED = _W_STATMECH_CALCULATION_KEY_UNDECLARED
 
 #: A statmech source link declares a role the resolved calculation cannot
 #: play, because its ``Calculation.type`` is a different kind of job.

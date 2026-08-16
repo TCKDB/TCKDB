@@ -22,6 +22,10 @@ from tckdb_schemas.fragments.refs import (
     WorkflowToolReleaseRef,
 )
 from tckdb_schemas.literature import LiteratureUploadRequest
+from tckdb_schemas.local_key_codes import (
+    W_STATMECH_CALCULATION_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.statmech_bits import (
     StatmechSourceCalcIn,
     StatmechTorsionIn,
@@ -287,25 +291,42 @@ class ConformerUploadRequest(SchemaBase):
         on, so an unrecognised key can only be a mistake. Refusing it is
         the difference between a 422 the depositor can fix and a
         provenance link that silently never existed.
+
+        The code is ``statmech_calculation_key_undeclared`` because that is
+        what ``app.services.statmech_resolution`` answers when the same
+        typo survives to the write path — this route reaches that seam, and
+        ADR 0017 says the depositor must not be able to tell which of the
+        two caught them.
         """
         if self.statmech is None:
             return self
         declared = set(self.declared_calculation_keys())
         for index, source in enumerate(self.statmech.source_calculations):
             if source.calculation_key not in declared:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_STATMECH_CALCULATION_KEY_UNDECLARED,
                     f"statmech.source_calculations[{index}].calculation_key "
                     f"'{source.calculation_key}' does not name a calculation "
                     f"declared in this upload. Put a matching 'key' on "
-                    f"'calculation' or on one of 'additional_calculations'."
+                    f"'calculation' or on one of 'additional_calculations'.",
+                    field=f"statmech.source_calculations[{index}]",
+                    key=source.calculation_key,
+                    declared=declared,
                 )
         for index, torsion in enumerate(self.statmech.torsions):
             key = torsion.source_scan_calculation_key
             if key is not None and key not in declared:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_STATMECH_CALCULATION_KEY_UNDECLARED,
                     f"statmech.torsions[{index}].source_scan_calculation_key "
                     f"'{key}' does not name a calculation declared in this "
-                    f"upload."
+                    f"upload.",
+                    field=(
+                        f"statmech.torsions[{index}]"
+                        f".source_scan_calculation_key"
+                    ),
+                    key=key,
+                    declared=declared,
                 )
         return self
 

@@ -11,6 +11,9 @@ from typing import TypeVar
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from tckdb_schemas.local_key_codes import (
+    W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED as _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
+)
 
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
@@ -35,8 +38,12 @@ from app.services.local_key_resolution import resolve_declared_key
 from app.services.software_resolution import resolve_software
 
 #: An applied correction names a source the enclosing upload never declared.
+#:
+#: Re-exported; *defined* in :mod:`tckdb_schemas.local_key_codes`, because
+#: four request schemas refuse the same mistake one layer earlier and may
+#: not import ``app`` (ADR 0017).
 W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED = (
-    "applied_energy_correction_source_key_undeclared"
+    _W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED
 )
 
 T = TypeVar("T")

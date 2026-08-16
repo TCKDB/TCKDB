@@ -57,6 +57,16 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
     validate_ts_evidence_set,
 )
+from tckdb_schemas.local_key_codes import (
+    W_CALCULATION_KEY_UNDECLARED,
+    W_GEOMETRY_KEY_UNRESOLVED,
+    W_MICRO_REACTION_KEY_UNDECLARED,
+    W_NETWORK_CHANNEL_KEY_UNDECLARED,
+    W_NETWORK_STATE_KEY_UNDECLARED,
+    W_SPECIES_KEY_UNDECLARED,
+    W_TRANSITION_STATE_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.shared.calculation_in import (
     CalculationIn,
     GeometryIn,
@@ -169,9 +179,13 @@ class NetworkSpeciesIn(SchemaBase):
             if calc.geometry_key is None:
                 continue
             if calc.geometry_key not in conformer_geometry_keys:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_GEOMETRY_KEY_UNRESOLVED,
                     f"Species '{self.key}' calculation '{calc.key}' geometry_key "
-                    f"must reference one of that species's conformer geometries."
+                    f"must reference one of that species's conformer geometries.",
+                    field=f"calculations['{calc.key}'].geometry_key",
+                    key=calc.geometry_key,
+                    declared=conformer_geometry_keys,
                 )
         return self
 
@@ -1223,42 +1237,73 @@ class NetworkPDepUploadRequest(SchemaBase):
         calculation_keys = set(_collect_all_calculation_keys(self))
 
         # State participants must reference defined species
-        for state in self.states:
-            for p in state.participants:
+        for state_index, state in enumerate(self.states):
+            for p_index, p in enumerate(state.participants):
                 if p.species_key not in species_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_SPECIES_KEY_UNDECLARED,
                         f"State '{state.key}' references undefined species_key "
-                        f"'{p.species_key}'."
+                        f"'{p.species_key}'.",
+                        field=(
+                            f"states[{state_index}].participants[{p_index}]."
+                            f"species_key"
+                        ),
+                        key=p.species_key,
+                        declared=species_keys,
                     )
 
         # Channels must reference defined states
-        for ch in self.channels:
+        for ch_index, ch in enumerate(self.channels):
             if ch.source_state_key not in state_keys:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_NETWORK_STATE_KEY_UNDECLARED,
                     f"Channel references undefined source_state_key "
-                    f"'{ch.source_state_key}'."
+                    f"'{ch.source_state_key}'.",
+                    field=f"channels[{ch_index}].source_state_key",
+                    key=ch.source_state_key,
+                    declared=state_keys,
                 )
             if ch.sink_state_key not in state_keys:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_NETWORK_STATE_KEY_UNDECLARED,
                     f"Channel references undefined sink_state_key "
-                    f"'{ch.sink_state_key}'."
+                    f"'{ch.sink_state_key}'.",
+                    field=f"channels[{ch_index}].sink_state_key",
+                    key=ch.sink_state_key,
+                    declared=state_keys,
                 )
 
-        # Micro reaction participants must reference defined species
-        for rxn in self.micro_reactions:
-            for rp in rxn.reactants + rxn.products:
-                if rp.species_key not in species_keys:
-                    raise ValueError(
-                        f"Micro reaction '{rxn.key}' references undefined "
-                        f"species_key '{rp.species_key}'."
-                    )
+        # Micro reaction participants must reference defined species.
+        # ``reactants`` and ``products`` are walked separately rather than
+        # concatenated, so ``context['field']`` names a location that
+        # exists in the depositor's file -- and the same one the workflow
+        # seam would have named.
+        for rxn_index, rxn in enumerate(self.micro_reactions):
+            for side in ("reactants", "products"):
+                for rp_index, rp in enumerate(getattr(rxn, side)):
+                    if rp.species_key not in species_keys:
+                        raise undeclared_key_error(
+                            W_SPECIES_KEY_UNDECLARED,
+                            f"Micro reaction '{rxn.key}' references undefined "
+                            f"species_key '{rp.species_key}'.",
+                            field=(
+                                f"micro_reactions[{rxn_index}].{side}"
+                                f"[{rp_index}].species_key"
+                            ),
+                            key=rp.species_key,
+                            declared=species_keys,
+                        )
 
         # TS must reference defined micro reactions
-        for ts in self.transition_states:
+        for ts_index, ts in enumerate(self.transition_states):
             if ts.micro_reaction_key not in reaction_keys:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_MICRO_REACTION_KEY_UNDECLARED,
                     f"Transition state '{ts.key}' references undefined "
-                    f"micro_reaction_key '{ts.micro_reaction_key}'."
+                    f"micro_reaction_key '{ts.micro_reaction_key}'.",
+                    field=f"transition_states[{ts_index}].micro_reaction_key",
+                    key=ts.micro_reaction_key,
+                    declared=reaction_keys,
                 )
             # IRC evidence is optional but recommended; a TS deposited without
             # it succeeds and the workflow emits an upload warning. What is
@@ -1267,9 +1312,12 @@ class NetworkPDepUploadRequest(SchemaBase):
                 ts.calculation.key: ts.calculation.type,
                 **{calculation.key: calculation.type for calculation in ts.calculations},
             }
-            for evidence in ts.validation_evidence:
+            for ev_index, evidence in enumerate(ts.validation_evidence):
                 # This payload HAS a calculation-key namespace, so evidence
-                # must name the irc calculation it came from.
+                # must name the irc calculation it came from. A *missing*
+                # key is a different refusal from a *wrong* one -- there is
+                # nothing to list alternatives against -- so it keeps the
+                # generic code.
                 if evidence.source_calculation_key is None:
                     raise ValueError(
                         f"Transition state '{ts.key}' validation evidence requires "
@@ -1277,9 +1325,17 @@ class NetworkPDepUploadRequest(SchemaBase):
                     )
                 calculation_type = ts_calculation_types.get(evidence.source_calculation_key)
                 if calculation_type is None:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"Transition state '{ts.key}' validation evidence references "
-                        f"undefined calculation_key '{evidence.source_calculation_key}'."
+                        f"undefined calculation_key '{evidence.source_calculation_key}'.",
+                        field=(
+                            f"transition_states['{ts.key}']."
+                            f"validation_evidence[{ev_index}]."
+                            f"source_calculation_key"
+                        ),
+                        key=evidence.source_calculation_key,
+                        declared=ts_calculation_types,
                     )
                 if calculation_type != CalculationType.irc:
                     raise ValueError(
@@ -1321,9 +1377,13 @@ class NetworkPDepUploadRequest(SchemaBase):
 
         for context, calc in all_calcs:
             if calc.geometry_key is not None and calc.geometry_key not in geometry_keys:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_GEOMETRY_KEY_UNRESOLVED,
                     f"Calculation '{calc.key}' in {context} references "
-                    f"undefined geometry_key '{calc.geometry_key}'."
+                    f"undefined geometry_key '{calc.geometry_key}'.",
+                    field=f"calculations['{calc.key}'].geometry_key",
+                    key=calc.geometry_key,
+                    declared=geometry_keys,
                 )
 
         # Species statmech references must resolve against that species's OWN
@@ -1340,12 +1400,25 @@ class NetworkPDepUploadRequest(SchemaBase):
             for calc in sp.calculations:
                 own_calc_types[calc.key] = calc.type
 
-            for sc in sp.statmech.source_calculations:
+            for sc_index, sc in enumerate(sp.statmech.source_calculations):
                 if sc.calculation_key not in own_calc_types:
-                    raise ValueError(
+                    # The namespace here is deliberately *narrower* than the
+                    # seam's (this species's own calculations, not the whole
+                    # network), which is why ``declared_keys`` differs
+                    # between the layers even though the code does not. The
+                    # narrower list is the more useful one: it is what would
+                    # actually have worked.
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"Species '{sp.key}' statmech.source_calculations "
                         f"references calculation_key '{sc.calculation_key}', "
-                        f"which is not one of that species's own calculations."
+                        f"which is not one of that species's own calculations.",
+                        field=(
+                            f"statmech.source_calculations[{sc_index}]."
+                            f"calculation_key"
+                        ),
+                        key=sc.calculation_key,
+                        declared=own_calc_types,
                     )
 
             for i, t in enumerate(sp.statmech.torsions):
@@ -1353,10 +1426,17 @@ class NetworkPDepUploadRequest(SchemaBase):
                 if scan_key is None:
                     continue
                 if scan_key not in own_calc_types:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"Species '{sp.key}' statmech.torsions[{i}]."
                         f"source_scan_calculation_key '{scan_key}' is not one "
-                        f"of that species's own calculations."
+                        f"of that species's own calculations.",
+                        field=(
+                            f"statmech.torsions[{i}]."
+                            f"source_scan_calculation_key"
+                        ),
+                        key=scan_key,
+                        declared=own_calc_types,
                     )
                 if own_calc_types[scan_key] != CalculationType.scan:
                     raise ValueError(
@@ -1367,34 +1447,53 @@ class NetworkPDepUploadRequest(SchemaBase):
 
         # Bath gas species must reference defined species
         if self.solve:
-            for bg in self.solve.bath_gas:
+            for bg_index, bg in enumerate(self.solve.bath_gas):
                 if bg.species_key not in species_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_SPECIES_KEY_UNDECLARED,
                         f"Bath gas references undefined species_key "
-                        f"'{bg.species_key}'."
+                        f"'{bg.species_key}'.",
+                        field=f"solve.bath_gas[{bg_index}].species_key",
+                        key=bg.species_key,
+                        declared=species_keys,
                     )
 
             # Solve source calculations must reference defined calculation keys
-            for sc in self.solve.source_calculations:
+            for sc_index, sc in enumerate(self.solve.source_calculations):
                 if sc.calculation_key not in calculation_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
                         f"Solve source_calculations references undefined "
-                        f"calculation_key '{sc.calculation_key}'."
+                        f"calculation_key '{sc.calculation_key}'.",
+                        field=(
+                            f"solve.source_calculations[{sc_index}]."
+                            f"calculation_key"
+                        ),
+                        key=sc.calculation_key,
+                        declared=calculation_keys,
                     )
 
             # Channel kinetics must reference defined states and a defined
             # channel (source, sink) pair.
             channel_keys = {ch.key for ch in self.channels}
-            for nk in self.solve.channel_kinetics:
+            for nk_index, nk in enumerate(self.solve.channel_kinetics):
                 if nk.channel_key is None:
                     matches = [ch.key for ch in self.channels if ch.source_state_key == nk.source_state_key and ch.sink_state_key == nk.sink_state_key]
+                    # No key was written at all, so there is nothing to
+                    # report as the offending name; the legacy endpoint pair
+                    # either matched nothing or matched ambiguously. A
+                    # different refusal, and it keeps the generic code.
                     if len(matches) != 1:
                         raise ValueError("channel_kinetics references undefined channel or ambiguous legacy endpoints; provide channel_key.")
                     nk.channel_key = matches[0]
                 if nk.channel_key not in channel_keys:
-                    raise ValueError(
+                    raise undeclared_key_error(
+                        W_NETWORK_CHANNEL_KEY_UNDECLARED,
                         f"channel_kinetics references undefined channel_key "
-                        f"'{nk.channel_key}'."
+                        f"'{nk.channel_key}'.",
+                        field=f"solve.channel_kinetics[{nk_index}].channel_key",
+                        key=nk.channel_key,
+                        declared=channel_keys,
                     )
 
         return self
@@ -1441,18 +1540,38 @@ class NetworkPDepUploadRequest(SchemaBase):
     def validate_mechanistic_channel_evidence(self) -> Self:
         reaction_keys = {item.key for item in self.micro_reactions}
         ts_by_key = {item.key: item.micro_reaction_key for item in self.transition_states}
-        for channel in self.channels:
+        for ch_index, channel in enumerate(self.channels):
             path_keys = [(path.micro_reaction_key, path.transition_state_key) for path in channel.microreaction_paths]
             if len(path_keys) != len(set(path_keys)):
                 raise ValueError(f"channel '{channel.key}' microreaction_paths must be unique by reaction and TS.")
-            for reaction_key, ts_key in path_keys:
+            for path_index, (reaction_key, ts_key) in enumerate(path_keys):
                 if reaction_key not in reaction_keys:
-                    raise ValueError(f"channel '{channel.key}' references undefined micro_reaction_key '{reaction_key}'.")
+                    raise undeclared_key_error(
+                        W_MICRO_REACTION_KEY_UNDECLARED,
+                        f"channel '{channel.key}' references undefined micro_reaction_key '{reaction_key}'.",
+                        field=(
+                            f"channels[{ch_index}].microreaction_paths"
+                            f"[{path_index}].micro_reaction_key"
+                        ),
+                        key=reaction_key,
+                        declared=reaction_keys,
+                    )
                 if ts_key is None:
                     # Barrierless / variational path: no saddle point to check.
                     continue
                 if ts_key not in ts_by_key:
-                    raise ValueError(f"channel '{channel.key}' references undefined transition_state_key '{ts_key}'.")
+                    raise undeclared_key_error(
+                        W_TRANSITION_STATE_KEY_UNDECLARED,
+                        f"channel '{channel.key}' references undefined transition_state_key '{ts_key}'.",
+                        field=(
+                            f"channels[{ch_index}].microreaction_paths"
+                            f"[{path_index}].transition_state_key"
+                        ),
+                        key=ts_key,
+                        declared=ts_by_key,
+                    )
+                # Both keys are declared; they just do not belong together.
+                # A different repair, so the generic code stays.
                 if ts_by_key[ts_key] != reaction_key:
                     raise ValueError(f"channel '{channel.key}' TS '{ts_key}' does not belong to micro reaction '{reaction_key}'.")
         state_keys = {state.key for state in self.states}
@@ -1464,19 +1583,58 @@ class NetworkPDepUploadRequest(SchemaBase):
             # applies to both kinds: relaxed means not required, never
             # unvalidated. A reported solve that volunteers a barrier still
             # has to point it at a real path.
-            for energy in self.solve.state_energies:
+            for energy_index, energy in enumerate(self.solve.state_energies):
                 if energy.source_calculation_key is not None and energy.source_calculation_key not in calc_keys:
-                    raise ValueError("state_energies references undefined source_calculation_key.")
-            for et in self.solve.energy_transfer:
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        "state_energies references undefined source_calculation_key.",
+                        field=(
+                            f"solve.state_energies[{energy_index}]."
+                            f"source_calculation_key"
+                        ),
+                        key=energy.source_calculation_key,
+                        declared=calc_keys,
+                    )
+            for et_index, et in enumerate(self.solve.energy_transfer):
                 if et.scope != NetworkEnergyTransferScope.per_well:
                     continue
+                # ``NetworkEnergyTransferIn`` already refuses a per-well
+                # entry missing either key, and a nested model's validators
+                # run before this one, so both are set by the time the keys
+                # are read as names.
+                assert et.state_key is not None
+                assert et.collider_species_key is not None
                 if et.state_key not in state_keys:
-                    raise ValueError("energy_transfer references undefined state_key.")
+                    raise undeclared_key_error(
+                        W_NETWORK_STATE_KEY_UNDECLARED,
+                        "energy_transfer references undefined state_key.",
+                        field=f"solve.energy_transfer[{et_index}].state_key",
+                        key=et.state_key,
+                        declared=state_keys,
+                    )
                 if et.collider_species_key not in species_keys:
-                    raise ValueError("energy_transfer references undefined collider_species_key.")
-            for barrier in self.solve.channel_barriers:
+                    raise undeclared_key_error(
+                        W_SPECIES_KEY_UNDECLARED,
+                        "energy_transfer references undefined collider_species_key.",
+                        field=(
+                            f"solve.energy_transfer[{et_index}]."
+                            f"collider_species_key"
+                        ),
+                        key=et.collider_species_key,
+                        declared=species_keys,
+                    )
+            for barrier_index, barrier in enumerate(self.solve.channel_barriers):
                 if barrier.source_calculation_key is not None and barrier.source_calculation_key not in calc_keys:
-                    raise ValueError("channel_barriers references undefined source_calculation_key.")
+                    raise undeclared_key_error(
+                        W_CALCULATION_KEY_UNDECLARED,
+                        "channel_barriers references undefined source_calculation_key.",
+                        field=(
+                            f"solve.channel_barriers[{barrier_index}]."
+                            f"source_calculation_key"
+                        ),
+                        key=barrier.source_calculation_key,
+                        declared=calc_keys,
+                    )
 
         # The three coverage rules below check master-equation *inputs*
         # against the network topology: an energy for every state, a ⟨ΔE⟩down

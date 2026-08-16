@@ -12,6 +12,10 @@ through the backend's stationary-point seam.
 from typing import Self
 
 from pydantic import Field, model_validator
+from tckdb_schemas.local_key_codes import (
+    W_CALCULATION_KEY_UNDECLARED,
+    undeclared_key_error,
+)
 from tckdb_schemas.stationary_point import (
     StationaryPointFinding,
     raise_for_blocking_findings,
@@ -117,11 +121,15 @@ class TransportUploadRequest(TransportUploadPayload):
         """Every ``source_calculations[*].calculation_key`` must reference a
         calculation declared in this upload."""
         defined = {c.key for c in self.calculations}
-        for sc in self.source_calculations:
+        for index, sc in enumerate(self.source_calculations):
             if sc.calculation_key not in defined:
-                raise ValueError(
+                raise undeclared_key_error(
+                    W_CALCULATION_KEY_UNDECLARED,
                     f"source_calculations references undefined "
-                    f"calculation_key '{sc.calculation_key}'."
+                    f"calculation_key '{sc.calculation_key}'.",
+                    field=f"source_calculations[{index}].calculation_key",
+                    key=sc.calculation_key,
+                    declared=defined,
                 )
         return self
 

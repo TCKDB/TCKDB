@@ -316,3 +316,37 @@ def test_resolving_a_geometry_key_does_not_bypass_the_composition_rule(
         422,
         "calculation_geometry_composition_mismatch",
     ), response.text
+
+
+def test_a_species_calculation_may_not_borrow_a_sibling_species_geometry(
+    client,
+) -> None:
+    """``NetworkSpeciesIn`` narrows a species calc to its own conformers.
+
+    Added for ADR 0017, and specifically because a runtime sweep of the
+    whole suite -- recording every site that raises one of the local-key
+    refusals -- found this validator reached by nothing at all. A
+    converted branch that no test enters is a branch a mutation cannot
+    turn red, which is the vacuous pass this repository keeps finding.
+
+    ``etoo_iso_geom`` is a real geometry declared elsewhere in the same
+    payload, so this is the narrow-namespace case rather than a typo:
+    the key names something that exists and is still not usable here.
+    That is why the code says *unresolved* rather than *undeclared*.
+    """
+    payload = _parallel_path_payload()
+    payload["species"][0]["calculations"][0]["geometry_key"] = "etoo_iso_geom"
+    response = _post(client, payload)
+    body = _assert_refused(response, code="geometry_key_unresolved")
+    assert body["context"]["key"] == "etoo_iso_geom"
+    # Only that species's own conformer geometries are offered.
+    assert "etoo_iso_geom" not in body["context"]["declared_keys"]
+
+
+def test_the_same_species_calculation_with_its_own_geometry_uploads(
+    client,
+) -> None:
+    """The accept side, so the refusal above is not vacuous."""
+    payload = _parallel_path_payload()
+    response = _post(client, payload)
+    assert response.status_code == 201, response.text

@@ -30,7 +30,10 @@ from app.services.calculation_ownership import (
 from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
 )
-from app.services.energy_correction_resolution import create_applied_energy_correction
+from app.services.energy_correction_resolution import (
+    create_applied_energy_correction,
+    resolve_applied_correction_source_key,
+)
 from app.services.group_additivity_resolution import create_applied_group_additivity
 from app.services.local_key_resolution import resolve_calculation_key
 from app.services.record_review import (
@@ -59,6 +62,14 @@ logger = logging.getLogger(__name__)
 #: repairs one may have nothing to say about the other. Same rule, same
 #: shape of context, two codes a client can tell apart.
 W_THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
+
+#: How a depositor declares a calculation key on the standalone thermo
+#: route, phrased as the remedy sentence's object for
+#: ``resolve_applied_correction_source_key``.
+_THERMO_CALCULATION_KEY_REMEDY = (
+    "Every calculation in this upload carries a required 'key'; "
+    "'source_calculation_key' must match one of them."
+)
 
 #: Roles that name a specific kind of job, and the ``CalculationType``\ s
 #: each accepts; the first entry is the canonical one the role is named
@@ -358,20 +369,30 @@ def persist_thermo_upload(
     thermo = persist_thermo(session, thermo_create, created_by=created_by)
 
     applied_corrections: list = []
-    for correction_payload in request.applied_energy_corrections:
+    for correction_index, correction_payload in enumerate(
+        request.applied_energy_corrections
+    ):
         source_calc_id: int | None = None
         if correction_payload.source_calculation_key is not None:
-            calc_row = calculations_by_key.get(
-                correction_payload.source_calculation_key
+            # The last raw lookup in this family. It used to raise a bare
+            # ``ValueError`` -- a generic ``validation_error`` with no
+            # context -- while the request schema one layer earlier and
+            # every sibling seam answered the same mistake with
+            # ``applied_energy_correction_source_key_undeclared``. Its own
+            # comment said "the schema validator normally prevents this",
+            # which is the assumption ADR 0017 exists to stop making: the
+            # seam is the backstop for exactly the payloads the validator's
+            # coverage misses, so it has to answer as well as the validator
+            # does, not worse.
+            calc_row = resolve_applied_correction_source_key(
+                correction_payload.source_calculation_key,
+                calculations_by_key,
+                field=(
+                    f"applied_energy_corrections[{correction_index}]."
+                    f"source_calculation_key"
+                ),
+                declares=_THERMO_CALCULATION_KEY_REMEDY,
             )
-            if calc_row is None:
-                # The schema validator normally prevents this, but defend
-                # against future code paths that bypass validation.
-                raise ValueError(
-                    f"applied_energy_correction.source_calculation_key "
-                    f"'{correction_payload.source_calculation_key}' did not "
-                    f"resolve to a declared calculation."
-                )
             assert_calculation_owned_by(
                 calc_row,
                 code=W_APPLIED_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
