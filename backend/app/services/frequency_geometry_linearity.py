@@ -310,7 +310,7 @@ def evaluate_frequency_list_linearity(
             code=W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
             message=(
                 f"{location}: the frequency list carries {n_modes} modes, "
-                f"which is 3N-5 for this {n_atoms}-atom geometry — the "
+                f"which is 3N-5 for this {n_atoms}-atom geometry -- the "
                 f"vibrational count of a *linear* molecule "
                 f"({W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY}). This "
                 f"geometry is not linear: its atoms spread across their long "
@@ -319,7 +319,7 @@ def evaluate_frequency_list_linearity(
                 f"geometry bent (exactly collinear is 0). A non-linear "
                 f"{n_atoms}-atom molecule has 3N-6 = {bent_count} "
                 f"vibrations, so one mode here is either spurious or is a "
-                f"rigid-body translation/rotation left in the list — the "
+                f"rigid-body translation/rotation left in the list -- the "
                 f"usual cause being a frequency job, or a script reading "
                 f"one, that treated the molecule as linear. The record is "
                 f"accepted and flagged, not refused: the boundary between "
