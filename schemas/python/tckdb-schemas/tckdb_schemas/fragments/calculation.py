@@ -162,6 +162,25 @@ class OptResultPayload(SchemaBase):
 #: and nothing in it is imaginary" — and is judged like any other list.
 W_FREQ_N_IMAG_DISAGREES_WITH_MODES = "freq_n_imag_disagrees_with_modes"
 
+#: Two mode rows in one frequency list claiming the same ``mode_index``.
+#:
+#: Its neighbour above is a scientific position — two fields of one record
+#: answering the same question about chemistry differently — and is declared
+#: in ``app.scientific_checks``. This one deliberately is not, and the
+#: distinction is the reason it needed a code of its own rather than a place
+#: in that register. ``mode_index`` is the ESS's 1-based ordering, so a
+#: repeated value is a malformed list: a serialiser that concatenated two
+#: blocks, or a producer that restarted its counter. Nothing about the
+#: potential energy surface is being claimed, so there is no position a
+#: referee could argue with — and a register whose entries are not all
+#: arguable claims is a register that dilutes the ones that are.
+#:
+#: It still needs a name. "Your frequency list is malformed, renumber the
+#: modes" is a different repair from every other 422 the same request can
+#: produce, and a client could previously tell it apart only by matching
+#: English inside a ``request_validation_error``.
+W_FREQ_MODE_INDEX_NOT_UNIQUE = "freq_mode_index_not_unique"
+
 
 class FrequencyModePayload(BaseModel):
     """One vibrational mode within a frequency calculation result.
@@ -255,7 +274,25 @@ class FreqResultPayload(SchemaBase):
             return self
         indices = [m.mode_index for m in self.modes]
         if len(set(indices)) != len(indices):
-            raise ValueError("mode_index values must be unique within a freq result.")
+            duplicates = sorted({i for i in indices if indices.count(i) > 1})
+            raise CodedValidationError(
+                W_FREQ_MODE_INDEX_NOT_UNIQUE,
+                # First sentence unchanged, byte for byte: attaching a code
+                # is additive and must not move published prose.
+                "mode_index values must be unique within a freq result. "
+                f"Index {', '.join(str(i) for i in duplicates)} appears "
+                f"more than once, so the list does not say which row is "
+                f"which mode and a consumer reading it cannot "
+                f"reconstruct the spectrum "
+                f"({W_FREQ_MODE_INDEX_NOT_UNIQUE}). Renumber the modes to "
+                f"the ESS's own 1-based ordering.",
+                context={
+                    "field": "modes",
+                    "duplicate_mode_indices": duplicates,
+                    "mode_count": len(self.modes),
+                },
+                message_prefix=False,
+            )
         if self.n_imag is not None:
             imaginary_count = sum(1 for m in self.modes if m.is_imaginary)
             if imaginary_count != self.n_imag:

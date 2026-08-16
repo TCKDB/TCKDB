@@ -24,6 +24,55 @@ rather than inside the server.
 
 ## Changelog
 
+### 0.34.0 — a frequency list that numbers two modes the same says so by name
+
+**Not breaking.** No field is added, renamed or removed, and the set of
+payloads that validate is byte-for-byte the set that validated under
+0.33.0 — **every 0.33.0 payload validates unchanged under 0.34.0**, and
+every payload 0.33.0 refused is still refused. What changes is what a
+client is *told* when one is refused.
+
+`FreqResultPayload.validate_modes_consistency` has always refused a
+`modes` list carrying the same `mode_index` twice. It refused with a bare
+`ValueError`, so the 422 envelope reported `code =
+"request_validation_error"` (or `"validation_error"`, depending on which
+handler saw it) and a client wanting to distinguish "renumber your
+frequency list" from any other validation failure had to match English.
+
+It now raises `CodedValidationError` under the new module-level constant
+`W_FREQ_MODE_INDEX_NOT_UNIQUE = "freq_mode_index_not_unique"`, with
+`context = {"field", "duplicate_mode_indices", "mode_count"}`. The first
+sentence of the message is byte-identical to the one 0.33.0 emitted
+(`message_prefix=False`), so a client matching prose is undisturbed; the
+duplicated indices and the repair follow it.
+
+Minor rather than patch because the envelope's `code` field is part of
+the published contract: a consumer may now branch on this refusal, which
+it could not before.
+
+**Deliberately not a scientific check.** Its neighbour
+`freq_n_imag_disagrees_with_modes` (0.28.0) is declared in the backend's
+scientific check register, because two fields of one record answering the
+same question about chemistry differently is a position a referee could
+argue with. A repeated `mode_index` is not: it is a malformed list — a
+concatenated serialisation, a producer that restarted its counter — and
+asserts nothing about the potential energy surface. It is catalogued in
+`app.api.code_catalogue` and reaches the client enum from there, which is
+the split that module exists for.
+
+### 0.33.0 — **BREAKING**: `CalculationPayload.literature_id` is removed
+
+Recorded after the fact: the version was published without a changelog
+entry, and this note is reconstructed from the commit that made it
+(#177). It says only what that change did.
+
+`CalculationPayload.literature_id` is **removed** and replaced by
+`literature`, the inline `LiteratureUploadRequest` fragment — the same
+repair 0.32.0 made to `CalculationIn`, applied to the other shared
+calculation payload. The generalised no-FK-ids gate that found it now
+walks every upload root discovered from the live route table, rather than
+the single root it used to check.
+
 ### 0.32.0 — **BREAKING**: a calculation cites literature inline, and the reaction bundle's 201 names its statmech
 
 **Breaking:** `CalculationIn.literature_id` is **removed**. It was a

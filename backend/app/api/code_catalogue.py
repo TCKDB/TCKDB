@@ -463,6 +463,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "whichever code its blocking finding carries, so the scan "
                 "cannot see it and the origin is the defining module."
             )),
+    ApiCode("freq_mode_index_not_unique", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            note=(
+                "Catalogued but deliberately absent from the scientific "
+                "check register, unlike its file neighbour "
+                "freq_n_imag_disagrees_with_modes. A repeated mode_index is "
+                "a malformed list -- a concatenated serialisation, a "
+                "restarted counter -- and asserts nothing about the "
+                "potential energy surface, so it fails the register's "
+                "inclusion test. That is the case this module exists for: a "
+                "code a client must branch on, about no chemistry at all."
+            )),
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
     ApiCode("geometry_too_large", 422, Surface.message_prefix,
