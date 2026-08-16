@@ -398,8 +398,18 @@ def run_and_persist_geometry_validation(
             rmsd_warning_threshold=rmsd_warning_threshold,
         )
     except Exception:
+        # "geometry validation", not "geometry_validation". A snake_case
+        # token in front of a colon is how this codebase *declares a code*
+        # (app.api.error_contract), and this string declares nothing -- it
+        # is a log line that reaches no response body. It was the only one
+        # of the five bare logger prefixes in the tree shaped like a code,
+        # because it was the only one containing an underscore; the other
+        # four ("manifest", "readyz", "startup", "status") cannot match the
+        # code-position pattern at all. Held by
+        # tests/api/test_error_contract_catalogue_gate.py::
+        # TestNoLoggerFormatStringSitsInTheCodePosition.
         logger.exception(
-            "geometry_validation: chemistry layer raised for calculation_id=%s; "
+            "geometry validation: chemistry layer raised for calculation_id=%s; "
             "skipping persistence",
             calculation.id,
         )

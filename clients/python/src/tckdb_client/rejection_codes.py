@@ -97,6 +97,7 @@ class RejectionCode(str, Enum):
     CURSOR_OFFSET_CONFLICT = "cursor_offset_conflict"
     CURSOR_QUERY_MISMATCH = "cursor_query_mismatch"
     DOI_ALREADY_RECORDED = "doi_already_recorded"
+    EMAIL_TAKEN = "email_taken"
     ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE = "energy_transfer_scope_columns_disagree"
     EXPORT_ALL_CAP_EXCEEDED = "export_all_cap_exceeded"
     EXPORT_SEED_EMPTY = "export_seed_empty"
@@ -217,6 +218,7 @@ class RejectionCode(str, Enum):
     UNSUPPORTED_RANKING_FOR_CALCULATION_TYPE = "unsupported_ranking_for_calculation_type"
     UNSUPPORTED_REACTION_MOLECULARITY = "unsupported_reaction_molecularity"
     UNSUPPORTED_RELEASE_RECORD_TYPE = "unsupported_release_record_type"
+    USERNAME_TAKEN = "username_taken"
     WITHDRAW_REASON_REQUIRED = "withdraw_reason_required"
 
 
@@ -351,6 +353,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ATOM_MAP_NOT_A_BIJECTION,
         RejectionCode.CURATION_POLICY_VERSION_CONFLICT,
         RejectionCode.DOI_ALREADY_RECORDED,
+        RejectionCode.EMAIL_TAKEN,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
         RejectionCode.MANIFEST_ALREADY_FROZEN,
@@ -364,6 +367,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.STATE_CONFLICT,
         RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE,
         RejectionCode.UNIQUE_CONFLICT,
+        RejectionCode.USERNAME_TAKEN,
     }
 )
 
@@ -405,6 +409,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURSOR_OFFSET_CONFLICT: frozenset({422}),
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
     RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
+    RejectionCode.EMAIL_TAKEN: frozenset({409}),
     RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE: frozenset({409}),
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),
@@ -525,6 +530,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNSUPPORTED_RANKING_FOR_CALCULATION_TYPE: frozenset({422}),
     RejectionCode.UNSUPPORTED_REACTION_MOLECULARITY: frozenset({422}),
     RejectionCode.UNSUPPORTED_RELEASE_RECORD_TYPE: frozenset({422}),
+    RejectionCode.USERNAME_TAKEN: frozenset({409}),
     RejectionCode.WITHDRAW_REASON_REQUIRED: frozenset({422}),
 }
 

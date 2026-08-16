@@ -451,6 +451,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("domain_error", 400, Surface.generic_fallback,
             "backend/app/api/errors.py"),
+    ApiCode("email_taken", 409, Surface.message_prefix,
+            "backend/app/api/routes/auth.py",
+            note=(
+                "Registration only, and paired with username_taken. Both "
+                "arrive at 23505 -- a unique violation says nothing about "
+                "which rule fired -- so the two are told apart by the "
+                "constraint name psycopg reports in exc.orig.diag, not by "
+                "the SQLSTATE and not by parsing the driver's message. "
+                "Before #225 both answered http_409 with one sentence "
+                "covering two fields, which is why a sign-up form could "
+                "not highlight the input at fault; unique_conflict, the "
+                "only code the SQLSTATE alone supports, would have been "
+                "the same problem with a code attached. Discloses nothing "
+                "registration does not already disclose by refusing at "
+                "all -- and that argument covers this endpoint only."
+            )),
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("export_all_cap_exceeded", 422, Surface.message_prefix,
@@ -877,6 +893,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/chemistry/units.py"),
     ApiCode("unsupported_release_record_type", 422, Surface.message_prefix,
             "backend/app/services/release/records.py"),
+    ApiCode("username_taken", 409, Surface.message_prefix,
+            "backend/app/api/routes/auth.py",
+            note=(
+                "The sibling of email_taken; see that entry for why the "
+                "pair exists and how they are told apart. 409 rather than "
+                "422 under Calvin's 2026-08-16 decision: the payload is "
+                "well formed and the name is simply spoken for, which is "
+                "a state conflict. There is no corrected body for the "
+                "same username, only a different one."
+            )),
     ApiCode("validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("withdraw_reason_required", 422, Surface.message_prefix,

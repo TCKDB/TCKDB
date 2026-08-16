@@ -448,6 +448,17 @@ def _operational_error_handler(
         orig,
         exc_info=exc,
     )
+    # ``fallback_code`` is unreachable here and is kept deliberately.
+    # ``code`` above is always one of two literals, so it is never falsy and
+    # ``error_envelope`` never reads the fallback. Three reasons it stays:
+    # ``fallback_code`` is a required keyword, so there is no "drop it" that
+    # leaves the call valid; ``code_catalogue.py`` carries a ``database_error``
+    # entry whose note records exactly this, and whose ``origin`` points at
+    # this file -- deleting the literal turns
+    # ``test_every_origin_still_defines_its_code`` red; and an edit that
+    # stopped setting ``code`` would then emit it, which is the case the
+    # enumeration exists to have already named. Not a code any response
+    # carries today.
     return JSONResponse(
         status_code=status,
         content=error_envelope(

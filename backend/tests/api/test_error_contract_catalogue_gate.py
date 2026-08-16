@@ -631,9 +631,13 @@ class TestTheLegacyDetailPathIsGatedToo:
 
     Its character test does not even require an underscore, so before this
     change ``raise HTTPException(422, "manifest: ...")`` would have
-    published ``code="manifest"``. Two of the five bare prefixes written in
-    the tree (``manifest``, ``readyz``, ``startup``, ``status``,
-    ``geometry_validation``) are one refactor away from an error body.
+    published ``code="manifest"``. The four bare prefixes written in the
+    tree (``manifest``, ``readyz``, ``startup``, ``status``) are one
+    refactor away from an error body, and the gate below is what stops
+    them arriving as codes. A fifth, ``geometry_validation``, was reworded
+    rather than gated -- it was the only one shaped like a code to the
+    *narrowed* pattern as well, and is now held by
+    :class:`TestNoLoggerFormatStringSitsInTheCodePosition`.
     """
 
     def test_a_catalogued_prefix_is_still_lifted(self):
@@ -667,3 +671,168 @@ class TestTheLegacyDetailPathIsGatedToo:
             == "tckdb_client_version_unsupported"
         )
         assert "tckdb_client_version_unsupported" not in MESSAGE_PREFIX_CODES
+
+
+# ---------------------------------------------------------------------------
+# Logger format strings: the code position, in a place with no response body
+# ---------------------------------------------------------------------------
+
+#: ``logger.<level>(...)`` calls whose first argument is a string literal.
+#: ``.log(level, msg)`` is deliberately absent -- its first argument is the
+#: level, not the message -- and no site in the tree uses it with a prefix.
+_LOG_LEVEL_METHODS = frozenset(
+    {"debug", "info", "warning", "warn", "error", "exception", "critical"}
+)
+
+#: Any leading ``token: `` at all, code-shaped or not. Looser than
+#: :data:`_CODE_POSITION` on purpose: it is the *population* the gate is
+#: measured against, so that "nothing matched" and "nothing is wrong" cannot
+#: be confused.
+_ANY_LEADING_TOKEN = re.compile(r"^([A-Za-z][A-Za-z0-9_]*): ")
+
+#: The bare logger prefixes written in the tree that are **not** code-shaped,
+#: because none contains an underscore. Named so the scan has a positive
+#: control: a sweep that found none of these has stopped reading files, and
+#: every "no code-shaped prefix found" below it would then be vacuous.
+_PREFIXES_THAT_ARE_NOT_CODE_SHAPED = frozenset(
+    {"manifest", "readyz", "startup", "status"}
+)
+
+
+def _logger_format_strings() -> list[tuple[str, int, str]]:
+    """``(path, lineno, message)`` for every logger call with a literal.
+
+    ``/importers/`` is scanned here although :data:`SKIPPED` excludes it
+    from the raise-site sweep. That exclusion is about *raises*, which an
+    offline importer cannot turn into a response; a log line is a
+    readability hazard wherever it is written, and ``manifest:`` -- one of
+    the five -- lives there.
+    """
+    found: list[tuple[str, int, str]] = []
+    for root in SCANNED_ROOTS:
+        for path in sorted(root.rglob("*.py")):
+            if "/tests/" in str(path):
+                continue
+            tree = ast.parse(path.read_text())
+            relative = str(path.relative_to(REPO_ROOT))
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.Call):
+                    continue
+                func = node.func
+                if (
+                    not isinstance(func, ast.Attribute)
+                    or func.attr not in _LOG_LEVEL_METHODS
+                    or not node.args
+                ):
+                    continue
+                first = node.args[0]
+                if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                    found.append((relative, node.lineno, first.value))
+                elif isinstance(first, ast.JoinedStr) and first.values:
+                    head = first.values[0]
+                    if isinstance(head, ast.Constant) and isinstance(head.value, str):
+                        found.append((relative, node.lineno, head.value))
+    return found
+
+
+def _logger_prefixes() -> dict[str, list[str]]:
+    """``token -> ["path:lineno", ...]`` for logger messages opening with one."""
+    prefixes: dict[str, list[str]] = {}
+    for relative, lineno, message in _logger_format_strings():
+        match = _ANY_LEADING_TOKEN.match(message)
+        if match:
+            prefixes.setdefault(match.group(1), []).append(f"{relative}:{lineno}")
+    return prefixes
+
+
+class TestNoLoggerFormatStringSitsInTheCodePosition:
+    """A log line is not a response, and must not read like a declaration.
+
+    ``geometry_validation: chemistry layer raised for calculation_id=%s``
+    reached no response body, so nothing was ever advertised wrongly. It
+    was still worth rewording, and the reason is the one #161, #173 and
+    #178 each cost a PR to learn: in this codebase a snake_case token in
+    front of a colon *is* how a code is declared. A string that carries
+    that shape without being a code is read as one -- by a person, and by
+    the next scan somebody widens.
+
+    ``geometry_validation`` was the only one of the five bare logger
+    prefixes that could be, because it was the only one containing an
+    underscore, and :data:`_CODE_POSITION` requires one. ``manifest``,
+    ``readyz``, ``startup`` and ``status`` cannot match it and are left
+    alone -- reworded strings nobody needed to rewrite are their own
+    kind of noise.
+
+    Note what this does **not** claim. ``detail_code``'s legacy character
+    test does not require an underscore, so all five would be code-shaped
+    to *it*; what stops them reaching a body is that promotion is gated on
+    the catalogue, asserted directly by
+    :meth:`TestTheLegacyDetailPathIsGatedToo.
+    test_an_uncatalogued_prefix_falls_back_to_the_status`. This gate is
+    about the shape a reader sees, and it is the durable answer to "a
+    string in the code position that is not a code", which is the shape
+    that has now produced four tasks.
+    """
+
+    def test_the_scan_reads_the_logger_calls_in_the_tree(self):
+        """Assert the population, so an empty sweep cannot pass as clean.
+
+        Measured 2026-08-16: 96 logger calls with a literal first argument,
+        16 of which open with a bare ``token: ``. The floor is well under
+        96 and exists to catch a scan that has stopped walking the tree,
+        not to police the count -- the same reasoning as
+        ``_MINIMUM_SITES_THE_SCAN_MUST_SEE`` in the re-raise gate.
+        """
+        messages = _logger_format_strings()
+        assert len(messages) >= 60, (
+            f"only {len(messages)} logger calls with a literal format string "
+            f"found under {[str(r) for r in SCANNED_ROOTS]}; the scan has "
+            "stopped reading files and every assertion below is vacuous"
+        )
+
+    def test_it_finds_the_bare_prefixes_that_are_written(self):
+        """The positive control: known non-code-shaped prefixes are seen."""
+        prefixes = _logger_prefixes()
+        missing = sorted(_PREFIXES_THAT_ARE_NOT_CODE_SHAPED - set(prefixes))
+        assert not missing, (
+            f"the scan no longer sees these logger prefixes: {missing}. They "
+            "are the evidence that it can see a prefix at all; without them "
+            "'no code-shaped prefix found' means nothing"
+        )
+
+    def test_no_logger_format_string_opens_in_the_code_position(self):
+        offenders = {
+            token: sites
+            for token, sites in _logger_prefixes().items()
+            if _CODE_POSITION.match(f"{token}: ")
+        }
+        assert not offenders, (
+            "these logger format strings open with a snake_case token in "
+            "front of a colon, which is how this codebase declares an error "
+            f"code: {offenders}. A log line declares nothing. Reword it -- "
+            "'geometry validation: ...' rather than 'geometry_validation: "
+            "...' -- so a reader, and the next scan somebody widens, cannot "
+            "mistake it for a code."
+        )
+
+    def test_the_remaining_prefixes_are_not_code_shaped(self):
+        """Says *why* four were left alone, rather than leaving it implied."""
+        for token in sorted(_PREFIXES_THAT_ARE_NOT_CODE_SHAPED):
+            assert "_" not in token
+            assert not _CODE_POSITION.match(f"{token}: "), (
+                f"{token!r} is code-shaped after all, so leaving it unchanged "
+                "was wrong and this gate should be failing on it"
+            )
+
+    def test_the_scan_would_notice_one(self):
+        """Provoked on source, so the detector is caught saying yes."""
+        tree = ast.parse('logger.warning("some_new_code: it went wrong")\n')
+        node = next(n for n in ast.walk(tree) if isinstance(n, ast.Call))
+        assert isinstance(node.func, ast.Attribute)
+        assert node.func.attr in _LOG_LEVEL_METHODS
+        message = node.args[0].value
+        assert _ANY_LEADING_TOKEN.match(message)
+        assert _CODE_POSITION.match(message), (
+            "the detector did not recognise a snake_case logger prefix; the "
+            "gate above would then pass over a real one"
+        )

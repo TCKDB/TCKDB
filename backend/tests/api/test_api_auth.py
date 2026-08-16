@@ -14,10 +14,13 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
 from app.api.app import create_app
+from app.api.code_catalogue import CATALOGUE
 from app.api.config import settings
 from app.api.deps import get_db, get_write_db
+from app.api.error_contract import detail_code
 from app.api.routes import auth as auth_routes
 from app.db.models.app_user import AppUser
 from app.db.models.common import AppUserRole
@@ -660,3 +663,220 @@ class TestLoginAccountEnumeration:
         assert len(verify_calls) == 1
         # `verify_password` burns an equivalent hash internally for this case.
         assert verify_calls[0] is None
+
+
+# ---------------------------------------------------------------------------
+# 10. Registration conflicts name the field they refused
+# ---------------------------------------------------------------------------
+
+
+class TestRegistrationConflictCodes:
+    """Which field was taken, as a code, not as an English sentence.
+
+    A taken username and a taken email address both arrive as SQLSTATE
+    23505, so nothing derived from the SQLSTATE can tell them apart --
+    ``unique_conflict`` would be a code that says less than the prose it
+    replaced. The route reads the constraint name out of psycopg's
+    structured diagnostics instead, and these tests hold it to reporting
+    a *different* code for each, because a handler answering one code for
+    both would pass any test asserting only that a 409 arrived.
+
+    Each conflict gets its own test function. Registration's rollback on
+    conflict unwinds the transaction the fixture holds open, which takes
+    the first account with it -- so provoking both conflicts inside one
+    test makes the second one register successfully and prove nothing.
+    That is not a quirk of the route; in production every request has its
+    own session. It is a property of the shared txn-scoped fixture, and
+    it silently turned a two-conflict reproduction into a 201.
+    """
+
+    def test_a_free_username_and_email_are_accepted(self, raw_client):
+        """The accepted case, so the codes below are not vacuous.
+
+        A route that 409'd on every registration would satisfy both
+        conflict tests. This is what says the 409s are refusals of
+        something specific rather than the endpoint's only behaviour.
+        """
+        resp = raw_client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "novel-name",
+                "email": "novel-name@example.org",
+                "password": "password-123",
+            },
+        )
+        assert resp.status_code == 201, resp.json()
+        body = resp.json()
+        assert body["username"] == "novel-name"
+        assert "code" not in body
+
+    def test_a_taken_username_reports_username_taken(self, raw_client):
+        first = raw_client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "taken-name",
+                "email": "first@example.org",
+                "password": "password-123",
+            },
+        )
+        assert first.status_code == 201, first.json()
+        raw_client.cookies.clear()
+
+        resp = raw_client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "taken-name",
+                # A free address, so only the username can be the cause.
+                "email": "second@example.org",
+                "password": "password-123",
+            },
+        )
+        assert resp.status_code == 409, resp.json()
+        body = resp.json()
+        assert body["code"] == "username_taken", body
+        assert body["code"] != "email_taken"
+        # The sentence stays useful to a human reading a traceback, and
+        # now says which field -- the old one could not. The ``"code: "``
+        # prefix stays in ``detail`` as well; that is the convention
+        # every other message_prefix refusal follows, not an oversight.
+        assert "username" in body["detail"].lower()
+        assert body["detail"] != auth_routes.REGISTRATION_CONFLICT_FALLBACK
+        # No row id reaches the client (DR-0028 Requirement 2), and there
+        # is nothing structured to carry here beyond the code.
+        assert body["context"] == {}
+
+    def test_a_taken_email_reports_email_taken(self, raw_client):
+        first = raw_client.post(
+            "/api/v1/auth/register",
+            json={
+                "username": "first-name",
+                "email": "taken@example.org",
+                "password": "password-123",
+            },
+        )
+        assert first.status_code == 201, first.json()
+        raw_client.cookies.clear()
+
+        resp = raw_client.post(
+            "/api/v1/auth/register",
+            json={
+                # A free username, so only the address can be the cause.
+                "username": "second-name",
+                "email": "taken@example.org",
+                "password": "password-123",
+            },
+        )
+        assert resp.status_code == 409, resp.json()
+        body = resp.json()
+        assert body["code"] == "email_taken", body
+        assert body["code"] != "username_taken"
+        assert "email" in body["detail"].lower()
+        assert body["detail"] != auth_routes.REGISTRATION_CONFLICT_FALLBACK
+        assert body["context"] == {}
+
+    def test_an_omitted_email_is_not_a_conflict(self, raw_client):
+        """NULL is not equal to NULL, so address-less accounts coexist.
+
+        Worth pinning: ``email`` is nullable *and* unique, and a reader
+        who sees ``UniqueConstraint("email")`` may reasonably expect the
+        second address-less registration to be refused. PostgreSQL's
+        default ``NULLS DISTINCT`` is what makes registration without an
+        address usable at all, and a migration adding ``NULLS NOT
+        DISTINCT`` would take that away silently.
+        """
+        first = raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": "no-address-one", "password": "password-123"},
+        )
+        assert first.status_code == 201, first.json()
+        raw_client.cookies.clear()
+
+        second = raw_client.post(
+            "/api/v1/auth/register",
+            json={"username": "no-address-two", "password": "password-123"},
+        )
+        assert second.status_code == 201, second.json()
+
+    def test_an_unmapped_constraint_falls_back_without_naming_a_field(self):
+        """The fallback must not guess, and must not leak the constraint.
+
+        Exercised against the classifier directly: provoking an unmapped
+        ``app_user`` uniqueness rule through the wire would mean adding
+        one to the schema, and the point of the branch is what it does
+        about a rule that is *not* in the model today -- one a future
+        migration adds and nobody remembers to classify.
+        """
+
+        class _Diag:
+            constraint_name = "uq_app_user_something_new"
+
+        class _Orig:
+            diag = _Diag()
+            sqlstate = "23505"
+
+        exc = IntegrityError("stmt", {}, Exception())
+        exc.orig = _Orig()  # type: ignore[assignment]
+
+        detail = auth_routes._registration_conflict_detail(exc)
+        assert detail == auth_routes.REGISTRATION_CONFLICT_FALLBACK
+        assert "uq_app_user_something_new" not in detail
+        # Nothing in the code position, so the envelope reports the
+        # status fallback rather than inventing a code for a rule nobody
+        # classified. Asserted through the promotion helper the handler
+        # actually uses, not against a copy of its regex.
+        assert detail_code(detail, fallback="http_409") == "http_409"
+
+    def test_a_driver_reporting_no_constraint_falls_back(self):
+        """``diag`` is absent on some wrapped errors; that must not raise."""
+        exc = IntegrityError("stmt", {}, Exception())
+        assert (
+            auth_routes._registration_conflict_detail(exc)
+            == auth_routes.REGISTRATION_CONFLICT_FALLBACK
+        )
+
+    def test_both_mapped_details_declare_their_code(self):
+        """Each mapping value must actually carry a code in the code position.
+
+        The promotion is by convention -- a ``"code: message"`` prefix --
+        so a value edited into plain prose would keep the 409, lose the
+        code, and break no other assertion in this file that a wire test
+        happens not to cover.
+
+        Read through :func:`~app.api.error_contract.detail_code`, the
+        helper the ``HTTPException`` handler itself calls, so this also
+        covers the half a regex cannot see: promotion is gated on the
+        catalogue, so a code present in the sentence but *absent from*
+        ``CATALOGUE`` as ``message_prefix`` is silently not promoted.
+
+        The codes are also required to be *distinct*, which is the whole
+        premise: two constraints answering one code is exactly the
+        under-specified ``unique_conflict`` this replaced, wearing a more
+        specific name.
+        """
+        codes = {
+            constraint: detail_code(detail, fallback="http_409")
+            for constraint, detail in auth_routes.REGISTRATION_CONFLICTS.items()
+        }
+        assert codes == {
+            "uq_app_user_username": "username_taken",
+            "uq_app_user_email": "email_taken",
+        }, codes
+        assert len(set(codes.values())) == len(codes), codes
+
+    def test_the_two_codes_are_catalogued_at_the_status_they_arrive_at(self):
+        """A code a client cannot import is a code it cannot branch on.
+
+        The catalogue gates the generated ``RejectionCode`` enum, and an
+        entry filed at the wrong status would give a caller the wrong
+        retry advice -- 422 says "resend a corrected payload", which is
+        false of a username somebody else holds.
+        """
+        entries = {
+            entry.code: entry
+            for entry in CATALOGUE
+            if entry.code in {"username_taken", "email_taken"}
+        }
+        assert set(entries) == {"username_taken", "email_taken"}
+        for entry in entries.values():
+            assert entry.status == 409, entry
+            assert entry.is_client_facing, entry
