@@ -37,6 +37,7 @@ from app.services.machine_review import (
     assign_curator_task,
     build_curator_tasks_for_submission,
     build_submission_machine_review_inspection,
+    get_curator_task_or_404,
     reopen_curator_task,
     resolve_curator_task,
     run_admin_fake_machine_review,
@@ -382,15 +383,6 @@ def _to_curator_task_response(
     )
 
 
-def _get_curator_task_or_404(
-    session: Session, task_id: int
-) -> MachineReviewCuratorTask:
-    task = session.get(MachineReviewCuratorTask, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Curator task not found.")
-    return task
-
-
 @router.get(
     _CURATOR_TASK_BASE,
     response_model=PaginatedResponse[AdminCuratorTaskResponse],
@@ -472,8 +464,15 @@ def get_curator_task(
     _admin: AppUser = Depends(require_admin),
     session: Session = Depends(get_db),
 ) -> AdminCuratorTaskResponse:
-    """Return one curator task by id (admin only); 404 if missing."""
-    return _to_curator_task_response(_get_curator_task_or_404(session, task_id))
+    """Return one curator task by id (admin only); 404 ``curator_task_not_found``.
+
+    The 404 comes from the same service helper the four write routes use.
+    It used to come from a private copy in this module that raised a bare
+    ``HTTPException``, so reading a missing task said ``http_404`` while
+    assigning the same missing task said ``curator_task_not_found`` — one
+    condition with two contracts, and a client could branch on only one.
+    """
+    return _to_curator_task_response(get_curator_task_or_404(session, task_id))
 
 
 @router.post(

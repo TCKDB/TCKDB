@@ -48063,7 +48063,7 @@
     },
     "/api/v1/admin/machine-review/curator-tasks/{task_id}": {
       "get": {
-        "description": "Return one curator task by id (admin only); 404 if missing.",
+        "description": "Return one curator task by id (admin only); 404 ``curator_task_not_found``.\n\nThe 404 comes from the same service helper the four write routes use.\nIt used to come from a private copy in this module that raised a bare\n``HTTPException``, so reading a missing task said ``http_404`` while\nassigning the same missing task said ``curator_task_not_found`` — one\ncondition with two contracts, and a client could branch on only one.",
         "operationId": "get_curator_task_api_v1_admin_machine_review_curator_tasks__task_id__get",
         "parameters": [
           {

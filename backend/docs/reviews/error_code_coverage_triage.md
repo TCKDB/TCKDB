@@ -474,7 +474,20 @@ fixture, which is the next round's work).
 
 | code | anchor | provoke with |
 |---|---|---|
-| `artifact_integrity_failed` | handler `api/errors.py:359`; detected at `services/artifact_storage.py:474`, `:484` | corrupt the stored object so its sha256 no longer matches, then download it. 502, deliberately not 503 |
+| `artifact_integrity_failed` | handler `api/errors.py:331`; detected at `services/artifact_storage.py:474`, `:484` | corrupt the stored object so its sha256 no longer matches, then download it. 502, deliberately not 503 |
+
+> **Corrected, then made true, in #212.** Measured when Tier E was first
+> written, the *download* route did not produce this code: it caught
+> `ArtifactIntegrityError` itself — legitimately, to record the custody
+> break ADR 0014 requires — and re-raised a bare `HTTPException(502)`, so
+> a client received `http_502`. The row above was right about the
+> condition and wrong about the route, and the code was reached only from
+> the *upload* path. The route now records the break and re-raises the
+> exception unchanged, so the anchor and the "provoke with" column are
+> both accurate. Both paths are asserted:
+> `tests/api/test_api_untested_refusals_tier_de.py`
+> `::test_uploading_over_a_corrupt_content_addressed_object_is_refused`
+> and `::test_the_download_route_publishes_the_same_code_for_the_same_break`.
 
 ---
 
@@ -625,6 +638,28 @@ Three things noticed while reading that are not about coverage:
    `api/routes/admin.py:385` has its own `_get_curator_task_or_404` that
    raises `HTTPException(404, "Curator task not found.")` instead of using the
    service helper. Same condition, two contracts.
+
+   > **Resolved in #209.** The private helper is gone; the service helper
+   > it duplicated is now public (`get_curator_task_or_404`) and all five
+   > routes call it. Held by
+   > `tests/api/test_admin_machine_review_curator_tasks.py`
+   > `::test_every_curator_task_route_names_a_missing_task_the_same_way`,
+   > which asserts the *set* of `(status, code)` answers across the five
+   > routes is a single element, so a sixth route cannot diverge quietly.
+   >
+   > This item and the Tier E row above are the same defect — a route that
+   > catches or duplicates a coded refusal and answers with a bare
+   > `HTTPException` — so the PR that fixed them swept for the rest of the
+   > family rather than fixing two. It found two more that nothing had
+   > reported: the sibling `except ArtifactStorageUnavailable` in the same
+   > download function (`http_503` for `artifact_storage_unavailable`),
+   > and `GET /scientific/artifacts/integrity` (`http_422` for
+   > `client_sort_not_supported`, which needed a fix on *both* sides —
+   > the route's wrapper and a service message that spelled the code as a
+   > bare token rather than in the code position). The sweep is kept from
+   > going stale by `tests/api/test_coded_exception_reraise_gate.py`,
+   > which fails on a new catch-and-replace site *and* on a listed site
+   > that no longer exists.
 3. **`_operational_error_handler` passes `fallback_code="database_error"`**
    (`api/errors.py:433`), a code the catalogue does not list. Harmless today —
    `code=` is always supplied explicitly on that path — but it is a string

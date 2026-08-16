@@ -34,14 +34,20 @@ docstring states what makes the payload valid apart from the one fault.
 Two corrections to the triage, recorded where the test is
 ---------------------------------------------------------
 * Tier E's row says to provoke ``artifact_integrity_failed`` by
-  corrupting a stored object and **downloading** it. Measured, the
-  download route answers ``code="http_502"``: it catches
-  ``ArtifactIntegrityError`` itself and re-raises a bare
+  corrupting a stored object and **downloading** it. When this file was
+  written that was measurably false — the download route caught
+  ``ArtifactIntegrityError`` itself and re-raised a bare
   ``HTTPException(502)``, so the app-level handler that mints the code
-  never runs. The code does reach a client — from the *upload* path,
-  where ``store_artifact`` verifies an existing content-addressed object
-  before attaching a second row to the shared key. See
-  ``test_uploading_over_a_corrupt_content_addressed_object_is_refused``.
+  never ran and a client received ``http_502``. #212 repaired it: the
+  route still records the custody break ADR 0014 requires, then re-raises
+  the exception unchanged. The triage row is now right, and both paths
+  are asserted here — the upload one at
+  ``test_uploading_over_a_corrupt_content_addressed_object_is_refused``,
+  the download one at
+  ``test_the_download_route_publishes_the_same_code_for_the_same_break``.
+  The sweep that came with #212 found the sibling ``except
+  ArtifactStorageUnavailable`` in the same function doing the same thing
+  at 503, which no task had noticed; it is asserted here too.
 * Tier D calls ``composed_search_candidate_limit_exceeded`` and
   ``composed_search_pagination_changed`` "upload payloads". They are
   composed *reads*; the tier heading is loose, the anchors are right.
@@ -787,26 +793,12 @@ def test_a_second_upload_of_the_same_bytes_verifies_the_stored_object(
     )
 
 
-def test_the_download_route_publishes_a_different_code_for_the_same_break(
-    client, db_session, monkeypatch
-) -> None:
-    """The contract defect the triage's Tier E row rests on, pinned as it is.
+def _an_approved_artifact(db_session):
+    """One approved artifact whose row claims ``_ARTIFACT_SHA256``.
 
-    Corrupting a stored object and downloading it is what the triage says
-    produces ``artifact_integrity_failed``. It does not: the route
-    catches ``ArtifactIntegrityError`` itself — so that it can record the
-    custody break before answering — and re-raises a bare
-    ``HTTPException(502)``, which the generic handler labels ``http_502``.
-    One condition, two contracts, decided by which route noticed it; the
-    same shape as the two curator-task codes the triage records under
-    "worth a second look".
-
-    This test asserts what a client receives **today**, deliberately, so
-    the divergence cannot be closed by accident and unnoticed. If the
-    route is changed to let the typed exception reach the app-level
-    handler — which is the repair — this test goes red and should be
-    rewritten to assert ``artifact_integrity_failed``, not deleted: the
-    property worth keeping is that this route's code is *decided*.
+    The store is left to the caller, which is the whole variable: what
+    the download route answers is decided by what the object store hands
+    back for this key, and each test below hands back something else.
     """
     from app.db.models.common import RecordReviewStatus, SubmissionRecordType
     from tests.api.scientific.test_api_scientific_artifacts import (
@@ -825,14 +817,121 @@ def test_the_download_route_publishes_a_different_code_for_the_same_break(
         status=RecordReviewStatus.approved,
     )
     db_session.flush()
+    return artifact
+
+
+def test_the_download_route_publishes_the_same_code_for_the_same_break(
+    client, db_session, monkeypatch
+) -> None:
+    """One condition, one contract, whichever route noticed the break.
+
+    This is the rewrite the previous version of this test asked for. It
+    used to assert ``http_502`` — what the route really answered — and
+    said in its own docstring that the repair was to let the typed
+    exception reach the app-level handler, and that it should then be
+    rewritten to assert ``artifact_integrity_failed`` rather than
+    deleted. The route now records the custody break and re-raises the
+    exception unchanged, so the handler in ``app.api.errors`` mints the
+    code, exactly as it does on the upload path.
+
+    The property being kept is the one the old docstring named: a client
+    must be able to tell an integrity break from a generic gateway
+    failure. Losing it still costs a red test — this one — because
+    ``http_502`` is what any bare ``HTTPException(502)`` here would
+    produce.
+
+    The custody record is asserted below and not merely assumed. Letting
+    the exception through is only correct if the row is still written
+    first; a repair that traded ADR 0014's durable record for a nicer
+    code would be a worse contract, not a better one.
+    """
+    artifact = _an_approved_artifact(db_session)
 
     _use_object_store(
         monkeypatch,
         db_session,
         _InMemoryObjectStore({_ARTIFACT_KEY: b"bytes that hash to something else"}),
     )
-    _assert_code(
+    body = _assert_code(
         client.get(f"/api/v1/scientific/artifacts/{_ARTIFACT_SHA256}/download"),
-        "http_502",
+        "artifact_integrity_failed",
         status=502,
     )
+    # DR-0028 Req. 2 — a subsystem is named and nothing else. No digest,
+    # no artifact id, nothing a caller could use to probe stored content.
+    assert body["context"] == {}, body
+    assert str(artifact.id) not in str(body.get("detail")), body
+
+    # ADR 0014: the break outlives the request that discovered it. This is
+    # the half that must survive the code change.
+    events = db_session.scalars(
+        select(ArtifactIntegrityEvent).where(
+            ArtifactIntegrityEvent.sha256 == _ARTIFACT_SHA256
+        )
+    ).all()
+    assert len(events) == 1, events
+    assert events[0].detected_during.value == "download", events[0].detected_during
+
+
+def test_an_intact_object_still_downloads(client, db_session, monkeypatch) -> None:
+    """The accept-half: nothing about the request or the row is wrong.
+
+    Without it, the 502 above is satisfied by a route that refuses every
+    download, and the custody assertion by a route that records a break
+    on every read.
+    """
+    _an_approved_artifact(db_session)
+    _use_object_store(
+        monkeypatch,
+        db_session,
+        _InMemoryObjectStore({_ARTIFACT_KEY: _ARTIFACT_BYTES}),
+    )
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{_ARTIFACT_SHA256}/download"
+    )
+    assert response.status_code == 200, response.text
+    assert response.content == _ARTIFACT_BYTES
+
+    events = db_session.scalars(
+        select(ArtifactIntegrityEvent).where(
+            ArtifactIntegrityEvent.sha256 == _ARTIFACT_SHA256
+        )
+    ).all()
+    assert events == [], events
+
+
+def test_a_missing_object_names_the_storage_subsystem_too(
+    client, db_session, monkeypatch
+) -> None:
+    """The sibling ``except`` in the same function, found by the sweep.
+
+    ``ArtifactStorageUnavailable`` had the identical defect and nobody
+    had filed it: caught for its side effect — recording ``object_missing``,
+    which is durable information about custody, not an outage — and then
+    re-raised as a bare ``HTTPException(503)``, so the download answered
+    ``http_503`` where the upload path answers
+    ``artifact_storage_unavailable``.
+
+    Two typed exceptions, one function, one defect: fixing only the one
+    with a task number would have left the other exactly as it was.
+    """
+    artifact = _an_approved_artifact(db_session)
+
+    # An empty store: the object store answers, and says the key is not
+    # there. That is the ``missing=True`` branch, not an outage.
+    _use_object_store(monkeypatch, db_session, _InMemoryObjectStore())
+    body = _assert_code(
+        client.get(f"/api/v1/scientific/artifacts/{_ARTIFACT_SHA256}/download"),
+        "artifact_storage_unavailable",
+        status=503,
+    )
+    assert body["context"] == {}, body
+    assert str(artifact.id) not in str(body.get("detail")), body
+
+    events = db_session.scalars(
+        select(ArtifactIntegrityEvent).where(
+            ArtifactIntegrityEvent.sha256 == _ARTIFACT_SHA256
+        )
+    ).all()
+    assert len(events) == 1, events
+    assert events[0].finding.value == "object_missing", events[0].finding

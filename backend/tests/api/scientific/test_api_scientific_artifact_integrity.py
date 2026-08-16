@@ -351,12 +351,29 @@ def test_an_admin_may_read_the_custody_record(
 def test_client_sort_is_rejected_like_every_other_scientific_read(
     client, db_session, login_as, _api_curator_user
 ):
+    """Rejected *and named*, which is the part that was not true.
+
+    This asserted the token appeared anywhere in ``response.text``, and
+    it did — inside ``detail``. The ``code`` field said ``http_422``, for
+    two independent reasons the sweep behind #209/#212 separated: the
+    route wrapped the service's ``ValueError`` in a bare
+    ``HTTPException(422)``, and the service raised the bare token
+    ``"client_sort_not_supported"`` instead of the house
+    ``"<code>: <prose>"`` form, which is the only form
+    ``validation_detail_code`` promotes. Fixing either alone leaves the
+    code generic; a substring assertion could not tell.
+    """
     login_as(_api_curator_user)
 
     response = client.get(LIST_URL, params={"sort": "sha256:asc"})
 
     assert response.status_code == 422
-    assert "client_sort_not_supported" in response.text
+    assert response.json()["code"] == "client_sort_not_supported", response.text
+
+    # The accept-half: the same request without ``sort=`` is served, so
+    # the 422 is about the sort vocabulary and not about the endpoint.
+    accepted = client.get(LIST_URL)
+    assert accepted.status_code == 200, accepted.text
 
 
 # ---------------------------------------------------------------------------
