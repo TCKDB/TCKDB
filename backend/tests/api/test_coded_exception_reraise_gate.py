@@ -63,6 +63,70 @@ asserted:
   outlive what it describes;
 * and the scan itself is provoked against a site known to exist, so a
   scan that silently matches nothing cannot pass as a clean sweep.
+
+The second rule: a handler that can *absorb* a coded refusal
+------------------------------------------------------------
+The rule above asks what a handler **raises**. It cannot see the other
+half, and the other half is where #212's last site actually lived:
+
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+That **passes** the rule above -- the message goes through -- and it is
+still a loss. ``CodedValidationError`` is a ``ValueError``, so this clause
+catches every coded refusal raised anywhere beneath it; ``detail=str(exc)``
+carries the code only where the catalogue lists it as ``message_prefix``,
+and it drops ``context`` and the handler's chosen status either way. It sat
+on ``GET /scientific/artifacts/integrity`` wrapping
+:func:`~app.services.scientific_read.artifact_integrity.search_artifact_integrity`,
+and the #176 census verdict on it -- "cannot receive a coded error" -- was
+**true**, established statically and empirically. It was true by accident:
+the wrapped function sits beside functions that do raise coded refusals
+(:func:`app.api.error_contract.reject_unsupported_filters` is one), so one
+refactor routing a coded refusal through it would have flattened the code
+with nothing failing.
+
+Rather than pin that one call graph, this second rule covers the shape.
+Every ``except`` in the API layer whose caught types can absorb a
+``CodedValidationError`` -- ``ValueError``, ``Exception``, ``BaseException``
+or a bare ``except`` -- must do one of three things:
+
+1. **re-raise the original** (``raise``, or ``raise exc``), so the
+   ``ValueError`` handler in :mod:`app.api.errors` still mints the code;
+2. **intercept the coded case first**, with an earlier
+   ``except CodedValidationError`` / ``except CodedValueError`` clause on
+   the same ``try`` that re-raises it as itself -- this is the shape #165
+   used on the kinetics wrapper, and it is the escape hatch for a handler
+   that genuinely needs to translate the *uncoded* case; or
+3. **be listed in** :data:`JUDGED_ABSORBING_HANDLERS` **with a reason**.
+
+Why the exemption list is a list and not an inference
+-----------------------------------------------------
+Four of the sites it finds translate a coded refusal on purpose, and a
+gate that broke them would be worse than no gate. Three are the lookup
+API, whose whole contract is that an unresolvable species is a *200 with a
+match block*, never a 422 -- the coded refusal is deliberately restated in
+that envelope's own reason vocabulary. The fourth is a health probe that
+must return rather than raise. None of that is derivable from the shape,
+so it is written down, per site, in the dict below. An entry is a standing
+claim; the staleness test makes it fail once it stops describing anything.
+
+Deliberately **not** covered: the same shape anywhere below the API layer.
+This is a scoping decision with a measured price. Running the identical
+scan over all of ``backend/app`` (measured 2026-08-16) finds **104**
+handlers that absorb without re-raising, against **8** in ``app/api`` --
+so widening the rule would demand 96 further judgements, nearly all of
+them chemistry parsers and service helpers restating one uncoded
+``ValueError`` as another. Every one would have to be read and written up
+before the gate could go green once, and a gate that opens with a hundred
+exemptions is a gate that gets deleted.
+
+The API layer is the right boundary on the merits, not only on cost: it is
+where an exception stops being an exception and becomes a response body,
+and a code that is never published is a code nobody could have branched
+on. A refusal re-raised through ten service frames and dropped in the
+eleventh is still caught here, because ``app/api`` is the last frame it
+must cross.
 """
 
 from __future__ import annotations
@@ -275,4 +339,407 @@ class TestTheSweepIsComplete:
             f"{path} has regrown a handler that catches an exception and "
             "raises an HTTPException with a new message -- the exact shape "
             "#212 repaired, twice in one function"
+        )
+
+
+# ---------------------------------------------------------------------------
+# The second rule: a handler that can absorb a coded refusal
+# ---------------------------------------------------------------------------
+
+#: The caught types that swallow a ``CodedValidationError``. It subclasses
+#: ``ValueError``, so these three -- plus a bare ``except:``, normalised to
+#: ``BaseException`` by :func:`_caught_names` -- are exhaustive. Nothing
+#: narrower can absorb one, and nothing wider exists.
+ABSORBING_CATCHES = frozenset({"ValueError", "Exception", "BaseException"})
+
+#: Clauses that take the coded case out of a broader clause's way. Both
+#: spellings are live: wire-schema checks raise ``CodedValidationError``
+#: because ``tckdb_schemas`` may not import ``app``, and the backend raises
+#: the ``CodedValueError`` subclass.
+CODED_CATCHES = frozenset({"CodedValidationError", "CodedValueError"})
+
+#: Handlers in the API layer that absorb a coded refusal on purpose, keyed
+#: ``"<path>::<enclosing qualname>"``. Anchored on the function rather than
+#: a line number so that reformatting the module above them does not fail
+#: this gate -- the lesson ``test_the_artifact_routes_did_not_regrow_their_
+#: handlers`` records, applied to a list eight entries long instead of one.
+#:
+#: Every value must say what a client loses and why that is right. Adding
+#: an entry is the expensive path on purpose: re-raising (``raise``) or an
+#: earlier ``except CodedValueError`` clause needs no entry at all.
+JUDGED_ABSORBING_HANDLERS: dict[str, str] = {
+    # -- The four deliberate translations. ------------------------------
+    # These are the ones a rule written carelessly would have broken, and
+    # the reason the exemption mechanism is an explicit dict.
+    "backend/app/api/routes/lookup.py::_resolve_species_list": (
+        "The lookup contract answers 200 with a `match` block; an "
+        "unresolvable reactant or product is a *result*, not a refusal, so "
+        "there is no error body for a code to be lost from. "
+        "`canonical_species_identity` can raise CodedValueError "
+        "(`species_smiles_charge_mismatch`) and that is deliberately "
+        "restated as the envelope's own `reactant_not_found` / "
+        "`product_not_found` reason. The coded message is preserved "
+        "verbatim inside the reason text (`f\"...: {e}\"`), so nothing a "
+        "caller could read is dropped -- only the transport changes."
+    ),
+    "backend/app/api/routes/lookup.py::lookup_species": (
+        "Same contract as above, one subject rather than a list: the coded "
+        "refusal becomes `species_identity_none` in the match block, "
+        "carrying `str(e)` as its reason. A 422 here would make the lookup "
+        "API the only read route that refuses a query it simply cannot "
+        "satisfy."
+    ),
+    "backend/app/api/routes/lookup.py::lookup_species_calculation": (
+        "Same contract again, on the calculation lookup. Three separate "
+        "entries rather than one wildcard on `lookup.py`: a wildcard would "
+        "also exempt a fourth handler nobody had read."
+    ),
+    "backend/app/api/routes/health.py::_sanitized_endpoint": (
+        "Formats an object-store URL for /status by stripping credentials "
+        "from it. The only raiser under the try is `urlsplit`, which raises "
+        "a bare ValueError; the handler returns the literal "
+        "'(unparseable)'. No coded refusal is reachable, and the function "
+        "returns a display string rather than a response body, so there is "
+        "no `code` field for one to have reached."
+    ),
+    # -- Broad diagnostic handlers, none on a refusal path. --------------
+    "backend/app/api/routes/auth.py::_migrate_password_hash": (
+        "Opportunistic password-hash upgrade inside a nested transaction "
+        "on an *already successful* login. Deliberately broad: the comment "
+        "at the site says `never fail a valid login`. It logs and falls "
+        "through, and the response it falls through to is a 200. Nothing "
+        "under the try raises a coded refusal -- `hash_password` is pure "
+        "and the nested begin raises SQLAlchemy errors."
+    ),
+    "backend/app/api/routes/health.py::_probe_bucket": (
+        "`/status` must answer under every failure including ones this "
+        "module has not anticipated, so the handler returns a health block "
+        "rather than raising. A coded refusal cannot reach it: the try "
+        "calls `head_bucket` on the storage client only."
+    ),
+    "backend/app/api/startup_checks.py::report_database_encoding_at_startup._probe": (
+        "Boot diagnostic running on its own thread; a probe that raises "
+        "must not become the fault it exists to report. It runs before any "
+        "request exists, so there is no response body to lose a code from."
+    ),
+    "backend/app/api/startup_checks.py::report_artifact_storage_at_startup": (
+        "Same reasoning at boot rather than on a thread: the storage probe "
+        "raising must not take the process with it. Returns a diagnostic "
+        "dict, not a response."
+    ),
+}
+
+#: Measured 2026-08-16: nine handlers in ``backend/app/api`` can absorb a
+#: coded refusal. One (``get_write_db``) needs no entry because it
+#: re-raises; the other eight are judged above. The floor is well under
+#: nine and exists only to catch a scan that has stopped walking the tree,
+#: not to police the count.
+_MINIMUM_ABSORBING_HANDLERS_THE_SCAN_MUST_SEE = 6
+
+#: The handler that must be classified as *safe by re-raise*, so the
+#: classifier is caught saying "no entry needed" about a real site rather
+#: than only about a synthetic one. It is the write-session dependency:
+#: every write request in the application passes through it, it catches
+#: ``Exception`` to roll back and audit, and it ends with a bare ``raise``.
+_A_HANDLER_THAT_RERAISES = "backend/app/api/deps.py::get_write_db"
+
+
+def _caught_names(handler: ast.ExceptHandler) -> frozenset[str]:
+    """The exception names a handler catches; bare ``except:`` is broadest."""
+    node = handler.type
+    if node is None:
+        return frozenset({"BaseException"})
+    parts = node.elts if isinstance(node, ast.Tuple) else [node]
+    return frozenset(
+        getattr(part, "id", None) or getattr(part, "attr", None) or ast.unparse(part)
+        for part in parts
+    )
+
+
+def _reraises_the_original(handler: ast.ExceptHandler) -> bool:
+    """True for a bare ``raise`` or ``raise <the bound name>``."""
+    for sub in ast.walk(handler):
+        if not isinstance(sub, ast.Raise):
+            continue
+        if sub.exc is None:
+            return True
+        if (
+            handler.name
+            and isinstance(sub.exc, ast.Name)
+            and sub.exc.id == handler.name
+        ):
+            return True
+    return False
+
+
+def _qualnames(tree: ast.Module) -> dict[int, str]:
+    """``id(node) -> "outer.inner"`` for every node, by enclosing scope."""
+    resolved: dict[int, str] = {}
+
+    def walk(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            ):
+                inner = f"{prefix}.{child.name}" if prefix else child.name
+                resolved[id(child)] = inner
+                walk(child, inner)
+            else:
+                resolved[id(child)] = prefix
+                walk(child, prefix)
+
+    walk(tree, "")
+    return resolved
+
+
+def _absorbing_handlers() -> dict[str, dict]:
+    """``"<path>::<qualname>" -> {caught, safe, lineno}`` for the API layer.
+
+    ``safe`` is true when the handler re-raises the original, or when an
+    earlier clause on the same ``try`` catches the coded type -- the two
+    shapes that keep a code nameable without needing an exemption.
+    """
+    found: dict[str, dict] = {}
+    for path in sorted(API_ROOT.rglob("*.py")):
+        tree = ast.parse(path.read_text())
+        relative = str(path.relative_to(REPO_ROOT))
+        qualnames = _qualnames(tree)
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Try):
+                continue
+            coded_taken_first = False
+            for handler in node.handlers:
+                caught = _caught_names(handler)
+                if caught & CODED_CATCHES:
+                    coded_taken_first = True
+                    continue
+                if not (caught & ABSORBING_CATCHES):
+                    continue
+                key = f"{relative}::{qualnames.get(id(node), '<module>')}"
+                safe = coded_taken_first or _reraises_the_original(handler)
+                previous = found.get(key)
+                if previous is not None:
+                    # Two absorbing handlers in one function collide on the
+                    # key and one would vanish from the sweep. Keep the
+                    # unsafe verdict so a merge can never hide a defect, and
+                    # record the collision for the test that fails on it.
+                    previous["collided"] = True
+                    if previous["safe"] and not safe:
+                        previous["safe"] = False
+                        previous["lineno"] = handler.lineno
+                    continue
+                found[key] = {
+                    "caught": "|".join(sorted(caught)),
+                    "safe": safe,
+                    "lineno": handler.lineno,
+                    "collided": False,
+                }
+    return found
+
+
+def _unjudged_absorbing_handlers() -> dict[str, dict]:
+    """The sites the gate fails on: unsafe, and nobody has judged them."""
+    return {
+        key: info
+        for key, info in _absorbing_handlers().items()
+        if not info["safe"] and key not in JUDGED_ABSORBING_HANDLERS
+    }
+
+
+class TestTheAbsorbingScanSeesWhatItIsWrittenOver:
+    """A sweep that matched nothing would pass every assertion below it."""
+
+    def test_it_finds_the_handlers_that_can_absorb_a_code(self):
+        handlers = _absorbing_handlers()
+        assert len(handlers) >= _MINIMUM_ABSORBING_HANDLERS_THE_SCAN_MUST_SEE, (
+            f"only {len(handlers)} handlers able to absorb a coded refusal "
+            f"found under {API_ROOT}; the scan has probably stopped walking "
+            "the tree, and every assertion below it would then pass "
+            "vacuously"
+        )
+
+    def test_no_two_handlers_share_a_key(self):
+        """Two in one function would merge, and one would leave the sweep."""
+        collided = sorted(
+            key for key, info in _absorbing_handlers().items() if info["collided"]
+        )
+        assert not collided, (
+            "these functions hold more than one handler that can absorb a "
+            "coded refusal, so the sweep cannot address them separately: "
+            f"{collided}. Split the function, or key this scan on the "
+            "handler's line number as well as its qualname."
+        )
+
+    def test_a_bare_reraise_is_classified_as_safe(self):
+        """Caught saying 'no entry needed' about a real site, not a stub."""
+        handlers = _absorbing_handlers()
+        assert _A_HANDLER_THAT_RERAISES in handlers, (
+            f"{_A_HANDLER_THAT_RERAISES} is no longer found by the scan; the "
+            "anchor for this assertion has moved"
+        )
+        assert handlers[_A_HANDLER_THAT_RERAISES]["safe"], (
+            "the write-session dependency catches Exception, rolls back, "
+            "audits and then re-raises -- if the scan calls that unsafe it "
+            "will call every correct handler unsafe and be deleted"
+        )
+        assert _A_HANDLER_THAT_RERAISES not in JUDGED_ABSORBING_HANDLERS, (
+            "a re-raising handler must not need an exemption; an entry here "
+            "would hide a later edit that stopped re-raising"
+        )
+
+    def test_it_would_notice_a_handler_that_swallows_a_coded_error(self):
+        """Provoked against source, so the classifier is caught saying no."""
+        tree = ast.parse(
+            "try:\n"
+            "    search_artifact_integrity()\n"
+            "except ValueError as exc:\n"
+            "    raise HTTPException(status_code=422, detail=str(exc)) from exc\n"
+        )
+        handler = next(
+            node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)
+        )
+        assert _caught_names(handler) & ABSORBING_CATCHES
+        assert not _reraises_the_original(handler), (
+            "the exact shape #212 removed from the artifact-integrity route "
+            "was classified as safe; the gate would then permit its return"
+        )
+
+    def test_it_recognises_the_coded_first_escape_hatch(self):
+        """#165's shape must pass, or the sanctioned repair fails the gate."""
+        tree = ast.parse(
+            "try:\n"
+            "    check()\n"
+            "except CodedValueError as exc:\n"
+            "    raise CodedValueError(exc.code, f'{field}: {exc}') from exc\n"
+            "except ValueError as exc:\n"
+            "    raise ValueError(f'{field}: {exc}') from exc\n"
+        )
+        node = next(n for n in ast.walk(tree) if isinstance(n, ast.Try))
+        coded_first = False
+        verdicts = []
+        for handler in node.handlers:
+            caught = _caught_names(handler)
+            if caught & CODED_CATCHES:
+                coded_first = True
+                continue
+            if caught & ABSORBING_CATCHES:
+                verdicts.append(coded_first or _reraises_the_original(handler))
+        assert verdicts == [True], (
+            "the broad clause behind an `except CodedValueError` that "
+            "re-raises coded was not recognised as safe; option (a) would "
+            "then be unavailable as a repair and this gate would force "
+            "exemptions instead of fixes"
+        )
+
+    def test_the_order_of_the_clauses_matters(self):
+        """A coded clause *after* the broad one never runs, so it is no fix."""
+        tree = ast.parse(
+            "try:\n"
+            "    check()\n"
+            "except ValueError as exc:\n"
+            "    raise HTTPException(status_code=422, detail=str(exc)) from exc\n"
+            "except CodedValueError as exc:\n"
+            "    raise\n"
+        )
+        node = next(n for n in ast.walk(tree) if isinstance(n, ast.Try))
+        coded_first = False
+        verdicts = []
+        for handler in node.handlers:
+            caught = _caught_names(handler)
+            if caught & CODED_CATCHES:
+                coded_first = True
+                continue
+            if caught & ABSORBING_CATCHES:
+                verdicts.append(coded_first or _reraises_the_original(handler))
+        assert verdicts == [False], (
+            "a CodedValueError clause written *below* the ValueError clause "
+            "was treated as protecting it. Python never reaches it -- the "
+            "broad clause matches first -- so accepting that ordering would "
+            "bless a repair that does nothing"
+        )
+
+
+class TestTheAbsorbingSweepIsComplete:
+    """Both directions, so neither a new site nor a stale entry survives."""
+
+    def test_every_absorbing_handler_is_reraising_or_judged(self):
+        unjudged = {
+            key: info["caught"]
+            for key, info in _unjudged_absorbing_handlers().items()
+        }
+        assert not unjudged, (
+            "these handlers in the API layer catch a type that swallows a "
+            "CodedValidationError, and neither re-raise it nor let an "
+            "earlier `except CodedValueError` clause take it first: "
+            f"{unjudged}. A coded refusal raised anywhere beneath them "
+            "loses its `code` and its `context`. Either re-raise "
+            "(`raise`), add an `except CodedValueError as exc: raise` "
+            "clause above the broad one, or add an entry to "
+            "JUDGED_ABSORBING_HANDLERS saying what a client loses and why "
+            "that is right."
+        )
+
+    def test_no_entry_describes_a_handler_that_is_gone(self):
+        """A list nothing re-checks is how a stale survey stays believed."""
+        needs_judging = {
+            key for key, info in _absorbing_handlers().items() if not info["safe"]
+        }
+        stale = sorted(set(JUDGED_ABSORBING_HANDLERS) - needs_judging)
+        assert not stale, (
+            "JUDGED_ABSORBING_HANDLERS describes handlers that no longer "
+            f"absorb a coded refusal: {stale}. If they were repaired, "
+            "delete the entry; if they moved or were renamed, re-anchor it."
+        )
+
+    def test_the_four_deliberate_translations_are_still_exactly_four(self):
+        """The set a careless rule would have broken, pinned by name.
+
+        Three lookup routes and one health probe. They are the reason the
+        exemption mechanism is an explicit dict rather than an inference
+        from shape: every one of them is, mechanically, a coded refusal
+        being turned into something else, and every one of them is right.
+        """
+        deliberate = sorted(
+            key
+            for key in JUDGED_ABSORBING_HANDLERS
+            if "lookup.py" in key or "::_sanitized_endpoint" in key
+        )
+        assert deliberate == [
+            "backend/app/api/routes/health.py::_sanitized_endpoint",
+            "backend/app/api/routes/lookup.py::_resolve_species_list",
+            "backend/app/api/routes/lookup.py::lookup_species",
+            "backend/app/api/routes/lookup.py::lookup_species_calculation",
+        ], (
+            "the four deliberate translations are no longer the four this "
+            f"gate was written around: {deliberate}. If one was repaired, "
+            "say so here; if a fifth was added, it needs the same argument "
+            "the other four carry."
+        )
+        found = _absorbing_handlers()
+        for key in deliberate:
+            assert key in found, (
+                f"{key} is exempted but the scan no longer finds it, so the "
+                "exemption is protecting nothing and would hide a "
+                "regression at the same site"
+            )
+
+    def test_the_integrity_route_has_not_regrown_its_value_error_handler(self):
+        """Named, because this is the site the whole second rule is for.
+
+        ``GET /scientific/artifacts/integrity`` carried
+        ``except ValueError -> HTTPException(422, str(exc))`` until #212
+        removed it. The wire test that asserts what it publishes instead is
+        ``tests/api/scientific/test_api_scientific_artifact_integrity.py``
+        ``::test_client_sort_is_rejected_like_every_other_scientific_read``;
+        this is the shape half, which cannot see a response body.
+        """
+        path = "backend/app/api/routes/scientific/artifacts.py"
+        regrown = sorted(
+            key for key in _unjudged_absorbing_handlers() if key.startswith(path)
+        )
+        assert not regrown, (
+            f"{path} has regrown a handler that absorbs a coded refusal "
+            f"without re-raising it: {regrown}. `search_artifact_integrity` "
+            "raises `client_sort_not_supported` and `offset_too_large`; "
+            "wrapping it re-answers 422 as `http_422`"
         )
