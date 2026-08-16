@@ -42,6 +42,24 @@ What each test asserts, and why in that shape
   the dependency-overridden test session does not), it is, and the comment
   says so.
 
+Six expected statuses changed in #211, and none of them was relaxed
+----------------------------------------------------------------------
+``release_not_draft`` (twice), ``release_not_published`` (twice),
+``selection_already_stands`` and ``selection_already_superseded`` were
+asserted here at **422** and are now asserted at **409**. That is not a
+test bending to fit the code: it is this file recording a decision made
+about the contract — 409 for a state conflict, 404 for a missing thing,
+422 only for a malformed payload. Every one of the six refuses a request
+whose body is correct, and no corrected body makes it succeed, so 422 was
+telling a client to resend something that could never be accepted.
+
+The assertion is *stronger* after the change, not weaker: the pair is
+still exact, and the same tests still require the neighbouring valid
+request to be accepted. ``release_tag_taken`` and
+``curation_policy_version_conflict`` had already been settled at 409 in
+#170, so this removed an inconsistency inside one router rather than
+creating one.
+
 Fixtures live in this file rather than in a conftest deliberately: they are
 one round old and shared by nothing else yet.
 """
@@ -219,7 +237,7 @@ def test_publishing_a_published_release_is_release_not_draft(
     assert first.status_code == 200, first.text
 
     again = as_curator.post(f"/api/v1/releases/{TAG}/publish")
-    _refusal(again, status=422, code="release_not_draft")
+    _refusal(again, status=409, code="release_not_draft")
 
 
 def test_selecting_into_a_published_release_is_release_not_draft(
@@ -239,7 +257,7 @@ def test_selecting_into_a_published_release_is_release_not_draft(
     assert as_curator.post(f"/api/v1/releases/{TAG}/publish").status_code == 200
 
     refused = _select(as_curator, other.public_ref)
-    _refusal(refused, status=422, code="release_not_draft")
+    _refusal(refused, status=409, code="release_not_draft")
 
 
 def test_withdrawing_a_draft_release_is_release_not_published(
@@ -258,7 +276,7 @@ def test_withdrawing_a_draft_release_is_release_not_published(
     refused = as_curator.post(
         f"/api/v1/releases/{TAG}/withdraw", json={"reason": "Systematic AEC error."}
     )
-    _refusal(refused, status=422, code="release_not_published")
+    _refusal(refused, status=409, code="release_not_published")
 
     # The same request, after publication, is accepted.
     assert as_curator.post(f"/api/v1/releases/{TAG}/publish").status_code == 200
@@ -284,7 +302,7 @@ def test_attaching_a_doi_to_a_draft_release_is_release_not_published(
 
     doi = {"doi": "10.5281/zenodo.1234567"}
     refused = as_curator.post(f"/api/v1/releases/{TAG}/doi", json=doi)
-    _refusal(refused, status=422, code="release_not_published")
+    _refusal(refused, status=409, code="release_not_published")
 
     assert as_curator.post(f"/api/v1/releases/{TAG}/publish").status_code == 200
     accepted = as_curator.post(f"/api/v1/releases/{TAG}/doi", json=doi)
@@ -387,7 +405,7 @@ def test_a_second_selection_for_the_same_subject_is_refused(
 
     _refusal(
         _select(as_curator, other.public_ref),
-        status=422,
+        status=409,
         code="selection_already_stands",
     )
 
@@ -396,6 +414,28 @@ def test_a_second_selection_for_the_same_subject_is_refused(
         as_curator, first.json()["selection_ref"], other.public_ref
     )
     assert replacement.status_code == 201, replacement.text
+
+
+def test_a_selectable_ref_that_names_no_record_is_a_404(as_curator, candidates):
+    """The fourth ``unknown_*`` on this router, and the last to reach 404.
+
+    ``unknown_release``, ``unknown_selection`` and ``unknown_curation_policy``
+    all answered 404 for the same condition; a candidate record answered 422,
+    which told a client to correct a body that was already correct. The ref
+    below is well formed and its prefix *is* selectable — the only thing
+    wrong with it is that nothing answers to it, which is what separates it
+    from ``record_ref_not_selectable`` (still 422, and still right: there the
+    prefix names no selectable kind at all).
+    """
+    _entry, chosen, _other = candidates
+    _open_draft(as_curator)
+
+    refused = _select(as_curator, "thm_0123456789abcdef")
+    _refusal(refused, status=404, code="unknown_record")
+
+    # A ref that does resolve, on the same route, is accepted.
+    accepted = _select(as_curator, chosen.public_ref)
+    assert accepted.status_code == 201, accepted.text
 
 
 def test_superseding_a_selection_with_itself_is_refused(as_curator, candidates):
@@ -441,7 +481,7 @@ def test_superseding_an_already_superseded_selection_is_refused(
 
     _refusal(
         _supersede(as_curator, first_ref, chosen.public_ref),
-        status=422,
+        status=409,
         code="selection_already_superseded",
     )
 

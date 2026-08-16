@@ -40,13 +40,29 @@ class NotFoundError(Exception):
     """Explicit 404 raised by service code.
 
     Pass ``code`` to attach a stable application-facing code to the
-    response envelope. Without a code the handler emits only
-    ``{"detail": ...}`` (legacy behavior).
+    response envelope. Without a code the envelope falls back to the
+    generic ``resource_not_found``, which tells a client nothing the status
+    line did not.
+
+    ``context`` carries the structured half of the refusal — which field
+    named the missing row, and what it named. A 404 raised from inside an
+    upload payload needs it: "statmech not found" is useless when the
+    payload cited four refs, and the alternative is a client string-matching
+    prose. It is deep-sanitised by :func:`app.api.error_contract.error_envelope`
+    like any other context, and must never carry a database primary key
+    (DR-0028 Requirement 2).
     """
 
-    def __init__(self, message: str, *, code: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str | None = None,
+        context: dict[str, object] | None = None,
+    ) -> None:
         super().__init__(message)
         self.code = code
+        self.context = dict(context or {})
 
 
 def not_found(
@@ -55,6 +71,7 @@ def not_found(
     row_id: object = None,
     ref: str | None = None,
     code: str | None = None,
+    context: dict[str, object] | None = None,
 ) -> NotFoundError:
     """Build a 404 that names the resource without disclosing its row id.
 
@@ -78,13 +95,14 @@ def not_found(
         returned.
     :param ref: A public ref the caller supplied, echoed into the body.
     :param code: Stable application code for the envelope.
+    :param context: Structured detail for the envelope — never a row id.
     """
     if row_id is not None:
         logger.info("404 %s not found: row_id=%s ref=%s", kind, row_id, ref)
     detail = f"{kind} not found"
     if ref is not None:
         detail += f" ({kind}_ref={ref!r})"
-    return NotFoundError(detail, code=code)
+    return NotFoundError(detail, code=code, context=context)
 
 
 class DataIntegrityError(Exception):
@@ -177,7 +195,10 @@ def _not_found_handler(_request: Request, exc: NotFoundError) -> JSONResponse:
     return JSONResponse(
         status_code=404,
         content=error_envelope(
-            str(exc), code=code, fallback_code="resource_not_found"
+            str(exc),
+            code=code,
+            context=getattr(exc, "context", None),
+            fallback_code="resource_not_found",
         ),
     )
 

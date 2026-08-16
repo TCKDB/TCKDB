@@ -11,6 +11,19 @@ established. They need opposite fixes. This document classifies all 53.
 
 It is an *analysis*. No production file is changed by the PR that carries it.
 
+> **Statuses recorded here have since moved (#211/#204, 2026-08-16.)** The
+> reproduction recipes below are still correct — the same request still
+> provokes the same code — but seven of the statuses are not. On the release
+> router `release_not_draft`, `release_not_published`,
+> `selection_already_stands`, `selection_already_superseded`,
+> `doi_already_recorded` and `manifest_already_frozen` are now **409**, and
+> `unknown_record` is now **404**; on `/uploads/kinetics` every "ref names no
+> row" refusal is now a coded **404** instead of a generic 422. The rule
+> applied was: 409 for a state conflict, 404 for a missing thing, 422 only
+> for a malformed payload. `app/api/code_catalogue.py` is the current
+> authority for any `(status, code)` pair; this document is a measurement
+> taken on 2026-08-13 and is not maintained against it.
+
 ---
 
 ## Lead: four things that change the picture

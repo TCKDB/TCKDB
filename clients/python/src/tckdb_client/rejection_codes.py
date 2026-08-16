@@ -193,13 +193,18 @@ class RejectionCode(str, Enum):
     TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS = "transition_state_reaction_coordinate_ambiguous"
     TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED = "transition_state_reaction_coordinate_not_designated"
     UNIQUE_CONFLICT = "unique_conflict"
+    UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
+    UNKNOWN_CALCULATION_REF = "unknown_calculation_ref"
     UNKNOWN_CURATION_POLICY = "unknown_curation_policy"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
+    UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
     UNKNOWN_RECORD = "unknown_record"
     UNKNOWN_RECORD_TYPE = "unknown_record_type"
     UNKNOWN_RELEASE = "unknown_release"
     UNKNOWN_RELEASE_ARTIFACT = "unknown_release_artifact"
     UNKNOWN_SELECTION = "unknown_selection"
+    UNKNOWN_STATMECH_REF = "unknown_statmech_ref"
+    UNKNOWN_TRANSITION_STATE_ENTRY_REF = "unknown_transition_state_entry_ref"
     UNSAFE_LOWEST_ENERGY_COMPARISON = "unsafe_lowest_energy_comparison"
     UNSUPPORTED_DIRECTION = "unsupported_direction"
     UNSUPPORTED_FILTER = "unsupported_filter"
@@ -237,7 +242,6 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
-        RejectionCode.DOI_ALREADY_RECORDED,
         RejectionCode.EXPORT_ALL_CAP_EXCEEDED,
         RejectionCode.EXPORT_SEED_EMPTY,
         RejectionCode.EXPORT_SEED_UNRESOLVED,
@@ -258,7 +262,6 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT,
         RejectionCode.LIMIT_TOO_LARGE,
         RejectionCode.LOWEST_ENERGY_UNAVAILABLE,
-        RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.MISSING_FILTER,
         RejectionCode.MISSING_IDENTIFIER,
         RejectionCode.MISSING_REACTION_SEARCH_FILTER,
@@ -285,12 +288,8 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.RECORD_REF_NOT_SELECTABLE,
         RejectionCode.RECORD_SUBJECT_MISMATCH,
         RejectionCode.RECORD_TYPE_NOT_SELECTABLE,
-        RejectionCode.RELEASE_NOT_DRAFT,
-        RejectionCode.RELEASE_NOT_PUBLISHED,
         RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED,
         RejectionCode.RELEASE_SELECTS_NOTHING,
-        RejectionCode.SELECTION_ALREADY_STANDS,
-        RejectionCode.SELECTION_ALREADY_SUPERSEDED,
         RejectionCode.SELECTION_NO_LONGER_APPROVED,
         RejectionCode.SMILES_TOO_LONG,
         RejectionCode.SPECIES_ENTRY_HANDLE_CONFLICT,
@@ -316,7 +315,6 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
-        RejectionCode.UNKNOWN_RECORD,
         RejectionCode.UNKNOWN_RECORD_TYPE,
         RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON,
         RejectionCode.UNSUPPORTED_DIRECTION,
@@ -340,11 +338,17 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.ATOM_MAP_ELEMENT_NOT_CONSERVED,
         RejectionCode.ATOM_MAP_NOT_A_BIJECTION,
         RejectionCode.CURATION_POLICY_VERSION_CONFLICT,
+        RejectionCode.DOI_ALREADY_RECORDED,
         RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE,
         RejectionCode.IDEMPOTENCY_CONFLICT,
+        RejectionCode.MANIFEST_ALREADY_FROZEN,
         RejectionCode.NETWORK_SOLVE_REPORTED_REQUIRES_LITERATURE,
         RejectionCode.REFERENCE_CONFLICT,
+        RejectionCode.RELEASE_NOT_DRAFT,
+        RejectionCode.RELEASE_NOT_PUBLISHED,
         RejectionCode.RELEASE_TAG_TAKEN,
+        RejectionCode.SELECTION_ALREADY_STANDS,
+        RejectionCode.SELECTION_ALREADY_SUPERSEDED,
         RejectionCode.STATE_CONFLICT,
         RejectionCode.STATMECH_SUBJECT_NOT_EXACTLY_ONE,
         RejectionCode.UNIQUE_CONFLICT,
@@ -388,7 +392,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.CURATOR_TASK_NOT_FOUND: frozenset({404}),
     RejectionCode.CURSOR_OFFSET_CONFLICT: frozenset({422}),
     RejectionCode.CURSOR_QUERY_MISMATCH: frozenset({422}),
-    RejectionCode.DOI_ALREADY_RECORDED: frozenset({422}),
+    RejectionCode.DOI_ALREADY_RECORDED: frozenset({409}),
     RejectionCode.ENERGY_TRANSFER_SCOPE_COLUMNS_DISAGREE: frozenset({409}),
     RejectionCode.EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.EXPORT_SEED_EMPTY: frozenset({422}),
@@ -414,7 +418,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.LEVEL_OF_THEORY_HANDLE_CONFLICT: frozenset({422}),
     RejectionCode.LIMIT_TOO_LARGE: frozenset({422}),
     RejectionCode.LOWEST_ENERGY_UNAVAILABLE: frozenset({422}),
-    RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({422}),
+    RejectionCode.MANIFEST_ALREADY_FROZEN: frozenset({409}),
     RejectionCode.MANIFEST_NOT_FROZEN: frozenset({404}),
     RejectionCode.MISSING_FILTER: frozenset({422}),
     RejectionCode.MISSING_IDENTIFIER: frozenset({422}),
@@ -447,14 +451,14 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.RECORD_SUBJECT_MISMATCH: frozenset({422}),
     RejectionCode.RECORD_TYPE_NOT_SELECTABLE: frozenset({422}),
     RejectionCode.REFERENCE_CONFLICT: frozenset({409}),
-    RejectionCode.RELEASE_NOT_DRAFT: frozenset({422}),
-    RejectionCode.RELEASE_NOT_PUBLISHED: frozenset({422}),
+    RejectionCode.RELEASE_NOT_DRAFT: frozenset({409}),
+    RejectionCode.RELEASE_NOT_PUBLISHED: frozenset({409}),
     RejectionCode.RELEASE_SCOPING_NOT_IMPLEMENTED: frozenset({422}),
     RejectionCode.RELEASE_SELECTS_NOTHING: frozenset({422}),
     RejectionCode.RELEASE_TAG_TAKEN: frozenset({409}),
     RejectionCode.SCAN_RESULT_NOT_FOUND: frozenset({404}),
-    RejectionCode.SELECTION_ALREADY_STANDS: frozenset({422}),
-    RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({422}),
+    RejectionCode.SELECTION_ALREADY_STANDS: frozenset({409}),
+    RejectionCode.SELECTION_ALREADY_SUPERSEDED: frozenset({409}),
     RejectionCode.SELECTION_NO_LONGER_APPROVED: frozenset({422}),
     RejectionCode.SMILES_TOO_LONG: frozenset({422}),
     RejectionCode.SPECIES_ENTRY_HANDLE_CONFLICT: frozenset({422}),
@@ -485,13 +489,18 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED: frozenset({422}),
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
+    RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_CALCULATION_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CURATION_POLICY: frozenset({404}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),
-    RejectionCode.UNKNOWN_RECORD: frozenset({422}),
+    RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_RECORD: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD_TYPE: frozenset({422}),
     RejectionCode.UNKNOWN_RELEASE: frozenset({404}),
     RejectionCode.UNKNOWN_RELEASE_ARTIFACT: frozenset({404}),
     RejectionCode.UNKNOWN_SELECTION: frozenset({404}),
+    RejectionCode.UNKNOWN_STATMECH_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_TRANSITION_STATE_ENTRY_REF: frozenset({404}),
     RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON: frozenset({422}),
     RejectionCode.UNSUPPORTED_DIRECTION: frozenset({422}),
     RejectionCode.UNSUPPORTED_FILTER: frozenset({422}),

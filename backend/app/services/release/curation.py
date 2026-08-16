@@ -41,7 +41,42 @@ from app.services.scientific_read.profile import CURATED_REVIEW_FLOOR
 
 
 class ReleaseCurationError(ValueError):
-    """Raised when a curation request is not coherent."""
+    """Raised when a curation request is not coherent.
+
+    The base carries the *malformed request* meaning and reaches a client as
+    422: the body said something the curator can correct and resend. The two
+    subclasses below exist because that is not true of every refusal on this
+    router, and answering 422 for a condition no corrected body repairs
+    invites a client to resend the same request forever.
+    """
+
+
+class ReleaseStateConflict(ReleaseCurationError):
+    """The request is coherent; the release is not in the state it assumes.
+
+    409, and the status is a property of *this class* rather than of the
+    route that catches it. That distinction is not cosmetic: it is exactly
+    the confusion :mod:`app.api.code_catalogue` recorded against
+    ``curation_policy_version_conflict``, whose entry had to explain that
+    reading the raise site said 422 while the one route that could reach it
+    wrapped it in 409. Both of those codes now raise this class, so the raise
+    site and the wire agree.
+
+    Membership test: *no corrected body makes this request succeed.* A
+    curator must publish the release, cut a new one, supersede a different
+    row, or accept the DOI already cited. Nothing they can retype helps,
+    which is what separates a conflict from a malformed payload.
+    """
+
+
+class ReleaseRecordNotFound(ReleaseCurationError):
+    """A public ref the request named resolves to no row -- 404.
+
+    This router already answers 404 for an unknown release, an unknown
+    selection and an unknown curation policy. A candidate record was the
+    fourth ``unknown_*`` on the same router and the only one answering 422,
+    which is an inconsistency inside a single file rather than between two.
+    """
 
 
 def _naive_utcnow() -> datetime:
@@ -82,7 +117,7 @@ def resolve_curation_policy(
     payload = dict(criteria or {})
     if existing is not None:
         if existing.description != description or existing.criteria_json != payload:
-            raise ReleaseCurationError(
+            raise ReleaseStateConflict(
                 "curation_policy_version_conflict: policy "
                 f"{name!r} version {version!r} already exists with different "
                 "content. Publish a new version instead of editing a version "
@@ -133,7 +168,7 @@ def create_release(
     if session.scalars(
         select(DatasetRelease).where(DatasetRelease.tag == tag)
     ).first() is not None:
-        raise ReleaseCurationError(f"release_tag_taken: {tag!r} already exists.")
+        raise ReleaseStateConflict(f"release_tag_taken: {tag!r} already exists.")
 
     release = DatasetRelease(
         tag=tag,
@@ -166,7 +201,7 @@ def publish_release(session: Session, release: DatasetRelease) -> DatasetRelease
         selection now names a record below the approval floor.
     """
     if release.status is not DatasetReleaseStatus.draft:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             f"release_not_draft: cannot publish a release in status "
             f"{release.status.value!r}."
         )
@@ -221,7 +256,7 @@ def withdraw_release(
         was given.
     """
     if release.status is not DatasetReleaseStatus.published:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             f"release_not_published: cannot withdraw a release in status "
             f"{release.status.value!r}."
         )
@@ -246,11 +281,11 @@ def record_doi(session: Session, release: DatasetRelease, *, doi: str) -> Datase
         a different DOI.
     """
     if release.status is not DatasetReleaseStatus.published:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             "release_not_published: only a published release can carry a DOI."
         )
     if release.doi is not None and release.doi != doi:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             "doi_already_recorded: this release already cites a different DOI."
         )
     release.doi = doi
@@ -271,7 +306,7 @@ def _assert_record_exists(
         select(table.c.id).where(table.c.id == record_id)
     ).first()
     if found is None:
-        raise ReleaseCurationError(
+        raise ReleaseRecordNotFound(
             f"unknown_record: no {record_type.value} record matches the request."
         )
 
@@ -354,7 +389,7 @@ def resolve_selectable_record(session: Session, record_ref: str) -> ResolvedCand
         select(table.c.id).where(table.c.public_ref == record_ref)
     ).first()
     if row is None:
-        raise ReleaseCurationError(f"unknown_record: no record matches {record_ref!r}.")
+        raise ReleaseRecordNotFound(f"unknown_record: no record matches {record_ref!r}.")
     record_id = row[0]
 
     model, fk_attr, subject_type = CANDIDATE_SOURCES[record_type]
@@ -460,7 +495,7 @@ def add_selection(
         record_type=record_type,
     )
     if standing is not None:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             "selection_already_stands: this subject already has a standing "
             "selection in this release. Supersede it rather than adding a "
             "second one -- selections are append-only, not additive."
@@ -621,7 +656,7 @@ def current_selection(
 
 def _assert_draft(release: DatasetRelease) -> None:
     if release.status is not DatasetReleaseStatus.draft:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             "release_not_draft: selections may only be appended while a release "
             "is a draft. A published release is frozen, checksummed and cited."
         )
@@ -636,7 +671,7 @@ def _assert_not_already_superseded(
         )
     ).first()
     if replacement is not None:
-        raise ReleaseCurationError(
+        raise ReleaseStateConflict(
             "selection_already_superseded: this selection has already been "
             "replaced; supersede the row that currently stands."
         )
@@ -645,6 +680,8 @@ def _assert_not_already_superseded(
 __all__ = [
     "SELECTABLE_REF_PREFIXES",
     "ReleaseCurationError",
+    "ReleaseRecordNotFound",
+    "ReleaseStateConflict",
     "ResolvedCandidate",
     "add_selection",
     "create_release",

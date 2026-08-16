@@ -565,6 +565,13 @@ def test_selecting_a_record_ref_that_names_nothing_is_refused(
 
     The sibling ``record_ref_not_selectable`` covers a *wrong prefix*;
     this is the right prefix and no row.
+
+    404 since #211, and asserted here at the new status deliberately. The
+    body is well formed and the prefix is selectable — the only thing
+    wrong is that nothing answers to the ref, which is the definition of
+    a 404. It was the fourth ``unknown_*`` on this router and the only one
+    that had not reached one. The sibling's 422 is untouched, because a
+    wrong prefix *is* a payload a curator corrects and resends.
     """
     entry = make_species_entry(
         db_session, species=make_species(db_session, smiles="CCCO")
@@ -586,7 +593,7 @@ def test_selecting_a_record_ref_that_names_nothing_is_refused(
             "rationale": "Composite single point, frequencies all real.",
         },
     )
-    _assert_refusal(refused, status=422, code="unknown_record")
+    _assert_refusal(refused, status=404, code="unknown_record")
 
     accepted = curator.post(
         f"{_RELEASES}/{draft_release}/selections",

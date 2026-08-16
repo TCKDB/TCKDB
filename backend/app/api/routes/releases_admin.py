@@ -37,6 +37,8 @@ from app.schemas.reads.scientific_release import (
 )
 from app.services.release.curation import (
     ReleaseCurationError,
+    ReleaseRecordNotFound,
+    ReleaseStateConflict,
     add_selection,
     create_release,
     publish_release,
@@ -47,7 +49,11 @@ from app.services.release.curation import (
     withdraw_release,
     withdraw_selection,
 )
-from app.services.release.manifest import ReleaseStateError, freeze_manifest
+from app.services.release.manifest import (
+    ReleaseManifestStateConflict,
+    ReleaseStateError,
+    freeze_manifest,
+)
 from app.services.scientific_read.releases import (
     UnknownReleaseError,
     get_release,
@@ -56,6 +62,32 @@ from app.services.scientific_read.releases import (
 )
 
 router = APIRouter()
+
+
+def _refusal_status(exc: ReleaseCurationError | ReleaseStateError) -> int:
+    """The status a curation refusal arrives at, read off the exception.
+
+    Three answers, and a client retries differently for each:
+
+    * **409** — the body is fine and the world is not how it assumed. No
+      corrected payload helps: the release has to be published, a new one
+      cut, or a different row superseded first.
+    * **404** — the request named a record that is not there.
+    * **422** — the body itself is wrong, and a corrected one is accepted.
+
+    Deriving the status from the exception class rather than from the route
+    is the point. ``release_tag_taken`` and
+    ``curation_policy_version_conflict`` were 409 because two ``except``
+    clauses said so, which is why :mod:`app.api.code_catalogue` had to carry
+    a note explaining that reading the raise site gave the wrong answer.
+    Now the raise site *is* the answer, and a new refusal gets its status by
+    choosing a class instead of by remembering which handler catches it.
+    """
+    if isinstance(exc, (ReleaseStateConflict, ReleaseManifestStateConflict)):
+        return 409
+    if isinstance(exc, ReleaseRecordNotFound):
+        return 404
+    return 422
 
 
 # ---------------------------------------------------------------------------
@@ -149,7 +181,7 @@ def create_curation_policy(
             created_by=user.id,
         )
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return CurationPolicyResponse(
         curation_policy_ref=policy.public_ref, name=policy.name, version=policy.version
     )
@@ -197,7 +229,7 @@ def create_dataset_release(
             created_by=user.id,
         )
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return get_release(session, release.tag).record
 
 
@@ -214,9 +246,11 @@ def append_selection(
 ) -> ReleaseSelectionRecord:
     """Append an attributed selection to a draft release.
 
-    :raises HTTPException: 404 unknown release; 422 for anything incoherent
-        (record not selectable, subject already has a standing selection,
-        release not a draft).
+    :raises HTTPException: 404 unknown release, or a ``record_ref`` naming no
+        record; 409 when the release is no longer a draft or the subject
+        already has a standing selection (supersede it instead); 422 for a
+        body that can be corrected and resent — an unselectable ref, a
+        blank rationale, a record below the approval floor.
     """
     release = _release(session, release_handle)
     try:
@@ -232,7 +266,7 @@ def append_selection(
             selected_by=user.id,
         )
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return _selection_record(session, release_handle, selection.public_ref)
 
 
@@ -252,8 +286,10 @@ def supersede(
 
     201, not 200: this creates a new row. Nothing is edited.
 
-    :raises HTTPException: 404 unknown release or selection; 422 when the row
-        has already been superseded or the replacement is incoherent.
+    :raises HTTPException: 404 unknown release, unknown selection, or a
+        ``record_ref`` naming no record; 409 when the row has already been
+        superseded or the release is no longer a draft; 422 when the
+        replacement is incoherent.
     """
     release = _release(session, release_handle)
     superseded = _selection(session, selection_ref, release=release)
@@ -267,7 +303,7 @@ def supersede(
             selected_by=user.id,
         )
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return _selection_record(session, release_handle, selection.public_ref)
 
 
@@ -285,8 +321,9 @@ def withdraw_a_selection(
 ) -> ReleaseSelectionRecord:
     """Append a withdrawal: the release now recommends nothing for this subject.
 
-    :raises HTTPException: 404 unknown release or selection; 422 when the row
-        has already been superseded.
+    :raises HTTPException: 404 unknown release or selection; 409 when the row
+        has already been superseded or the release is no longer a draft; 422
+        when no reason was given.
     """
     release = _release(session, release_handle)
     superseded = _selection(session, selection_ref, release=release)
@@ -298,7 +335,7 @@ def withdraw_a_selection(
             selected_by=user.id,
         )
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return _selection_record(session, release_handle, selection.public_ref)
 
 
@@ -313,15 +350,16 @@ def publish(
     Publishing and freezing are one operation because a published release
     without a manifest would be citable but unverifiable — the worst of both.
 
-    :raises HTTPException: 404 unknown release; 422 when the release is not a
-        draft or a manifest already exists.
+    :raises HTTPException: 404 unknown release; 409 when the release is not a
+        draft or a manifest already exists; 422 when the release selects
+        nothing or a selected record holds a non-finite value.
     """
     release = _release(session, release_handle)
     try:
         publish_release(session, release)
         freeze_manifest(session, release, created_by=user.id)
     except (ReleaseCurationError, ReleaseStateError) as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return get_release(session, release.tag).record
 
 
@@ -334,13 +372,14 @@ def withdraw(
 ) -> DatasetReleaseSummary:
     """Retract a published release, keeping its row and manifest readable.
 
-    :raises HTTPException: 404 unknown release; 422 when it is not published.
+    :raises HTTPException: 404 unknown release; 409 when it is not published;
+        422 when no reason was given.
     """
     release = _release(session, release_handle)
     try:
         withdraw_release(session, release, reason=body.reason)
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return get_release(session, release.tag).record
 
 
@@ -353,14 +392,14 @@ def attach_doi(
 ) -> DatasetReleaseSummary:
     """Record a DOI that was minted out-of-band for a published release.
 
-    :raises HTTPException: 404 unknown release; 422 when the release is not
+    :raises HTTPException: 404 unknown release; 409 when the release is not
         published or already cites a different DOI.
     """
     release = _release(session, release_handle)
     try:
         record_doi(session, release, doi=body.doi)
     except ReleaseCurationError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        raise HTTPException(_refusal_status(exc), detail=str(exc)) from exc
     return get_release(session, release.tag).record
 
 

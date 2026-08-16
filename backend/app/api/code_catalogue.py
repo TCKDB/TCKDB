@@ -409,13 +409,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("curation_policy_version_conflict", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
             note=(
-                "409, not the 422 its ValueError base would suggest. "
-                "ReleaseCurationError subclasses ValueError, so reading the "
-                "raise site says 422; the one route that can reach it wraps "
-                "it in HTTPException(409) instead "
-                "(api/routes/releases_admin.py). The status is a property of "
-                "the route, not of the raise, which is why it was recorded "
-                "wrong until the observer started checking the pair."
+                "409, not the 422 a bare ReleaseCurationError would reach. "
+                "It was recorded wrong for a long time because the status "
+                "used to be a property of the *route*: the raise site said "
+                "ValueError and one except clause said 409. Since #211 the "
+                "raise site says ReleaseStateConflict and the route reads "
+                "the status off the class, so the two can no longer "
+                "disagree. The observer checking the (status, code) pair is "
+                "what caught the original mismatch."
             )),
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/curator_task_lifecycle.py"),
@@ -440,8 +441,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("database_unavailable", 503, Surface.response_literal,
             "backend/app/api/errors.py"),
-    ApiCode("doi_already_recorded", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("doi_already_recorded", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 since #211. Recording the DOI the release already cites "
+                "succeeds; only a *different* one refuses, and it refuses "
+                "because a citation is already pointing somewhere. There is "
+                "no corrected body -- the deposit would have to be redone."
+            )),
     ApiCode("domain_error", 400, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
@@ -549,8 +556,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("lowest_energy_unavailable", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/species_calculations_search.py"),
-    ApiCode("manifest_already_frozen", 422, Surface.message_prefix,
-            "backend/app/services/release/manifest.py"),
+    ApiCode("manifest_already_frozen", 409, Surface.message_prefix,
+            "backend/app/services/release/manifest.py",
+            note=(
+                "409 since #211, for consistency with its module neighbour "
+                "release_not_published rather than because a caller reported "
+                "it: no route reaches it, because POST /publish calls "
+                "publish_release first and that raises release_not_draft. The "
+                "branch is live all the same -- a service-level test calls "
+                "freeze_manifest directly -- so it keeps an entry. Whether it "
+                "should be Reach.guard, and therefore unexported, is a "
+                "separate question this pass did not settle."
+            )),
     ApiCode("manifest_not_frozen", 404, Surface.message_prefix,
             "backend/app/api/routes/scientific/releases.py"),
     ApiCode("missing_filter", 422, Surface.message_prefix,
@@ -627,10 +644,25 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py"),
     ApiCode("release_artifact_corrupt", 500, Surface.message_prefix,
             "backend/app/api/routes/scientific/releases.py"),
-    ApiCode("release_not_draft", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
-    ApiCode("release_not_published", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("release_not_draft", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 since #211. A published release is frozen and cited; no "
+                "corrected body makes a second publish or a late selection "
+                "succeed, so 422 was telling a client to resend something "
+                "that could never be accepted. It raises ReleaseStateConflict, "
+                "and the route reads the status off the class."
+            )),
+    ApiCode("release_not_published", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 since #211, from two modules: curation.py refuses to "
+                "withdraw or attach a DOI to a release that was never "
+                "published, and manifest.py refuses to freeze one. Both are "
+                "the same sentence about the same state, so they share a "
+                "code and now share a status; the curation.py literal is the "
+                "one the drift guard checks."
+            )),
     ApiCode("release_scoping_not_implemented", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/profile.py"),
     ApiCode("release_selects_nothing", 422, Surface.message_prefix,
@@ -639,9 +671,10 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/release/curation.py",
             note=(
                 "409 for the same reason as "
-                "curation_policy_version_conflict: the route wraps the "
-                "ReleaseCurationError in HTTPException(409) rather than "
-                "letting its ValueError base reach the 422 handler."
+                "curation_policy_version_conflict, and by the same mechanism "
+                "since #211: it raises ReleaseStateConflict, which the route "
+                "maps to 409. A tag that is taken is taken; there is no "
+                "corrected body, only a different tag."
             )),
     ApiCode("request_validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),
@@ -651,10 +684,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("schema_not_initialized", 503, Surface.response_literal,
             "backend/app/api/routes/health.py"),
-    ApiCode("selection_already_stands", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
-    ApiCode("selection_already_superseded", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("selection_already_stands", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 since #211, and it moved with its sibling rather than "
+                "after it: this and selection_already_superseded are the same "
+                "refusal seen from the two ends of a chain -- a row already "
+                "exists that blocks the write -- and leaving one at 422 would "
+                "have kept the inconsistency the pass was opened to remove."
+            )),
+    ApiCode("selection_already_superseded", 409, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "409 since #211. Supersession chains stay linear, so the row "
+                "to replace is the one that currently stands -- a different "
+                "URL, not a different body."
+            )),
     ApiCode("selection_no_longer_approved", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("smiles_too_long", 422, Surface.message_prefix,
@@ -739,12 +784,34 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
             "backend/app/api/errors.py"),
+    ApiCode("unknown_calculation_artifact_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py",
+            note=(
+                "An artifact locator is a (calculation_ref, sha256) pair, and "
+                "it has its own code rather than sharing "
+                "unknown_calculation_ref because the pair fails for two "
+                "reasons a depositor repairs differently: no such "
+                "calculation, or that calculation holds no file with that "
+                "digest. context carries both halves."
+            )),
+    ApiCode("unknown_calculation_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py"),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),
     ApiCode("unknown_include_token", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
-    ApiCode("unknown_record", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+    ApiCode("unknown_network_kinetics_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py"),
+    ApiCode("unknown_record", 404, Surface.message_prefix,
+            "backend/app/services/release/curation.py",
+            note=(
+                "404 since #211. It was the fourth unknown_* on this router "
+                "and the only one at 422: unknown_release, unknown_selection "
+                "and unknown_curation_policy all answered 404 for the same "
+                "condition. Distinct from record_ref_not_selectable, which "
+                "stays 422 -- there the prefix is not a selectable kind at "
+                "all, which is a malformed ref rather than a missing row."
+            )),
     ApiCode("unknown_record_type", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/literature_records.py"),
     ApiCode("unknown_release", 404, Surface.message_prefix,
@@ -753,6 +820,30 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/routes/scientific/releases.py"),
     ApiCode("unknown_selection", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),
+    ApiCode("unknown_statmech_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py",
+            note=(
+                "404 since #204. Every ref-names-nothing refusal on "
+                "/uploads/kinetics used to be a bare ValueError, so a client "
+                "received 422 validation_error with no context and had to "
+                "read English to find out which of four refs was wrong. The "
+                "status matched neither the condition nor the sibling roots: "
+                "/uploads/thermo and /uploads/statmech already answered 404 "
+                "when a caller-supplied existing_*_id named no row, so the "
+                "status depended on how the caller spelled the name."
+            )),
+    ApiCode("unknown_transition_state_entry_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py",
+            note=(
+                "One code, three raise sites in workflows/kinetics.py, and "
+                "only the first is reachable through a route: the schema "
+                "confines an interpretation's transition_state_entry_ref to "
+                "role='transition_state', and the TS-anchored reaction lookup "
+                "collects every such ref plus the tunneling one and resolves "
+                "them before either of the other two sites runs. The other "
+                "two stay as tripwires against a reordering. context['field'] "
+                "says which ref asked."
+            )),
     ApiCode("unsafe_lowest_energy_comparison", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/species_calculations_search.py"),
     ApiCode("unsupported_direction", 422, Surface.message_prefix,

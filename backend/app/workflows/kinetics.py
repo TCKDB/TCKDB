@@ -55,6 +55,13 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species, resolve_species_entry
+from app.services.upload_reference import (
+    W_UNKNOWN_CALCULATION_ARTIFACT_REF,
+    W_UNKNOWN_CALCULATION_REF,
+    W_UNKNOWN_STATMECH_REF,
+    W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
+    unknown_reference,
+)
 from app.workflows.reaction import persist_reaction_upload
 
 
@@ -132,7 +139,17 @@ def _resolve_ts_anchored_reaction_entry(
         .where(TransitionStateEntry.public_ref == ts_ref)
     )
     if reaction_entry_id is None:
-        raise ValueError("transition_state_entry_ref does not reference an existing TS entry.")
+        raise unknown_reference(
+            code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
+            field="transition_state_entry_ref",
+            kind="transition_state_entry",
+            ref=ts_ref,
+            remedy=(
+                "Deposit the transition state first, or correct the ref. This "
+                "is the ref that anchors the rate to an already-deposited "
+                "reaction entry, so it is read before anything else."
+            ),
+        )
     reaction_entry = session.get(ReactionEntry, reaction_entry_id)
     assert reaction_entry is not None
 
@@ -191,7 +208,15 @@ def _resolve_interpretation_assignments(
             select(Statmech).where(Statmech.public_ref == assignment.statmech_ref)
         )
         if statmech is None:
-            raise ValueError("interpretation statmech_ref does not reference an existing statmech record.")
+            raise unknown_reference(
+                code=W_UNKNOWN_STATMECH_REF,
+                field=f"{field}.statmech_ref",
+                kind="statmech",
+                ref=assignment.statmech_ref,
+                remedy=(
+                    "Deposit the partition function first, or correct the ref."
+                ),
+            )
         # This is the point at which a rate coefficient actually *depends* on
         # a partition function, so this is where the reproducibility claim is
         # made and enforced. Deposit-time statmech only warns about a missing
@@ -216,8 +241,18 @@ def _resolve_interpretation_assignments(
                     TransitionStateEntry.public_ref == assignment.transition_state_entry_ref
                 )
             )
+            # Unreachable through a route: the schema confines this ref to
+            # role='transition_state', and every such ref is resolved by the
+            # TS-anchored reaction lookup above, which refuses first with the
+            # same code. Kept as a tripwire against a reordering.
             if ts_entry_id is None:
-                raise ValueError("interpretation transition_state_entry_ref does not reference an existing TS entry.")
+                raise unknown_reference(
+                    code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
+                    field=f"{field}.transition_state_entry_ref",
+                    kind="transition_state_entry",
+                    ref=assignment.transition_state_entry_ref,
+                    remedy="Deposit the transition state first, or correct the ref.",
+                )
 
         species_entry_id: int | None = None
         if assignment.role in {"reactant", "product"}:
@@ -522,9 +557,23 @@ def persist_kinetics_upload(
                 TransitionStateEntry.public_ref == tunneling.transition_state_entry_ref
             )
         )
+        # Unreachable through a route for the same reason as its sibling in
+        # _resolve_interpretation_assignments: the anchor lookup resolves the
+        # tunneling ref too, and refuses first with the same code.
         if ts_entry_id is None:
-            raise ValueError("tunneling transition_state_entry_ref does not reference an existing TS entry.")
-        def resolve_artifact(calculation_ref: str | None, sha256: str | None, label: str) -> int | None:
+            raise unknown_reference(
+                code=W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
+                field="tunneling_application.transition_state_entry_ref",
+                kind="transition_state_entry",
+                ref=tunneling.transition_state_entry_ref,
+                remedy="Deposit the transition state first, or correct the ref.",
+            )
+        def resolve_artifact(
+            calculation_ref: str | None,
+            sha256: str | None,
+            label: str,
+            field_name: str,
+        ) -> int | None:
             if calculation_ref is None:
                 return None
             artifact_id = session.scalar(
@@ -536,15 +585,30 @@ def persist_kinetics_upload(
                 )
             )
             if artifact_id is None:
-                raise ValueError(f"tunneling {label} artifact locator does not reference an existing artifact.")
+                raise unknown_reference(
+                    code=W_UNKNOWN_CALCULATION_ARTIFACT_REF,
+                    field=f"tunneling_application.{field_name}",
+                    kind="calculation_artifact",
+                    ref=calculation_ref,
+                    remedy=(
+                        f"The {label} artifact locator is a (calculation ref, "
+                        "SHA-256) pair and no stored artifact matches it. "
+                        "Upload the artifact, or correct either half."
+                    ),
+                    sha256=sha256,
+                )
             return artifact_id
         result_artifact_id = resolve_artifact(
-            tunneling.result_artifact_calculation_ref, tunneling.result_artifact_sha256, "result"
+            tunneling.result_artifact_calculation_ref,
+            tunneling.result_artifact_sha256,
+            "result",
+            "result_artifact_calculation_ref",
         )
         sct_path_artifact_id = resolve_artifact(
             tunneling.sct_path_integral_artifact_calculation_ref,
             tunneling.sct_path_integral_artifact_sha256,
             "SCT path-integral",
+            "sct_path_integral_artifact_calculation_ref",
         )
         # A rate's tunneling TS must be one of this reaction's TS concepts.
         ts_reaction_id = session.scalar(
@@ -562,8 +626,15 @@ def persist_kinetics_upload(
                 )
             )
             if tunneling_source_calculation_id is None:
-                raise ValueError(
-                    "tunneling source_calculation_ref does not reference an existing calculation."
+                raise unknown_reference(
+                    code=W_UNKNOWN_CALCULATION_REF,
+                    field="tunneling_application.source_calculation_ref",
+                    kind="calculation",
+                    ref=tunneling.source_calculation_ref,
+                    remedy=(
+                        "Deposit the calculation the tunneling energies were "
+                        "read from first, or correct the ref."
+                    ),
                 )
         session.add(KineticsTunnelingApplication(
             kinetics_id=kinetics.id, model=tunneling.model,

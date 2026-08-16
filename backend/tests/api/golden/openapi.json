@@ -57654,7 +57654,7 @@
     },
     "/api/v1/releases/{release_handle}/doi": {
       "post": {
-        "description": "Record a DOI that was minted out-of-band for a published release.\n\n:raises HTTPException: 404 unknown release; 422 when the release is not\n    published or already cites a different DOI.",
+        "description": "Record a DOI that was minted out-of-band for a published release.\n\n:raises HTTPException: 404 unknown release; 409 when the release is not\n    published or already cites a different DOI.",
         "operationId": "attach_doi_api_v1_releases__release_handle__doi_post",
         "parameters": [
           {
@@ -57773,7 +57773,7 @@
     },
     "/api/v1/releases/{release_handle}/publish": {
       "post": {
-        "description": "Publish a draft release and freeze its immutable, checksummed manifest.\n\nPublishing and freezing are one operation because a published release\nwithout a manifest would be citable but unverifiable — the worst of both.\n\n:raises HTTPException: 404 unknown release; 422 when the release is not a\n    draft or a manifest already exists.",
+        "description": "Publish a draft release and freeze its immutable, checksummed manifest.\n\nPublishing and freezing are one operation because a published release\nwithout a manifest would be citable but unverifiable — the worst of both.\n\n:raises HTTPException: 404 unknown release; 409 when the release is not a\n    draft or a manifest already exists; 422 when the release selects\n    nothing or a selected record holds a non-finite value.",
         "operationId": "publish_api_v1_releases__release_handle__publish_post",
         "parameters": [
           {
@@ -57882,7 +57882,7 @@
     },
     "/api/v1/releases/{release_handle}/selections": {
       "post": {
-        "description": "Append an attributed selection to a draft release.\n\n:raises HTTPException: 404 unknown release; 422 for anything incoherent\n    (record not selectable, subject already has a standing selection,\n    release not a draft).",
+        "description": "Append an attributed selection to a draft release.\n\n:raises HTTPException: 404 unknown release, or a ``record_ref`` naming no\n    record; 409 when the release is no longer a draft or the subject\n    already has a standing selection (supersede it instead); 422 for a\n    body that can be corrected and resent — an unselectable ref, a\n    blank rationale, a record below the approval floor.",
         "operationId": "append_selection_api_v1_releases__release_handle__selections_post",
         "parameters": [
           {
@@ -58001,7 +58001,7 @@
     },
     "/api/v1/releases/{release_handle}/selections/{selection_ref}/supersede": {
       "post": {
-        "description": "Append a replacement selection. The superseded row is left untouched.\n\n201, not 200: this creates a new row. Nothing is edited.\n\n:raises HTTPException: 404 unknown release or selection; 422 when the row\n    has already been superseded or the replacement is incoherent.",
+        "description": "Append a replacement selection. The superseded row is left untouched.\n\n201, not 200: this creates a new row. Nothing is edited.\n\n:raises HTTPException: 404 unknown release, unknown selection, or a\n    ``record_ref`` naming no record; 409 when the row has already been\n    superseded or the release is no longer a draft; 422 when the\n    replacement is incoherent.",
         "operationId": "supersede_api_v1_releases__release_handle__selections__selection_ref__supersede_post",
         "parameters": [
           {
@@ -58131,7 +58131,7 @@
     },
     "/api/v1/releases/{release_handle}/selections/{selection_ref}/withdraw": {
       "post": {
-        "description": "Append a withdrawal: the release now recommends nothing for this subject.\n\n:raises HTTPException: 404 unknown release or selection; 422 when the row\n    has already been superseded.",
+        "description": "Append a withdrawal: the release now recommends nothing for this subject.\n\n:raises HTTPException: 404 unknown release or selection; 409 when the row\n    has already been superseded or the release is no longer a draft; 422\n    when no reason was given.",
         "operationId": "withdraw_a_selection_api_v1_releases__release_handle__selections__selection_ref__withdraw_post",
         "parameters": [
           {
@@ -58261,7 +58261,7 @@
     },
     "/api/v1/releases/{release_handle}/withdraw": {
       "post": {
-        "description": "Retract a published release, keeping its row and manifest readable.\n\n:raises HTTPException: 404 unknown release; 422 when it is not published.",
+        "description": "Retract a published release, keeping its row and manifest readable.\n\n:raises HTTPException: 404 unknown release; 409 when it is not published;\n    422 when no reason was given.",
         "operationId": "withdraw_api_v1_releases__release_handle__withdraw_post",
         "parameters": [
           {
