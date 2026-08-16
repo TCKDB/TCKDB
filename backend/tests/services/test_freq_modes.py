@@ -14,6 +14,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 from tckdb_schemas.coded_error import CodedValidationError
 from tckdb_schemas.fragments.calculation import (
+    W_FREQ_MODE_INDEX_NOT_UNIQUE,
     W_FREQ_N_IMAG_DISAGREES_WITH_MODES,
 )
 
@@ -96,7 +97,14 @@ class TestFreqResultPayloadModes:
         assert payload.modes is None
 
     def test_duplicate_mode_index_rejected(self) -> None:
-        with pytest.raises(ValidationError, match="mode_index values must be unique"):
+        """The refusal is named, and names which index collided.
+
+        The prose match is kept because the first sentence is published
+        and attaching a code was meant to be additive; the code and the
+        context are the new contract, and a client branching on either
+        is the reason ``freq_mode_index_not_unique`` exists at all.
+        """
+        with pytest.raises(ValidationError, match="mode_index values must be unique") as excinfo:
             FreqResultPayload(
                 modes=[
                     FrequencyModePayload(
@@ -107,6 +115,56 @@ class TestFreqResultPayloadModes:
                     ),
                 ]
             )
+        errors = excinfo.value.errors()
+        assert len(errors) == 1, errors
+        coded = errors[0]["ctx"]["error"]
+        assert isinstance(coded, CodedValidationError)
+        assert coded.code == W_FREQ_MODE_INDEX_NOT_UNIQUE
+        assert coded.context == {
+            "field": "modes",
+            "duplicate_mode_indices": [1],
+            "mode_count": 2,
+        }
+
+    def test_a_unique_mode_index_list_is_accepted(self) -> None:
+        """The negative half. Same two rows, renumbered, and it validates.
+
+        Without it the assertion above passes just as well against a
+        validator that refuses every ``modes`` list it is given.
+        """
+        payload = FreqResultPayload(
+            n_imag=0,
+            modes=[
+                FrequencyModePayload(
+                    mode_index=1, frequency_cm1=1100.0, is_imaginary=False
+                ),
+                FrequencyModePayload(
+                    mode_index=2, frequency_cm1=1200.0, is_imaginary=False
+                ),
+            ],
+        )
+        assert [m.mode_index for m in payload.modes or []] == [1, 2]
+
+    def test_every_repeated_index_is_named_not_just_the_first(self) -> None:
+        """Two collisions in one list report both, sorted.
+
+        A depositor whose serialiser concatenated two blocks has more
+        than one duplicate, and being told about one of them is a repair
+        loop rather than a repair.
+        """
+        with pytest.raises(ValidationError) as excinfo:
+            FreqResultPayload(
+                modes=[
+                    FrequencyModePayload(
+                        mode_index=index, frequency_cm1=1000.0 + index,
+                        is_imaginary=False,
+                    )
+                    for index in (3, 1, 3, 1, 2)
+                ]
+            )
+        coded = excinfo.value.errors()[0]["ctx"]["error"]
+        assert coded.context["duplicate_mode_indices"] == [1, 3]
+        assert coded.context["mode_count"] == 5
 
     def test_n_imag_mismatch_rejected(self) -> None:
         with pytest.raises(ValidationError, match="does not match imaginary mode count"):
