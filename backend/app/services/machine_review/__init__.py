@@ -39,6 +39,7 @@ from app.services.machine_review.context_hash import (
 )
 from app.services.machine_review.curator_task_lifecycle import (
     assign_curator_task,
+    get_curator_task_or_404,
     reopen_curator_task,
     resolve_curator_task,
     start_curator_task_review,
@@ -208,6 +209,7 @@ __all__ = [
     "event_is_machine_review",
     "execute_record_machine_rereview_plan",
     "get_active_machine_review_recipe",
+    "get_curator_task_or_404",
     "get_latest_record_machine_review_row",
     "get_machine_review_summaries_for_record",
     "get_record_machine_review_currency_for_record",

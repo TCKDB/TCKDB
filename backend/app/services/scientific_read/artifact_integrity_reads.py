@@ -29,7 +29,10 @@ from app.schemas.reads.scientific_artifact_integrity import (
     ScientificArtifactIntegrityResponse,
 )
 from app.schemas.reads.scientific_common import Pagination
-from app.services.scientific_read.common import validate_pagination
+from app.services.scientific_read.common import (
+    reject_client_sort,
+    validate_pagination,
+)
 
 #: The findings that assert a break, taken from the enum rather than
 #: restated, so a new finding cannot quietly count as clean here while
@@ -220,8 +223,11 @@ def search_artifact_integrity(
         sort (the vocabulary is v0-frozen, as on every other scientific
         read).
     """
-    if sort is not None:
-        raise ValueError("client_sort_not_supported")
+    # The shared helper, not a hand-rolled ``raise ValueError("<token>")``.
+    # A bare token is not in the code position (``<code>: <prose>``), so
+    # ``validation_detail_code`` would not promote it and the refusal
+    # arrived uncoded even once the route stopped wrapping it.
+    reject_client_sort(sort)
     offset, limit = validate_pagination(offset, limit)
     records, total = _summaries(
         session,

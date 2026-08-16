@@ -23,7 +23,23 @@ from app.services.artifact_storage import (
 )
 from tests.services.test_artifact_integrity import _SessionProxy
 
-_ROUTE_LOGGER = "app.api.routes.scientific.artifacts"
+#: Where the explanatory log line for a download 502/503 is now emitted.
+#:
+#: It used to be the route: the route caught the typed exception and
+#: re-raised a bare ``HTTPException``, which bypassed both the handler in
+#: ``app.api.errors`` *and* that handler's logging, so the route had to log
+#: for itself or the 2026-08-05 storage outage would have been a bare
+#: access-log 5xx again. #212 made the route re-raise the exception
+#: unchanged — which is what lets the handler mint
+#: ``artifact_integrity_failed`` / ``artifact_storage_unavailable`` instead
+#: of ``http_502`` / ``http_503`` — and the handler logs the same
+#: exception, with ``exc_info`` and with the request's method and path.
+#:
+#: So the *claim* the two tests below make is unchanged and still asserted:
+#: an operator can read the reason and a traceback out of the journal. Only
+#: the logger name moved. Keeping a duplicate log in the route would mean
+#: two records of one event.
+_ERROR_HANDLER_LOGGER = "app.api.errors"
 from tests.api.scientific.test_api_scientific_artifacts import (
     _make_species_owned_calc,
 )
@@ -148,8 +164,18 @@ def test_artifact_download_maps_integrity_failure_to_502(
     )
 
     assert response.status_code == 502
-    assert response.json()["detail"] == (
-        "Stored artifact failed integrity verification."
+    body = response.json()
+    # The code, not the prose. The prose used to be the route's own
+    # sentence, because the route raised its own ``HTTPException``; that
+    # is exactly what made this route answer ``http_502`` where the
+    # upload path answered ``artifact_integrity_failed`` for the same
+    # break (#212). Asserting the code is what would notice if the route
+    # started minting its own answer again — asserting a sentence would
+    # not.
+    assert body["code"] == "artifact_integrity_failed", body
+    assert body["detail"] == (
+        "A stored artifact failed integrity verification. This has "
+        "been recorded; retrying will not clear it."
     )
 
 
@@ -158,17 +184,24 @@ def test_artifact_download_maps_storage_outage_to_503(
 ) -> None:
     """A storage outage on the download path is a 503 — and is logged.
 
-    This route converts the exception to ``HTTPException``, so it bypasses
-    the ``ArtifactStorageUnavailable`` handler in ``app.api.errors`` and
-    that handler's logging. Without a log line here, a storage outage
-    appears in the journal as a bare access-log 503 naming a subsystem
-    with no record of why — the exact thing that made the 2026-08-05
-    outage take so long to diagnose.
+    Without an explanatory log line, a storage outage appears in the
+    journal as a bare access-log 503 naming a subsystem with no record of
+    why — the exact thing that made the 2026-08-05 outage take so long to
+    diagnose. That claim is unchanged; where it is satisfied has moved.
+
+    The route used to convert the exception to an ``HTTPException``,
+    which bypassed the ``ArtifactStorageUnavailable`` handler in
+    ``app.api.errors`` *and* its logging, so the route logged for itself.
+    It also meant the download answered ``http_503`` where the rest of
+    the API answers ``artifact_storage_unavailable``. The route now
+    re-raises the exception unchanged, so the handler both logs it and
+    names it — see ``_ERROR_HANDLER_LOGGER``. The assertions below are
+    the same assertions against that logger, plus the code.
     """
     artifact, _content = _downloadable_artifact(
         db_session, status=RecordReviewStatus.approved
     )
-    caplog.set_level(logging.WARNING, logger=_ROUTE_LOGGER)
+    caplog.set_level(logging.WARNING, logger=_ERROR_HANDLER_LOGGER)
 
     def fake_load(*_args, **_kwargs):
         raise ArtifactStorageUnavailable(
@@ -184,14 +217,17 @@ def test_artifact_download_maps_storage_outage_to_503(
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"] == "Artifact storage is unavailable."
+    assert response.json()["code"] == "artifact_storage_unavailable", response.text
 
-    records = [rec for rec in caplog.records if rec.name == _ROUTE_LOGGER]
+    records = [rec for rec in caplog.records if rec.name == _ERROR_HANDLER_LOGGER]
     assert records, "storage 503 on download produced no explanatory log record"
     # The reason, not just the verdict: the endpoint it could not reach.
     assert "EndpointConnectionError" in records[0].getMessage()
     assert "127.0.0.1:9000" in records[0].getMessage()
     assert records[0].exc_info is not None
+    # And the request it happened on, which the route's own log line never
+    # carried: the handler is given the Request object, the route is not.
+    assert "/download" in records[0].getMessage()
 
 
 def test_artifact_download_logs_why_integrity_verification_failed(
@@ -200,12 +236,15 @@ def test_artifact_download_logs_why_integrity_verification_failed(
     """A 502 here means stored bytes no longer match their digest.
 
     That is data corruption, and the public body says nothing about which
-    object or why. If it is not in the log it is nowhere.
+    object or why. If it is not in the log it is nowhere. Emitted by the
+    handler rather than the route since #212 — see
+    ``_ERROR_HANDLER_LOGGER`` — because the route now re-raises the typed
+    exception instead of replacing it.
     """
     artifact, _content = _downloadable_artifact(
         db_session, status=RecordReviewStatus.approved
     )
-    caplog.set_level(logging.ERROR, logger=_ROUTE_LOGGER)
+    caplog.set_level(logging.ERROR, logger=_ERROR_HANDLER_LOGGER)
 
     def fake_load(*_args, **_kwargs):
         raise ArtifactIntegrityError(
@@ -224,7 +263,8 @@ def test_artifact_download_logs_why_integrity_verification_failed(
     )
 
     assert response.status_code == 502
-    records = [rec for rec in caplog.records if rec.name == _ROUTE_LOGGER]
+    assert response.json()["code"] == "artifact_integrity_failed", response.text
+    records = [rec for rec in caplog.records if rec.name == _ERROR_HANDLER_LOGGER]
     assert records, "integrity 502 produced no explanatory log record"
     assert "retrieved sha=deadbeef" in records[0].getMessage()
     assert records[0].exc_info is not None

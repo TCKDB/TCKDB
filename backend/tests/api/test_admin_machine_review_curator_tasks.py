@@ -230,8 +230,70 @@ def test_get_task_returns_task(client, db_session, login_as, _api_admin_user):
 
 
 def test_get_task_404(client, login_as, _api_admin_user):
+    """404 *and* the code, because the status alone proved nothing.
+
+    This asserted ``status_code == 404`` only, which passes against a
+    handler that 404s on everything -- and it did pass while ``GET``
+    answered ``code="http_404"`` and every write route answered
+    ``curator_task_not_found`` for the identical condition.
+    """
     login_as(_api_admin_user)
-    assert client.get(f"{_BASE}/999999").status_code == 404
+    resp = client.get(f"{_BASE}/999999")
+    assert resp.status_code == 404, resp.text
+    body = resp.json()
+    assert body["code"] == "curator_task_not_found", body
+    # DR-0028 Req. 2: the looked-up row id goes to the operator's log, never
+    # into the body. 999999 is the caller's own path parameter.
+    assert body["context"] == {}, body
+
+
+def test_every_curator_task_route_names_a_missing_task_the_same_way(
+    client, db_session, login_as, _api_admin_user
+):
+    """One condition, one code, on all five routes that can meet it.
+
+    ``GET`` used to answer ``http_404`` because ``api/routes/admin.py``
+    kept a private ``_get_curator_task_or_404`` raising its own
+    ``HTTPException`` rather than calling the service helper the four
+    write routes call. An admin UI that branches on
+    ``curator_task_not_found`` to drop a vanished task from its queue got
+    the branch on assign and not on read.
+
+    Asserting the *set* rather than five separate equalities is the
+    point: a sixth route added later that reaches for the bare
+    ``HTTPException`` again fails here, and the failure names it.
+    """
+    login_as(_api_admin_user)
+    missing = 999999
+    requests = {
+        "GET": lambda: client.get(f"{_BASE}/{missing}"),
+        "assign": lambda: client.post(
+            f"{_BASE}/{missing}/assign", json={"assignee_id": None}
+        ),
+        "start-review": lambda: client.post(f"{_BASE}/{missing}/start-review", json={}),
+        "resolve": lambda: client.post(
+            f"{_BASE}/{missing}/resolve",
+            json={"resolution_state": "resolved_no_action", "resolution_note": "x"},
+        ),
+        "reopen": lambda: client.post(f"{_BASE}/{missing}/reopen", json={}),
+    }
+    answers = {}
+    for name, send in requests.items():
+        resp = send()
+        answers[name] = (resp.status_code, resp.json().get("code"))
+    assert set(answers.values()) == {(404, "curator_task_not_found")}, answers
+
+    # The accept-half. Without it the assertion above is satisfied by a
+    # route that 404s on every id, including ids that exist.
+    submission = _new_submission(db_session, _api_admin_user)
+    task = _make_task(db_session, submission.id)
+    found = client.get(f"{_BASE}/{task.id}")
+    assert found.status_code == 200, found.text
+    assert found.json()["id"] == task.id
+    assigned = client.post(
+        f"{_BASE}/{task.id}/assign", json={"assignee_id": _api_admin_user}
+    )
+    assert assigned.status_code == 200, assigned.text
 
 
 def test_list_tasks_filters_by_workflow_state(

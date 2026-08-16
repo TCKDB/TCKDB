@@ -62,7 +62,20 @@ def _now_naive_utc() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
-def _get_task_or_404(session: Session, task_id: int) -> MachineReviewCuratorTask:
+def get_curator_task_or_404(
+    session: Session, task_id: int
+) -> MachineReviewCuratorTask:
+    """Load one task, or raise the 404 that names *why* it is a 404.
+
+    Public, and deliberately so. This was private, and the read endpoint
+    consequently grew its own copy in ``app.api.routes.admin`` that raised
+    a bare ``HTTPException(404)``. One condition — a task id naming no row
+    — then answered ``code="http_404"`` on ``GET`` and
+    ``code="curator_task_not_found"`` on every write route, decided by
+    which route noticed. A private helper that four writers need and one
+    reader also needs is not private; exporting it is what makes the
+    duplicate unnecessary rather than merely discouraged.
+    """
     task = session.get(MachineReviewCuratorTask, task_id)
     if task is None:
         raise not_found(
@@ -85,7 +98,7 @@ def assign_curator_task(
     be (re)assigned unless ``allow_terminal=True`` — reassigning a closed task
     is almost always a mistake, so it must be explicit.
     """
-    task = _get_task_or_404(session, task_id)
+    task = get_curator_task_or_404(session, task_id)
 
     if task.workflow_state.is_terminal and not allow_terminal:
         raise DomainError(
@@ -114,7 +127,7 @@ def start_curator_task_review(
     acting user (``actor_id``) is assigned as a side effect. Touches no
     human-review state.
     """
-    task = _get_task_or_404(session, task_id)
+    task = get_curator_task_or_404(session, task_id)
     state = task.workflow_state
 
     if state.is_terminal:
@@ -168,7 +181,7 @@ def resolve_curator_task(
     if not note:
         raise DomainError("resolution_note is required and must be non-empty.")
 
-    task = _get_task_or_404(session, task_id)
+    task = get_curator_task_or_404(session, task_id)
 
     if task.workflow_state.is_terminal:
         if task.workflow_state is resolution:
@@ -214,7 +227,7 @@ def reopen_curator_task(
             f"{target_state.value!r}."
         )
 
-    task = _get_task_or_404(session, task_id)
+    task = get_curator_task_or_404(session, task_id)
 
     if not task.workflow_state.is_terminal:
         raise DomainError(

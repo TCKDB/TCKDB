@@ -58,6 +58,11 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.profile import current_read_profile
 
 router = APIRouter(prefix="/artifacts")
+#: No call sites at present. The two lines this module used to log became
+#: duplicates of what the handlers in ``app.api.errors`` log for the same
+#: exceptions, once the download route stopped swallowing them (#212) --
+#: one event, one journal entry. The logger stays because the next thing
+#: this module needs to say will not be an exception the handlers see.
 logger = logging.getLogger(__name__)
 
 # Query-string keys allowed alongside POST. None in v0 — POST search
@@ -207,18 +212,21 @@ def artifact_integrity_search(
     deployment rather than science about a record -- the same reasoning
     that gates raw artifact bytes (ADR 0004).
     """
-    try:
-        payload = search_artifact_integrity(
-            session,
-            sha256=sha256,
-            calculation_ref=calculation_ref,
-            only_currently_broken=only_currently_broken,
-            sort=sort,
-            offset=offset,
-            limit=limit,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    # No ``except ValueError -> HTTPException(422)`` here, deliberately.
+    # The service raises the same coded refusals every other scientific read
+    # raises (``client_sort_not_supported``, ``offset_too_large``), and the
+    # ValueError handler in app.api.errors answers 422 with the code and its
+    # context. Wrapping them re-answered 422 with ``code="http_422"``: the
+    # same refusal, named on ``/search`` and anonymous here.
+    payload = search_artifact_integrity(
+        session,
+        sha256=sha256,
+        calculation_ref=calculation_ref,
+        only_currently_broken=only_currently_broken,
+        sort=sort,
+        offset=offset,
+        limit=limit,
+    )
     return apply_internal_ids_visibility(payload)
 
 
@@ -305,36 +313,29 @@ def download_approved_artifact(
             sha256,
             expected_bytes=artifact.bytes,
         )
-    # These two are converted to HTTPException, which means they bypass the
-    # ArtifactStorageUnavailable handler in app.api.errors and its logging.
-    # Without these lines the download path reproduces the exact problem that
-    # made the 2026-08-05 storage outage undiagnosable: a bare access-log 5xx
-    # naming a subsystem, with no record of why that subsystem failed.
+    # Both are caught for their side effect and then **re-raised typed**, so
+    # the handlers in app.api.errors still mint the code and still log with
+    # the request's method and path. The earlier version of these blocks did
+    # the side effect and then raised a bare ``HTTPException``, which is what
+    # made this route answer ``code="http_502"`` where the upload path answers
+    # ``artifact_integrity_failed`` for the identical condition — one break,
+    # two contracts, decided by which route noticed it. A caught exception
+    # that must keep its meaning has to leave the handler as itself.
     except ArtifactIntegrityError as exc:
-        logger.error(
-            "Artifact integrity verification failed on download: %s",
-            exc,
-            exc_info=exc,
-        )
         # A log is not a record. This reader gets a 502 either way; the
         # row is what makes the break visible to the *next* reader, and
         # to the trust evaluator, without anyone having to grep. Written
         # in its own transaction and best-effort, so it cannot turn a
-        # 502 into a 500. See ADR 0014.
+        # 502 into a 500. See ADR 0014. Recorded *before* the re-raise:
+        # nothing after this line can skip it.
         record_from_error(
             exc,
             detected_during=ArtifactIntegrityDetectionContext.download,
             artifact=artifact,
             detected_by=user.id,
         )
-        raise HTTPException(
-            status_code=502,
-            detail="Stored artifact failed integrity verification.",
-        ) from exc
+        raise
     except ArtifactStorageUnavailable as exc:
-        logger.warning(
-            "Artifact storage unavailable on download: %s", exc, exc_info=exc
-        )
         # An unreachable store says nothing about the object and must not
         # be recorded as a custody break — but a store that answered and
         # said the object is *not there*, for a digest a row still
@@ -350,10 +351,7 @@ def download_approved_artifact(
                 detected_by=user.id,
                 detail=str(exc),
             )
-        raise HTTPException(
-            status_code=503,
-            detail="Artifact storage is unavailable.",
-        ) from exc
+        raise
 
     media_type = guess_type(artifact.filename)[0] or "application/octet-stream"
     encoded_filename = quote(artifact.filename, safe="")
