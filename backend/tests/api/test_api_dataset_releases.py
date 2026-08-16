@@ -486,11 +486,14 @@ def test_doi_is_recorded_not_minted(client, login_as, _api_curator_user, corpus)
     assert attached.status_code == 200, attached.text
     assert attached.json()["doi"] == "10.5281/zenodo.1"
 
+    # 409 since #211, not 422: the body is well formed and the release
+    # already cites a DOI. No corrected payload repoints a citation, so a
+    # client must not be told to fix and resend.
     repointed = client.post(
         f"/api/v1/releases/{RELEASE['tag']}/doi", json={"doi": "10.5281/zenodo.2"}
     )
-    assert repointed.status_code == 422
-    assert "doi_already_recorded" in repointed.text
+    assert repointed.status_code == 409, repointed.text
+    assert repointed.json()["code"] == "doi_already_recorded", repointed.text
 
 
 def test_unknown_release_is_404_not_422(client):
@@ -528,11 +531,13 @@ def test_a_non_selectable_record_ref_is_refused(
 # The two refusals that arrive at 409, and why the status is the assertion
 # ---------------------------------------------------------------------------
 #
-# Both raise ``ReleaseCurationError``, which subclasses ``ValueError`` -- so
-# reading the raise site says 422, and the catalogue recorded 422 for both.
-# The routes that reach them wrap the error in ``HTTPException(409)`` instead
-# (``api/routes/releases_admin.py``), because in both cases the tag or the
-# policy version *already exists*: the caller is colliding with state, not
+# Both used to raise a bare ``ReleaseCurationError``, which subclasses
+# ``ValueError`` -- so reading the raise site said 422, and the catalogue
+# recorded 422 for both, while the routes that reach them wrapped the error
+# in ``HTTPException(409)``. Since #211 they raise ``ReleaseStateConflict``
+# and the route reads the status off the class, so the raise site and the
+# wire can no longer disagree: in both cases the tag or the policy version
+# *already exists*, and the caller is colliding with state rather than
 # sending a malformed payload. Nothing in the suite emitted either code, so
 # the runtime observer had never seen the disagreement, and it was comparing
 # codes rather than ``(status, code)`` pairs and could not have reported it

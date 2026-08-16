@@ -13,6 +13,10 @@ from app.schemas.workflows.kinetics_upload import KineticsUploadRequest
 from app.services.calculation_resolution import resolve_workflow_tool_release_ref
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_resolution import resolve_software_release_ref
+from app.services.upload_reference import (
+    W_UNKNOWN_NETWORK_KINETICS_REF,
+    unknown_reference,
+)
 
 # ---------------------------------------------------------------------------
 # Kinetics source-calculation role/type/owner compatibility
@@ -187,8 +191,15 @@ def resolve_kinetics_upload(
             )
         )
         if network_kinetics is None:
-            raise ValueError(
-                "network_kinetics_ref does not reference an existing network_kinetics row."
+            raise unknown_reference(
+                code=W_UNKNOWN_NETWORK_KINETICS_REF,
+                field="network_kinetics_ref",
+                kind="network_kinetics",
+                ref=request.network_kinetics_ref,
+                remedy=(
+                    "Deposit the pressure-dependent network solve this rate "
+                    "came out of first, or correct the ref."
+                ),
             )
         network_kinetics_id = network_kinetics.id
 

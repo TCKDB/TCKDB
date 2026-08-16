@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError
+from app.api.errors import NotFoundError
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArrheniusAUnits,
@@ -868,13 +869,28 @@ def test_network_bridge_resolves(db_conn, monkeypatch):
 
 
 def test_network_bridge_unknown_id_rejected(db_conn, monkeypatch):
+    """A ref naming no row is a 404 with a code, not a bare ValueError.
+
+    Changed in #204: this used to match a substring of the message, which
+    is the assertion that survives any status and any code. It now asserts
+    the ``code`` and the structured ``context`` a client actually branches
+    on. ``NotFoundError`` is not a ``ValueError``, so the old
+    ``pytest.raises(ValueError, ...)`` would have gone red rather than
+    silently passing -- which is how this one was found.
+    """
     _patch_doi(monkeypatch)
     with Session(db_conn) as session, session.begin():
-        with pytest.raises(ValueError, match="does not reference an existing"):
+        with pytest.raises(NotFoundError) as refused:
             persist_kinetics_upload(
                 session,
                 _kinetics_request(network_kinetics_ref="nkin_missing"),
             )
+    assert refused.value.code == "unknown_network_kinetics_ref"
+    assert refused.value.context == {
+        "field": "network_kinetics_ref",
+        "kind": "network_kinetics",
+        "ref": "nkin_missing",
+    }
 
 
 # ---------------------------------------------------------------------------

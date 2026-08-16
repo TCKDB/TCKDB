@@ -95,6 +95,17 @@ class ReleaseStateError(RuntimeError):
     """Raised when a release is not in a state that permits the operation."""
 
 
+class ReleaseManifestStateConflict(ReleaseStateError):
+    """A manifest operation the release's current state forbids -- 409.
+
+    Split from the base so the status is a property of the raise rather than
+    of the route. Its sibling ``release_selects_nothing`` stays a plain
+    :class:`ReleaseStateError` and a 422: that one refuses on what the
+    release *contains*, and a curator repairs it by appending a selection,
+    not by waiting for the release to be in a different state.
+    """
+
+
 @dataclass(frozen=True)
 class VerificationReport:
     """Integrity of the *frozen* release. Independent of the live corpus."""
@@ -284,7 +295,7 @@ def freeze_manifest(
         would make "which manifest does this citation mean?" ambiguous).
     """
     if release.status is not DatasetReleaseStatus.published:
-        raise ReleaseStateError(
+        raise ReleaseManifestStateConflict(
             "release_not_published: a manifest may only be frozen for a "
             "published release."
         )
@@ -292,7 +303,7 @@ def freeze_manifest(
         select(ReleaseManifest).where(ReleaseManifest.dataset_release_id == release.id)
     ).first()
     if existing is not None:
-        raise ReleaseStateError(
+        raise ReleaseManifestStateConflict(
             "manifest_already_frozen: this release already has an immutable "
             "manifest; a release has exactly one."
         )
@@ -602,6 +613,7 @@ def _require_manifest(
 __all__ = [
     "DivergenceReport",
     "ManifestSnapshot",
+    "ReleaseManifestStateConflict",
     "ReleaseStateError",
     "VerificationReport",
     "freeze_manifest",
