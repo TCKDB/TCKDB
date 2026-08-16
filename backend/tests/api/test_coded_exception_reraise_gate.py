@@ -457,19 +457,35 @@ def _caught_names(handler: ast.ExceptHandler) -> frozenset[str]:
 
 
 def _reraises_the_original(handler: ast.ExceptHandler) -> bool:
-    """True for a bare ``raise`` or ``raise <the bound name>``."""
-    for sub in ast.walk(handler):
-        if not isinstance(sub, ast.Raise):
-            continue
-        if sub.exc is None:
-            return True
-        if (
-            handler.name
-            and isinstance(sub.exc, ast.Name)
-            and sub.exc.id == handler.name
-        ):
-            return True
-    return False
+    """True for a bare ``raise`` or ``raise <the bound name>``.
+
+    Nested ``def``/``lambda`` bodies are **not** searched. A ``raise``
+    inside a closure the handler merely defines does not re-raise anything
+    when the handler runs, and counting it would make this classifier
+    permissive in the one direction that matters: calling an unsafe
+    handler safe is how a gate passes having checked nothing.
+    """
+
+    def search(node: ast.AST) -> bool:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+            ):
+                continue
+            if isinstance(child, ast.Raise):
+                if child.exc is None:
+                    return True
+                if (
+                    handler.name
+                    and isinstance(child.exc, ast.Name)
+                    and child.exc.id == handler.name
+                ):
+                    return True
+            if search(child):
+                return True
+        return False
+
+    return search(handler)
 
 
 def _qualnames(tree: ast.Module) -> dict[int, str]:
@@ -603,6 +619,45 @@ class TestTheAbsorbingScanSeesWhatItIsWrittenOver:
             "the exact shape #212 removed from the artifact-integrity route "
             "was classified as safe; the gate would then permit its return"
         )
+
+    def test_a_raise_inside_a_nested_def_is_not_a_reraise(self):
+        """The permissive direction, provoked: calling unsafe handlers safe.
+
+        A handler that defines a closure containing ``raise`` has not
+        re-raised anything. Counting it would silently exempt the site.
+        """
+        tree = ast.parse(
+            "try:\n"
+            "    check()\n"
+            "except ValueError as exc:\n"
+            "    def _later():\n"
+            "        raise\n"
+            "    register(_later)\n"
+        )
+        handler = next(
+            node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)
+        )
+        assert not _reraises_the_original(handler), (
+            "a `raise` inside a nested def was counted as the handler "
+            "re-raising; every such handler would then be exempted without "
+            "anybody writing a reason for it"
+        )
+
+    def test_a_real_reraise_beside_a_nested_def_still_counts(self):
+        """The other direction, so the narrowing did not break the rule."""
+        tree = ast.parse(
+            "try:\n"
+            "    check()\n"
+            "except ValueError as exc:\n"
+            "    def _later():\n"
+            "        pass\n"
+            "    log(exc)\n"
+            "    raise\n"
+        )
+        handler = next(
+            node for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)
+        )
+        assert _reraises_the_original(handler)
 
     def test_it_recognises_the_coded_first_escape_hatch(self):
         """#165's shape must pass, or the sanctioned repair fails the gate."""
