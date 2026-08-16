@@ -451,6 +451,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("domain_error", 400, Surface.generic_fallback,
             "backend/app/api/errors.py"),
+    ApiCode("email_taken", 409, Surface.message_prefix,
+            "backend/app/api/routes/auth.py",
+            note=(
+                "Registration only, and paired with username_taken. Both "
+                "arrive at 23505 -- a unique violation says nothing about "
+                "which rule fired -- so the two are told apart by the "
+                "constraint name psycopg reports in exc.orig.diag, not by "
+                "the SQLSTATE and not by parsing the driver's message. "
+                "Before #225 both answered http_409 with one sentence "
+                "covering two fields, which is why a sign-up form could "
+                "not highlight the input at fault; unique_conflict, the "
+                "only code the SQLSTATE alone supports, would have been "
+                "the same problem with a code attached. Discloses nothing "
+                "registration does not already disclose by refusing at "
+                "all -- and that argument covers this endpoint only."
+            )),
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("export_all_cap_exceeded", 422, Surface.message_prefix,
@@ -484,6 +500,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+    ApiCode("geometry_key_unresolved", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py",
+            note=(
+                "The one member of the local-key family that does not say "
+                "'undeclared'. A geometry key is declared on a species "
+                "conformer or a transition state and resolved as the workflow "
+                "walks those owners, so a TS calculation naming a later TS's "
+                "geometry names something the payload really contains and the "
+                "workflow really cannot resolve -- calling that undeclared "
+                "would be false."
+            )),
     ApiCode("geometry_too_large", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/geometry.py"),
     ApiCode("handle_not_found", 404, Surface.coded_exception,
@@ -586,12 +613,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/ml_dataset.py"),
     ApiCode("ml_export_seed_unresolved", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("micro_reaction_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("multiple_structure_queries", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/structure_search.py"),
     ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+    ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
+    ApiCode("network_state_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("non_finite_value", 422, Surface.message_prefix,
             "backend/app/services/release/artifacts.py"),
     ApiCode("offset_too_large", 422, Surface.message_prefix,
@@ -712,6 +745,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/species_resolution.py"),
     ApiCode("species_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py"),
+    ApiCode("species_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("species_kind_conflict", 422, Surface.coded_exception,
             "backend/app/services/species_resolution.py"),
     ApiCode("species_smiles_charge_mismatch", 422, Surface.coded_exception,
@@ -760,6 +795,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/reaction_resolution.py"),
     ApiCode("transition_state_irc_mapping_element_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),
+    ApiCode("transition_state_key_undeclared", 422, Surface.coded_exception,
+            "backend/app/services/local_key_resolution.py"),
     ApiCode("transition_state_no_imaginary_mode", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transition_state_reaction_coordinate_ambiguous", 422, Surface.coded_exception,
@@ -874,6 +911,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/chemistry/units.py"),
     ApiCode("unsupported_release_record_type", 422, Surface.message_prefix,
             "backend/app/services/release/records.py"),
+    ApiCode("username_taken", 409, Surface.message_prefix,
+            "backend/app/api/routes/auth.py",
+            note=(
+                "The sibling of email_taken; see that entry for why the "
+                "pair exists and how they are told apart. 409 rather than "
+                "422 under Calvin's 2026-08-16 decision: the payload is "
+                "well formed and the name is simply spoken for, which is "
+                "a state conflict. There is no corrected body for the "
+                "same username, only a different one."
+            )),
     ApiCode("validation_error", 422, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("withdraw_reason_required", 422, Surface.message_prefix,
