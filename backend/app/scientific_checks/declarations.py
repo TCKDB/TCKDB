@@ -82,6 +82,7 @@ from app.scientific_checks import (
 from app.services import (
     calculation_geometry_composition,
     charge_multiplicity_reconciliation,
+    frequency_geometry_linearity,
     reaction_resolution,
     species_resolution,
     transition_state_validation,
@@ -1300,6 +1301,7 @@ DECLARING_MODULES: tuple[ModuleType, ...] = (
     chemistry_species,
     chemistry_units,
     charge_multiplicity_reconciliation,
+    frequency_geometry_linearity,
     geometry_validation_service,
     reaction_atom_map_service,
     reaction_resolution,

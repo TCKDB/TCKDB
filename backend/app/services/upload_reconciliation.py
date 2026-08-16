@@ -39,6 +39,9 @@ from app.services.ess_result import (
     ESSSymmetry,
 )
 from app.services.ess_species_deduction import Deduction, deduce_all
+from app.services.frequency_geometry_linearity import (
+    calculation_linearity_warnings,
+)
 
 # ---------------------------------------------------------------------------
 # Warning codes
@@ -462,16 +465,31 @@ def reconcile_species_entry_full(
     # computes the completeness findings, so there is no such duplication
     # to avoid for them, and routing them through here is what puts them
     # on the one upload path that skips the schema-side collection.
+    #
+    # Layer 1d, immediately below, is the sharper half of the same
+    # question and runs on the same list for the same reason. The two
+    # never both fire on one frequency list: the completeness floor
+    # speaks only below ``3N - 6`` and the linearity check only at
+    # exactly ``3N - 5``.
     if primary_calc is not None:
         for index, calc in enumerate([primary_calc, *additional]):
+            location = f"calculations[{index}].freq_result.modes"
             warnings.extend(
                 stationary_point_warnings(
                     calc.frequency_completeness_findings(
-                        location=(
-                            f"calculations[{index}].freq_result.modes"
-                        ),
+                        location=location,
                         fallback_xyz_text=reference_xyz_text,
                     )
+                )
+            )
+            # Layer 1d: does the *count* say linear while the *shape*
+            # says bent? Needs coordinates and a collinearity tolerance,
+            # so it cannot live where Layer 1c's rule does.
+            warnings.extend(
+                calculation_linearity_warnings(
+                    calc,
+                    location=location,
+                    fallback_xyz_text=reference_xyz_text,
                 )
             )
 

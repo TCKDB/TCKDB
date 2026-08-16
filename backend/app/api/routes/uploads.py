@@ -38,6 +38,13 @@ from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
 from app.schemas.workflows.transport_upload import TransportUploadRequest
+from app.services.frequency_geometry_linearity import (
+    computed_reaction_linearity_warnings,
+    computed_species_linearity_warnings,
+    inline_calculation_linearity_warnings,
+    network_pdep_linearity_warnings,
+    transition_state_upload_linearity_warnings,
+)
 from app.services.provenance_warnings import (
     collect_kinetics_content_warnings,
     collect_kinetics_provenance_warnings,
@@ -396,6 +403,7 @@ def upload_network_pdep(
     pdep_warnings: list[UploadWarning] = stationary_point_warnings(
         request.stationary_point_findings()
     )
+    pdep_warnings.extend(network_pdep_linearity_warnings(request))
     network = persist_network_pdep_upload(
         session,
         request,
@@ -439,6 +447,7 @@ def upload_statmech(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
+    warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_statmech_provenance_warnings(request))
     warnings.extend(
         collect_statmech_content_warnings(
@@ -482,6 +491,7 @@ def upload_thermo(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
+    warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_thermo_provenance_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.thermo
@@ -524,6 +534,7 @@ def upload_transition_state(
         for w in ws:
             warnings.append(w.model_copy(update={"field": f"reaction.products[{i}].{w.field}"}))
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
+    warnings.extend(transition_state_upload_linearity_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.transition_state
     )
@@ -569,6 +580,7 @@ def upload_transport(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
+    warnings.extend(inline_calculation_linearity_warnings(request.calculations))
     warnings.extend(collect_transport_provenance_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.transport
@@ -605,6 +617,10 @@ def upload_computed_species(
         return replay
     warnings = reconcile_species_entry(request.species_entry)
     warnings.extend(stationary_point_warnings(request.stationary_point_findings()))
+    # The sharper half of the completeness question, which needs the
+    # geometry's coordinates and a collinearity tolerance and therefore
+    # cannot live in the wire package alongside the ``3N - 6`` floor.
+    warnings.extend(computed_species_linearity_warnings(request))
     sub = open_upload_submission(
         session, created_by=current_user.id, kind=SubmissionKind.computed_species
     )
@@ -688,6 +704,7 @@ def upload_computed_reaction(
     # reported rather than being produced inside it.
     result_dict["warnings"] = [
         *stationary_point_warnings(request.stationary_point_findings()),
+        *computed_reaction_linearity_warnings(request),
         *result_dict.get("warnings", []),
     ]
     result = ComputedReactionUploadResult(
