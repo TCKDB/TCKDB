@@ -71,7 +71,31 @@ least one owning calculation has an explicit `approved` review state. It reads
 the content-addressed object and verifies both digest and persisted byte count
 before returning it. Unknown, under-review, rejected, deprecated, and otherwise
 non-approved digests all return the same 404 response so existence cannot be
-probed. Storage failure returns 503; integrity failure returns 502.
+probed.
+
+Failure to serve the bytes splits three ways, and the split is by what the
+object store said rather than by which check noticed:
+
+| Situation | Status | `code` | Retry? |
+|---|---|---|---|
+| The store did not answer | 503 | `artifact_storage_unavailable` | Yes — back off and retry |
+| The store answered, and the object is not at its key | 502 | `artifact_object_missing` | No — recorded as an `object_missing` custody event |
+| The bytes came back and failed digest/size verification | 502 | `artifact_integrity_failed` | No — recorded as a `digest_mismatch`/`size_mismatch` custody event |
+
+The second row was `503 artifact_storage_unavailable` until #226, which is
+the same answer as the first and the opposite advice: a store that reports
+"no such key" for a digest a committed row still points at will keep
+reporting it. Both non-retryable rows are breaks in custody and are written
+to `artifact_integrity_event` before the response is built, so the trust
+layer hard-fails the owning calculation for the *next* reader too — see
+[ADR 0014](../../../docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md).
+
+A missing object is deliberately **not** a 404 or a 410. The artifact record
+exists and is still published; what is gone are bytes TCKDB undertook to
+keep, so the failure is the server's and belongs in the 5xx band. A 404
+would additionally be indistinguishable from the anti-probing 404 above,
+and a 410 would tell a client to drop the reference that
+`restore_held_object` needs in order to put the object back.
 
 Successful downloads require cache revalidation so a later review-state change
 can take effect. They carry an ETag equal to the quoted SHA-256,
