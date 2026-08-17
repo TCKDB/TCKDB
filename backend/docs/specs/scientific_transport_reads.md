@@ -161,6 +161,12 @@ Detail endpoint:
 - Never filters by review status (404 only on unknown handles).
 - Always carries the compact review badge.
 - `review_summary` counts the requested record only.
+- Every record carries `supersession` at the record root: `null` when the
+  record is current, otherwise a `SupersessionNotice` naming the immediate
+  successor (`superseded_by`) *and* the head of the correction chain
+  (`current`). Unconditional, not an `include=` token. Contract:
+  [accepted_science_immutability.md](accepted_science_immutability.md)
+  §"Announcing a replacement on a read".
 
 Search endpoint:
 - Hides `rejected` / `deprecated` by default; `include_rejected` /

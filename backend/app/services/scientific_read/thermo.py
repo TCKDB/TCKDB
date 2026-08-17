@@ -81,6 +81,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -301,6 +302,16 @@ def get_species_thermo(
     if not classified:
         return _empty_response(species_entry_id, species_entry_ref, request, includes, offset, limit)
 
+    # Correction notices. Resolved for the whole visible candidate set in two
+    # queries, exactly as the badges above are — never one chain walk per
+    # record. Unconditional: a client must not have to ask whether the number
+    # it is about to cite has been replaced.
+    supersessions = fetch_supersession_notices(
+        session,
+        record_type=SubmissionRecordType.thermo,
+        record_ids=[t.id for t, _ in classified],
+    )
+
     # Pre-fetch validation/SCF data for ALL relevant source calcs. Phase 2
     # audit: include statmech-linked source calcs in the lookup set so the
     # fallback inside ``_build_provenance`` / ``_evidence_breakdown`` can
@@ -393,6 +404,7 @@ def get_species_thermo(
             scientific_origin=t.scientific_origin,
             model_kind=model_kind,
             review=badges[t.id],
+            supersession=supersessions.get(t.id),
             h298_kj_mol=t.h298_kj_mol,
             s298_j_mol_k=t.s298_j_mol_k,
             h298_uncertainty_kj_mol=t.h298_uncertainty_kj_mol,

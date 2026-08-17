@@ -23,7 +23,11 @@ from app.db.models.common import (
     ReleaseArtifactKind,
     ReleaseSelectionAction,
 )
-from app.schemas.reads.scientific_common import Pagination, ProfiledRequestEcho
+from app.schemas.reads.scientific_common import (
+    Pagination,
+    ProfiledRequestEcho,
+    SupersessionNotice,
+)
 
 
 class RequestEcho(ProfiledRequestEcho):
@@ -111,7 +115,25 @@ class ReleaseManifestSummary(BaseModel):
 
 
 class ReleaseSelectionRecord(BaseModel):
-    """One attributed selection row, standing or superseded."""
+    """One attributed selection row, standing or superseded.
+
+    Two unrelated supersessions meet on this row and must not be confused;
+    ``backend/docs/specs/dataset_release_and_profiles.md`` §"two supersessions"
+    holds them apart:
+
+    ``supersedes_selection_ref``  a *curator's opinion* was revised. Both
+                                  records remain equally valid science.
+    ``record_supersession``       the *science* was corrected. The selected
+                                  record has been replaced by a better
+                                  measurement of the same thing.
+
+    A standing selection whose selected record has since been superseded is the
+    single most misleading state this API can serve: it is what a citable,
+    DOI-bearing release points a reader outside the project at. It is reported
+    here rather than folded into ``live_divergence``, which is a per-file byte
+    digest — "the database has moved", advisory and routinely true — and cannot
+    name a record.
+    """
 
     selection_ref: str
     action: ReleaseSelectionAction
@@ -121,6 +143,12 @@ class ReleaseSelectionRecord(BaseModel):
     subject_type: str
     subject_ref: str | None = None
     supersedes_selection_ref: str | None = None
+    #: Set only when the *selected scientific record* has since been replaced.
+    #: Computed live from the supersession ledger, never frozen into the
+    #: release: a release published before the correction existed cannot have
+    #: recorded it, and rewriting the frozen artifacts to add it would break
+    #: their published digests.
+    record_supersession: SupersessionNotice | None = None
     rationale: str
     created_at: str | None = None
     curator: CuratorSummary | None = None

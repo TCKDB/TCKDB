@@ -37,6 +37,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
     SoftwareReleaseSummary,
+    SupersessionNotice,
     WorkflowToolReleaseSummary,
 )
 from app.services.trust.models import TrustFragment
@@ -193,6 +194,12 @@ class ScientificTransportRecord(BaseModel):
     """
 
     transport: TransportCoreBlock
+    #: Correction notice, present only when this record has been replaced.
+    #: ``null`` on a current record — and always computed, never behind an
+    #: ``include=`` token. It sits at the record root rather than inside
+    #: ``transport`` (where ``review`` lives) so the notice has the same
+    #: address on every scientific product read.
+    supersession: SupersessionNotice | None = None
     species: TransportSpeciesContext
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
