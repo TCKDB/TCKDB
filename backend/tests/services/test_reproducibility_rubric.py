@@ -59,6 +59,8 @@ from app.services.reproducibility_rubric import (
     evaluate_reproducibility,
 )
 from app.services.scientific_read.calculations import _build_execution_environment_summary
+from app.services.trust.evaluator import _detect_calculation_hard_fail
+from app.services.trust.models import HardFailReason
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_kinetics,
@@ -695,6 +697,50 @@ def test_a_store_that_says_gone_is_not_a_store_that_says_nothing(
         assert evidence["integrity_event_ref"].startswith("aie_")
         assert evidence["finding"] == "object_missing"
         assert evidence["observed_by_this_evaluation"] is True
+
+
+def test_recording_the_disappearance_reaches_the_trust_layer(
+    db_session,
+    _api_test_user,
+) -> None:
+    """The point of recording it: the fact now has a read-time consequence.
+
+    Asserted here, and not left implicit, because it is the whole reason a
+    row is written rather than logged. ADR 0014 makes *any* recorded
+    custody break a ``HardFailReason.artifact_integrity_failed`` on the
+    owning calculation, and that already happened when the download route
+    discovered this same loss. What changes is that the sweep can now
+    reach it too, instead of finding the break and dropping it.
+
+    Note what is *not* claimed: the reproducibility verdict stays the
+    weaker ``evidence_missing`` and the reproducibility grade is unchanged
+    by the split. The hard fail is the custody record's documented
+    consequence, not a second opinion the rubric formed.
+    """
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _output_artifact(calculation)
+    assert _detect_calculation_hard_fail(calculation) is None
+
+    def loader(sha256: str, *, expected_bytes: int | None = None) -> bytes:
+        del expected_bytes
+        raise ArtifactStorageUnavailable("no such key", missing=True)
+
+    evaluate_reproducibility(
+        db_session,
+        record_type="calculation",
+        record_id=calculation.id,
+        artifact_loader=loader,
+        **_integrity_seam(db_session),
+    )
+
+    db_session.refresh(artifact)
+    assert (
+        _detect_calculation_hard_fail(calculation)
+        is HardFailReason.artifact_integrity_failed
+    )
 
 
 def test_a_recorded_disappearance_is_cited_as_missing_evidence(
