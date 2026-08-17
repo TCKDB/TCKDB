@@ -48,6 +48,12 @@ from app.services.calculation_ownership import (
     assert_statmech_owned_by,
 )
 from app.services.calculation_resolution import resolve_level_of_theory_ref
+from app.services.conformer_selection_locator import (
+    SelectionCandidate,
+    ambiguous_conformer_selection_locator,
+    selection_kind_token,
+    unknown_conformer_selection,
+)
 from app.services.kinetics_resolution import persist_kinetics, resolve_kinetics_upload
 from app.services.record_review import (
     RecordRef,
@@ -298,25 +304,76 @@ def _resolve_interpretation_assignments(
             selection_species_entry = resolve_species_entry(
                 session, locator.species_entry, created_by=created_by
             )
+            # The scheme join is an OUTER join and was an inner one: the
+            # refusal below has to be able to report the scheme each
+            # candidate carries, including the NULL-scheme case, and an
+            # inner join cannot see a row that has none. The ``WHERE``
+            # clauses are unchanged, and a predicate on an outer-joined
+            # column filters exactly as the inner join did.
             stmt = (
-                select(ConformerSelection.id)
+                select(
+                    ConformerSelection.id,
+                    ConformerSelection.selection_kind,
+                    ConformerGroup.label,
+                    ConformerGroup.public_ref,
+                    ConformerAssignmentScheme.public_ref,
+                )
                 .join(ConformerGroup, ConformerGroup.id == ConformerSelection.conformer_group_id)
+                .outerjoin(
+                    ConformerAssignmentScheme,
+                    ConformerAssignmentScheme.id == ConformerSelection.assignment_scheme_id,
+                )
                 .where(
                     ConformerGroup.species_entry_id == selection_species_entry.id,
                     ConformerSelection.selection_kind == locator.selection_kind,
                 )
+                # Label first so the values the refusal prints come out in
+                # an order a human can scan, and ``public_ref`` after it so
+                # unlabelled groups -- of which one species entry may have
+                # many, the constraint treating NULL labels as distinct --
+                # still order deterministically. A published list whose
+                # order shifts between two identical requests is a
+                # contract nobody can write a test against.
+                .order_by(ConformerGroup.label, ConformerGroup.public_ref)
             )
             if locator.assignment_scheme_ref is None:
                 stmt = stmt.where(ConformerSelection.assignment_scheme_id.is_(None))
             else:
-                stmt = stmt.join(
-                    ConformerAssignmentScheme,
-                    ConformerAssignmentScheme.id == ConformerSelection.assignment_scheme_id,
-                ).where(ConformerAssignmentScheme.public_ref == locator.assignment_scheme_ref)
-            selection_ids = session.scalars(stmt.limit(2)).all()
-            if len(selection_ids) != 1:
-                raise ValueError("conformer_selection content locator must resolve exactly one selection.")
-            selection_id = selection_ids[0]
+                stmt = stmt.where(
+                    ConformerAssignmentScheme.public_ref == locator.assignment_scheme_ref
+                )
+            # Unbounded on purpose, where the old lookup took ``limit(2)``:
+            # the 422 has to publish an honest ``match_count`` and the
+            # values that separate the candidates, and a capped fetch would
+            # report a count that is not the count. The set is small by
+            # construction -- one species entry, one selection kind, one
+            # scheme, and ``uq_conformer_selection_conformer_group_id``
+            # permits at most one row per conformer group of that entry.
+            candidates = [
+                SelectionCandidate(
+                    selection_id=row[0],
+                    selection_kind=selection_kind_token(row[1]),
+                    conformer_group_label=row[2],
+                    conformer_group_ref=row[3],
+                    assignment_scheme_ref=row[4],
+                )
+                for row in session.execute(stmt).all()
+            ]
+            # Zero and several are opposite repairs and used to share one
+            # sentence at 422 with an empty context. See
+            # :mod:`app.services.conformer_selection_locator`.
+            if not candidates:
+                raise unknown_conformer_selection(
+                    field=f"{field}.conformer_selection",
+                    selection_kind=locator.selection_kind,
+                    assignment_scheme_ref=locator.assignment_scheme_ref,
+                )
+            if len(candidates) > 1:
+                raise ambiguous_conformer_selection_locator(
+                    field=f"{field}.conformer_selection",
+                    candidates=candidates,
+                )
+            selection_id = candidates[0].selection_id
             # The role test is defence in depth, not a live branch:
             # ``validate_role_shape`` already refuses a conformer_selection
             # on a transition-state assignment, so nothing reaching here
