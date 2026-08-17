@@ -59,6 +59,52 @@ wrapper over a contract that is itself still moving.
 
 ### Fixed
 
+- **The `mypy` gate could not see the wire-contract package, and said
+  "Success" anyway.** `tckdb-schemas` is a first-party package that lives in
+  this repository and is installed *editable*. `mypy` does not read an
+  editable install's import hook, so it could not find the package by name and
+  reported `import-not-found` on all **38** of its imports from
+  `backend/app/schemas` — which `ignore_missing_imports = true` then absorbed
+  silently. The gate reported `Success: no issues found in 149 source files`
+  while every type error *inside* the wire package, and every type error in
+  backend code arising from how it uses the wire package, was invisible to it.
+
+  Made resolvable and made a check target: `mypy_path` points at the package,
+  the package is listed in `files`, and `ignore_missing_imports` is now
+  **off**. All three are necessary and none substitutes for another.
+  `follow_imports = "silent"` means a merely-*imported* module is analysed but
+  its own errors are suppressed, so `mypy_path` alone would still have said
+  nothing about a broken annotation inside the package; and
+  `ignore_missing_imports` cannot distinguish "third-party package with no
+  stubs" from "first-party package we failed to point mypy at", which is what
+  made the original failure silent by construction. Measured at the time of
+  the change: nothing in scope needed the setting — all 38 suppressed errors
+  were `tckdb_schemas`. A stubless third-party dependency now needs a narrow
+  per-module override, the way `rdkit` already has one.
+
+  **12 findings** the gate had been missing, all in code that merged green.
+  Eleven are fixed here; one is a documented suppression with its argument on
+  the line. The one that was a live defect rather than an annotation
+  infelicity: `EnergyTransferIn.model` on the pressure-dependent network
+  upload is a **required** `str`, but its normalizer was
+  `normalize_optional_text`, which collapses a blank string to `None`. A
+  whitespace-only energy-transfer model name passes `min_length=1` and then
+  left the field holding `None`. It is now `normalize_required_text`, which
+  refuses the blank with a 422 — which is what `min_length=1` was already
+  promising. The rest: two `float | None` comparisons in the NASA polynomial
+  temperature-bound validator that were guarded by a `None`-count the checker
+  could not read; two loop variables reused across loops over differently
+  shaped payloads; and one dict annotated with the ORM `CalculationType` while
+  holding the wire `CalculationType` — two distinct classes with identical
+  members, whose every comparison worked only because both subclass `str`.
+
+  Gate scope went from 149 to 183 source files. Proven by mutation, because a
+  configuration change that silently still ignores the package looks identical
+  to one that works: a deliberate `return 12345` from a `-> str` function
+  inside the wire package, a deliberate misuse of a `tckdb_schemas` symbol
+  from `backend/app`, and a deliberately unresolvable `mypy_path` each fail
+  the gate now and each passed it green before.
+
 - **A full artifact store is no longer reported as "retry later", and no
   longer reports itself as healthy.** Two halves of one defect.
 

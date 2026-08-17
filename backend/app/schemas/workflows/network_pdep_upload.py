@@ -53,6 +53,7 @@ from app.schemas.reaction_family import find_canonical_reaction_family
 # Re-exported for backwards compatibility — ArtifactIn now lives in
 # app/schemas/fragments/artifact.py.
 __all__ = ("ArtifactIn",)
+from tckdb_schemas.enums import CalculationType as PayloadCalculationType
 from tckdb_schemas.fragments.ts_validation_evidence import (
     TransitionStateValidationEvidenceIn,
     validate_ts_evidence_set,
@@ -82,7 +83,7 @@ from tckdb_schemas.stationary_point import (
 )
 from tckdb_schemas.workflows.computed_species_upload import StatmechInBundle
 
-from app.schemas.utils import normalize_optional_text
+from app.schemas.utils import normalize_optional_text, normalize_required_text
 from app.schemas.workflows.literature_upload import LiteratureUploadRequest
 from app.schemas.workflows.transport_upload import TransportUploadPayload
 
@@ -590,7 +591,13 @@ class EnergyTransferIn(SchemaBase):
 
     @model_validator(mode="after")
     def normalize_text(self) -> Self:
-        self.model = normalize_optional_text(self.model)
+        # `normalize_required_text`, not `normalize_optional_text`. `model`
+        # is a required `str`, and the optional helper collapses a blank
+        # string to None -- so a whitespace-only model name (which passes
+        # `min_length=1`) left this field holding None on a non-optional
+        # column-bound value. The required helper refuses the blank with a
+        # 422 instead, which is what `min_length=1` was already promising.
+        self.model = normalize_required_text(self.model)
         self.note = normalize_optional_text(self.note)
         return self
 
@@ -1394,7 +1401,15 @@ class NetworkPDepUploadRequest(SchemaBase):
         for sp in self.species:
             if sp.statmech is None:
                 continue
-            own_calc_types: dict[str, CalculationType] = {}
+            # Annotated with the *payload* enum, not the ORM one. `calc.type`
+            # comes off a wire-package `CalculationIn`, so it is a
+            # `tckdb_schemas.enums.CalculationType`; this module's bare
+            # `CalculationType` is `app.db.models.common.CalculationType`.
+            # The two are distinct classes with identical members, and every
+            # comparison between them happens to work only because both are
+            # `str` subclasses -- so the mismatch was invisible until mypy
+            # could see the wire package's types at all.
+            own_calc_types: dict[str, PayloadCalculationType] = {}
             for conf in sp.conformers:
                 own_calc_types[conf.calculation.key] = conf.calculation.type
             for calc in sp.calculations:
@@ -1458,18 +1473,21 @@ class NetworkPDepUploadRequest(SchemaBase):
                         declared=species_keys,
                     )
 
-            # Solve source calculations must reference defined calculation keys
-            for sc_index, sc in enumerate(self.solve.source_calculations):
-                if sc.calculation_key not in calculation_keys:
+            # Solve source calculations must reference defined calculation keys.
+            # Named `solve_sc`, not `sc`: the statmech loop earlier in this
+            # same function binds `sc` to a `StatmechSourceCalcIn`, so reusing
+            # the name gave the solve entry the statmech entry's static type.
+            for sc_index, solve_sc in enumerate(self.solve.source_calculations):
+                if solve_sc.calculation_key not in calculation_keys:
                     raise undeclared_key_error(
                         W_CALCULATION_KEY_UNDECLARED,
                         f"Solve source_calculations references undefined "
-                        f"calculation_key '{sc.calculation_key}'.",
+                        f"calculation_key '{solve_sc.calculation_key}'.",
                         field=(
                             f"solve.source_calculations[{sc_index}]."
                             f"calculation_key"
                         ),
-                        key=sc.calculation_key,
+                        key=solve_sc.calculation_key,
                         declared=calculation_keys,
                     )
 

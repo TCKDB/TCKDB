@@ -148,7 +148,32 @@ class StatmechSourceCalculationIn(StatmechSourceCalcIn):
     :param role: Scientific role the calculation plays for this statmech.
     """
 
-    calculation_key: str | None = Field(default=None, min_length=1)
+    # Widening a base class's mutable attribute is a Liskov violation, and
+    # mypy is right to say so. It is nonetheless the declared design here,
+    # and the suppression is narrowed to this one line and this one error
+    # code rather than the module.
+    #
+    # The subclass relationship is load-bearing at *runtime*, not just
+    # cosmetic: ``ConformerUploadStatmechPayload.source_calculations`` is
+    # annotated with the key-only base, and Pydantic v2's
+    # ``revalidate_instances="never"`` is what lets an instance of this
+    # subclass pass through that field with ``existing_calculation_id``
+    # intact. Break the inheritance and Pydantic revalidates into the base,
+    # silently dropping the chained id -- the exact failure
+    # ``test_statmech_upload_chained_id_survives_payload_handover`` exists
+    # to pin. So the fix mypy would want is the one thing that must not
+    # happen.
+    #
+    # The reason it is safe is a runtime invariant, not a type: the
+    # ``validate_exactly_one_reference`` validator below guarantees that
+    # whenever ``calculation_key`` is None, ``existing_calculation_id`` is
+    # not -- and the only consumer that reads ``calculation_key`` as a
+    # non-optional ``str``
+    # (``app.services.statmech_resolution._resolve_calculation_key``) is
+    # reached only on the branch where the chained id was absent.
+    calculation_key: str | None = Field(  # type: ignore[assignment]
+        default=None, min_length=1
+    )
     existing_calculation_id: int | None = Field(default=None, gt=0)
 
     @model_validator(mode="after")

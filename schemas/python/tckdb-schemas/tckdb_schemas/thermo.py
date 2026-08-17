@@ -80,16 +80,22 @@ class ThermoNASABase(BaseModel):
 
     @model_validator(mode="after")
     def validate_temperature_bounds(self) -> Self:
-        temps = [self.t_low, self.t_mid, self.t_high]
-        nones = sum(t is None for t in temps)
-        if nones not in (0, 3):
+        # Bound to locals and compared through explicit `is not None`
+        # guards rather than a `nones == 0` count. The count is the same
+        # fact, but it is a fact about a list rather than about the three
+        # attributes, so no reader -- human or type checker -- can tell
+        # from the comparison below that all three are floats there. The
+        # ordering rules are unchanged.
+        t_low, t_mid, t_high = self.t_low, self.t_mid, self.t_high
+        supplied = [t for t in (t_low, t_mid, t_high) if t is not None]
+        if len(supplied) not in (0, 3):
             raise ValueError(
                 "Temperature bounds must be all provided or all omitted."
             )
-        if nones == 0:
-            if self.t_mid <= self.t_low:
+        if t_low is not None and t_mid is not None and t_high is not None:
+            if t_mid <= t_low:
                 raise ValueError("t_mid must be greater than t_low.")
-            if self.t_high <= self.t_mid:
+            if t_high <= t_mid:
                 raise ValueError("t_high must be greater than t_mid.")
         return self
 
