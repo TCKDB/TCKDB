@@ -416,6 +416,28 @@ class ApiCode:
 #: this from :mod:`app.scientific_checks`, whose entries claim something a
 #: referee could argue with and must stay expensive.
 CATALOGUE: tuple[ApiCode, ...] = (
+    ApiCode("ambiguous_conformer_selection_locator", 422, Surface.coded_exception,
+            "backend/app/services/conformer_selection_locator.py",
+            note=(
+                "The 'several matched' half of a split; unknown_conformer_"
+                "selection is the 'none matched' half, at 404. Both used to "
+                "be one bare ValueError reading 'must resolve exactly one "
+                "selection', so 422 validation_error with an empty context "
+                "covered two opposite repairs -- deposit the missing row, "
+                "versus say more about which row you meant. 422 and not 409 "
+                "because every candidate exists: the world is consistent and "
+                "the request is under-determined. context reports what "
+                "actually differs across the candidates (discriminator, "
+                "discriminator_values) and whether the locator has a field "
+                "for it (locator_can_express), because 'be more specific' is "
+                "only advice if there is something to add -- and here there "
+                "is not: the lookup filters on all three locator fields, so "
+                "candidates agree on all three and can only differ by the "
+                "conformer group, which the locator cannot name. Every "
+                "observed refusal therefore reports "
+                "locator_can_express=false, which is the evidence the "
+                "locator needs widening."
+            )),
     ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             note=(
@@ -1049,6 +1071,23 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "status. context['field'] separates them; context['ref'] is "
                 "present for the public-ref spelling only, because a row id "
                 "is logged and never echoed (DR-0028 Requirement 2)."
+            )),
+    ApiCode("unknown_conformer_selection", 404, Surface.coded_exception,
+            "backend/app/services/conformer_selection_locator.py",
+            note=(
+                "The one unknown_* on /uploads/kinetics not built by "
+                "upload_reference.unknown_reference, and the reason is that "
+                "helper's own rule: it takes exactly one of ref= (echoed) or "
+                "row_id= (logged only), because the spelling chooses the "
+                "disclosure rule. A conformer_selection content locator is a "
+                "third spelling -- a description, not a name -- so there is "
+                "no caller-written string to quote back and context carries "
+                "the locator's own fields (selection_kind, and "
+                "assignment_scheme_ref when set) instead. The field/kind "
+                "pair is kept identical to unknown_reference's so a client "
+                "reads one body layout. Paired with "
+                "ambiguous_conformer_selection_locator at 422, which is the "
+                "same locator matching too many rows rather than none."
             )),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),
