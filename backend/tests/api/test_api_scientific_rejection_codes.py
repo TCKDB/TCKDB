@@ -1066,3 +1066,28 @@ class TestTheAtomMapAgainstTheIrcPartition:
         assert "transition_state_irc_mapping_element_mismatch" in str(
             body["detail"]
         )
+
+        # The two compositions that disagree, and the two things they belong
+        # to. A ``*_mismatch`` names neither side by construction
+        # (``Shape.relationship`` in ``app.api.code_catalogue``), so before
+        # #210 the only machine-readable fact here was that *something* did
+        # not match. Asserted key by key, not as "context is non-empty" --
+        # that would pass against a handler stuffing in a constant.
+        context = body["context"]
+        # ``reactant:1`` is CH3 and the partition hands it the saddle
+        # point's four hydrogens, so it is the first slot to disagree.
+        assert context["role"] == "reactant", context
+        assert context["participant_key"] == "reactant:1", context
+        assert context["participant_index"] == 1, context
+        assert context["ts_atom_indices"] == [2, 3, 4, 5], context
+        assert context["assigned_composition"] == {"H": 4}, context
+        assert context["declared_composition"] == {"C": 1, "H": 3}, context
+        assert context["declared_smiles"] == "[CH3]", context
+        assert context["field"] == "transition_state.validation_evidence", context
+
+        # No row ids reach a client (DR-0028 Requirement 2): every fact here
+        # is either the depositor's own payload coordinate or an element
+        # count.
+        assert not any(
+            key == "id" or key.endswith(("_id", "_ids")) for key in context
+        ), context

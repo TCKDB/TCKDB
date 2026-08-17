@@ -98,6 +98,46 @@ def test_wrong_prefix_ref_returns_422_handle_type_mismatch(client):
     assert "handle_type_mismatch" in r.json()["detail"]
 
 
+def test_a_wrong_prefix_names_both_prefixes_in_context(client):
+    """The relationship refusal says *which two* prefixes disagreed.
+
+    ``handle_type_mismatch`` asserts that the prefix on the supplied ref and
+    the prefix the route expects are not the same one, and the code names
+    neither -- the case ``Shape.relationship`` in ``app.api.code_catalogue``
+    is about. Until #210 the only place the two lived was the sentence,
+    which the error contract tells clients not to parse.
+
+    Asserted on the ``(status, code)`` pair *and* the individual keys. "the
+    context is non-empty" would pass against a handler that stuffed in a
+    constant, and asserting the whole dict by equality would make an added
+    fact a red test for no reason -- so each key is named and its value
+    checked.
+    """
+    r = client.get(
+        "/api/v1/scientific/reaction-entries/"
+        "spe_abcdefghijklmnopqrstuvwxyz/full"
+    )
+
+    assert r.status_code == 422, r.text
+    body = r.json()
+    assert body["code"] == "handle_type_mismatch", body
+    context = body["context"]
+    assert context["expected_kind"] == "reaction_entry", context
+    assert context["expected_prefix"] == "rxe", context
+    assert context["supplied_prefix"] == "spe", context
+
+    # The published prose did not move: the code is now declared on the
+    # exception instead of promoted out of the sentence, and the sentence is
+    # byte-for-byte what it was.
+    assert body["detail"].startswith("handle_type_mismatch: expected a "), body
+
+    # A prefix is a schema-level constant and the supplied one is the
+    # caller's own input, so no row id is disclosed (DR-0028 Requirement 2).
+    assert not any(
+        key.endswith("_id") or key == "id" for key in context
+    ), context
+
+
 def test_malformed_handle_returns_422_invalid_handle(client):
     r = client.get("/api/v1/scientific/geometries/!!notarealhandle!!")
     assert r.status_code == 422

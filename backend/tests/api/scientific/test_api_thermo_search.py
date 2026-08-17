@@ -65,6 +65,37 @@ def test_invalid_temperature_range_returns_422(client, db_session):
     assert "invalid_temperature_range" in resp.text
 
 
+def test_an_inverted_temperature_range_names_both_bounds_in_context(
+    client, db_session
+):
+    """The two bounds that are the wrong way round, structured.
+
+    ``invalid_temperature_range`` is a relationship code -- it says two
+    values are in the wrong order and names neither -- and its ``context``
+    was empty because the raise was a plain ``ValueError``, which has
+    nowhere to put facts. Its sibling ``invalid_range`` in
+    ``scientific_read/analytics.py`` has always carried its bounds.
+
+    Asserted key by key on the ``(status, code)`` pair. "``context`` is
+    non-empty" would pass against a handler that stuffed in a constant.
+    """
+    _seed(db_session, smiles="TRC")
+    resp = client.get(
+        "/api/v1/scientific/thermo/search"
+        "?smiles=TRC&temperature_min=3000&temperature_max=300"
+    )
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["code"] == "invalid_temperature_range", body
+    assert body["context"]["temperature_min_k"] == 3000.0, body["context"]
+    assert body["context"]["temperature_max_k"] == 300.0, body["context"]
+    # The published prose did not move: only the route into ``code`` did.
+    assert body["detail"] == (
+        "invalid_temperature_range: temperature_min must be <= temperature_max"
+    ), body["detail"]
+
+
 def test_invalid_include_token_returns_422(client, db_session):
     _seed(db_session, smiles="II")
     resp = client.get(

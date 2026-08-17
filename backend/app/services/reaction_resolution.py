@@ -817,7 +817,32 @@ def validate_ts_evidence_participant_composition(
                         "participant, so a participant cannot be made of atoms it "
                         "does not contain. The identical claim written as an "
                         "atom_map is already refused; correct the mapping per "
-                        "atom, not per count."
+                        "atom, not per count.",
+                        # The two compositions that disagree, and the two
+                        # things they belong to. A ``*_mismatch`` code names
+                        # neither side by construction (``Shape.relationship``
+                        # in ``app.api.code_catalogue``), so without this the
+                        # only machine-readable fact is that *something* did
+                        # not match -- and the sentence a client was told not
+                        # to parse is where the rest lived. Its sibling
+                        # ``atom_map_element_not_conserved``, which refuses
+                        # the same claim written per atom, has carried its
+                        # context since it was written.
+                        #
+                        # No row ids: ``participant_key`` and
+                        # ``participant_index`` are the depositor's own
+                        # payload coordinates and ``smiles`` is what they
+                        # wrote (DR-0028 Requirement 2).
+                        context={
+                            "field": field_path,
+                            "participant_key": participant_key,
+                            "role": role.value,
+                            "participant_index": participant_index,
+                            "ts_atom_indices": sorted(atom_indices),
+                            "assigned_composition": dict(sorted(assigned.items())),
+                            "declared_composition": dict(sorted(declared.items())),
+                            "declared_smiles": species.smiles,
+                        },
                     )
 
 

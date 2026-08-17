@@ -456,9 +456,43 @@ The distinction worth building on is what a client should *do*:
 | `arrhenius_a_units_molecularity_mismatch` | `a_units` do not have the dimensionality the reaction order requires | fix the unit token |
 | `validation_error` | a refusal that carries no more specific code | read `detail`; and please report it, because a scientific refusal reaching you as this is a gap |
 
-`context` carries the same facts in structured form — the two element
-counts that disagreed, the two charges, the disputed atom indices — so a
-client can render a useful message without parsing the sentence.
+### What `context` carries, and when it is empty
+
+`context` is where a refusal's facts go in structured form — the two
+element counts that disagreed, the two charges, the disputed atom indices
+— so a client can render a useful message without parsing the sentence.
+
+It is **not populated for every code**, and the rule for which is worth
+knowing before you write a branch that reads it:
+
+- A code that names a **relationship** — `state_conflict`,
+  `handle_type_mismatch`, `atom_map_element_not_conserved`, anything
+  spelled `*_conflict` or `*_mismatch` — asserts that two or more things
+  disagree and names none of them. There `context` is where the *which*
+  lives: a field path, a public ref, a local key you declared, the
+  database constraint that refused, a count. Never a database row id —
+  TCKDB does not put row ids in error bodies, because a row id is not
+  stable across a restore or between two deployments and no public
+  surface is keyed on one.
+- A code that names a **thing** — `unknown_release`, `missing_filter`,
+  `limit_too_large` — is already the whole message. `context` may be `{}`
+  and that is the honest answer, not a gap: there is no second fact to
+  report.
+
+So: read `context` where the code names a relationship, and treat `{}`
+as normal everywhere else. Do not make a populated `context` a
+precondition for handling a refusal — branch on `code` first, then
+enrich from `context` if it is there. Some relationship codes have not
+been populated yet; that work is in progress, and the server's own
+catalogue (`backend/app/api/code_catalogue.py`) records the
+classification per code if you need to know where things stand.
+
+One special case that looks like an exception and is not: the `426`
+client-version refusals (`tckdb_client_version_unsupported` and
+siblings) put their facts — the version you sent, the minimum this
+server accepts — in `detail`, which for these three is a JSON object
+rather than a sentence. "Never parse `detail`" still holds: parsing is
+what a sentence needs, and these are already structured.
 
 A warning is not a refusal: an accepted upload returns `201` with a
 `warnings` list whose entries carry their own `code`. The register's

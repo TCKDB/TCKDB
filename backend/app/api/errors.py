@@ -302,6 +302,22 @@ def _integrity_error_handler(
     # about, because every violation collapsed into its SQLSTATE bucket.
     # Keyed on the constraint name rather than on the driver's message
     # text: parsing prose is what the typed envelope exists to replace.
+    #
+    # Why the *unnamed* buckets below are left with an empty ``context``,
+    # although ``unique_conflict``, ``reference_conflict``,
+    # ``state_conflict`` and ``integrity_conflict`` are all
+    # ``Shape.relationship`` codes that owe a client the things that
+    # disagreed (see ``app.api.code_catalogue``): the only fact available
+    # here is the constraint name, and this repository holds two
+    # incompatible positions about whether that may be disclosed. The
+    # register path below reports it deliberately -- it is the key into
+    # ``docs/guides/scientific_check_register.md``, and
+    # ``test_api_database_constraint_codes.py`` asserts it reaches the
+    # body. ``test_api_integrity_error_handler.py`` asserts the opposite
+    # for the unregistered buckets, in as many words: "Internal
+    # constraint name must not leak through the public body." Widening
+    # disclosure is a decision for whoever owns that rule, not something
+    # to settle inside a tranche, so these four stay on the open list.
     rejection = _constraint_rejections().get(constraint) if constraint else None
     if rejection is not None:
         code, message = rejection

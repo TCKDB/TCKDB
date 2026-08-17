@@ -20,6 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
+from app.api.error_contract import CodedValueError
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
 from app.db.models.record_review import RecordReview
 from app.schemas.reads.scientific_common import (
@@ -237,8 +238,27 @@ def validate_temperature_range(
         and temperature_max is not None
         and temperature_min > temperature_max
     ):
-        raise ValueError(
-            "invalid_temperature_range: temperature_min must be <= temperature_max"
+        # ``invalid_temperature_range`` names a relationship -- two bounds
+        # that are the wrong way round -- and names neither value, which is
+        # the case ``Shape.relationship`` in ``app.api.code_catalogue`` is
+        # about. Its sibling ``invalid_range`` in ``scientific_read/
+        # analytics.py`` has carried its two bounds in ``context`` since it
+        # was written; this one is the same shape and had nothing.
+        #
+        # ``message_prefix=True`` keeps ``str(exc)`` -- and so the
+        # response's ``detail`` -- byte-identical to the plain
+        # ``ValueError`` this replaced. Only the route into ``code``
+        # changes, from promoted-out-of-the-sentence to declared on the
+        # exception, which is why the catalogue entry moves to
+        # ``Surface.coded_exception``. Both values are the caller's own
+        # query parameters, so nothing here is a row id.
+        raise CodedValueError(
+            "invalid_temperature_range",
+            "temperature_min must be <= temperature_max",
+            context={
+                "temperature_min_k": temperature_min,
+                "temperature_max_k": temperature_max,
+            },
         )
 
 
