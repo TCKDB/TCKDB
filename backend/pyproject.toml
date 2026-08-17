@@ -306,15 +306,65 @@ ignore = [
 # mypy configuration. Scoped adoption: strict-ish on the layers with the
 # highest annotation quality (models, schemas, chemistry); widen the
 # `files` list per-package as layers are brought up to standard.
+#
+# Paths here are resolved against the current working directory, so this
+# whole block assumes mypy is run from `backend/` — which is what CI does
+# (`working-directory: backend`) and what the documented local command
+# does. Running it from the repository root checks nothing and is not
+# supported.
+#
+# The wire package is in `files` and on `mypy_path`, and
+# `ignore_missing_imports` is off. All three are load-bearing; see the
+# block below.
 [tool.mypy]
 python_version = "3.13"
-files = ["app/db", "app/schemas", "app/chemistry"]
+files = [
+    "app/db",
+    "app/schemas",
+    "app/chemistry",
+    "../schemas/python/tckdb-schemas/tckdb_schemas",
+]
+mypy_path = "../schemas/python/tckdb-schemas"
 follow_imports = "silent"
-ignore_missing_imports = true
+ignore_missing_imports = false
 check_untyped_defs = true
 warn_redundant_casts = true
 warn_unused_ignores = false
 no_implicit_optional = true
+
+# Why the three settings above are the way they are.
+#
+# `tckdb_schemas` is a first-party package that lives in this repository
+# and is installed *editable*. mypy does not read an editable install's
+# import hook, so it could not find the package by name and reported
+# `import-not-found` on all 38 of its imports from `app/schemas` --
+# which `ignore_missing_imports = true` then absorbed silently. The gate
+# said "Success: no issues found in 149 source files" while every type
+# error inside the wire package, and every type error arising from how
+# the backend uses it, was invisible to it. Measured when this was fixed:
+# 12 real findings, in code that had merged green.
+#
+# `mypy_path` makes the package resolvable, so backend code is checked
+# against the wire package's *actual* types instead of `Any`.
+#
+# The `files` entry is separate and equally necessary. `follow_imports =
+# "silent"` means a merely-imported module is analysed but its own errors
+# are suppressed, so `mypy_path` alone would still have said nothing
+# about a broken annotation inside the wire package. Listing it as a
+# check target is what makes its own errors reportable. The two settings
+# catch different halves and neither substitutes for the other; a
+# mutation test for each is the only way to tell a working config from
+# one that silently still ignores the package.
+#
+# `ignore_missing_imports = false` is what stops this recurring. That
+# setting cannot distinguish "third-party package with no stubs" from
+# "first-party package in this repository that we failed to point mypy
+# at", so with it on, the second failure is silent by construction. Off,
+# an unresolvable module is an error. Measured at the time of the change:
+# nothing in scope needed it -- all 38 suppressed errors were
+# `tckdb_schemas`. If a genuinely stubless third-party dependency arrives,
+# add a narrow `[[tool.mypy.overrides]]` naming that module, the way the
+# rdkit block below does. Do not turn this back on.
 
 # Some rdkit-stubs releases ship a syntactically-broken .pyi
 # (rdchem.pyi: "parameter without a default follows parameter with a default"),

@@ -1579,18 +1579,24 @@ class ComputedReactionUploadRequest(SchemaBase):
         for sp in self.species:
             if sp.statmech is None:
                 continue
-            for i, sc in enumerate(sp.statmech.source_calculations):
-                if sc.calculation_key not in all_calc_keys:
+            # Named `msc`, not `sc`: the thermo loop above binds `sc` to a
+            # `ThermoSourceCalcInBundle` in this same function scope, and
+            # reusing the name here made the statmech entry's static type
+            # the thermo one. Nothing broke, because both happen to carry
+            # `calculation_key` -- which is exactly why it would keep not
+            # breaking until the two shapes diverged.
+            for i, msc in enumerate(sp.statmech.source_calculations):
+                if msc.calculation_key not in all_calc_keys:
                     raise undeclared_key_error(
                         W_CALCULATION_KEY_UNDECLARED,
                         f"species[{sp.key!r}].statmech.source_calculations[{i}]."
                         f"calculation_key references undefined "
-                        f"calculation_key '{sc.calculation_key}'.",
+                        f"calculation_key '{msc.calculation_key}'.",
                         field=(
                             f"species['{sp.key}'].statmech.source_calculations"
                             f"[{i}].calculation_key"
                         ),
-                        key=sc.calculation_key,
+                        key=msc.calculation_key,
                         declared=all_calc_keys,
                     )
             for i, t in enumerate(sp.statmech.torsions):
