@@ -41,6 +41,17 @@ question is exported to clients as `NON_RETRYABLE_CODES`, beside the enum
 rather than inside it, so a `5xx` a retry layer must recognise no longer
 has to be smuggled into an enum named for rejections.
 
+That same handler now reports a third fact, and it is the case where the
+answer was neither declaration nor enum but the **status**. A full object
+store (`507 artifact_storage_full`) will clear, but only when an operator
+frees space — never on a caller's backoff schedule. `Replay` cannot say
+that: `never_succeeds` would be false, and `may_succeed` is true but
+useless at a status that invites the retry. Putting it at `507` — which is
+registered with exactly this meaning and is absent from the client's
+default retry set — makes the status carry the advice, so a pinned client
+and a non-Python caller both behave correctly without knowing the code
+exists.
+
 Uploads are gated by `require_supported_tckdb_client` so stale clients
 can't write malformed payloads. See
 [`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md) §2

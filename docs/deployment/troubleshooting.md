@@ -136,6 +136,87 @@ Set `S3_ENDPOINT_URL` to the compose service name and restart the API. See
 
 ---
 
+### Uploads with files return 507 `artifact_storage_full`
+
+**Symptom**
+
+An upload carrying an artifact returns `507` with
+`"code": "artifact_storage_full"`. Reads, queries, and file-less uploads all
+work normally. Downloads of existing artifacts also work normally.
+
+**"Full" is not all-or-nothing, and this is the confusing part.** MinIO
+refuses a write that would breach its free-space threshold, sized against the
+object being written — so on a store in this state a large ESS log is refused
+while a small text artifact still succeeds. Measured: a store that refused an
+8 MiB artifact accepted a 1-byte one in the same second. So *some uploads
+still working is not evidence that the store is fine*, and the refused size in
+the `/status` reason is the number that tells you how close to the edge you
+are.
+
+**Cause**
+
+The object store answered and refused the *write*: it is out of disk, or the
+bucket is over its quota. This is not transient from a depositor's side — no
+number of retries clears it, which is why the status is 507 rather than 503.
+
+**Verify**
+
+```bash
+curl -s http://127.0.0.1:8010/api/v1/status | jq '.components.artifact_storage'
+```
+
+Look for `"storage_full": true` and `"storage_full_observed_at"`. The
+`reason` names the store's own error code and the size of the write it
+refused.
+
+Read this next part before trusting a green `/status`. The `/status` probe is
+a `head_bucket`, and a full store answers a `head_bucket` with **200**:
+
+- On MinIO `RELEASE.2025-09-07T16-13-09Z`, measured on a volume filled to its
+  free-space threshold, every read succeeded and even a **1-byte** write
+  succeeded on the same store that refused a 4 MiB one — MinIO's threshold
+  check is sized against the incoming object.
+- So a *capacity* problem is invisible to any read-only probe, and a cheap
+  synthetic write probe would miss it too. The S3 API exposes no capacity or
+  quota query to ask instead.
+
+`storage_full` therefore reports what the **real write path** was told, not
+what a probe found. That has two consequences an operator must know:
+
+- **`"storage_full": false` does not mean there is space.** It means no
+  upload has been refused for room *in this API process*. A store that fills
+  while TCKDB is idle reads healthy until the next depositor arrives.
+- **It is per-process and cleared by a restart.** With several API workers,
+  `/status` can answer from a worker that has attempted no write. It clears
+  by itself as soon as one upload succeeds — deduplicating against an
+  existing object does not count, because that is a read.
+
+To check capacity directly, ask the store rather than the API:
+
+```bash
+docker exec <minio-container> mc admin info local     # MinIO
+df -h /path/to/minio/data                             # the underlying volume
+```
+
+**Fix**
+
+Free space or raise the quota, then confirm with one real upload — that is
+also what clears the `/status` flag:
+
+- delete or archive unreferenced objects. The reclaim sweep is the supported
+  route: `backend/scripts/ops/verify_artifact_integrity.py --reclaim-orphans`
+  moves month-old unreferenced objects to a hold, and a separate
+  `--purge-hold-days` run deletes from the hold. **Note that the sweep itself
+  writes** (it copies before deleting), so on a completely full store the
+  copy is refused too and the first pass may fail with the same condition;
+  free a little space by hand first.
+- grow the volume, or raise the bucket quota
+  (`mc quota set local/<bucket> --size ...`). MinIO enforces a hard quota
+  asynchronously from its data-usage scanner, so both the refusal and the
+  recovery lag the change by a minute or two.
+
+---
+
 ## Database
 
 ### `database "tckdb_dev" does not exist`

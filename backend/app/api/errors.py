@@ -386,9 +386,14 @@ def _artifact_integrity_handler(
 def _artifact_storage_unavailable_handler(
     request: Request, exc: ArtifactStorageUnavailable
 ) -> JSONResponse:
-    """503 for a store that did not answer; 502 for one that said "not there".
+    """One exception type, three facts, three statuses, three answers.
 
-    One exception type, two facts, and opposite retry advice. Until #226
+    503 for a store that did not answer; 502 for one that answered "not
+    there"; 507 for one that answered "no room". The 507 branch is the
+    newest and its reasoning sits with it below, including why it is a
+    status change rather than a third ``Replay`` member.
+
+    The two older facts, and how they came to be told apart. Until #226
     both left here as ``503 artifact_storage_unavailable`` with "Retry
     later." — true of an outage, and a false instruction for the other
     case: a store that answered ``NoSuchKey`` for a digest a committed
@@ -444,6 +449,66 @@ def _artifact_storage_unavailable_handler(
     request attached; a caller that reaches it opportunistically never
     sees a response at all.
     """
+    if getattr(exc, "full", False):
+        # A full store is a third fact, and it is neither of the two above.
+        # An unreachable store may clear on its own, so 503's "retry later"
+        # is honest. A missing object never comes back, so 502 with
+        # "retrying will not clear it" is honest. This one *will* clear —
+        # but not on any client's backoff schedule and not by anything the
+        # depositor can do. Only an operator freeing space or raising a
+        # quota clears it, which is a different request by a different
+        # principal.
+        #
+        # 507 rather than a second code at 503, and the status is doing
+        # most of the work:
+        #
+        # * It is registered with exactly this meaning (RFC 4918 §11.5 --
+        #   "the server is unable to store the representation needed to
+        #   complete the request"), and it is what the store itself
+        #   answers: MinIO returns 507 with ``XMinioStorageFull``.
+        # * It is not in the client's default retry set
+        #   (``tckdb_client.retry.DEFAULT_RETRY_STATUS_CODES`` is 429, 502,
+        #   503, 504), so a well-behaved client stops after one attempt on
+        #   the status alone -- including a pinned client that has never
+        #   heard of this code, and every non-Python caller, neither of
+        #   which a ``NON_RETRYABLE_CODES`` entry would reach.
+        # * At 503 the opposite would happen: the status would invite the
+        #   retry and only the generated deny list could contradict it,
+        #   which means the correct behaviour would depend on the caller
+        #   having upgraded.
+        #
+        # Which is also why the catalogue entry keeps the
+        # ``Replay.may_succeed`` default rather than gaining a third
+        # ``Replay`` member for "retryable, but not by you, and not soon".
+        # ``Replay`` exists solely to contradict a status that invites a
+        # retry; 507 does not invite one, so a declaration here would be
+        # inert -- and ``never_succeeds`` would be a false claim, since its
+        # note must say what makes the condition deterministic and a full
+        # store is not. The vocabulary is adequate; the status carries the
+        # meaning the vocabulary cannot.
+        logger.error(
+            "ArtifactStorageUnavailable (store full, S3 code %s) on %s %s: %s",
+            getattr(exc, "s3_code", None),
+            request.method,
+            request.url.path,
+            exc,
+            exc_info=exc,
+        )
+        return JSONResponse(
+            status_code=507,
+            content={
+                "detail": (
+                    "The artifact object store has no room for this upload "
+                    "and refused to accept it. This is not a problem with "
+                    "the request and retrying will not clear it: an "
+                    "operator must free space or raise the store's quota. "
+                    "The condition has been recorded and is reported on "
+                    "/status."
+                ),
+                "code": "artifact_storage_full",
+                "context": {},
+            },
+        )
     if getattr(exc, "missing", False):
         # A break in custody, so ``error`` and not ``warning`` — the same
         # level ``_artifact_integrity_handler`` uses for the sibling break.

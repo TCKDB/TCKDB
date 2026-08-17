@@ -59,6 +59,61 @@ wrapper over a contract that is itself still moving.
 
 ### Fixed
 
+- **A full artifact store is no longer reported as "retry later", and no
+  longer reports itself as healthy.** Two halves of one defect.
+
+  *The wrong answer.* `artifact_storage.py` special-cased exactly one
+  condition — the store answering "no such key" — and every other error a
+  botocore `ClientError` can carry collapsed into a single
+  `503 artifact_storage_unavailable ... Retry later.` A **full** store landed
+  in that residue, so a depositor uploading into a store with no disk left was
+  told to do the one thing that cannot work: retrying a full disk fails until
+  an *operator* frees space. Uploads into a store that has no room now answer
+  **`507 artifact_storage_full`**, whose body says an operator must act.
+  507 rather than a second code at 503 because the *status* then carries the
+  advice: it is registered with exactly this meaning (RFC 4918), it is what
+  MinIO itself answers, and it is absent from `tckdb-client`'s default retry
+  set — so a pinned client and a non-Python caller both stop after one attempt
+  without knowing the code exists. The `Replay` vocabulary is deliberately not
+  extended: `never_succeeds` would be a false claim (an operator frees space
+  and the identical request then succeeds) and any declaration at 507 is inert
+  by `is_replay_futile`'s own rule.
+
+  The error codes are **measured, not inferred**. MinIO
+  `RELEASE.2025-09-07T16-13-09Z` was filled on a size-capped scratch volume
+  and answered `XMinioStorageFull` at HTTP 507; with a hard bucket quota it
+  answered `XMinioAdminBucketQuotaExceeded` at HTTP 400. `EntityTooLarge` is
+  deliberately *not* treated as a capacity signal — it is a fact about one
+  object, not about free space.
+
+  *The silent health check.* `/status` probed artifact storage with a
+  `head_bucket`, and a full store answers a `head_bucket` with **200**: every
+  read succeeds, and — measured — even a 1-byte write succeeds on a store that
+  refuses a 4 MiB one, because MinIO's threshold check is sized against the
+  incoming object. So `/status` reported green while every artifact upload
+  failed for want of space, and nobody was told, including whoever was on
+  call. No read-only probe can detect this and no *cheap* write probe can
+  either; the S3 API exposes no capacity query to ask instead. `/status` now
+  reports what the real write path was told, as
+  `artifact_storage.storage_full` with the observation timestamp, and degrades
+  on it. Its limits are documented rather than papered over: `false` means "no
+  write has been refused for room in this process", not "there is space"; it
+  needs one upload attempt to fire; and it is per-process and cleared by a
+  restart. See
+  [`docs/deployment/troubleshooting.md`](docs/deployment/troubleshooting.md).
+
+  Also fixed on the way: `artifact_persistence._store_and_record`'s broad
+  `except Exception` caught the already-typed `ArtifactStorageUnavailable` and
+  raised a *fresh* one, discarding every discriminator set upstream — so the
+  pre-existing `missing` flag was being erased on the upload path too; and
+  `store_artifact` let a raw `ClientError` from `create_bucket` escape past
+  every `except ArtifactStorageUnavailable` downstream.
+
+  Behaviour of `artifact_storage_unavailable` (503) and
+  `artifact_object_missing` (502) is unchanged. **`tckdb-client`
+  0.51.0 → 0.52.0** (documentation and one test; no code change — 507 was
+  already outside the default retry set). No schema or migration impact.
+
 - **A client no longer retries a lost artifact forever.**
   `GET /scientific/artifacts/{sha256}/download` reports two different storage
   failures: `503 artifact_storage_unavailable` when the object store did not

@@ -217,6 +217,22 @@ def _store_and_record(
         uri = store_artifact(decoded.content, decoded.computed_sha256)
     except ArtifactValidationError:
         raise
+    except ArtifactStorageUnavailable:
+        # Re-raised as itself, and this arm is load-bearing rather than
+        # tidy. ``store_artifact`` now classifies what the store said —
+        # ``full`` when it refused the write for want of room, ``missing``
+        # when it answered "no such key" while verifying an existing
+        # content-addressed object — and the handler in
+        # :mod:`app.api.errors` reads those to choose between 507, 502 and
+        # 503. Without this arm the broad ``except`` below caught the
+        # already-typed exception and raised a *new* one with both flags at
+        # their defaults, so every classification made upstream was
+        # discarded here and every storage failure on this path reported
+        # itself as a transient outage. Catching an exception that must
+        # keep its meaning and re-raising a fresh one is the same defect
+        # the download route had, repaired by "Re-raise a caught coded
+        # exception, not a bare 404/502".
+        raise
     except ArtifactIntegrityError as exc:
         # ``store_artifact`` verifies an existing content-addressed object
         # before attaching another row to the shared key, so this means the
