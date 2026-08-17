@@ -414,6 +414,19 @@ def _artifact_storage_unavailable_handler(
     caller did — which is why neither code is in the client's
     ``RejectionCode`` enum.
 
+    That was necessary and, until #234, not sufficient. The sentence below
+    says "retrying will not clear it" and no client could act on it: 502
+    sits in ``tckdb_client``'s default retry set, and the one field that
+    contradicts the status is the ``code``, which the enum excludes by
+    construction. So a well-behaved client replayed a custody break on a
+    backoff schedule forever. The catalogue now carries a second,
+    *declared* classification -- ``ApiCode.replay`` -- exported beside the
+    enum as ``NON_RETRYABLE_CODES``, and the client reads the body's code
+    at the point it decides whether to retry. The sentence in this branch
+    is therefore load-bearing twice over: a human reads it, and a machine
+    acts on the code beside it. Changing one without the other is the
+    disagreement #234 removed.
+
     The public body stays deliberately vague -- it names a subsystem and
     says what to do. That is right for a caller and useless for whoever
     has to fix it: before this log line, a storage outage appeared in the

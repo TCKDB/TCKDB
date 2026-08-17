@@ -22,6 +22,7 @@ from tckdb_client.errors import (
 from tckdb_client.idempotency import make_idempotency_key, validate_idempotency_key
 from tckdb_client.rejection_codes import (
     CONFLICT_REJECTION_CODES,
+    NON_RETRYABLE_CODES,
     REJECTION_STATUSES,
     RejectionCode,
     VALIDATION_REJECTION_CODES,
@@ -34,6 +35,7 @@ from tckdb_client.replay import (
     replay_bundle,
 )
 from tckdb_client.retry import (
+    DEFAULT_NON_RETRYABLE_CODES,
     DEFAULT_RETRY_STATUS_CODES,
     RetryPolicy,
 )
@@ -109,6 +111,7 @@ __all__ = [
     "TCKDBIdempotencyConflictError",
     "TCKDBPaginationError",
     "CONFLICT_REJECTION_CODES",
+    "NON_RETRYABLE_CODES",
     "REJECTION_STATUSES",
     "RejectionCode",
     "VALIDATION_REJECTION_CODES",
@@ -119,6 +122,7 @@ __all__ = [
     "ReplayFailure",
     "ReplaySummary",
     "replay_bundle",
+    "DEFAULT_NON_RETRYABLE_CODES",
     "DEFAULT_RETRY_STATUS_CODES",
     "RetryPolicy",
     "ArtifactRecord",

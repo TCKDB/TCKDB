@@ -484,6 +484,14 @@ class TCKDBClient:
                 or attempt >= max_attempts
                 or response.is_success
                 or not policy.status_is_retryable(response.status_code)
+                # The status said "transient"; the body may contradict it.
+                # TCKDB reports a store that did not answer and a store
+                # that answered "the bytes are gone" at two statuses this
+                # policy replays, and only one of them can ever clear.
+                # Placed after the status check so a body is parsed only
+                # when a retry is otherwise about to happen — the cost is
+                # bounded by the retry rate, not the request rate.
+                or not policy.code_is_retryable(_error_body_code(response))
                 # A server asking for a longer pause than the caller
                 # budgeted is not a transient blip; surface it now rather
                 # than block for the maintenance window.
@@ -3383,6 +3391,40 @@ def _carries_idempotency_key(headers: Mapping[str, str]) -> bool:
         if name.lower() == target:
             return isinstance(value, str) and bool(value.strip())
     return False
+
+
+def _error_body_code(response: httpx.Response) -> str | None:
+    """The ``code`` field of an error body, or ``None`` if there is not one.
+
+    Read at the retry decision point rather than from the raised
+    exception, because that is where the choice is made and the raise is
+    two layers later. Nothing streams here — ``httpx.Client.request`` has
+    already read the body — so the ``code`` really is in scope, and the
+    only cost is a ``json.loads`` on a response about to be replayed
+    anyway.
+
+    Every failure returns ``None``: a body that is not JSON (an artifact
+    download's error page, a proxy's HTML 502), a JSON array or scalar, a
+    missing or non-string ``code``. ``None`` means "no opinion", which
+    :meth:`~tckdb_client.retry.RetryPolicy.code_is_retryable` answers by
+    letting the status decide — so an unreadable body can never be the
+    reason a transient failure stopped being retried.
+
+    Deliberately not shared with ``_build_http_error``'s legacy-detail
+    sniffing. That reconstructs a code the server *should* have sent so an
+    old deployment still raises the right exception type; this reads only a
+    code the server actually did send, because inferring one and then
+    refusing to retry on the inference would abandon a request on a guess.
+    """
+
+    try:
+        parsed = response.json()
+    except ValueError:
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    code = parsed.get("code")
+    return code if isinstance(code, str) else None
 
 
 def _iter_ndjson(payload: str) -> Iterator[JSONDict]:

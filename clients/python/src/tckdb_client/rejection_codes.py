@@ -23,6 +23,17 @@ are the ``http_<status>`` fallbacks and the generic ``validation_error``
 family, which carry nothing the status line does not, and 5xx codes,
 which refuse nothing the caller did.
 
+:data:`NON_RETRYABLE_CODES` is the one place a 5xx code appears here, and
+it is not an enum member. Those codes are not refusals -- the caller did
+nothing wrong -- so there is no branch for a depositor to write. What
+there is, is a retry layer that would otherwise replay them: 502 and 503
+are transient statuses by default, and a handful of TCKDB's 5xx
+conditions are deterministic, so replaying them is a backoff schedule
+with no exit. :class:`tckdb_client.retry.RetryPolicy` consults this set
+and stops after one attempt. A code it does not recognise is retried
+exactly as before, which is the safe direction: giving up on a real blip
+is worse than a few wasted attempts.
+
 Using it::
 
     from tckdb_client import RejectionCode, rejection_code
@@ -57,6 +68,7 @@ from enum import Enum
 
 __all__ = [
     "CONFLICT_REJECTION_CODES",
+    "NON_RETRYABLE_CODES",
     "REJECTION_STATUSES",
     "RejectionCode",
     "VALIDATION_REJECTION_CODES",
@@ -533,6 +545,25 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.USERNAME_TAKEN: frozenset({409}),
     RejectionCode.WITHDRAW_REASON_REQUIRED: frozenset({422}),
 }
+
+#: Codes whose condition is deterministic: the identical request
+#: will meet the identical answer however long a client waits, so
+#: replaying it is a backoff schedule with no exit. Bare strings
+#: rather than ``RejectionCode`` members, because these arrive at a
+#: 5xx and refuse nothing the caller did -- there is no branch for a
+#: depositor to write, only a retry to abandon.
+#:
+#: Consulted by ``RetryPolicy.code_is_retryable``. It is a *deny*
+#: list on purpose: a code absent from it is retried exactly as it
+#: was before this set existed, so a server newer than this package
+#: can add a transient failure without a pinned client silently
+#: giving up on it. Abandoning a real blip is the worse bug.
+NON_RETRYABLE_CODES: frozenset[str] = frozenset(
+    {
+        "artifact_integrity_failed",
+        "artifact_object_missing",
+    }
+)
 
 
 def rejection_code(value: object) -> RejectionCode | None:

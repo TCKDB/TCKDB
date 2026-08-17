@@ -30,12 +30,15 @@ from pathlib import Path
 
 from app.api.code_catalogue import (
     CATALOGUE,
+    REPLAYABLE_STATUSES,
     STATUS_FALLBACK_PATTERN,
     ApiCode,
     Reach,
+    Replay,
     Surface,
     catalogued_codes,
     client_facing,
+    never_retryable,
 )
 from app.scientific_checks import CodeChannel
 from app.scientific_checks.declarations import constraint_rejections, register
@@ -772,6 +775,164 @@ def test_every_guard_entry_is_catalogued_annotated_and_unexported() -> None:
         assert code in exported, (
             f"{code} is reachable but not exported, so a client still cannot "
             "branch on a refusal it can receive"
+        )
+
+
+#: The codes declared deterministic, pinned so a silent reclassification
+#: fails rather than restoring the forever-retry bug. Both are 502s whose
+#: own refusal sentence says "retrying will not clear it".
+_NEVER_SUCCEEDS_CODES = ("artifact_integrity_failed", "artifact_object_missing")
+
+
+def test_the_replay_rule_can_say_no() -> None:
+    """``Replay`` must change an answer, or it is a comment with a type.
+
+    The same shape as ``test_the_reach_rule_can_say_no`` above, and for the
+    same reason: two probes differing in nothing but the field under test,
+    so the negative cannot be produced by one of the other rules. Also
+    pins the default, which is the fail-safe direction — an unclassified
+    code must stay retryable, because giving up on a real outage is worse
+    than the wasted attempts this field prevents.
+    """
+    origin = "backend/app/api/errors.py"
+    transient = ApiCode("probe_code", 503, Surface.response_literal, origin)
+    deterministic = ApiCode(
+        "probe_code", 503, Surface.response_literal, origin,
+        replay=Replay.never_succeeds, note="probe",
+    )
+
+    assert transient.replay is Replay.may_succeed, (
+        "Replay.may_succeed must be the default: an entry nobody classified "
+        "has to keep being retried"
+    )
+    assert not transient.is_replay_futile
+    assert deterministic.is_replay_futile
+
+
+def test_a_never_succeeds_declaration_at_an_unreplayed_status_is_inert() -> None:
+    """A true classification that changes nothing must not be exported.
+
+    No client retries a 422, so declaring one deterministic is correct and
+    useless — and publishing it would grow ``NON_RETRYABLE_CODES`` with
+    entries whose effect can never be observed, which is how a set stops
+    being read. Same for a guard no request can produce: nothing will ever
+    hand that code to a retry layer.
+    """
+    origin = "backend/app/api/errors.py"
+    at_422 = ApiCode(
+        "probe_code", 422, Surface.coded_exception, origin,
+        replay=Replay.never_succeeds, note="probe",
+    )
+    unreachable = ApiCode(
+        "probe_code", 503, Surface.response_literal, origin,
+        reach=Reach.guard, replay=Replay.never_succeeds, note="probe",
+    )
+
+    assert at_422.replay is Replay.never_succeeds
+    assert not at_422.is_replay_futile, (
+        "a 422 declared never_succeeds was exported; 422 is not in "
+        f"REPLAYABLE_STATUSES ({sorted(REPLAYABLE_STATUSES)}) so the "
+        "declaration cannot change any client's behaviour"
+    )
+    assert not unreachable.is_replay_futile
+
+
+def test_every_never_succeeds_entry_is_annotated_and_effective() -> None:
+    """The declaration's obligations, asserted as separate properties.
+
+    Non-empty, because every other assertion here runs over the set and an
+    empty one would satisfy them all while the client retried a lost
+    artifact forever. Annotated, for the reason ``Reach.guard`` requires a
+    note: this claim tells a client to stop trying, and an unexplained
+    claim is the kind that rots. Effective, because a declaration at a
+    status nobody replays is inert. And rare, because the safe default is
+    "keep retrying" and a set that grows to cover most 5xx conditions has
+    become a place to put codes nobody wanted to think about.
+    """
+    declared = [
+        entry for entry in CATALOGUE if entry.replay is Replay.never_succeeds
+    ]
+    assert declared, (
+        "no entry is declared Replay.never_succeeds, so the client's "
+        "NON_RETRYABLE_CODES is empty and every deterministic 5xx is "
+        "replayed on a backoff schedule again -- the bug #234 fixed"
+    )
+    assert len(declared) * 10 < len(CATALOGUE), (
+        f"{len(declared)} of {len(CATALOGUE)} entries are declared "
+        "never_succeeds. The class is meant to be the rare condition that "
+        "provably cannot clear; at this proportion it has become the "
+        "default, and the default has to be 'keep retrying'."
+    )
+
+    for entry in declared:
+        assert entry.note, (
+            f"{entry.code} is declared Replay.never_succeeds with no note. "
+            "The note is where the claim is justified; without it the "
+            "classification is unfalsifiable."
+        )
+        assert entry.status in REPLAYABLE_STATUSES, (
+            f"{entry.code} is declared never_succeeds at {entry.status}, "
+            "which no client replays anyway. The declaration is true and "
+            "inert; delete it or fix the status."
+        )
+        assert entry.reach is Reach.request, (
+            f"{entry.code} is declared never_succeeds and also unreachable, "
+            "so no retry layer will ever be handed it"
+        )
+
+    assert {entry.code for entry in never_retryable()} == set(_NEVER_SUCCEEDS_CODES), (
+        "the exported deny list changed. That is a published client "
+        "contract: adding to it stops clients retrying something, removing "
+        f"from it starts them again. Expected {sorted(_NEVER_SUCCEEDS_CODES)}, "
+        f"got {sorted(entry.code for entry in never_retryable())}."
+    )
+
+
+def test_the_storage_pair_still_disagrees_about_replay() -> None:
+    """The pair that forced the field to exist, asserted from both ends.
+
+    ``artifact_storage_unavailable`` and ``artifact_object_missing`` leave
+    one handler, from one exception type, about one subsystem — and they
+    need opposite retry advice. A test that only pinned the 502 would pass
+    against a catalogue that had marked *both* deterministic, which would
+    make the client abandon every transient object-store blip. So the
+    negative is pinned too, and it is the entry that makes the guard above
+    non-vacuous.
+
+    Also asserted: neither reaches the ``RejectionCode`` enum. That is not
+    a defect this work leaves behind, it is the point — the caller did
+    nothing wrong, so there is no branch for a depositor to write, and the
+    retry advice travels by the second export instead.
+    """
+    by_code: dict[str, ApiCode] = {}
+    for entry in CATALOGUE:
+        if entry.status >= 500:
+            by_code[entry.code] = entry
+
+    missing = by_code.get("artifact_object_missing")
+    unavailable = by_code.get("artifact_storage_unavailable")
+    integrity = by_code.get("artifact_integrity_failed")
+    assert missing and unavailable and integrity, (
+        "one of the three artifact-storage codes is gone from the "
+        f"catalogue: {sorted(by_code)}"
+    )
+
+    assert missing.replay is Replay.never_succeeds
+    assert integrity.replay is Replay.never_succeeds
+    assert unavailable.replay is Replay.may_succeed, (
+        "artifact_storage_unavailable is declared never_succeeds. It means "
+        "the object store did not answer, which is exactly the case where "
+        "waiting is the right response -- a client marking it deterministic "
+        "would abandon every transient outage."
+    )
+
+    exported = {entry.code for entry in client_facing()}
+    for entry in (missing, unavailable, integrity):
+        assert entry.code not in exported, (
+            f"{entry.code} reached the RejectionCode enum. It is a 5xx: the "
+            "caller did nothing wrong, so there is no refusal to branch on. "
+            "The retry advice is carried by never_retryable(), which is why "
+            "is_client_facing did not have to widen."
         )
 
 

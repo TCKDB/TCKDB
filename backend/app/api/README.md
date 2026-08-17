@@ -30,6 +30,17 @@ client could name. Adding a catalogue entry is cheap because it claims
 only that the code exists; adding a register entry stays expensive
 because it claims a position a referee could argue with.
 
+The catalogue answers two independent questions about each code, and
+conflating them was a real bug. `is_client_facing` (derived) asks *can a
+caller branch on this* — `4xx` only, since a `5xx` refuses nothing the
+caller did. `Replay` (declared) asks *could sending the same request
+again ever succeed*, and nothing an entry holds implies the answer:
+`artifact_storage_unavailable` and `artifact_object_missing` leave one
+handler from one exception type and need opposite advice. The second
+question is exported to clients as `NON_RETRYABLE_CODES`, beside the enum
+rather than inside it, so a `5xx` a retry layer must recognise no longer
+has to be smuggled into an enum named for rejections.
+
 Uploads are gated by `require_supported_tckdb_client` so stale clients
 can't write malformed payloads. See
 [`docs/guides/system_flow.md`](../../../docs/guides/system_flow.md) §2

@@ -22,6 +22,7 @@ from conftest import make_client
 from tckdb_client import TCKDBClient
 from tckdb_client.errors import TCKDBConnectionError, TCKDBHTTPError
 from tckdb_client.retry import (
+    DEFAULT_NON_RETRYABLE_CODES,
     DEFAULT_RETRY_STATUS_CODES,
     RetryPolicy,
 )
@@ -363,6 +364,288 @@ class TestStatusEligibility:
 
         assert client.get_json("/health") == {"ok": True}
         assert len(attempts) == 2
+
+
+# ---------------------------------------------------------------------------
+# Code eligibility: when the body contradicts the status
+# ---------------------------------------------------------------------------
+
+
+class TestNonRetryableCodes:
+    """A transient status carrying a deterministic code is attempted once.
+
+    Every test here asserts an **attempt count**, not merely that the call
+    raised. ``pytest.raises(TCKDBHTTPError)`` passes identically against a
+    client that gave up immediately and one that replayed for two minutes
+    first, so it says nothing at all about the behaviour under test — and
+    the behaviour under test *is* the number of attempts.
+
+    The two halves are deliberately in one class. Before #234 the client
+    replayed ``artifact_object_missing`` on a backoff schedule forever for
+    a condition guaranteed never to clear; the fix must not overshoot into
+    abandoning the 503 beside it, which is a genuine outage where waiting
+    is the correct response. Asserting only the first half would leave a
+    client that stopped retrying everything looking fixed.
+    """
+
+    def test_the_deny_list_is_not_empty(self):
+        """Everything below is vacuous if the generated set is empty.
+
+        ``code_is_retryable`` answers ``True`` for anything it does not
+        recognise, so an empty ``NON_RETRYABLE_CODES`` would make every
+        once-only assertion below pass for the wrong reason — the status
+        rule alone would be back in charge and nothing would say so.
+        """
+        assert DEFAULT_NON_RETRYABLE_CODES, (
+            "NON_RETRYABLE_CODES is empty, so the retry layer has no code "
+            "it will refuse to replay and every test in this class is "
+            "asserting the pre-#234 behaviour"
+        )
+        assert "artifact_object_missing" in DEFAULT_NON_RETRYABLE_CODES
+        assert "artifact_integrity_failed" in DEFAULT_NON_RETRYABLE_CODES
+
+    @pytest.mark.parametrize(
+        "code", ["artifact_object_missing", "artifact_integrity_failed"]
+    )
+    def test_a_custody_break_is_attempted_exactly_once(self, code):
+        """502 is in the default retry set; the code overrules it."""
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                502,
+                json={
+                    "detail": "retrying will not clear it",
+                    "code": code,
+                    "context": {},
+                },
+            )
+
+        pol, recorder = policy(max_attempts=4)
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError) as excinfo:
+            client.get_json("/scientific/artifacts/abc/download")
+
+        assert len(attempts) == 1, (
+            f"{code} was attempted {len(attempts)} times; the condition is "
+            "deterministic, so every attempt after the first is guaranteed "
+            "to meet the same answer"
+        )
+        assert recorder.count == 0, "the client slept before giving up"
+        assert excinfo.value.status_code == 502
+        assert excinfo.value.code == code
+
+    def test_a_storage_outage_is_still_retried(self):
+        """The other half of the pair, at the status that means "wait".
+
+        ``artifact_storage_unavailable`` leaves the same handler, from the
+        same exception type, as the 502 above. It is not in the deny list
+        and must keep its full backoff schedule — a client that stopped
+        retrying this would abandon every transient object-store blip.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                503,
+                json={
+                    "detail": "Artifact storage is temporarily unavailable.",
+                    "code": "artifact_storage_unavailable",
+                    "context": {},
+                },
+            )
+
+        pol, recorder = policy(max_attempts=4)
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError):
+            client.get_json("/scientific/artifacts/abc/download")
+
+        assert len(attempts) == 4, (
+            "a store that did not answer was attempted "
+            f"{len(attempts)} times instead of the budgeted 4"
+        )
+        assert recorder.delays == [1.0, 2.0, 4.0]
+
+    def test_a_recovering_store_still_succeeds_on_a_later_attempt(self):
+        """Retrying is not merely permitted, it works.
+
+        Exhausting the budget above proves the attempts happened; this
+        proves the replay is a real request whose success is returned,
+        which an assertion counting failures cannot distinguish.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            if len(attempts) < 3:
+                return httpx.Response(
+                    503,
+                    json={"code": "artifact_storage_unavailable", "detail": "wait"},
+                )
+            return httpx.Response(200, json={"ok": True})
+
+        pol, _ = policy()
+        client = client_with(handler, retry=pol)
+
+        assert client.get_json("/health") == {"ok": True}
+        assert len(attempts) == 3
+
+    def test_download_artifact_stops_after_one_attempt(self):
+        """Through the real call, not a synthetic path.
+
+        ``download_artifact`` returns raw bytes and therefore takes
+        ``_request_raw`` rather than ``request_json``. Both funnel into
+        ``_send``, but the retry loop lives in ``_send`` and a test that
+        only ever went through the JSON path would not have noticed if the
+        bytes path skipped it — and the bytes path is the one this whole
+        fix is about.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                502,
+                json={
+                    "detail": "The stored bytes for this artifact are not "
+                    "in the object store.",
+                    "code": "artifact_object_missing",
+                    "context": {},
+                },
+            )
+
+        pol, recorder = policy(max_attempts=5)
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError) as excinfo:
+            client.download_artifact("a" * 64)
+
+        assert len(attempts) == 1
+        assert recorder.count == 0
+        assert excinfo.value.code == "artifact_object_missing"
+        assert attempts[0].url.path.endswith("/download")
+
+    def test_an_unrecognised_code_is_still_retried(self):
+        """The deny list fails safe: unknown means keep trying.
+
+        A pinned client routinely talks to a newer server. If an unknown
+        code stopped a retry, adding any transient failure server-side
+        would silently break backoff for every client in the field —
+        worse than the bug this list fixes, because it turns a recoverable
+        outage into a failure.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                503,
+                json={"code": "some_transient_thing_invented_later", "detail": "x"},
+            )
+
+        pol, _ = policy(max_attempts=3)
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError):
+            client.get_json("/health")
+        assert len(attempts) == 3
+
+    @pytest.mark.parametrize(
+        "response_kwargs",
+        [
+            pytest.param({"json": {"detail": "no code field"}}, id="no-code-key"),
+            pytest.param({"json": {"code": None}}, id="null-code"),
+            pytest.param({"json": {"code": 502}}, id="non-string-code"),
+            pytest.param({"json": ["not", "an", "object"]}, id="json-array"),
+            pytest.param({"content": b"\x89PNG\r\n\x1a\n\xff"}, id="binary-body"),
+            pytest.param({"text": "<html>502 Bad Gateway</html>"}, id="html-body"),
+            pytest.param({"content": b""}, id="empty-body"),
+        ],
+    )
+    def test_a_body_with_no_readable_code_is_retried(self, response_kwargs):
+        """An unreadable body must never be the reason a retry stopped.
+
+        A proxy's HTML 502, a truncated body, a response with no ``code``
+        at all: each yields "no opinion", and no opinion leaves the status
+        rule in charge. The alternative — treating an unparseable body as
+        non-retryable — would silently disable backoff behind any
+        misbehaving intermediary.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(502, **response_kwargs)
+
+        pol, _ = policy(max_attempts=3)
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises((TCKDBHTTPError, TCKDBConnectionError)):
+            client.get_json("/health")
+        assert len(attempts) == 3
+
+    def test_the_code_rule_cannot_start_a_retry_the_status_refused(self):
+        """The veto is one-directional.
+
+        ``code_is_retryable`` answers ``True`` for every 4xx code, since
+        none of them are in the deny list. That must not make a 422
+        retryable: the status rule runs first and its "no" is final.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                422, json={"code": "reaction_mass_balance_failed", "detail": "no"}
+            )
+
+        pol, recorder = policy()
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError):
+            client.get_json("/species/1")
+        assert len(attempts) == 1
+        assert recorder.count == 0
+
+    def test_the_deny_list_is_configurable_and_load_bearing(self):
+        """Emptying it restores the old behaviour, which proves it acts.
+
+        The same mutation the PR ran by hand, pinned as a test: with no
+        deny list the identical 502 is replayed to the attempt cap. If
+        this passed *and* the once-only test above passed, the field would
+        not be consulted at all.
+        """
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                502, json={"code": "artifact_object_missing", "detail": "gone"}
+            )
+
+        pol, _ = policy(max_attempts=3, non_retryable_codes=frozenset())
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError):
+            client.get_json("/health")
+        assert len(attempts) == 3
+
+    @pytest.mark.parametrize("value", [None, 502, b"artifact_object_missing", object()])
+    def test_a_non_string_code_is_retryable(self, value):
+        """The unit-level fail-safe, stated separately from the wire tests."""
+        pol, _ = policy()
+        assert pol.code_is_retryable(value)
+
+    def test_the_policy_reports_the_two_codes_directly(self):
+        pol, _ = policy()
+        assert not pol.code_is_retryable("artifact_object_missing")
+        assert not pol.code_is_retryable("artifact_integrity_failed")
+        assert pol.code_is_retryable("artifact_storage_unavailable")
+        assert pol.code_is_retryable("rate_limit_exceeded")
 
 
 # ---------------------------------------------------------------------------
