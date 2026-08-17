@@ -236,7 +236,7 @@ class _Custody:
         :func:`record_integrity_observation`, which is the same function
         the download route calls for the same finding; only
         ``detected_during`` differs. One writer, two callers, rather than
-        a third near-identical helper (the defect in #162).
+        a third near-identical helper that would drift from the other two.
         """
         return record_integrity_observation(
             sha256=artifact.sha256,
@@ -593,13 +593,14 @@ def _verify_artifact(
     except ArtifactStorageUnavailable as exc:
         if getattr(exc, "missing", False):
             # The store answered, and it said the object a live artifact row
-            # still references is not there. #199 established there is no
-            # benign reading of that: objects are written before rows,
-            # rollback deliberately retains objects, the one caller of
-            # ``delete_artifact_object`` copies before deleting an
-            # unreferenced digest, and the purge refuses any digest a row
-            # points at. So this is a custody break, and custody of stored
-            # evidence is *recorded*, not logged (ADR 0014).
+            # still references is not there. There is no benign reading of
+            # that, as the download route's split established: objects are
+            # written before rows, rollback deliberately retains objects,
+            # the one caller of ``delete_artifact_object`` copies before
+            # deleting an unreferenced digest, and the purge refuses any
+            # digest a row points at. So this is a custody break, and
+            # custody of stored evidence is *recorded*, not logged
+            # (ADR 0014).
             #
             # This sweep is one of the very few things that systematically
             # re-reads stored artifacts, and therefore the most likely place
