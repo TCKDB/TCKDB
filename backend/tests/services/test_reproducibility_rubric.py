@@ -59,6 +59,8 @@ from app.services.reproducibility_rubric import (
     evaluate_reproducibility,
 )
 from app.services.scientific_read.calculations import _build_execution_environment_summary
+from app.services.trust.evaluator import _detect_calculation_hard_fail
+from app.services.trust.models import HardFailReason
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
     make_kinetics,
@@ -81,9 +83,17 @@ def _snapshot_hash(snapshot) -> str:
 
 
 def _verified_loader(objects: dict[str, bytes]):
+    """A store that serves ``objects`` and is unreachable for anything else.
+
+    ``missing`` is left at its default ``False`` on purpose: an object this
+    mock was never given stands for a store that did not answer, not for a
+    store that answered "no such key". The second case is a custody break
+    and is simulated explicitly where it is the subject.
+    """
+
     def load(sha256: str, *, expected_bytes: int | None = None) -> bytes:
         if sha256 not in objects:
-            raise ArtifactStorageUnavailable("missing mocked object")
+            raise ArtifactStorageUnavailable("mocked store did not answer")
         content = objects[sha256]
         if not hmac.compare_digest(hashlib.sha256(content).hexdigest(), sha256):
             raise ArtifactIntegrityError(
@@ -599,6 +609,180 @@ def test_rubric_clean_read_clears_a_recorded_break(db_session, _api_test_user) -
     assert events[-1].observed_sha256 == artifact.sha256
     assert _artifact_snapshot(result, artifact)["verification"] == "verified"
     assert result.grade is ReproducibilityGrade.rerunnable
+
+
+@pytest.mark.parametrize(
+    ("store", "verification", "warning_code", "recorded_events"),
+    [
+        ("healthy", "verified", None, 0),
+        ("unreachable", "unavailable", "artifact_storage_unavailable", 0),
+        ("gone", "evidence_missing", "artifact_object_missing", 1),
+    ],
+)
+def test_a_store_that_says_gone_is_not_a_store_that_says_nothing(
+    db_session,
+    _api_test_user,
+    store,
+    verification,
+    warning_code,
+    recorded_events,
+) -> None:
+    """Three outcomes, three words, and only one of them writes a row.
+
+    All three arms are asserted together because a two-arm test cannot
+    tell this change from a rubric that simply fails everything: "the
+    snapshot is not verified" is equally true of a healthy artifact under
+    a broken rubric. So a healthy read must still reach ``verified``, an
+    unreachable store must still be ``unavailable`` -- *"we could not
+    check right now"* -- and only a store that answered "the key is not
+    there" gets the new ``evidence_missing`` -- *"the thing we would have
+    checked is gone"*.
+
+    Both of the last two arrive as ``ArtifactStorageUnavailable`` and were
+    reported identically before this; ``exc.missing`` is what tells them
+    apart. The custody counts are the other half: the disappearance is a
+    break in custody and is recorded (ADR 0014), while a store that would
+    not answer has said nothing about the object and must leave no row
+    behind. If both arms recorded, the causes were never split.
+    """
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _output_artifact(calculation)
+    sound = _verified_loader(objects)
+
+    def loader(sha256: str, *, expected_bytes: int | None = None) -> bytes:
+        if sha256 == artifact.sha256:
+            if store == "unreachable":
+                raise ArtifactStorageUnavailable("mocked store did not answer")
+            if store == "gone":
+                raise ArtifactStorageUnavailable(
+                    "mocked store answered: no such key", missing=True
+                )
+        return sound(sha256, expected_bytes=expected_bytes)
+
+    result = evaluate_reproducibility(
+        db_session,
+        record_type="calculation",
+        record_id=calculation.id,
+        artifact_loader=loader,
+        **_integrity_seam(db_session),
+    )
+
+    assert _artifact_snapshot(result, artifact)["verification"] == verification
+    assert [warning["code"] for warning in result.warnings] == (
+        [] if warning_code is None else [warning_code]
+    )
+    if warning_code is None:
+        assert result.grade is ReproducibilityGrade.rerunnable
+    else:
+        assert result.grade is not ReproducibilityGrade.rerunnable
+
+    events = _integrity_events(db_session, artifact.sha256)
+    assert len(events) == recorded_events
+    if recorded_events:
+        assert events[0].finding is ArtifactIntegrityFinding.object_missing
+        assert (
+            events[0].detected_during
+            is ArtifactIntegrityDetectionContext.reproducibility_verification
+        )
+        assert events[0].artifact_id == artifact.id
+        assert events[0].expected_bytes == artifact.bytes
+        # Nothing was read, so there is nothing to report as observed; the
+        # table's CHECK constraint requires exactly this for object_missing.
+        assert events[0].observed_sha256 is None
+        evidence = result.warnings[0]["evidence"]
+        assert evidence["integrity_event_ref"] == events[0].public_ref
+        assert evidence["integrity_event_ref"].startswith("aie_")
+        assert evidence["finding"] == "object_missing"
+        assert evidence["observed_by_this_evaluation"] is True
+
+
+def test_recording_the_disappearance_reaches_the_trust_layer(
+    db_session,
+    _api_test_user,
+) -> None:
+    """The point of recording it: the fact now has a read-time consequence.
+
+    Asserted here, and not left implicit, because it is the whole reason a
+    row is written rather than logged. ADR 0014 makes *any* recorded
+    custody break a ``HardFailReason.artifact_integrity_failed`` on the
+    owning calculation, and that already happened when the download route
+    discovered this same loss. What changes is that the sweep can now
+    reach it too, instead of finding the break and dropping it.
+
+    Note what is *not* claimed: the reproducibility verdict stays the
+    weaker ``evidence_missing`` and the reproducibility grade is unchanged
+    by the split. The hard fail is the custody record's documented
+    consequence, not a second opinion the rubric formed.
+    """
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _output_artifact(calculation)
+    assert _detect_calculation_hard_fail(calculation) is None
+
+    def loader(sha256: str, *, expected_bytes: int | None = None) -> bytes:
+        del expected_bytes
+        raise ArtifactStorageUnavailable("no such key", missing=True)
+
+    evaluate_reproducibility(
+        db_session,
+        record_type="calculation",
+        record_id=calculation.id,
+        artifact_loader=loader,
+        **_integrity_seam(db_session),
+    )
+
+    db_session.refresh(artifact)
+    assert (
+        _detect_calculation_hard_fail(calculation)
+        is HardFailReason.artifact_integrity_failed
+    )
+
+
+def test_a_recorded_disappearance_is_cited_as_missing_evidence(
+    db_session,
+    _api_test_user,
+) -> None:
+    """The citation keeps the distinction the detection just gained.
+
+    The rubric only re-reads output logs of the graded calculation, so a
+    disappearance the download route recorded against an *input* artifact
+    is copied from the custody record rather than observed. That copy has
+    to use the same vocabulary: reporting ``integrity_failed`` here while
+    the sweep that read the same object reports ``evidence_missing`` would
+    make the verdict depend on which path ran, which is the class of
+    disagreement ADR 0008 exists to prevent.
+    """
+    objects: dict[str, bytes] = {}
+    calculation = _calculation(
+        db_session, complete=True, created_by=_api_test_user, objects=objects
+    )
+    artifact = _input_artifact(calculation)
+    event_ref = record_integrity_observation(
+        sha256=artifact.sha256,
+        finding=ArtifactIntegrityFinding.object_missing,
+        detected_during=ArtifactIntegrityDetectionContext.download,
+        expected_bytes=artifact.bytes,
+        artifact_id=artifact.id,
+        artifact_recorded_at=artifact.created_at,
+        session_factory=_SessionProxy(db_session),
+        storage_client=_MuteStoreProbe(),
+    )
+
+    result = _evaluate(db_session, calculation, objects)
+
+    assert _artifact_snapshot(result, artifact)["verification"] == "evidence_missing"
+    warning = next(w for w in result.warnings if w["code"] == "artifact_object_missing")
+    assert warning["evidence"]["integrity_event_ref"] == event_ref
+    assert warning["evidence"]["detected_during"] == "download"
+    assert warning["evidence"]["observed_by_this_evaluation"] is False
+    # Citing is not detecting: no second row for a fact already recorded.
+    assert len(_integrity_events(db_session, artifact.sha256)) == 1
+    assert result.grade is not ReproducibilityGrade.rerunnable
 
 
 def test_typed_output_absence_caps_calculation_at_described(

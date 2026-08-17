@@ -56,6 +56,7 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
+    ArtifactIntegrityFinding,
     ArtifactKind,
     CalculationType,
     ReproducibilityAssessorKind,
@@ -76,6 +77,7 @@ from app.db.models.transport import Transport
 from app.services.artifact_integrity import (
     latest_integrity_observations,
     record_from_error,
+    record_integrity_observation,
     record_integrity_verified,
 )
 from app.services.artifact_storage import (
@@ -113,9 +115,32 @@ class CheckOutcome(str, Enum):
 
 
 class ArtifactVerificationStatus(str, Enum):
+    """What this evaluation established about one artifact's bytes.
+
+    ``unavailable`` and ``evidence_missing`` are the pair worth reading
+    carefully, because they used to be one value. Both arrive as
+    :class:`~app.services.artifact_storage.ArtifactStorageUnavailable`,
+    and until this split both were reported as ``unavailable``:
+
+    * ``unavailable`` — *we could not check right now.* The store did not
+      answer. It said nothing about the object, so nothing durable
+      follows; the next sweep may well read the bytes cleanly.
+    * ``evidence_missing`` — *the thing we would have checked is gone.*
+      The store did answer, and what it answered was that the key a live
+      artifact row still references is not there. That is permanent until
+      an operator restores the object, and it is a custody break recorded
+      in ``artifact_integrity_event`` (ADR 0014).
+
+    Collapsing them lost the fact that matters. It is deliberately not
+    ``integrity_failed``: that verdict means bytes came back and were
+    wrong, which tells an operator to look at what changed them. Missing
+    bytes tell them to look for where the object went.
+    """
+
     verified = "verified"
     not_requested = "not_requested"
     unavailable = "unavailable"
+    evidence_missing = "evidence_missing"
     integrity_failed = "integrity_failed"
     size_limit_exceeded = "size_limit_exceeded"
     count_budget_exceeded = "count_budget_exceeded"
@@ -157,11 +182,12 @@ class _Custody:
     consequences, so a reader's answer depended on which path ran last.
 
     Both directions now go through this object. Detections are reported
-    to the custody record (``record_break`` / ``record_repair``, each in
-    its own transaction, ADR 0014), and the rubric's verdict for an
-    artifact it did *not* read is copied from that record rather than
-    invented -- which also closes the reverse gap, where a break found by
-    the download route on an input artifact was invisible here.
+    to the custody record (``record_break`` / ``record_missing`` /
+    ``record_repair``, each in its own transaction, ADR 0014), and the
+    rubric's verdict for an artifact it did *not* read is copied from that
+    record rather than invented -- which also closes the reverse gap,
+    where a break found by the download route on an input artifact was
+    invisible here.
 
     ``session_factory`` and ``storage_client`` exist so a caller can hand
     the recorder somewhere to write; the defaults are the recorder's own.
@@ -192,6 +218,36 @@ class _Custody:
                 ArtifactIntegrityDetectionContext.reproducibility_verification
             ),
             artifact=artifact,
+            session_factory=self.session_factory,
+            storage_client=self.storage_client,
+        )
+
+    def record_missing(
+        self, artifact: CalculationArtifact, *, detail: str
+    ) -> str | None:
+        """Record that the store answered and said the object is gone.
+
+        ``record_from_error`` cannot serve this case and is not a small
+        edit away from serving it: it takes an
+        :class:`~app.services.artifact_storage.ArtifactIntegrityError`,
+        which by construction never carries ``object_missing`` — that
+        exception describes bytes that came back and were wrong, and here
+        no bytes came back at all. So this goes through
+        :func:`record_integrity_observation`, which is the same function
+        the download route calls for the same finding; only
+        ``detected_during`` differs. One writer, two callers, rather than
+        a third near-identical helper that would drift from the other two.
+        """
+        return record_integrity_observation(
+            sha256=artifact.sha256,
+            finding=ArtifactIntegrityFinding.object_missing,
+            detected_during=(
+                ArtifactIntegrityDetectionContext.reproducibility_verification
+            ),
+            expected_bytes=artifact.bytes,
+            artifact_id=artifact.id,
+            artifact_recorded_at=artifact.created_at,
+            detail=detail,
             session_factory=self.session_factory,
             storage_client=self.storage_client,
         )
@@ -442,6 +498,21 @@ def _typed_output_snapshot(calculation: Calculation) -> tuple[bool, dict[str, An
     return bool(meaningful), snapshot
 
 
+def _break_verdict(
+    finding: ArtifactIntegrityFinding,
+) -> tuple[ArtifactVerificationStatus, str]:
+    """The snapshot verdict and warning code for one custody finding.
+
+    One mapping, used both where the rubric observes the break itself and
+    where it copies the custody record's verdict, so the same artifact
+    cannot be called ``evidence_missing`` by the sweep that read it and
+    ``integrity_failed`` by the next sweep that only cited the row.
+    """
+    if finding is ArtifactIntegrityFinding.object_missing:
+        return ArtifactVerificationStatus.evidence_missing, "artifact_object_missing"
+    return ArtifactVerificationStatus.integrity_failed, "artifact_integrity_failed"
+
+
 def _cited_break(
     snapshot: dict[str, Any],
     artifact: CalculationArtifact,
@@ -464,10 +535,16 @@ def _cited_break(
     answer the lookup strips ``*_id`` keys by policy, so the citation
     named something the reader was structurally unable to look up and a
     curator was left matching on timestamps.
+
+    The verdict is derived from the cited finding rather than fixed at
+    ``integrity_failed``, because "the bytes are wrong" and "the bytes are
+    gone" are different facts and the citation already says which one was
+    recorded. See :func:`_break_verdict`.
     """
-    snapshot["verification"] = ArtifactVerificationStatus.integrity_failed.value
+    verdict, code = _break_verdict(event.finding)
+    snapshot["verification"] = verdict.value
     return snapshot, ReproducibilityWarning(
-        code="artifact_integrity_failed",
+        code=code,
         evidence={
             "artifact_id": artifact.id,
             "sha256": artifact.sha256,
@@ -513,9 +590,56 @@ def _verify_artifact(
         )
     try:
         content = artifact_loader(artifact.sha256, expected_bytes=artifact.bytes)
-    except ArtifactStorageUnavailable:
+    except ArtifactStorageUnavailable as exc:
+        if getattr(exc, "missing", False):
+            # The store answered, and it said the object a live artifact row
+            # still references is not there. There is no benign reading of
+            # that, as the download route's split established: objects are
+            # written before rows, rollback deliberately retains objects,
+            # the one caller of ``delete_artifact_object`` copies before
+            # deleting an unreferenced digest, and the purge refuses any
+            # digest a row points at. So this is a custody break, and
+            # custody of stored evidence is *recorded*, not logged
+            # (ADR 0014).
+            #
+            # This sweep is one of the very few things that systematically
+            # re-reads stored artifacts, and therefore the most likely place
+            # in the system to discover such a break. Until now it
+            # discovered one and threw it away, and the next sweep
+            # rediscovered and threw away the same one.
+            #
+            # ``recorded`` is deliberately not consulted: this evaluation
+            # read the store itself and got an answer, which outranks any
+            # earlier observation. Re-observation is appended rather than
+            # deduped because it dates the break — the table is an
+            # append-only log of observations and the trust layer reads the
+            # latest one — and it is bounded by broken artifacts per sweep,
+            # not by traffic.
+            #
+            # The verdict is the weaker ``evidence_missing``, not a hard
+            # ``integrity_failed``: "the thing we would have checked is
+            # gone" is a different fact from "the bytes came back wrong",
+            # and the grade consequence is unchanged either way (the
+            # artifact is simply not ``verified``).
+            event_ref = custody.record_missing(artifact, detail=str(exc))
+            verdict, code = _break_verdict(ArtifactIntegrityFinding.object_missing)
+            snapshot["verification"] = verdict.value
+            return snapshot, ReproducibilityWarning(
+                code=code,
+                evidence={
+                    "artifact_id": artifact.id,
+                    "sha256": artifact.sha256,
+                    "integrity_event_ref": event_ref,
+                    "finding": ArtifactIntegrityFinding.object_missing.value,
+                    "detected_during": (
+                        ArtifactIntegrityDetectionContext.reproducibility_verification.value
+                    ),
+                    "observed_by_this_evaluation": True,
+                },
+            )
         # A store that will not answer says nothing about the object, so it
-        # cannot clear a break somebody already recorded against it.
+        # cannot clear a break somebody already recorded against it -- and,
+        # equally, it cannot create one. Nothing durable is written here.
         if recorded is not None:
             return _cited_break(snapshot, artifact, recorded)
         snapshot["verification"] = ArtifactVerificationStatus.unavailable.value
