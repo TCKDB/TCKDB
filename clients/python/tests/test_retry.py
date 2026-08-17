@@ -350,6 +350,47 @@ class TestStatusEligibility:
             client.get_json("/health")
         assert len(attempts) == 1
 
+    def test_507_insufficient_storage_is_not_retried(self):
+        """A full object store, and the reason it is 507 and not 503.
+
+        TCKDB answers ``507 artifact_storage_full`` when the object store
+        refuses a write for want of room. That condition *will* clear, but
+        only when an operator frees space -- never on a client's backoff
+        schedule -- so replaying it is a loop with no exit that the caller
+        cannot shorten.
+
+        The whole point of putting it at 507 rather than adding a second
+        code at 503 is that this test needs nothing else to pass: 507 is
+        absent from :data:`DEFAULT_RETRY_STATUS_CODES`, so a client stops
+        after one attempt on the status alone. A pinned client that has
+        never heard of ``artifact_storage_full`` behaves correctly, and so
+        does a caller in another language with no deny list at all. At 503
+        the correct behaviour would have depended on the deny list, and so
+        on the caller having upgraded.
+        """
+        assert 507 not in DEFAULT_RETRY_STATUS_CODES
+
+        attempts: list[httpx.Request] = []
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            attempts.append(request)
+            return httpx.Response(
+                507,
+                json={
+                    "code": "artifact_storage_full",
+                    "detail": "no room; an operator must free space",
+                },
+            )
+
+        # No deny list at all: the status must carry this on its own.
+        pol, recorder = policy(max_attempts=3, non_retryable_codes=frozenset())
+        client = client_with(handler, retry=pol)
+
+        with pytest.raises(TCKDBHTTPError):
+            client.get_json("/health")
+        assert len(attempts) == 1
+        assert recorder.count == 0
+
     def test_retry_status_codes_are_configurable(self):
         attempts: list[httpx.Request] = []
 

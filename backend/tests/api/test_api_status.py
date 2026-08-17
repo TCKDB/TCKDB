@@ -427,6 +427,140 @@ def test_status_answers_promptly_when_storage_hangs(client, storage_probe) -> No
     assert block["endpoint"] == PROBE_ENDPOINT
 
 
+# ---------------------------------------------------------------------------
+# A full store, which the read-only probe cannot see
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _no_leftover_storage_full_latch():
+    """The observation is process state; no test may inherit another's."""
+    artifact_storage.clear_storage_full_observation()
+    yield
+    artifact_storage.clear_storage_full_observation()
+
+
+def _observe_a_full_store(attempted_bytes: int = 4_194_304) -> None:
+    """Record what the write path records when the store refuses for room.
+
+    Written through the production recorder rather than by assigning to the
+    module global, so a test cannot pass against a latch shape the write
+    path does not produce.
+    """
+    artifact_storage.record_storage_full_observation(
+        s3_code="XMinioStorageFull",
+        attempted_bytes=attempted_bytes,
+        detail=(
+            "Artifact storage write failed for sha=deadbeef: "
+            "Storage backend has reached its minimum free drive threshold."
+        ),
+    )
+
+
+def test_the_read_only_probe_cannot_see_a_full_store(client, storage_probe) -> None:
+    """The negative finding, pinned so nobody re-derives it the hard way.
+
+    Measured against MinIO ``RELEASE.2025-09-07T16-13-09Z`` on a volume
+    filled to its free-space threshold: ``head_bucket`` returns 200, every
+    read succeeds, and even a 1-byte write succeeds on the same store that
+    refuses a 4 MiB one. So the probe ``/status`` performs is *incapable*
+    of distinguishing a full store from a healthy one, and this asserts
+    that plainly: with nothing but the probe to go on, a store that refuses
+    every real upload reads healthy.
+
+    That is what makes the observation below necessary. It is not a
+    redundant second signal — it is the only signal there is.
+    """
+    fake = storage_probe(None)
+
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+
+    # A HEAD is all that happened, and a HEAD is 200 on a full store.
+    assert fake.calls == [PROBE_BUCKET]
+    assert block["healthy"] is True
+    assert block["storage_full"] is False
+
+
+def test_a_full_store_degrades_status_and_says_what_to_do(
+    client, storage_probe
+) -> None:
+    """The direction that was silent: green while every upload failed."""
+    storage_probe(None)  # the probe itself is, and stays, happy
+    _observe_a_full_store()
+
+    response = client.get("/api/v1/status")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "degraded"
+    assert "artifact_storage" in body["degraded"]
+    block = body["components"]["artifact_storage"]
+    assert block["healthy"] is False
+    assert block["storage_full"] is True
+    assert block["storage_full_observed_at"] is not None
+    # The endpoint answered, so this is not an unreachability report and
+    # must not be confused with one.
+    assert block["reachable"] is True
+    assert "want of room" in block["reason"], block["reason"]
+    assert "XMinioStorageFull" in block["reason"], block["reason"]
+    # Sized, so an operator can tell "nearly full" from "nothing fits".
+    assert "4,194,304-byte" in block["reason"], block["reason"]
+    # The other components are untouched -- which is exactly why nothing
+    # alerted before.
+    assert body["components"]["database"]["healthy"] is True
+
+
+def test_a_working_store_is_healthy_again_once_a_write_succeeds(
+    client, storage_probe
+) -> None:
+    """The other direction, or the test above cannot tell the two apart.
+
+    A latch that never clears is a stuck alarm, and an alarm that is always
+    on is the same non-signal as one that is always off.
+    """
+    storage_probe(None)
+    _observe_a_full_store()
+    assert (
+        client.get("/api/v1/status").json()["components"]["artifact_storage"][
+            "healthy"
+        ]
+        is False
+    )
+
+    artifact_storage.clear_storage_full_observation()
+
+    body = client.get("/api/v1/status").json()
+    block = body["components"]["artifact_storage"]
+    assert block["healthy"] is True
+    assert block["storage_full"] is False
+    assert block["storage_full_observed_at"] is None
+    assert block["reason"] is None
+    assert body["status"] == "ok"
+    assert body["degraded"] == []
+
+
+def test_a_full_store_that_is_also_unreachable_reports_both(
+    client, storage_probe
+) -> None:
+    """Two true facts at once, and the actionable one leads.
+
+    The capacity observation only ever removes health; it must never
+    overwrite an unreachability report, because "cannot reach the endpoint"
+    and "the endpoint has no room" send an operator to different places and
+    the first has to be fixed first.
+    """
+    storage_probe(EndpointConnectionError(endpoint_url=PROBE_ENDPOINT))
+    _observe_a_full_store()
+
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+
+    assert block["healthy"] is False
+    assert block["reachable"] is False
+    assert "cannot reach" in block["reason"], block["reason"]
+    assert "want of room" in block["reason"], block["reason"]
+    assert block["storage_full"] is True
+
+
 def test_the_probe_deadline_is_short_enough_to_poll(client) -> None:
     """/status is polled every 5 minutes; it must not cost seconds to answer."""
     assert health._STORAGE_PROBE_DEADLINE_SECONDS <= 5.0

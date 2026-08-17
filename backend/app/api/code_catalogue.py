@@ -485,6 +485,42 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "(object_missing vs digest/size mismatch) and therefore "
                 "in what an operator does next."
             )),
+    ApiCode("artifact_storage_full", 507, Surface.response_literal,
+            "backend/app/api/errors.py",
+            note=(
+                "The third fact one handler can learn about the object "
+                "store, after 'it did not answer' (503) and 'it answered, "
+                "and the object is not there' (502): it answered, and it "
+                "has no room. Told apart by "
+                "ArtifactStorageUnavailable.full, set from the store's own "
+                "error code in artifact_storage._raise_write_refusal. "
+                "Measured, not inferred: MinIO answers XMinioStorageFull "
+                "at 507 when the drive free-space threshold is breached, "
+                "and XMinioAdminBucketQuotaExceeded at 400 when a hard "
+                "bucket quota is passed. TCKDB reports 507 for both, "
+                "because the upstream 400 classifies MinIO's own API call "
+                "and not the depositor's request -- the depositor did "
+                "nothing wrong either way. "
+                "507 rather than a second code at 503 because the status "
+                "must carry the advice on its own: 507 is registered with "
+                "exactly this meaning (RFC 4918) and is absent from "
+                "tckdb_client.retry.DEFAULT_RETRY_STATUS_CODES, so a "
+                "pinned client and a non-Python caller both stop retrying "
+                "without knowing this code exists. At 503 the status would "
+                "invite the retry and only NON_RETRYABLE_CODES could "
+                "contradict it, making correct behaviour depend on the "
+                "caller having upgraded. "
+                "Deliberately at the Replay.may_succeed default, and not a "
+                "new Replay member for 'retryable, but not by you, and not "
+                "soon'. Replay exists only to contradict a status that "
+                "invites a retry, so a declaration at 507 would be inert "
+                "by is_replay_futile's own rule; and never_succeeds would "
+                "be a false claim, because its note must say what makes "
+                "the condition deterministic and a full store is not -- an "
+                "operator frees space and the identical request then "
+                "succeeds. The vocabulary is adequate; the status carries "
+                "what the vocabulary cannot."
+            )),
     ApiCode("artifact_storage_unavailable", 503, Surface.response_literal,
             "backend/app/api/errors.py",
             note=(

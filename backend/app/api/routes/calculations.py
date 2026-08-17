@@ -586,7 +586,13 @@ def upload_calculation_artifacts(
     writes are produced. If a storage write fails partway through pass-2,
     pending rows roll back and content-addressed objects are retained for
     reference-aware garbage collection; deleting a digest key eagerly could
-    remove bytes shared with an existing record. The route returns 503.
+    remove bytes shared with an existing record.
+
+    A storage failure returns 503 (`artifact_storage_unavailable`) when the
+    object store did not answer, and **507** (`artifact_storage_full`) when
+    it answered and refused the write for want of room. The second is not
+    transient from a depositor's side: an operator must free space or raise
+    the store's quota, so retrying is futile until they do.
 
     Authorization (any one of):
 

@@ -272,6 +272,22 @@ def _artifact_storage_status() -> dict:
     * **``head_bucket``, not a write.** A round trip would make ``/status``
       itself a source of load and of garbage objects, and it can fail for
       reasons that have nothing to do with availability.
+
+      What that choice cannot see is a store that is **full**, and this
+      was measured rather than reasoned about. Against MinIO
+      ``RELEASE.2025-09-07T16-13-09Z`` on a volume filled to its
+      free-space threshold, ``head_bucket`` returns **200**, every read
+      succeeds, and a **1-byte** write also succeeds on the same store
+      that refuses a 4 MiB one — MinIO's threshold check is sized against
+      the incoming object. So the read-only probe reports healthy while
+      every real artifact upload fails, and a cheap synthetic write probe
+      would report healthy too. An honest write probe would have to write
+      something the size of a real artifact on every health check, and the
+      S3 API offers no capacity or quota query to ask instead. The signal
+      therefore comes from the real write path's own refusal, latched in
+      :class:`~app.services.artifact_storage.StorageFullObservation`, and
+      is folded in below. Its limits are documented on that class and are
+      real: it needs one upload attempt to fire, and it is per-process.
     * **``endpoint`` and ``bucket`` are reported.** They are what makes the
       failure legible in seconds rather than after reading source: the
       incident's whole content was that the endpoint was the wrong one,
@@ -306,6 +322,43 @@ def _artifact_storage_status() -> dict:
                 f"{_STORAGE_PROBE_DEADLINE_SECONDS}s"
             ),
         }
+    # A reachable bucket is necessary and not sufficient: the probe above
+    # cannot distinguish a full store from a healthy one (see the docstring),
+    # so the write path's own refusal is consulted. It only ever *removes*
+    # health -- a latched refusal cannot make an unreachable store look
+    # reachable, and a healthy probe cannot clear a latch, because only a
+    # successful write does that.
+    #
+    # ``storage_full: false`` deliberately does not claim there is space --
+    # nothing here can know that. It means "no write has been refused for
+    # want of room in this process, and nothing else is claimed", which is
+    # the strongest honest statement available and the reason the field is
+    # named after the observation rather than after the capacity.
+    full = artifact_storage.last_storage_full_observation()
+    block["storage_full"] = full is not None
+    block["storage_full_observed_at"] = (
+        None if full is None else full.observed_at.isoformat()
+    )
+    if full is not None:
+        outcome["healthy"] = False
+        attempted = (
+            "an artifact"
+            if full.attempted_bytes is None
+            else f"a {full.attempted_bytes:,}-byte artifact"
+        )
+        # Two reasons can be true at once -- an unreachable store this
+        # process previously found full. The probe's reason is the one an
+        # operator should act on first, so it leads.
+        capacity = (
+            f"object store refused {attempted} for want of room at "
+            f"{full.observed_at.isoformat()} (S3 code {full.s3_code}); free "
+            f"space or raise the quota"
+        )
+        outcome["reason"] = (
+            capacity
+            if outcome["reason"] is None
+            else f"{outcome['reason']}; {capacity}"
+        )
     if outcome["healthy"] is not True:
         logger.warning(
             "status: artifact storage unhealthy: endpoint=%s bucket=%s reason=%s",

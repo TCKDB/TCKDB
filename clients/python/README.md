@@ -243,6 +243,15 @@ are gone; only an operator restoring the object changes that, so replaying
 the request is a backoff schedule with no exit. Both statuses are in
 `DEFAULT_RETRY_STATUS_CODES`, so the status alone cannot tell them apart.
 
+Artifact **uploads** add a third: `507 artifact_storage_full` means the
+object store answered and refused the write because it has no room — out
+of space, or over its quota. Nothing about the request is wrong and no
+amount of waiting helps until an operator frees space, so do not retry it;
+surface it to whoever runs the deployment. Unlike the pair above, this one
+needs no deny list to get right — `507` is deliberately *not* in
+`DEFAULT_RETRY_STATUS_CODES`, so any client, in any language, pinned to any
+version, stops after one attempt on the status alone.
+
 `RetryPolicy` consults this set automatically — if you pass a policy, you
 get the behaviour for free. It is a **deny list**: a code the set does not
 name is retried exactly as before, so a client pinned against an older
