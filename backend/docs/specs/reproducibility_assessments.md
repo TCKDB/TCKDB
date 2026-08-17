@@ -87,6 +87,46 @@ nonblank version/revision/build token, and fails when declared-versus-parsed
 software reconciliation is `mismatch`; this is a nonconflicting declared
 identity, not a verified runtime environment.
 
+### Artifact verdicts, and the two ways a read can fail to happen
+
+Each artifact in `context_json` carries a `verification` verdict. Three of them
+are about the artifact's bytes rather than about the rubric's budget, and two of
+those are easy to confuse:
+
+| Verdict | What happened | Durable consequence |
+|---|---|---|
+| `verified` | The bytes were read and match the persisted digest and size. | A later `verified` custody observation, if a break was on record. |
+| `unavailable` | The object store did not answer. **We could not check right now.** | None. An unreachable store says nothing about the object, so it can neither create a custody break nor clear one. |
+| `evidence_missing` | The store answered, and said the key a live artifact row references is not there. **The thing we would have checked is gone.** | An `object_missing` row in `artifact_integrity_event`, detected during `reproducibility_verification`. |
+| `integrity_failed` | The bytes came back and were wrong. | A `digest_mismatch` / `size_mismatch` row. |
+
+`unavailable` and `evidence_missing` both arrive as one exception,
+`ArtifactStorageUnavailable`, and are told apart by its `missing` attribute —
+the same discriminator the download route uses to choose between `503
+artifact_storage_unavailable` and `502 artifact_object_missing`. A transient
+failure and a permanent one deserve different words, and reporting both as
+`unavailable` lost the one that matters.
+
+A disappearance is a **break in custody**, and custody of stored evidence is
+recorded rather than logged (ADR 0014): the sweep is one of the few things that
+systematically re-reads stored artifacts, so it is the most likely place in the
+system to discover such a break, and a discovery it discarded would simply be
+rediscovered and discarded by the next sweep. The row is written in its own
+transaction, so it survives whether or not the assessment it feeds is committed.
+`evidence_missing` is deliberately a *weaker* verdict than `integrity_failed`
+and not a hard failure of its own: the grade consequence is the same either way
+(the artifact is not `verified`, so the auditable artifact check has no evidence
+to pass on), and what differs is what an operator does next — look for where the
+object went, rather than for what changed it.
+
+For an artifact this evaluation does not read — every input, checkpoint and
+Hessian file, and every artifact of an upstream dependency — the verdict is
+copied from the custody record rather than invented, and cites the observation it
+copied by `integrity_event_ref` (resolvable at
+`GET /scientific/artifacts/{sha256}/integrity`). The copy uses the same
+vocabulary, so a recorded `object_missing` is reported as `evidence_missing`
+whether the sweep read the object itself or only cited the row.
+
 ### Reaching `rerunnable`
 
 `rerunnable` is awarded only to a calculation, and only when every `auditable`
