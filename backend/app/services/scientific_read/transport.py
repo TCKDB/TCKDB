@@ -37,6 +37,7 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     RecordReviewBadge,
     SoftwareReleaseSummary,
+    SupersessionNotice,
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_transport import (
@@ -59,6 +60,7 @@ from app.services.scientific_read.handles import resolve_transport_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -143,8 +145,19 @@ def get_transport(
         raise not_found("transport", row_id=tr_id, code="handle_not_found")
 
     badge = _load_review_badge(session, tr.id)
+    # Unconditional correction notice: a reader who cited this transport
+    # record must be told it was replaced without having to ask.
+    supersessions = fetch_supersession_notices(
+        session,
+        record_type=SubmissionRecordType.transport,
+        record_ids=[tr.id],
+    )
     record = build_transport_record(
-        session, tr=tr, badge=badge, includes=includes
+        session,
+        tr=tr,
+        badge=badge,
+        includes=includes,
+        supersession=supersessions.get(tr.id),
     )
 
     return ScientificTransportDetailResponse(
@@ -165,6 +178,7 @@ def build_transport_record(
     tr: Transport,
     badge: RecordReviewBadge,
     includes: set[str],
+    supersession: SupersessionNotice | None = None,
 ) -> ScientificTransportRecord:
     """Project one Transport row into the public scientific record shape.
 
@@ -231,6 +245,7 @@ def build_transport_record(
 
     return ScientificTransportRecord(
         transport=core,
+        supersession=supersession,
         species=species_context,
         software_release=sw_summary,
         workflow_tool_release=wf_summary,

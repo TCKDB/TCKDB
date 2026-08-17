@@ -47,6 +47,7 @@ from app.services.scientific_read.handles import resolve_filter_ref
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.transport import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
@@ -338,6 +339,14 @@ def _materialize_records(
         select(Transport).where(Transport.id.in_(page_ids))
     ).all()
     by_id = {r.id: r for r in rows}
+    # Correction notices for the page, batched. Two queries whatever the page
+    # size — resolving a chain per row would be the N+1 trap this shape
+    # exists to avoid.
+    supersessions = fetch_supersession_notices(
+        session,
+        record_type=SubmissionRecordType.transport,
+        record_ids=page_ids,
+    )
     out: list[ScientificTransportRecord] = []
     for cid in page_ids:
         tr = by_id.get(cid)
@@ -345,7 +354,11 @@ def _materialize_records(
             continue
         out.append(
             build_transport_record(
-                session, tr=tr, badge=badges[cid], includes=includes
+                session,
+                tr=tr,
+                badge=badges[cid],
+                includes=includes,
+                supersession=supersessions.get(cid),
             )
         )
     return out

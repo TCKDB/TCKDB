@@ -108,6 +108,30 @@ class ReactionRecord(TypedDict, total=False):
     reaction_entry_id: int
 
 
+class SupersessionNotice(TypedDict):
+    """Correction notice on a scientific product record that was replaced.
+
+    Present (non-``None``) only when the record has been superseded. TCKDB
+    never rewrites an accepted record, so an old citation keeps resolving --
+    this block is what tells a reader the number they just fetched is no
+    longer the current one.
+
+    ``superseded_by``  public ref of the immediate successor.
+    ``current``        public ref of the head of the chain -- what to follow.
+                       Equal to ``superseded_by`` for a single correction;
+                       different once a record has been corrected twice.
+    ``reason``         why the immediate replacement was recorded.
+    ``superseded_at``  when that edge was recorded (ISO 8601).
+    ``chain_length``   recorded edges between this record and ``current``.
+    """
+
+    superseded_by: Required[str]
+    current: Required[str]
+    reason: Required[str]
+    superseded_at: Required[str]
+    chain_length: Required[int]
+
+
 class ThermoSearchRecord(TypedDict):
     """One composed thermo-search row with resolved species context."""
 
@@ -124,6 +148,7 @@ class ThermoDetailRecord(TypedDict, total=False):
     review: Required[JSONDict]
     evidence_completeness: Required[JSONDict]
     provenance: Required[JSONDict]
+    supersession: SupersessionNotice | None
     thermo_id: int
     h298_kj_mol: float | None
     s298_j_mol_k: float | None
@@ -150,6 +175,7 @@ class KineticsDetailRecord(TypedDict, total=False):
     uncertainty: Required[JSONDict]
     evidence_completeness: Required[JSONDict]
     provenance: Required[JSONDict]
+    supersession: SupersessionNotice | None
     kinetics_id: int
     direction: str | None
     pressure_bar: float | None
@@ -883,6 +909,7 @@ __all__ = [
     "StatmechAnalyticsResponse",
     "StatmechRecord",
     "StatmechSearchResponse",
+    "SupersessionNotice",
     "ThermoAnalyticsRecord",
     "ThermoAnalyticsResponse",
     "ThermoDetailRecord",

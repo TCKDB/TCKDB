@@ -34,6 +34,7 @@ from tckdb_client import (
     SpeciesThermoResponse,
     StatmechRecord,
     StatmechSearchResponse,
+    SupersessionNotice,
     TCKDBClient,
     TCKDBPaginationError,
     ThermoSearchResponse,
@@ -72,6 +73,18 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
     assert "species" not in ThermoDetailRecord.__annotations__
     assert "kinetics_ref" in KineticsDetailRecord.__annotations__
     assert "reaction" not in KineticsDetailRecord.__annotations__
+    # A correction notice is part of the default detail shape on both product
+    # reads, not an opt-in block, so it must be typed as always-present and
+    # nullable rather than NotRequired.
+    assert get_type_hints(ThermoDetailRecord)["supersession"] == SupersessionNotice | None
+    assert get_type_hints(KineticsDetailRecord)["supersession"] == SupersessionNotice | None
+    assert set(SupersessionNotice.__required_keys__) == {
+        "superseded_by",
+        "current",
+        "reason",
+        "superseded_at",
+        "chain_length",
+    }
     assert "assessments" in StatmechRecord.__annotations__
     assert "assessments" in TransportRecord.__annotations__
     assert get_type_hints(StatmechRecord)["assessments"] == PublicAssessmentSummary | None
@@ -102,6 +115,7 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
         "PublicAssessmentSummary",
         "ReproducibilityAssessmentSummary",
         "ScientificSoftwareReleaseIdentity",
+        "SupersessionNotice",
         "WorkflowToolReleaseIdentity",
     ):
         assert name in tckdb_client.__all__

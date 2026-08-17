@@ -98,6 +98,7 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -425,6 +426,16 @@ def get_reaction_kinetics(
     if not kinetics_rows:
         return _empty_response(reaction_entry_id, reaction_entry_ref, request, includes, offset, limit)
 
+    # Correction notices. Two queries for the whole visible candidate set,
+    # exactly as the badges above are — never one chain walk per record.
+    # Unconditional: a client must not have to ask whether the rate constant
+    # it is about to cite has been replaced.
+    supersessions = fetch_supersession_notices(
+        session,
+        record_type=SubmissionRecordType.kinetics,
+        record_ids=[k.id for k in kinetics_rows],
+    )
+
     # Bulk-load TS data for the entry to determine has_transition_state and
     # path-search/IRC chain reachability.
     ts_entry_ids = _ts_entry_ids_for_reaction(session, reaction_entry_id)
@@ -533,6 +544,7 @@ def get_reaction_kinetics(
                 model_kind=k.model_kind,
                 direction=k.direction,
                 review=badges[k.id],
+                supersession=supersessions.get(k.id),
                 parameters=ArrheniusParameters(
                     A=k.a, A_units=k.a_units, n=k.n, Ea_kj_mol=k.ea_kj_mol
                 ),

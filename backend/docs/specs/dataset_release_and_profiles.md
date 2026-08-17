@@ -223,6 +223,26 @@ and better than a stale recommendation.
   better measurement of the same thing?* That is a statement about the science.
   A release supersession is a statement about a *curator's opinion*; both
   records remain equally valid science.
+
+  Holding the two apart is not the same as ignoring one of them. A **standing**
+  selection whose selected record has since been scientifically superseded is
+  the most misleading state this API can serve: a DOI-bearing release points a
+  reader outside the project at a number, the citation resolves cleanly, and
+  nothing says the number has been corrected. The selection ledger therefore
+  carries `record_supersession` alongside `supersedes_selection_ref` — the
+  first is the science, the second is the opinion, and the field names keep
+  them distinguishable. Its contract is in
+  [`accepted_science_immutability.md`](accepted_science_immutability.md)
+  §"Announcing a replacement on a read".
+
+  It is **not** `live_divergence`, and `live_divergence` was never going to
+  become it: that is a per-file byte digest answering "has the database moved
+  since publication", advisory and routinely `true`, with no ability to name a
+  record. It also cannot be frozen into the release, because a release
+  published before the correction existed cannot have recorded it, and
+  rewriting the frozen artifacts to add it would break their published
+  digests. The notice is computed live, at read time, from the supersession
+  ledger.
 - **`ConformerSelection`** elects which *conformer* a product should be derived
   from. `ReleaseSelection` elects which *product record* to recommend. Neither
   subsumes the other.

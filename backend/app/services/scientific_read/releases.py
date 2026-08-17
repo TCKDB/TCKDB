@@ -20,7 +20,7 @@ from app.db.models.dataset_release import (
     DatasetRelease,
     ReleaseSelection,
 )
-from app.schemas.reads.scientific_common import Pagination
+from app.schemas.reads.scientific_common import Pagination, SupersessionNotice
 from app.schemas.reads.scientific_release import (
     CurationPolicySummary,
     CuratorSummary,
@@ -46,6 +46,7 @@ from app.services.release.manifest import (
 )
 from app.services.release.records import encode_scalar, public_refs_for
 from app.services.scientific_read.common import validate_pagination
+from app.services.scientific_read.supersession import fetch_supersession_notices
 
 
 class UnknownReleaseError(ValueError):
@@ -163,6 +164,33 @@ def _refs_by_type(session: Session, pairs: list[tuple]) -> dict[tuple, str]:
     return out
 
 
+def _record_supersessions(
+    session: Session, pairs: list[tuple]
+) -> dict[tuple, SupersessionNotice]:
+    """Correction notices for selected records, batched by record type.
+
+    One grouped resolve for the whole page — mirroring :func:`_refs_by_type`
+    right above — rather than one chain walk per selection row. A release
+    ledger is exactly the endpoint that must not go quadratic in the thing it
+    exists to publish.
+
+    A record type with no public ref (``applied_energy_correction``) is skipped
+    by the resolver, so it simply yields no notice rather than a pointer a
+    reader cannot follow.
+    """
+    by_type: dict[object, set[int]] = {}
+    for record_type, record_id in pairs:
+        by_type.setdefault(record_type, set()).add(record_id)
+    out: dict[tuple, SupersessionNotice] = {}
+    for record_type, ids in by_type.items():
+        found = fetch_supersession_notices(
+            session, record_type=record_type, record_ids=sorted(ids)
+        )
+        for record_id, notice in found.items():
+            out[(record_type, record_id)] = notice
+    return out
+
+
 def list_releases(
     session: Session,
     *,
@@ -272,6 +300,9 @@ def _selection_record(
     curator = session.get(AppUser, row.selected_by)
     record_refs = _refs_by_type(session, [(row.record_type, row.record_id)])
     subject_refs = _refs_by_type(session, [(row.subject_type, row.subject_id)])
+    record_notices = _record_supersessions(
+        session, [(row.record_type, row.record_id)]
+    )
     return ReleaseSelectionRecord(
         selection_ref=row.public_ref,
         action=row.action,
@@ -284,6 +315,7 @@ def _selection_record(
         supersedes_selection_ref=(
             superseded.public_ref if superseded is not None else None
         ),
+        record_supersession=record_notices.get((row.record_type, row.record_id)),
         rationale=row.rationale,
         created_at=encode_scalar(row.created_at),
         curator=(
@@ -432,6 +464,9 @@ def get_release_selections(
     # publish. Scoped to the page, because that is all this response renders.
     record_refs = _refs_by_type(session, [(r.record_type, r.record_id) for r in rows])
     subject_refs = _refs_by_type(session, [(r.subject_type, r.subject_id) for r in rows])
+    record_notices = _record_supersessions(
+        session, [(r.record_type, r.record_id) for r in rows]
+    )
 
     records = [
         ReleaseSelectionRecord(
@@ -443,6 +478,7 @@ def get_release_selections(
             subject_type=row.subject_type.value,
             subject_ref=subject_refs.get((row.subject_type, row.subject_id)),
             supersedes_selection_ref=by_id.get(row.supersedes_selection_id),
+            record_supersession=record_notices.get((row.record_type, row.record_id)),
             rationale=row.rationale,
             created_at=encode_scalar(row.created_at),
             curator=(

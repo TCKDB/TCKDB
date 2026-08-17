@@ -190,6 +190,14 @@ reader unable to tell which of two entries is current. ADR 0011 contemplates
 this ("the reactions that matter can be re-uploaded with maps") but predates
 the observation that nothing marks the old one as superseded.
 
+Half of that objection has since been answered and half has not. Where a
+supersession edge *is* recorded, a read now says so — see
+[`accepted_science_immutability.md`](accepted_science_immutability.md)
+§"Announcing a replacement on a read" — but `transition_state_entry` is not yet
+one of the record types wired to that resolver, and a bare re-deposit records
+no edge at all, so it still yields two entries with nothing connecting them.
+The edge is what carries the notice; option B on its own creates no edge.
+
 **C. Add a write surface for maps on unapproved records.** A route that
 attaches a map to an existing `transition_state_entry`, permitted only while
 that entry is unapproved -- which is exactly the window the database already

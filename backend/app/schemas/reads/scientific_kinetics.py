@@ -41,6 +41,7 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
     SCFStabilitySummary,
     SoftwareReleaseSummary,
+    SupersessionNotice,
     TemperatureCoverage,
     ValidationSummary,
     WorkflowToolReleaseSummary,
@@ -349,6 +350,10 @@ class KineticsRecord(BaseModel):
     model_kind: KineticsModelKind
     direction: KineticsDirection | None = None
     review: RecordReviewBadge
+    #: Correction notice, present only when this record has been replaced.
+    #: ``null`` on a current record — and always computed, never behind an
+    #: ``include=`` token. See :class:`SupersessionNotice`.
+    supersession: SupersessionNotice | None = None
     parameters: ArrheniusParameters
     # DR-0036: populated only for ``multi_arrhenius`` records — the summed
     # modified-Arrhenius terms. ``null`` for every other model kind.
