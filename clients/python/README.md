@@ -209,8 +209,18 @@ except TCKDBHTTPError as exc:
         case None:
             raise                               # not a code this client knows
     print(exc.detail)                           # prose, for a human
-    print(exc.response_json["context"])         # the same facts, structured
+    print(exc.response_json["context"])         # structured facts, or {}
 ```
+
+`context` is not populated for every code, and `{}` is often the correct
+answer rather than a gap. The server's rule: a code that names a
+**relationship** — `*_conflict`, `*_mismatch`, anything asserting that
+two things disagree — puts the *which* in `context` (a field path, a
+public ref, a local key, a constraint name, a count; never a database row
+id). A code that names a **thing** — `unknown_release`, `missing_filter`
+— is already the whole message and has no second fact to report. Branch
+on `code` first and enrich from `context` if it is there; never make a
+non-empty `context` a precondition for handling a refusal.
 
 Use `rejection_code(exc.code)` rather than `RejectionCode(exc.code)`: a
 server is routinely newer than the client pinned against it, and a code

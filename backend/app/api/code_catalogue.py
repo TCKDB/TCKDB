@@ -57,6 +57,64 @@ Nor any line numbers or rendered paths in the generated client file. See
 ``backend/scripts/generate_client_rejection_codes.py`` for why a gate that
 fires on cosmetic movement is worse than no gate.
 
+Which codes owe a client structured facts
+-----------------------------------------
+Every entry also carries a :class:`Shape`: whether the code names a
+*thing* or a *relationship between things*, and therefore whether the
+envelope's ``context`` owes a client anything. The rule and its reasoning
+live on that class. What belongs here is the part a reader of *this list*
+needs -- the borderline calls -- because a classification whose hard cases
+are undocumented is one the next person re-litigates from scratch.
+
+Measured on this file: 64 entries (62 distinct codes) are relationships,
+104 are things.
+
+The groups where the call was genuinely arguable, and the argument:
+
+* **Caps are things.** ``limit_too_large``, ``offset_too_large``,
+  ``geometry_too_large``, ``smiles_too_long``, ``export_all_cap_exceeded``,
+  ``ml_export_all_cap_exceeded``, ``query_too_expensive`` and
+  ``composed_search_candidate_limit_exceeded`` each compare a supplied
+  value against a server-side limit, so by the letter of the rule they
+  assert something about two things. They are classified as things because
+  the rule's discriminator is *conflict, mismatch, ambiguity* and a cap
+  breach is none of those: the code names one field and states a predicate
+  about it, and the field is the whole repair. This is the largest
+  borderline group and the one most likely to be revisited -- a client
+  retrying with a legal page size does want the cap, and on a deployment
+  that lowers ``public_max_limit`` the cap is not guessable from the docs.
+* **A code that names both its fields is a thing.**
+  ``parameter_value_requires_key``,
+  ``canonical_parameter_value_requires_key`` and
+  ``unsupported_ranking_for_calculation_type`` are each about two fields
+  and each *names* both, so a ``context`` would be the code spelled a
+  second way.
+* **"Taken" is a thing.** ``email_taken``, ``username_taken`` and
+  ``release_tag_taken`` imply a second claimant, but only one party is
+  identifiable and the code says which field it is -- which was the point
+  of splitting the first two in #225. The other claimant is another
+  principal's row and is not ours to disclose.
+* **``artifact_integrity_failed`` is a thing**, although it is a digest
+  comparison. Its name states a property of one artifact, and the two
+  digests are custody evidence for an operator -- recorded in
+  ``artifact_integrity_event``, not handed to a caller who can act on
+  neither. Its response body is pinned empty for exactly that reason.
+* **``invalid_structure_query`` is a thing** because only one of its two
+  conditions has a second thing (``mode`` not accepting a query kind); the
+  other is an unparseable SMILES. A code that owes facts on one path and
+  not the other should be split, which is a bigger decision than a
+  classification.
+* **``supersedes_same_record`` is a relationship** although it fires
+  because two things are the *same* rather than different. The test the
+  rule applies is whether the code asserts something about two things and
+  names neither, and it does.
+* **``tckdb_client_version_unsupported`` is a relationship that is
+  deliberately not populated.** Its two facts are already
+  machine-readable, in a ``detail`` that is a dict rather than a sentence
+  -- see :attr:`Surface.detail_object`. That is why
+  :attr:`ApiCode.owes_context` is a property and not a bare comparison
+  against :attr:`Shape.relationship`.
+
 Why completeness is checked, not claimed
 ----------------------------------------
 A catalogue that asserts it is complete and is not would be exactly the
@@ -295,6 +353,107 @@ class Replay(str, Enum):
     never_succeeds = "never_succeeds"
 
 
+class Shape(str, Enum):
+    """Whether the code names a *thing* or a *relationship between things*.
+
+    Why this classification and not "does it have ``context`` yet"
+    -------------------------------------------------------------
+    The error contract tells clients to branch on :attr:`ApiCode.code` and
+    read the envelope's structured ``context``, never the prose ``detail``
+    — see :mod:`app.api.error_contract`. That advice is right, and for a
+    large part of this catalogue ``context`` is an empty object, so the
+    advice reduced to "read this empty dict" and the only place the reason
+    lived was the prose a client was told not to parse.
+
+    The obvious repair — populate ``context`` everywhere — is wrong. Most
+    refusals have nothing to put there. Calvin's rule (2026-08-17) says
+    which do:
+
+        A code naming a **relationship** — conflict, mismatch, ambiguity —
+        needs ``context``, because it asserts something about two or more
+        things and names none of them. A code naming a **thing** —
+        ``unknown_X``, ``missing_Y`` — does not, because the name is the
+        whole message.
+
+    ``unknown_release`` is complete as it stands: a client that reads the
+    code knows exactly what happened and what to fix. ``state_conflict``
+    is not: it says two things disagreed and names neither, so without
+    ``context`` the only way to find out which is to read English.
+
+    What this field is, and what it is not
+    --------------------------------------
+    It is a statement about the **code**, in the same way :class:`Surface`
+    is a statement about mechanism: a fact that does not change when the
+    implementation does. It is deliberately *not* a record of whether the
+    obligation has been met — that is measured from the response body by
+    the per-code wire tests, not declared here, because a declaration
+    would go stale in the direction that hides work rather than the
+    direction that fails.
+
+    So a :attr:`relationship` entry with an empty ``context`` today is a
+    known gap, not a lie: the classification is what makes the gap
+    countable, and nothing in the test suite asserts that any such
+    ``context`` *stays* empty. Pinning the empty object would make every
+    future improvement cost a red test, which is why the suite carefully
+    does not do it.
+
+    Why the default is :attr:`thing`, and why that is safe
+    -----------------------------------------------------
+    Because most codes are things (measured: roughly five in eight), so
+    declaring the majority case would be noise of the kind
+    :attr:`Reach.request` and :attr:`Replay.may_succeed` also avoid. The
+    risk a default carries is the opposite of theirs, though: an
+    unclassified *relationship* would read as a thing and quietly excuse
+    itself from the obligation.
+
+    That is closed by :data:`RELATIONSHIP_WORDS` and its guard in
+    ``backend/tests/api/test_api_code_catalogue.py``. A code whose *name*
+    contains a word that can only describe a relation between two things
+    must declare :attr:`relationship`; the guard covers the spellings the
+    codes here actually use, and it is the reason a new ``*_mismatch``
+    cannot arrive classified as a thing by omission. The converse is not
+    guarded and cannot be: plenty of relationships are spelled without
+    one of those words — ``atom_map_not_a_bijection``,
+    ``selection_already_stands``, ``multiple_structure_queries`` — so
+    those are declared by hand and the declaration is the judgement.
+    """
+
+    #: The name is the whole message. A client that reads the code knows
+    #: what happened; ``context`` would repeat it in a second spelling.
+    #: The default.
+    thing = "thing"
+
+    #: The code asserts a disagreement, a collision or an ambiguity
+    #: between two or more things and names none of them, so ``context``
+    #: is the only place the *which* can live. What goes in it is the
+    #: things themselves — a field path, a public ref, a declared local
+    #: key, a constraint name, a count — and never a database primary key
+    #: (DR-0028 Requirement 2), which is logged instead.
+    relationship = "relationship"
+
+
+#: Words that can only describe a relation between two or more things.
+#: A code whose name contains one of these must declare
+#: :attr:`Shape.relationship`; the guard over this constant lives in
+#: ``backend/tests/api/test_api_code_catalogue.py``.
+#:
+#: Deliberately short, and deliberately not "every word that hints at a
+#: comparison". ``too_large``, ``exceeds`` and ``requires`` were all
+#: considered and left out: each compares a supplied value against a
+#: server-side limit or a sibling field that the *code itself already
+#: names*, so the name is the whole message and forcing them into
+#: :attr:`Shape.relationship` would turn a judgement into an accident of
+#: vocabulary. See the borderline notes in the module docstring.
+RELATIONSHIP_WORDS: tuple[str, ...] = (
+    "ambiguous",
+    "conflict",
+    "contradicts",
+    "disagree",
+    "mismatch",
+    "not_conserved",
+)
+
+
 #: Statuses a client may reasonably replay, so the statuses where a
 #: :attr:`Replay.never_succeeds` declaration changes an outcome rather
 #: than merely being true. Mirrors
@@ -332,6 +491,11 @@ class ApiCode:
         rather than derived, because nothing an entry holds implies it.
         Defaults to :attr:`Replay.may_succeed`, which is the fail-safe
         direction.
+    :param shape: Whether the code names a thing or a relationship
+        between things, and therefore whether it owes a client a populated
+        ``context`` — see :class:`Shape`. Declared, because no other field
+        implies it; defaults to :attr:`Shape.thing` with
+        :data:`RELATIONSHIP_WORDS` guarding the omission that would matter.
     :param note: A fact the site cannot state about itself. Deliberately
         rare — this is an enumeration, not a second copy of the refusal
         messages. Required on every :attr:`Reach.guard` entry, because
@@ -346,7 +510,22 @@ class ApiCode:
     origin: str
     reach: Reach = Reach.request
     replay: Replay = Replay.may_succeed
+    shape: Shape = Shape.thing
     note: str | None = None
+
+    @property
+    def owes_context(self) -> bool:
+        """Whether a client is owed structured facts beside this code.
+
+        True exactly for :attr:`Shape.relationship`. A separate property
+        rather than a bare comparison so the obligation has a name the
+        tests and the client-facing docs can both cite, and so that
+        narrowing it later — should a relationship code turn out to state
+        its things in a structured ``detail`` instead, as
+        ``tckdb_client_version_unsupported`` does — is one edit here rather
+        than a search for ``is Shape.relationship``.
+        """
+        return self.shape is Shape.relationship
 
     @property
     def is_client_facing(self) -> bool:
@@ -418,6 +597,7 @@ class ApiCode:
 CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
             note=(
                 "Reach.guard until #195, and the note it carried named the "
                 "repair that ended it: /uploads/computed-reaction resolves "
@@ -434,7 +614,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("applied_energy_correction_source_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
     ApiCode("arrhenius_a_units_molecularity_mismatch", 422, Surface.coded_exception,
-            "backend/app/chemistry/units.py"),
+            "backend/app/chemistry/units.py",
+            shape=Shape.relationship),
     ApiCode("artifact_integrity_failed", 502, Surface.response_literal,
             "backend/app/api/errors.py",
             replay=Replay.never_succeeds,
@@ -534,13 +715,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "guard non-vacuous."
             )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            shape=Shape.relationship),
     ApiCode("atom_map_contradicts_irc_mapping", 422, Surface.coded_exception,
-            "backend/app/services/reaction_atom_map.py"),
+            "backend/app/services/reaction_atom_map.py",
+            shape=Shape.relationship),
     ApiCode("atom_map_element_not_conserved", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            shape=Shape.relationship),
     ApiCode("atom_map_element_not_conserved", 409, Surface.database_constraint,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            shape=Shape.relationship,
             note=(
                 "Two entries, and both are real. The claim is stated once at "
                 "the wire boundary and again as a check constraint, so which "
@@ -553,19 +738,23 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("atom_map_geometry_unparseable", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_indices_not_geometry_relative", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            shape=Shape.relationship),
     ApiCode("atom_map_inferred_requires_note", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_not_a_bijection", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            shape=Shape.relationship),
     ApiCode("atom_map_not_a_bijection", 409, Surface.database_constraint,
-            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py",
+            shape=Shape.relationship),
     ApiCode("atom_map_participant_not_declared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("atom_map_without_transition_state", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
     ApiCode("calculation_geometry_composition_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_geometry_composition.py",
+            shape=Shape.relationship,
             note=(
                 "A geometry linked to a calculation is not made of the atoms "
                 "of the subject the calculation is filed under. One code "
@@ -581,7 +770,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "payload's identity block, this one on a calculation."
             )),
     ApiCode("calculation_handle_conflict", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship),
     ApiCode("calculation_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py",
             note=(
@@ -605,13 +795,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("composed_search_candidate_limit_exceeded", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
     ApiCode("composed_search_invalid_page", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/common.py"),
+            "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship),
     ApiCode("composed_search_pagination_changed", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/common.py"),
+            "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship),
     ApiCode("composed_search_pagination_stalled", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/common.py"),
+            "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship),
     ApiCode("curation_policy_version_conflict", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
             note=(
                 "409, not the 422 a bare ReleaseCurationError would reach. "
                 "It was recorded wrong for a long time because the status "
@@ -625,9 +819,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("curator_task_not_found", 404, Surface.coded_exception,
             "backend/app/services/machine_review/curator_task_lifecycle.py"),
     ApiCode("cursor_offset_conflict", 422, Surface.coded_exception,
-            "backend/app/services/scientific_read/analytics.py"),
+            "backend/app/services/scientific_read/analytics.py",
+            shape=Shape.relationship),
     ApiCode("cursor_query_mismatch", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/keyset.py"),
+            "backend/app/services/scientific_read/keyset.py",
+            shape=Shape.relationship),
     ApiCode("data_integrity_error", 500, Surface.generic_fallback,
             "backend/app/api/errors.py"),
     ApiCode("database_error", 503, Surface.generic_fallback,
@@ -647,6 +843,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/errors.py"),
     ApiCode("doi_already_recorded", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
             note=(
                 "409 since #211. Recording the DOI the release already cites "
                 "succeeds; only a *different* one refuses, and it refuses "
@@ -672,7 +869,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "all -- and that argument covers this endpoint only."
             )),
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
-            "backend/app/scientific_checks/declarations.py"),
+            "backend/app/scientific_checks/declarations.py",
+            shape=Shape.relationship),
     ApiCode("export_all_cap_exceeded", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/export.py"),
     ApiCode("export_seed_empty", 422, Surface.message_prefix,
@@ -681,6 +879,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/export.py"),
     ApiCode("freq_list_exceeds_geometry_degrees_of_freedom", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/frequency_completeness.py",
+            shape=Shape.relationship,
             note=(
                 "One of two codes that module reports, and the only one that "
                 "refuses. Its sibling freq_list_incomplete_for_geometry is an "
@@ -692,6 +891,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("freq_mode_index_not_unique", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            shape=Shape.relationship,
             note=(
                 "Catalogued but deliberately absent from the scientific "
                 "check register, unlike its file neighbour "
@@ -703,7 +903,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "code a client must branch on, about no chemistry at all."
             )),
     ApiCode("freq_n_imag_disagrees_with_modes", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/fragments/calculation.py",
+            shape=Shape.relationship),
     ApiCode("geometry_key_unresolved", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py",
             note=(
@@ -719,12 +920,36 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/geometry.py"),
     ApiCode("handle_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
-    ApiCode("handle_type_mismatch", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+    ApiCode("handle_type_mismatch", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship,
+            note=(
+                "Surface.coded_exception since #210, and the detail did not "
+                "move a byte. It was message_prefix -- two "
+                "ValueError(f'handle_type_mismatch: ...') sites -- which is "
+                "the surface with nowhere to put context, and this code "
+                "names a relationship: two ref prefixes that are not the "
+                "same one, neither of them named. Both sites now raise "
+                "CodedValueError with message_prefix=True, so str(exc) is "
+                "unchanged and only the route into `code` differs: declared "
+                "on the exception rather than promoted out of the sentence. "
+                "It leaves MESSAGE_PREFIX_CODES as a consequence, which is "
+                "correct -- the envelope no longer needs to read English to "
+                "find this code. Its six *_handle_conflict neighbours in the "
+                "same module have the same defect and are *not* converted "
+                "here: their code is minted from reconcile_id_ref's "
+                "conflict_code parameter, and test_error_contract_catalogue_"
+                "gate.py's TestTheShapeTheRaiseSiteScanCannotRead is written "
+                "over exactly that spelling, so moving them means "
+                "re-pointing that gate at the new shape rather than "
+                "deleting it."
+            )),
     ApiCode("idempotency_conflict", 409, Surface.response_literal,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            shape=Shape.relationship),
     ApiCode("idempotency_in_progress", 409, Surface.response_literal,
             "backend/app/api/errors.py",
+            shape=Shape.relationship,
             reach=Reach.guard,
             note=(
                 "The ternary that mints it has one live arm. "
@@ -741,7 +966,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("include_not_implemented_yet", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/calculations.py"),
     ApiCode("integrity_conflict", 409, Surface.generic_fallback,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            shape=Shape.relationship),
     ApiCode("invalid_cursor", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/keyset.py"),
     ApiCode("invalid_handle", 422, Surface.message_prefix,
@@ -751,17 +977,31 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("invalid_pagination", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
     ApiCode("invalid_range", 422, Surface.coded_exception,
-            "backend/app/services/scientific_read/analytics.py"),
+            "backend/app/services/scientific_read/analytics.py",
+            shape=Shape.relationship),
     ApiCode("invalid_structure_query", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/structure_search.py"),
-    ApiCode("invalid_temperature_range", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/common.py"),
+    ApiCode("invalid_temperature_range", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship,
+            note=(
+                "Surface.coded_exception since #210, with the detail "
+                "byte-identical: the raise moved to CodedValueError with "
+                "message_prefix=True so it could carry the two bounds in "
+                "context. Its sibling invalid_range in "
+                "scientific_read/analytics.py was already coded_exception "
+                "and already carried them, which is what made this one's "
+                "empty context visible as an inconsistency rather than a "
+                "policy."
+            )),
     ApiCode("irc_result_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("kinetics_interpretation_conformer_selection_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py"),
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship),
     ApiCode("kinetics_interpretation_statmech_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
             note=(
                 "One code, two comparisons: a reactant/product assignment "
                 "is held to the participant's species entry and a "
@@ -771,7 +1011,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "which owner disagreed is already in context['owner_kind']."
             )),
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship),
     ApiCode("limit_too_large", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py",
             note=(
@@ -819,10 +1060,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/ml_dataset.py"),
     ApiCode("micro_reaction_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
-    ApiCode("multiple_structure_queries", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/structure_search.py"),
+    ApiCode("multiple_structure_queries", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/structure_search.py",
+            shape=Shape.relationship,
+            note=(
+                "Surface.coded_exception since #210, detail unchanged. An "
+                "ambiguity code that named none of the fields it was "
+                "ambiguous between; context['supplied'] now does. Its "
+                "neighbour missing_structure_query stays message_prefix "
+                "and stays empty on purpose: it names a thing (no query "
+                "was supplied) and the code is the whole message."
+            )),
     ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py",
+            shape=Shape.relationship),
     ApiCode("network_channel_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
     ApiCode("network_solve_reported_requires_literature", 409, Surface.database_constraint,
@@ -850,7 +1101,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("post_search_fields_must_be_in_body", 422, Surface.message_prefix,
             "backend/app/api/routes/scientific/artifacts.py"),
     ApiCode("pressure_alias_conflict", 422, Surface.message_prefix,
-            "backend/app/schemas/reads/scientific_kinetics.py"),
+            "backend/app/schemas/reads/scientific_kinetics.py",
+            shape=Shape.relationship),
     ApiCode("query_timeout", 503, Surface.response_literal,
             "backend/app/api/errors.py"),
     ApiCode("query_too_expensive", 422, Surface.message_prefix,
@@ -860,9 +1112,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("rationale_required", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("reaction_charge_not_conserved", 422, Surface.coded_exception,
-            "backend/app/services/reaction_resolution.py"),
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship),
     ApiCode("reaction_mass_balance_failed", 422, Surface.coded_exception,
-            "backend/app/services/reaction_resolution.py"),
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship),
     ApiCode("record_has_no_subject", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("record_not_approved", 422, Surface.message_prefix,
@@ -870,15 +1124,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("record_ref_not_selectable", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("record_subject_mismatch", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship),
     ApiCode("record_type_not_selectable", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
     ApiCode("reaction_entry_handle_conflict", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship),
     ApiCode("reaction_handle_conflict", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship),
     ApiCode("reference_conflict", 409, Surface.sqlstate_category,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            shape=Shape.relationship),
     ApiCode("release_artifact_corrupt", 500, Surface.message_prefix,
             "backend/app/api/routes/scientific/releases.py"),
     ApiCode("release_not_draft", 409, Surface.message_prefix,
@@ -923,6 +1181,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/api/routes/health.py"),
     ApiCode("selection_already_stands", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
             note=(
                 "409 since #211, and it moved with its sibling rather than "
                 "after it: this and selection_already_superseded are the same "
@@ -932,6 +1191,7 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("selection_already_superseded", 409, Surface.message_prefix,
             "backend/app/services/release/curation.py",
+            shape=Shape.relationship,
             note=(
                 "409 since #211. Supersession chains stay linear, so the row "
                 "to replace is the one that currently stands -- a different "
@@ -942,49 +1202,65 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("smiles_too_long", 422, Surface.message_prefix,
             "backend/app/schemas/reads/scientific_kinetics_search.py"),
     ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship),
     ApiCode("species_geometry_composition_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/species_resolution.py"),
+            "backend/app/services/species_resolution.py",
+            shape=Shape.relationship),
     ApiCode("species_geometry_isotope_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/species_resolution.py"),
+            "backend/app/services/species_resolution.py",
+            shape=Shape.relationship),
     ApiCode("species_handle_conflict", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/handles.py"),
+            "backend/app/services/scientific_read/handles.py",
+            shape=Shape.relationship),
     ApiCode("species_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
     ApiCode("species_kind_conflict", 422, Surface.coded_exception,
-            "backend/app/services/species_resolution.py"),
+            "backend/app/services/species_resolution.py",
+            shape=Shape.relationship),
     ApiCode("species_smiles_charge_mismatch", 422, Surface.coded_exception,
-            "backend/app/chemistry/species.py"),
+            "backend/app/chemistry/species.py",
+            shape=Shape.relationship),
     ApiCode("state_conflict", 409, Surface.sqlstate_category,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            shape=Shape.relationship),
     ApiCode("statmech_calculation_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
     ApiCode("statmech_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py"),
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship),
     ApiCode("statmech_source_role_type_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/statmech_resolution.py"),
+            "backend/app/services/statmech_resolution.py",
+            shape=Shape.relationship),
     ApiCode("statmech_subject_not_exactly_one", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py"),
     ApiCode("statmech_torsion_scan_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py"),
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship),
     ApiCode("stored_species_smiles_unparseable", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py"),
     ApiCode("subject_type_mismatch", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship),
     ApiCode("supersedes_same_record", 422, Surface.message_prefix,
-            "backend/app/services/release/curation.py"),
+            "backend/app/services/release/curation.py",
+            shape=Shape.relationship),
     ApiCode("tckdb_client_version_invalid", 426, Surface.detail_object,
             "backend/app/api/client_version.py"),
     ApiCode("tckdb_client_version_missing", 426, Surface.detail_object,
             "backend/app/api/client_version.py"),
     ApiCode("tckdb_client_version_unsupported", 426, Surface.detail_object,
-            "backend/app/api/client_version.py"),
+            "backend/app/api/client_version.py",
+            shape=Shape.relationship),
     ApiCode("thermo_source_calculation_owner_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/calculation_ownership.py"),
+            "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship),
     ApiCode("thermo_source_role_type_mismatch", 422, Surface.coded_exception,
-            "backend/app/workflows/thermo.py"),
+            "backend/app/workflows/thermo.py",
+            shape=Shape.relationship),
     ApiCode("thermo_statmech_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
             note=(
                 "The ownership family's first code over a cited row that "
                 "is not a calculation. Distinct from "
@@ -994,21 +1270,26 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "repairs them in different places."
             )),
     ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/reaction_resolution.py"),
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship),
     ApiCode("transition_state_composition_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/reaction_resolution.py"),
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship),
     ApiCode("transition_state_irc_mapping_element_mismatch", 422, Surface.coded_exception,
-            "backend/app/services/reaction_resolution.py"),
+            "backend/app/services/reaction_resolution.py",
+            shape=Shape.relationship),
     ApiCode("transition_state_key_undeclared", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
     ApiCode("transition_state_no_imaginary_mode", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transition_state_reaction_coordinate_ambiguous", 422, Surface.coded_exception,
-            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
+            "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py",
+            shape=Shape.relationship),
     ApiCode("transition_state_reaction_coordinate_not_designated", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py"),
     ApiCode("transport_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
+            shape=Shape.relationship,
             reach=Reach.guard,
             note=(
                 "No request produces it, and unlike its four siblings no "
@@ -1024,7 +1305,8 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "does."
             )),
     ApiCode("unique_conflict", 409, Surface.sqlstate_category,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            shape=Shape.relationship),
     ApiCode("unknown_calculation_artifact_ref", 404, Surface.coded_exception,
             "backend/app/services/upload_reference.py",
             note=(
@@ -1169,11 +1451,13 @@ def never_retryable() -> tuple[ApiCode, ...]:
 
 __all__ = [
     "CATALOGUE",
+    "RELATIONSHIP_WORDS",
     "REPLAYABLE_STATUSES",
     "STATUS_FALLBACK_PATTERN",
     "ApiCode",
     "Reach",
     "Replay",
+    "Shape",
     "Surface",
     "catalogued_codes",
     "client_facing",

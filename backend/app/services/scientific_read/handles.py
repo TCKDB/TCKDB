@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
 from app.db.models.calculation import Calculation
 from app.db.models.common import RecordReviewStatus, SubmissionRecordType
@@ -96,6 +97,47 @@ def parse_handle(value: str) -> tuple[str, Any]:
     raise ValueError(
         f"invalid_handle: {stripped!r} is neither an integer id nor a "
         "<prefix>_<body> public ref"
+    )
+
+
+def _handle_type_mismatch(
+    kind_label: str,
+    expected_prefix: str,
+    prefix: str,
+    *,
+    noun: str,
+) -> CodedValueError:
+    """The 422 for a public ref carrying the wrong resource's prefix.
+
+    ``handle_type_mismatch`` names a relationship — two prefixes that are
+    not the same one — and names neither of them, which is the case
+    :class:`~app.api.code_catalogue.Shape.relationship` is about. The two
+    prefixes and the resource expected therefore go in ``context``, where
+    a client can read them without parsing the sentence. Nothing here is a
+    database id: a prefix is a schema-level constant and the supplied ref
+    is the caller's own input.
+
+    ``message_prefix=True`` keeps ``str(exc)`` -- and so the response's
+    ``detail`` -- byte-identical to the ``ValueError(f"handle_type_mismatch:
+    ...")`` this replaced. Only the *route* into ``code`` changes: it is
+    now declared on the exception instead of promoted out of the sentence,
+    which is why the catalogue entry moved from
+    :attr:`~app.api.code_catalogue.Surface.message_prefix` to
+    :attr:`~app.api.code_catalogue.Surface.coded_exception`.
+
+    :param noun: ``"handle"`` on a path lookup, ``"ref"`` on a filter --
+        the two call sites word it differently and the published prose is
+        preserved exactly, prefix included.
+    """
+    return CodedValueError(
+        "handle_type_mismatch",
+        f"expected a {kind_label} {noun} "
+        f"(prefix {expected_prefix!r}) but got prefix {prefix!r}",
+        context={
+            "expected_kind": kind_label,
+            "expected_prefix": expected_prefix,
+            "supplied_prefix": prefix,
+        },
     )
 
 
@@ -304,9 +346,8 @@ def resolve_path_handle(
     ref = parsed
     prefix = ref.split("_", 1)[0]
     if prefix != expected_prefix:
-        raise ValueError(
-            f"handle_type_mismatch: expected a {kind_label} handle "
-            f"(prefix {expected_prefix!r}) but got prefix {prefix!r}"
+        raise _handle_type_mismatch(
+            kind_label, expected_prefix, prefix, noun="handle"
         )
     row_id = session.scalar(
         select(model_cls.id).where(model_cls.public_ref == ref)
@@ -359,9 +400,8 @@ def resolve_filter_ref(
     expected_prefix = prefix_for(model_cls)
     prefix = ref.split("_", 1)[0]
     if prefix != expected_prefix:
-        raise ValueError(
-            f"handle_type_mismatch: expected a {kind_label} ref "
-            f"(prefix {expected_prefix!r}) but got prefix {prefix!r}"
+        raise _handle_type_mismatch(
+            kind_label, expected_prefix, prefix, noun="ref"
         )
     return session.scalar(
         select(model_cls.id).where(model_cls.public_ref == ref)

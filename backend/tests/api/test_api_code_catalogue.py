@@ -30,11 +30,13 @@ from pathlib import Path
 
 from app.api.code_catalogue import (
     CATALOGUE,
+    RELATIONSHIP_WORDS,
     REPLAYABLE_STATUSES,
     STATUS_FALLBACK_PATTERN,
     ApiCode,
     Reach,
     Replay,
+    Shape,
     Surface,
     catalogued_codes,
     client_facing,
@@ -1008,3 +1010,181 @@ def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
     exported = {entry.code for entry in client_facing()}
     assert "applied_energy_correction_source_calculation_owner_mismatch" in exported
     assert "transport_source_calculation_owner_mismatch" not in exported
+
+
+# ---------------------------------------------------------------------------
+# Shape: does the code owe a client structured facts?
+# ---------------------------------------------------------------------------
+#
+# ``Shape`` classifies every entry by Calvin's rule (2026-08-17): a code
+# naming a relationship -- conflict, mismatch, ambiguity -- owes a client a
+# populated ``context``, because it asserts something about two or more
+# things and names none of them; a code naming a thing does not, because the
+# name is the whole message.
+#
+# What is deliberately *not* asserted here, and must stay that way: that
+# any entry's ``context`` is empty. Pinning the empty object would make
+# every future improvement cost a red test, so the gap is left countable
+# and unfrozen. The obligation in the other direction -- that a populated
+# ``context`` keeps its keys -- is asserted per code on the wire, where a
+# response body can be looked at, not here.
+
+
+#: Entries whose ``context`` this repository has already populated *and*
+#: which a wire test pins by key. Pinned here so that unpopulating one is a
+#: deliberate edit in two places rather than a silent regression in one --
+#: and pinned as a *floor*, never as the whole set, so the tranche that
+#: populates the next relationship code does not have to edit this list.
+_POPULATED_RELATIONSHIP_CODES = (
+    "handle_type_mismatch",
+    "invalid_temperature_range",
+    "multiple_structure_queries",
+    "transition_state_irc_mapping_element_mismatch",
+)
+
+
+def test_the_shape_rule_can_say_no() -> None:
+    """``Shape`` must change an answer, or it is a comment with a type.
+
+    The same shape as ``test_the_reach_rule_can_say_no`` and
+    ``test_the_replay_rule_can_say_no``: two probes differing in nothing
+    but the field under test, so the negative cannot be produced by one of
+    the other rules. Also pins the default, and the default is the one that
+    needs pinning -- an unclassified code reads as a thing and therefore
+    excuses itself from the obligation, which is the failure the word guard
+    below exists to close.
+    """
+    origin = "backend/app/api/errors.py"
+    named = ApiCode("probe_code", 409, Surface.sqlstate_category, origin)
+    relating = ApiCode(
+        "probe_code", 409, Surface.sqlstate_category, origin,
+        shape=Shape.relationship,
+    )
+
+    assert named.shape is Shape.thing, "Shape.thing must be the default"
+    assert not named.owes_context
+    assert relating.owes_context
+
+
+def test_the_classification_splits_the_catalogue_both_ways() -> None:
+    """Both classes are populated, and neither swallowed the catalogue.
+
+    A classification where every entry landed on one side is a field that
+    was added and not applied -- it would satisfy every other assertion
+    below while saying nothing. The bounds are deliberately loose: the
+    point is that both answers are given, not that the ratio is any
+    particular number.
+    """
+    relationships = [entry for entry in CATALOGUE if entry.shape is Shape.relationship]
+    things = [entry for entry in CATALOGUE if entry.shape is Shape.thing]
+
+    assert len(relationships) + len(things) == len(CATALOGUE), (
+        "an entry carries neither shape, which the enum should have made "
+        "impossible"
+    )
+    assert len(relationships) > 20, (
+        f"only {len(relationships)} of {len(CATALOGUE)} entries are "
+        "classified as relationships. The catalogue is full of *_mismatch "
+        "and *_conflict codes; a number this low means the field was added "
+        "and not applied."
+    )
+    assert len(things) > 20, (
+        f"only {len(things)} of {len(CATALOGUE)} entries are classified as "
+        "things. Most refusals name a thing -- unknown_X, missing_Y -- so a "
+        "number this low means the rule was read as 'populate everything', "
+        "which is the answer it exists to refuse."
+    )
+    assert {entry.code for entry in CATALOGUE if entry.owes_context} == {
+        entry.code for entry in relationships
+    }, "ApiCode.owes_context has drifted from Shape.relationship"
+
+
+def test_no_entry_named_like_a_relationship_is_classified_as_a_thing() -> None:
+    """The word guard, and proof it has something to guard.
+
+    ``Shape`` defaults to ``thing``, so the classification a new code gets
+    for free is the one that excuses it from the obligation. This is what
+    stops that being silent for the spellings the codes here actually use:
+    a name containing ``mismatch``, ``conflict``, ``contradicts``,
+    ``disagree``, ``ambiguous`` or ``not_conserved`` cannot describe one
+    thing, so it must be declared.
+
+    The converse is not checked and cannot be -- ``atom_map_not_a_bijection``
+    and ``selection_already_stands`` are relationships spelled without any
+    of those words -- so a ``Shape.relationship`` declaration on a code
+    with none of them is a judgement, not an error.
+    """
+    matched = [
+        entry
+        for entry in CATALOGUE
+        if any(word in entry.code for word in RELATIONSHIP_WORDS)
+    ]
+    assert len(matched) > 25, (
+        f"only {len(matched)} entries carry a relationship word, so this "
+        "guard is nearly vacuous. Either RELATIONSHIP_WORDS lost a word or "
+        "the catalogue was renamed out from under it."
+    )
+    misclassified = [
+        entry.code for entry in matched if entry.shape is not Shape.relationship
+    ]
+    assert not misclassified, (
+        f"{sorted(set(misclassified))} are named for a relation between two "
+        "things but classified Shape.thing. A code whose name contains "
+        f"{list(RELATIONSHIP_WORDS)} asserts something about two or more "
+        "things and names neither, so it owes a client a populated context "
+        "-- see Shape in app/api/code_catalogue.py. If one of these really "
+        "is complete under its own name, rename the code; do not reclassify "
+        "it."
+    )
+
+
+def test_the_word_guard_would_notice_a_misclassification() -> None:
+    """The detector above must be able to fail, not merely to pass.
+
+    Measured, not reasoned about: the real catalogue satisfies the guard,
+    so a bug that made the word test match nothing would be invisible. A
+    synthetic entry named for a relation and classified as a thing has to
+    be caught by the same expression the assertion uses.
+    """
+    origin = "backend/app/api/errors.py"
+    bait = ApiCode("probe_owner_mismatch", 422, Surface.coded_exception, origin)
+    honest = ApiCode(
+        "probe_owner_mismatch", 422, Surface.coded_exception, origin,
+        shape=Shape.relationship,
+    )
+    clean = ApiCode("probe_unknown_thing", 404, Surface.coded_exception, origin)
+
+    def caught(entry: ApiCode) -> bool:
+        return (
+            any(word in entry.code for word in RELATIONSHIP_WORDS)
+            and entry.shape is not Shape.relationship
+        )
+
+    assert caught(bait), "the word guard cannot see a misclassified *_mismatch"
+    assert not caught(honest)
+    assert not caught(clean), (
+        "the word guard fires on a code that names no relation, so it would "
+        "force a classification by accident of vocabulary"
+    )
+
+
+def test_every_populated_relationship_code_is_still_a_relationship() -> None:
+    """The codes with wire tests over their ``context`` keep the claim.
+
+    One direction only. A code moving *out* of ``Shape.relationship`` while
+    a wire test still pins its context keys is a contradiction: the entry
+    would say the code names a thing while the response names two. The
+    other direction -- a relationship entry whose context is still empty --
+    is the open work and is deliberately not asserted anywhere, because
+    pinning it either way costs a red test for the next improvement.
+    """
+    by_code = {entry.code: entry for entry in CATALOGUE}
+    for code in _POPULATED_RELATIONSHIP_CODES:
+        entry = by_code.get(code)
+        assert entry is not None, f"{code} left the catalogue"
+        assert entry.shape is Shape.relationship, (
+            f"{code} is classified Shape.thing, but a wire test asserts its "
+            "response context names the two things that disagreed. One of "
+            "the two is wrong."
+        )
+        assert entry.owes_context

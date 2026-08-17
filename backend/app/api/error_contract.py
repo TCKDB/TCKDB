@@ -137,6 +137,52 @@ the count 73 are gone: they were reworded, not reclassified. So the set of
 error-reachable prefixes the catalogue does not cover is presently empty —
 measured, and re-measurable, rather than asserted.
 
+What ``context`` promises, and what it does not
+----------------------------------------------
+"Branch on ``code``, read ``context``, never parse ``detail``" is the
+published advice and it is right. It was also, until #210, an
+over-promise: ``context`` is populated by the raiser, and a large part of
+the catalogue has no raiser that can populate it. Measured on the entry
+count as this was written, 76 of 168 entries arrive by
+:data:`~app.api.code_catalogue.Surface.message_prefix` — that is,
+``raise ValueError(f"code: prose")`` — and a plain ``ValueError`` has
+nowhere to put structured facts, so :func:`error_envelope` renders
+``"context": {}`` for every one of them. Several hand-built
+``JSONResponse`` bodies in :mod:`app.api.errors` do the same.
+
+The repair is not "populate everything". Most refusals have nothing to
+put there, and a ``context`` that restates the code in a second spelling
+is drift with extra steps. What a client is owed depends on what the code
+names, which is what
+:class:`~app.api.code_catalogue.Shape` classifies and
+:attr:`~app.api.code_catalogue.ApiCode.owes_context` answers:
+
+* A code naming a **thing** — ``unknown_release``, ``missing_filter``,
+  ``limit_too_large`` — is complete on its own. ``context`` may be empty
+  and that is not a gap.
+* A code naming a **relationship** — ``state_conflict``,
+  ``handle_type_mismatch``, ``atom_map_element_not_conserved`` — asserts
+  something about two or more things and names none of them. There
+  ``context`` is the only machine-readable place the *which* can live,
+  and an empty one leaves the reason reachable only through the prose a
+  client was told not to read.
+
+So the honest promise is narrower than the old one: **where a code names
+a relationship, the facts are in ``context``; where it names a thing, the
+code is the fact.** Not every relationship entry has been populated yet —
+they are being worked through in tranches, and the classification is what
+makes the remainder countable. Nothing asserts that any of those
+``context`` objects stays empty, deliberately: pinning the empty object
+would make each improvement cost a red test.
+
+One exception is worth naming because it looks like a violation and is
+not. ``tckdb_client_version_unsupported`` and its two siblings arrive by
+:data:`~app.api.code_catalogue.Surface.detail_object`, where ``detail``
+is a *dict* rather than prose. Their facts — the version sent and the
+minimum supported — are already machine-readable; they are simply in
+``detail``. "Never parse ``detail``" still holds, because parsing is what
+a sentence needs and a dict does not.
+
 One of those five was itself repaired rather than merely recorded. Only
 ``geometry_validation`` contained an underscore, so it was the only logger
 prefix ``_CODE_POSITION_PATTERN`` could match — a string carrying the
@@ -456,6 +502,12 @@ def error_envelope(
 
     The envelope is deep-sanitised so any non-finite float echoed from the
     offending request cannot break JSON rendering (see :func:`_json_safe`).
+
+    ``context`` is whatever the caller passed, and ``{}`` when it passed
+    nothing. That empty object is not a promise unmet for most codes — see
+    "What ``context`` promises, and what it does not" in the module
+    docstring for which codes owe a client facts here and which are
+    complete without them.
     """
 
     return _json_safe(

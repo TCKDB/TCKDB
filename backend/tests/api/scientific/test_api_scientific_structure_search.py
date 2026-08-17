@@ -87,6 +87,46 @@ def test_post_multiple_structure_queries_returns_422(client, db_session):
     assert "multiple_structure_queries" in resp.text
 
 
+def test_an_ambiguous_structure_query_names_the_fields_it_got(
+    client, db_session
+):
+    """The ambiguity code names which fields were ambiguous between.
+
+    ``multiple_structure_queries`` is a relationship code in the sense
+    ``Shape.relationship`` means it -- an *ambiguity* asserted about two or
+    more things, naming none of them. ``context['supplied']`` now names
+    them. The query values are deliberately not echoed: the field names are
+    the whole repair.
+
+    Asserted on the ``(status, code)`` pair and on the exact list, not on
+    "context is non-empty".
+    """
+    resp = client.post(
+        SEARCH_URL,
+        json={
+            "query_smiles": "CCO",
+            "query_smarts": "[#6]O",
+            "mode": "substructure",
+        },
+    )
+
+    assert resp.status_code == 422, resp.text
+    body = resp.json()
+    assert body["code"] == "multiple_structure_queries", body
+    assert body["context"]["supplied"] == ["query_smarts", "query_smiles"], (
+        body["context"]
+    )
+    # Neither query value is echoed, and no row id is disclosed.
+    assert "CCO" not in repr(body["context"]), body["context"]
+    assert not any(
+        key == "id" or key.endswith(("_id", "_ids")) for key in body["context"]
+    ), body["context"]
+    # The published prose did not move.
+    assert body["detail"].startswith(
+        "multiple_structure_queries: exactly one structure query field is allowed;"
+    ), body["detail"]
+
+
 def test_invalid_smiles_returns_422(client, db_session):
     resp = client.get(
         SEARCH_URL + "?query_smiles=NOT_A_REAL_MOLECULE&mode=substructure"
