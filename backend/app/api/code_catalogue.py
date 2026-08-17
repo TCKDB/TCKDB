@@ -597,7 +597,20 @@ class ApiCode:
 CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("ambiguous_conformer_selection_locator", 422, Surface.coded_exception,
             "backend/app/services/conformer_selection_locator.py",
+            shape=Shape.relationship,
             note=(
+                "Shape.relationship, and it was already meeting the "
+                "obligation before there was a field to name it: the code "
+                "says several rows matched and names none of them, while "
+                "Discrimination.as_context reports match_count, differs_by, "
+                "discriminator, discriminator_values and locator_can_express "
+                "-- the things that differ, never their ids. So this entry "
+                "needed a declaration, not a repair. It is also the first "
+                "code to arrive after RELATIONSHIP_WORDS existed, and it "
+                "arrived misclassified by omission: written before Shape "
+                "was, it took the Shape.thing default and the word guard "
+                "refused it on the merge. Nothing else would have -- the "
+                "merge was textually clean. "
                 "The 'several matched' half of a split; unknown_conformer_"
                 "selection is the 'none matched' half, at 404. Both used to "
                 "be one bare ValueError reading 'must resolve exactly one "

@@ -1036,6 +1036,13 @@ def test_the_ownership_guards_are_guards_because_of_a_schema_shape() -> None:
 #: and pinned as a *floor*, never as the whole set, so the tranche that
 #: populates the next relationship code does not have to edit this list.
 _POPULATED_RELATIONSHIP_CODES = (
+    # Not populated by this pass -- it arrived already carrying its
+    # context, from ``Tell "no such selection" from "which selection?"``,
+    # and ``test_api_conformer_selection_locator_codes.py`` pins its keys
+    # on the wire. Listed for the same reason as the rest: a later edit
+    # moving it to ``Shape.thing`` while those assertions stand would be a
+    # contradiction, and this is what says so.
+    "ambiguous_conformer_selection_locator",
     "handle_type_mismatch",
     "invalid_temperature_range",
     "multiple_structure_queries",
