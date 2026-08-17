@@ -58,11 +58,21 @@ asserted:
 
 * a **new** catch-and-replace site fails :meth:`test_every_site_that_
   replaces_the_message_is_accounted_for`, and the failure names it;
-* a listed site that has been fixed, moved or deleted fails
+* a listed site that has been fixed, renamed or deleted fails
   :meth:`test_no_entry_describes_a_site_that_is_gone`, so the list cannot
   outlive what it describes;
 * and the scan itself is provoked against a site known to exist, so a
   scan that silently matches nothing cannot pass as a clean sweep.
+
+How an entry names its site
+---------------------------
+Both exemption lists here -- :data:`JUDGED_SITES` and
+:data:`JUDGED_ABSORBING_HANDLERS` -- key on
+``"<path>::<enclosing qualname>"``. Neither keys on a line number, and one
+of them used to: the drift that retired the form is written up on
+:data:`JUDGED_SITES`, along with the two tests that hold the qualname form
+honest, since an anchor is only worth having if the day it stops resolving
+is a red build rather than a quiet skip.
 
 The second rule: a handler that can *absorb* a coded refusal
 ------------------------------------------------------------
@@ -152,14 +162,33 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 API_ROOT = REPO_ROOT / "backend" / "app" / "api"
 
 #: Sites that catch an exception and raise an ``HTTPException`` carrying a
-#: *new* message, keyed ``"<path>:<except lineno>"``. Each value says why
-#: that is not a lost code. Anything not here must pass ``str(exc)``
+#: *new* message, keyed ``"<path>::<enclosing qualname>"``. Each value says
+#: why that is not a lost code. Anything not here must pass ``str(exc)``
 #: through so a ``message_prefix`` code survives.
 #:
 #: Keep this small. An entry is a standing claim that a client loses
 #: nothing, and every one of them should name the test that checked it.
+#:
+#: Anchored on the enclosing function rather than the ``except`` line
+#: number, matching :data:`JUDGED_ABSORBING_HANDLERS`. The line-number form
+#: was measured failing: "Say which field registration refused, not that
+#: one was" (#197) added a helper above this handler, which moved the
+#: ``except`` from line 181 to line 256 and turned two tests below red --
+#: :meth:`~TestTheSweepIsComplete.test_every_site_that_replaces_the_message
+#: _is_accounted_for` saw an unlisted site at 256 and
+#: :meth:`~TestTheSweepIsComplete.test_no_entry_describes_a_site_that_is_
+#: gone` saw a listed site gone from 181. The handler had not changed; the
+#: coordinate had. A qualname survives every edit except a rename, and a
+#: rename is a change worth re-reading the judgement for.
+#:
+#: The anchor form is load-bearing, not cosmetic, so it is itself held:
+#: :meth:`~TestTheSweepIsComplete.test_every_anchor_names_an_enclosing_
+#: function` fails if a site appears at module scope (nothing to name), and
+#: :meth:`~TestTheSweepIsComplete.test_no_two_judged_sites_share_an_anchor`
+#: fails if two such handlers land in one function, where one entry would
+#: silently exempt both.
 JUDGED_SITES: dict[str, str] = {
-    "backend/app/api/routes/auth.py:256": (
+    "backend/app/api/routes/auth.py::register": (
         "Registration catches IntegrityError to roll back before answering, "
         "and this entry is the *completed* half of the one it replaces. "
         "That entry said letting the exception through would publish "
@@ -185,16 +214,27 @@ JUDGED_SITES: dict[str, str] = {
 }
 
 #: A site the scan must find, so a scan that matches nothing cannot pass.
-#: It is the ``ReleaseCurationError`` handler on the release-publish route
+#: It is the ``ReleaseCurationError`` handlers on the release-admin routes
 #: -- the canonical *correct* shape, ``detail=str(exc)``.
+#:
+#: A **file**, not a qualname, and deliberately so: nine handlers in this
+#: module share the idiom, and the claim being made is about the idiom, not
+#: about any one route keeping its name. Naming a single function here would
+#: only add a way for the assertion to fail without the idiom changing.
 _A_SITE_THAT_PASSES_THE_MESSAGE_THROUGH = "backend/app/api/routes/releases_admin.py"
 
-#: Measured 2026-08-16, after the repairs: 13 handlers in
-#: ``backend/app/api`` raise an ``HTTPException``, of which 12 pass the
-#: caught message through and one is judged below. The floor is well under
-#: 13 and exists only to catch a scan that has stopped seeing the tree,
-#: not to police the count.
+#: Measured 2026-08-17: 13 handlers in ``backend/app/api`` raise an
+#: ``HTTPException``, of which 12 pass the caught message through and one is
+#: judged above. The floor is well under 13 and exists only to catch a scan
+#: that has stopped seeing the tree, not to police the count. Counted per
+#: handler rather than per anchor, so two in one function still count twice.
 _MINIMUM_SITES_THE_SCAN_MUST_SEE = 8
+
+#: How many of those 13 replace the caught message: exactly one, the
+#: registration conflict handler judged above. A floor rather than an
+#: equality so that repairing a site does not require editing two places,
+#: but not zero -- at zero, both directions of the sweep pass vacuously.
+_REPLACING_SITES_THE_SCAN_MUST_SEE = 1
 
 
 def _raised_http_exceptions(node: ast.AST) -> list[ast.Call]:
@@ -234,46 +274,103 @@ def _passes_the_message_through(call: ast.Call, bound: str | None) -> bool:
     return False
 
 
-def _scan() -> dict[str, str]:
-    """``"<path>:<lineno>" -> caught type(s)`` for catch-and-replace sites."""
-    replaced: dict[str, str] = {}
+def _qualnames(tree: ast.Module) -> dict[int, str]:
+    """``id(node) -> "outer.inner"`` for every node, by enclosing scope.
+
+    Shared by both rules: each anchors its exemption list on the enclosing
+    function rather than on a line number.
+    """
+    resolved: dict[int, str] = {}
+
+    def walk(node: ast.AST, prefix: str) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+            ):
+                inner = f"{prefix}.{child.name}" if prefix else child.name
+                resolved[id(child)] = inner
+                walk(child, inner)
+            else:
+                resolved[id(child)] = prefix
+                walk(child, prefix)
+
+    walk(tree, "")
+    return resolved
+
+
+def _http_raising_handlers() -> list[dict]:
+    """One record per ``except`` in the API layer raising an ``HTTPException``.
+
+    A list, not a dict: the count of *handlers* is asserted below, and
+    collapsing onto anchors first would let two handlers in one function
+    read as one and quietly lower that count.
+    """
+    records: list[dict] = []
     for path in sorted(API_ROOT.rglob("*.py")):
         tree = ast.parse(path.read_text())
         relative = str(path.relative_to(REPO_ROOT))
+        qualnames = _qualnames(tree)
         for node in ast.walk(tree):
             if not isinstance(node, ast.ExceptHandler):
                 continue
             raises = _raised_http_exceptions(node)
             if not raises:
                 continue
-            if all(_passes_the_message_through(call, node.name) for call in raises):
-                continue
-            replaced[f"{relative}:{node.lineno}"] = ast.unparse(node.type or ast.Name("BaseException"))
-    return replaced
+            qualname = qualnames.get(id(node)) or "<module>"
+            records.append(
+                {
+                    "key": f"{relative}::{qualname}",
+                    "path": relative,
+                    "qualname": qualname,
+                    "lineno": node.lineno,
+                    "caught": ast.unparse(node.type or ast.Name("BaseException")),
+                    "replaces_message": not all(
+                        _passes_the_message_through(call, node.name)
+                        for call in raises
+                    ),
+                }
+            )
+    return records
 
 
-def _all_sites() -> dict[str, str]:
+def _by_anchor(records: list[dict]) -> dict[str, dict]:
+    """Collapse records onto ``"<path>::<qualname>"``, flagging collisions.
+
+    Two handlers in one function share an anchor, so one would vanish from
+    the sweep and a single entry would exempt both. The merge is recorded
+    rather than hidden, for the test that fails on it.
+    """
+    merged: dict[str, dict] = {}
+    for record in records:
+        previous = merged.get(record["key"])
+        if previous is None:
+            merged[record["key"]] = dict(record, collided=False)
+            continue
+        previous["collided"] = True
+    return merged
+
+
+def _scan() -> dict[str, dict]:
+    """``"<path>::<qualname>" -> record`` for catch-and-replace sites."""
+    return _by_anchor(
+        [record for record in _http_raising_handlers() if record["replaces_message"]]
+    )
+
+
+def _all_sites() -> dict[str, dict]:
     """Every ``except`` in the API layer that raises an ``HTTPException``."""
-    sites: dict[str, str] = {}
-    for path in sorted(API_ROOT.rglob("*.py")):
-        tree = ast.parse(path.read_text())
-        relative = str(path.relative_to(REPO_ROOT))
-        for node in ast.walk(tree):
-            if isinstance(node, ast.ExceptHandler) and _raised_http_exceptions(node):
-                sites[f"{relative}:{node.lineno}"] = ast.unparse(
-                    node.type or ast.Name("BaseException")
-                )
-    return sites
+    return _by_anchor(_http_raising_handlers())
 
 
 class TestTheScanSeesTheCodeItIsWrittenOver:
     """A survey that checked nothing passes; these say what it checked."""
 
     def test_it_finds_more_than_a_handful_of_handlers(self):
-        sites = _all_sites()
-        assert len(sites) >= _MINIMUM_SITES_THE_SCAN_MUST_SEE, (
-            f"only {len(sites)} except-and-raise sites found under {API_ROOT}; "
-            "the scan has probably stopped walking the tree"
+        """Counted per handler, not per anchor, so a merge cannot hide one."""
+        handlers = _http_raising_handlers()
+        assert len(handlers) >= _MINIMUM_SITES_THE_SCAN_MUST_SEE, (
+            f"only {len(handlers)} except-and-raise sites found under "
+            f"{API_ROOT}; the scan has probably stopped walking the tree"
         )
 
     def test_it_recognises_the_message_passthrough_idiom(self):
@@ -281,8 +378,8 @@ class TestTheScanSeesTheCodeItIsWrittenOver:
         sites = _all_sites()
         passthrough = {
             site
-            for site in sites
-            if site.startswith(_A_SITE_THAT_PASSES_THE_MESSAGE_THROUGH)
+            for site, info in sites.items()
+            if info["path"] == _A_SITE_THAT_PASSES_THE_MESSAGE_THROUGH
         }
         assert passthrough, (
             f"no handler found in {_A_SITE_THAT_PASSES_THE_MESSAGE_THROUGH}; "
@@ -314,8 +411,8 @@ class TestTheSweepIsComplete:
 
     def test_every_site_that_replaces_the_message_is_accounted_for(self):
         unlisted = {
-            site: caught
-            for site, caught in _scan().items()
+            site: f"{info['caught']} (line {info['lineno']})"
+            for site, info in _scan().items()
             if site not in JUDGED_SITES
         }
         assert not unlisted, (
@@ -327,13 +424,91 @@ class TestTheSweepIsComplete:
         )
 
     def test_no_entry_describes_a_site_that_is_gone(self):
-        """A list nothing re-checks is how a stale survey stays believed."""
+        """A list nothing re-checks is how a stale survey stays believed.
+
+        This is also what stops an anchor from resolving to nothing. An
+        entry naming a function that no longer exists -- renamed, moved to
+        another module, deleted -- is not quietly skipped: it appears here
+        as stale and fails.
+        """
         found = _scan()
         stale = sorted(set(JUDGED_SITES) - set(found))
         assert not stale, (
             f"JUDGED_SITES describes sites that no longer replace the caught "
             f"exception's message: {stale}. If they were repaired, delete the "
-            "entry; if they moved, re-anchor it."
+            "entry; if the enclosing function was renamed or the handler "
+            f"moved to another one, re-anchor it. Found: {sorted(found)}"
+        )
+
+    def test_the_judged_list_is_not_empty_and_is_exactly_the_scan(self):
+        """The count, derived the way the gate derives it.
+
+        A sweep over an empty list satisfies both directions above
+        vacuously: nothing is unlisted and nothing is stale. Pinning a
+        floor on what the scan classifies as catch-and-replace means an
+        ``ast`` walk that has stopped matching cannot read as a clean
+        sweep, and the set equality then says the list is neither short
+        nor long.
+        """
+        replacing = _scan()
+        assert len(replacing) >= _REPLACING_SITES_THE_SCAN_MUST_SEE, (
+            f"the scan classifies only {len(replacing)} handlers as replacing "
+            f"the caught message, below the floor of "
+            f"{_REPLACING_SITES_THE_SCAN_MUST_SEE} measured 2026-08-17. Either "
+            "a judged site was genuinely repaired -- lower the floor and say "
+            "so -- or the classifier has stopped recognising the shape, in "
+            "which case every assertion in this class passes having checked "
+            "nothing"
+        )
+        assert set(JUDGED_SITES) == set(replacing), (
+            "JUDGED_SITES and the scan disagree; "
+            f"listed-not-found={sorted(set(JUDGED_SITES) - set(replacing))}, "
+            f"found-not-listed={sorted(set(replacing) - set(JUDGED_SITES))}"
+        )
+
+    def test_every_anchor_names_an_enclosing_function(self):
+        """A module-level handler has no name to anchor an entry on.
+
+        There are none today (measured 2026-08-17: all 13 sites sit inside
+        a named function), which is why the qualname form is a clean sweep
+        rather than a hybrid. Should one appear at module scope, its anchor
+        would degrade to ``"<path>::<module>"`` -- file-level precision
+        wearing a function-level spelling, and shared with every other
+        module-level handler in the same file. Fail here instead, where the
+        message can say what to do about it.
+        """
+        unanchorable = sorted(
+            f"{record['path']}:{record['lineno']}"
+            for record in _http_raising_handlers()
+            if record["qualname"] == "<module>"
+        )
+        assert not unanchorable, (
+            "these handlers raise an HTTPException at module scope, so there "
+            f"is no enclosing function for an entry to name: {unanchorable}. "
+            "Move the handler into a named function, or re-key both this scan "
+            "and JUDGED_SITES on the line number as well -- and record why the "
+            "anchor form had to change"
+        )
+
+    def test_no_two_judged_sites_share_an_anchor(self):
+        """Two in one function would merge, and one entry would exempt both.
+
+        The ambiguity a line number does not have, and a real cost of this
+        anchor form rather than a hypothetical one. The sibling scan carries
+        the same guard, and two of the four defects repaired by "Re-raise a
+        caught coded exception, not a bare 404/502" were *in the same
+        function* -- the download route's ``ArtifactIntegrityError`` and
+        ``ArtifactStorageUnavailable`` clauses.
+        """
+        collided = sorted(
+            key for key, info in _all_sites().items() if info["collided"]
+        )
+        assert not collided, (
+            "these functions hold more than one `except` that raises an "
+            "HTTPException, so JUDGED_SITES cannot address them separately "
+            f"and one entry would exempt both: {collided}. Split the "
+            "function, or key this scan on the handler's line number as well "
+            "as its qualname"
         )
 
     def test_the_artifact_routes_did_not_regrow_their_handlers(self):
@@ -359,7 +534,7 @@ class TestTheSweepIsComplete:
         ``test_every_curator_task_route_names_a_missing_task_the_same_way``,
         verified by mutation: reinstating the private guard turns it red.
         """
-        replaced_by_file = {site.split(":")[0] for site in _scan()}
+        replaced_by_file = {info["path"] for info in _scan().values()}
         path = "backend/app/api/routes/scientific/artifacts.py"
         assert path not in replaced_by_file, (
             f"{path} has regrown a handler that catches an exception and "
@@ -388,7 +563,9 @@ CODED_CATCHES = frozenset({"CodedValidationError", "CodedValueError"})
 #: ``"<path>::<enclosing qualname>"``. Anchored on the function rather than
 #: a line number so that reformatting the module above them does not fail
 #: this gate -- the lesson ``test_the_artifact_routes_did_not_regrow_their_
-#: handlers`` records, applied to a list eight entries long instead of one.
+#: handlers`` records. :data:`JUDGED_SITES` uses the same form; it was
+#: line-numbered until the drift documented there was measured, and this
+#: file now has one anchor convention rather than two.
 #:
 #: Every value must say what a client loses and why that is right. Adding
 #: an entry is the expensive path on purpose: re-raising (``raise``) or an
@@ -514,26 +691,6 @@ def _reraises_the_original(handler: ast.ExceptHandler) -> bool:
     return search(handler)
 
 
-def _qualnames(tree: ast.Module) -> dict[int, str]:
-    """``id(node) -> "outer.inner"`` for every node, by enclosing scope."""
-    resolved: dict[int, str] = {}
-
-    def walk(node: ast.AST, prefix: str) -> None:
-        for child in ast.iter_child_nodes(node):
-            if isinstance(
-                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-            ):
-                inner = f"{prefix}.{child.name}" if prefix else child.name
-                resolved[id(child)] = inner
-                walk(child, inner)
-            else:
-                resolved[id(child)] = prefix
-                walk(child, prefix)
-
-    walk(tree, "")
-    return resolved
-
-
 def _absorbing_handlers() -> dict[str, dict]:
     """``"<path>::<qualname>" -> {caught, safe, lineno}`` for the API layer.
 
@@ -557,7 +714,9 @@ def _absorbing_handlers() -> dict[str, dict]:
                     continue
                 if not (caught & ABSORBING_CATCHES):
                     continue
-                key = f"{relative}::{qualnames.get(id(node), '<module>')}"
+                # ``or``, not a ``.get`` default: every node is in the map,
+                # and module scope is recorded as the empty string.
+                key = f"{relative}::{qualnames.get(id(node)) or '<module>'}"
                 safe = coded_taken_first or _reraises_the_original(handler)
                 previous = found.get(key)
                 if previous is not None:
