@@ -239,6 +239,73 @@ class Reach(str, Enum):
     guard = "guard"
 
 
+class Replay(str, Enum):
+    """Whether sending the identical request again could ever succeed.
+
+    Why this is **declared and not derived**, unlike every other
+    classification in this module
+    -----------------------------------------------------------------
+    :attr:`ApiCode.is_client_facing` is a property because
+    :attr:`~ApiCode.status`, :attr:`~ApiCode.surface` and
+    :attr:`~ApiCode.reach` already determine it. This is not derivable
+    from anything an entry holds, and the pair that forced the field
+    proves it: ``artifact_storage_unavailable`` and
+    ``artifact_object_missing`` are both reported by one handler, from one
+    exception type, about one subsystem, and they need opposite answers.
+    The 503 is a store that did not answer, so waiting is exactly right.
+    The 502 is a committed row pointing at bytes that are gone, so waiting
+    is a loop that cannot terminate. No field distinguishes them because
+    the distinction is a fact about the failure, not about the entry.
+
+    So it is a declaration, and it carries a declaration's obligations:
+    :attr:`Replay.never_succeeds` requires a :attr:`ApiCode.note` saying
+    what makes the condition deterministic, for the reason
+    :attr:`Reach.guard` requires one. An unexplained claim is the kind
+    that rots, and this claim tells a client to stop trying.
+
+    Why it is not the client's ``RejectionCode`` enum
+    ------------------------------------------------
+    Because these are 5xx codes and that enum means "a refusal of
+    something the caller did". Widening
+    :attr:`ApiCode.is_client_facing` to admit them would move seven
+    entries into an enum named for rejections, three of which
+    (``database_unavailable``, ``query_timeout``,
+    ``schema_not_initialized``) refuse nothing at all. The retry question
+    and the branch-on-it question are genuinely different questions, and
+    the honest answer is a second export rather than one wider set — see
+    ``clients/python/src/tckdb_client/rejection_codes.py``.
+    """
+
+    #: Replaying might work. The default, and the only safe default: a
+    #: client that stops retrying a genuinely transient failure because
+    #: nobody classified it is a worse outcome than the wasted attempts
+    #: this field exists to prevent.
+    may_succeed = "may_succeed"
+
+    #: The condition is deterministic. The identical request will meet the
+    #: identical answer however long the caller waits, so a retry
+    #: schedule is a loop with no exit. Emitted to clients as
+    #: ``NON_RETRYABLE_CODES`` and consulted by
+    #: :meth:`tckdb_client.retry.RetryPolicy.code_is_retryable`.
+    #:
+    #: Only worth declaring where the status would otherwise *invite* a
+    #: retry. Marking a 422 is true and inert — no client retries a 422 —
+    #: and an inert declaration is a comment with a type, so the guard in
+    #: ``backend/tests/api/test_api_code_catalogue.py`` refuses one.
+    never_succeeds = "never_succeeds"
+
+
+#: Statuses a client may reasonably replay, so the statuses where a
+#: :attr:`Replay.never_succeeds` declaration changes an outcome rather
+#: than merely being true. Mirrors
+#: :data:`tckdb_client.retry.DEFAULT_RETRY_STATUS_CODES`, spelled again
+#: here because ``backend/app`` must not import the client package —
+#: the same one-way rule that keeps ``clients/python`` free of ``app``.
+#: Widening the client's set can only make this conservative; narrowing
+#: it is what the guard over this constant is watching for.
+REPLAYABLE_STATUSES: frozenset[int] = frozenset({429, 502, 503, 504})
+
+
 @dataclass(frozen=True)
 class ApiCode:
     """One code the API can report, and how it gets there.
@@ -260,11 +327,17 @@ class ApiCode:
         Defaults to :attr:`Reach.request`, so the classification costs
         nothing to the entries where it is uninteresting and has to be
         written down where it is not.
+    :param replay: Whether replaying the request could succeed — see
+        :class:`Replay`. The one classification here that is declared
+        rather than derived, because nothing an entry holds implies it.
+        Defaults to :attr:`Replay.may_succeed`, which is the fail-safe
+        direction.
     :param note: A fact the site cannot state about itself. Deliberately
         rare — this is an enumeration, not a second copy of the refusal
         messages. Required on every :attr:`Reach.guard` entry, because
         "no request can produce this" is a claim and an unexplained claim
-        is the kind that rots.
+        is the kind that rots — and on every
+        :attr:`Replay.never_succeeds` entry, for the same reason.
     """
 
     code: str
@@ -272,11 +345,22 @@ class ApiCode:
     surface: Surface
     origin: str
     reach: Reach = Reach.request
+    replay: Replay = Replay.may_succeed
     note: str | None = None
 
     @property
     def is_client_facing(self) -> bool:
         """Whether a client should be able to import and branch on this.
+
+        This answers *can a caller branch on it*, and since #234 it no
+        longer doubles as *should a caller retry it*. Those are different
+        questions, and answering both with one rule is why a 5xx a client
+        genuinely needs had nowhere to go: ``artifact_object_missing`` is
+        correctly refused here — the caller did nothing wrong, so there is
+        no branch for them to write — while being precisely the code a
+        retry layer must recognise. The second question is answered by
+        :attr:`replay` and exported separately; see
+        :func:`never_retryable`.
 
         Derived, never declared. A 5xx is not a refusal of anything the
         caller did; a generic fallback repeats the status; an accidental
@@ -296,6 +380,32 @@ class ApiCode:
                 Surface.generic_fallback,
                 Surface.accidental_prefix,
             }
+        )
+
+    @property
+    def is_replay_futile(self) -> bool:
+        """Whether a client's retry layer should refuse to replay this.
+
+        The :attr:`replay` declaration, narrowed to the entries where it
+        does any work. Two conditions beyond the declaration itself:
+
+        * :attr:`Reach.request`, because a code no request can produce is
+          a code no retry layer will ever be handed — the same reason a
+          guard is not exported to the client enum.
+        * A status in :data:`REPLAYABLE_STATUSES`, because a client does
+          not retry the others anyway. Marking a 422 ``never_succeeds``
+          is true and changes nothing, and publishing it would grow the
+          exported set with entries that cannot be observed to matter.
+
+        Note that this is *not* the complement of anything: an entry that
+        is neither client-facing nor replay-futile is the ordinary case —
+        a transient 5xx a client should keep retrying and has no branch
+        for.
+        """
+        return (
+            self.replay is Replay.never_succeeds
+            and self.reach is Reach.request
+            and self.status in REPLAYABLE_STATUSES
         )
 
 
@@ -326,10 +436,34 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("arrhenius_a_units_molecularity_mismatch", 422, Surface.coded_exception,
             "backend/app/chemistry/units.py"),
     ApiCode("artifact_integrity_failed", 502, Surface.response_literal,
-            "backend/app/api/errors.py"),
+            "backend/app/api/errors.py",
+            replay=Replay.never_succeeds,
+            note=(
+                "Replay.never_succeeds because the verification is a "
+                "comparison of stored bytes against a digest recorded when "
+                "they were accepted, and both sides are fixed: the digest "
+                "is immutable and the bytes are whatever they now are. The "
+                "same request meets the same mismatch forever. The handler's "
+                "own sentence already says so -- 'retrying will not clear "
+                "it' -- and until #234 no client could act on it, because "
+                "502 is in the client's default retry set and the code that "
+                "contradicts it was excluded from the exported enum by "
+                "is_client_facing's 4xx rule. Repair is an operator "
+                "restoring the object, not a caller waiting."
+            )),
     ApiCode("artifact_object_missing", 502, Surface.response_literal,
             "backend/app/api/errors.py",
+            replay=Replay.never_succeeds,
             note=(
+                "Replay.never_succeeds: the store answered, and what it "
+                "answered was that the key is not there. Nothing about "
+                "waiting changes that -- only an operator putting the "
+                "object back does, which is a different request by a "
+                "different principal. This is the pair that forced the "
+                "Replay field to exist: it and artifact_storage_unavailable "
+                "leave one handler, from one exception type, with opposite "
+                "retry advice and no field between them that a property "
+                "could read. "
                 "Split from artifact_storage_unavailable in #226, which "
                 "carried both 'the store did not answer' and 'the store "
                 "answered and the object is not there' — opposite retry "
@@ -357,7 +491,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "Now means only what its sentence says: the store did not "
                 "answer, and retrying is the right response. The case "
                 "where it answered 'no such key' left this code in #226 — "
-                "see artifact_object_missing."
+                "see artifact_object_missing. Deliberately left at the "
+                "Replay.may_succeed default: this is the half of the "
+                "original pair where the 503's retry advice was true all "
+                "along, and it is the entry that makes the new field's "
+                "guard non-vacuous."
             )),
     ApiCode("atom_map_atoms_unaccounted_for", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/fragments/reaction_atom_map.py"),
@@ -976,12 +1114,32 @@ def client_facing() -> tuple[ApiCode, ...]:
     return tuple(entry for entry in CATALOGUE if entry.is_client_facing)
 
 
+def never_retryable() -> tuple[ApiCode, ...]:
+    """The entries a client's retry layer must refuse to replay.
+
+    Disjoint from :func:`client_facing` today, and the test suite pins
+    that — but not by construction. The two answer different questions,
+    and a 429 could in principle be both (importable *and* pointless to
+    replay) without either rule contradicting the other; the assertion in
+    ``backend/tests/api/test_client_rejection_codes_generated.py`` is
+    there to make the first such entry a deliberate decision rather than
+    an accident, and its message says so.
+
+    See :attr:`ApiCode.is_replay_futile` for the rule, and :class:`Replay`
+    for why this one classification is declared rather than derived.
+    """
+    return tuple(entry for entry in CATALOGUE if entry.is_replay_futile)
+
+
 __all__ = [
     "CATALOGUE",
+    "REPLAYABLE_STATUSES",
     "STATUS_FALLBACK_PATTERN",
     "ApiCode",
     "Reach",
+    "Replay",
     "Surface",
     "catalogued_codes",
     "client_facing",
+    "never_retryable",
 ]

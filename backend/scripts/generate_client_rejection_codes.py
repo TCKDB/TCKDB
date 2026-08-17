@@ -35,6 +35,26 @@ named for rejections would invite a client to treat an accepted deposit
 as a failed one. Nor do trust labels, which refuse nothing, nor 5xx
 codes, which refuse nothing the caller did.
 
+The second export, and why it is not enum members
+-------------------------------------------------
+``NON_RETRYABLE_CODES`` is emitted from
+:func:`~app.api.code_catalogue.never_retryable` as bare strings, beside
+the enum rather than inside it. The two exports answer different
+questions -- *can I branch on this* and *should I replay this* -- and
+until #234 only the first had anywhere to go, which meant a client
+retried ``artifact_object_missing`` on a backoff schedule forever for a
+condition guaranteed never to clear. Making them members instead would
+have required admitting 5xx codes to ``RejectionCode``, moving seven
+entries into an enum named for refusals of the caller's request, three of
+which (``database_unavailable``, ``query_timeout``,
+``schema_not_initialized``) refuse nothing whatsoever. A separate set
+costs one export and claims exactly what is true.
+
+It is a ``frozenset[str]`` and not ``frozenset[RejectionCode]`` for the
+same reason -- there are no members to name -- and a retry layer compares
+against the raw ``code`` field of a response body anyway, which is a
+string before anything has decided whether the enum knows it.
+
 Nothing else is emitted. No file paths, no line numbers, no docstrings,
 no counts, no prose lifted from ``asserts``. That is a deliberate
 constraint on the *output*, not laziness about it: this file is compared
@@ -63,7 +83,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT / "backend"))
 
-from app.api.code_catalogue import client_facing  # noqa: E402
+from app.api.code_catalogue import client_facing, never_retryable  # noqa: E402
 
 OUTPUT = (
     REPO_ROOT
@@ -101,6 +121,17 @@ are the ``http_<status>`` fallbacks and the generic ``validation_error``
 family, which carry nothing the status line does not, and 5xx codes,
 which refuse nothing the caller did.
 
+:data:`NON_RETRYABLE_CODES` is the one place a 5xx code appears here, and
+it is not an enum member. Those codes are not refusals -- the caller did
+nothing wrong -- so there is no branch for a depositor to write. What
+there is, is a retry layer that would otherwise replay them: 502 and 503
+are transient statuses by default, and a handful of TCKDB's 5xx
+conditions are deterministic, so replaying them is a backoff schedule
+with no exit. :class:`tckdb_client.retry.RetryPolicy` consults this set
+and stops after one attempt. A code it does not recognise is retried
+exactly as before, which is the safe direction: giving up on a real blip
+is worse than a few wasted attempts.
+
 Using it::
 
     from tckdb_client import RejectionCode, rejection_code
@@ -135,6 +166,7 @@ from enum import Enum
 
 __all__ = [
     "CONFLICT_REJECTION_CODES",
+    "NON_RETRYABLE_CODES",
     "REJECTION_STATUSES",
     "RejectionCode",
     "VALIDATION_REJECTION_CODES",
@@ -181,12 +213,25 @@ def render() -> str:
 
     validation = sorted({entry.code for entry in entries if entry.status == 422})
     conflict = sorted({entry.code for entry in entries if entry.status == 409})
+    non_retryable = sorted({entry.code for entry in never_retryable()})
 
     if not validation:
         raise SystemExit(
             "The catalogue declares no client-facing 422 codes. Generating "
             "an empty enum would quietly remove a published client API; "
             "refusing."
+        )
+
+    if not non_retryable:
+        # The same refusal as the one above, for the same reason. An empty
+        # NON_RETRYABLE_CODES is a valid Python frozenset and a silently
+        # dead feature: every code becomes retryable again and the retry
+        # layer's fail-safe default hides the regression completely.
+        raise SystemExit(
+            "The catalogue declares no Replay.never_succeeds code that a "
+            "client would otherwise replay. Emitting an empty "
+            "NON_RETRYABLE_CODES would restore the forever-retry bug #234 "
+            "fixed while leaving the export in place; refusing."
         )
 
     lines = [_HEADER]
@@ -246,6 +291,26 @@ def render() -> str:
             f"    RejectionCode.{_member(code)}: frozenset({{{rendered}}}),\n"
         )
     lines.append("}\n")
+
+    lines.append(
+        "\n#: Codes whose condition is deterministic: the identical request\n"
+        "#: will meet the identical answer however long a client waits, so\n"
+        "#: replaying it is a backoff schedule with no exit. Bare strings\n"
+        "#: rather than ``RejectionCode`` members, because these arrive at a\n"
+        "#: 5xx and refuse nothing the caller did -- there is no branch for a\n"
+        "#: depositor to write, only a retry to abandon.\n"
+        "#:\n"
+        "#: Consulted by ``RetryPolicy.code_is_retryable``. It is a *deny*\n"
+        "#: list on purpose: a code absent from it is retried exactly as it\n"
+        "#: was before this set existed, so a server newer than this package\n"
+        "#: can add a transient failure without a pinned client silently\n"
+        "#: giving up on it. Abandoning a real blip is the worse bug.\n"
+        "NON_RETRYABLE_CODES: frozenset[str] = frozenset(\n"
+        "    {\n"
+    )
+    for code in non_retryable:
+        lines.append(f'        "{code}",\n')
+    lines.append("    }\n)\n")
 
     lines.append(_FOOTER)
     return "".join(lines)

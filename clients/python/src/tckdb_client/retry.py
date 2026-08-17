@@ -18,6 +18,32 @@ particular is the dangerous case: the server may have committed the
 upload and lost the response, so a blind replay would duplicate a
 scientific record.
 
+The status line is not always enough
+------------------------------------
+Those rules ask whether replaying is *safe*. A second question is
+whether it is *useful*, and the status alone cannot answer it. TCKDB
+reports two different artifact-storage failures at two statuses that are
+both in :data:`DEFAULT_RETRY_STATUS_CODES`: a 503 when the object store
+did not answer, where waiting is exactly right, and a 502 when the store
+answered and the bytes a published record points at are gone, where
+waiting cannot help — only an operator restoring the object can, and that
+is a different request by a different principal. Retrying the second is a
+backoff schedule with no exit.
+
+So the response *body* is consulted too. Its ``code`` field is checked
+against :data:`NON_RETRYABLE_CODES`, which the server generates from its
+own catalogue of error codes, and a match stops after one attempt
+whatever the status says. This is possible only because the decision
+point in ``TCKDBClient._send`` holds the whole response: ``httpx`` has
+already read the body by then, so the code is in scope where the retry is
+decided rather than one layer up where the error is raised.
+
+It is a **deny list, and unrecognised codes are retried.** A client that
+abandons a genuinely transient failure because it did not recognise the
+code is a worse bug than the wasted attempts this rule exists to prevent,
+and a pinned client talking to a newer server will meet codes it has
+never heard of routinely.
+
 Retries are **off by default**. Construct a :class:`RetryPolicy` and pass
 it to ``TCKDBClient(..., retry=policy)`` to opt in.
 """
@@ -31,10 +57,18 @@ from email.utils import parsedate_to_datetime
 from datetime import datetime, timezone
 from typing import Callable, Mapping
 
+from .rejection_codes import NON_RETRYABLE_CODES
+
 #: Transient status codes worth replaying. 429 is the only 4xx here:
 #: it is an explicit "come back later", not a malformed request. Every
 #: other 4xx describes a client-side problem that a replay cannot fix.
 DEFAULT_RETRY_STATUS_CODES: frozenset[int] = frozenset({429, 502, 503, 504})
+
+#: Codes that override the status above. Generated server-side from
+#: ``app.api.code_catalogue``, re-exported here so a caller configuring a
+#: policy does not have to know which module the set came from. See the
+#: module docstring for why the body is consulted at all.
+DEFAULT_NON_RETRYABLE_CODES: frozenset[str] = NON_RETRYABLE_CODES
 
 #: Methods that are safe to replay unconditionally.
 SAFE_METHODS: frozenset[str] = frozenset({"GET", "HEAD"})
@@ -71,6 +105,13 @@ class RetryPolicy:
     retry_status_codes:
         Response codes worth replaying. Defaults to
         :data:`DEFAULT_RETRY_STATUS_CODES`.
+    non_retryable_codes:
+        Error-body ``code`` values that veto a retry the status would
+        otherwise allow. Defaults to
+        :data:`DEFAULT_NON_RETRYABLE_CODES`. Pass ``frozenset()`` to
+        restore the pre-#234 behaviour of deciding on the status alone —
+        which means replaying a lost artifact forever, so there is no
+        good reason to.
     respect_retry_after:
         Honour the ``Retry-After`` response header. The client never
         sleeps *less* than the server asked for.
@@ -91,6 +132,7 @@ class RetryPolicy:
     max_backoff: float = 30.0
     jitter: float = 0.5
     retry_status_codes: frozenset[int] = DEFAULT_RETRY_STATUS_CODES
+    non_retryable_codes: frozenset[str] = DEFAULT_NON_RETRYABLE_CODES
     respect_retry_after: bool = True
     max_retry_after: float = 120.0
     sleep: Callable[[float], None] = field(default=_time.sleep, repr=False, compare=False)
@@ -132,6 +174,26 @@ class RetryPolicy:
     def status_is_retryable(self, status_code: int) -> bool:
         """Return ``True`` for transient response codes only."""
         return status_code in self.retry_status_codes
+
+    def code_is_retryable(self, code: object) -> bool:
+        """Return ``False`` only for a code known to be deterministic.
+
+        The veto over :meth:`status_is_retryable`, and deliberately the
+        weaker of the two: it can stop a retry the status permitted, never
+        start one the status refused. So a 422 does not become retryable
+        by omission from :attr:`non_retryable_codes`.
+
+        Everything unrecognised answers ``True`` — a code from a newer
+        server, a body with no ``code`` field, a body that was not JSON at
+        all, ``None``. Read the default as "keep retrying unless TCKDB has
+        said in writing that it is pointless", not as a whitelist. The
+        failure this shape avoids: a client pinned at an older version
+        meets a transient code added since, does not recognise it, and
+        gives up on an outage that would have cleared in four seconds.
+        """
+        if not isinstance(code, str):
+            return True
+        return code not in self.non_retryable_codes
 
     # ------------------------------------------------------------------
     # Delay computation
@@ -215,6 +277,7 @@ class RetryPolicy:
 
 
 __all__ = [
+    "DEFAULT_NON_RETRYABLE_CODES",
     "DEFAULT_RETRY_STATUS_CODES",
     "IDEMPOTENT_WITH_KEY_METHODS",
     "RetryPolicy",

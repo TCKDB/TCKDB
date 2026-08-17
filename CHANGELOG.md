@@ -57,6 +57,31 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Fixed
+
+- **A client no longer retries a lost artifact forever.**
+  `GET /scientific/artifacts/{sha256}/download` reports two different storage
+  failures: `503 artifact_storage_unavailable` when the object store did not
+  answer, and `502 artifact_object_missing` when it answered and the bytes a
+  still-published record points at are gone. Only the first can clear by
+  waiting. Both statuses are in `tckdb-client`'s default retry set and the
+  code that says which is which was excluded from `RejectionCode` by
+  construction (the enum is `4xx` only, because a `5xx` refuses nothing the
+  caller did) — so the server was honest and no client could act on it, and a
+  custody break was replayed on a backoff schedule for a condition guaranteed
+  never to clear.
+
+  The code catalogue now carries a second, **declared** classification
+  (`Replay`) beside the derived `is_client_facing`, and the generator emits it
+  as **`NON_RETRYABLE_CODES`** — a `frozenset[str]`, not enum members, since
+  these are not refusals. `RetryPolicy` reads the response body's `code` at the
+  point it decides to retry (the whole response is in scope there) and stops
+  after one attempt on a match. It is a **deny list**: an unrecognised code is
+  retried exactly as before, so a pinned client never abandons a transient
+  failure a newer server introduced. No HTTP status, code spelling or response
+  body changed; no `RejectionCode` member was added or removed.
+  **`tckdb-client` 0.49.0 → 0.50.0.** No schema or migration impact.
+
 ### Added
 
 - **Imaginary modes get a determination, not just a threshold.**

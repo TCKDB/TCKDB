@@ -137,6 +137,63 @@ def test_every_client_facing_catalogue_code_is_exported() -> None:
     )
 
 
+def test_every_never_retryable_code_reaches_the_client_deny_list() -> None:
+    """The second export, read the way a client reads it.
+
+    ``NON_RETRYABLE_CODES`` is the only route by which a 5xx code reaches a
+    client at all, and it exists because the enum cannot carry one:
+    ``is_client_facing`` requires a 4xx, on the correct grounds that a 5xx
+    refuses nothing the caller did. The consequence, until #234, was that
+    ``artifact_object_missing`` was honest server-side and unusable
+    client-side — 502 is in ``tckdb_client``'s default retry set, so the
+    client replayed a custody break on a backoff schedule forever.
+
+    Checked against the block rather than the whole file, because the
+    codes also appear in the header prose: a substring search over the
+    file would pass on the docstring alone while the set was empty.
+    """
+    from app.api.code_catalogue import never_retryable
+
+    expected = {entry.code for entry in never_retryable()}
+    assert expected, (
+        "the catalogue declares no never-retryable code, so the deny list "
+        "would be empty and the retry layer's fail-safe default would hide "
+        "it completely"
+    )
+
+    published = GENERATED.read_text()
+    assert "NON_RETRYABLE_CODES: frozenset[str] = frozenset(" in published, (
+        "the deny-list export is gone from the generated file; a client "
+        "importing it would fail, and one that used a stale copy would "
+        "resume replaying deterministic failures"
+    )
+    block = published.split("NON_RETRYABLE_CODES: frozenset[str] = frozenset(")[-1]
+    block = block.split(")")[0]
+
+    missing = sorted(code for code in expected if f'"{code}"' not in block)
+    assert not missing, (
+        f"The catalogue says replaying these can never succeed, but "
+        f"NON_RETRYABLE_CODES does not carry them: {missing}. A client would "
+        "retry each one to its attempt cap for a condition guaranteed not to "
+        "clear."
+    )
+
+    # The other direction: nothing in the deny list may also be an enum
+    # member. A code cannot simultaneously be a refusal of the caller's
+    # request and a 5xx the caller did not cause, and publishing it twice
+    # under two meanings is how a consumer ends up branching on the wrong
+    # one.
+    from app.api.code_catalogue import client_facing
+
+    overlap = expected & {entry.code for entry in client_facing()}
+    assert not overlap, (
+        f"{sorted(overlap)} is both exported as a RejectionCode member and "
+        "listed as never retryable. If a 4xx genuinely needs both, say so "
+        "deliberately -- this assertion is here because the two sets "
+        "answering different questions is the whole design."
+    )
+
+
 def test_the_generated_file_carries_no_anchor_that_moves_for_free() -> None:
     """Nothing derived from where a check lives, for the reason #119 established.
 

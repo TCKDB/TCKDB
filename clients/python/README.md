@@ -223,6 +223,31 @@ write, `422` means nothing was written at all. A code can be in both: the
 same scientific claim is sometimes enforced at the wire boundary and
 again in the schema.
 
+### Codes that are not refusals: `NON_RETRYABLE_CODES`
+
+`RejectionCode` covers `4xx` only, because a `5xx` is not a refusal of
+anything the caller did and there is no payload to repair. But a handful
+of TCKDB's `5xx` conditions are *deterministic*, and a retry policy needs
+to know which:
+
+```python
+from tckdb_client import NON_RETRYABLE_CODES
+# frozenset of plain strings, not RejectionCode members
+```
+
+`GET /scientific/artifacts/{sha256}/download` reports two different
+storage failures. A `503 artifact_storage_unavailable` means the object
+store did not answer — wait and try again. A `502 artifact_object_missing`
+means the store answered and the bytes a still-published record points at
+are gone; only an operator restoring the object changes that, so replaying
+the request is a backoff schedule with no exit. Both statuses are in
+`DEFAULT_RETRY_STATUS_CODES`, so the status alone cannot tell them apart.
+
+`RetryPolicy` consults this set automatically — if you pass a policy, you
+get the behaviour for free. It is a **deny list**: a code the set does not
+name is retried exactly as before, so a client pinned against an older
+release never stops retrying a transient failure it has not heard of.
+
 What each code asserts, why it refuses rather than warns, and how
 legitimate chemistry it would otherwise reject can still be deposited, is
 in [the scientific check register](https://github.com/TCKDB/TCKDB/blob/main/docs/guides/scientific_check_register.md).
