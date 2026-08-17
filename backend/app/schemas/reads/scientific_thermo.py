@@ -26,6 +26,7 @@ from app.schemas.reads.scientific_common import (
     ReviewStatusSummary,
     SelectionPolicy,
     SoftwareReleaseSummary,
+    SupersessionNotice,
     TemperatureCoverage,
 )
 from app.services.trust.models import TrustFragment
@@ -201,6 +202,10 @@ class ThermoRecord(BaseModel):
     scientific_origin: ScientificOriginKind
     model_kind: ThermoModelKindQuery
     review: RecordReviewBadge
+    #: Correction notice, present only when this record has been replaced.
+    #: ``null`` on a current record — and always computed, never behind an
+    #: ``include=`` token. See :class:`SupersessionNotice`.
+    supersession: SupersessionNotice | None = None
     h298_kj_mol: float | None = None
     s298_j_mol_k: float | None = None
     h298_uncertainty_kj_mol: float | None = None

@@ -15,11 +15,13 @@ from sqlalchemy import select, text
 
 from app.db.models.common import (
     DatasetReleaseStatus,
+    RecordReviewStatus,
     ReleaseSelectionAction,
     SubmissionRecordType,
 )
 from app.db.models.dataset_release import ReleaseSelection
 from app.db.models.thermo import Thermo
+from app.services.record_review import set_record_review_status
 from app.services.release.curation import (
     ReleaseCurationError,
     add_selection,
@@ -33,6 +35,9 @@ from app.services.release.curation import (
     withdraw_release,
     withdraw_selection,
 )
+from app.services.scientific_read.releases import get_release_selections
+from app.services.scientific_record_supersession import supersede_scientific_record
+from tests.services.scientific_read._factories import make_thermo_scalar
 
 
 def _snapshot(session, thermo_id: int) -> dict:
@@ -783,3 +788,92 @@ def test_an_approved_selected_record_is_frozen_by_the_science_trigger(
             {"v": -999.0, "i": first.id},
         )
     db_session.rollback()
+
+
+# ---------------------------------------------------------------------------
+# A published release must announce post-cut supersession of its selections
+# ---------------------------------------------------------------------------
+
+
+def test_the_selection_ledger_announces_a_post_cut_record_supersession(
+    db_session, draft_release, curator, species_entry, thermo_candidates
+):
+    """A standing selection whose selected record was later corrected.
+
+    This is the state that can mislead someone *outside* the project: a
+    DOI-bearing release points at a number, the citation resolves cleanly, and
+    nothing says the number has since been replaced.
+
+    ``live_divergence`` is not this answer. It compares per-file byte digests
+    and reports "the database has moved" — advisory, routinely ``true``, and
+    unable to name a record. Three links again, so "immediate successor" and
+    "head" cannot be confused.
+    """
+    first, second = thermo_candidates
+    third = make_thermo_scalar(
+        db_session, species_entry=species_entry, h298_kj_mol=-236.4
+    )
+    set_record_review_status(
+        db_session,
+        record_type=SubmissionRecordType.thermo,
+        record_id=third.id,
+        status=RecordReviewStatus.approved,
+        actor=curator,
+        note="third candidate",
+    )
+    selection = _select_first(
+        db_session, draft_release, curator, first, species_entry
+    )
+    before = _snapshot(db_session, first.id)
+
+    for older, newer in ((first, second), (second, third)):
+        supersede_scientific_record(
+            db_session,
+            record_type=SubmissionRecordType.thermo,
+            superseded_record_id=older.id,
+            superseding_record_id=newer.id,
+            actor=curator,
+            reason=f"refit {older.id} -> {newer.id}",
+        )
+    db_session.flush()
+
+    ledger = get_release_selections(db_session, draft_release.tag)
+    row = next(
+        rec for rec in ledger.records if rec.selection_ref == selection.public_ref
+    )
+
+    assert row.stands is True, (
+        "the curator never revised their opinion; only the science moved"
+    )
+    assert row.supersedes_selection_ref is None
+    notice = row.record_supersession
+    assert notice is not None, (
+        "a standing selection of a superseded record must say so"
+    )
+    assert notice.superseded_by == second.public_ref
+    assert notice.current == third.public_ref
+    assert notice.superseded_by != notice.current
+    assert notice.chain_length == 2
+    assert notice.reason == f"refit {first.id} -> {second.id}"
+
+    # The two supersessions are different questions and must not be conflated.
+    assert row.record_supersession is not None
+    assert row.supersedes_selection_ref is None
+
+    # And reading the ledger changed nothing about the selected record.
+    assert _snapshot(db_session, first.id) == before
+
+
+def test_a_selection_of_a_current_record_reports_no_notice(
+    db_session, draft_release, curator, species_entry, thermo_candidates
+):
+    first, _second = thermo_candidates
+    selection = _select_first(
+        db_session, draft_release, curator, first, species_entry
+    )
+
+    ledger = get_release_selections(db_session, draft_release.tag)
+    row = next(
+        rec for rec in ledger.records if rec.selection_ref == selection.public_ref
+    )
+    assert row.record_supersession is None

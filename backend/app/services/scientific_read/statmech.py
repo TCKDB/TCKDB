@@ -48,6 +48,7 @@ from app.schemas.reads.scientific_common import (
     LiteratureSummary,
     RecordReviewBadge,
     SoftwareReleaseSummary,
+    SupersessionNotice,
     WorkflowToolReleaseSummary,
 )
 from app.schemas.reads.scientific_statmech import (
@@ -77,6 +78,7 @@ from app.services.scientific_read.handles import resolve_statmech_handle
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -220,8 +222,19 @@ def get_statmech(
         raise not_found("statmech", row_id=sm_id, code="handle_not_found")
 
     badge = _load_review_badge(session, sm.id)
+    # Unconditional correction notice: a reader who cited this statmech must
+    # be told it was replaced without having to ask.
+    supersessions = fetch_supersession_notices(
+        session,
+        record_type=SubmissionRecordType.statmech,
+        record_ids=[sm.id],
+    )
     record = build_statmech_record(
-        session, sm=sm, badge=badge, includes=includes
+        session,
+        sm=sm,
+        badge=badge,
+        includes=includes,
+        supersession=supersessions.get(sm.id),
     )
 
     return ScientificStatmechDetailResponse(
@@ -242,6 +255,7 @@ def build_statmech_record(
     sm: Statmech,
     badge: RecordReviewBadge,
     includes: set[str],
+    supersession: SupersessionNotice | None = None,
 ) -> ScientificStatmechRecord:
     """Project one Statmech row into the public scientific record shape.
 
@@ -364,6 +378,7 @@ def build_statmech_record(
 
     return ScientificStatmechRecord(
         statmech=core,
+        supersession=supersession,
         species=species_context,
         transition_state=transition_state_context,
         frequency_scale_factor=fsf_summary,

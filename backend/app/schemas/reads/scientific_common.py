@@ -146,6 +146,69 @@ class RecordReviewBadge(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Supersession notice
+# ---------------------------------------------------------------------------
+
+
+class SupersessionNotice(BaseModel):
+    """Correction notice attached to a record that has been replaced.
+
+    Why this exists
+    ---------------
+    TCKDB never rewrites an accepted scientific record. A correction is a
+    *new* record plus an immutable
+    ``scientific_record_supersession`` edge saying "this was replaced by
+    that, here is why, by whom, when". Keeping the old row byte-identical is
+    what makes an existing citation keep resolving.
+
+    Resolving is not enough. A citation that 404s announces its own problem;
+    a citation that resolves cleanly to a *superseded* number looks healthy,
+    so nobody investigates. Findable-and-unmarked is precisely the failure
+    the append-only design was meant to prevent, so every read of a
+    superseded record carries this block — unconditionally, not behind an
+    ``include=`` token. See ADR 0003 (frozen rows) and ADR 0007 (no stored
+    ``is_current``).
+
+    Two pointers, deliberately
+    --------------------------
+    ``superseded_by``  the **immediate** successor. Truthful about the one
+                       edge that was recorded, and preserves the history: a
+                       reader walking A → B → C sees the real steps.
+    ``current``        the **head** of the chain — what a reader actually
+                       wants to follow. For a one-link chain the two are
+                       equal; for A → B → C a read of A reports
+                       ``superseded_by=B``, ``current=C``.
+
+    Neither pointer is stored. The database holds only the chain of edges;
+    the head is computed per read. Storing the head would mean ``UPDATE``-ing
+    every earlier record whenever a new correction lands — forbidden by the
+    accepted-science immutability triggers, and the same second-source-of-
+    truth defect ADR 0007 rejected as ``is_current``. Appending a correction
+    is one ``INSERT``, and every read of every earlier record reports the new
+    head immediately because it was never written down.
+
+    ``reason`` and ``superseded_at`` describe the **immediate** edge, matching
+    ``superseded_by``. Whoever recorded the edge is deliberately not named
+    here: the read API does not attribute curation actions to a person.
+
+    Both pointers are public refs of the *records* (``thm_…``, ``kin_…``),
+    never of the supersession edge, and never a database row id
+    (DR-0028 Req 2).
+    """
+
+    superseded_by: str
+    current: str
+    reason: str
+    superseded_at: datetime
+    #: Number of recorded edges between this record and ``current``. ``1``
+    #: means ``superseded_by`` *is* the head; ``>1`` means this record has
+    #: been corrected more than once since. A client that only wants "is
+    #: there anything newer than my immediate successor" can read this
+    #: instead of walking the chain itself.
+    chain_length: int = Field(ge=1)
+
+
+# ---------------------------------------------------------------------------
 # Level of theory / software / workflow tool / literature summaries
 # ---------------------------------------------------------------------------
 

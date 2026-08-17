@@ -78,6 +78,7 @@ from app.services.scientific_read.statmech import (
     _LEGAL_INCLUDE_TOKENS,
     build_statmech_record,
 )
+from app.services.scientific_read.supersession import fetch_supersession_notices
 
 _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "species_ref",
@@ -419,6 +420,14 @@ def _materialize_records(
         select(Statmech).where(Statmech.id.in_(page_ids))
     ).all()
     by_id = {r.id: r for r in rows}
+    # Correction notices for the page, batched. Two queries whatever the page
+    # size — resolving a chain per row would be the N+1 trap this shape
+    # exists to avoid.
+    supersessions = fetch_supersession_notices(
+        session,
+        record_type=SubmissionRecordType.statmech,
+        record_ids=page_ids,
+    )
     out: list[ScientificStatmechRecord] = []
     for cid in page_ids:
         sm = by_id.get(cid)
@@ -430,6 +439,7 @@ def _materialize_records(
                 sm=sm,
                 badge=badges[cid],
                 includes=includes,
+                supersession=supersessions.get(cid),
             )
         )
     return out

@@ -18314,6 +18314,16 @@
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind"
           },
+          "supersession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersessionNotice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "temperature_coverage": {
             "anyOf": [
               {
@@ -29880,7 +29890,7 @@
         "type": "string"
       },
       "ReleaseSelectionRecord": {
-        "description": "One attributed selection row, standing or superseded.",
+        "description": "One attributed selection row, standing or superseded.\n\nTwo unrelated supersessions meet on this row and must not be confused;\n``backend/docs/specs/dataset_release_and_profiles.md`` §\"two supersessions\"\nholds them apart:\n\n``supersedes_selection_ref``  a *curator's opinion* was revised. Both\n                              records remain equally valid science.\n``record_supersession``       the *science* was corrected. The selected\n                              record has been replaced by a better\n                              measurement of the same thing.\n\nA standing selection whose selected record has since been superseded is the\nsingle most misleading state this API can serve: it is what a citable,\nDOI-bearing release points a reader outside the project at. It is reported\nhere rather than folded into ``live_divergence``, which is a per-file byte\ndigest — \"the database has moved\", advisory and routinely true — and cannot\nname a record.",
         "properties": {
           "action": {
             "$ref": "#/components/schemas/ReleaseSelectionAction"
@@ -29930,6 +29940,16 @@
               }
             ],
             "title": "Record Ref"
+          },
+          "record_supersession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersessionNotice"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "record_type": {
             "title": "Record Type",
@@ -34210,6 +34230,16 @@
           "statmech": {
             "$ref": "#/components/schemas/StatmechCoreBlock"
           },
+          "supersession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersessionNotice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "torsions": {
             "anyOf": [
               {
@@ -34666,6 +34696,16 @@
           },
           "species": {
             "$ref": "#/components/schemas/TransportSpeciesContext"
+          },
+          "supersession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersessionNotice"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "transport": {
             "$ref": "#/components/schemas/TransportCoreBlock"
@@ -39514,6 +39554,42 @@
         "title": "SupersedeRequest",
         "type": "object"
       },
+      "SupersessionNotice": {
+        "description": "Correction notice attached to a record that has been replaced.\n\nWhy this exists\n---------------\nTCKDB never rewrites an accepted scientific record. A correction is a\n*new* record plus an immutable\n``scientific_record_supersession`` edge saying \"this was replaced by\nthat, here is why, by whom, when\". Keeping the old row byte-identical is\nwhat makes an existing citation keep resolving.\n\nResolving is not enough. A citation that 404s announces its own problem;\na citation that resolves cleanly to a *superseded* number looks healthy,\nso nobody investigates. Findable-and-unmarked is precisely the failure\nthe append-only design was meant to prevent, so every read of a\nsuperseded record carries this block — unconditionally, not behind an\n``include=`` token. See ADR 0003 (frozen rows) and ADR 0007 (no stored\n``is_current``).\n\nTwo pointers, deliberately\n--------------------------\n``superseded_by``  the **immediate** successor. Truthful about the one\n                   edge that was recorded, and preserves the history: a\n                   reader walking A → B → C sees the real steps.\n``current``        the **head** of the chain — what a reader actually\n                   wants to follow. For a one-link chain the two are\n                   equal; for A → B → C a read of A reports\n                   ``superseded_by=B``, ``current=C``.\n\nNeither pointer is stored. The database holds only the chain of edges;\nthe head is computed per read. Storing the head would mean ``UPDATE``-ing\nevery earlier record whenever a new correction lands — forbidden by the\naccepted-science immutability triggers, and the same second-source-of-\ntruth defect ADR 0007 rejected as ``is_current``. Appending a correction\nis one ``INSERT``, and every read of every earlier record reports the new\nhead immediately because it was never written down.\n\n``reason`` and ``superseded_at`` describe the **immediate** edge, matching\n``superseded_by``. Whoever recorded the edge is deliberately not named\nhere: the read API does not attribute curation actions to a person.\n\nBoth pointers are public refs of the *records* (``thm_…``, ``kin_…``),\nnever of the supersession edge, and never a database row id\n(DR-0028 Req 2).",
+        "properties": {
+          "chain_length": {
+            "minimum": 1.0,
+            "title": "Chain Length",
+            "type": "integer"
+          },
+          "current": {
+            "title": "Current",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "superseded_at": {
+            "format": "date-time",
+            "title": "Superseded At",
+            "type": "string"
+          },
+          "superseded_by": {
+            "title": "Superseded By",
+            "type": "string"
+          }
+        },
+        "required": [
+          "superseded_by",
+          "current",
+          "reason",
+          "superseded_at",
+          "chain_length"
+        ],
+        "title": "SupersessionNotice",
+        "type": "object"
+      },
       "SupportingCalculationRef": {
         "description": "One supporting calculation reference (id + public ref).",
         "properties": {
@@ -41572,6 +41648,16 @@
           },
           "scientific_origin": {
             "$ref": "#/components/schemas/ScientificOriginKind"
+          },
+          "supersession": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SupersessionNotice"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "temperature_coverage": {
             "anyOf": [

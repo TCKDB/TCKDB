@@ -63,6 +63,56 @@ role-at-action snapshot, and a later role change must not invalidate archive
 restore. Consequently, actor authority is temporal application evidence—not a
 cryptographically unforgeable database invariant.
 
+## Announcing a replacement on a read
+
+Keeping the old row findable is only half the contract. A citation that 404s
+announces its own problem; a citation that resolves cleanly to a *superseded*
+number looks perfectly healthy, so nobody investigates. Findable **and
+unmarked** is the failure this design exists to prevent, so every scientific
+product read of a superseded record carries a correction notice.
+
+`SupersessionNotice` (`app/schemas/reads/scientific_common.py`) has two
+pointers, and both are needed:
+
+- `superseded_by` — the **immediate** successor. Truthful about the one edge
+  that was recorded, and what preserves the history.
+- `current` — the **head** of the chain. What a reader actually wants to
+  follow. For `A -> B -> C`, a read of `A` reports `superseded_by=B`,
+  `current=C`, `chain_length=2`.
+
+`reason` and `superseded_at` describe the immediate edge, matching
+`superseded_by`. Both pointers are public refs of the superseding *records*,
+never of the supersession edge and never a row id (DR-0028 Req 2). A current
+record reports `null`, not an empty block.
+
+**The chain is stored; the head is computed.** Storing the head would mean
+`UPDATE`-ing every earlier record in the chain when a new correction lands —
+refused by the triggers above, and the same second-source-of-truth defect
+ADR 0007 rejected as a stored `is_current` flag. Appending a correction stays
+one `INSERT`, and every read of every earlier record reports the new head
+immediately because it was never written down.
+`app/services/scientific_read/supersession.py` resolves a whole page in two
+queries (one recursive CTE plus one ref lookup), never one walk per row.
+
+Carried today by: thermo, kinetics, statmech and transport (detail reads and
+their search endpoints), and by a dataset release's selection ledger — see the
+"two supersessions" section of
+[`dataset_release_and_profiles.md`](dataset_release_and_profiles.md). The
+remaining supported roots (`calculation`, `network`, `network_solve`,
+`transition_state_entry`, `conformer_observation`) are one call site each
+against the same resolver. `applied_energy_correction` cannot carry a notice
+until it has a `public_ref` column, because there is no way to name its
+replacement without leaking a primary key.
+
+The notice is **not** behind an `include=` token. A correction notice a client
+must ask for is one most clients will not ask for, which defeats its purpose.
+
+Note that supersession also flips the old record's review status to
+`deprecated`, and the default read posture hides deprecated records. Reaching a
+superseded record therefore needs `include_deprecated=true` (or a direct
+by-ref read) — which is exactly what a reader following an existing citation
+does, and exactly the case the notice exists for.
+
 ## Deployment prerequisite
 
 Triggers are an adversarial guarantee only when the application role is a
