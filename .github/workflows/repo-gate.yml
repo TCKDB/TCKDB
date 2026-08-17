@@ -47,6 +47,22 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          # Full history, not the depth-1 default. The package version guard
+          # below compares against the *merge base* of this branch and the
+          # base branch, and a shallow clone has no merge base to compute --
+          # git would fail rather than quietly find nothing, but only
+          # because check_package_version_bump.py refuses that case
+          # explicitly. test_the_gate_has_the_history_it_needs pins this.
+          fetch-depth: 0
+          # And tags, which fetch-depth: 0 does NOT bring on its own -- the
+          # action passes --no-tags unless asked for them. Without this the
+          # guard's third check ("is this version already pinned by a
+          # <name>-v<version> tag?") would see an empty tag list, find no
+          # conflict, and sit there inert while reporting green. That is the
+          # exact shape of failure this whole gate exists to prevent, so it
+          # would be a poor one to build into it.
+          fetch-tags: true
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -58,6 +74,52 @@ jobs:
 
       - name: Every test file is run by a required job
         run: python -m pytest --noconftest -q backend/tests/scripts/test_gate_coverage.py
+
+      # WHY THE VERSION GUARD IS HERE AND NOT IN python-client-ci.yml
+      #   Two agents branched from tckdb-client 0.46.0 on 2026-08-16, both
+      #   correctly bumped to 0.47.0, and git merged the byte-identical
+      #   version line with no conflict and no entry in the merge stat. One
+      #   number, two packages. The same thing has already happened five
+      #   times to tckdb-schemas -- run the script with --audit to see them.
+      #
+      #   It lives in the unfiltered workflow because the packages it covers
+      #   include integrations/mcp, which python-client-ci.yml's paths:
+      #   filter does not match: a pull request touching only that package
+      #   would start no job that could notice. The guard's own tests run
+      #   here too, for the reason given above about the aggregator -- a
+      #   defect in a guard is a defect in the gate.
+      - name: The guard against two packages claiming one version works
+        run: python -m pytest --noconftest -q backend/tests/scripts/test_check_package_version_bump.py
+
+      # THE TWO REFS ARE DIFFERENT ON PURPOSE.
+      #
+      #   --base-ref is the base branch's tip *as the pull request event saw
+      #   it*, a concrete sha that always exists in the checkout. The script
+      #   takes merge-base(base, head) from it, which is the only ref that
+      #   asks the author the question they can answer: "did you raise the
+      #   number from where you branched?" Comparing against the current tip
+      #   instead would fail a branch that is merely behind, blaming it for
+      #   someone else's merge.
+      #
+      #   --main-ref is the base branch as fetched *now*, which is fresher
+      #   than base.sha and therefore includes a sibling branch that merged
+      #   after this pull request last ran. That is the whole point: the
+      #   colliding version is never on the merge base's history -- it
+      #   arrives on main after the branch point, which is what makes the
+      #   collision possible.
+      #
+      # RESIDUAL GAP, STATED RATHER THAN HIDDEN
+      #   If this job last ran before the sibling merged and is never re-run,
+      #   its green is stale. No CI check can close that from inside the run;
+      #   it needs "Require branches to be up to date before merging" in
+      #   branch protection. The guard narrows the window to the interval
+      #   between the last run and the merge, instead of leaving it open.
+      - name: A changed package carries an unused, strictly greater version
+        run: >-
+          python backend/scripts/check_package_version_bump.py
+          --base-ref "${{ github.event.pull_request.base.sha || github.sha }}"
+          --head-ref "${{ github.event.pull_request.head.sha || github.sha }}"
+          --main-ref "origin/${{ github.base_ref || github.event.repository.default_branch }}"
 
       # Runs here too, and not only in the backend complement gate, because
       # this file is the mechanism by which the *other* workflows become
