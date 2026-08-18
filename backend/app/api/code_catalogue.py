@@ -427,8 +427,14 @@ class Shape(str, Enum):
     #: between two or more things and names none of them, so ``context``
     #: is the only place the *which* can live. What goes in it is the
     #: things themselves — a field path, a public ref, a declared local
-    #: key, a constraint name, a count — and never a database primary key
-    #: (DR-0028 Requirement 2), which is logged instead.
+    #: key, a count — and never an internal identifier: not a database
+    #: primary key (DR-0028 Requirement 2), and since 2026-08-18 not a
+    #: raw database constraint name either. Both are logged instead, for
+    #: the same reason: they are ours, not the depositor's, they do not
+    #: survive a restore or a rename, and no public surface is keyed on
+    #: them. A constraint that deserves a public contract earns a code of
+    #: its own through the scientific check register — see
+    #: :func:`app.api.errors._integrity_error_handler`.
     relationship = "relationship"
 
 

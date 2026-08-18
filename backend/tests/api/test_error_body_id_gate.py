@@ -1,4 +1,10 @@
-"""The DR-0028 body sweep must catch the shape it exists to catch.
+"""The body sweep must catch the shapes it exists to catch.
+
+Two of them since 2026-08-18: a database primary key (DR-0028
+Requirement 2) and a raw database constraint name. Both are internal
+identifiers a depositor cannot act on, both go to the log instead, and
+the second is here because the repository had been asserting it one test
+at a time and had ended up holding three different positions at once.
 
 ``tests/error_body_observer.py`` is a passive observer: it inspects every
 4xx/5xx body the suite produces and fails the test that produced a
@@ -157,6 +163,99 @@ def test_prose_that_merely_contains_a_number_is_not_a_leak() -> None:
     ):
         body = {"code": "x", "detail": detail, "context": {}}
         assert _leaks(422, body) == [], detail
+
+
+@pytest.mark.parametrize(
+    "body, where",
+    [
+        # The disclosure the 2026-08-18 ruling removed: the registered
+        # constraint path published its own key.
+        (
+            {
+                "code": "atom_map_element_not_conserved",
+                "detail": "An atom map pairs two atoms of different elements.",
+                "context": {"constraint": "ck_reaction_atom_map_pair_element_matches"},
+            },
+            "context.constraint",
+        ),
+        # Renaming the key does not launder the value. The rule is about
+        # what is published, not what it is called.
+        (
+            {
+                "code": "unique_conflict",
+                "detail": "conflict",
+                "context": {"rule": "uq_software_name"},
+            },
+            "context.rule",
+        ),
+        # The foreign-key class, which had no assertion in either
+        # direction until this ruling.
+        (
+            {
+                "code": "reference_conflict",
+                "detail": "conflict",
+                "context": {"violated": ["fk_species_entry_species_id_species"]},
+            },
+            "context.violated[0]",
+        ),
+        # An index name, and a primary key's, because
+        # ``NAMING_CONVENTION`` mints five prefixes and not two.
+        (
+            {"code": "x", "detail": "no", "context": {"why": "ix_species_smiles"}},
+            "context.why",
+        ),
+        (
+            {"code": "x", "detail": "no", "context": {"why": "pk_species"}},
+            "context.why",
+        ),
+        # In prose, which is where it would land if somebody rendered the
+        # driver's own sentence instead of publishing a field.
+        (
+            {
+                "code": "state_conflict",
+                "detail": 'violates check constraint "ck_geometry_atom_element_canonical"',
+                "context": {},
+            },
+            "detail",
+        ),
+    ],
+)
+def test_a_database_constraint_name_in_a_body_is_a_leak(body, where) -> None:
+    """Calvin's ruling of 2026-08-18, as a shape the extractor refuses.
+
+    A raw constraint name is an internal identifier on exactly the DR-0028
+    reasoning: meaningless to a depositor, not stable across a migration
+    that renames it, and a disclosure of schema layout. The register is
+    the sanctioned route from such a name to a public contract -- the
+    constraint declares a rejection code and the *code* crosses the wire.
+    """
+    assert _leaks(409, body) == [where], body
+
+
+def test_prose_and_values_that_merely_look_technical_are_not_a_leak() -> None:
+    """The constraint rule must not swallow the codes it exists to protect.
+
+    Every registered rejection code, every public ref prefix and every
+    ordinary refusal sentence has to survive it, or the ruling would have
+    cost the contract it was meant to defend.
+    """
+    for context, detail in (
+        # The codes the register mints. These are the public contract.
+        ({}, "An atom map pairs two atoms of different elements."),
+        ({"code": "atom_map_not_a_bijection"}, "A map is a bijection or it is not."),
+        ({"code": "energy_transfer_scope_columns_disagree"}, "refused"),
+        # Public refs, which are what a body is allowed to name.
+        ({"species_entry_ref": "spe_abcdefghijklmnopqrstuvwx"}, "unknown entry"),
+        ({"ref": "nsolve_19ee5931311c4abe86a2d5b964"}, "unknown solve"),
+        # The new generic sentences, which must stay clean.
+        ({}, "A uniqueness rule was violated: a record with these values already exists."),
+        ({}, "A referenced record does not exist, or is still referenced by another record."),
+        # Words that merely begin with one of the five prefixes.
+        ({"field": "pkey_material"}, "ixion is not an element"),
+        ({"unit": "cm-1"}, "fk is not a recognised prefix here"),
+    ):
+        body = {"code": "x", "detail": detail, "context": context}
+        assert _leaks(422, body) == [], (context, detail)
 
 
 def test_a_clean_body_still_counts_as_examined() -> None:
