@@ -181,15 +181,41 @@ a `head_bucket`, and a full store answers a `head_bucket` with **200**:
   quota query to ask instead.
 
 `storage_full` therefore reports what the **real write path** was told, not
-what a probe found. That has two consequences an operator must know:
+what a probe found. It is recorded in the append-only
+`artifact_storage_capacity_event` table, so:
 
+- **It survives a restart.** It used to be process memory, and a restart
+  silently reset it to healthy while every upload still failed.
 - **`"storage_full": false` does not mean there is space.** It means no
-  upload has been refused for room *in this API process*. A store that fills
-  while TCKDB is idle reads healthy until the next depositor arrives.
-- **It is per-process and cleared by a restart.** With several API workers,
-  `/status` can answer from a worker that has attempted no write. It clears
-  by itself as soon as one upload succeeds — deduplicating against an
-  existing object does not count, because that is a read.
+  refusal is outstanding. A store that fills while TCKDB is idle still reads
+  healthy until the next depositor arrives — onset needs one upload attempt.
+
+**How it clears**, which is the part worth reading carefully. Because a full
+store still accepts small writes, TCKDB records the *size* it was refused at
+and clears only on evidence of at least that size:
+
+| what happened | does it clear? |
+|---|---|
+| a write of **at least** the refused size succeeds | yes |
+| a write **smaller** than the refused size succeeds | **no** — recorded, but the store is still refusing real artifacts |
+| deduplicating against an object already stored | no — that is a read |
+| MinIO reports **at least** the refused size free | yes, unless the refusal was a bucket quota |
+| an operator clears it explicitly | yes, always |
+| time passing | **never** — there is deliberately no expiry |
+
+There is no timer because a timer guesses and a size-qualified success
+measures. A stale "full" you can clear in one command is safer than a flag
+that goes quiet while the disk is still full.
+
+While a refusal is outstanding, `/status` also asks MinIO's admin API how
+much room it has, so **recovery is noticed on the next poll rather than on
+the next large upload**. It uses the credentials the API already holds, writes
+nothing, and is skipped entirely on a healthy store. Against AWS S3 or any
+non-MinIO store it returns no opinion and changes nothing.
+
+It cannot see a bucket quota: measured, MinIO refused a 2 MiB write with
+`XMinioAdminBucketQuotaExceeded` while reporting **418 MiB free**. A quota
+refusal therefore clears only on a real successful write or an operator.
 
 To check capacity directly, ask the store rather than the API:
 
@@ -198,10 +224,35 @@ docker exec <minio-container> mc admin info local     # MinIO
 df -h /path/to/minio/data                             # the underlying volume
 ```
 
+**If the store is fine and the flag is stale**, an admin can clear it. Use
+this when you have fixed the cause and do not want to wait for a large upload
+— or when the refusal was a quota, which no free-space reading will clear:
+
+```bash
+curl -s -X POST http://127.0.0.1:8010/api/v1/admin/artifact-storage/capacity/clear \
+  -H "Authorization: Bearer $TCKDB_ADMIN_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"reason": "added a 2 TB volume and restarted MinIO"}'
+```
+
+The reason is required and is recorded with your user id. Clearing **appends**
+— it never edits or deletes the refusal, so the incident stays in the log. If
+the store is in fact still full, the next refused upload records a new refusal
+and `/status` degrades again.
+
+To see the current state without changing it:
+
+```bash
+curl -s http://127.0.0.1:8010/api/v1/admin/artifact-storage/capacity \
+  -H "Authorization: Bearer $TCKDB_ADMIN_TOKEN"
+```
+
 **Fix**
 
-Free space or raise the quota, then confirm with one real upload — that is
-also what clears the `/status` flag:
+Free space or raise the quota. `/status` clears itself on the next poll once
+MinIO reports enough room; to confirm end to end, upload one artifact **at
+least as large as the refused size** shown in the `reason` — a small one will
+succeed without clearing anything, by design:
 
 - delete or archive unreferenced objects. The reclaim sweep is the supported
   route: `backend/scripts/ops/verify_artifact_integrity.py --reclaim-orphans`

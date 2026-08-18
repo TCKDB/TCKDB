@@ -24,10 +24,15 @@ import time
 
 import pytest
 from botocore.exceptions import ClientError, EndpointConnectionError
+from fastapi.testclient import TestClient
 from sqlalchemy.orm import sessionmaker
 
+from app.api import deps as api_deps
+from app.api.app import create_app
 from app.api.routes import health
-from app.services import artifact_storage
+from app.db.models.artifact_storage_capacity import ArtifactStorageCapacityEvent
+from app.services import artifact_storage, artifact_storage_admin
+from app.services import artifact_storage_capacity as capacity
 
 PROBE_ENDPOINT = "http://minio.test:9000"
 PROBE_BUCKET = "tckdb-artifacts-test"
@@ -432,28 +437,64 @@ def test_status_answers_promptly_when_storage_hangs(client, storage_probe) -> No
 # ---------------------------------------------------------------------------
 
 
+@pytest.fixture
+def capacity_db(db_engine, monkeypatch):
+    """One connection that the capacity log and ``/status`` both read.
+
+    The observation used to be a module global a fixture could reset. It
+    is a table now, so isolation is a transaction: a dedicated connection
+    whose outer transaction is rolled back at teardown, with both the
+    ambient factory and ``/status``'s bound to it.
+
+    This deliberately re-patches ``health.SessionLocal`` after
+    ``_bind_status_probes_to_test_database`` has set it, because that
+    fixture binds to the *engine* -- a fresh pooled connection that would
+    see only committed rows, and nothing here commits.
+    """
+    connection = db_engine.connect()
+    transaction = connection.begin()
+    connection.begin_nested()
+    factory = sessionmaker(
+        bind=connection,
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
+    )
+    monkeypatch.setattr(api_deps, "SessionLocal", factory)
+    monkeypatch.setattr(health, "SessionLocal", factory)
+    try:
+        yield factory
+    finally:
+        transaction.rollback()
+        connection.close()
+
+
 @pytest.fixture(autouse=True)
-def _no_leftover_storage_full_latch():
-    """The observation is process state; no test may inherit another's."""
-    artifact_storage.clear_storage_full_observation()
-    yield
-    artifact_storage.clear_storage_full_observation()
+def _no_capacity_probe_by_default(monkeypatch):
+    """No test reaches a real MinIO admin API unless it says to.
+
+    Default is "no opinion", which is what a non-MinIO store answers and
+    what leaves the recorded refusal untouched.
+    """
+    monkeypatch.setattr(
+        artifact_storage_admin, "report_free_bytes", lambda **_kwargs: None
+    )
 
 
-def _observe_a_full_store(attempted_bytes: int = 4_194_304) -> None:
+def _observe_a_full_store(factory, attempted_bytes: int = 4_194_304) -> None:
     """Record what the write path records when the store refuses for room.
 
-    Written through the production recorder rather than by assigning to the
-    module global, so a test cannot pass against a latch shape the write
-    path does not produce.
+    Written through the production recorder rather than by inserting a row
+    by hand, so a test cannot pass against a record shape the write path
+    does not produce.
     """
-    artifact_storage.record_storage_full_observation(
+    capacity.record_refusal(
         s3_code="XMinioStorageFull",
         attempted_bytes=attempted_bytes,
         detail=(
             "Artifact storage write failed for sha=deadbeef: "
             "Storage backend has reached its minimum free drive threshold."
         ),
+        session_factory=factory,
     )
 
 
@@ -482,11 +523,11 @@ def test_the_read_only_probe_cannot_see_a_full_store(client, storage_probe) -> N
 
 
 def test_a_full_store_degrades_status_and_says_what_to_do(
-    client, storage_probe
+    client, storage_probe, capacity_db
 ) -> None:
     """The direction that was silent: green while every upload failed."""
     storage_probe(None)  # the probe itself is, and stays, happy
-    _observe_a_full_store()
+    _observe_a_full_store(capacity_db)
 
     response = client.get("/api/v1/status")
 
@@ -510,16 +551,16 @@ def test_a_full_store_degrades_status_and_says_what_to_do(
     assert body["components"]["database"]["healthy"] is True
 
 
-def test_a_working_store_is_healthy_again_once_a_write_succeeds(
-    client, storage_probe
+def test_a_working_store_is_healthy_again_once_a_big_enough_write_succeeds(
+    client, storage_probe, capacity_db
 ) -> None:
     """The other direction, or the test above cannot tell the two apart.
 
-    A latch that never clears is a stuck alarm, and an alarm that is always
+    A flag that never clears is a stuck alarm, and an alarm that is always
     on is the same non-signal as one that is always off.
     """
     storage_probe(None)
-    _observe_a_full_store()
+    _observe_a_full_store(capacity_db, attempted_bytes=4_194_304)
     assert (
         client.get("/api/v1/status").json()["components"]["artifact_storage"][
             "healthy"
@@ -527,7 +568,19 @@ def test_a_working_store_is_healthy_again_once_a_write_succeeds(
         is False
     )
 
-    artifact_storage.clear_storage_full_observation()
+    # A *small* write first: it must not be enough. Without this the test
+    # below would pass against the naive "any success clears it" rule.
+    capacity.note_successful_write(accepted_bytes=1, session_factory=capacity_db)
+    assert (
+        client.get("/api/v1/status").json()["components"]["artifact_storage"][
+            "storage_full"
+        ]
+        is True
+    ), "a 1-byte write turned /status green while 4 MiB was still refused"
+
+    capacity.note_successful_write(
+        accepted_bytes=4_194_304, session_factory=capacity_db
+    )
 
     body = client.get("/api/v1/status").json()
     block = body["components"]["artifact_storage"]
@@ -540,7 +593,7 @@ def test_a_working_store_is_healthy_again_once_a_write_succeeds(
 
 
 def test_a_full_store_that_is_also_unreachable_reports_both(
-    client, storage_probe
+    client, storage_probe, capacity_db
 ) -> None:
     """Two true facts at once, and the actionable one leads.
 
@@ -550,7 +603,7 @@ def test_a_full_store_that_is_also_unreachable_reports_both(
     the first has to be fixed first.
     """
     storage_probe(EndpointConnectionError(endpoint_url=PROBE_ENDPOINT))
-    _observe_a_full_store()
+    _observe_a_full_store(capacity_db)
 
     block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
 
@@ -566,6 +619,222 @@ def test_the_probe_deadline_is_short_enough_to_poll(client) -> None:
     assert health._STORAGE_PROBE_DEADLINE_SECONDS <= 5.0
     assert health._STORAGE_PROBE_CONNECT_TIMEOUT <= 2.0
     assert health._STORAGE_PROBE_READ_TIMEOUT <= 2.0
+    # The capacity probe runs inline, *after* the bucket probe, so the two
+    # budgets add. Asserted together because either one alone looks fine and
+    # the sum is what an operator's poll actually waits for.
+    assert artifact_storage_admin._TIMEOUT_SECONDS <= 2.0
+    assert (
+        health._STORAGE_PROBE_DEADLINE_SECONDS
+        + artifact_storage_admin._TIMEOUT_SECONDS
+    ) <= 6.0
+
+
+# ---------------------------------------------------------------------------
+# Surviving a restart, which is the whole reason this became a table
+# ---------------------------------------------------------------------------
+
+
+def test_status_reads_a_refusal_no_code_in_this_process_ever_saw(
+    client, storage_probe, capacity_db
+) -> None:
+    """The assertion that actually proves durability.
+
+    This is the discriminator, and the restart test below is *not*. A module
+    global survives ``create_app()`` perfectly well — it lives in the module,
+    not in the application object — so "a freshly built app still reports it"
+    would have passed against the very implementation this change replaces.
+    That test would have been green for a reason unrelated to what it claims.
+
+    So the refusal is inserted **straight into the table**, by a plain ORM
+    add, with no TCKDB code path notified: no recorder called, nothing
+    latched, nothing in this process aware the store was ever refused. If
+    ``/status`` reported anything but "full", it would be reading process
+    state — which is exactly the defect.
+
+    This is also what a second API worker, or the process after a restart,
+    actually sees: a row somebody else wrote.
+    """
+    storage_probe(None)
+    with capacity_db() as session:
+        with session.begin():
+            session.add(
+                ArtifactStorageCapacityEvent(
+                    observation=capacity.ArtifactStorageCapacityObservation.refused,
+                    observed_bytes=4_194_304,
+                    s3_code="XMinioStorageFull",
+                    detail="written by nothing in this process",
+                )
+            )
+
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+
+    assert block["storage_full"] is True, (
+        "/status did not see a refusal it was never told about in memory: "
+        "the fact is not being read from the database"
+    )
+    assert block["healthy"] is False
+    assert "4,194,304-byte" in block["reason"], block["reason"]
+
+
+def test_a_full_store_is_still_reported_after_a_restart(
+    client, storage_probe, capacity_db
+) -> None:
+    """The defect this change exists to fix, end to end.
+
+    The observation used to be a module global. A restart forgot it, and
+    the API came back up reporting ``artifact_storage`` healthy while every
+    upload still failed with 507 — the same confident all-clear over a live
+    outage that the endpoint exists to prevent.
+
+    "Restart" here is a **freshly constructed application object**. On its
+    own that is weaker than it looks (see the test above, which is the real
+    discriminator); it is asserted because it is the shape an operator
+    recognises, and because the two together say the whole thing: the fact
+    is in the database, and a new app instance serves it.
+    """
+    storage_probe(None)
+    _observe_a_full_store(capacity_db)
+    assert (
+        client.get("/api/v1/status").json()["components"]["artifact_storage"][
+            "storage_full"
+        ]
+        is True
+    )
+
+    restarted = TestClient(create_app())
+    block = restarted.get("/api/v1/status").json()["components"]["artifact_storage"]
+
+    assert block["storage_full"] is True, (
+        "a restarted process reported a healthy store while a refusal stood"
+    )
+    assert block["healthy"] is False
+    assert block["storage_full_observed_at"] is not None
+    assert "want of room" in block["reason"], block["reason"]
+
+
+def test_a_restart_does_not_invent_a_full_store(client, storage_probe) -> None:
+    """The other half: with an empty log, a fresh process reports healthy.
+
+    Without this, ``storage_full: true`` after a restart could be a
+    constant rather than a reading, and the test above would pass against
+    an implementation that always degrades.
+    """
+    storage_probe(None)
+    restarted = TestClient(create_app())
+    block = restarted.get("/api/v1/status").json()["components"]["artifact_storage"]
+    assert block["storage_full"] is False
+    assert block["healthy"] is True
+
+
+# ---------------------------------------------------------------------------
+# The free-space probe, which is what notices recovery without an upload
+# ---------------------------------------------------------------------------
+
+
+def test_a_capacity_report_of_enough_free_space_clears_it_on_status(
+    client, storage_probe, capacity_db, monkeypatch
+) -> None:
+    """Recovery noticed by ``/status`` itself, not by the next depositor.
+
+    The write path alone only learns the store recovered when someone
+    happens to upload something large enough, which could be days. MinIO's
+    admin API reports free space with the credentials this process already
+    holds, so ``/status`` asks — but only while a refusal is outstanding.
+    """
+    storage_probe(None)
+    _observe_a_full_store(capacity_db, attempted_bytes=4_194_304)
+
+    # Still tight: measured, ``availspace`` was 4,030,464 at the instant a
+    # 4,194,304-byte write was refused. Not enough is not enough.
+    monkeypatch.setattr(
+        artifact_storage_admin, "report_free_bytes", lambda **_kwargs: 4_030_464
+    )
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+    assert block["storage_full"] is True, (
+        "a free-space number below the refused size cleared the report"
+    )
+
+    # An operator added a disk.
+    monkeypatch.setattr(
+        artifact_storage_admin, "report_free_bytes", lambda **_kwargs: 2 * 1024**3
+    )
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+    assert block["storage_full"] is False
+    assert block["healthy"] is True
+
+
+def test_a_healthy_store_is_never_asked_for_its_capacity(
+    client, storage_probe, monkeypatch
+) -> None:
+    """The probe costs nothing when nothing is wrong.
+
+    ``/status`` is polled every few minutes. An admin-API round trip on
+    every poll of a healthy store would be pure cost, and a row per poll
+    would turn the log into a metric series.
+    """
+    storage_probe(None)
+    calls: list[dict] = []
+
+    def _record(**kwargs):
+        calls.append(kwargs)
+        return 2 * 1024**3
+
+    monkeypatch.setattr(artifact_storage_admin, "report_free_bytes", _record)
+
+    assert client.get("/api/v1/status").status_code == 200
+    assert calls == [], "the capacity probe ran against a store nothing had refused"
+
+
+def test_a_store_with_no_capacity_opinion_leaves_the_refusal_standing(
+    client, storage_probe, capacity_db, monkeypatch
+) -> None:
+    """A non-MinIO store answers nothing, and nothing is not "there is room".
+
+    ``report_free_bytes`` returns ``None`` for AWS S3, a 403, a 404, a
+    timeout, or an unfamiliar body. Every one of those must leave the
+    write path's own evidence exactly as it was — a probe that could clear
+    a refusal by failing would be worse than no probe.
+    """
+    storage_probe(None)
+    _observe_a_full_store(capacity_db)
+    monkeypatch.setattr(
+        artifact_storage_admin, "report_free_bytes", lambda **_kwargs: None
+    )
+
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+    assert block["storage_full"] is True
+    assert block["healthy"] is False
+
+
+def test_a_capacity_report_cannot_clear_a_bucket_quota_refusal_on_status(
+    client, storage_probe, capacity_db, monkeypatch
+) -> None:
+    """Measured: 418 MiB free while a 2 MiB write was refused for quota.
+
+    A quota refusal is invisible to a free-space number, so ``/status``
+    must not consult one to clear it — and must not even ask, since the
+    answer could not be used.
+    """
+    storage_probe(None)
+    capacity.record_refusal(
+        s3_code="XMinioAdminBucketQuotaExceeded",
+        attempted_bytes=2_097_152,
+        detail="Bucket quota exceeded",
+        session_factory=capacity_db,
+    )
+    calls: list[dict] = []
+
+    def _record(**kwargs):
+        calls.append(kwargs)
+        return 437_858_304
+
+    monkeypatch.setattr(artifact_storage_admin, "report_free_bytes", _record)
+
+    block = client.get("/api/v1/status").json()["components"]["artifact_storage"]
+    assert block["storage_full"] is True, (
+        "418 MiB of free disk cleared a bucket-quota refusal on /status"
+    )
+    assert calls == [], "the probe was asked a question its answer cannot settle"
 
 
 @pytest.mark.parametrize(

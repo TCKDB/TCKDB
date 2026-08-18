@@ -143,10 +143,41 @@ wrapper over a contract that is itself still moving.
   reports what the real write path was told, as
   `artifact_storage.storage_full` with the observation timestamp, and degrades
   on it. Its limits are documented rather than papered over: `false` means "no
-  write has been refused for room in this process", not "there is space"; it
-  needs one upload attempt to fire; and it is per-process and cleared by a
-  restart. See
+  refusal is outstanding", not "there is space", and onset still needs one
+  upload attempt to fire. See
   [`docs/deployment/troubleshooting.md`](docs/deployment/troubleshooting.md).
+
+- **That observation is now durable, and clears only on evidence of the right
+  size.** It lived in a module global, so a restart forgot it and `/status`
+  reported healthy until the next upload failed. It is now an append-only
+  `artifact_storage_capacity_event` log, with no `is_full` column — "is the
+  store full?" is computed head-of-log, because a stored flag would be a
+  second source of truth able to disagree with the log it summarises (the
+  shape ADR 0007 rejected for curated selections).
+
+  The clearing rule is the point, and the obvious version of it is wrong.
+  "Clear when a write succeeds" would have restored a green light while every
+  real upload still failed, because the same store **refused 8 MiB and
+  accepted 1 byte in the same second**. So a refusal records the *size* it was
+  refused at, and is answered only by a later write of at least that size, a
+  free-space reading of at least that size, or an operator. There is
+  deliberately **no time-based expiry**: a timer guesses, a size-qualified
+  success measures, and a stale "full" an operator can clear in one command is
+  safer than a flag that goes quiet while the disk is still full.
+
+  `/status` additionally consults **MinIO's admin API** for free space while a
+  refusal is outstanding, so recovery is noticed on the next poll instead of
+  on the next sufficiently large upload. It needs no new credentials (the
+  compose file already gives the API MinIO's root user), writes nothing, and
+  is skipped entirely on a healthy store. It is supplementary, never
+  authoritative: any failure — a non-MinIO store, a 403, a timeout — is "no
+  opinion" and changes nothing. It is also, measured, **blind to bucket
+  quotas** (418 MiB reported free while a 2 MiB write was refused), so it may
+  not clear a quota refusal.
+
+  New admin endpoints `GET`/`POST /admin/artifact-storage/capacity[/clear]`
+  let an operator read the state and clear it with a required reason, which is
+  recorded. Clearing appends; it never edits or deletes the refusal.
 
   Also fixed on the way: `artifact_persistence._store_and_record`'s broad
   `except Exception` caught the already-typed `ArtifactStorageUnavailable` and

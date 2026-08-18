@@ -163,6 +163,10 @@ EXCLUDED_TABLES: Mapping[str, str] = {
     "accepted_science_repair": "deployment-local repair record keyed on a cluster transaction id",
     "accepted_science_repair_change": "deployment-local repair record keyed on a cluster transaction id",
     "api_key": "authentication credential state",
+    "artifact_storage_capacity_event": (
+        "deployment-local account of one object store's capacity; restoring it "
+        "would import a storage incident the restoring cluster never had"
+    ),
     "idempotency_record": "ephemeral HTTP retry state",
     "upload_job": "ephemeral worker queue state",
     "user_session": "authentication session state",

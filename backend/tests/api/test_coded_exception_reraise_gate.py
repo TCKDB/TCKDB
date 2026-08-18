@@ -630,6 +630,28 @@ JUDGED_ABSORBING_HANDLERS: dict[str, str] = {
         "raising must not take the process with it. Returns a diagnostic "
         "dict, not a response."
     ),
+    "backend/app/api/routes/health.py::_recorded_refusal": (
+        "Reads `artifact_storage_capacity_event` so /status can report a "
+        "full object store across a restart. Same reasoning as "
+        "`_probe_bucket` one entry above, on the other dependency: /status "
+        "must answer while things are broken, and a database outage "
+        "reported as a 500 from the endpoint that describes outages is "
+        "indistinguishable from the host being down. It returns a state "
+        "object or None, never a response body, and the `database` "
+        "component reports the database's own health separately. No coded "
+        "refusal is reachable: the try opens a session and runs one "
+        "SELECT via `current_full_state`, which raises nothing coded."
+    ),
+    "backend/app/api/routes/health.py::_refusal_after_capacity_report": (
+        "The write half of the same read, split out because the gate "
+        "allows one absorbing handler per function. It appends a "
+        "`capacity_report` observation and re-reads. Absorbing is the "
+        "conservative direction here and that is the point: on failure it "
+        "returns the refusal the caller already read, so a capacity report "
+        "that could not be written can never be mistaken for one that "
+        "cleared the refusal. Nothing under the try raises a coded "
+        "refusal -- an INSERT and a SELECT."
+    ),
 }
 
 #: Measured 2026-08-16: nine handlers in ``backend/app/api`` can absorb a

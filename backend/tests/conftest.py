@@ -1376,6 +1376,11 @@ _WATCHED_TABLES: tuple[str, ...] = (
     "species_entry_review",
     "dataset_release",
     "release_selection",
+    # operational observation logs, written out-of-request in their own
+    # transactions precisely so they survive the caller's rollback -- which
+    # is also what makes them able to survive a *test's* rollback if the
+    # writer is ever pointed at the wrong session factory.
+    "artifact_storage_capacity_event",
 )
 
 _COUNT_SQL = text(

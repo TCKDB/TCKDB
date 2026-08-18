@@ -27,9 +27,6 @@ import hashlib
 import hmac
 import logging
 import os
-import threading
-from dataclasses import dataclass
-from datetime import datetime, timezone
 from typing import NoReturn
 
 import boto3
@@ -263,134 +260,39 @@ def _error_code(exc: ClientError) -> str:
     return str(exc.response.get("Error", {}).get("Code", ""))
 
 
-@dataclass(frozen=True)
-class StorageFullObservation:
-    """The last time a write was refused for want of room, in this process.
-
-    Why an observation and not a probe
-    ----------------------------------
-    ``/status`` cannot find this out by asking. Measured against MinIO
-    ``RELEASE.2025-09-07T16-13-09Z`` on a scratch volume filled to its
-    free-space threshold:
-
-    * ``head_bucket`` — the probe ``/status`` performs — returns **200**.
-    * ``list_objects``, ``head_object`` and ``get_object`` all succeed. A
-      full store serves reads perfectly.
-    * a **1-byte** ``put_object`` also **succeeds**, on the same store
-      that refuses a 4 MiB one. MinIO's threshold check is sized against
-      the incoming object, so a cheap synthetic write probe would report
-      healthy on a store with no room for any real artifact.
-
-    The last point has a consequence beyond probing, and it is why
-    :attr:`attempted_bytes` is recorded: "full" is not all-or-nothing. On a
-    store in this state a large ESS log is refused while a small text
-    artifact still lands, so *some uploads continuing to work is not
-    evidence the store is well*. Verified end to end against a real filled
-    MinIO: an 8 MiB artifact answered 507 while a 1-byte write returned 200
-    in the same second.
-
-    That last measurement is why there is no write probe here. To answer
-    the question a probe would have to write something the size of a real
-    artifact (up to :data:`MAX_ARTIFACT_BYTES`) on every health check, and
-    the S3 API exposes no capacity or quota query to ask instead —
-    MinIO's free space is available only through its admin API, which
-    needs administrative credentials this process does not have and should
-    not be given, and AWS S3 has no notion of "full" at all.
-
-    So the signal is the real write path's own refusal. TCKDB already
-    performs correctly-sized writes for real reasons; recording what they
-    are told is strictly better evidence than a synthetic probe, and costs
-    nothing when the store is healthy.
-
-    What it does *not* cover, stated here because a health signal whose
-    limits are undocumented is the thing that produced this defect:
-
-    * **It needs one upload attempt to fire.** A store that fills while
-      TCKDB is idle reads healthy until the next depositor arrives. That
-      depositor now gets a correct answer (507) *and* trips this, so at
-      most one upload is spent finding out.
-    * **It is per-process, and cleared by a restart.** A deployment
-      running several API workers can answer ``/status`` from a worker
-      that has not attempted a write. Making it durable means a table and
-      an append-only record, which is a larger decision than this change.
-    """
-
-    #: When the refusal was seen.
-    observed_at: datetime
-
-    #: The store's own error code, e.g. ``XMinioStorageFull``.
-    s3_code: str
-
-    #: Size of the object the store refused, so an operator can see
-    #: whether they are near the threshold or nowhere near it.
-    attempted_bytes: int | None
-
-
-_storage_full_lock = threading.Lock()
-_last_storage_full: StorageFullObservation | None = None
-
-
-def record_storage_full_observation(
-    *,
-    s3_code: str,
-    attempted_bytes: int | None,
-    detail: str,
-) -> None:
-    """Latch "the store refused a write for want of room".
-
-    ``detail`` is what the store said and goes to the log only. It is
-    deliberately not kept on the observation: ``/status`` is public, the
-    message carries a content digest, and a field nothing reads is a field
-    that will be rendered somewhere by accident eventually.
-    """
-    global _last_storage_full
-    with _storage_full_lock:
-        _last_storage_full = StorageFullObservation(
-            observed_at=datetime.now(timezone.utc),
-            s3_code=s3_code,
-            attempted_bytes=attempted_bytes,
-        )
-    logger.error(
-        "artifact storage refused a %s-byte write for want of room "
-        "(S3 code %s); /status will report degraded until a write succeeds: %s",
-        attempted_bytes,
-        s3_code,
-        detail,
-    )
-
-
-def clear_storage_full_observation() -> None:
-    """Forget the latch, because a write has just succeeded.
-
-    Called only after a real ``put_object`` returns. Deliberately **not**
-    called on the deduplication path: finding an object already at its
-    content-addressed key proves the store can serve a read, and says
-    nothing whatever about whether it can accept bytes.
-
-    Nothing else clears it, and in particular no timer does. A store that
-    was full ten minutes ago and has accepted nothing since is still a
-    store TCKDB has no evidence it can write to, and a latch that decays
-    on its own would go quiet while the disk was still full and nobody had
-    acted — which is the exact silence this exists to break.
-    """
-    global _last_storage_full
-    with _storage_full_lock:
-        if _last_storage_full is None:
-            return
-        previous = _last_storage_full
-        _last_storage_full = None
-    logger.info(
-        "artifact storage accepted a write; clearing the storage-full "
-        "observation recorded at %s (S3 code %s)",
-        previous.observed_at.isoformat(),
-        previous.s3_code,
-    )
-
-
-def last_storage_full_observation() -> StorageFullObservation | None:
-    """The latch, for ``/status``. ``None`` when nothing has been refused."""
-    with _storage_full_lock:
-        return _last_storage_full
+# "The store has no room" was, until this change, a module global in this
+# file: a ``StorageFullObservation`` dataclass behind a lock. It is now a
+# row in ``artifact_storage_capacity_event``, because a restart forgot the
+# global and ``/status`` reported healthy until the next upload failed.
+#
+# Why the observation is still the signal, rather than a probe. Measured
+# against MinIO ``RELEASE.2025-09-07T16-13-09Z`` on a volume filled to its
+# free-space threshold:
+#
+# * ``head_bucket`` -- the probe ``/status`` performs -- returns **200**.
+# * ``list_objects``, ``head_object`` and ``get_object`` all succeed. A
+#   full store serves reads perfectly.
+# * a **1-byte** ``put_object`` also **succeeds**, on the same store that
+#   refuses a 4 MiB one. MinIO's threshold check is sized against the
+#   incoming object, so a cheap synthetic write probe would report healthy
+#   on a store with no room for any real artifact.
+#
+# The last point is why the refused *size* is recorded and why "clear it
+# when a write succeeds" is wrong; see
+# :mod:`app.services.artifact_storage_capacity`, which owns that rule.
+#
+# The write path remains the **authoritative** signal: it is store-
+# agnostic, it is correctly sized by construction, and it is the only
+# thing that can see a bucket-quota refusal. ``/status`` additionally
+# consults MinIO's admin API for free space, which detects *recovery*
+# without waiting for a depositor -- see
+# :mod:`app.services.artifact_storage_admin` -- but that supplements this
+# and never replaces it.
+#
+# One limit is unchanged: **onset needs one upload attempt to fire.** A
+# store that fills while TCKDB is idle reads healthy until the next
+# depositor arrives. That depositor now gets a correct answer (507) *and*
+# trips this, so at most one upload is spent finding out.
 
 
 def _raise_write_refusal(
@@ -399,6 +301,7 @@ def _raise_write_refusal(
     what: str,
     sha256: str,
     attempted_bytes: int | None = None,
+    session_factory=None,
 ) -> NoReturn:
     """Turn a refused *write* into the one typed exception, classified.
 
@@ -406,14 +309,23 @@ def _raise_write_refusal(
     upload ``put_object`` and the reclaim/restore ``copy_object`` — so a
     full store is recognised wherever it is met rather than at whichever
     site happened to be edited. Always raises.
+
+    ``session_factory`` is threaded through to the capacity log so a test
+    can bind the observation to its own transaction; in production it is
+    ``None`` and the log opens a session of its own.
     """
     code = _error_code(exc)
     full = code in _STORAGE_FULL_CODES
     if full:
-        record_storage_full_observation(
+        # Lazy import: the capacity log reaches for the app's session
+        # factory, and this module must stay importable without it.
+        from app.services.artifact_storage_capacity import record_refusal
+
+        record_refusal(
             s3_code=code,
             attempted_bytes=attempted_bytes,
             detail=f"{what} for sha={sha256}: {exc}",
+            session_factory=session_factory,
         )
     raise ArtifactStorageUnavailable(
         f"{what} for sha={sha256}: {code or type(exc).__name__}",
@@ -594,6 +506,7 @@ def store_artifact(
     *,
     client=None,
     bucket: str | None = None,
+    session_factory=None,
 ) -> str:
     """Upload artifact content to S3/MinIO.
 
@@ -604,6 +517,10 @@ def store_artifact(
     :param sha256: Pre-computed SHA-256 hex digest (from validate_artifact).
     :param client: Optional pre-created boto3 S3 client (for testing).
     :param bucket: Optional bucket name override (for testing).
+    :param session_factory: Optional session factory for the capacity log,
+        which records what this write was told. Production passes nothing
+        and the log opens its own transaction — the refusal has to survive
+        the rollback of the request that discovered it.
     :returns: The S3 URI (``s3://bucket/key``).
     """
     if client is None:
@@ -639,6 +556,7 @@ def store_artifact(
             what="Artifact storage bucket check failed",
             sha256=sha256,
             attempted_bytes=len(content),
+            session_factory=session_factory,
         )
 
     key = content_addressed_key(sha256)
@@ -685,6 +603,7 @@ def store_artifact(
             what="Artifact storage write failed",
             sha256=sha256,
             attempted_bytes=len(content),
+            session_factory=session_factory,
         )
     except BotoCoreError as exc:
         raise ArtifactStorageUnavailable(
@@ -692,10 +611,16 @@ def store_artifact(
             f"{type(exc).__name__}: {exc}"
         ) from exc
 
-    # A write landed, so whatever this process last believed about the
-    # store having no room is now known to be out of date. Only here: the
-    # dedup return above is a read, and proves nothing about capacity.
-    clear_storage_full_observation()
+    # A write landed. Whether that *answers* an outstanding refusal is not
+    # this module's call to make: a 1-byte write succeeds on a store that
+    # refuses 8 MiB, so the size is reported and the capacity log decides.
+    # Only here -- the dedup return above is a read, and proves nothing
+    # whatever about the store's capacity to accept bytes.
+    from app.services.artifact_storage_capacity import note_successful_write
+
+    note_successful_write(
+        accepted_bytes=len(content), session_factory=session_factory
+    )
     return f"s3://{bucket}/{key}"
 
 
