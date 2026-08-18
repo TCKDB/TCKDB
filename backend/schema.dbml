@@ -49,6 +49,13 @@ enum ArtifactKind {
   ancillary
 }
 
+enum ArtifactStorageCapacityObservation {
+  refused
+  accepted
+  capacity_report
+  operator_clear
+}
+
 enum AtomMapSource {
   declared
   inferred
@@ -920,6 +927,27 @@ Table artifact_integrity_event {
   }
 
   Note: 'One observation about TCKDB\'s custody of a stored artifact.'
+}
+
+Table artifact_storage_capacity_event {
+  id bigint [pk, not null]
+  observation ArtifactStorageCapacityObservation [not null]
+  observed_bytes bigint
+  s3_code text
+  detail text
+  created_at timestamp [not null, default: 'now']
+  created_by bigint [ref: > app_user.id]
+
+  indexes {
+    (observation, id) [name: 'ix_artifact_storage_capacity_event_observation_id']
+  }
+
+  checks {
+    `(observation <> 'operator_clear' OR observed_bytes IS NULL) AND (observation <> 'capacity_report' OR observed_bytes IS NOT NULL) AND (observation <> 'accepted' OR observed_bytes IS NOT NULL)` [name: 'ck_artifact_storage_capacity_event_bytes_match_observation']
+    `observation = 'refused' OR s3_code IS NULL` [name: 'ck_artifact_storage_capacity_event_s3_code_only_on_refused']
+  }
+
+  Note: 'One observation about the object store\'s capacity to accept a write.'
 }
 
 Table author {

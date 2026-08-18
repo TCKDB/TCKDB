@@ -12,7 +12,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -21,6 +21,7 @@ from app.api.routes._pagination import PaginatedResponse
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     AppUserRole,
+    ArtifactStorageCapacityObservation,
     MachineReviewCuratorTaskState,
     MachineReviewSeverity,
     MachineReviewStatus,
@@ -28,6 +29,10 @@ from app.db.models.common import (
 )
 from app.db.models.machine_review_curator_task import MachineReviewCuratorTask
 from app.db.models.submission import Submission
+from app.services.artifact_storage_capacity import (
+    append_observation,
+    current_full_state,
+)
 from app.services.machine_review import (
     MachineReviewOrchestrationStatus,
     MachineReviewRecordSummary,
@@ -610,3 +615,91 @@ def reopen_curator_task_endpoint(
         clear_assignment=body.clear_assignment,
     )
     return _to_curator_task_response(task)
+
+
+# ---------------------------------------------------------------------------
+# Artifact storage capacity — the operator's way to clear a stale "full"
+# ---------------------------------------------------------------------------
+
+
+class StorageCapacityClearRequest(BaseModel):
+    """An operator's assertion that the store has room again."""
+
+    #: Required, and required for the same reason a curated selection's
+    #: rationale is: this is the one clearing path that rests on assertion
+    #: rather than on measurement, so the log has to say who said what.
+    reason: str = Field(min_length=1, max_length=1000)
+
+
+class StorageCapacityStateResponse(BaseModel):
+    """Whether a refusal is outstanding, after whatever was just appended.
+
+    Carries no row ids, no digests and no bucket names — this is an
+    operational report, and DR-0028 Req. 2 applies to it as much as to an
+    error body.
+    """
+
+    storage_full: bool
+    storage_full_observed_at: datetime | None = None
+    s3_code: str | None = None
+    refused_bytes: int | None = None
+
+
+def _capacity_state_response(state) -> StorageCapacityStateResponse:
+    if state is None:
+        return StorageCapacityStateResponse(storage_full=False)
+    return StorageCapacityStateResponse(
+        storage_full=True,
+        storage_full_observed_at=state.observed_at,
+        s3_code=state.s3_code,
+        refused_bytes=state.attempted_bytes,
+    )
+
+
+@router.get(
+    "/artifact-storage/capacity",
+    response_model=StorageCapacityStateResponse,
+)
+def get_artifact_storage_capacity(
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_db),
+) -> StorageCapacityStateResponse:
+    """Whether the object store is currently refusing writes for want of room.
+
+    The same head-of-log computation ``/status`` reports, without the
+    free-space probe — this is the operator's view of the record itself.
+    """
+    return _capacity_state_response(current_full_state(session))
+
+
+@router.post(
+    "/artifact-storage/capacity/clear",
+    response_model=StorageCapacityStateResponse,
+)
+def clear_artifact_storage_capacity(
+    request: StorageCapacityClearRequest,
+    _admin: AppUser = Depends(require_admin),
+    session: Session = Depends(get_write_db),
+) -> StorageCapacityStateResponse:
+    """Declare a storage-full condition resolved (admin only).
+
+    An operator is who resolves a full disk, so an operator has to be able
+    to say so. This is the clearing path of last resort and the only one
+    that can answer a refusal no measurement will: one whose size was
+    never known, or a bucket-quota refusal that a free-space report cannot
+    see.
+
+    It **appends**; it never edits or deletes. The refusal stays in the
+    log as the account of what happened, and this observation supersedes
+    it — the same shape as clearing an artifact integrity break, and for
+    the same reason. If the store is in fact still full, the next refused
+    upload appends a new refusal and ``/status`` degrades again, which is
+    the system working rather than a clear that was lost.
+    """
+    append_observation(
+        session,
+        observation=ArtifactStorageCapacityObservation.operator_clear,
+        detail=request.reason,
+        created_by=_admin.id,
+    )
+    return _capacity_state_response(current_full_state(session))
