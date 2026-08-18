@@ -52,6 +52,7 @@ selection/trust machinery this reuses):
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -59,6 +60,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.chemistry.geometry import resolve_element_symbol
 from app.db.models.calculation import (
     Calculation,
@@ -101,6 +103,8 @@ from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     current_read_profile,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Schema tag stamped on every ML record so a consumer can branch on format.
 ML_EXPORT_SCHEMA = "tckdb.ml.v0"
@@ -473,9 +477,24 @@ def _resolve_species_entry_ids(
             select(SpeciesEntry.id).order_by(SpeciesEntry.id)
         ).all()
         if len(all_ids) > all_cap:
-            raise ValueError(
-                "ml_export_all_cap_exceeded: refusing to export "
-                f"{len(all_ids)} species entries (cap {all_cap})"
+            # The ML surface's own cap, and the same disclosure call as
+            # its native sibling ``export_all_cap_exceeded``: publish the
+            # configured cap, log the count. ``len(all_ids)`` is an
+            # unfiltered ``SELECT`` over ``species_entry`` -- the total
+            # number of species entries TCKDB holds, which is the
+            # enumeration signal ``docs/specs/public_identifier_policy.md``
+            # rejects sequential integer primary keys for.
+            logger.info(
+                "ML export refused as ml_export_all_cap_exceeded; %d "
+                "species entries against a cap of %d",
+                len(all_ids),
+                all_cap,
+            )
+            raise CodedValueError(
+                "ml_export_all_cap_exceeded",
+                "refusing to export every species entry: the corpus is "
+                f"larger than the export cap of {all_cap}",
+                context={"cap": all_cap, "record_type": "species_entry"},
             )
         ids.extend(all_ids)
 

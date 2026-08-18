@@ -198,6 +198,45 @@ code.
 so cutting it lower in config is honored, but raising it above 200
 has no effect.
 
+### What a cap refusal discloses (decided 2026-08-18)
+
+Every code in the table above puts its **threshold** in the error
+envelope's `context`, so a client can retry against the value this
+deployment actually runs rather than the default printed here. Publishing
+a cap is not an abuse control: it is discoverable in about three requests
+by halving the supplied value, the control is the cap being *enforced*
+rather than secret, and it describes our configuration rather than
+anyone's data. A refusal that withheld it was un-actionable — the only
+remedy was to bisect.
+
+The **measured value that crossed the cap** is a separate question and is
+not published where it describes the corpus rather than the caller's own
+request:
+
+| what the number is | example | published? |
+|---|---|---|
+| the configured threshold | `PUBLIC_MAX_OFFSET` | yes |
+| the caller's own request, echoed | the `limit` they sent | yes |
+| a property of one named record | a geometry's atom count | yes — chemistry, and strictly less than a successful read of the same record returns |
+| a count of rows TCKDB holds | how many records matched; how many `reaction_entry` rows exist | **no** — logged only |
+
+The last row is the enumeration exposure
+`docs/specs/public_identifier_policy.md` (§"Why this matters now", item
+3) rejects sequential integer primary keys for: they "leak the total
+count of objects (and roughly the upload schedule) of every table". A
+refusal that reports an exact count is worse than a primary key, because
+a key leaks the count once while a countable refusal leaks it per query,
+cheaply, forever. Four codes are on that side —
+`export_all_cap_exceeded`, `ml_export_all_cap_exceeded`,
+`query_too_expensive` and `composed_search_candidate_limit_exceeded` —
+and their counts are absent from `detail` as well as `context`, since
+both are published.
+
+The rule itself lives on `Shape` in `backend/app/api/code_catalogue.py`
+("The disclosure line"), and the absences are asserted per code in
+`backend/tests/api/test_api_query_caps.py` and
+`backend/tests/api/test_api_untested_refusals_tier_de.py`.
+
 The `/reaction-entries/{id}/full` cap applies regardless of how the
 section was requested — there is no way to evade it by enumerating
 `include=` tokens vs. `include=all`.

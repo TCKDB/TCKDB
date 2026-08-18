@@ -222,6 +222,17 @@ id). A code that names a **thing** — `unknown_release`, `missing_filter`
 on `code` first and enrich from `context` if it is there; never make a
 non-empty `context` a precondition for handling a refusal.
 
+Cap refusals (`limit_too_large`, `offset_too_large`, `geometry_too_large`,
+`smiles_too_long`, `query_too_expensive`, the two `*_all_cap_exceeded`
+codes and `composed_search_candidate_limit_exceeded`) are relationships
+and carry **the limit** — read it and retry against it rather than
+hardcoding a number, because these caps are deployment settings and a
+self-hosted TCKDB may run different ones. They will never tell you how
+much data is on the far side of the cap: no match count, no row count,
+in `context` or `detail`. That is deliberate, not a gap to report — an
+exact count off a cheap refusal would turn any filter into a census of
+the server's holdings.
+
 Use `rejection_code(exc.code)` rather than `RejectionCode(exc.code)`: a
 server is routinely newer than the client pinned against it, and a code
 added since must return `None` rather than raise inside your own error

@@ -143,7 +143,7 @@ What ``context`` promises, and what it does not
 published advice and it is right. It was also, until #210, an
 over-promise: ``context`` is populated by the raiser, and a large part of
 the catalogue has no raiser that can populate it. Measured on the entry
-count as this was written, 76 of 168 entries arrive by
+count as this was written, 65 of 170 entries arrive by
 :data:`~app.api.code_catalogue.Surface.message_prefix` — that is,
 ``raise ValueError(f"code: prose")`` — and a plain ``ValueError`` has
 nowhere to put structured facts, so :func:`error_envelope` renders
@@ -158,14 +158,23 @@ names, which is what
 :attr:`~app.api.code_catalogue.ApiCode.owes_context` answers:
 
 * A code naming a **thing** — ``unknown_release``, ``missing_filter``,
-  ``limit_too_large`` — is complete on its own. ``context`` may be empty
-  and that is not a gap.
+  ``unknown_include_token`` — is complete on its own. ``context`` may be
+  empty and that is not a gap.
 * A code naming a **relationship** — ``state_conflict``,
   ``handle_type_mismatch``, ``atom_map_element_not_conserved`` — asserts
   something about two or more things and names none of them. There
   ``context`` is the only machine-readable place the *which* can live,
   and an empty one leaves the reason reachable only through the prose a
   client was told not to read.
+
+``limit_too_large`` was the example in the first bullet until 2026-08-18
+and is now in the second, which is worth saying out loud rather than
+quietly editing: a cap refusal that does not state the cap is
+un-actionable, so the whole cap family became relationships and now
+carries the limit. What such a code may put in ``context`` is bounded by
+the disclosure line on :class:`~app.api.code_catalogue.Shape` — the
+threshold and the caller's own value, never a server-side measurement of
+how much data exists.
 
 So the honest promise is narrower than the old one: **where a code names
 a relationship, the facts are in ``context``; where it names a thing, the

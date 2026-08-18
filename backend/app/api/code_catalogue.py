@@ -66,23 +66,38 @@ live on that class. What belongs here is the part a reader of *this list*
 needs -- the borderline calls -- because a classification whose hard cases
 are undocumented is one the next person re-litigates from scratch.
 
-Measured on this file: 64 entries (62 distinct codes) are relationships,
-104 are things.
+Measured on this file: 73 entries (71 distinct codes) are relationships,
+97 are things. The cap family moved eight of them across on 2026-08-18 --
+see the first borderline group below.
 
 The groups where the call was genuinely arguable, and the argument:
 
-* **Caps are things.** ``limit_too_large``, ``offset_too_large``,
-  ``geometry_too_large``, ``smiles_too_long``, ``export_all_cap_exceeded``,
-  ``ml_export_all_cap_exceeded``, ``query_too_expensive`` and
-  ``composed_search_candidate_limit_exceeded`` each compare a supplied
-  value against a server-side limit, so by the letter of the rule they
-  assert something about two things. They are classified as things because
-  the rule's discriminator is *conflict, mismatch, ambiguity* and a cap
-  breach is none of those: the code names one field and states a predicate
-  about it, and the field is the whole repair. This is the largest
-  borderline group and the one most likely to be revisited -- a client
-  retrying with a legal page size does want the cap, and on a deployment
-  that lowers ``public_max_limit`` the cap is not guessable from the docs.
+* **Caps are relationships. Overruled 2026-08-18.** ``limit_too_large``,
+  ``offset_too_large``, ``geometry_too_large``, ``smiles_too_long``,
+  ``export_all_cap_exceeded``, ``ml_export_all_cap_exceeded``,
+  ``query_too_expensive`` and
+  ``composed_search_candidate_limit_exceeded`` were classified as things
+  when :class:`Shape` was introduced, on the ground that the rule's
+  discriminator is *conflict, mismatch, ambiguity* and a cap breach is
+  none of those. That reading was invited to be overruled and was.
+
+  The argument that won: **a limit refusal that does not state the limit
+  is un-actionable.** A client that wants to retry must guess, or a human
+  must go and read documentation -- and every one of these caps is a
+  *setting* or a module constant, so on a deployment that lowers
+  ``public_max_limit`` there is no document that has the right number in
+  it. That is the same defect diagnosed in "Tell 'no such selection' from
+  'which selection?'": advice that cannot be followed teaches people to
+  stop reading advice.
+
+  Publishing a cap is not a security concern. It is discoverable in about
+  three requests by halving the value; the control is the cap being
+  *enforced*, not the cap being secret; and it describes TCKDB's own
+  configuration rather than anybody's data.
+
+  What may **not** be published is the other number, and the rule for
+  that is on :class:`Shape` -- see "The disclosure line". Four of the
+  eight publish a threshold and deliberately publish nothing else.
 * **A code that names both its fields is a thing.**
   ``parameter_value_requires_key``,
   ``canonical_parameter_value_requires_key`` and
@@ -399,7 +414,8 @@ class Shape(str, Enum):
 
     Why the default is :attr:`thing`, and why that is safe
     -----------------------------------------------------
-    Because most codes are things (measured: roughly five in eight), so
+    Because most codes are things (measured: roughly four in seven, and
+    it was five in eight before the cap family moved), so
     declaring the majority case would be noise of the kind
     :attr:`Reach.request` and :attr:`Replay.may_succeed` also avoid. The
     risk a default carries is the opposite of theirs, though: an
@@ -416,6 +432,59 @@ class Shape(str, Enum):
     one of those words — ``atom_map_not_a_bijection``,
     ``selection_already_stands``, ``multiple_structure_queries`` — so
     those are declared by hand and the declaration is the judgement.
+
+    The disclosure line
+    -------------------
+    Deciding a code is a relationship settles that it owes ``context``.
+    It does not settle *what goes in it*, and for the cap family the two
+    questions come apart, because a cap refusal compares two numbers of
+    different kinds. Calvin's rule of 2026-08-18:
+
+        **Publish the THRESHOLD. Never publish the MEASURED VALUE that
+        crossed it, where that value describes the corpus rather than the
+        caller's own request.**
+
+    A configured cap is a fact about TCKDB, and one a client must have to
+    retry. A measured count is a fact about **how much data exists** —
+    precisely the enumeration exposure
+    ``docs/specs/public_identifier_policy.md`` argues against when it
+    rejects sequential integer primary keys (§"Why this matters now",
+    item 3: they "leak the total count of objects (and roughly the upload
+    schedule) of every table"). A refusal that reports an exact match
+    count turns any filter into a free census endpoint, which is worse
+    than a primary key: a key leaks the count once, a countable refusal
+    leaks it per query, forever, and cheaply.
+
+    Three categories, and only the third is withheld:
+
+    * **The threshold** — ``limit_max``, ``offset_max``, ``max_atoms``,
+      ``max_length``, ``cap``, ``max_traversable``. TCKDB's own
+      configuration. Always published.
+    * **The caller's own request echoed back** — the ``limit`` they sent,
+      the ``offset`` they sent, the length of the SMILES they sent.
+      Telling someone they asked for 5000 discloses nothing they did not
+      already know. Published.
+    * **A server-side measurement of the corpus** — how many records
+      matched, how many rows exist, how many entries a table holds.
+      Logged, never published, and absent from ``detail`` as well as
+      ``context``: ``detail`` is published too, so omitting it from one
+      and not the other would be decorative.
+
+    The discriminator between the second and third categories is not
+    "did the server compute it" — the server computes the second as well.
+    It is **what the number is about**. A geometry's atom count is
+    chemistry: a property of one molecule the caller named, and strictly
+    less than the same endpoint returns for any request under the cap. A
+    ``len(...)`` over rows TCKDB stores is holdings. The first is
+    published; the second is not.
+
+    Four codes sit on the withheld side and carry the threshold alone:
+    ``export_all_cap_exceeded``, ``ml_export_all_cap_exceeded``,
+    ``query_too_expensive`` and
+    ``composed_search_candidate_limit_exceeded``. That the count is
+    *absent* is asserted per code in
+    ``backend/tests/api/test_api_query_caps.py``, because an omission is
+    the one property no other test notices when it is lost.
     """
 
     #: The name is the whole message. A client that reads the code knows
@@ -827,8 +896,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculations_search.py"),
     ApiCode("client_sort_not_supported", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
-    ApiCode("composed_search_candidate_limit_exceeded", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/common.py"),
+    ApiCode("composed_search_candidate_limit_exceeded", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship,
+            note=(
+                "Two raise sites in collect_bounded_pages, and they are not "
+                "the same disclosure question. The first compares the "
+                "*match count* against public_max_offset + page_size: the "
+                "bound is published as context['max_traversable'] and the "
+                "match count is logged, because a filter that can be turned "
+                "into an exact row count is a census endpoint TCKDB does "
+                "not offer. The second simply ran past the offset bound and "
+                "measures nothing, so it publishes offset_max. Both carry "
+                "resource."
+            )),
     ApiCode("composed_search_invalid_page", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship),
@@ -906,8 +987,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("energy_transfer_scope_columns_disagree", 409, Surface.database_constraint,
             "backend/app/scientific_checks/declarations.py",
             shape=Shape.relationship),
-    ApiCode("export_all_cap_exceeded", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/export.py"),
+    ApiCode("export_all_cap_exceeded", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/export.py",
+            shape=Shape.relationship,
+            note=(
+                "Shape.relationship since 2026-08-18, and one of the four "
+                "codes that publish the threshold and withhold the "
+                "measurement. context carries cap and record_type; the "
+                "count that crossed it is an unfiltered row count over "
+                "reaction_entry -- the corpus total -- so it is logged and "
+                "appears in neither context nor detail. See the disclosure "
+                "line on Shape."
+            )),
     ApiCode("export_seed_empty", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/export.py"),
     ApiCode("export_seed_unresolved", 422, Surface.message_prefix,
@@ -951,8 +1042,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "workflow really cannot resolve -- calling that undeclared "
                 "would be false."
             )),
-    ApiCode("geometry_too_large", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/geometry.py"),
+    ApiCode("geometry_too_large", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/geometry.py",
+            shape=Shape.relationship,
+            note=(
+                "Shape.relationship since 2026-08-18. context carries "
+                "max_atoms (settings.max_geometry_atoms_public) and atoms "
+                "(the requested geometry's own atom count). The second is "
+                "not the withheld kind of measurement: it is a property of "
+                "one record the caller named, and strictly less than this "
+                "endpoint returns for any request under the cap."
+            )),
     ApiCode("handle_not_found", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("handle_type_mismatch", 422, Surface.coded_exception,
@@ -1048,8 +1148,9 @@ CATALOGUE: tuple[ApiCode, ...] = (
     ApiCode("level_of_theory_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),
-    ApiCode("limit_too_large", 422, Surface.message_prefix,
+    ApiCode("limit_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship,
             note=(
                 "Split out of invalid_pagination, which covered four "
                 "conditions with three different remedies. A limit above the "
@@ -1059,7 +1160,11 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "configuration, where MAX_LIMIT and public_max_limit are "
                 "both 200 and Query(le=200) refuses anything larger first -- "
                 "reachable through a POST search body, and through any GET "
-                "on a deployment that lowers public_max_limit."
+                "on a deployment that lowers public_max_limit. "
+                "Shape.relationship since Calvin's overrule of 2026-08-18; "
+                "context carries limit_max (a setting) and limit (the "
+                "caller's own value). Surface.coded_exception from the same "
+                "change, and detail did not move a byte."
             )),
     ApiCode("lowest_energy_unavailable", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/species_calculations_search.py"),
@@ -1085,8 +1190,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/reactions.py"),
     ApiCode("missing_structure_query", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/structure_search.py"),
-    ApiCode("ml_export_all_cap_exceeded", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/ml_dataset.py"),
+    ApiCode("ml_export_all_cap_exceeded", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/ml_dataset.py",
+            shape=Shape.relationship,
+            note=(
+                "The ML surface's own cap, and the same call as its native "
+                "sibling export_all_cap_exceeded: context carries cap and "
+                "record_type, and the species_entry row count that crossed "
+                "it is logged rather than published."
+            )),
     ApiCode("ml_export_lot_unresolved", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/ml_dataset.py"),
     ApiCode("ml_export_seed_empty", 422, Surface.message_prefix,
@@ -1117,15 +1229,18 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py"),
     ApiCode("non_finite_value", 422, Surface.message_prefix,
             "backend/app/services/release/artifacts.py"),
-    ApiCode("offset_too_large", 422, Surface.message_prefix,
+    ApiCode("offset_too_large", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",
+            shape=Shape.relationship,
             note=(
                 "The sibling of limit_too_large, and the reason they are two "
                 "codes rather than one: retrying with a smaller offset "
                 "returns different rows, so this one is not recoverable by "
                 "resending. Reachable on any paginated read against the "
                 "shipped configuration -- offset carries no upper bound at "
-                "the route, so settings.public_max_offset is the only one."
+                "the route, so settings.public_max_offset is the only one. "
+                "Shape.relationship since 2026-08-18; context carries "
+                "offset_max (a setting) and offset (the caller's own)."
             )),
     ApiCode("owner_missing", 404, Surface.coded_exception,
             "backend/app/services/scientific_read/calculations.py"),
@@ -1140,8 +1255,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
             shape=Shape.relationship),
     ApiCode("query_timeout", 503, Surface.response_literal,
             "backend/app/api/errors.py"),
-    ApiCode("query_too_expensive", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/provenance.py"),
+    ApiCode("query_too_expensive", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/provenance.py",
+            shape=Shape.relationship,
+            note=(
+                "Shape.relationship since 2026-08-18, published "
+                "threshold-only. context carries section (which sub-array "
+                "was the offender) and cap. len(block) -- how many "
+                "calculations, geometries, artifacts, conformer groups or "
+                "atom-map pairs TCKDB holds for the requested record -- is "
+                "a count of the corpus, not a property of the caller's "
+                "request, so it is logged. A caller who could read it off a "
+                "cheap refusal would have a row-counting oracle."
+            )),
     ApiCode("rate_limit_exceeded", 429, Surface.response_literal,
             "backend/app/api/rate_limit.py"),
     ApiCode("rationale_required", 422, Surface.message_prefix,
@@ -1234,8 +1360,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("selection_no_longer_approved", 422, Surface.message_prefix,
             "backend/app/services/release/curation.py"),
-    ApiCode("smiles_too_long", 422, Surface.message_prefix,
-            "backend/app/schemas/reads/scientific_kinetics_search.py"),
+    ApiCode("smiles_too_long", 422, Surface.coded_exception,
+            "backend/app/schemas/reads/scientific_kinetics_search.py",
+            shape=Shape.relationship,
+            note=(
+                "Shape.relationship since 2026-08-18. Two sites -- this one "
+                "and the reaction-search twin -- raise the wire package's "
+                "CodedValidationError rather than the backend's subclass, "
+                "because app.schemas.reads sits on the wire side. context "
+                "carries max_length (a module constant) and length (the "
+                "caller's own string, measured). The string is not echoed."
+            )),
     ApiCode("species_entry_handle_conflict", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/handles.py",
             shape=Shape.relationship),
