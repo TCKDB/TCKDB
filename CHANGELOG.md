@@ -48,7 +48,7 @@ Per-package maturity classifiers:
 |---|---|---|
 | `tckdb-backend` | Alpha | HTTP read contracts stabilising; schema still advancing |
 | `tckdb-client` | Beta | Typed methods track the published OpenAPI |
-| `tckdb-schemas` | Alpha | Upload wire contracts; version bumped on every change |
+| `tckdb-schemas` | Alpha | Upload wire contracts; version bumped on every change — **enforced in CI since 2026-08-17; five earlier versions are not unique, listed under Unreleased** |
 | `tckdb-mcp` | Alpha | Agent integration surface |
 | `tckdb-chemkin` | Alpha | Mechanism-export adapter |
 
@@ -58,6 +58,68 @@ wrapper over a contract that is itself still moving.
 ## Unreleased
 
 ### Fixed
+
+- **Two pull requests could claim the same package version, and `git` would
+  merge it silently.** Every change to a published package bumps its version.
+  Two branches that start from the same base therefore bump to the *same next
+  number*, and when the second merges, the version line on both sides is
+  **byte-identical** — so `git` reports no conflict, the file does not appear
+  in the merge diffstat, and one version number ends up describing two
+  different packages. This was caught by hand on 2026-08-17, one line-diff
+  before it shipped.
+
+  A pull-request check now refuses it. It makes **two** comparisons against
+  **two different refs**, because one ref cannot do both: *monotonicity*
+  against the merge base (`git merge-base(base.sha, head.sha)` — not `main`'s
+  tip, or a branch merely behind would be blamed for someone else's merge),
+  and *novelty* against `origin/main` fetched at job runtime plus existing
+  `<name>-v<version>` tags. The near-miss above passes the first check and is
+  caught only by the second. Comparison uses a PEP 440 sort key, not string
+  order, so `0.10.0` correctly exceeds `0.9.0`. Covers `tckdb-client`,
+  `tckdb-schemas`, `tckdb-chemkin` and `tckdb-mcp`; a test fails if a new
+  `pyproject.toml` appears in neither the covered nor the excluded list.
+
+- **Five `tckdb-schemas` versions already carry more than one package, and
+  this is the record of them.** Measured twice, by two independently written
+  scripts that agreed, comparing *tree contents* per version rather than
+  commit counts:
+
+  | Version | Distinct states |
+  |---|---|
+  | `0.2.0` | 3 |
+  | `0.8.0` | 2 |
+  | `0.14.0` | 2 |
+  | `0.30.0` | 2 |
+  | `0.33.0` | 2 |
+
+  `tckdb-mcp` `0.1.0` carries four states — it has never been bumped at all.
+  **`tckdb-client` is clean** across its whole history.
+
+  The difference is not cosmetic. Across the two `0.2.0` states, one lacks
+  `HessianSource`, `TunnelingModel`, and the `lindemann` / `troe` / `sri` /
+  `plog` / `chebyshev` entries entirely: **one state rejects payloads the
+  other accepts.**
+
+  **`0.8.0` is the one to know about.** The annotated tag
+  `tckdb-schemas-v0.8.0` reads *"pinned for tckdb-adapters/tckdb_arc (Phase
+  1)"*, and holds the **first** of its two states —
+  `git merge-base --is-ancestor 7ad5cb99a tckdb-schemas-v0.8.0` returns false.
+  Commit `7ad5cb99a` changed `tckdb_schemas/enums.py` and
+  `tckdb_schemas/workflows/computed_reaction_upload.py` and left
+  `version = "0.8.0"` untouched, so the two states **accept different upload
+  fields**.
+
+  **No consumer resolves a version number**, which is why nothing is being
+  re-published to correct this. These packages were only ever installed from
+  git, never from a package index, and ARC — the only known downstream —
+  installs from a branch with no tag, SHA, or version constraint at all. So a
+  duplicated version cannot mis-resolve for anybody today.
+
+  **The `v0.8.0` tag is deliberately left where it is.** Moving or deleting a
+  tag is its own hazard: anyone who has already fetched it holds the old
+  target either way, and a moved tag makes two clones disagree about what a
+  name means. It is recorded here instead, which is the honest fix for
+  something that has already happened.
 
 - **The `mypy` gate could not see the wire-contract package, and said
   "Success" anyway.** `tckdb-schemas` is a first-party package that lives in
