@@ -59,6 +59,8 @@ import base64
 import copy
 import hashlib
 import io
+import json
+import re
 
 import pytest
 from botocore.exceptions import ClientError
@@ -104,6 +106,38 @@ def _assert_code(response, expected: str, *, status: int = 422) -> dict:
         f"at {response.status_code}. detail={body.get('detail')!r}"
     )
     return body
+
+
+def _assert_number_absent_from_body(
+    body: dict, measured: int, what: str
+) -> None:
+    """No integer anywhere in the published body equals *measured*.
+
+    The disclosure line on ``app.api.code_catalogue.Shape`` (2026-08-18):
+    a cap refusal publishes the threshold and never the measured value
+    that crossed it, where that value describes the corpus rather than
+    the caller's own request. A count of matching records, or of rows a
+    table holds, is a fact about how much data exists -- the enumeration
+    exposure ``docs/specs/public_identifier_policy.md`` refuses to leak
+    through primary keys, and worse here because a countable refusal
+    leaks it once per query rather than once.
+
+    Asserted over the **whole serialized body**, not just ``context``.
+    ``detail`` is published too and carried these counts until the caps
+    were reclassified; an omission from one and not the other would be
+    decorative.
+
+    Integers are extracted as literals rather than substring-matched, so
+    a cap of 1 and a count of 12 cannot be confused, and a test seeding
+    two records does not fail because ``2`` appears inside a public ref.
+    """
+    serialized = json.dumps(body)
+    found = {int(token) for token in re.findall(r"\d+", serialized)}
+    assert measured not in found, (
+        f"the refusal published {what} ({measured}). That is a measurement "
+        "of the corpus, not of the caller's request -- see the disclosure "
+        f"line on app.api.code_catalogue.Shape. Body: {serialized}"
+    )
 
 
 # ===========================================================================
@@ -425,10 +459,30 @@ def test_a_composed_search_refuses_a_candidate_set_it_cannot_traverse(
     """
     monkeypatch.setattr(settings, "public_max_limit", 1)
     monkeypatch.setattr(settings, "public_max_offset", 0)
-    _assert_code(
+    body = _assert_code(
         client.post(_THERMO_SEARCH_URL, json={"formula": "C5H12", "limit": 1}),
         "composed_search_candidate_limit_exceeded",
     )
+
+    # Since 2026-08-18 this is a Shape.relationship code, and it is one of
+    # the four that publish the threshold and withhold the measurement.
+    #
+    # ``max_traversable`` is ``public_max_offset + page_size`` -- TCKDB's
+    # own configuration, and the whole repair, since it tells the caller
+    # how much narrowing the query needs. It is published.
+    assert body["context"] == {
+        "resource": "species discovery candidates",
+        "max_traversable": 1,
+    }, body
+
+    # ``expected_total`` -- how many records in the corpus matched -- is
+    # not. A refusal that reports an exact match count turns any filter
+    # into a free census endpoint, which is the enumeration exposure
+    # ``docs/specs/public_identifier_policy.md`` rejects integer primary
+    # keys for. Two pentanes are seeded, so 2 is the measured value; the
+    # assertion is over the whole serialized body because ``detail`` is
+    # published too and carried the count until this change.
+    _assert_number_absent_from_body(body, 2, "how many records matched")
 
 
 def test_the_same_search_within_the_bound_is_accepted(
@@ -533,17 +587,35 @@ def test_an_all_reactions_export_over_its_cap_is_refused(
     """One reaction in the corpus, a cap of zero.
 
     The seed is a real reaction deposited through the ordinary upload
-    route, so the count in the refusal is a count of real rows. The
+    route, so the count the refusal measures is a count of real rows. The
     request is the same one the accept-half makes.
+
+    Since 2026-08-18 this is a ``Shape.relationship`` code that publishes
+    its cap, and it is the sharpest of the four withheld measurements:
+    ``all=true`` is by construction the one export request whose size the
+    caller did not state, and the number it crosses is an unfiltered
+    ``SELECT`` over ``reaction_entry`` -- TCKDB's total holdings. Echoing
+    it back is not echoing the caller's own request; it is answering a
+    census question no route offers.
     """
     assert client.post(_REACTION_URL, json=_bundle(_map())).status_code == 201
     login_as(_api_curator_user)
     monkeypatch.setitem(iter_export_ndjson.__kwdefaults__, "all_cap", 0)
-    _assert_code(
+    body = _assert_code(
         client.get(
             _EXPORT_URL, params={"all": "true", "min_review_status": "under_review"}
         ),
         "export_all_cap_exceeded",
+    )
+
+    # The threshold and what kind of record it counts: enough for a
+    # client to know the request cannot be made whole, and which seed to
+    # narrow to instead.
+    assert body["context"] == {"cap": 0, "record_type": "reaction_entry"}, body
+
+    # One reaction entry was deposited above, so 1 is the measured value.
+    _assert_number_absent_from_body(
+        body, 1, "how many reaction entries TCKDB holds"
     )
 
 
@@ -584,6 +656,10 @@ def test_an_all_species_ml_export_over_its_cap_is_refused(
     ``export_all_cap_exceeded`` learns nothing about the ML surface, and
     the catalogue says so. One species entry is deposited so the refusal
     counts something real.
+
+    The same disclosure call as its native sibling, over a different
+    table: the cap is published, the ``species_entry`` row count is
+    logged.
     """
     assert (
         client.post("/api/v1/uploads/conformers", json=_CONFORMER_PAYLOAD).status_code
@@ -591,12 +667,17 @@ def test_an_all_species_ml_export_over_its_cap_is_refused(
     )
     login_as(_api_curator_user)
     monkeypatch.setitem(iter_ml_species_ndjson.__kwdefaults__, "all_cap", 0)
-    _assert_code(
+    body = _assert_code(
         client.get(
             _ML_EXPORT_URL,
             params={"all": "true", "min_review_status": "under_review"},
         ),
         "ml_export_all_cap_exceeded",
+    )
+
+    assert body["context"] == {"cap": 0, "record_type": "species_entry"}, body
+    _assert_number_absent_from_body(
+        body, 1, "how many species entries TCKDB holds"
     )
 
 

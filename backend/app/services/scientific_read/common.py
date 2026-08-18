@@ -13,6 +13,7 @@ Each service module imports from here so the rules are defined once.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable, Iterable
 from typing import TYPE_CHECKING, Any, Protocol
 
@@ -37,6 +38,8 @@ from app.services.scientific_read.profile import current_read_profile
 
 if TYPE_CHECKING:
     pass
+
+logger = logging.getLogger(__name__)
 
 
 class PaginatedResponse(Protocol):
@@ -99,6 +102,28 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
     — the code was catalogued, exported, and unreachable on these two
     paths. One token per message is now checked statically by
     ``tests/api/test_error_contract_catalogue_gate.py``.
+
+    Both caps are published in ``context``
+    --------------------------------------
+    ``limit_too_large`` and ``offset_too_large`` are
+    :attr:`~app.api.code_catalogue.Shape.relationship` codes as of
+    Calvin's overrule of 2026-08-18: each asserts that a supplied value
+    and a server-side cap are in the wrong order, and the code names
+    neither. A refusal that does not state the limit cannot be acted on
+    without guessing, and both caps are *settings* — a deployment that
+    lowers ``public_max_limit`` is not documented anywhere the client can
+    read.
+
+    Both values are safe to publish under the disclosure line in
+    :class:`~app.api.code_catalogue.Shape`: the cap is TCKDB's own
+    configuration, and the supplied value is the caller's own request
+    echoed back. Neither measures the corpus.
+
+    ``message_prefix=True`` keeps ``str(exc)`` byte-identical to the
+    plain ``ValueError`` these replaced, so the published ``detail`` does
+    not move; only the route into ``code`` changes, which is why the
+    catalogue entries move to
+    :attr:`~app.api.code_catalogue.Surface.coded_exception`.
     """
     if offset < 0:
         raise ValueError("invalid_pagination: offset must be >= 0")
@@ -106,14 +131,19 @@ def validate_pagination(offset: int, limit: int) -> tuple[int, int]:
         raise ValueError("invalid_pagination: limit must be >= 1")
     effective_limit_cap = min(MAX_LIMIT, settings.public_max_limit)
     if limit > effective_limit_cap:
-        raise ValueError(
-            f"limit_too_large: limit must be <= {effective_limit_cap} "
-            f"(got {limit})"
+        raise CodedValueError(
+            "limit_too_large",
+            f"limit must be <= {effective_limit_cap} (got {limit})",
+            context={"limit_max": effective_limit_cap, "limit": limit},
         )
     if offset > settings.public_max_offset:
-        raise ValueError(
-            f"offset_too_large: offset must be <= {settings.public_max_offset} "
-            f"(got {offset})"
+        raise CodedValueError(
+            "offset_too_large",
+            f"offset must be <= {settings.public_max_offset} (got {offset})",
+            context={
+                "offset_max": settings.public_max_offset,
+                "offset": offset,
+            },
         )
     return offset, limit
 
@@ -128,6 +158,32 @@ def collect_bounded_pages(
     Composed endpoints must not silently treat the first 200 rows as the
     complete set. Walk all pages within the hosted offset bound and fail
     explicitly when the complete result is not reachable.
+
+    ``composed_search_candidate_limit_exceeded`` publishes the bound and
+    not the match count
+    -------------------------------------------------------------------
+    This is the sharp case for the disclosure line in
+    :class:`~app.api.code_catalogue.Shape`. The refusal compares two
+    numbers and they are not the same kind of number:
+
+    * ``max_traversable`` — ``public_max_offset + page_size`` — is
+      TCKDB's own configuration. Publishing it is what makes the refusal
+      actionable, and a caller can derive it in about three requests by
+      halving a page size anyway.
+    * ``expected_total`` is **how many records in the corpus matched the
+      query**. That is a measurement of TCKDB's holdings, not of the
+      request, and it is exactly the enumeration signal
+      ``docs/specs/public_identifier_policy.md`` (§"Why this matters
+      now", item 3) rejects sequential integer primary keys for: it
+      leaks the total count of objects and roughly the upload schedule.
+      A caller who can turn any filter into an exact row count has a
+      free census endpoint that no route offers.
+
+    So the count is logged and not published — neither in ``context``
+    nor in ``detail``, because ``detail`` is published too and putting it
+    there would make the ``context`` omission decorative.
+    ``tests/api/test_api_query_caps.py`` asserts its absence from the
+    whole body.
     """
     page_size = min(MAX_LIMIT, settings.public_max_limit)
     max_reachable = settings.public_max_offset + page_size
@@ -143,10 +199,26 @@ def collect_bounded_pages(
         if expected_total is None:
             expected_total = page_total
             if expected_total > max_reachable:
-                raise ValueError(
-                    "composed_search_candidate_limit_exceeded: "
-                    f"{resource_name} matched {expected_total} records, but at most "
-                    f"{max_reachable} can be traversed; narrow the query."
+                # Phrased so the code is not in the code position: a log
+                # line declares nothing, and a snake_case token in front
+                # of a colon is how this codebase declares an error code.
+                # See TestNoLoggerFormatStringSitsInTheCodePosition.
+                logger.info(
+                    "composed search refused as "
+                    "composed_search_candidate_limit_exceeded; %s matched %d "
+                    "records against a traversable bound of %d",
+                    resource_name,
+                    expected_total,
+                    max_reachable,
+                )
+                raise CodedValueError(
+                    "composed_search_candidate_limit_exceeded",
+                    f"{resource_name} matched more records than the "
+                    f"{max_reachable} that can be traversed; narrow the query.",
+                    context={
+                        "resource": resource_name,
+                        "max_traversable": max_reachable,
+                    },
                 )
         elif page_total != expected_total:
             raise ValueError(
@@ -172,10 +244,17 @@ def collect_bounded_pages(
 
         offset += len(page_records)
         if offset > settings.public_max_offset:
-            raise ValueError(
-                "composed_search_candidate_limit_exceeded: "
+            # The second site of the same code. Nothing here measures the
+            # corpus: the traversal simply ran past a configured offset
+            # bound, so the bound is the whole fact and it is published.
+            raise CodedValueError(
+                "composed_search_candidate_limit_exceeded",
                 f"{resource_name} requires an offset beyond "
-                f"{settings.public_max_offset}; narrow the query."
+                f"{settings.public_max_offset}; narrow the query.",
+                context={
+                    "resource": resource_name,
+                    "offset_max": settings.public_max_offset,
+                },
             )
 
 
