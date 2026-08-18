@@ -1258,14 +1258,33 @@ scientific surface — only metadata is exposed.
   `integrity_conflict`.
 - A constraint that the scientific check register names carries its own
   code and sentence instead — `atom_map_element_not_conserved` rather
-  than `state_conflict` — and echoes the **constraint name** in
-  `context.constraint`. That is a deliberate reversal of the earlier
-  position that the name is never echoed. A schema object name is not a
-  row id: it is stable across instances, it is the key into
-  `docs/guides/scientific_check_register.md`, and withholding it left
-  the client unable to tell which scientific rule refused the write when
-  the guarantee behind it is the strongest one TCKDB makes. See
-  `backend/tests/api/test_api_database_constraint_codes.py`.
+  than `state_conflict`. The **code** is the whole public contract, and
+  it is what a client branches on and what keys
+  `docs/guides/scientific_check_register.md`.
+- The **raw constraint name never appears in a body** (Calvin,
+  2026-08-18). Between #214 and that ruling this section described the
+  opposite — the registered path echoed the name in `context.constraint`,
+  argued as "a schema object name is not a row id, it is stable across
+  instances". The ruling rejects that premise: a constraint name is an
+  internal identifier on the same reasoning as DR-0028 Requirement 2 —
+  meaningless to a depositor, not stable across a migration that renames
+  it, and a disclosure of schema layout. The sanctioned route from an
+  internal name to a public contract is the register, which mints a code;
+  echoing the name was the shortcut around it. The name goes to the
+  handler's log line, where the operator is.
+- Enforced two ways: per-class in
+  `backend/tests/api/test_api_database_constraint_codes.py` and
+  `backend/tests/api/test_api_integrity_error_handler.py` (each absence
+  assertion sits beside the positive it guards, so it cannot pass against
+  an empty body), and for **every** error body the suite produces by the
+  sweep in `backend/tests/error_body_observer.py`.
+- The four SQLSTATE buckets therefore pay what they can pay: a
+  repair-shaped sentence saying which kind of rule refused and what would
+  make a second attempt succeed, rather than "Integrity constraint
+  violation." for all of them. Their `context` stays empty; they are
+  `Shape.relationship` codes and that half of the obligation is still
+  open, because the only fact this seam holds is the name it may not
+  disclose. Paying it needs a coded refusal raised on the write path.
 - `app.api.errors.not_found` is the single constructor for a 404: it
   logs the integer id server-side and returns a detail that names the
   resource kind, plus the public ref if the caller supplied one. A
