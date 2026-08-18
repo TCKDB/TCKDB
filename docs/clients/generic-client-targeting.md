@@ -475,9 +475,41 @@ knowing before you write a branch that reads it:
   stable across a restore or between two deployments and no public
   surface is keyed on one.
 - A code that names a **thing** — `unknown_release`, `missing_filter`,
-  `limit_too_large` — is already the whole message. `context` may be `{}`
-  and that is the honest answer, not a gap: there is no second fact to
-  report.
+  `unknown_include_token` — is already the whole message. `context` may
+  be `{}` and that is the honest answer, not a gap: there is no second
+  fact to report.
+
+### Cap refusals tell you the cap (since 2026-08-18)
+
+`limit_too_large` was the example in the second bullet above until
+2026-08-18. It is now a relationship code, and so is every other cap:
+
+| code | `context` |
+|---|---|
+| `limit_too_large` | `limit_max`, `limit` |
+| `offset_too_large` | `offset_max`, `offset` |
+| `geometry_too_large` | `max_atoms`, `atoms` |
+| `smiles_too_long` | `max_length`, `length` |
+| `export_all_cap_exceeded` | `cap`, `record_type` |
+| `ml_export_all_cap_exceeded` | `cap`, `record_type` |
+| `query_too_expensive` | `section`, `cap` |
+| `composed_search_candidate_limit_exceeded` | `resource`, and `max_traversable` or `offset_max` |
+
+The reason is retry: these caps are **deployment settings**, not
+constants in this document, so a self-hosted or lab TCKDB may run
+different numbers and a refusal that did not state them left you
+bisecting. Read the threshold out of `context` and retry against it —
+do not hardcode 200, and do not scrape the sentence.
+
+**What a cap refusal will never tell you** is how much data is on the
+other side of the cap. The last four rows publish the threshold and
+stop there: no match count, no row count, no corpus total, in `context`
+or in `detail`. This is deliberate and is not a bug to report — an
+exact match count off a cheap refusal would make every filter a census
+endpoint, which is the enumeration exposure TCKDB avoids elsewhere by
+not exposing sequential row ids. If you need to know how large a result
+set is, page it or ask a curator for bulk access; do not expect the
+refusal to say.
 
 So: read `context` where the code names a relationship, and treat `{}`
 as normal everywhere else. Do not make a populated `context` a

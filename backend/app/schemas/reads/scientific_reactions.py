@@ -8,6 +8,7 @@ from __future__ import annotations
 from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads._field_bounds import (
@@ -82,12 +83,31 @@ class ReactionSearchRequest(BaseModel):
     @field_validator("reactants", "products")
     @classmethod
     def _bound_participant_lengths(cls, value: list[str]) -> list[str]:
-        """Reject participant SMILES that exceed the public free-text cap."""
+        """Reject participant SMILES that exceed the public free-text cap.
+
+        ``smiles_too_long`` is a relationship code as of 2026-08-18: a
+        supplied length against a configured maximum, neither named by
+        the code. ``context`` carries both, and both are safe under the
+        disclosure line in ``app.api.code_catalogue.Shape`` — the
+        maximum is TCKDB's own constant, and the length is the caller's
+        own string measured back to them. The string itself is *not*
+        echoed: it adds nothing the length does not and would grow the
+        body by up to the cap.
+
+        ``CodedValidationError`` rather than the backend's
+        ``CodedValueError`` because ``app.schemas.reads`` is on the wire
+        side of the schema layer; both are caught by the same handler.
+        """
         for item in value:
             if len(item) > _MAX_SMILES_LENGTH:
-                raise ValueError(
-                    "smiles_too_long: participant SMILES exceeds "
-                    f"the maximum length of {_MAX_SMILES_LENGTH}."
+                raise CodedValidationError(
+                    "smiles_too_long",
+                    "participant SMILES exceeds "
+                    f"the maximum length of {_MAX_SMILES_LENGTH}.",
+                    context={
+                        "max_length": _MAX_SMILES_LENGTH,
+                        "length": len(item),
+                    },
                 )
         return value
 
