@@ -365,17 +365,27 @@ def test_a_ts_calculation_may_not_borrow_a_reactants_geometry_by_key(
     have left it open.
     """
 
-    import glob
     import json
+    from pathlib import Path
 
     from app.schemas.workflows.computed_reaction_upload import (
         ComputedReactionUploadRequest,
     )
     from app.workflows.computed_reaction import persist_computed_reaction_upload
 
-    fixture = glob.glob(
-        "tests/fixtures/arc_runs/reaction_1/tckdb_payloads/computed_reaction/*.json"
-    )[0]
+    # Anchored to this file, not to the process's working directory: globbing a
+    # relative path found nothing when pytest was run from the repository root,
+    # and the empty list then failed as an ``IndexError`` on the subscript below
+    # rather than as the missing fixture it actually was.
+    fixture_dir = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures/arc_runs/reaction_1/tckdb_payloads/computed_reaction"
+    )
+    # ``*.payload.json`` and not ``*.json``: the directory also holds a
+    # ``.meta.json`` sidecar, which is upload bookkeeping and not a payload.
+    fixtures = sorted(fixture_dir.glob("*.payload.json"))
+    assert fixtures, f"no computed-reaction payload fixture under {fixture_dir}"
+    fixture = fixtures[0]
     with open(fixture) as handle:
         doc = json.load(handle)
 
