@@ -32,21 +32,32 @@ name: uptime-check
 #   (healthchecks.io), which turns the same run into a signal an operator can
 #   look at: last ping, and up/down, on a page that is not hosted on the Pi.
 #
-#   Three outcomes, three different pings, and the third is the point:
+#   Two outcomes:
 #
-#     status ok, nothing degraded  -> ping success. The check shows "up".
-#     the deployment answered badly -> ping /fail. The check shows "down" now,
-#                                      rather than after the grace expires.
-#     could not reach it at all     -> ping NOTHING.
+#     status ok, nothing degraded -> ping success. The check shows "up".
+#     anything else               -> ping /fail, including "no answer at all".
 #
-#   That last case is the one worth arguing about. A GitHub runner with a DNS
-#   or egress problem cannot tell a dead Pi from its own broken networking, so
-#   pinging /fail would report a deployment outage this job has no evidence
-#   for, and pinging success would be a false all-clear. Sending nothing is the
-#   honest answer: one missed ping is absorbed by the grace period, and an
-#   inability to look that *persists* trips the alarm on its own. This is the
-#   same distinction the API makes between "I could not look" and "your input
-#   is bad"; it belongs in a monitor for the same reason.
+#   AN EARLIER VERSION SENT NOTHING WHEN THE DEPLOYMENT DID NOT ANSWER, on the
+#   reasoning that a runner with broken egress cannot tell a dead host from its
+#   own dead network, so a /fail there would report an outage on no evidence.
+#   That reasoning is wrong, for a reason worth writing down because it is not
+#   obvious: THE /fail PING TRAVELS THE SAME EGRESS. A runner that cannot reach
+#   the deployment because its own networking is broken cannot reach
+#   healthchecks.io either, so the ping fails to deliver and the check goes
+#   quiet anyway. The case being guarded against produces the desired behaviour
+#   by itself, and the guard bought nothing but a delay.
+#
+#   Delivering the /fail is therefore also evidence: it proves this runner's
+#   egress works, which means the deployment really is the thing that cannot be
+#   reached. And unreachable IS down -- a database nobody can get to is not
+#   serving anyone, whatever its process table says.
+#
+#   The decisive argument is coherence. This job already sends an urgent ntfy
+#   push the moment it cannot reach the deployment. Staying silent to the
+#   heartbeat left the dashboard green for up to a full period plus grace after
+#   that push went out, so the two signals contradicted each other and the one
+#   an operator would open to confirm the alarm was the one still saying
+#   "fine". Two monitors disagreeing is worse than either alone.
 #
 #   The heartbeat is supplementary. If its secret is unset, or healthchecks.io
 #   is unreachable, this job's ntfy alerting is untouched.
@@ -119,12 +130,7 @@ jobs:
           code="$(tail -n1 <<<"$raw")"
           body="$(sed '$d' <<<"$raw")"
 
-          # Did we get an answer at all? Distinct from whether the answer was
-          # good, because only the second is evidence about the deployment.
-          answered=1
-
           if [ $rc -ne 0 ] || [ -z "$body" ]; then
-            answered=0
             summary="TCKDB is unreachable from GitHub (curl exit ${rc})."
             detail="No response from the public status endpoint. The host may be down, off the network, or the tunnel/proxy may be broken. The on-host checker cannot tell you this, which is why this job exists."
           elif [ "$code" != "200" ]; then
@@ -177,17 +183,12 @@ jobs:
               || echo "::warning::failed to publish to ntfy"
           fi
 
-          # Report the failure to the heartbeat ONLY when the deployment
-          # actually answered. If it did not, this job has no evidence about
-          # the deployment at all -- a runner with broken egress produces the
-          # identical symptom -- so it says nothing and lets the missing ping
-          # speak. One absent ping is inside the grace; a persistent inability
-          # to look expires it, which is the correct alarm for "nobody can
-          # reach this", and a different alarm from "the database is down".
-          if [ "$answered" = "1" ]; then
-            heartbeat "/fail"
-          else
-            echo "::notice::not pinging the heartbeat: the deployment could not be reached, so this run is not evidence that it is unwell. The missing ping is the signal."
-          fi
+          # Every failure, including "it did not answer", so the heartbeat page
+          # agrees with the push that has just gone out. Self-limiting: if this
+          # runner's own networking is what is broken, this ping cannot be
+          # delivered either, the warning above fires, and the check falls
+          # silent on its own -- which is the behaviour an explicit guard here
+          # would have produced, at the cost of delaying every real outage.
+          heartbeat "/fail"
 
           exit 1

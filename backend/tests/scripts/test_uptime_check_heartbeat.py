@@ -10,18 +10,26 @@ WHY THIS EXISTS
     identical to its right behaviour from the outside: silence.
 
 THE PROPERTY
-    Three outcomes, three treatments, and the third is the one worth testing:
+    Two outcomes:
 
-      the deployment is well          -> ping success
-      the deployment answered badly   -> ping /fail
-      the deployment did not answer   -> ping NOTHING
+      the deployment is well  -> ping success
+      anything else           -> ping /fail, INCLUDING "it did not answer"
 
-    The last is not an oversight and must not be "fixed" into a /fail. A
-    GitHub runner with broken egress cannot distinguish a dead Pi from its own
-    dead network, so a /fail there reports a deployment outage on no evidence.
-    Sending nothing lets the check's own grace period decide: one missed ping
-    is absorbed, a persistent inability to look expires it. Same reasoning as
-    the API's split between "I could not look" and "your input is bad".
+    An earlier version of this file asserted that an unreachable deployment
+    must ping nothing, to avoid reporting an outage when the runner's own
+    networking was the broken thing. That is wrong, and the reason is worth
+    keeping: the /fail ping travels the same egress. A runner that cannot
+    reach the deployment for its own network reasons cannot reach
+    healthchecks.io either, so the check falls silent by itself. The guard
+    prevented nothing and delayed every real outage by a period plus a grace.
+
+    Two consequences this file pins:
+
+      * delivering /fail is itself evidence the egress works, so the
+        deployment really is what cannot be reached -- and unreachable is
+        down, whatever the remote process table says;
+      * the heartbeat must never fail the job, because the broken-runner case
+        has to degrade into silence rather than into a red workflow.
 
 WHAT IS AND IS NOT FAKED
     The workflow's own shell runs, verbatim, extracted from the YAML -- so
@@ -32,7 +40,9 @@ WHAT IS AND IS NOT FAKED
 
     Deliberately asserts on what was NOT sent. A test that only checked
     "success pings /hb" passes against an implementation that pings /hb every
-    single run, which would report a dead deployment as healthy forever.
+    single run, which would report a dead deployment as healthy forever -- so
+    every case asserts the exact list of pings, never merely that one is
+    present.
 """
 
 from __future__ import annotations
@@ -126,24 +136,33 @@ def probe_script(tmp_path_factory) -> Path:
     return path
 
 
-def _run(probe: Path, mode: str, *, reachable: bool) -> list[str]:
-    """Run the probe against a stand-in deployment; return the pings it sent."""
+def _run(
+    probe: Path,
+    mode: str,
+    *,
+    reachable: bool = True,
+    heartbeat_reachable: bool = True,
+) -> tuple[list[str], int]:
+    """Run the probe against stand-ins; return the pings sent and the exit code.
+
+    ``heartbeat_reachable=False`` models the case the design turns on: this
+    runner's egress is broken, so neither endpoint can be reached.
+    """
     hits: list[str] = []
     server = HTTPServer(("127.0.0.1", 0), _handler_for(mode, hits))
     port = server.server_port
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        # An unreachable deployment is a port with nothing on it. The heartbeat
-        # endpoint stays up, so "sent nothing" cannot be confused with "could
-        # not have sent anything".
+        # An unreachable endpoint is a port with nothing on it.
         status_port = port if reachable else _closed_port()
-        subprocess.run(
+        hb_port = port if heartbeat_reachable else _closed_port()
+        completed = subprocess.run(
             ["bash", str(probe)],
             env={
                 "PATH": "/usr/bin:/bin:/usr/local/bin",
                 "STATUS_URL": f"http://127.0.0.1:{status_port}/status",
                 "NTFY_TOPIC": "",
-                "HEARTBEAT_URL": f"http://127.0.0.1:{port}/hb",
+                "HEARTBEAT_URL": f"http://127.0.0.1:{hb_port}/hb",
             },
             capture_output=True,
             timeout=120,
@@ -152,7 +171,7 @@ def _run(probe: Path, mode: str, *, reachable: bool) -> list[str]:
     finally:
         server.shutdown()
         server.server_close()
-    return hits
+    return hits, completed.returncode
 
 
 def _closed_port() -> int:
@@ -176,28 +195,78 @@ def _require_tools() -> None:
     assert not missing, f"cannot exercise the probe without: {', '.join(missing)}"
 
 
-def test_a_well_deployment_pings_success(probe_script) -> None:
-    assert _run(probe_script, "ok", reachable=True) == ["/hb"]
+def test_a_well_deployment_pings_success_and_only_success(probe_script) -> None:
+    hits, code = _run(probe_script, "ok")
+    assert hits == ["/hb"]
+    assert code == 0
 
 
 @pytest.mark.parametrize("mode", ["degraded", "contradictory", "http500"])
 def test_a_deployment_that_answered_badly_pings_fail(probe_script, mode) -> None:
     """It answered, and the answer was bad. That is evidence; report it."""
-    assert _run(probe_script, mode, reachable=True) == ["/hb/fail"]
+    hits, code = _run(probe_script, mode)
+    assert hits == ["/hb/fail"]
+    assert code == 1
 
 
-def test_an_unreachable_deployment_pings_nothing_at_all(probe_script) -> None:
-    """The assertion the design rests on.
+def test_an_unreachable_deployment_pings_fail(probe_script) -> None:
+    """Unreachable is down.
 
-    Without it, the correct implementation and one that reports every failure
-    as a deployment outage are indistinguishable -- to this suite and to a
-    reviewer reading it.
+    The heartbeat endpoint is up in this case while the deployment is not,
+    which is the real-world shape of "GitHub's network is fine, the Pi is
+    not". Reaching one and not the other is what makes the /fail meaningful
+    rather than a guess.
 
-    Mutation-checked: forcing the "did it answer" flag true makes this the only
-    failing case, and removing the success ping makes
-    ``test_a_well_deployment_pings_success`` the only failing case.
+    Mutation-checked: removing the ``heartbeat "/fail"`` on the failure path
+    makes this and the three answered-badly cases fail, and nothing else.
     """
-    assert _run(probe_script, "ok", reachable=False) == [], (
-        "the probe reported a verdict on a deployment it could not reach; a "
-        "runner with broken networking would page as a deployment outage"
+    hits, code = _run(probe_script, "ok", reachable=False)
+    assert hits == ["/hb/fail"]
+    assert code == 1
+
+
+def test_a_runner_that_can_reach_nothing_stays_silent(probe_script) -> None:
+    """The case that made the explicit "say nothing" branch unnecessary.
+
+    When this runner's own egress is broken, neither endpoint answers, so the
+    /fail cannot be delivered and the check falls silent on its own -- exactly
+    what the removed branch was written to achieve, achieved by the topology
+    instead, and without delaying a real outage by a period plus a grace.
+    """
+    hits, _ = _run(probe_script, "ok", reachable=False, heartbeat_reachable=False)
+    assert hits == []
+
+
+def test_an_unreachable_heartbeat_does_not_redden_a_healthy_run(
+    probe_script,
+) -> None:
+    """The deployment is well; healthchecks.io is the thing that is down.
+
+    That must stay a green run. A monitoring dependency failing is not a
+    deployment failure, and turning it into one trains an operator to ignore
+    the workflow -- which costs more than the heartbeat was worth.
+
+    ON WHAT ENFORCES THIS, measured rather than assumed, because the obvious
+    answer is wrong in both directions:
+
+    * TODAY, nothing about the ping can change the exit code at all. Both
+      call sites are followed by an unconditional ``exit`` and the script uses
+      ``set -uo pipefail`` without ``-e``. Confirmed by making ``heartbeat``
+      return curl's status: every test here still passed. So the ``|| echo``
+      is currently a log line, not a guard.
+    * It BECOMES the guard the moment ``-e`` is added, since a command on the
+      left of ``||`` is exempt from ``set -e`` while a bare one is not.
+
+    Mutating ``set -uo`` to ``set -euo`` is caught -- but by
+    ``test_an_unreachable_deployment_pings_fail``, not by this test: under
+    ``-e`` the run aborts at the failed status curl and never reaches the
+    ping at all. This test stays green there precisely because ``|| echo``
+    does its job. Both are kept: they fail for different reasons, and the
+    pair is what says which mechanism is doing the work.
+    """
+    hits, code = _run(probe_script, "ok", heartbeat_reachable=False)
+    assert hits == []
+    assert code == 0, (
+        "an unreachable heartbeat turned a healthy deployment into a failed "
+        "workflow run"
     )
