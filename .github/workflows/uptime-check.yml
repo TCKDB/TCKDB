@@ -23,10 +23,57 @@ name: uptime-check
 #   not a latency SLA. Note also that GitHub disables scheduled workflows in
 #   repositories with no activity for 60 days.
 #
+# THE POSITIVE SIGNAL, AND WHY IT IS A SEPARATE MECHANISM
+#   Everything above is negative: it speaks when something is wrong. Nothing in
+#   it lets an operator confirm the deployment is *well* without curling
+#   /status by hand, and "no alert" is not the same statement as "I checked and
+#   it is fine" -- an alerter that has silently stopped produces identical
+#   silence. So this job also pings an external heartbeat check
+#   (healthchecks.io), which turns the same run into a signal an operator can
+#   look at: last ping, and up/down, on a page that is not hosted on the Pi.
+#
+#   Two outcomes:
+#
+#     status ok, nothing degraded -> ping success. The check shows "up".
+#     anything else               -> ping /fail, including "no answer at all".
+#
+#   AN EARLIER VERSION SENT NOTHING WHEN THE DEPLOYMENT DID NOT ANSWER, on the
+#   reasoning that a runner with broken egress cannot tell a dead host from its
+#   own dead network, so a /fail there would report an outage on no evidence.
+#   That reasoning is wrong, for a reason worth writing down because it is not
+#   obvious: THE /fail PING TRAVELS THE SAME EGRESS. A runner that cannot reach
+#   the deployment because its own networking is broken cannot reach
+#   healthchecks.io either, so the ping fails to deliver and the check goes
+#   quiet anyway. The case being guarded against produces the desired behaviour
+#   by itself, and the guard bought nothing but a delay.
+#
+#   Delivering the /fail is therefore also evidence: it proves this runner's
+#   egress works, which means the deployment really is the thing that cannot be
+#   reached. And unreachable IS down -- a database nobody can get to is not
+#   serving anyone, whatever its process table says.
+#
+#   The decisive argument is coherence. This job already sends an urgent ntfy
+#   push the moment it cannot reach the deployment. Staying silent to the
+#   heartbeat left the dashboard green for up to a full period plus grace after
+#   that push went out, so the two signals contradicted each other and the one
+#   an operator would open to confirm the alarm was the one still saying
+#   "fine". Two monitors disagreeing is worse than either alone.
+#
+#   The heartbeat is supplementary. If its secret is unset, or healthchecks.io
+#   is unreachable, this job's ntfy alerting is untouched.
+#
 # SETUP
 #   gh secret set TCKDB_NTFY_TOPIC --repo TCKDB/TCKDB
 #   (the same topic the Pi-side checker publishes to, so both classes of alarm
 #   land in one place)
+#
+#   gh secret set TCKDB_DEPLOYMENT_HEARTBEAT_URL --repo TCKDB/TCKDB
+#   (a healthchecks.io ping URL, period ~20 min and grace ~10 to absorb
+#   GitHub's best-effort cron. A DIFFERENT check from the one behind
+#   TCKDB_DEADMAN_URL, which belongs to ci-watchdog.yml and watches CI, not the
+#   deployment. The URL is the whole credential -- anyone holding it can forge
+#   this heartbeat and keep the alarm quiet -- so it is a secret, read into the
+#   environment, and never interpolated into a command line.)
 
 on:
   schedule:
@@ -51,6 +98,7 @@ jobs:
           # repository is public; GitHub masks secret values in logs, but the
           # safe habit is not to put them anywhere that gets echoed.
           NTFY_TOPIC: ${{ secrets.TCKDB_NTFY_TOPIC }}
+          HEARTBEAT_URL: ${{ secrets.TCKDB_DEPLOYMENT_HEARTBEAT_URL }}
           STATUS_URL: https://tckdb.homecalvin.com/api/v1/status
         run: |
           set -uo pipefail
@@ -58,6 +106,24 @@ jobs:
           if [ -z "${NTFY_TOPIC}" ]; then
             echo "::warning::TCKDB_NTFY_TOPIC is not set; probing without alerting."
           fi
+          if [ -z "${HEARTBEAT_URL:-}" ]; then
+            echo "::warning::TCKDB_DEPLOYMENT_HEARTBEAT_URL is not set; there is no positive signal that the deployment is well, only alerts when it is not."
+          fi
+
+          # heartbeat <suffix> -- "" to report success, "/fail" to report a
+          # failure the check should show immediately. Never fails the job: a
+          # heartbeat that cannot be delivered must not turn a healthy
+          # deployment into a red workflow run, and its absence is itself the
+          # signal healthchecks.io alerts on.
+          heartbeat() {
+            if [ -z "${HEARTBEAT_URL:-}" ]; then
+              return 0
+            fi
+            # %/ strips one trailing slash so "<url>/" + "/fail" cannot become
+            # a double slash, which healthchecks.io does not route.
+            curl -sS --fail --max-time 20 -o /dev/null "${HEARTBEAT_URL%/}${1}" \
+              || echo "::warning::failed to ping the deployment heartbeat"
+          }
 
           raw="$(curl -sS --max-time 25 -w '\n%{http_code}' "$STATUS_URL" 2>/dev/null)"
           rc=$?
@@ -83,6 +149,10 @@ jobs:
             # this deployment has already had once.
             if [ "$state" = "ok" ] && [ -z "$degraded" ]; then
               echo "TCKDB ok"
+              # The only place a success ping is sent, and it is sent on the
+              # same condition the job exits 0 on -- so the heartbeat page and
+              # this workflow's own verdict cannot disagree.
+              heartbeat ""
               exit 0
             fi
 
@@ -112,5 +182,13 @@ jobs:
               "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null \
               || echo "::warning::failed to publish to ntfy"
           fi
+
+          # Every failure, including "it did not answer", so the heartbeat page
+          # agrees with the push that has just gone out. Self-limiting: if this
+          # runner's own networking is what is broken, this ping cannot be
+          # delivered either, the warning above fires, and the check falls
+          # silent on its own -- which is the behaviour an explicit guard here
+          # would have produced, at the cost of delaying every real outage.
+          heartbeat "/fail"
 
           exit 1
