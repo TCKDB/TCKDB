@@ -130,6 +130,16 @@ jobs:
       - name: The aggregate gate can still tell the three states apart
         run: python -m pytest --noconftest -q backend/tests/scripts/test_aggregate_pr_gates.py
 
+      # The deployment monitor's own shell, exercised. It belongs in THIS
+      # workflow rather than a path-filtered one for the same reason the
+      # coverage guard does: uptime-check.yml is the only thing watching the
+      # deployment from outside it, and a monitor that has silently stopped
+      # monitoring is indistinguishable from a healthy system. It needs bash,
+      # curl and jq -- all present on ubuntu-latest -- and binds only to
+      # loopback.
+      - name: The uptime probe still tells its three verdicts apart
+        run: python -m pytest --noconftest -q backend/tests/scripts/test_uptime_check_heartbeat.py
+
   required-gates:
     # THE REQUIRED CHECK. This job's name is the context listed in branch
     # protection, so renaming it silently un-requires every test suite in

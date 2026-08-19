@@ -23,10 +23,46 @@ name: uptime-check
 #   not a latency SLA. Note also that GitHub disables scheduled workflows in
 #   repositories with no activity for 60 days.
 #
+# THE POSITIVE SIGNAL, AND WHY IT IS A SEPARATE MECHANISM
+#   Everything above is negative: it speaks when something is wrong. Nothing in
+#   it lets an operator confirm the deployment is *well* without curling
+#   /status by hand, and "no alert" is not the same statement as "I checked and
+#   it is fine" -- an alerter that has silently stopped produces identical
+#   silence. So this job also pings an external heartbeat check
+#   (healthchecks.io), which turns the same run into a signal an operator can
+#   look at: last ping, and up/down, on a page that is not hosted on the Pi.
+#
+#   Three outcomes, three different pings, and the third is the point:
+#
+#     status ok, nothing degraded  -> ping success. The check shows "up".
+#     the deployment answered badly -> ping /fail. The check shows "down" now,
+#                                      rather than after the grace expires.
+#     could not reach it at all     -> ping NOTHING.
+#
+#   That last case is the one worth arguing about. A GitHub runner with a DNS
+#   or egress problem cannot tell a dead Pi from its own broken networking, so
+#   pinging /fail would report a deployment outage this job has no evidence
+#   for, and pinging success would be a false all-clear. Sending nothing is the
+#   honest answer: one missed ping is absorbed by the grace period, and an
+#   inability to look that *persists* trips the alarm on its own. This is the
+#   same distinction the API makes between "I could not look" and "your input
+#   is bad"; it belongs in a monitor for the same reason.
+#
+#   The heartbeat is supplementary. If its secret is unset, or healthchecks.io
+#   is unreachable, this job's ntfy alerting is untouched.
+#
 # SETUP
 #   gh secret set TCKDB_NTFY_TOPIC --repo TCKDB/TCKDB
 #   (the same topic the Pi-side checker publishes to, so both classes of alarm
 #   land in one place)
+#
+#   gh secret set TCKDB_DEPLOYMENT_HEARTBEAT_URL --repo TCKDB/TCKDB
+#   (a healthchecks.io ping URL, period ~20 min and grace ~10 to absorb
+#   GitHub's best-effort cron. A DIFFERENT check from the one behind
+#   TCKDB_DEADMAN_URL, which belongs to ci-watchdog.yml and watches CI, not the
+#   deployment. The URL is the whole credential -- anyone holding it can forge
+#   this heartbeat and keep the alarm quiet -- so it is a secret, read into the
+#   environment, and never interpolated into a command line.)
 
 on:
   schedule:
@@ -51,6 +87,7 @@ jobs:
           # repository is public; GitHub masks secret values in logs, but the
           # safe habit is not to put them anywhere that gets echoed.
           NTFY_TOPIC: ${{ secrets.TCKDB_NTFY_TOPIC }}
+          HEARTBEAT_URL: ${{ secrets.TCKDB_DEPLOYMENT_HEARTBEAT_URL }}
           STATUS_URL: https://tckdb.homecalvin.com/api/v1/status
         run: |
           set -uo pipefail
@@ -58,13 +95,36 @@ jobs:
           if [ -z "${NTFY_TOPIC}" ]; then
             echo "::warning::TCKDB_NTFY_TOPIC is not set; probing without alerting."
           fi
+          if [ -z "${HEARTBEAT_URL:-}" ]; then
+            echo "::warning::TCKDB_DEPLOYMENT_HEARTBEAT_URL is not set; there is no positive signal that the deployment is well, only alerts when it is not."
+          fi
+
+          # heartbeat <suffix> -- "" to report success, "/fail" to report a
+          # failure the check should show immediately. Never fails the job: a
+          # heartbeat that cannot be delivered must not turn a healthy
+          # deployment into a red workflow run, and its absence is itself the
+          # signal healthchecks.io alerts on.
+          heartbeat() {
+            if [ -z "${HEARTBEAT_URL:-}" ]; then
+              return 0
+            fi
+            # %/ strips one trailing slash so "<url>/" + "/fail" cannot become
+            # a double slash, which healthchecks.io does not route.
+            curl -sS --fail --max-time 20 -o /dev/null "${HEARTBEAT_URL%/}${1}" \
+              || echo "::warning::failed to ping the deployment heartbeat"
+          }
 
           raw="$(curl -sS --max-time 25 -w '\n%{http_code}' "$STATUS_URL" 2>/dev/null)"
           rc=$?
           code="$(tail -n1 <<<"$raw")"
           body="$(sed '$d' <<<"$raw")"
 
+          # Did we get an answer at all? Distinct from whether the answer was
+          # good, because only the second is evidence about the deployment.
+          answered=1
+
           if [ $rc -ne 0 ] || [ -z "$body" ]; then
+            answered=0
             summary="TCKDB is unreachable from GitHub (curl exit ${rc})."
             detail="No response from the public status endpoint. The host may be down, off the network, or the tunnel/proxy may be broken. The on-host checker cannot tell you this, which is why this job exists."
           elif [ "$code" != "200" ]; then
@@ -83,6 +143,10 @@ jobs:
             # this deployment has already had once.
             if [ "$state" = "ok" ] && [ -z "$degraded" ]; then
               echo "TCKDB ok"
+              # The only place a success ping is sent, and it is sent on the
+              # same condition the job exits 0 on -- so the heartbeat page and
+              # this workflow's own verdict cannot disagree.
+              heartbeat ""
               exit 0
             fi
 
@@ -111,6 +175,19 @@ jobs:
               -d "$message" \
               "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null \
               || echo "::warning::failed to publish to ntfy"
+          fi
+
+          # Report the failure to the heartbeat ONLY when the deployment
+          # actually answered. If it did not, this job has no evidence about
+          # the deployment at all -- a runner with broken egress produces the
+          # identical symptom -- so it says nothing and lets the missing ping
+          # speak. One absent ping is inside the grace; a persistent inability
+          # to look expires it, which is the correct alarm for "nobody can
+          # reach this", and a different alarm from "the database is down".
+          if [ "$answered" = "1" ]; then
+            heartbeat "/fail"
+          else
+            echo "::notice::not pinging the heartbeat: the deployment could not be reached, so this run is not evidence that it is unwell. The missing ping is the signal."
           fi
 
           exit 1
