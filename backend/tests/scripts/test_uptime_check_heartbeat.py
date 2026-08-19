@@ -1,4 +1,4 @@
-"""The uptime probe's three verdicts reach the heartbeat as three different pings.
+"""The uptime probe's verdict reaches the heartbeat as the right kind of ping.
 
 WHY THIS EXISTS
     ``.github/workflows/uptime-check.yml`` is the only thing that watches the
@@ -28,8 +28,10 @@ THE PROPERTY
       * delivering /fail is itself evidence the egress works, so the
         deployment really is what cannot be reached -- and unreachable is
         down, whatever the remote process table says;
-      * the heartbeat must never fail the job, because the broken-runner case
-        has to degrade into silence rather than into a red workflow.
+      * a heartbeat that cannot be delivered must not change the job's own
+        verdict, so a healthchecks.io outage does not redden a healthy run.
+        See ``test_an_unreachable_heartbeat_does_not_redden_a_healthy_run``
+        for what actually enforces that, which is not what it looks like.
 
 WHAT IS AND IS NOT FAKED
     The workflow's own shell runs, verbatim, extracted from the YAML -- so
@@ -68,9 +70,7 @@ _BODIES = {
         {
             "status": "degraded",
             "degraded": ["artifact_storage"],
-            "components": {
-                "artifact_storage": {"healthy": False, "reason": "no room"}
-            },
+            "components": {"artifact_storage": {"healthy": False, "reason": "no room"}},
         },
     ),
     # status says ok while the components disagree. The workflow treats the
@@ -100,7 +100,7 @@ def _handler_for(mode: str, hits: list[str]):
             self.end_headers()
             self.wfile.write(body)
 
-        def do_GET(self) -> None:  # noqa: N802 - stdlib naming
+        def do_GET(self) -> None:
             if self.path.startswith("/hb"):
                 hits.append(self.path)
                 return self._json(200, {"ok": True})
@@ -109,7 +109,7 @@ def _handler_for(mode: str, hits: list[str]):
                 return self._json(code, payload)
             self._json(404, {"detail": "not found"})
 
-        def do_POST(self) -> None:  # noqa: N802 - the ntfy stand-in
+        def do_POST(self) -> None:
             self.rfile.read(int(self.headers.get("Content-Length", 0)))
             self._json(200, {"ok": True})
 
@@ -266,7 +266,4 @@ def test_an_unreachable_heartbeat_does_not_redden_a_healthy_run(
     """
     hits, code = _run(probe_script, "ok", heartbeat_reachable=False)
     assert hits == []
-    assert code == 0, (
-        "an unreachable heartbeat turned a healthy deployment into a failed "
-        "workflow run"
-    )
+    assert code == 0, "an unreachable heartbeat turned a healthy deployment into a failed workflow run"

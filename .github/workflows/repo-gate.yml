@@ -137,7 +137,7 @@ jobs:
       # monitoring is indistinguishable from a healthy system. It needs bash,
       # curl and jq -- all present on ubuntu-latest -- and binds only to
       # loopback.
-      - name: The uptime probe still tells its three verdicts apart
+      - name: The uptime probe still tells its verdicts apart
         run: python -m pytest --noconftest -q backend/tests/scripts/test_uptime_check_heartbeat.py
 
   required-gates:
