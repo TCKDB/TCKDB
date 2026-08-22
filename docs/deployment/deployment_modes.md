@@ -192,7 +192,9 @@ TCKDB instance it is configured against.
 | Legacy entity routes | Open | `LEGACY_READS_REQUIRE_AUTH=true` | `LEGACY_READS_REQUIRE_AUTH=true` |
 | Open registration | Operator choice | Off (`AUTH_ALLOW_OPEN_REGISTRATION=false`) | Off; seeded accounts |
 | Rate limiting | Optional | Required | Required |
-| OpenAPI / Swagger | Operator choice | Hidden (`EXPOSE_API_DOCS=false`) | Hidden |
+| Swagger UI (`/docs`) | Operator choice | Hidden (`EXPOSE_API_DOCS=false`) | Hidden |
+| API reference (`/redoc`, `/openapi.json`) | Operator choice | Operator choice (`EXPOSE_API_REFERENCE`) | Published (`EXPOSE_API_REFERENCE=true`) |
+| Landing page (`/`) | Always served | Always served | Always served |
 | TLS | Not required | Required (edge cert via Cloudflare or origin cert via proxy) | Required |
 | Secrets management | `.env` on local disk | `.env.selfhosted` outside repo, restricted perms | Operator-managed (vault/secret store) |
 
