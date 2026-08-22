@@ -12,6 +12,7 @@ from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
+    ReactionMatchMode,
     ReactionSearchRequest,
     ScientificReactionSearchResponse,
 )
@@ -29,6 +30,7 @@ def reaction_search_get(
     reactants: list[str] | None = Query(None),
     products: list[str] | None = Query(None),
     direction: ReactionDirectionQuery = Query(ReactionDirectionQuery.either),
+    match: ReactionMatchMode = Query(ReactionMatchMode.contains),
     family: str | None = Query(None),
     reaction_ref: str | None = Query(None),
     reaction_entry_ref: str | None = Query(None),
@@ -45,12 +47,18 @@ def reaction_search_get(
 
     Repeated ``reactants=`` and ``products=`` are accepted and preserve list
     order. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).
-    See ``docs/specs/read_api_mvp.md`` §Endpoint 2.
+
+    ``match=contains`` (the default) means set containment per role, so
+    ``?reactants=NN`` returns every reaction with NN among its reactants and
+    leaves the product side unconstrained. ``match=exact`` asks for precisely
+    one equation, both sides, counts included. See
+    ``docs/specs/read_api_mvp.md`` §Endpoint 2.
     """
     request = ReactionSearchRequest(
         reactants=reactants or [],
         products=products or [],
         direction=direction,
+        match=match,
         family=family,
         reaction_ref=reaction_ref,
         reaction_entry_ref=reaction_entry_ref,

@@ -149,3 +149,134 @@ def test_get_includes_kinetics_count_when_available(client, db_session):
     avail = resp.json()["records"][0]["availability"]
     assert avail["has_kinetics"] is True
     assert avail["kinetics_count"] == 1
+
+
+# ---------------------------------------------------------------------------
+# match=contains (default) vs match=exact, over HTTP
+# ---------------------------------------------------------------------------
+
+
+def _setup_two_by_two(db_session, prefix: str):
+    """A + B <=> C + D, so every partial query has something to be partial about."""
+    species = {
+        role: make_species(
+            db_session, smiles=f"{prefix}_{role}", inchi_key=next_inchi_key(prefix)
+        )
+        for role in ("A", "B", "C", "D")
+    }
+    chem = make_chem_reaction(
+        db_session,
+        reactants=[species["A"], species["B"]],
+        products=[species["C"], species["D"]],
+    )
+    return make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[
+            make_species_entry(db_session, species[r]) for r in ("A", "B")
+        ],
+        product_entries=[
+            make_species_entry(db_session, species[r]) for r in ("C", "D")
+        ],
+    )
+
+
+def test_get_reactants_only_returns_the_reaction(client, db_session):
+    """"What consumes this species?" over HTTP — 200 with a record, not 200 with none."""
+    _setup_two_by_two(db_session, "HCT")
+
+    resp = client.get("/api/v1/scientific/reactions/search?reactants=HCT_A")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert len(body["records"]) == 1
+    assert body["pagination"]["total"] == 1
+    assert {p["smiles"] for p in body["records"][0]["reactants"]} == {
+        "HCT_A",
+        "HCT_B",
+    }
+
+
+def test_get_products_only_returns_the_reaction(client, db_session):
+    _setup_two_by_two(db_session, "HPO")
+
+    resp = client.get("/api/v1/scientific/reactions/search?products=HPO_C")
+
+    assert resp.status_code == 200
+    assert len(resp.json()["records"]) == 1
+
+
+def test_get_match_exact_rejects_the_partial_query(client, db_session):
+    """The migration path: ``match=exact`` restores the pre-``match`` answer."""
+    _setup_two_by_two(db_session, "HEX")
+
+    contains = client.get(
+        "/api/v1/scientific/reactions/search?reactants=HEX_A&products=HEX_C"
+    )
+    exact = client.get(
+        "/api/v1/scientific/reactions/search"
+        "?reactants=HEX_A&products=HEX_C&match=exact"
+    )
+
+    assert len(contains.json()["records"]) == 1
+    assert exact.status_code == 200
+    assert exact.json()["records"] == []
+
+
+def test_get_match_exact_still_matches_the_whole_equation(client, db_session):
+    _setup_two_by_two(db_session, "HEW")
+
+    resp = client.get(
+        "/api/v1/scientific/reactions/search"
+        "?reactants=HEW_A&reactants=HEW_B"
+        "&products=HEW_C&products=HEW_D&match=exact"
+    )
+
+    assert resp.status_code == 200
+    assert len(resp.json()["records"]) == 1
+
+
+def test_get_rejects_unknown_match_value(client, db_session):
+    _setup_two_by_two(db_session, "HBAD")
+
+    resp = client.get(
+        "/api/v1/scientific/reactions/search?reactants=HBAD_A&match=subset"
+    )
+
+    assert resp.status_code == 422
+
+
+def test_post_accepts_match_in_body(client, db_session):
+    _setup_two_by_two(db_session, "HPB")
+
+    resp = client.post(
+        "/api/v1/scientific/reactions/search",
+        json={"reactants": ["HPB_A"], "match": "contains"},
+    )
+
+    assert resp.status_code == 200
+    assert len(resp.json()["records"]) == 1
+
+
+def test_response_echoes_the_match_mode(client, db_session):
+    _setup_two_by_two(db_session, "HECH")
+
+    resp = client.get("/api/v1/scientific/reactions/search?reactants=HECH_A")
+
+    assert resp.json()["request"]["filter"]["match"] == "contains"
+
+
+def test_get_direction_reverse_composes_with_contains(client, db_session):
+    """``direction`` and ``match`` are independent axes; check they compose."""
+    _setup_two_by_two(db_session, "HDIR")
+
+    reverse_hit = client.get(
+        "/api/v1/scientific/reactions/search?reactants=HDIR_C&direction=reverse"
+    )
+    reverse_miss = client.get(
+        "/api/v1/scientific/reactions/search?reactants=HDIR_A&direction=reverse"
+    )
+
+    assert len(reverse_hit.json()["records"]) == 1
+    assert reverse_hit.json()["records"][0]["matched_direction"] == "reverse"
+    assert reverse_miss.json()["records"] == []

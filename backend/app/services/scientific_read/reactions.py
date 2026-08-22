@@ -30,6 +30,7 @@ from app.schemas.reads.scientific_common import REVIEW_RANK
 from app.schemas.reads.scientific_reactions import (
     ReactionAvailability,
     ReactionDirectionQuery,
+    ReactionMatchMode,
     ReactionParticipantSummary,
     ReactionScientificRecord,
     ReactionSearchRequest,
@@ -76,8 +77,18 @@ def search_reactions(
     Direction matching is query-time semantics — the schema does not store a
     per-entry direction. ``either`` matches in either orientation; ``forward``
     requires query reactants → stored reactants and query products → stored
-    products; ``reverse`` requires the swap. ``exact`` is **not** supported in
-    v0 (rejected with 422 ``unsupported_direction``).
+    products; ``reverse`` requires the swap. ``direction=exact`` is **not**
+    supported in v0 (rejected with 422 ``unsupported_direction``).
+
+    ``match`` is the orthogonal axis and defaults to ``contains``: every
+    queried species must appear in that role, and a side the caller left
+    empty constrains nothing. So ``reactants=NN`` answers "what consumes
+    hydrazine?" rather than "what turns hydrazine into nothing?" — the
+    latter has no answer and used to be the question this endpoint asked.
+    ``match=exact`` restores multiset equality on both sides for callers who
+    want precisely one equation and do not hold its ``reaction_ref``.
+    Containment is set-based, not multiset; see
+    :class:`~app.schemas.reads.scientific_reactions.ReactionMatchMode`.
 
     Default sort (per L3): ``review_rank ASC, has_kinetics DESC,
     has_transition_state DESC, created_at DESC, id DESC``. Client-supplied
@@ -148,6 +159,7 @@ def search_reactions(
             reactant_species_ids=reactant_species_ids,
             product_species_ids=product_species_ids,
             direction=request.direction,
+            match=request.match,
         )
         # Phase C: narrow the participant-derived candidate set with
         # the explicit ref filters in SQL, so we still pay only one
@@ -251,6 +263,7 @@ def search_reactions(
             reactant_species_ids=reactant_species_ids,
             product_species_ids=product_species_ids,
             requested=request.direction,
+            match=request.match,
         )
 
     family_name_by_id: dict[int, str] = {}
@@ -374,17 +387,59 @@ def _resolve_smiles_to_species_ids(
     return [by_smiles[s] for s in smiles_list if s in by_smiles]
 
 
+def _side_matches(
+    stored: list[int], queried: list[int], match: ReactionMatchMode
+) -> bool:
+    """Test one role (reactants or products) of one orientation.
+
+    ``exact`` is multiset equality — same species, same counts. ``contains``
+    is set containment: every queried species appears in the stored side,
+    counts ignored. An empty ``queried`` is contained in anything, which is
+    what makes a one-sided ``contains`` query leave the other side free.
+    """
+    if match is ReactionMatchMode.exact:
+        return sorted(stored) == sorted(queried)
+    return set(queried).issubset(stored)
+
+
+def _orientation_matches(
+    *,
+    stored_reactants: list[int],
+    stored_products: list[int],
+    queried_reactants: list[int],
+    queried_products: list[int],
+    match: ReactionMatchMode,
+) -> bool:
+    """Test both roles of a single orientation under ``match`` semantics."""
+    return _side_matches(stored_reactants, queried_reactants, match) and _side_matches(
+        stored_products, queried_products, match
+    )
+
+
 def _find_matching_reaction_entry_ids(
     session: Session,
     *,
     reactant_species_ids: list[int],
     product_species_ids: list[int],
     direction: ReactionDirectionQuery,
+    match: ReactionMatchMode,
 ) -> list[int]:
     """Find reaction_entry IDs whose structure participants match the query.
 
-    Match semantics use multisets (counts) of species_id per role. ``exact``
-    direction is rejected upstream of this helper.
+    Two independent axes, and they compose:
+
+    * ``direction`` picks which orientation(s) of the stored entry the query
+      is tried against — ``forward``, ``reverse``, or (default) ``either``.
+    * ``match`` picks how a side is compared once an orientation is chosen —
+      ``contains`` (set containment per role, the default) or ``exact``
+      (multiset equality on both roles).
+
+    Under ``either`` + ``contains``, containment is tested in *both*
+    orientations and an entry matching in either one is returned.
+
+    ``direction=exact`` is rejected upstream of this helper; it is not the
+    same thing as ``match=exact``, which is what "precisely this equation"
+    now means.
     """
     if direction == ReactionDirectionQuery.forward:
         orientations = [(reactant_species_ids, product_species_ids)]
@@ -442,9 +497,13 @@ def _find_matching_reaction_entry_ids(
     matching: list[int] = []
     for entry_id, sides in grouped.items():
         for left, right in orientations:
-            if sorted(sides[ReactionRole.reactant]) == sorted(left) and sorted(
-                sides[ReactionRole.product]
-            ) == sorted(right):
+            if _orientation_matches(
+                stored_reactants=sides[ReactionRole.reactant],
+                stored_products=sides[ReactionRole.product],
+                queried_reactants=left,
+                queried_products=right,
+                match=match,
+            ):
                 matching.append(entry_id)
                 break
     return matching
@@ -571,23 +630,28 @@ def _matched_direction(
     reactant_species_ids: list[int],
     product_species_ids: list[int],
     requested: ReactionDirectionQuery,
+    match: ReactionMatchMode,
 ) -> ReactionDirectionQuery:
     """Determine which orientation of the entry the query actually matched.
 
     For ``forward`` and ``reverse`` the requested orientation is the matched
-    orientation. For ``either``, prefer ``forward`` when query reactants line
-    up with stored reactants; otherwise ``reverse``.
+    orientation. For ``either``, prefer ``forward`` when the query matches the
+    stored orientation *under the same* ``match`` semantics the matcher used;
+    otherwise ``reverse``. Testing this with multiset equality while the
+    matcher used containment would report ``reverse`` for every one-sided
+    ``contains`` query, including the forward ones.
     """
     if requested == ReactionDirectionQuery.forward:
         return ReactionDirectionQuery.forward
     if requested == ReactionDirectionQuery.reverse:
         return ReactionDirectionQuery.reverse
 
-    stored_reactants = sorted(entry_species[ReactionRole.reactant])
-    stored_products = sorted(entry_species[ReactionRole.product])
-    if (
-        sorted(reactant_species_ids) == stored_reactants
-        and sorted(product_species_ids) == stored_products
+    if _orientation_matches(
+        stored_reactants=entry_species[ReactionRole.reactant],
+        stored_products=entry_species[ReactionRole.product],
+        queried_reactants=reactant_species_ids,
+        queried_products=product_species_ids,
+        match=match,
     ):
         return ReactionDirectionQuery.forward
     return ReactionDirectionQuery.reverse
@@ -640,6 +704,7 @@ def _filter_echo(request: ReactionSearchRequest) -> dict[str, object]:
     if request.products:
         echo["products"] = list(request.products)
     echo["direction"] = request.direction.value
+    echo["match"] = request.match.value
     if request.family is not None:
         echo["family"] = request.family
     if request.reaction_ref is not None:

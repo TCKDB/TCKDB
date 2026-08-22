@@ -184,7 +184,9 @@ print(f"A = {params['A']} ({params['A_units']}) n = {params['n']}"
 Notes:
 
 - `direction="either"` matches in either forward or reverse orientation; the response says which (`matched_direction`).
-- `direction="exact"` is **not** supported in v0 — the backend returns 422.
+- `direction="exact"` is **not** supported in v0 — the backend returns 422. It is not the same thing as `match="exact"`, which is supported and described below.
+- `match="contains"` (the default) means **set containment per role**: every species you name must appear in that role, and a side you leave out constrains nothing. So `search_kinetics(reactants=["CC"])` on its own is a real query — "kinetics for reactions consuming ethane" — and so is `search_reactions(products=["[OH]"])`. Counts are ignored in this mode: naming one `[OH]` matches a reaction consuming two.
+- `match="exact"` demands the whole equation, both sides, counts included. Use it when you mean one specific reaction and do not hold its `reaction_ref`. Before `match` existed this was the only behaviour, which is why a one-sided query used to come back empty.
 - Non-TS-backed kinetics (experimental, estimated, network-derived, …) come through with `provenance.transition_state_entry_ref = null` and every `ts_*_calculation_ref = null`. That's not an error — it's how the schema signals "no transition-state chain to follow."
 
 ---

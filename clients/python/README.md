@@ -303,6 +303,9 @@ deployment with no curated selection answers exploratorily.
 
 ```python
 kinetics = client.search_kinetics(reactants=["C[CH2]"], profile="curated")
+# One-sided queries mean containment: "kinetics for reactions consuming
+# the ethyl radical", products unconstrained. Pass match="exact" to ask
+# for one specific equation instead (both sides, counts included).
 kinetics["request"]["profile"]                  # what actually answered
 kinetics["request"]["profile_recommendation"]   # what TCKDB recommends
 ```

@@ -13,8 +13,8 @@ Policy choices enforced here (in addition to server-side validation):
 - ``limit`` is capped at ``config.max_limit`` (default 50).
 - At least one identity discriminator must be supplied
   (``reactants``, ``products``, ``reaction_ref``, ``reaction_entry_ref``,
-  or ``family``). Modifiers alone (``direction``, ``min_review_status``)
-  are not searchable on their own.
+  or ``family``). Modifiers alone (``direction``, ``match``,
+  ``min_review_status``) are not searchable on their own.
 """
 
 from __future__ import annotations
@@ -28,7 +28,10 @@ from ..http_client import TCKDBHttpClient
 TOOL_NAME = "tckdb_search_reactions"
 TOOL_DESCRIPTION = (
     "Search TCKDB reactions and reaction_entries by reactant/product "
-    "SMILES, direction, family, or public ref. Read-only. At least one "
+    "SMILES, direction, family, or public ref. Read-only. Matching is "
+    "containment by default (match=contains): reactants alone means "
+    "'every reaction with these among its reactants'; match=exact demands "
+    "the whole equation. At least one "
     "discriminator (reactants, products, reaction_ref, reaction_entry_ref, "
     "or family) is required. Returns the server search envelope unchanged."
 )
@@ -45,6 +48,12 @@ LEGAL_INCLUDE_TOKENS = frozenset(
 # (``exact`` is explicitly rejected in v0; the enum does not include it.)
 LEGAL_DIRECTIONS = frozenset({"forward", "reverse", "either"})
 
+# Legal ``match`` values from
+# backend/app/schemas/reads/scientific_reactions.py::ReactionMatchMode.
+# ``contains`` is set containment per role and is the server default;
+# ``exact`` is multiset equality on both sides.
+LEGAL_MATCH_MODES = frozenset({"contains", "exact"})
+
 _DISCRIMINATOR_FIELDS: tuple[str, ...] = (
     "reactants",
     "products",
@@ -58,6 +67,7 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "reactants",
         "products",
         "direction",
+        "match",
         "family",
         "reaction_ref",
         "reaction_entry_ref",
@@ -95,6 +105,19 @@ INPUT_SCHEMA: dict[str, Any] = {
             "type": "string",
             "enum": sorted(LEGAL_DIRECTIONS),
             "default": "either",
+        },
+        "match": {
+            "type": "string",
+            "enum": sorted(LEGAL_MATCH_MODES),
+            "default": "contains",
+            "description": (
+                "How the supplied species lists are compared with a stored "
+                "reaction side. 'contains' (default) means every named "
+                "species must appear in that role and an omitted side is "
+                "unconstrained, so reactants=['NN'] answers 'what consumes "
+                "hydrazine'. 'exact' demands the whole equation, both "
+                "sides, counts included."
+            ),
         },
         "family": {"type": "string"},
         "reaction_ref": {
@@ -198,6 +221,12 @@ def run(
             f"direction must be one of {sorted(LEGAL_DIRECTIONS)!r}; got {direction!r}"
         )
 
+    match_mode = args.get("match")
+    if match_mode is not None and match_mode not in LEGAL_MATCH_MODES:
+        raise invalid_input(
+            f"match must be one of {sorted(LEGAL_MATCH_MODES)!r}; got {match_mode!r}"
+        )
+
     offset = args.get("offset", 0)
     if not isinstance(offset, int) or isinstance(offset, bool) or offset < 0:
         raise invalid_input(f"offset must be a non-negative integer; got {offset!r}")
@@ -239,6 +268,7 @@ def run(
         "reactants": reactants if reactants else None,
         "products": products if products else None,
         "direction": direction,
+        "match": match_mode,
         "family": args.get("family"),
         "reaction_ref": reaction_ref,
         "reaction_entry_ref": reaction_entry_ref,

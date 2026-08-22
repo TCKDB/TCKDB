@@ -18581,7 +18581,7 @@
         "type": "object"
       },
       "KineticsSearchRequest": {
-        "description": "Service-layer request for chemistry-first kinetics search.\n\nReactants and/or products are required; matching uses the same\nspecies-multiset semantics as ``search_reactions``. ``direction=exact``\nis **not** supported in v0.",
+        "description": "Service-layer request for chemistry-first kinetics search.\n\nReactants and/or products are required; reaction identity is resolved by\ndelegating to ``search_reactions``, so ``direction`` and ``match`` mean\nexactly what they mean there — ``match`` defaults to ``contains`` (set\ncontainment per role), and ``match=exact`` asks for one whole equation.\n``direction=exact`` is **not** supported in v0.",
         "properties": {
           "collapse": {
             "$ref": "#/components/schemas/CollapseMode",
@@ -18647,6 +18647,10 @@
             "default": 50,
             "title": "Limit",
             "type": "integer"
+          },
+          "match": {
+            "$ref": "#/components/schemas/ReactionMatchMode",
+            "default": "contains"
           },
           "min_review_status": {
             "anyOf": [
@@ -29163,6 +29167,15 @@
         "title": "ReactionFullSpeciesParticipant",
         "type": "object"
       },
+      "ReactionMatchMode": {
+        "description": "How a supplied participant list is compared against a stored side.\n\n``contains`` (the default) — **set containment per role**: every queried\nspecies must appear in that role of the stored reaction. The empty side\nconstrains nothing, so ``reactants=NN`` alone means \"NN among the\nreactants, products unconstrained\".\n\n``exact`` — multiset equality on *both* roles: precisely this equation,\nboth sides, counts included.\n\nThe default is containment because \"reactions involving hydrazine\" is\nwhat a chemist means by ``reactants=NN``, and answering it with the\nempty set — which is what multiset equality against an unstated product\nside must do — is a confidently wrong scientific answer rather than a\nnarrow one.\n\nContainment is deliberately **set**, not multiset. ``reactants=NN``\nmatches a reaction consuming two NN, and ``reactants=NN&reactants=NN``\nmatches a reaction consuming one. Stoichiometry is not a filter here:\na caller who wants counts to line up is asking for a specific equation\nand should say ``match=exact``. The opposite reading — that a queried\nmultiset must be covered with multiplicity — is defensible enough that\nit is stated here rather than left to fall out of the implementation.",
+        "enum": [
+          "contains",
+          "exact"
+        ],
+        "title": "ReactionMatchMode",
+        "type": "string"
+      },
       "ReactionParticipantSummary": {
         "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.",
         "properties": {
@@ -29402,6 +29415,10 @@
             "default": 50,
             "title": "Limit",
             "type": "integer"
+          },
+          "match": {
+            "$ref": "#/components/schemas/ReactionMatchMode",
+            "default": "contains"
           },
           "min_review_status": {
             "anyOf": [
@@ -65642,7 +65659,7 @@
     },
     "/api/v1/scientific/kinetics/search": {
       "get": {
-        "description": "Chemistry-first kinetics search by reactants/products.\n\nRepeated ``reactants=`` and ``products=`` are accepted on the GET form.\nFor complex reactant/product lists (especially with bracket-heavy\nSMILES), prefer the POST form. Returns kinetics records with the\nresolved reaction/reaction_entry identity attached.",
+        "description": "Chemistry-first kinetics search by reactants/products.\n\nRepeated ``reactants=`` and ``products=`` are accepted on the GET form.\n``match=contains`` (the default) means every queried species must appear\nin that role and an omitted side constrains nothing; ``match=exact``\ndemands the whole equation. For complex reactant/product lists\n(especially with bracket-heavy SMILES), prefer the POST form. Returns\nkinetics records with the resolved reaction/reaction_entry identity\nattached.",
         "operationId": "kinetics_search_get_api_v1_scientific_kinetics_search_get",
         "parameters": [
           {
@@ -65690,6 +65707,15 @@
             "schema": {
               "$ref": "#/components/schemas/ReactionDirectionQuery",
               "default": "either"
+            }
+          },
+          {
+            "in": "query",
+            "name": "match",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReactionMatchMode",
+              "default": "contains"
             }
           },
           {
@@ -69145,7 +69171,7 @@
     },
     "/api/v1/scientific/reactions/search": {
       "get": {
-        "description": "Discover reaction entries by reactants/products with availability + trust.\n\nRepeated ``reactants=`` and ``products=`` are accepted and preserve list\norder. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).\nSee ``docs/specs/read_api_mvp.md`` §Endpoint 2.",
+        "description": "Discover reaction entries by reactants/products with availability + trust.\n\nRepeated ``reactants=`` and ``products=`` are accepted and preserve list\norder. ``direction=exact`` is rejected (v0). ``sort=`` is rejected (v0).\n\n``match=contains`` (the default) means set containment per role, so\n``?reactants=NN`` returns every reaction with NN among its reactants and\nleaves the product side unconstrained. ``match=exact`` asks for precisely\none equation, both sides, counts included. See\n``docs/specs/read_api_mvp.md`` §Endpoint 2.",
         "operationId": "reaction_search_get_api_v1_scientific_reactions_search_get",
         "parameters": [
           {
@@ -69193,6 +69219,15 @@
             "schema": {
               "$ref": "#/components/schemas/ReactionDirectionQuery",
               "default": "either"
+            }
+          },
+          {
+            "in": "query",
+            "name": "match",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReactionMatchMode",
+              "default": "contains"
             }
           },
           {

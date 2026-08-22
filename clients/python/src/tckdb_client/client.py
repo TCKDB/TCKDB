@@ -1170,6 +1170,7 @@ class TCKDBClient:
         reactants: list[str] | None = None,
         products: list[str] | None = None,
         direction: str | None = None,
+        match: str | None = None,
         family: str | None = None,
         reaction_ref: str | None = None,
         reaction_entry_ref: str | None = None,
@@ -1192,11 +1193,21 @@ class TCKDBClient:
 
         Phase C: ``reaction_ref`` / ``reaction_entry_ref`` may be supplied
         as standalone identity filters (no SMILES required).
+
+        ``match`` selects how the supplied species lists are compared with a
+        stored reaction side. The server default is ``"contains"`` — set
+        containment per role, so ``reactants=["NN"]`` alone means "every
+        reaction with NN among its reactants" and leaves the product side
+        unconstrained. ``match="exact"`` asks for precisely one equation,
+        both sides, counts included; it is what this endpoint did
+        unconditionally before the parameter existed. Left ``None`` the
+        field is not sent and the server default applies.
         """
         common = {
             "reactants": reactants,
             "products": products,
             "direction": direction,
+            "match": match,
             "family": family,
             "reaction_ref": reaction_ref,
             "reaction_entry_ref": reaction_entry_ref,
@@ -1410,6 +1421,7 @@ class TCKDBClient:
         reactants: list[str] | None = None,
         products: list[str] | None = None,
         direction: str | None = None,
+        match: str | None = None,
         family: str | None = None,
         reaction_ref: str | None = None,
         reaction_entry_ref: str | None = None,
@@ -1439,11 +1451,15 @@ class TCKDBClient:
         repeated-query-param form. Non-TS-backed kinetics surface with null
         TS-chain provenance fields, exactly like the entry-id detail endpoint.
         ``pressure_bar`` is canonical; ``pressure`` is a deprecated alias.
+        ``match`` means what it means on :meth:`search_reactions` — reaction
+        identity here is resolved by that same service — and defaults
+        server-side to ``"contains"``.
         """
         body = {
             "reactants": reactants,
             "products": products,
             "direction": direction,
+            "match": match,
             "family": family,
             "reaction_ref": reaction_ref,
             "reaction_entry_ref": reaction_entry_ref,
