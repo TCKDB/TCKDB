@@ -304,7 +304,8 @@ the placeholders. The non-negotiable hosted toggles:
 | Variable | Required value | Why |
 |---|---|---|
 | `DEPLOYMENT_MODE` | `hosted_public` | Activates the startup safety guard so unsafe values for the rows below cause the API to exit at boot instead of silently misconfiguring production. Use `shared_private` for lab-internal deployments. |
-| `EXPOSE_API_DOCS` | `false` | Don't ship Swagger/ReDoc to the public surface. |
+| `EXPOSE_API_DOCS` | `false` | Don't ship Swagger UI's live request console to the public surface. |
+| `EXPOSE_API_REFERENCE` | operator choice (default `false`) | Set `true` to publish the read-only ReDoc reference at `/redoc` plus `/openapi.json` while `/docs` stays unregistered. |
 | `LEGACY_READS_REQUIRE_AUTH` | `true` | Legacy `/api/v1/{thermo,…}` routes leak integer PKs. |
 | `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | Clients use refs as handles. |
 | `RATE_LIMIT_ENABLED` | `true` | Hosted abuse control is mandatory. |
@@ -863,14 +864,18 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 ```bash
 curl -s -o /dev/null -w "%{http_code}\n" \
     https://api.tckdb.example.org/docs
-# expect 404
+# expect 404, always
 curl -s -o /dev/null -w "%{http_code}\n" \
     https://api.tckdb.example.org/openapi.json
-# expect 404
+# expect 404 with EXPOSE_API_REFERENCE unset or false;
+# expect 200 with EXPOSE_API_REFERENCE=true, which is intended
+curl -s -o /dev/null -w "%{http_code}\n" \
+    https://api.tckdb.example.org/
+# expect 200 — the landing page, served regardless of either setting
 ```
 
-If either returns 200, `EXPOSE_API_DOCS=true` slipped through — fix
-`.env.selfhosted` and `systemctl restart tckdb-api`.
+If `/docs` returns 200, `EXPOSE_API_DOCS=true` slipped through — fix
+`.env.selfhosted` and restart the API container.
 
 ### 6. Postgres not publicly reachable
 

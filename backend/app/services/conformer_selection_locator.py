@@ -5,9 +5,11 @@ The locator
 ``ConformerSelectionContentRef`` is how a depositor cites a stored
 conformer selection when they hold no handle for it. Instead of a ref they
 *describe* the row — ``{species_entry, selection_kind,
-assignment_scheme_ref}``, read as "the lowest-energy selection for this
-species entry under this scheme" — and the workflow expects the
-description to pick out exactly one row.
+assignment_scheme_ref, conformer_group_ref}``, read as "the lowest-energy
+selection for this species entry under this scheme, in this conformer
+group" — and the workflow expects the description to pick out exactly one
+row. The last field is optional and is the one added last; the rest of
+this module is largely the record of what its absence cost.
 
 Two conditions, two repairs, and one sentence
 ---------------------------------------------
@@ -45,37 +47,57 @@ on how the row was named.
 
 Why the 422 has to say what *differs*
 -------------------------------------
-"Be more specific" is only advice if there is something to add. The
-locator has three fields and the lookup filters on all three, so **every
-candidate agrees on all three by construction** — and the axis that
-actually separates them is the conformer group, which the locator cannot
-name at all. ``conformer_group`` is unique on ``(species_entry_id,
-label)`` with NULLs distinct, so one species entry may own many groups,
-each able to carry a ``lowest_energy`` selection with a NULL scheme, and
-the locator joins on ``species_entry_id`` alone.
+"Be more specific" is only advice if there is something to add, and while
+the locator had three fields and the lookup filtered on all three, there
+was not. Every candidate agreed on all three by construction, and
+the axis that actually separated them was the conformer group, which the
+locator could not name at all. ``conformer_group`` is unique on
+``(species_entry_id, label)`` with NULLs distinct, so one species entry
+may own many groups (normally: ``resolve_conformer_group`` mints a fresh
+one per unrecognised basin), each able to carry a ``lowest_energy``
+selection with a NULL scheme, and the locator joined on
+``species_entry_id`` alone.
 
-Told only "be more specific", that depositor is being sent to look for a
-field that does not exist. An error whose advice cannot be followed is
+Told only "be more specific", that depositor was being sent to look for a
+field that did not exist. An error whose advice cannot be followed is
 worse than a vague one, because it teaches people to stop reading the
 advice. :func:`discriminate` therefore computes what varies across the
 candidate set and the refusal says it, with
 ``context['locator_can_express']`` stating outright whether the difference
-is one the payload could have expressed.
+is one the payload could have expressed — and every refusal this module
+was written for reported ``false``.
+
+``conformer_group_ref`` is the answer to that ``false``, and it is a
+public ref rather than a label because a label cannot do the job:
+``uq_conformer_group_species_entry_id`` does not declare
+``postgresql_nulls_not_distinct``, so a species entry may own any number
+of *unlabelled* groups and there would be nothing to write in a label
+field. The refusal below is left intact rather than deleted along with
+the defect: it is what a client still receives when the ref is omitted,
+and it now names a field the payload can set.
 
 The three outcomes, and which of them a request can reach
 --------------------------------------------------------
 :func:`discriminate` classifies a candidate set three ways, and only one
-of them is reachable through a route today. That is recorded here rather
-than pruned, because the *unreachable* ones are what the classification
-exists to prove:
+of them is reachable through a route. Which one **changed** when the
+locator gained ``conformer_group_ref``, and the change is the point:
 
 1. **Differs by a locator field** (``selection_kind``,
-   ``assignment_scheme_ref``). Actionable: add the field. Structurally
-   unreachable — those are the two fields the ``WHERE`` clause pins.
+   ``assignment_scheme_ref``, ``conformer_group_ref``). Actionable: add
+   the field. This is now the outcome a request reaches, by way of the
+   third — the ``WHERE`` clause pins the first two always and the third
+   only when it is supplied, so two groups under one species entry differ
+   by a field the depositor *can* set. Before the field existed this
+   outcome was structurally unreachable, and that was the finding.
 2. **Differs by something the locator cannot express** (the conformer
-   group's ``label``, or failing that its ``public_ref``). The only
-   outcome a request reaches, and the evidence that the locator is too
-   narrow.
+   group's ``label``). Now the unreachable one, and unreachable twice
+   over: two candidates sit in two groups, two groups have two public
+   refs, and ``conformer_group_ref`` is ordered ahead of
+   ``conformer_group_label`` — so a label difference never wins the
+   discriminator. Kept, tested over hand-built candidates, and left
+   saying what it says, because ``locator_can_express`` is a published
+   field a client branches on and this is the branch that gives it a
+   ``false`` to mean something.
 3. **Differs by nothing reportable.** A duplicate curation row rather
    than an under-determined request, and worth saying so rather than
    dressing it up as ambiguity. Unreachable while
@@ -150,14 +172,24 @@ class SelectionCandidate:
 _AXES: tuple[str, ...] = (
     "selection_kind",
     "assignment_scheme_ref",
-    "conformer_group_label",
     "conformer_group_ref",
+    "conformer_group_label",
 )
 
 #: The subset of :data:`_AXES` that ``ConformerSelectionContentRef``
 #: actually has a field for. ``species_entry`` is not here because it is
 #: not an axis: the lookup joins on it, so it cannot vary.
-_LOCATOR_AXES: frozenset[str] = frozenset({"selection_kind", "assignment_scheme_ref"})
+#:
+#: ``conformer_group_ref`` joined this set when the locator gained the
+#: field, and that is also why it now precedes ``conformer_group_label``
+#: in :data:`_AXES`. Two candidates in two groups differ by *both*
+#: whenever the labels differ, and only one of the two is a field the
+#: depositor can set -- so the label ordered first would have named the
+#: unusable one and produced a refusal nobody can act on, which is the
+#: exact defect the field was added to end.
+_LOCATOR_AXES: frozenset[str] = frozenset(
+    {"selection_kind", "assignment_scheme_ref", "conformer_group_ref"}
+)
 
 
 @dataclass(frozen=True)
@@ -243,6 +275,7 @@ def unknown_conformer_selection(
     field: str,
     selection_kind: str,
     assignment_scheme_ref: str | None,
+    conformer_group_ref: str | None = None,
 ) -> NotFoundError:
     """Build the 404 for a locator that describes no stored selection.
 
@@ -255,12 +288,22 @@ def unknown_conformer_selection(
     :param assignment_scheme_ref: The scheme public ref the locator asked
         for, if any. Omitted from ``context`` when absent, matching
         ``unknown_reference``'s treatment of ``ref``.
+    :param conformer_group_ref: The group public ref the locator narrowed
+        to, if any. Echoed on the same terms, and for a sharper reason
+        than the others: with it set, the search covered *one* group, so a
+        404 that did not name the group would be describing a search the
+        depositor cannot picture. Absent when the locator did not narrow
+        -- the reference itself is refused earlier, by
+        ``unknown_conformer_group_ref``, so a ref reaching here is one
+        that names a real group of this species entry.
     """
     described = f"selection_kind={selection_kind!r}"
     if assignment_scheme_ref is not None:
         described += f", assignment_scheme_ref={assignment_scheme_ref!r}"
     else:
         described += ", no assignment scheme"
+    if conformer_group_ref is not None:
+        described += f", conformer_group_ref={conformer_group_ref!r}"
     context: dict[str, object] = {
         "field": field,
         "kind": _KIND,
@@ -268,12 +311,23 @@ def unknown_conformer_selection(
     }
     if assignment_scheme_ref is not None:
         context["assignment_scheme_ref"] = assignment_scheme_ref
+    if conformer_group_ref is not None:
+        context["conformer_group_ref"] = conformer_group_ref
+    # The remedy names the group only when the locator did. Told to
+    # "correct the conformer group" by a request that named none, a
+    # depositor is being pointed at a field they did not set -- the same
+    # unfollowable-advice failure the ambiguity refusal was built to avoid.
+    named = (
+        "species entry or conformer group"
+        if conformer_group_ref is not None
+        else "species entry"
+    )
     # No ``"code: "`` prefix in the prose: the exception carries the code
     # as an attribute and the handler passes it through unparsed.
     return NotFoundError(
         f"{field} ({described}) describes no conformer selection for that "
         "species entry in this database. Deposit the conformer selection "
-        "first, or correct the species entry the locator names.",
+        f"first, or correct the {named} the locator names.",
         code=W_UNKNOWN_CONFORMER_SELECTION,
         context=context,
     )
