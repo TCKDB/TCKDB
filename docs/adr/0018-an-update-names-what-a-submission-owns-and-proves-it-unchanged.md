@@ -1,6 +1,6 @@
 # An update names what a submission owns, and proves it unchanged
 
-**Status: proposed 2026-08-16.** No code change yet. Supersedes nothing; constrained by [0003](0003-freeze-ever-approved-science.md), [0007](0007-curated-selections-are-a-release-overlay-not-a-column.md), [0015](0015-a-repair-to-accepted-science-is-declared-before-it-is-made.md) and [0016](0016-review-approves-a-claim-and-does-not-cascade.md).
+**Status: proposed 2026-08-16, amended 2026-08-22.** No code change yet. The amendment settles two of the questions this record first left open — whether a depositor may supersede their own record, and what an update does to a record under review — and corrects a third that was posed wrongly: the level of theory, which turns out not to be a supersession question at all. Supersedes nothing; constrained by [0003](0003-freeze-ever-approved-science.md), [0007](0007-curated-selections-are-a-release-overlay-not-a-column.md), [0015](0015-a-repair-to-accepted-science-is-declared-before-it-is-made.md) and [0016](0016-review-approves-a-claim-and-does-not-cascade.md).
 
 A depositor who has uploaded a reaction wants to correct it. Today there is no path: the upload roots create, and nothing edits. The obvious design — hand the depositor a handle, let them PUT it back — collides with four things this store already decided, and the collisions are the interesting part.
 
@@ -62,10 +62,56 @@ What remains genuinely updatable is narrow and unglamorous: on a **never-approve
 4. **A version token accompanies every updatable read** and must be presented on write, as `ETag` / `If-Match`, answering only "unchanged since you read it".
 5. **Ever-approved records are refused**, with a code that names supersession as the repair rather than a generic conflict.
 6. **Result values are never updatable.** The updatable set is provenance and annotation on never-approved records, enumerated explicitly.
+7. **A depositor may supersede their own record, and so may a curator — but they are not the same act.** The path from "my number was wrong" to a corrected record plus a supersession edge is what depositors actually want, and today only a curator can create that edge, so every correction waits on someone else's attention. The depositor's supersession therefore becomes the **ordinary** path. It is a *correction*, not an edit: the original row is never rewritten, the edge carries the meaning, and everything [0003](0003-freeze-ever-approved-science.md) freezes stays frozen.
+
+   A curator superseding someone else's record stays available and stays **exceptional** — an intervention, taken when something is wrong and the depositor is not the one fixing it. [0016](0016-review-approves-a-claim-and-does-not-cascade.md) decides the shape that has to take: a reviewer's act must be represented as the act they performed. So these are not one edge with a different name on it. The record must show which happened and who did it, because "the depositor corrected their own number" and "a curator intervened in someone else's record" are different facts about a dataset — a store where curators routinely intervene has a quality problem, and one where depositors self-correct is working. A reader who cannot tell them apart has lost the more interesting one.
+8. **An update to a record under review is refused while the review is open.** It does not queue, and it does not reset the review. Resetting is rejected on cost rather than principle: a depositor editing a record in the window where a reviewer is looking at it is vanishingly rare, and the machinery to make a mid-review edit coherent — invalidating a partial verdict, telling the reviewer their work was discarded, deciding whether the clock restarts — is a large amount of design for an event that does not happen. Refusing costs the depositor one message and a wait. That message must say the record is under review and that the edit can be re-sent afterwards, so the depositor is not left guessing which of several refusal reasons applies.
+
+## The level of theory is not superseded, it is re-pointed
+
+The rule above — a field that changes what the record *claims* is not
+updatable — sorts almost every field cleanly. The level of theory looks like
+the hard case, and an earlier reading of it asked whether changing one counted
+as an update or a supersession.
+
+That question is malformed, and this record's own first section says why.
+**A level of theory is identity.** `LevelOfTheory` sits in `_CONTENT_DERIVED`;
+its ref is `lot_`, generated from `lot_hash`, so every calculation run at
+`B3LYP/6-31G(d)` anywhere in the store attaches to **one row**. Superseding it
+is the same category error as superseding ethanol, and editing it is worse:
+the change would silently rewrite what every other calculation pointing at
+that row claims, including calculations deposited by people who have never met
+each other. Levels of theory dedupe harder than almost anything else here,
+because the community uses a small number of them.
+
+> **A level of theory is never edited and never superseded. What a depositor
+> owns is the *link* — and the repair is to re-point it.**
+
+So the repair for a mis-transcribed level has two shapes, neither of which
+touches shared identity:
+
+* **Re-point at an existing `lot_`.** Almost always available, precisely
+  because levels dedupe — the level they meant is very likely already a row
+  that someone else's calculation put there.
+* **Deposit the level, then point at it.** If it genuinely is not in the store
+  yet, creating it is an ordinary write against an identity table, which
+  anyone may do. Identity is nobody's, so there is no ownership question to
+  answer.
+
+This makes the question a better-posed one: not *"is a level-of-theory change
+an update or a supersession"*, but *"may a depositor re-point a provenance
+link?"* — and decision 6 nearly answers it already, since the updatable set is
+provenance and annotation on never-approved records, and a level-of-theory
+link is provenance.
+
+Re-pointing is also **recoverable in a way a supersession is not**, which
+lowers what is at stake: the old `lot_` row is shared and untouched, nothing
+is destroyed, and the previous link is recordable. A wrong re-point is a wrong
+attribution to be corrected, not a fork in the citation graph.
 
 ## What this deliberately does not settle
 
-**Whether a depositor may supersede their own record.** The path from "my number was wrong" to a corrected record plus an edge is the thing depositors will actually want, and it is a larger design: it touches review state, citation, and whether a supersession by a non-curator needs approval. This record covers editing, not correcting. Deciding it is the natural successor.
+**Whether a depositor's supersession needs approval before a reader sees it.** Decision 7 settles that both a depositor and a curator may supersede, and that the two are distinct acts. It does not settle whether a depositor's correction is visible immediately or waits on review. Immediate is the honest default for a record nobody has approved — there is nothing yet to protect — but a record that has already been cited is a different case, and this record does not decide it.
 
 **Whether ownership should be transferable.** A depositor leaves a group; who owns their submissions? Today the answer is "nobody else", which is a real operational problem and not one an update endpoint should solve on the side.
 
