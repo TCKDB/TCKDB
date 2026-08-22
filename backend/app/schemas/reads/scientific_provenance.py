@@ -32,8 +32,8 @@ from app.schemas.reads.scientific_common import (
 )
 from app.schemas.reads.scientific_conformer import (
     AvailableConformerSections,
-    ConformerCalculationEvidenceSummary,
     ConformerGroupCoreBlock,
+    ConformerGroupEvidenceSummary,
     ConformerObservationsSummary,
     ConformerSelectionSummary,
 )
@@ -372,7 +372,7 @@ class ReactionFullConformerGroupItem(BaseModel):
     endpoint: str
     conformer_group: ConformerGroupCoreBlock
     observations_summary: ConformerObservationsSummary
-    evidence_summary: ConformerCalculationEvidenceSummary
+    evidence_summary: ConformerGroupEvidenceSummary
     selection_summary: list[ConformerSelectionSummary] = Field(default_factory=list)
     available_sections: AvailableConformerSections
 

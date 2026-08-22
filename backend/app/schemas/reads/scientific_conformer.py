@@ -181,18 +181,95 @@ class ConformerSelectionSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ConformerCalculationEvidenceSummary(BaseModel):
-    """Bounded calculation-evidence projection for a conformer group or
-    observation.
+class ConformerEvidenceCoverage(BaseModel):
+    """How many observations in scope carry each kind of evidence.
+
+    Every value counts **observations**, never calculations. An
+    observation with three ``freq`` calculations contributes ``1`` to
+    ``freq``, not ``3``. The shared denominator is
+    ``ConformerGroupEvidenceSummary.observation_count``, so a caller
+    reads each field as "*n* of *observation_count*".
+
+    What a full count does and does not say
+    ---------------------------------------
+    ``freq == observation_count`` says the coverage is **complete** —
+    every observation in the basin has at least one frequency
+    calculation. It does **not** say those calculations are
+    *comparable*: the five may sit at five different levels of theory,
+    from five different codes, at five different geometries. A count is
+    honest about coverage, not about consistency. A caller who needs
+    consistency must inspect the per-calculation level-of-theory /
+    software provenance under ``include=calculations``; no number in
+    this block can stand in for that.
+
+    ``0`` is exactly as strong as the old ``has_x is False`` was:
+    nothing in scope carries that evidence.
+    """
+
+    opt: int
+    freq: int
+    sp: int
+    geometry_validation: int
+    scf_stability: int
+
+
+class ConformerGroupEvidenceSummary(BaseModel):
+    """Bounded calculation-evidence projection for a conformer **group**.
 
     ``observation_count`` is the number of observation rows under the
-    group (always ``1`` on the observation detail surface).
-    ``calculation_count`` is the number of calculations whose
-    ``conformer_observation_id`` belongs to the in-scope observation
-    set (the parent group, or this single observation).
+    group. ``calculation_count`` is the number of calculations whose
+    ``conformer_observation_id`` belongs to that observation set.
     ``geometry_count`` is the number of distinct
     ``calculation_output_geometry`` rows reached through that
-    calculation set.
+    calculation set. ``evidence_coverage`` reports, per evidence kind,
+    how many of the ``observation_count`` observations carry it.
+
+    Why counts here and booleans on the observation surface
+    -------------------------------------------------------
+    This block deliberately has a **different shape** from
+    :class:`ConformerObservationEvidenceSummary`. That asymmetry is the
+    point, not an oversight, and it should not be smoothed over.
+
+    A group pools several observations. The booleans this block used to
+    carry (``has_opt`` / ``has_freq`` / …) were a plain OR across all of
+    them, which made them asymmetrically informative: ``false`` was
+    strong (nothing in the group has it) while ``true`` was nearly
+    empty (one calculation out of a hundred made it ``true``). A reader
+    seeing ``has_freq: true`` on a five-observation basin could not tell
+    whether five observations had frequencies or one did. Counts answer
+    that question — ``freq: 2`` with ``observation_count: 5`` shows an
+    unevenly covered basin at a glance — and ``count > 0`` reproduces
+    the old boolean exactly, so nothing that the boolean expressed was
+    lost.
+
+    An observation is a single provenance row, so on that surface the
+    booleans are unambiguous and are kept as they were.
+    """
+
+    observation_count: int | None = None
+    calculation_count: int
+    evidence_coverage: ConformerEvidenceCoverage
+    geometry_count: int
+
+
+class ConformerObservationEvidenceSummary(BaseModel):
+    """Bounded calculation-evidence projection for one conformer
+    **observation**.
+
+    Scope is this single observation: ``observation_count`` is always
+    ``1`` and every ``has_*`` boolean describes that one provenance row,
+    where a boolean is unambiguous — it cannot pool a covered
+    observation with an uncovered one, which is what made the same
+    booleans misleading at group scope (see
+    :class:`ConformerGroupEvidenceSummary`).
+
+    ``calculation_count`` and ``geometry_count`` carry the same meaning
+    as on the group block, restricted to this observation's own
+    calculations.
+
+    As with the group block's counts, ``has_freq: true`` says frequency
+    evidence exists — not that it is comparable with the frequency
+    evidence on any sibling observation.
     """
 
     observation_count: int | None = None
@@ -309,7 +386,7 @@ class ScientificConformerObservationRecord(BaseModel):
     conformer_group: ConformerGroupCoreBlock
     species: ConformerSpeciesContext
     assignment_scheme: ConformerAssignmentSchemeSummary | None = None
-    evidence_summary: ConformerCalculationEvidenceSummary
+    evidence_summary: ConformerObservationEvidenceSummary
     available_sections: AvailableConformerSections
 
     # Optional include blocks
@@ -334,7 +411,7 @@ class ScientificConformerGroupRecord(BaseModel):
     species: ConformerSpeciesContext
     observations_summary: ConformerObservationsSummary
     selection_summary: list[ConformerSelectionSummary] = Field(default_factory=list)
-    evidence_summary: ConformerCalculationEvidenceSummary
+    evidence_summary: ConformerGroupEvidenceSummary
     available_sections: AvailableConformerSections
 
     # Optional include blocks
@@ -371,13 +448,15 @@ class ScientificConformerObservationDetailResponse(BaseModel):
 __all__ = [
     "AvailableConformerSections",
     "ConformerAssignmentSchemeSummary",
-    "ConformerCalculationEvidenceSummary",
     "ConformerCalculationSummary",
+    "ConformerEvidenceCoverage",
     "ConformerGeometryLink",
     "ConformerGroupCoreBlock",
     "ConformerGroupDetailRequest",
+    "ConformerGroupEvidenceSummary",
     "ConformerObservationCoreBlock",
     "ConformerObservationDetailRequest",
+    "ConformerObservationEvidenceSummary",
     "ConformerObservationsSummary",
     "ConformerReviewEntry",
     "ConformerSelectionSummary",
