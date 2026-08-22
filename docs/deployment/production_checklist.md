@@ -43,7 +43,8 @@ Every row below must be set to the indicated value before the API is reachable f
 |---|---|---|
 | `DEPLOYMENT_MODE` | `shared_private` or `hosted_public` | **enforced** Selects the hosted posture and turns on the startup safety guard. See [Deployment mode and startup guard](#deployment-mode-and-startup-guard). |
 | `AUTH_ALLOW_OPEN_REGISTRATION` | `false` | **enforced** Defaults to `true` for local dev convenience. Leaving it `true` in a hosted deployment turns the API into an uncontrolled self-registration endpoint. Seed accounts via `backend/scripts/bootstrap_admin.py` + admin invites instead. |
-| `EXPOSE_API_DOCS` | `false` | **enforced** Defaults to `true`. When `false`, FastAPI never registers `/docs`, `/redoc`, or `/openapi.json`. Hosted deployments either keep docs off entirely or gate them behind a private network. |
+| `EXPOSE_API_DOCS` | `false` | **enforced** Defaults to `true`. When `false`, FastAPI never registers `/docs`, `/redoc`, or `/openapi.json`. It is all-or-nothing and it includes Swagger UI, which is an interactive request console pointed at the live deployment — hence enforced off. To publish the API contract without that console, leave this `false` and set `EXPOSE_API_REFERENCE=true` (next row). |
+| `EXPOSE_API_REFERENCE` | operator choice | Not enforced; **defaults to `false`**. When `true` *and* `EXPOSE_API_DOCS=false`, FastAPI registers ReDoc at `/redoc` and the schema at `/openapi.json`, and still does not register Swagger UI at `/docs`. ReDoc is a static reference with no "Try it out" button. Note that ReDoc's page loads its renderer from a public CDN (`cdn.jsdelivr.net`) and its fonts from Google Fonts; the landing page at `/` does not, and stays readable with those hosts blocked. |
 | `LEGACY_READS_REQUIRE_AUTH` | `true` | **enforced** The `/api/v1/{thermo,kinetics,geometries,...}` legacy routes pre-date the internal-IDs visibility policy and leak integer PKs. They must require auth in hosted deployments. |
 | `ALLOW_PUBLIC_INTERNAL_IDS` | `false` | **enforced** Hides internal integer primary keys from scientific responses. Clients use public refs. Set to `true` only in local/dev/test for compatibility with the legacy id-bearing shape. |
 | `SESSION_COOKIE_SECURE` | `true` | **enforced** Required so browsers only send the session cookie over TLS. Set `false` only when testing a local HTTP-only setup. |
@@ -137,7 +138,8 @@ Settings alone are not enough. Before opening the deployment to traffic:
 - [ ] Migrations are at head: `alembic current` matches `alembic heads`. See [Deployed-DB migration playbook](../../backend/docs/deployment/migrations.md).
 - [ ] At least one admin account has been seeded via `backend/scripts/bootstrap_admin.py`.
 - [ ] `AUTH_ALLOW_OPEN_REGISTRATION=false` is verified by sending `POST /api/v1/auth/register` and confirming the response is `403` or equivalent.
-- [ ] `EXPOSE_API_DOCS=false` is verified by `curl -fsS https://your-host/openapi.json` returning `404`.
+- [ ] `EXPOSE_API_DOCS=false` is verified by `curl -o /dev/null -sw '%{http_code}\n' https://your-host/docs` returning `404`. (With `EXPOSE_API_REFERENCE=true`, `/openapi.json` and `/redoc` return `200` by design; `/docs` must still be `404`.)
+- [ ] `GET /` returns `200 text/html` — the landing page, so a human following the base URL from a paper is not met with a JSON 404.
 - [ ] `LEGACY_READS_REQUIRE_AUTH=true` is verified by hitting `/api/v1/thermo` without credentials and confirming the response is `401`.
 - [ ] `SESSION_COOKIE_SECURE=true` is verified by logging in and confirming the `Set-Cookie` response has `Secure` set.
 - [ ] Rate limits trip under intentional flood: hit `/auth/login` 11 times in one minute from one IP, confirm the 11th returns `429` with a `Retry-After` header.

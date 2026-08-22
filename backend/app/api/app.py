@@ -8,8 +8,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.config import settings
+from app.api.config import Settings, settings
 from app.api.errors import register_exception_handlers
+from app.api.landing import REDOC_PATH, landing_router
 from app.api.logging_config import configure_logging
 from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
@@ -65,6 +66,45 @@ async def _lifespan(app: FastAPI):
     # Daemon thread dies with the process — nothing to clean up.
 
 
+#: Paths FastAPI registers for each of the three built-in doc surfaces.
+#: Restated here rather than relying on the framework defaults so the
+#: landing page, the tests and the deployment checklist all name the
+#: same strings.
+SWAGGER_PATH = "/docs"
+OPENAPI_PATH = "/openapi.json"
+
+
+def _docs_kwargs(settings_obj: Settings) -> dict[str, str | None]:
+    """Resolve which of ``/docs``, ``/redoc`` and ``/openapi.json`` exist.
+
+    Passing ``None`` for one of these URLs prevents FastAPI from
+    registering the corresponding route at all, so a disabled surface
+    returns the same 404 as any other unrouted path -- there is nothing
+    behind it to be reached by guessing.
+
+    Three configurations, in precedence order:
+
+    * ``EXPOSE_API_DOCS=true`` (the local/dev default) -- all three,
+      Swagger UI included. Unchanged from before this function existed.
+    * ``EXPOSE_API_DOCS=false`` **and**
+      ``EXPOSE_API_REFERENCE=true`` -- ReDoc and the OpenAPI document,
+      no Swagger UI. This is the hosted posture: publish the contract
+      as a static reference, do not hand an anonymous reader a request
+      console pointed at the live deployment.
+    * both false (the hosted default, and the default for any
+      deployment that sets neither) -- none of the three.
+
+    ``EXPOSE_API_DOCS`` therefore keeps its exact previous meaning for
+    Swagger, and no deployment becomes more exposed by upgrading: the
+    middle case has to be opted into.
+    """
+    if settings_obj.expose_api_docs:
+        return {}
+    if settings_obj.expose_api_reference:
+        return {"docs_url": None, "redoc_url": REDOC_PATH, "openapi_url": OPENAPI_PATH}
+    return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+
+
 def create_app() -> FastAPI:
     configure_logging()
     # Refuse to boot a hosted/public deployment with unsafe settings.
@@ -72,12 +112,7 @@ def create_app() -> FastAPI:
     # fixtures are unaffected. See app/api/startup_checks.py and
     # docs/deployment/production_checklist.md.
     validate_deployment_safety(settings)
-    # Passing ``None`` for the docs URL prevents FastAPI from
-    # registering the route. Hosted deployments default to off via
-    # ``EXPOSE_API_DOCS=false`` (see settings); local/dev leaves it on.
-    docs_kwargs: dict[str, str | None] = {}
-    if not settings.expose_api_docs:
-        docs_kwargs.update(docs_url=None, redoc_url=None, openapi_url=None)
+    docs_kwargs = _docs_kwargs(settings)
     app = FastAPI(
         title="TCKDB",
         version="0.1.0",
@@ -103,6 +138,14 @@ def create_app() -> FastAPI:
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api/v1")
+    # Registered *after* the API router, and matching the single exact
+    # path ``/``. Starlette resolves routes in registration order, so a
+    # router added last can only ever be reached by a request no earlier
+    # route matched -- and ``/`` is not a prefix of ``/api/v1/...``
+    # anyway. Nothing that answered before this line answers differently
+    # after it; tests/api/test_landing_page.py asserts the full route
+    # table is unchanged apart from the one addition.
+    app.include_router(landing_router)
     register_exception_handlers(app)
     install_hosted_openapi(app)
     return app

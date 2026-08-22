@@ -369,12 +369,29 @@ routes stay open for ad-hoc inspection.
 
 ### 7.3 OpenAPI / Swagger / ReDoc exposure (F8)
 
-| Setting          | Default | Effect when false |
-| ---------------- | ------- | ----------------- |
-| `EXPOSE_API_DOCS`| `true`  | `/docs`, `/redoc`, and `/openapi.json` are not registered. FastAPI returns 404. |
+| Setting | Default | Effect |
+| --- | --- | --- |
+| `EXPOSE_API_DOCS` | `true` | When false, `/docs`, `/redoc` and `/openapi.json` are not registered. FastAPI returns 404. |
+| `EXPOSE_API_REFERENCE` | `false` | When true *and* `EXPOSE_API_DOCS` is false, `/redoc` and `/openapi.json` are registered and `/docs` is not. |
 
-Hosted production sets this to false. Local/dev leaves it on. The
-scientific API endpoints are unaffected by either mode.
+Hosted production sets `EXPOSE_API_DOCS=false`. Local/dev leaves it on.
+The scientific API endpoints are unaffected by either mode.
+
+The split exists because the two things that switch used to control are
+not the same risk. `/docs` is Swagger UI: an interactive request console
+aimed at the live deployment, and the reason the startup guard refuses to
+boot a hosted mode with `EXPOSE_API_DOCS=true`. `/redoc` renders the same
+schema as a static reference with no "Try it out" control, and publishing
+the contract is a thing a hosted instance positively wants — a reader who
+cannot discover the endpoints is not protected by that, only excluded.
+`EXPOSE_API_REFERENCE` is therefore deliberately absent from the guard's
+violation list, and defaults to false so upgrading exposes nothing new.
+
+One caveat worth stating plainly: the ReDoc page FastAPI generates loads
+its renderer from `cdn.jsdelivr.net` and its fonts from Google Fonts, so
+`/redoc` is blank for a reader who blocks those hosts. The landing page at
+`/` is fully self-contained and carries the citation, data-model and
+API-entry information without loading anything.
 
 ### 7.4 Free-text input bounds (F9)
 
