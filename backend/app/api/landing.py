@@ -433,10 +433,9 @@ footer p { max-width: none; margin: 0; }
           <p class="panel-label">TCKDB replies</p>
           <code class="verdict-code">__HERO_CODE__</code>
           <p class="verdict-body">
-            This geometry is linear &mdash; its atoms spread across their long
-            axis by 0 of their spread along it. A linear three-atom molecule
-            has 3N&minus;5 = 4 vibrations, and this list carries 3, the count
-            for a bent molecule. One mode is missing.
+            This geometry is linear. A linear three-atom molecule has
+            3N&minus;5 = 4 vibrations, and this list carries 3, the count for a
+            bent molecule. One mode is missing.
           </p>
           <p class="verdict-body">
             The usual cause is a degenerate bending pair reported once: a
