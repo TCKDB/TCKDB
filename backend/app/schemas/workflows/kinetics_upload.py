@@ -246,11 +246,37 @@ class ChebyshevUpload(SchemaBase):
 
 
 class ConformerSelectionContentRef(SchemaBase):
-    """Content-first locator for a conformer-selection interpretation."""
+    """Content-first locator for a conformer-selection interpretation.
+
+    Set the optional conformer_group_ref (a cg_ public ref, as returned by
+    GET /scientific/conformer-groups) when one species entry owns more than
+    one conformer group. Without it the other three fields can describe
+    several stored selections at once, and the upload is refused with
+    ambiguous_conformer_selection_locator listing the refs to choose from.
+    """
 
     species_entry: SpeciesEntryIdentityPayload
     selection_kind: str = Field(min_length=1)
     assignment_scheme_ref: str | None = Field(default=None, min_length=1)
+    # Optional, always: every payload valid before this field existed is
+    # still valid, and this widens the locator rather than tightening it.
+    #
+    # A public ref and not a label. One species entry owning several
+    # groups is normal -- ``resolve_conformer_group`` mints
+    # ``conformer_1``, ``conformer_2``, ... for each basin it does not
+    # recognise -- and each may carry its own ``lowest_energy`` selection
+    # under no assignment scheme, which
+    # ``uq_conformer_selection_conformer_group_id`` permits because it is
+    # per-group. But ``uq_conformer_group_species_entry_id`` does *not*
+    # declare ``postgresql_nulls_not_distinct``, so a species entry may
+    # also own arbitrarily many *unlabelled* groups, and among those a
+    # label field would discriminate nothing at all.
+    #
+    # A public ref is not a database FK id and this is not the "no FK IDs
+    # in upload schemas" rule being bent: it is the opaque, stable handle
+    # the read API already hands a client for a conformer group, so
+    # citing one is a client naming a record it can see.
+    conformer_group_ref: str | None = Field(default=None, min_length=1)
 
 
 class KineticsInterpretationAssignmentUpload(SchemaBase):

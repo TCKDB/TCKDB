@@ -11422,7 +11422,7 @@
       },
       "ConformerSelectionContentRef": {
         "additionalProperties": false,
-        "description": "Content-first locator for a conformer-selection interpretation.",
+        "description": "Content-first locator for a conformer-selection interpretation.\n\nSet the optional conformer_group_ref (a cg_ public ref, as returned by\nGET /scientific/conformer-groups) when one species entry owns more than\none conformer group. Without it the other three fields can describe\nseveral stored selections at once, and the upload is refused with\nambiguous_conformer_selection_locator listing the refs to choose from.",
         "properties": {
           "assignment_scheme_ref": {
             "anyOf": [
@@ -11435,6 +11435,18 @@
               }
             ],
             "title": "Assignment Scheme Ref"
+          },
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Ref"
           },
           "selection_kind": {
             "minLength": 1,

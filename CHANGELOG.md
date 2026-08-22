@@ -57,6 +57,32 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Added
+
+- **The base URL now answers a person.** `https://<host>/` served a bare
+  `404 application/json` blob, and so did `/docs`, `/redoc` and
+  `/openapi.json`, because hosted deployments set `EXPOSE_API_DOCS=false`
+  and no route was registered at `/` at all. Anyone following the URL a
+  paper prints — a referee, most importantly — got an error object with
+  nothing in it to say a database was there. `/` now serves a
+  self-contained HTML landing page: what TCKDB is, a worked example of a
+  real check refusing to accept a frequency list it cannot justify, the
+  four write-behaviour roles every table plays, how to cite the software
+  versus a dataset release, and where the API starts. It loads no CDN, no
+  web font and no script, so it renders on a locked-down network and with
+  JavaScript disabled. Nothing else about the route table changed: `/` is
+  registered last, matches one exact path, and is excluded from the
+  OpenAPI document.
+- **`EXPOSE_API_REFERENCE`**, a new setting, defaulting to `false`. With
+  `EXPOSE_API_DOCS=false` it registers ReDoc at `/redoc` and the schema at
+  `/openapi.json` and still leaves Swagger UI at `/docs` unregistered.
+  `EXPOSE_API_DOCS` was all-or-nothing, and the startup guard refuses to
+  boot a hosted deployment with it on — correctly, because it brings
+  Swagger's live request console with it. That is not the same risk as
+  publishing the contract, which a hosted instance wants to do. Note that
+  FastAPI's ReDoc page loads its renderer from `cdn.jsdelivr.net` and its
+  fonts from Google Fonts; the landing page does not.
+
 ### Fixed
 
 - **A linear molecule could deposit a frequency list with one vibration
