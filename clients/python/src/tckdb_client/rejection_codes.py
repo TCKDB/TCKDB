@@ -215,6 +215,7 @@ class RejectionCode(str, Enum):
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
     UNKNOWN_CALCULATION_REF = "unknown_calculation_ref"
+    UNKNOWN_CONFORMER_GROUP_REF = "unknown_conformer_group_ref"
     UNKNOWN_CONFORMER_SELECTION = "unknown_conformer_selection"
     UNKNOWN_CURATION_POLICY = "unknown_curation_policy"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
@@ -530,6 +531,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CALCULATION_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_CONFORMER_GROUP_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CONFORMER_SELECTION: frozenset({404}),
     RejectionCode.UNKNOWN_CURATION_POLICY: frozenset({404}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),

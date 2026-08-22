@@ -115,6 +115,18 @@ W_UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
 #: A ``network_kinetics_ref`` names no network_kinetics row.
 W_UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
 
+#: A ``conformer_selection.conformer_group_ref`` names no conformer group.
+#: Its own code rather than
+#: :data:`app.services.conformer_selection_locator.W_UNKNOWN_CONFORMER_SELECTION`,
+#: by the same argument that split that code from the ambiguity one: the
+#: two repairs are opposite. A ref naming nothing is repaired by
+#: correcting the string the caller wrote; a real group holding no such
+#: selection is repaired by depositing the selection. A group that exists
+#: but belongs to another species entry is neither, and is not a 404 at
+#: all -- the row is there, the request contradicts itself, and that is a
+#: 422 from ``assert_owned_by``.
+W_UNKNOWN_CONFORMER_GROUP_REF = "unknown_conformer_group_ref"
+
 
 def unknown_reference(
     *,
@@ -187,6 +199,7 @@ def unknown_reference(
 __all__ = [
     "W_UNKNOWN_CALCULATION_ARTIFACT_REF",
     "W_UNKNOWN_CALCULATION_REF",
+    "W_UNKNOWN_CONFORMER_GROUP_REF",
     "W_UNKNOWN_NETWORK_KINETICS_REF",
     "W_UNKNOWN_STATMECH_REF",
     "W_UNKNOWN_TRANSITION_STATE_ENTRY_REF",

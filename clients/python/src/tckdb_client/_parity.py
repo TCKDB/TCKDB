@@ -722,6 +722,15 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
 _NOT_APPLICABLE: tuple[tuple[str, str, str], ...] = tuple(
     (method, path, _ADMIN_ONLY)
     for method, path in (
+        # Both gated on ``require_admin`` in
+        # ``backend/app/api/routes/admin.py``: an operator reads whether
+        # the object store is refusing writes, and an operator declares
+        # the condition resolved. Arrived with #218 and were untriaged
+        # here until now -- this workflow runs only on ``clients/python``
+        # and ``schemas/`` paths, and #218 touched neither, so the drift
+        # sat green until the next pull request that did.
+        ("GET", "/api/v1/admin/artifact-storage/capacity"),
+        ("POST", "/api/v1/admin/artifact-storage/capacity/clear"),
         ("GET", "/api/v1/admin/machine-review/curator-tasks"),
         (
             "POST",
