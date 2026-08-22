@@ -57,6 +57,7 @@ from app.schemas.reads.scientific_conformer import (
     ScientificConformerGroupRecord,
 )
 from app.schemas.reads.scientific_conformer_search import (
+    ConformerEvidenceMatch,
     ConformersSearchRequest,
     RequestEcho,
     ScientificConformersSearchResponse,
@@ -97,6 +98,9 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "has_sp",
     "has_geometry_validation",
     "has_scf_stability",
+    # ``evidence_match`` is deliberately absent: it modifies what the
+    # ``has_*`` filters mean but selects nothing on its own, so it must
+    # not satisfy the at-least-one-filter rule.
     "scientific_origin",
     "method",
     "basis",
@@ -388,65 +392,80 @@ def _apply_observation_filters(
     return stmt
 
 
+# The evidence family, in the order the filters are applied. Each entry is
+# ``(request field, extra WHERE clause, extra JOIN)`` against ``Calculation``.
+# One table drives both quantifier modes so ``any`` and ``all`` can never
+# disagree about *which* evidence a name refers to.
+_EVIDENCE_FILTERS: tuple[tuple[str, Any, Any], ...] = (
+    ("has_calculations", None, None),
+    ("has_opt", Calculation.type == CalculationType.opt, None),
+    ("has_freq", Calculation.type == CalculationType.freq, None),
+    ("has_sp", Calculation.type == CalculationType.sp, None),
+    (
+        "has_geometries",
+        None,
+        (
+            CalculationOutputGeometry,
+            CalculationOutputGeometry.calculation_id == Calculation.id,
+        ),
+    ),
+    (
+        "has_geometry_validation",
+        None,
+        (
+            CalculationGeometryValidation,
+            CalculationGeometryValidation.calculation_id == Calculation.id,
+        ),
+    ),
+    (
+        "has_scf_stability",
+        None,
+        (
+            CalculationSCFStability,
+            CalculationSCFStability.calculation_id == Calculation.id,
+        ),
+    ),
+)
+
+
 def _apply_evidence_filters(stmt, request: ConformersSearchRequest):
     """Evidence filters at the conformer-group grain.
 
-    ``has_calculations`` / ``has_opt`` / ``has_freq`` / ``has_sp`` etc.
-    semantics: a group matches iff **at least one** of its
-    observations has at least one matching calculation. This mirrors
-    the TS search's ``has_*`` semantics at TS-entry grain.
-    """
-    if request.has_calculations is not None:
-        ex = _calc_exists_in_group()
-        stmt = stmt.where(ex if request.has_calculations else ~ex)
+    ``request.evidence_match`` chooses the quantifier over the group's
+    observations (see :class:`ConformerEvidenceMatch` for the full
+    contract):
 
-    type_filters: list[tuple[bool | None, CalculationType]] = [
-        (request.has_opt, CalculationType.opt),
-        (request.has_freq, CalculationType.freq),
-        (request.has_sp, CalculationType.sp),
-    ]
-    for want, calc_type in type_filters:
+    - ``any_observation`` (default): ``has_freq=true`` matches a group
+      where at least one observation has a ``freq`` calculation;
+      ``has_freq=false`` matches a group where none does. This is the
+      historical behaviour and is unchanged, so callers that never pass
+      ``evidence_match`` see exactly what they saw before.
+    - ``all_observations``: ``has_freq=true`` matches a group with at
+      least one observation where *every* observation has a ``freq``
+      calculation; ``has_freq=false`` matches a group with at least one
+      observation where *at least one* lacks it (incomplete coverage).
+
+    A group with no observations matches neither direction under
+    ``all_observations`` — an empty basin is not vacuously complete.
+    """
+    all_observations = (
+        request.evidence_match is ConformerEvidenceMatch.all_observations
+    )
+    for field_name, extra_clause, extra_join in _EVIDENCE_FILTERS:
+        want = getattr(request, field_name)
         if want is None:
             continue
-        ex = _calc_exists_in_group(extra_clause=(Calculation.type == calc_type))
-        stmt = stmt.where(ex if want else ~ex)
-
-    if request.has_geometries is not None:
-        ex = (
-            select(CalculationOutputGeometry.geometry_id)
-            .join(
-                Calculation,
-                Calculation.id == CalculationOutputGeometry.calculation_id,
+        if all_observations:
+            stmt = stmt.where(
+                _every_observation_clause(
+                    want, extra_clause=extra_clause, extra_join=extra_join
+                )
             )
-            .join(
-                ConformerObservation,
-                ConformerObservation.id == Calculation.conformer_observation_id,
+        else:
+            ex = _calc_exists_in_group(
+                extra_clause=extra_clause, extra_join=extra_join
             )
-            .where(
-                ConformerObservation.conformer_group_id == ConformerGroup.id
-            )
-            .exists()
-        )
-        stmt = stmt.where(ex if request.has_geometries else ~ex)
-
-    if request.has_geometry_validation is not None:
-        ex = _calc_exists_in_group(
-            extra_join=(
-                CalculationGeometryValidation,
-                CalculationGeometryValidation.calculation_id == Calculation.id,
-            ),
-        )
-        stmt = stmt.where(ex if request.has_geometry_validation else ~ex)
-
-    if request.has_scf_stability is not None:
-        ex = _calc_exists_in_group(
-            extra_join=(
-                CalculationSCFStability,
-                CalculationSCFStability.calculation_id == Calculation.id,
-            ),
-        )
-        stmt = stmt.where(ex if request.has_scf_stability else ~ex)
-
+            stmt = stmt.where(ex if want else ~ex)
     return stmt
 
 
@@ -466,6 +485,50 @@ def _calc_exists_in_group(*, extra_clause=None, extra_join=None):
     if extra_clause is not None:
         sub = sub.where(extra_clause)
     return sub.exists()
+
+
+def _every_observation_clause(want: bool, *, extra_clause=None, extra_join=None):
+    """Clause for the ``all_observations`` quantifier.
+
+    Expressed as "the group has an observation, and (no / some)
+    observation lacks the evidence" rather than a COUNT comparison so it
+    stays a pair of correlated EXISTS the planner can short-circuit.
+
+    The leading "has an observation" term is load-bearing: without it
+    ``NOT EXISTS(observation lacking freq)`` is *true* for a group with
+    zero observations, and an empty basin would be reported as fully
+    covered.
+    """
+    observation_in_group = (
+        ConformerObservation.conformer_group_id == ConformerGroup.id
+    )
+
+    evidence_on_observation = select(Calculation.id).where(
+        Calculation.conformer_observation_id == ConformerObservation.id
+    )
+    if extra_join is not None:
+        evidence_on_observation = evidence_on_observation.join(*extra_join)
+    if extra_clause is not None:
+        evidence_on_observation = evidence_on_observation.where(extra_clause)
+    evidence_on_observation = evidence_on_observation.correlate(
+        ConformerObservation
+    )
+
+    has_any_observation = (
+        select(ConformerObservation.id)
+        .where(observation_in_group)
+        .correlate(ConformerGroup)
+        .exists()
+    )
+    observation_lacking_evidence = (
+        select(ConformerObservation.id)
+        .where(observation_in_group, ~evidence_on_observation.exists())
+        .correlate(ConformerGroup)
+        .exists()
+    )
+    if want:
+        return and_(has_any_observation, ~observation_lacking_evidence)
+    return and_(has_any_observation, observation_lacking_evidence)
 
 
 def _apply_method_basis_software_filters(
@@ -584,9 +647,15 @@ def _empty_response(
 
 
 def _request_filter_echo(request: ConformersSearchRequest) -> dict[str, Any]:
-    """Return the caller's filter inputs verbatim (post-parse)."""
+    """Return the caller's filter inputs verbatim (post-parse).
+
+    ``evidence_match`` is always echoed, including when the caller did
+    not supply it. It changes what the ``has_*`` filters mean, so a
+    response that reported the filters without reporting the quantifier
+    would be ambiguous in exactly the way this parameter exists to fix.
+    """
     out: dict[str, Any] = {}
-    for name in (*_MEANINGFUL_FILTER_FIELDS, "include_rejected", "include_deprecated", "min_review_status"):
+    for name in (*_MEANINGFUL_FILTER_FIELDS, "evidence_match", "include_rejected", "include_deprecated", "min_review_status"):
         value = getattr(request, name)
         if value is None:
             continue

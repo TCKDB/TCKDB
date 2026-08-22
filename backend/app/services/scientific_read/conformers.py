@@ -56,11 +56,13 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_conformer import (
     AvailableConformerSections,
     ConformerAssignmentSchemeSummary,
-    ConformerCalculationEvidenceSummary,
     ConformerCalculationSummary,
+    ConformerEvidenceCoverage,
     ConformerGeometryLink,
     ConformerGroupCoreBlock,
+    ConformerGroupEvidenceSummary,
     ConformerObservationCoreBlock,
+    ConformerObservationEvidenceSummary,
     ConformerObservationsSummary,
     ConformerReviewEntry,
     ConformerSelectionSummary,
@@ -189,7 +191,7 @@ def build_group_record(
     obs_ids = [o.id for o in obs_rows]
 
     observations_summary = _build_observations_summary(obs_rows)
-    evidence_summary = _build_evidence_summary(session, obs_ids)
+    evidence_summary = _build_group_evidence_summary(session, obs_ids)
     selection_rows = _load_selection_rows(session, cg.id)
     selection_summary = _build_selection_summary_list(session, selection_rows)
     available = _build_available_sections(
@@ -350,7 +352,7 @@ def _build_observation_record(
     observation.id``).
     """
     obs_ids = [observation.id]
-    evidence = _build_evidence_summary(session, obs_ids)
+    evidence = _build_observation_evidence_summary(session, observation.id)
     available = _build_available_sections(
         session,
         obs_ids=obs_ids,
@@ -491,36 +493,163 @@ def _build_observations_summary(
     )
 
 
-def _build_evidence_summary(
+def _build_group_evidence_summary(
     session: Session, observation_ids: list[int]
-) -> ConformerCalculationEvidenceSummary:
-    """Compute the calculation-evidence summary for a set of observations.
+) -> ConformerGroupEvidenceSummary:
+    """Compute the group-scope calculation-evidence summary.
 
-    Counts and ``has_*`` booleans are aggregates over the calculations
-    whose ``conformer_observation_id`` is in *observation_ids*. The
-    geometry count is over distinct
-    ``calculation_output_geometry.geometry_id`` rows reached through
-    that calc set.
+    ``calculation_count`` and ``geometry_count`` are aggregates over the
+    calculations whose ``conformer_observation_id`` is in
+    *observation_ids* (geometry over distinct
+    ``calculation_output_geometry.geometry_id`` reached through that calc
+    set).
+
+    ``evidence_coverage`` is deliberately **not** a calculation count.
+    Each value is the number of *observations* in *observation_ids* with
+    at least one calculation of that kind — an observation carrying three
+    ``freq`` calculations contributes ``1``. That is what makes the value
+    readable against the shared ``observation_count`` denominator, and it
+    is why the coverage queries count ``DISTINCT
+    Calculation.conformer_observation_id`` rather than
+    ``Calculation.id``.
+
+    This block replaced a set of ``has_*`` booleans that OR-ed every
+    calculation under the group together; see
+    :class:`ConformerGroupEvidenceSummary` for why. ``count > 0``
+    reproduces the retired boolean exactly.
     """
     if not observation_ids:
-        return ConformerCalculationEvidenceSummary(
-            observation_count=len(observation_ids),
+        # No observations: every coverage value is 0 out of 0. Nothing is
+        # vacuously "covered" here — a caller reading ``freq == 0`` against
+        # ``observation_count == 0`` sees an empty basin, not a complete one.
+        return ConformerGroupEvidenceSummary(
+            observation_count=0,
             calculation_count=0,
-            has_opt=False,
-            has_freq=False,
-            has_sp=False,
-            has_geometry_validation=False,
-            has_scf_stability=False,
+            evidence_coverage=ConformerEvidenceCoverage(
+                opt=0,
+                freq=0,
+                sp=0,
+                geometry_validation=0,
+                scf_stability=0,
+            ),
             geometry_count=0,
         )
 
+    # One pass gives both the calculation total (COUNT(id)) and the
+    # per-type observation coverage (COUNT(DISTINCT observation_id)).
+    type_rows = session.execute(
+        select(
+            Calculation.type,
+            func.count(Calculation.id),
+            func.count(func.distinct(Calculation.conformer_observation_id)),
+        )
+        .where(Calculation.conformer_observation_id.in_(observation_ids))
+        .group_by(Calculation.type)
+    ).all()
+    calc_counts: dict[CalculationType, int] = {
+        row[0]: row[1] for row in type_rows
+    }
+    obs_coverage: dict[CalculationType, int] = {
+        row[0]: row[2] for row in type_rows
+    }
+    total = sum(calc_counts.values())
+
+    geometry_validation_coverage = _observation_coverage_via_join(
+        session,
+        observation_ids,
+        joined=CalculationGeometryValidation,
+        onclause=(
+            CalculationGeometryValidation.calculation_id == Calculation.id
+        ),
+    )
+    scf_stability_coverage = _observation_coverage_via_join(
+        session,
+        observation_ids,
+        joined=CalculationSCFStability,
+        onclause=CalculationSCFStability.calculation_id == Calculation.id,
+    )
+    geometry_count = _distinct_geometry_count(session, observation_ids)
+
+    return ConformerGroupEvidenceSummary(
+        observation_count=len(observation_ids),
+        calculation_count=total,
+        evidence_coverage=ConformerEvidenceCoverage(
+            opt=obs_coverage.get(CalculationType.opt, 0),
+            freq=obs_coverage.get(CalculationType.freq, 0),
+            sp=obs_coverage.get(CalculationType.sp, 0),
+            geometry_validation=geometry_validation_coverage,
+            scf_stability=scf_stability_coverage,
+        ),
+        geometry_count=geometry_count,
+    )
+
+
+def _observation_coverage_via_join(
+    session: Session,
+    observation_ids: list[int],
+    *,
+    joined,
+    onclause,
+) -> int:
+    """Count observations with >=1 calculation carrying a joined evidence row.
+
+    DISTINCT is on ``conformer_observation_id``, so an observation with
+    three qualifying calculations still counts once.
+    """
+    return int(
+        session.scalar(
+            select(
+                func.count(
+                    func.distinct(Calculation.conformer_observation_id)
+                )
+            )
+            .select_from(Calculation)
+            .join(joined, onclause)
+            .where(Calculation.conformer_observation_id.in_(observation_ids))
+        )
+        or 0
+    )
+
+
+def _distinct_geometry_count(
+    session: Session, observation_ids: list[int]
+) -> int:
+    return int(
+        session.scalar(
+            select(
+                func.count(func.distinct(CalculationOutputGeometry.geometry_id))
+            )
+            .select_from(CalculationOutputGeometry)
+            .join(
+                Calculation,
+                Calculation.id == CalculationOutputGeometry.calculation_id,
+            )
+            .where(
+                Calculation.conformer_observation_id.in_(observation_ids)
+            )
+        )
+        or 0
+    )
+
+
+def _build_observation_evidence_summary(
+    session: Session, observation_id: int
+) -> ConformerObservationEvidenceSummary:
+    """Compute the observation-scope calculation-evidence summary.
+
+    Scope is one provenance row, so the ``has_*`` booleans here are
+    unambiguous — there is no second observation for a ``true`` to hide.
+    They are kept as booleans for exactly that reason; the group surface
+    reports counts instead (see
+    :class:`ConformerGroupEvidenceSummary`).
+    """
+    observation_ids = [observation_id]
     type_rows = session.execute(
         select(Calculation.type, func.count(Calculation.id))
         .where(Calculation.conformer_observation_id.in_(observation_ids))
         .group_by(Calculation.type)
     ).all()
     type_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
-    total = sum(type_counts.values())
 
     has_geom_val = bool(
         session.scalar(
@@ -552,32 +681,16 @@ def _build_evidence_summary(
             )
         )
     )
-    geometry_count = int(
-        session.scalar(
-            select(
-                func.count(func.distinct(CalculationOutputGeometry.geometry_id))
-            )
-            .select_from(CalculationOutputGeometry)
-            .join(
-                Calculation,
-                Calculation.id == CalculationOutputGeometry.calculation_id,
-            )
-            .where(
-                Calculation.conformer_observation_id.in_(observation_ids)
-            )
-        )
-        or 0
-    )
 
-    return ConformerCalculationEvidenceSummary(
+    return ConformerObservationEvidenceSummary(
         observation_count=len(observation_ids),
-        calculation_count=total,
+        calculation_count=sum(type_counts.values()),
         has_opt=type_counts.get(CalculationType.opt, 0) > 0,
         has_freq=type_counts.get(CalculationType.freq, 0) > 0,
         has_sp=type_counts.get(CalculationType.sp, 0) > 0,
         has_geometry_validation=has_geom_val,
         has_scf_stability=has_scf,
-        geometry_count=geometry_count,
+        geometry_count=_distinct_geometry_count(session, observation_ids),
     )
 
 

@@ -152,6 +152,35 @@ class TestConformers:
             "has_freq": True,
         }
 
+    def test_search_forwards_evidence_match(self):
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.search_conformers(
+            species_entry_ref="spe_x",
+            has_freq=True,
+            evidence_match="all_observations",
+        )
+
+        assert json.loads(seen[0].content) == {
+            "species_entry_ref": "spe_x",
+            "has_freq": True,
+            "evidence_match": "all_observations",
+        }
+
+    def test_search_omits_evidence_match_when_not_supplied(self):
+        """Omitted, not defaulted client-side.
+
+        The server owns the default (``any_observation``); a client that
+        spelled it out would freeze today's default into every request.
+        """
+        handler, seen = _capture(_envelope())
+        client, _ = make_client(handler)
+
+        client.search_conformers(species_entry_ref="spe_x", has_freq=True)
+
+        assert "evidence_match" not in json.loads(seen[0].content)
+
     def test_search_get_form(self):
         handler, seen = _capture(_envelope())
         client, _ = make_client(handler)
