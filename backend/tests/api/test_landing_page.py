@@ -264,7 +264,7 @@ class TestLandingPageResponse:
         """
         with client_factory() as c:
             body = c.get("/").text
-        prose = re.sub(r"<style>.*?</style>", "", body, flags=re.DOTALL)
+        prose = re.sub(r"<style>.*?</style>", "", body, flags=re.DOTALL | re.IGNORECASE)
         prose = re.sub(r"<[^>]+>", " ", prose)
         forbidden = re.compile(
             r"\b\d[\d,]*\s*(records?|species|reactions?|calculations?|users?|"
@@ -313,7 +313,7 @@ class TestLandingPageIsSelfContained:
     def test_no_stylesheet_import_or_url_reaches_off_host(self, client_factory):
         with client_factory() as c:
             body = c.get("/").text
-        style = re.search(r"<style>(.*?)</style>", body, flags=re.DOTALL)
+        style = re.search(r"<style>(.*?)</style>", body, flags=re.DOTALL | re.IGNORECASE)
         assert style is not None
         css = style.group(1)
         assert "@import" not in css
@@ -742,8 +742,8 @@ class TestReactionSearchTakesASetPerSide:
             literal for literal in re.findall(r'"([^"]*)"', script)
             if "missing_reaction_search_filter" in literal
         ], "the code is the endpoint's to state, not this page's to guess"
-        prose = re.sub(r"<script>.*?</script>", "", page, flags=re.DOTALL)
-        prose = re.sub(r"<style>.*?</style>", "", prose, flags=re.DOTALL)
+        prose = re.sub(r"<script>.*?</script>", "", page, flags=re.DOTALL | re.IGNORECASE)
+        prose = re.sub(r"<style>.*?</style>", "", prose, flags=re.DOTALL | re.IGNORECASE)
         assert "missing_reaction_search_filter" not in prose
 
     def test_the_render_is_capped_and_never_lies_about_the_total(self, script):
@@ -807,7 +807,7 @@ class TestBothSearchesSurviveWithoutTheSwitch:
         whole document scrolled sideways, which is the one thing the
         narrow layout is not allowed to do.
         """
-        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL).group(1)
+        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL | re.IGNORECASE).group(1)
         form_rule = re.search(r"\.fallback form \{([^}]*)\}", css)
         assert form_rule is not None
         assert "flex-wrap: wrap" in form_rule.group(1)
@@ -827,7 +827,7 @@ class TestReviewStateIsInformation:
         put a warning on the ordinary case, which is both wrong and the
         opposite of what the review model is for.
         """
-        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL).group(1)
+        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL | re.IGNORECASE).group(1)
         flagged = set()
         for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
             if "--phase-neg" not in body:
