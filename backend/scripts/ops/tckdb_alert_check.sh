@@ -62,6 +62,20 @@
 #                      after every completed run; its silence is what tells you
 #                      this checker died
 #
+# WARNINGS ARE A SEPARATE, QUIETER CHANNEL
+#   /status carries two verdict fields. `degraded` lists components that are
+#   BROKEN, and this script pages on it at Priority: high. `warnings` lists
+#   things that are TRUE BUT NOT YET BROKEN -- today, an object store whose
+#   remaining room has fallen below the largest artifact TCKDB accepts, which
+#   is worth knowing about hours before the first upload fails.
+#
+#   A warning is pushed at Priority: low, does NOT change the verdict, and
+#   does NOT change the exit code. That separation is the whole point: an
+#   alert that fires while every upload still succeeds is an alert you learn
+#   to swipe away, and you swipe the real ones away with it. Warnings get
+#   their own state file so a standing warning is pushed once rather than
+#   every five minutes, on the same edge-triggered discipline as the verdict.
+#
 # EXIT CODES
 #   0  the deployment is healthy
 #   1  a VERDICT of unhealthy: unreachable, bad endpoint, or degraded. The unit
@@ -115,6 +129,13 @@ previous="$(cat "$STATE_FILE" 2>/dev/null || echo "unknown")"
 # single token that a human can read and edit with `echo`.
 DEADMAN_NOTICE_FILE="${STATE_FILE}.deadman-notice"
 
+# Warnings are edge-triggered like the verdict, but on their own axis: a store
+# can start warning while the deployment stays healthy, and can stop warning
+# while it stays degraded. One token here rather than a second field in the
+# state file, for the same reason the deadman notice is its own file -- the
+# state file stays something a human can read and overwrite with `echo`.
+WARNING_STATE_FILE="${STATE_FILE}.warnings"
+
 publish() {
     # publish <title> <priority> <tags> <body>; returns curl's exit status so
     # the caller can decide whether the notification actually happened.
@@ -130,6 +151,12 @@ publish() {
         -d "$4" \
         "${NTFY_SERVER}/${TCKDB_NTFY_TOPIC}" >/dev/null
 }
+
+# Set on the 200 path only; declared here because `set -u` is on and the
+# unreachable and bad-endpoint paths never reach the parser. Empty means "no
+# warnings", which is also the right answer for a build too old to have the
+# field -- an absent `warnings` array is not a warning.
+warnings=""
 
 # --max-time so a hung server cannot wedge the timer. --fail is deliberately
 # NOT used: /status returns 200 while degraded and we want to read the body.
@@ -166,6 +193,7 @@ else
         status="$(jq -r '.status // "unparseable"' <<<"$response")"
         degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$response")"
         reasons="$(jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "\(.key): \(.value.reason // "unhealthy")"] | join("; ")' <<<"$response")"
+        warnings="$(jq -r '[.warnings // [] | .[] | .summary // .code // "unspecified warning"] | join(" | ")' <<<"$response")"
     else
         status="$(grep -o '"status"[[:space:]]*:[[:space:]]*"[^"]*"' <<<"$response" | head -1 | sed 's/.*"\([^"]*\)"$/\1/')"
         # `degraded` is an ARRAY. A string-shaped grep returns empty for every
@@ -174,6 +202,21 @@ else
         # prevent. Match the array, as tckdb_deploy.sh does.
         degraded="$(sed -n 's/.*"degraded"[[:space:]]*:[[:space:]]*\[\([^]]*\)\].*/\1/p' <<<"$response" | head -1 | tr -d '" ')"
         reasons="(install jq for per-component reasons)"
+        # `warnings` is an array of OBJECTS, so the array-of-strings sed used
+        # for `degraded` cannot read it -- and a regex that tried would be a
+        # regex nobody could check. Presence is all this path claims: an
+        # empty array is silence, a non-empty one is a push whose detail says
+        # where to look. Note the three-way test: an ABSENT field is not an
+        # empty one, and both are silence, but for different reasons and only
+        # one of them means "upgrade the deployment".
+        compact="$(tr -d " \t\n" <<<"$response")"
+        if [[ "$compact" == *'"warnings":[]'* ]]; then
+            warnings=""
+        elif [[ "$compact" == *'"warnings":['* ]]; then
+            warnings="(install jq for warning detail; open ${STATUS_URL} to read them)"
+        else
+            warnings=""
+        fi
     fi
 
     # BOTH fields decide, not just `status`.
@@ -229,6 +272,33 @@ if [[ "$current" != "$previous" ]]; then
         printf '%s' "$current" > "$STATE_FILE"
     else
         echo "warning: failed to publish to ntfy; state not advanced, will retry" >&2
+    fi
+fi
+
+# WARNINGS. Low priority, no effect on the verdict, no effect on the exit
+# code. Edge-triggered against their own state file so a store that has been
+# warning for a week is one push, not two thousand.
+#
+# The state is advanced only once the push has gone out, exactly as the
+# verdict's is, so a failed publish retries on the next run instead of
+# recording "you have been told" when nobody had been.
+#
+# A warning CLEARING is recorded silently rather than pushed. Recovery from a
+# verdict is worth a push because you were left wondering whether it was still
+# broken; nothing was broken here, so there is nothing to reassure about, and
+# a "good news" push is exactly the kind of traffic that trains you to ignore
+# the channel.
+previous_warnings="$(cat "$WARNING_STATE_FILE" 2>/dev/null || echo "")"
+if [[ "$warnings" != "$previous_warnings" ]]; then
+    if [[ -z "$warnings" ]]; then
+        printf '%s' "$warnings" > "$WARNING_STATE_FILE"
+        echo "$(date -Is) warning cleared"
+    elif publish "TCKDB warning" "low" "warning" \
+        "${warnings} -- nothing is broken and every upload still works; this is the notice that arrives before one stops working. Source: ${STATUS_URL}"; then
+        printf '%s' "$warnings" > "$WARNING_STATE_FILE"
+        echo "$(date -Is) warning=${warnings}"
+    else
+        echo "warning: failed to publish the low-priority warning; state not advanced, will retry" >&2
     fi
 fi
 

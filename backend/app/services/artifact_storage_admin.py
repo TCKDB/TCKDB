@@ -48,6 +48,30 @@ degrades ``/status`` and never clears a refusal; the write path's own
 evidence is untouched by this module being unavailable. A capacity probe
 that could turn an S3 deployment red would be a worse bug than the one it
 is here to fix.
+
+The second question: what is the bucket allowed to hold?
+--------------------------------------------------------
+:func:`report_bucket_quota_bytes` asks a different endpoint the one
+question free space cannot answer, and the two together are what let
+``/status`` *warn* before a write is refused rather than only after.
+Measured against the same MinIO build:
+
+* ``GET /minio/admin/v3/get-bucket-quota?bucket=<name>`` → **200**,
+  ``{"quota":20971520,"size":0,"rate":0,"requests":0,"quotatype":"hard"}``.
+* **``size`` is not usage and is never read here.** It answered ``0``
+  throughout, including while the bucket held 60 MiB. Reading it as usage
+  would produce a confident wrong number, which is worse than none — so
+  usage comes from TCKDB's own ledger instead, in
+  :mod:`app.services.artifact_storage_headroom`.
+* No quota configured → ``200 {"quota":0,"size":0,"rate":0,"requests":0}``,
+  with ``quotatype`` **absent** rather than empty. ``quota == 0`` means
+  "no quota set", which is *no opinion* and not "a quota of zero".
+* A bucket that does not exist → ``404 NoSuchBucket``; no opinion, like
+  every other failure.
+* **Root credentials are not required.** A policy of exactly
+  ``admin:GetBucketQuota`` answers this endpoint and is *denied*
+  ``/minio/admin/v3/info``, so this probe runs on a strictly weaker
+  credential than :func:`report_free_bytes` needs.
 """
 
 from __future__ import annotations
@@ -57,7 +81,7 @@ import logging
 import urllib.error
 import urllib.request
 from typing import Optional
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 
 from botocore.auth import S3SigV4Auth
 from botocore.awsrequest import AWSRequest
@@ -71,6 +95,12 @@ logger = logging.getLogger(__name__)
 #: like any other failure, and version negotiation would be machinery in
 #: aid of a signal that is explicitly supplementary.
 _ADMIN_INFO_PATH = "/minio/admin/v3/info"
+
+#: Same pinned admin version, same reasoning. Takes the bucket as a query
+#: parameter, which SigV4 signs as part of the canonical request — so it is
+#: built once, here, and handed to both the signer and the opener rather
+#: than assembled twice and risked diverging.
+_ADMIN_BUCKET_QUOTA_PATH = "/minio/admin/v3/get-bucket-quota"
 
 #: Short, and it has to be. This runs **inline in the ``/status`` request
 #: thread**, after the bucket probe's own 4s deadline, so it is additive:
@@ -149,6 +179,78 @@ def report_free_bytes(
         return None
 
 
+def report_bucket_quota_bytes(
+    *,
+    endpoint_url: str,
+    bucket: str,
+    access_key: str,
+    secret_key: str,
+    region: str = "us-east-1",
+    timeout: float = _TIMEOUT_SECONDS,
+) -> Optional[int]:
+    """The bucket's configured hard quota in bytes, or ``None``.
+
+    ``None`` means *no opinion* and covers every failure **and** the
+    ordinary case of no quota being configured at all, which MinIO reports
+    as ``quota: 0``. Zero is not returned as a quota of zero bytes: that
+    would read as "this bucket may hold nothing", degrade every store
+    without a quota, and be wrong on the default deployment. Never raises.
+
+    The ``size`` field in the same response is deliberately ignored — it
+    read ``0`` while the bucket held 60 MiB. Usage comes from
+    :func:`app.services.artifact_storage_headroom.deposited_bytes`.
+    """
+    if not endpoint_url or not bucket:
+        return None
+    url = (
+        endpoint_url.rstrip("/")
+        + _ADMIN_BUCKET_QUOTA_PATH
+        + "?"
+        + urlencode({"bucket": bucket})
+    )
+    try:
+        request = AWSRequest(method="GET", url=url, data=b"")
+        S3SigV4Auth(Credentials(access_key, secret_key), "s3", region).add_auth(request)
+        opened = urllib.request.urlopen(
+            urllib.request.Request(url, method="GET", headers=dict(request.headers)),
+            timeout=timeout,
+        )
+        with opened as response:
+            payload = json.loads(response.read())
+    except urllib.error.HTTPError as exc:
+        # 404 ``NoSuchBucket`` (measured), 403 without
+        # ``admin:GetBucketQuota``, 426 on a version mismatch, anything a
+        # non-MinIO answers. All the same: this store will not tell us.
+        logger.debug(
+            "bucket quota probe: %s answered HTTP %s; no quota opinion",
+            _sanitized(endpoint_url),
+            exc.code,
+        )
+        return None
+    except Exception as exc:
+        logger.debug(
+            "bucket quota probe: %s did not answer (%s); no quota opinion",
+            _sanitized(endpoint_url),
+            type(exc).__name__,
+        )
+        return None
+
+    if not isinstance(payload, dict):
+        logger.debug("bucket quota probe: unfamiliar response shape")
+        return None
+    quota = payload.get("quota")
+    # ``bool`` is an ``int`` in Python and would sail through; excluded so a
+    # response shape nobody has seen cannot become a one-byte quota.
+    if not isinstance(quota, int) or isinstance(quota, bool):
+        logger.debug("bucket quota probe: no integer 'quota' in the response")
+        return None
+    if quota <= 0:
+        # Measured: no quota configured answers ``{"quota":0,...}`` with
+        # ``quotatype`` absent entirely. "Not configured" is no opinion.
+        return None
+    return quota
+
+
 def _sanitized(endpoint_url: str) -> str:
     """``scheme://host:port``, so a credential in the URL cannot be logged."""
     try:
@@ -161,4 +263,4 @@ def _sanitized(endpoint_url: str) -> str:
     return "(unparseable endpoint)"
 
 
-__all__ = ["report_free_bytes"]
+__all__ = ["report_bucket_quota_bytes", "report_free_bytes"]

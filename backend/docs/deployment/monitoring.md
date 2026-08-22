@@ -71,6 +71,7 @@ script never gets far enough to ping anything). Neither alone is enough.
 {
   "status": "ok",
   "degraded": [],
+  "warnings": [],
   "components": {
     "database": {"healthy": true, "alembic_revision": "f9b2e6c4a1d7", "reason": null},
     "worker": {
@@ -80,7 +81,9 @@ script never gets far enough to ping anything). Neither alone is enough.
     },
     "artifact_storage": {
       "endpoint": "http://minio:9000", "bucket": "tckdb-artifacts",
-      "healthy": true, "reachable": true, "reason": null
+      "healthy": true, "reachable": true, "reason": null,
+      "storage_full": false, "storage_full_observed_at": null,
+      "warnings": []
     }
   }
 }
@@ -98,6 +101,74 @@ component being down.
 Reading one of two fields is exactly how monitoring comes to vouch against an
 outage, which has happened here once already. It is cheap to read both, and
 the cost of not doing so is paid in a way you cannot see.
+
+### `warnings`: true but not yet broken
+
+`degraded` is what the alerters **page** on. `warnings` is a second array for
+things that are true and not yet broken, and it is deliberately separate:
+
+- a warning never appears in `degraded`,
+- the component reporting it keeps `healthy: true`,
+- `status` stays `"ok"`,
+- both alerters deliver it at low priority (ntfy `Priority: low`) and neither
+  turns its run red.
+
+That separation is the whole design. An alert that fires while every upload
+still succeeds is an alert an operator learns to swipe away — and the real
+outage alerts go with it, because they arrive on the same channel.
+
+Each entry names the component it came from and carries a stable `code` so a
+consumer can branch on it without parsing prose:
+
+```json
+{
+  "component": "artifact_storage",
+  "code": "artifact_storage_headroom_low",
+  "summary": "artifact storage has 41,943,040 bytes of headroom, less than the 52,428,800-byte artifact TCKDB will accept, so a full-size upload may be refused. The limit is the bucket quota (104,857,600 bytes) minus what TCKDB has deposited (62,914,560 bytes); raise the quota or reclaim orphaned objects.",
+  "headroom_bytes": 41943040,
+  "max_artifact_bytes": 52428800,
+  "source": "bucket_quota",
+  "measured_at": "2026-08-22T09:41:07.123456+00:00",
+  "quota_bytes": 104857600,
+  "ledger_bytes": 62914560,
+  "free_bytes": 483183820800,
+  "quota_age_seconds": 42.0
+}
+```
+
+**The only warning today is "the object store is running out of room".** It is
+a byte count and not a percentage on purpose: "80 % full" reads as safe, and it
+is not safe if the remaining fifth is smaller than the next upload. The
+predicate is `headroom < MAX_ARTIFACT_BYTES` — *the store no longer has room
+for the largest artifact TCKDB will accept*, which is a claim about the next
+real write.
+
+`source` is either `bucket_quota` or `free_space`, and it matters because the
+remedies differ: "free disk" and "raise the quota" send you to different
+places. It is the tighter of the two, and either may be absent — against AWS S3
+or any non-MinIO store both are absent and no warning is ever raised.
+
+`quota_age_seconds` is the one stale number in the block. A bucket quota is
+cached for five minutes (`TCKDB_STORAGE_QUOTA_TTL_SECONDS`, default `300`)
+because it changes about once a year and asking costs a network round trip on
+the request thread; deposited bytes and free space are read fresh on every
+poll. If you have just raised a quota and `/status` has not noticed, that field
+tells you how long until it will.
+
+Two honest limits, worth knowing before you act on the number:
+
+- **Deposited bytes come from TCKDB's own ledger**, summed over *distinct*
+  `sha256` because the store is content-addressed and one object may have many
+  `calculation_artifact` rows. It is a **lower bound** on what the bucket
+  actually holds: `reclaimed/` holds from the orphan sweep, write-then-rollback
+  orphans, and anything put in the bucket by hand are invisible to it. The
+  free-space arm sees all of them.
+- **A MinIO bucket quota is a periodic sweep, not a write-path gate.** Its
+  data-usage scanner ticks every 60 s and the overshoot is unbounded — measured,
+  60 × 1 MiB written back-to-back into a 20 MiB-quota bucket were all accepted,
+  three times the quota, with no refusal. A quota will be *noticed*; it will not
+  protect the host disk from a fast depositor. Only the drive's own free-space
+  threshold does that.
 
 The worker block carries two independent signals because neither is sufficient:
 
