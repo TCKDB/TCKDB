@@ -7,4 +7,4 @@ It never queries Postgres directly and never imports the backend.
 See ``docs/specs/mcp_readonly_integration.md`` for the full design.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
