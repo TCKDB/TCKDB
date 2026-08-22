@@ -21,7 +21,8 @@ Policy choices enforced here (in addition to server-side validation):
 - ``limit`` is capped at ``config.max_limit`` (default 50).
 - At least one identity discriminator must be supplied
   (``reactants``, ``products``, ``reaction_ref``, ``reaction_entry_ref``,
-  or ``family``). ``direction`` alone is a modifier, not a search.
+  or ``family``). ``direction`` and ``match`` alone are modifiers, not
+  searches.
 """
 
 from __future__ import annotations
@@ -66,6 +67,12 @@ LEGAL_MODEL_KINDS = frozenset({"arrhenius", "modified_arrhenius"})
 # backend/app/schemas/reads/scientific_reactions.py::ReactionDirectionQuery.
 LEGAL_DIRECTIONS = frozenset({"forward", "reverse", "either"})
 
+# Legal ``match`` values from
+# backend/app/schemas/reads/scientific_reactions.py::ReactionMatchMode.
+# ``contains`` is set containment per role and is the server default;
+# ``exact`` is multiset equality on both sides.
+LEGAL_MATCH_MODES = frozenset({"contains", "exact"})
+
 _DEFAULT_INCLUDE: tuple[str, ...] = ("provenance",)
 
 _DISCRIMINATOR_FIELDS: tuple[str, ...] = (
@@ -82,6 +89,7 @@ _ACCEPTED_FIELDS: frozenset[str] = frozenset(
         "reactants",
         "products",
         "direction",
+        "match",
         "family",
         "reaction_ref",
         "reaction_entry_ref",
@@ -137,6 +145,19 @@ INPUT_SCHEMA: dict[str, Any] = {
             "enum": sorted(LEGAL_DIRECTIONS),
             "default": "either",
             "description": "Modifier, not a discriminator on its own.",
+        },
+        "match": {
+            "type": "string",
+            "enum": sorted(LEGAL_MATCH_MODES),
+            "default": "contains",
+            "description": (
+                "How the supplied species lists are compared with a stored "
+                "reaction side. 'contains' (default) means every named "
+                "species must appear in that role and an omitted side is "
+                "unconstrained, so reactants=['NN'] answers 'what consumes "
+                "hydrazine'. 'exact' demands the whole equation, both "
+                "sides, counts included."
+            ),
         },
         "family": {"type": "string"},
         "reaction_ref": {
@@ -261,6 +282,12 @@ def run(
             f"direction must be one of {sorted(LEGAL_DIRECTIONS)!r}; got {direction!r}"
         )
 
+    match_mode = args.get("match")
+    if match_mode is not None and match_mode not in LEGAL_MATCH_MODES:
+        raise invalid_input(
+            f"match must be one of {sorted(LEGAL_MATCH_MODES)!r}; got {match_mode!r}"
+        )
+
     model_kind = args.get("model_kind")
     if model_kind is not None and model_kind not in LEGAL_MODEL_KINDS:
         raise invalid_input(
@@ -316,6 +343,7 @@ def run(
         "reactants": reactants if reactants else None,
         "products": products if products else None,
         "direction": direction,
+        "match": match_mode,
         "family": args.get("family"),
         "reaction_ref": reaction_ref,
         "reaction_entry_ref": reaction_entry_ref,

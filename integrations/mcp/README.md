@@ -436,12 +436,18 @@ direction, or public ref.
 
 At least one discriminator is required: `reactants`, `products`,
 `reaction_ref`, `reaction_entry_ref`, or `family`. Modifiers alone
-(`direction`, `min_review_status`) do not constitute a search.
+(`direction`, `match`, `min_review_status`) do not constitute a search.
+
+Matching defaults to containment. `reactants: ["NN"]` on its own returns
+every reaction with NN among its reactants and leaves the product side
+unconstrained; `match: "exact"` asks for one whole equation instead.
 
 ```text
 reactants?: string[]            # non-empty list of non-empty SMILES
 products?: string[]             # non-empty list of non-empty SMILES
 direction?: "forward" | "reverse" | "either"   # default "either"
+match?: "contains" | "exact"    # default "contains" (set containment
+                                #   per role; "exact" = whole equation)
 family?: string
 reaction_ref?: string           # must start with "rxn_"
 reaction_entry_ref?: string     # must start with "rxe_"
@@ -677,13 +683,14 @@ Complements `tckdb_get_reaction_entry_kinetics`.
 
 At least one identity discriminator is **required**: `reactants`,
 `products`, `reaction_ref`, `reaction_entry_ref`, or `family`. Modifiers
-alone (`direction`, temperature/pressure, model_kind, review filters)
-are rejected to avoid unbounded scans.
+alone (`direction`, `match`, temperature/pressure, model_kind, review
+filters) are rejected to avoid unbounded scans.
 
 ```text
 reactants?: string[]                 # non-empty SMILES list
 products?: string[]                  # non-empty SMILES list
 direction?: "forward" | "reverse" | "either"   # modifier; default "either"
+match?: "contains" | "exact"         # modifier; default "contains"
 family?: string
 reaction_ref?: string                # must start with "rxn_"
 reaction_entry_ref?: string          # must start with "rxe_"

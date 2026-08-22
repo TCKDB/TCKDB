@@ -24,10 +24,21 @@ curl -G "http://127.0.0.1:8010/api/v1/scientific/kinetics/search" \
     --data-urlencode "reactants=[H][H]" \
     --data-urlencode "products=C" \
     --data-urlencode "products=[H]"
+
+# Reaction search naming only one side.
+curl -G "http://127.0.0.1:8010/api/v1/scientific/reactions/search" \
+    --data-urlencode "reactants=[CH3]"
 ```
 
 Always URL-encode bracketed SMILES with `--data-urlencode`; otherwise
 shells and curl can interpret brackets as URL ranges.
+
+Reaction and kinetics search match by **containment** unless you say
+otherwise: every species you name must appear in that role, and a side you
+leave out is unconstrained. So the last example above means "reactions
+consuming the methyl radical", not "reactions turning methyl into
+nothing". Add `--data-urlencode "match=exact"` when you want precisely one
+equation — both sides, counts included.
 
 ## Python Example
 

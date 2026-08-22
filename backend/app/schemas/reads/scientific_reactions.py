@@ -48,6 +48,36 @@ class ReactionDirectionQuery(str, Enum):
     either = "either"
 
 
+class ReactionMatchMode(str, Enum):
+    """How a supplied participant list is compared against a stored side.
+
+    ``contains`` (the default) — **set containment per role**: every queried
+    species must appear in that role of the stored reaction. The empty side
+    constrains nothing, so ``reactants=NN`` alone means "NN among the
+    reactants, products unconstrained".
+
+    ``exact`` — multiset equality on *both* roles: precisely this equation,
+    both sides, counts included.
+
+    The default is containment because "reactions involving hydrazine" is
+    what a chemist means by ``reactants=NN``, and answering it with the
+    empty set — which is what multiset equality against an unstated product
+    side must do — is a confidently wrong scientific answer rather than a
+    narrow one.
+
+    Containment is deliberately **set**, not multiset. ``reactants=NN``
+    matches a reaction consuming two NN, and ``reactants=NN&reactants=NN``
+    matches a reaction consuming one. Stoichiometry is not a filter here:
+    a caller who wants counts to line up is asking for a specific equation
+    and should say ``match=exact``. The opposite reading — that a queried
+    multiset must be covered with multiplicity — is defensible enough that
+    it is stated here rather than left to fall out of the implementation.
+    """
+
+    contains = "contains"
+    exact = "exact"
+
+
 class ReactionSearchRequest(BaseModel):
     """Service-layer request model for reaction search."""
 
@@ -60,6 +90,7 @@ class ReactionSearchRequest(BaseModel):
         max_length=_MAX_PARTICIPANTS_PER_REACTION,
     )
     direction: ReactionDirectionQuery = ReactionDirectionQuery.either
+    match: ReactionMatchMode = ReactionMatchMode.contains
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
 
     # Phase C: explicit handles (refs) — useful when a caller already has

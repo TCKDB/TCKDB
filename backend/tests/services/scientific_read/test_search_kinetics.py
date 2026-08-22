@@ -11,7 +11,10 @@ from app.db.models.common import (
 )
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics_search import KineticsSearchRequest
-from app.schemas.reads.scientific_reactions import ReactionDirectionQuery
+from app.schemas.reads.scientific_reactions import (
+    ReactionDirectionQuery,
+    ReactionMatchMode,
+)
 from app.services.scientific_read.kinetics_search import search_kinetics
 from tests.services.scientific_read._factories import (
     make_chem_reaction,
@@ -264,3 +267,70 @@ def test_sort_is_deterministic_across_calls(db_session):
         db_session, KineticsSearchRequest(reactants=["DET1"], products=["DET2"])
     )
     assert r1.model_dump() == r2.model_dump()
+
+
+# ---------------------------------------------------------------------------
+# match=contains vs match=exact
+#
+# Reaction identity here is resolved by delegating to ``search_reactions``,
+# so the semantics are inherited rather than reimplemented. These tests pin
+# that the delegation actually carries ``match`` through — a kinetics search
+# that quietly dropped it would fall back to the server default and give a
+# different answer than the caller asked for.
+# ---------------------------------------------------------------------------
+
+
+def test_reactants_only_kinetics_search_finds_the_reaction(db_session):
+    """"What rate coefficients do we have for reactions consuming X?"."""
+    _setup_reaction_with_kinetics(
+        db_session, reactant_smiles="KCT_A", product_smiles="KCT_B"
+    )
+
+    response = search_kinetics(db_session, KineticsSearchRequest(reactants=["KCT_A"]))
+
+    assert len(response.records) == 1
+
+
+def test_products_only_kinetics_search_finds_the_reaction(db_session):
+    _setup_reaction_with_kinetics(
+        db_session, reactant_smiles="KPO_A", product_smiles="KPO_B"
+    )
+
+    response = search_kinetics(db_session, KineticsSearchRequest(products=["KPO_B"]))
+
+    assert len(response.records) == 1
+
+
+def test_kinetics_match_exact_rejects_a_one_sided_query(db_session):
+    """``match=exact`` reaches the reaction service, so it must still bite."""
+    _setup_reaction_with_kinetics(
+        db_session, reactant_smiles="KEX_A", product_smiles="KEX_B"
+    )
+
+    partial = search_kinetics(
+        db_session,
+        KineticsSearchRequest(
+            reactants=["KEX_A"], match=ReactionMatchMode.exact
+        ),
+    )
+    whole = search_kinetics(
+        db_session,
+        KineticsSearchRequest(
+            reactants=["KEX_A"],
+            products=["KEX_B"],
+            match=ReactionMatchMode.exact,
+        ),
+    )
+
+    assert partial.records == []
+    assert len(whole.records) == 1
+
+
+def test_kinetics_filter_echo_reports_the_match_mode(db_session):
+    _setup_reaction_with_kinetics(
+        db_session, reactant_smiles="KEC_A", product_smiles="KEC_B"
+    )
+
+    response = search_kinetics(db_session, KineticsSearchRequest(reactants=["KEC_A"]))
+
+    assert response.request.filter["match"] == "contains"

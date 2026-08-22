@@ -57,6 +57,56 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Changed
+
+- **Reaction search now means containment, and a one-sided query finally
+  works.** `GET|POST /api/v1/scientific/reactions/search` accepted
+  `reactants` or `products` alone, and the validator said so explicitly —
+  but the matcher compared *both* roles for multiset equality. A query
+  naming only reactants therefore asked for "entries whose reactants are
+  exactly {X} **and** whose products are exactly {}". No reaction has zero
+  products, so a reactants-only search could not match anything, for any
+  input, ever. It returned `200` with an empty result set rather than an
+  error: measured against the hosted instance, `?reactants=NN` answered
+  "no reactions" while the database held 24 hydrazine reactions.
+
+  A **`match`** parameter now selects the comparison, and it defaults to
+  **`contains`**: set containment per role. Every species the caller names
+  must appear in that role; a side left empty constrains nothing. So
+  `?reactants=NN` means "every reaction with NN among its reactants,
+  products unconstrained" — the question a chemist was asking. `match` is
+  accepted on `/scientific/reactions/search` and on
+  `/scientific/kinetics/search`, which resolves reaction identity through
+  the same service and had the same defect.
+
+  Containment is deliberately **set**-based, not multiset. A reaction
+  consuming two NN matches `reactants=NN`, and `reactants=NN&reactants=NN`
+  matches a reaction consuming one. Stoichiometry is not a filter in this
+  mode; a caller who wants counts to line up is asking for a specific
+  equation, and that is what `match=exact` is for. The opposite reading is
+  defensible enough that it is written into the enum's docstring and into
+  the OpenAPI description rather than left to fall out of the code.
+
+  **Breaking for existing callers who supply both sides.** They got exact
+  multiset equality; under the new default they get containment, which
+  returns a superset — a two-species query will now also match the larger
+  reactions that contain those two. **Migration: send `match=exact`**,
+  which reproduces the previous behaviour byte for byte on both endpoints
+  and remains a first-class query (`reaction_ref` does not replace it —
+  you do not always hold the ref). Callers who supply one side were
+  getting an empty list and cannot regress. `direction` is unchanged and
+  composes with `match` on both axes: under `direction=either`,
+  containment is tested in both orientations and `matched_direction`
+  reports which one matched under the same semantics the matcher used.
+
+  Per the pre-1.0 policy above, a minor bump may break an HTTP contract.
+  This one does, which is why it is written down here rather than shipped
+  quietly. No database schema or migration impact: this is a query
+  projection, not a table. **`tckdb-client` 0.53.0 → 0.54.0** (new `match`
+  keyword on `search_reactions` and `search_kinetics`; omitted means the
+  server default applies). **`tckdb-mcp` 0.1.1 → 0.2.0** (new `match`
+  field on `tckdb_search_reactions` and `tckdb_search_kinetics`).
+
 ### Added
 
 - **The base URL now answers a person.** `https://<host>/` served a bare

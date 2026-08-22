@@ -15,7 +15,10 @@ from app.schemas.reads.scientific_kinetics_search import (
     KineticsSearchRequest,
     ScientificKineticsSearchResponse,
 )
-from app.schemas.reads.scientific_reactions import ReactionDirectionQuery
+from app.schemas.reads.scientific_reactions import (
+    ReactionDirectionQuery,
+    ReactionMatchMode,
+)
 from app.services.scientific_read.kinetics_search import search_kinetics
 from app.services.scientific_read.public_assessments import (
     attach_kinetics_assessments,
@@ -36,6 +39,7 @@ def kinetics_search_get(
     reactants: list[str] | None = Query(None),
     products: list[str] | None = Query(None),
     direction: ReactionDirectionQuery = Query(ReactionDirectionQuery.either),
+    match: ReactionMatchMode = Query(ReactionMatchMode.contains),
     family: str | None = Query(None),
     reaction_ref: str | None = Query(None),
     reaction_entry_ref: str | None = Query(None),
@@ -70,14 +74,18 @@ def kinetics_search_get(
     """Chemistry-first kinetics search by reactants/products.
 
     Repeated ``reactants=`` and ``products=`` are accepted on the GET form.
-    For complex reactant/product lists (especially with bracket-heavy
-    SMILES), prefer the POST form. Returns kinetics records with the
-    resolved reaction/reaction_entry identity attached.
+    ``match=contains`` (the default) means every queried species must appear
+    in that role and an omitted side constrains nothing; ``match=exact``
+    demands the whole equation. For complex reactant/product lists
+    (especially with bracket-heavy SMILES), prefer the POST form. Returns
+    kinetics records with the resolved reaction/reaction_entry identity
+    attached.
     """
     request = KineticsSearchRequest(
         reactants=reactants or [],
         products=products or [],
         direction=direction,
+        match=match,
         family=family,
         reaction_ref=reaction_ref,
         reaction_entry_ref=reaction_entry_ref,

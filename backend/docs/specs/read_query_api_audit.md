@@ -371,7 +371,7 @@ non-canonical surface; "✗" means no documented surface answers it.
 | 2 | Find thermo for a species | ✓ | `GET /scientific/species-entries/{id}/thermo` (per-entry), `GET\|POST /scientific/thermo/search` (chemistry-first) | Both support `include=trust` only on the per-entry surface; search lacks trust by policy. |
 | 3 | Find transport for a species | ✓ | `GET /scientific/species-entries/{id}/transport` (per-entry), `GET\|POST /scientific/transport/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_transport_v1`. Search still does not expose trust by policy. |
 | 4 | Find statmech for a species | ✓ | `GET /scientific/species-entries/{id}/statmech` (per-entry), `GET\|POST /scientific/statmech/search` (chemistry-first) | The per-entry surface now mirrors species-entry thermo: review-aware, public-handle, `include=trust` → `computed_statmech_v1`. Search still does not expose trust by policy. |
-| 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`. |
+| 5 | Find reactions by reactants / products | ✓ | `GET\|POST /scientific/reactions/search` | Reactants/products as identifier lists; direction `forward\|reverse\|either`; `match=contains` (default, set containment per role) or `match=exact`. |
 | 6 | Find kinetics for a reaction | ✓ | `GET /scientific/reaction-entries/{id}/kinetics`, `GET\|POST /scientific/kinetics/search` | Per-entry surface exposes `include=trust`; search does not. |
 | 7 | Inspect calculation / provenance for a record | ✓ | `GET /scientific/calculations/{ref_or_id}`, `GET /scientific/reaction-entries/{id}/full` | `/full` is the only composite "provenance projection" today; no generic `/scientific/records/{type}/{id}/provenance`. |
 | 8 | Ask for trust / evidence details on a record | ✓ | record/per-entry reads (calculation, kinetics-per-entry, thermo-per-entry, statmech detail + species-entry statmech, transport detail + species-entry transport, standalone transition-state-entry) plus the composite `/reaction-entries/{id}/full?include=trust` for embedded kinetics + calculations + transition-state entries | Conformer / network sections still lack trust because no rubric exists for them; no top-level reaction-entry or TS-concept aggregation rubric exists yet. |
@@ -1032,6 +1032,7 @@ empty identifier set → 422 `missing_identifier`.
 | reactants (list) | ✓ (max 32; max 2048 chars each) | ✗ |
 | products (list) | ✓ | ✗ |
 | direction | ✓ (`forward\|reverse\|either`; no `exact`) | ✗ |
+| match | ✓ (`contains` default \| `exact`) | ✗ |
 | family | ✓ (string) | ✓ (`reaction_family_id`, `reaction_family_raw`) |
 | reversible | ✗ (implicit via direction) | ✓ |
 | has_kinetics | ✗ | ✗ |

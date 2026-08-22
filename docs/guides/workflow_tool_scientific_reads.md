@@ -270,6 +270,11 @@ repeated-query-param form (`?reactants=A&reactants=B&products=C`).
 `direction="exact"` is **not** supported in v0 — the backend rejects it
 with 422.
 
+`match` is the other axis and defaults to `contains`: every species you
+name must appear in that role, and an omitted side constrains nothing, so
+`reactants=["NN"]` alone asks "what consumes hydrazine?". `match="exact"`
+asks instead for precisely one equation, both sides, counts included.
+
 **Returned entry ids are handles, not prerequisites.** A workflow
 adapter should inspect `review` and `provenance` on each record before
 deciding to reuse it. Importantly:
@@ -420,6 +425,13 @@ Each record carries:
 
 `direction` accepts `forward`, `reverse`, or `either`. `direction=exact`
 is **not** supported in v0 and the backend rejects it with 422.
+
+`match` accepts `contains` (default) or `exact`, and is independent of
+`direction`: `direction` picks which orientation(s) of the stored
+reaction the query is tried against, `match` picks how a side is compared
+once an orientation is chosen. Under `direction=either` containment is
+tested in both orientations and `matched_direction` reports which one
+matched.
 
 If you prefer the GET form (e.g. for a quick interactive lookup with
 plain identifiers), pass `method="GET"`:

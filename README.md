@@ -471,6 +471,12 @@ curl -G "http://127.0.0.1:8010/api/v1/scientific/kinetics/search" \
     --data-urlencode "products=O" \
     --data-urlencode "products=[CH3]"
 
+# One side is enough. Matching defaults to containment, so this asks
+# "what reactions consume the OH radical?" and leaves the products free.
+# Add match=exact to ask for one specific equation instead:
+curl -G "http://127.0.0.1:8010/api/v1/scientific/reactions/search" \
+    --data-urlencode "reactants=[OH]"
+
 # Geometry detail by public handle (geom_… ref):
 curl "http://127.0.0.1:8010/api/v1/scientific/geometries/geom_abc123"
 ```

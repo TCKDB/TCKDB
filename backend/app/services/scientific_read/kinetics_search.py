@@ -6,8 +6,9 @@ manually.
 
 Composition order (final response ordering):
 
-1. Resolve reaction/reaction_entry candidates using the same multiset
-   matching rules as ``search_reactions`` (direction handling included).
+1. Resolve reaction/reaction_entry candidates using the same matching
+   rules as ``search_reactions`` (``direction`` and ``match`` handling
+   included, so ``match`` defaults to containment here too).
 2. For each surviving reaction_entry, fetch kinetics records using the
    same per-record D9 ordering as ``get_reaction_kinetics``.
 3. Group across reaction_entries deterministically: outer key is the
@@ -121,6 +122,7 @@ def search_kinetics(
                 reactants=request.reactants,
                 products=request.products,
                 direction=request.direction,
+                match=request.match,
                 family=request.family,
                 reaction_ref=request.reaction_ref,
                 reaction_entry_ref=request.reaction_entry_ref,
@@ -261,6 +263,7 @@ def _filter_echo(request: KineticsSearchRequest) -> dict[str, object]:
     if request.products:
         echo["products"] = list(request.products)
     echo["direction"] = request.direction.value
+    echo["match"] = request.match.value
     if request.family is not None:
         echo["family"] = request.family
     if request.temperature_min is not None:

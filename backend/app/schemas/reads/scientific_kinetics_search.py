@@ -39,6 +39,7 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_reactions import (
     ReactionDirectionQuery,
+    ReactionMatchMode,
     ReactionParticipantSummary,
 )
 
@@ -50,9 +51,11 @@ from app.schemas.reads.scientific_reactions import (
 class KineticsSearchRequest(BaseModel):
     """Service-layer request for chemistry-first kinetics search.
 
-    Reactants and/or products are required; matching uses the same
-    species-multiset semantics as ``search_reactions``. ``direction=exact``
-    is **not** supported in v0.
+    Reactants and/or products are required; reaction identity is resolved by
+    delegating to ``search_reactions``, so ``direction`` and ``match`` mean
+    exactly what they mean there — ``match`` defaults to ``contains`` (set
+    containment per role), and ``match=exact`` asks for one whole equation.
+    ``direction=exact`` is **not** supported in v0.
     """
 
     # Reaction identity filters
@@ -63,6 +66,7 @@ class KineticsSearchRequest(BaseModel):
         default_factory=list, max_length=_MAX_PARTICIPANTS_PER_REACTION
     )
     direction: ReactionDirectionQuery = ReactionDirectionQuery.either
+    match: ReactionMatchMode = ReactionMatchMode.contains
     family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
 
     # Phase C: optional explicit reaction/reaction-entry handles.

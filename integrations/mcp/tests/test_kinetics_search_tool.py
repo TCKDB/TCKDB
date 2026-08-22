@@ -831,3 +831,33 @@ def test_api_key_header_forwarded_when_set() -> None:
     ks_tool.run(client, _cfg(), {"reactants": ["[OH]"]})
     assert seen[0].get("x-api-key") == "tck_xyz"
     client.close()
+
+
+# ---------------------------------------------------------------------------
+# Match mode
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("match_mode", ["contains", "exact"])
+def test_legal_match_values_forwarded(match_mode: str) -> None:
+    captured: list[dict[str, Any]] = []
+    client = _make_client(_ok_handler(captured))
+    ks_tool.run(client, _cfg(), {"reactants": ["[OH]", "CC"], "match": match_mode})
+    assert captured[0]["body"]["match"] == match_mode
+    client.close()
+
+
+def test_rejects_unknown_match_mode() -> None:
+    client = _make_client(_ok_handler([]))
+    with pytest.raises(MCPToolError) as excinfo:
+        ks_tool.run(client, _cfg(), {"reactants": ["[OH]"], "match": "subset"})
+    assert excinfo.value.code == "invalid_input"
+    assert "match" in excinfo.value.detail
+    client.close()
+
+
+def test_match_alone_rejected_as_modifier_only() -> None:
+    client = _make_client(_ok_handler([]))
+    with pytest.raises(MCPToolError):
+        ks_tool.run(client, _cfg(), {"match": "contains"})
+    client.close()

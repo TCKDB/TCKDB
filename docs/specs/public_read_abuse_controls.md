@@ -262,7 +262,27 @@ start.
 
 `family`, `min_review_status`, and the include-flag options are
 explicitly **not** considered meaningful filters because none of
-them bound the candidate set to a small, predictable size.
+them bound the candidate set to a small, predictable size. Neither is
+`match` (below): it changes how a supplied species list is compared,
+not whether one was supplied.
+
+The **and/or** above is load-bearing and was, for a time, a lie. Until
+the `match` parameter existed the matcher compared both roles for
+multiset equality, so `reactants` alone asked for "reactants exactly
+{X} and products exactly {}" and matched nothing whatever the input.
+The guard admitted the request and the answer came back `200` with an
+empty result set. `match=contains` — the default — is what makes the
+one-sided form mean what this section says it means: every named
+species must appear in that role, and a side left empty constrains
+nothing. `match=exact` restores multiset equality on both sides for a
+caller who wants one specific equation.
+
+Note for the enumeration guard specifically: `contains` widens the
+candidate set relative to `exact`, but it does not unbound it. The
+candidate prefilter is still driven by the supplied species ids, so a
+one-sided query is bounded by the reactions that touch those species —
+not by the size of the table. `limit` and the pagination caps apply
+unchanged.
 
 ---
 
