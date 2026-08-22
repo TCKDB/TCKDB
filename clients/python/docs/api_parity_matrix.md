@@ -13,8 +13,8 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 |---|---|
 | typed | 92 |
 | raw_only | 105 |
-| not_applicable | 37 |
-| **total** | **234** |
+| not_applicable | 39 |
+| **total** | **236** |
 
 ## Typed coverage
 
@@ -292,6 +292,8 @@ Admin, auth, and curator-internal surface that a producer/consumer client is not
 
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
+| `GET /api/v1/admin/artifact-storage/capacity` | yes | — | — | — | — |
+| `POST /api/v1/admin/artifact-storage/capacity/clear` | yes | — | — | — | — |
 | `GET /api/v1/admin/machine-review/curator-tasks` | yes | — | — | — | — |
 | `POST /api/v1/admin/machine-review/curator-tasks/build-for-submission/{submission_id}` | yes | — | — | — | — |
 | `GET /api/v1/admin/machine-review/curator-tasks/{task_id}` | yes | — | — | — | — |
