@@ -697,13 +697,20 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "actually differs across the candidates (discriminator, "
                 "discriminator_values) and whether the locator has a field "
                 "for it (locator_can_express), because 'be more specific' is "
-                "only advice if there is something to add -- and here there "
-                "is not: the lookup filters on all three locator fields, so "
-                "candidates agree on all three and can only differ by the "
-                "conformer group, which the locator cannot name. Every "
-                "observed refusal therefore reports "
-                "locator_can_express=false, which is the evidence the "
-                "locator needs widening."
+                "only advice if there is something to add. For a long time "
+                "there was not: the lookup filtered on all three locator "
+                "fields, so candidates agreed on all three and could only "
+                "differ by the conformer group, which the locator could "
+                "not name -- every observed refusal reported "
+                "locator_can_express=false, which was the evidence the "
+                "locator needed widening. It has since been widened. The "
+                "locator carries an optional conformer_group_ref, the "
+                "field is filtered on when supplied, and this refusal now "
+                "names it: discriminator=conformer_group_ref, "
+                "locator_can_express=true, and discriminator_values listing "
+                "the cg_ refs to choose between. The code, the status and "
+                "every context key are unchanged -- what changed is that "
+                "the advice can now be followed."
             )),
     ApiCode("applied_energy_correction_source_calculation_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
@@ -1139,7 +1146,23 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculation_paths.py"),
     ApiCode("kinetics_interpretation_conformer_selection_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
-            shape=Shape.relationship),
+            shape=Shape.relationship,
+            note=(
+                "Two raise sites, one repair: cite a conformer record "
+                "belonging to the right species entry. The first holds the "
+                "resolved selection to the interpretation subject's entry; "
+                "the second, added with the locator's conformer_group_ref, "
+                "holds the named conformer group to the entry the locator "
+                "itself names -- a locator whose two halves contradict each "
+                "other. Not a new code, by the argument the sibling "
+                "kinetics_interpretation_statmech_owner_mismatch already "
+                "carries: context['field'] separates them "
+                "(...conformer_selection versus "
+                "...conformer_selection.conformer_group_ref) and the "
+                "corrective action is the same. 422 and not 404 because "
+                "the group exists -- a 404 would tell a depositor to "
+                "deposit a row they can already read."
+            )),
     ApiCode("kinetics_interpretation_statmech_owner_mismatch", 422, Surface.coded_exception,
             "backend/app/services/calculation_ownership.py",
             shape=Shape.relationship,
@@ -1508,6 +1531,27 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "present for the public-ref spelling only, because a row id "
                 "is logged and never echoed (DR-0028 Requirement 2)."
             )),
+    ApiCode("unknown_conformer_group_ref", 404, Surface.coded_exception,
+            "backend/app/services/upload_reference.py",
+            note=(
+                "The third refusal a conformer_selection locator can "
+                "produce, and the newest: it arrived with the locator's "
+                "conformer_group_ref field, which was added because two "
+                "conformer groups under one species entry made the locator "
+                "unanswerable -- every ambiguous_conformer_selection_"
+                "locator refusal reported locator_can_express=false and no "
+                "corrected body existed. Not folded into "
+                "unknown_conformer_selection, by that code's own argument: "
+                "a ref naming nothing is repaired by fixing the string the "
+                "caller wrote, a real group holding no such selection by "
+                "depositing the selection. The third case -- a real group "
+                "belonging to a different species entry -- is neither a "
+                "404 nor a new code: the row exists and the locator "
+                "contradicts itself, so it is 422 kinetics_interpretation_"
+                "conformer_selection_owner_mismatch from the shared "
+                "ownership guard, separated from that code's other raise "
+                "site by context['field']."
+            )),
     ApiCode("unknown_conformer_selection", 404, Surface.coded_exception,
             "backend/app/services/conformer_selection_locator.py",
             note=(
@@ -1518,12 +1562,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "disclosure rule. A conformer_selection content locator is a "
                 "third spelling -- a description, not a name -- so there is "
                 "no caller-written string to quote back and context carries "
-                "the locator's own fields (selection_kind, and "
-                "assignment_scheme_ref when set) instead. The field/kind "
+                "the locator's own fields (selection_kind, plus "
+                "assignment_scheme_ref and conformer_group_ref when set) "
+                "instead. The field/kind "
                 "pair is kept identical to unknown_reference's so a client "
                 "reads one body layout. Paired with "
                 "ambiguous_conformer_selection_locator at 422, which is the "
-                "same locator matching too many rows rather than none."
+                "same locator matching too many rows rather than none, and "
+                "with unknown_conformer_group_ref at 404, which is the "
+                "locator's conformer_group_ref naming no group at all -- a "
+                "different repair, so a different code."
             )),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),

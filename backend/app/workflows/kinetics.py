@@ -64,6 +64,7 @@ from app.services.species_resolution import resolve_species, resolve_species_ent
 from app.services.upload_reference import (
     W_UNKNOWN_CALCULATION_ARTIFACT_REF,
     W_UNKNOWN_CALCULATION_REF,
+    W_UNKNOWN_CONFORMER_GROUP_REF,
     W_UNKNOWN_STATMECH_REF,
     W_UNKNOWN_TRANSITION_STATE_ENTRY_REF,
     unknown_reference,
@@ -304,6 +305,53 @@ def _resolve_interpretation_assignments(
             selection_species_entry = resolve_species_entry(
                 session, locator.species_entry, created_by=created_by
             )
+            # ``conformer_group_ref`` is resolved to a row *before* it is
+            # used as a filter, rather than folded into the ``WHERE``
+            # clause below. Folded in, all three of "no such group", "that
+            # group is another species entry's" and "that group holds no
+            # such selection" would arrive as the same empty result and
+            # the same 404 -- three different repairs behind one sentence,
+            # which is the defect this whole module split apart in the
+            # first place.
+            selection_group = None
+            if locator.conformer_group_ref is not None:
+                selection_group = session.execute(
+                    select(ConformerGroup.id, ConformerGroup.species_entry_id).where(
+                        ConformerGroup.public_ref == locator.conformer_group_ref
+                    )
+                ).first()
+                if selection_group is None:
+                    raise unknown_reference(
+                        code=W_UNKNOWN_CONFORMER_GROUP_REF,
+                        field=f"{field}.conformer_selection.conformer_group_ref",
+                        # Snake case, like every other kind on this route
+                        # ("transition_state_entry", "calculation_artifact")
+                        # and like the "conformer_selection" the sibling
+                        # refusals publish: a client keys off one spelling.
+                        kind="conformer_group",
+                        ref=locator.conformer_group_ref,
+                        remedy=(
+                            "Deposit the conformer group first, or correct "
+                            "the ref."
+                        ),
+                    )
+                # A real group belonging to somebody else. Not the 404
+                # above -- the row exists, and telling a depositor to
+                # deposit a row they can already read is advice that
+                # cannot be followed. The locator contradicts itself
+                # instead: its ``species_entry`` and its
+                # ``conformer_group_ref`` name two different subjects, and
+                # exactly one of the two is wrong.
+                assert_owned_by(
+                    subject_noun="conformer group",
+                    row_id=selection_group.id,
+                    row_species_entry_id=selection_group.species_entry_id,
+                    row_transition_state_entry_id=None,
+                    code=W_KINETICS_INTERPRETATION_CONFORMER_SELECTION_OWNER_MISMATCH,
+                    target="conformer_selection locator",
+                    context=f"{field}.conformer_selection.conformer_group_ref",
+                    species_entry_id=selection_species_entry.id,
+                )
             # The scheme join is an OUTER join and was an inner one: the
             # refusal below has to be able to report the scheme each
             # candidate carries, including the NULL-scheme case, and an
@@ -342,6 +390,14 @@ def _resolve_interpretation_assignments(
                 stmt = stmt.where(
                     ConformerAssignmentScheme.public_ref == locator.assignment_scheme_ref
                 )
+            if selection_group is not None:
+                # Filtered on the resolved id, not on the ref again: the
+                # ref has already been held to name a group of this
+                # species entry, and re-deriving it here would be a second
+                # place for the two to disagree.
+                stmt = stmt.where(
+                    ConformerSelection.conformer_group_id == selection_group.id
+                )
             # Unbounded on purpose, where the old lookup took ``limit(2)``:
             # the 422 has to publish an honest ``match_count`` and the
             # values that separate the candidates, and a capped fetch would
@@ -367,6 +423,7 @@ def _resolve_interpretation_assignments(
                     field=f"{field}.conformer_selection",
                     selection_kind=locator.selection_kind,
                     assignment_scheme_ref=locator.assignment_scheme_ref,
+                    conformer_group_ref=locator.conformer_group_ref,
                 )
             if len(candidates) > 1:
                 raise ambiguous_conformer_selection_locator(
