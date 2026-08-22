@@ -43,6 +43,7 @@ from app.services import (
     artifact_storage,
     artifact_storage_admin,
     artifact_storage_capacity,
+    artifact_storage_headroom,
 )
 
 router = APIRouter()
@@ -340,6 +341,93 @@ def _refusal_after_capacity_report(*, free_bytes: int, fallback):
         return fallback
 
 
+#: Names the one warning this endpoint can currently raise. A stable token
+#: so an alerter can branch on it without parsing prose, and so a second
+#: warning added later cannot be mistaken for this one.
+_HEADROOM_WARNING_CODE = "artifact_storage_headroom_low"
+
+
+def _headroom_warning() -> dict | None:
+    """"The store is running out of room", said before a write is refused.
+
+    Why this is a *warning* and not a component going unhealthy
+    -----------------------------------------------------------
+    ``degraded`` is derived from any component with ``healthy: false``, and
+    **both** alerters page on a non-empty ``degraded`` — the Pi-side checker
+    at ``Priority: high`` and the GitHub probe at ``Priority: urgent``, the
+    latter every fifteen minutes until it clears. Routing "getting full"
+    down that path would page an operator about a store that is still
+    accepting every upload, and an alert that pages when nothing is broken
+    is an alert that gets muted — taking the real ones with it. So this
+    goes in a separate ``warnings`` array, the component stays
+    ``healthy: true``, and ``degraded`` stays empty.
+
+    Why it is a byte count and not a percentage
+    --------------------------------------------
+    "80 % full" reads as safe. It is not safe if the remaining 20 % is
+    smaller than the next upload. The predicate is ``headroom <
+    MAX_ARTIFACT_BYTES`` — *the store no longer has room for the largest
+    artifact TCKDB will accept* — which is a claim about the next real
+    write. The number, the arm it came from, and how stale that arm is are
+    all reported, because "free disk" and "raise the quota" are different
+    remedies and a single boolean cannot tell them apart.
+
+    Not asked while the store is already unhealthy. A warning that the
+    store is *approaching* full is worthless beside a refusal that has
+    already happened, and the probe costs up to two admin round trips —
+    which is the wrong bill to add to the one poll that has to answer
+    quickly. See :mod:`app.services.artifact_storage_headroom` for the two
+    arms and for what the ledger cannot see.
+    """
+    headroom = artifact_storage_headroom.current_headroom(
+        endpoint_url=artifact_storage.S3_ENDPOINT_URL,
+        bucket=artifact_storage.S3_BUCKET,
+        access_key=artifact_storage.S3_ACCESS_KEY,
+        secret_key=artifact_storage.S3_SECRET_KEY,
+        session_factory=SessionLocal,
+    )
+    if headroom is None or not headroom.is_low:
+        return None
+
+    ceiling = artifact_storage.MAX_ARTIFACT_BYTES
+    if headroom.source == "bucket_quota":
+        where = (
+            f"the bucket quota ({headroom.quota_bytes:,} bytes) minus what "
+            f"TCKDB has deposited ({headroom.ledger_bytes:,} bytes); raise "
+            f"the quota or reclaim orphaned objects"
+        )
+    else:
+        where = (
+            f"free space the object store reports ({headroom.free_bytes:,} "
+            f"bytes); free disk"
+        )
+    summary = (
+        f"artifact storage has {headroom.bytes:,} bytes of headroom, less "
+        f"than the {ceiling:,}-byte artifact TCKDB will accept, so a "
+        f"full-size upload may be refused. The limit is {where}."
+    )
+    logger.warning("status: %s", summary)
+    return {
+        "code": _HEADROOM_WARNING_CODE,
+        "summary": summary,
+        "headroom_bytes": headroom.bytes,
+        "max_artifact_bytes": ceiling,
+        "source": headroom.source,
+        "measured_at": headroom.measured_at.isoformat(),
+        "quota_bytes": headroom.quota_bytes,
+        "ledger_bytes": headroom.ledger_bytes,
+        "free_bytes": headroom.free_bytes,
+        # The one stale number in the report, named as such. The ledger and
+        # the free-space figure are read fresh on every poll; the quota is
+        # cached because it changes about once a year.
+        "quota_age_seconds": (
+            None
+            if headroom.quota_age_seconds is None
+            else round(headroom.quota_age_seconds, 1)
+        ),
+    }
+
+
 def _artifact_storage_status() -> dict:
     """Report whether artifact uploads can actually be stored.
 
@@ -465,6 +553,13 @@ def _artifact_storage_status() -> dict:
             outcome["reason"],
         )
     block.update(outcome)
+
+    # Warnings, not health. The component stays green: everything above is
+    # about whether the store is working *now*, and this is about whether it
+    # will still be working after the next few uploads. Skipped when the
+    # component is already unhealthy -- see ``_headroom_warning``.
+    warning = None if outcome["healthy"] is not True else _headroom_warning()
+    block["warnings"] = [] if warning is None else [warning]
     return block
 
 
@@ -560,6 +655,15 @@ def status():
     Components: ``database``, ``worker``, ``artifact_storage``. Each is a hard
     dependency that can fail alone while the others stay green.
 
+    Two verdict channels, and the difference is which one wakes somebody.
+    ``degraded`` lists every component reporting ``healthy: false``; both
+    alerters page on it. ``warnings`` is a separate array of things that are
+    true but not yet broken -- today, an object store whose remaining room
+    has fallen below the largest artifact TCKDB accepts. A warning never
+    appears in ``degraded``, never flips ``status``, and is delivered at low
+    priority, because an alert that fires while everything still works is an
+    alert that gets muted, and it takes the real ones with it.
+
     Discloses no credentials and no driver text. It does disclose the Alembic
     revision and the object-store ``scheme://host:port`` and bucket name -- a
     deliberate, bounded trade: those are what let an operator diagnose a
@@ -631,8 +735,24 @@ def status():
     unhealthy = sorted(
         name for name, block in components.items() if block.get("healthy") is False
     )
+    # A second, quieter channel beside ``degraded``, and deliberately not a
+    # member of it. ``degraded`` is what both alerters page on -- the Pi-side
+    # checker at Priority: high, the GitHub probe at Priority: urgent, every
+    # fifteen minutes until it clears -- so anything routed through it has to
+    # be worth waking someone for. "The store is getting full" is not: every
+    # upload still works. It is worth *telling* someone, which is a different
+    # thing, and a channel that cannot page is the only kind that stays
+    # readable. Aggregated from the components rather than assembled here, so
+    # a component owns both of its own signals and a second one can start
+    # warning without this function learning about it.
+    warnings = [
+        {"component": name, **warning}
+        for name, block in components.items()
+        for warning in block.get("warnings") or []
+    ]
     return {
         "status": "ok" if not unhealthy else "degraded",
         "degraded": unhealthy,
+        "warnings": warnings,
         "components": components,
     }

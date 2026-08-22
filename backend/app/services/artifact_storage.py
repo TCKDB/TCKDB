@@ -116,6 +116,23 @@ _MISSING_OBJECT_CODES = frozenset({"404", "NoSuchKey", "NotFound"})
 #:   ``400`` here, not 507, and enforces the quota asynchronously from its
 #:   data-usage scanner, so the refusal begins a minute or two after the
 #:   quota is actually passed.
+#:
+#:   That was correct and incomplete, and the missing half matters. The
+#:   scanner period was measured at **60.0 s, dead steady**, and the
+#:   **overshoot in bytes is unbounded**: with a 20 MiB hard quota, 60
+#:   consecutive 1 MiB writes were **all 60 accepted — 3× the quota, zero
+#:   refusals** — because the writes outran the scan. A bucket quota is a
+#:   periodic sweep, not a write-path gate, so it does **not** protect the
+#:   host disk from a fast depositor; only the drive's own free-space
+#:   threshold (``XMinioStorageFull``, above) does that, and it is checked
+#:   per write. Two consequences for anyone reasoning about capacity here:
+#:   a quota is a budget that will be noticed, not a limit that will be
+#:   enforced in time; and the scanner's usage figure must never be
+#:   thresholded on, since at the instant of a genuine refusal
+#:   ``usage + incoming > quota`` evaluated to
+#:   ``19,922,944 + 1,048,576 = 20,971,520 > 20,971,520`` → **false**.
+#:   :mod:`app.services.artifact_storage_headroom` therefore takes usage
+#:   from TCKDB's own ledger and never from the scanner.
 #: * ``QuotaExceeded``, ``InsufficientStorage``, ``XMinioStorageFullError``
 #:   — **not provoked here**; documented spellings from other
 #:   S3-compatible implementations (Ceph RGW uses ``QuotaExceeded``) and

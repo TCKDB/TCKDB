@@ -23,6 +23,24 @@ What was measured, against MinIO on a scratch container
   why a capacity report may not answer a quota refusal, asserted in
   ``tests/api/test_api_artifact_storage_capacity.py``.
 
+The quota probe, which answers the question free space cannot
+--------------------------------------------------------------
+``GET /minio/admin/v3/get-bucket-quota?bucket=<name>`` answers **200**
+with ``{"quota":20971520,"size":0,"rate":0,"requests":0,
+"quotatype":"hard"}``. Three measured facts drive the tests below:
+
+* ``size`` **is not usage**. It read ``0`` for the whole run, including
+  while the bucket held 60 MiB, so nothing here reads it.
+* No quota configured answers ``200 {"quota":0,...}`` with ``quotatype``
+  **absent** rather than empty. ``quota == 0`` is *no opinion*, not a
+  quota of zero bytes — the difference between saying nothing about a
+  default deployment and declaring it unable to hold a single object.
+* A missing bucket answers ``404 NoSuchBucket``.
+
+It also needs **less** privilege than ``report_free_bytes``: a policy of
+exactly ``admin:GetBucketQuota`` answers it and is *denied*
+``/minio/admin/v3/info``. Nothing here requires MinIO root.
+
 Why the failure modes get as many tests as the success
 -------------------------------------------------------
 This probe is supplementary. The authoritative signal is the write path's
@@ -168,4 +186,138 @@ def test_the_sanitizer_keeps_a_credential_out_of_the_log() -> None:
     assert (
         admin._sanitized("http://user:hunter2@minio.test:9000/x")
         == "http://minio.test:9000"
+    )
+
+
+# ---------------------------------------------------------------------------
+# The bucket quota probe
+# ---------------------------------------------------------------------------
+
+BUCKET = "tckdb-artifacts"
+
+
+def _quota() -> int | None:
+    return admin.report_bucket_quota_bytes(
+        endpoint_url=ENDPOINT, bucket=BUCKET, access_key="ak", secret_key="sk"
+    )
+
+
+def test_it_reports_a_configured_hard_quota(answer) -> None:
+    """The measured body, verbatim, including the field that lies."""
+    answer(
+        json.dumps(
+            {
+                "quota": 20971520,
+                "size": 0,
+                "rate": 0,
+                "requests": 0,
+                "quotatype": "hard",
+            }
+        ).encode()
+    )
+    assert _quota() == 20971520
+
+
+def test_the_size_field_is_never_read_as_usage(answer) -> None:
+    """The trap, pinned.
+
+    ``size`` read **0** throughout a run in which the bucket held 60 MiB.
+    A caller that took it for usage would compute a headroom equal to the
+    whole quota on a bucket that was three times over it. This asserts the
+    only defence that survives refactoring: the returned value depends on
+    ``quota`` alone, so a wildly wrong ``size`` cannot move it.
+    """
+    honest = json.dumps({"quota": 20971520, "size": 0, "quotatype": "hard"}).encode()
+    absurd = json.dumps(
+        {"quota": 20971520, "size": 62914560, "quotatype": "hard"}
+    ).encode()
+    answer(honest)
+    first = _quota()
+    answer(absurd)
+    assert _quota() == first == 20971520
+
+
+def test_no_quota_configured_is_no_opinion(answer) -> None:
+    """Measured: ``{"quota":0,...}`` with ``quotatype`` absent, not empty.
+
+    Returning ``0`` here would be the expensive kind of wrong: every
+    deployment without a bucket quota — which is the default, and is the
+    Pi — would report zero headroom and warn forever, and an alert that is
+    always on is an alert that is off.
+    """
+    answer(json.dumps({"quota": 0, "size": 0, "rate": 0, "requests": 0}).encode())
+    assert _quota() is None
+
+
+def test_it_signs_the_quota_request_and_names_the_bucket(answer) -> None:
+    """Same ``x-amz-content-sha256`` requirement, and the bucket in the query.
+
+    The bucket travels as a query parameter, which SigV4 signs as part of
+    the canonical request: a URL built for the signer and a different one
+    handed to the opener would produce a 403 that looks like a
+    permissions problem. Asserting they are the same string is what stops
+    that afternoon happening twice.
+    """
+    captured = answer(json.dumps({"quota": 1024, "quotatype": "hard"}).encode())
+    _quota()
+
+    headers = {k.lower(): v for k, v in captured["headers"].items()}
+    assert "x-amz-content-sha256" in headers, headers
+    assert headers["authorization"].startswith("AWS4-HMAC-SHA256 "), headers
+    assert (
+        captured["url"]
+        == f"{ENDPOINT}/minio/admin/v3/get-bucket-quota?bucket={BUCKET}"
+    )
+
+
+@pytest.mark.parametrize(
+    "effect",
+    [
+        # Measured: a bucket that is not there.
+        urllib.error.HTTPError(ENDPOINT, 404, "NoSuchBucket", {}, io.BytesIO(b"")),
+        # A credential without ``admin:GetBucketQuota``.
+        urllib.error.HTTPError(ENDPOINT, 403, "Forbidden", {}, io.BytesIO(b"")),
+        urllib.error.HTTPError(ENDPOINT, 426, "Upgrade", {}, io.BytesIO(b"")),
+        OSError("connection refused"),
+        TimeoutError("timed out"),
+    ],
+)
+def test_every_quota_failure_is_no_opinion_and_never_raises(answer, effect) -> None:
+    answer(effect)
+    assert _quota() is None
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        b"not json at all",
+        b"[]",
+        b"{}",
+        # A string where an int belongs.
+        json.dumps({"quota": "20MiB"}).encode(),
+        # ``bool`` is an ``int`` in Python; ``True`` must not become a
+        # one-byte quota that reports every store as full.
+        json.dumps({"quota": True}).encode(),
+        # Negative is not a quota.
+        json.dumps({"quota": -1}).encode(),
+    ],
+)
+def test_an_unfamiliar_quota_response_is_no_opinion(answer, body) -> None:
+    answer(body)
+    assert _quota() is None
+
+
+@pytest.mark.parametrize("endpoint,bucket", [("", BUCKET), (ENDPOINT, "")])
+def test_the_quota_probe_needs_both_an_endpoint_and_a_bucket(
+    monkeypatch, endpoint, bucket
+) -> None:
+    def _boom(*_a, **_k):
+        raise AssertionError("no HTTP call may be made without endpoint and bucket")
+
+    monkeypatch.setattr(admin.urllib.request, "urlopen", _boom)
+    assert (
+        admin.report_bucket_quota_bytes(
+            endpoint_url=endpoint, bucket=bucket, access_key="ak", secret_key="sk"
+        )
+        is None
     )

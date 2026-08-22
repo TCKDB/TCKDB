@@ -45,6 +45,22 @@ WHAT IS AND IS NOT FAKED
     single run, which would report a dead deployment as healthy forever -- so
     every case asserts the exact list of pings, never merely that one is
     present.
+
+WARNINGS, WHICH MUST NOT LOOK LIKE FAILURES
+    ``/status`` also carries a ``warnings`` array for things that are true but
+    not yet broken. This job's failure path pushes ``Priority: urgent`` and
+    exits 1, every fifteen minutes until the condition clears, and it keeps no
+    state between runs -- so routing a warning through it would page four
+    times an hour about a deployment where every upload works. The tests below
+    pin the three things that must stay true of a warning: the heartbeat
+    still reports SUCCESS (not ``/fail``), the job still exits 0, and the ntfy
+    push carries ``Priority: low``.
+
+    The push is asserted, not assumed. Doing so required the ntfy host to be
+    overridable, which it was not -- the URL was hard-coded to ntfy.sh, so no
+    test could see whether this job published at all, let alone at what
+    priority. ``NTFY_SERVER`` now defaults to ntfy.sh in the workflow's own
+    ``env:`` block, exactly as the Pi-side checker has always allowed.
 """
 
 from __future__ import annotations
@@ -84,10 +100,46 @@ _BODIES = {
         },
     ),
     "http500": (500, {"detail": "the API is failing before it can answer"}),
+    # Everything works; the object store is running out of room.
+    "warning": (
+        200,
+        {
+            "status": "ok",
+            "degraded": [],
+            "warnings": [
+                {
+                    "component": "artifact_storage",
+                    "code": "artifact_storage_headroom_low",
+                    "summary": "artifact storage has 8,388,608 bytes of headroom",
+                    "headroom_bytes": 8_388_608,
+                    "source": "free_space",
+                }
+            ],
+            "components": {"artifact_storage": {"healthy": True, "warnings": []}},
+        },
+    ),
+    # A warning riding alongside a real fault. The fault decides.
+    "warning_and_degraded": (
+        200,
+        {
+            "status": "degraded",
+            "degraded": ["artifact_storage"],
+            "warnings": [
+                {
+                    "component": "artifact_storage",
+                    "code": "artifact_storage_headroom_low",
+                    "summary": "artifact storage has 8,388,608 bytes of headroom",
+                }
+            ],
+            "components": {
+                "artifact_storage": {"healthy": False, "reason": "no room"}
+            },
+        },
+    ),
 }
 
 
-def _handler_for(mode: str, hits: list[str]):
+def _handler_for(mode: str, hits: list[str], pushes: list[dict]):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, *args):  # keep pytest output readable
             pass
@@ -110,7 +162,14 @@ def _handler_for(mode: str, hits: list[str]):
             self._json(404, {"detail": "not found"})
 
         def do_POST(self) -> None:
-            self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            body = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+            pushes.append(
+                {
+                    "path": self.path,
+                    "headers": {k.lower(): v for k, v in self.headers.items()},
+                    "body": body.decode("utf-8", "replace"),
+                }
+            )
             self._json(200, {"ok": True})
 
     return Handler
@@ -142,14 +201,22 @@ def _run(
     *,
     reachable: bool = True,
     heartbeat_reachable: bool = True,
+    pushes: list[dict] | None = None,
 ) -> tuple[list[str], int]:
     """Run the probe against stand-ins; return the pings sent and the exit code.
 
     ``heartbeat_reachable=False`` models the case the design turns on: this
     runner's egress is broken, so neither endpoint can be reached.
+
+    Pass ``pushes`` to also configure a topic and collect the ntfy POSTs. It
+    is opt-in so the existing cases keep running with alerting switched off,
+    which is what makes their ``hits ==`` assertions exact.
     """
     hits: list[str] = []
-    server = HTTPServer(("127.0.0.1", 0), _handler_for(mode, hits))
+    collecting = pushes is not None
+    pushes = [] if pushes is None else pushes
+    topic = "an-ntfy-topic" if collecting else ""
+    server = HTTPServer(("127.0.0.1", 0), _handler_for(mode, hits, pushes))
     port = server.server_port
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
@@ -161,7 +228,8 @@ def _run(
             env={
                 "PATH": "/usr/bin:/bin:/usr/local/bin",
                 "STATUS_URL": f"http://127.0.0.1:{status_port}/status",
-                "NTFY_TOPIC": "",
+                "NTFY_TOPIC": topic,
+                "NTFY_SERVER": f"http://127.0.0.1:{port}",
                 "HEARTBEAT_URL": f"http://127.0.0.1:{hb_port}/hb",
             },
             capture_output=True,
@@ -267,3 +335,74 @@ def test_an_unreachable_heartbeat_does_not_redden_a_healthy_run(
     hits, code = _run(probe_script, "ok", heartbeat_reachable=False)
     assert hits == []
     assert code == 0, "an unreachable heartbeat turned a healthy deployment into a failed workflow run"
+
+
+# ---------------------------------------------------------------------------
+# Warnings: told, not paged
+# ---------------------------------------------------------------------------
+
+
+def test_a_warning_keeps_the_heartbeat_green_and_the_run_green(probe_script) -> None:
+    """The deployment is well. A warning does not change that.
+
+    ``/fail`` here would put the healthchecks.io page in "down" while every
+    upload still worked -- and this job's own exit code would disagree with
+    it, which is the two-monitors-contradicting-each-other failure the
+    heartbeat was added to end.
+    """
+    hits, code = _run(probe_script, "warning")
+    assert hits == ["/hb"]
+    assert code == 0
+
+
+def test_a_warning_is_pushed_at_low_priority(probe_script) -> None:
+    """``low``, never ``urgent``.
+
+    ``urgent`` is what this job sends when the deployment cannot be reached.
+    A store at 90 % arriving on the same channel with the same siren is how
+    an operator learns to ignore both.
+    """
+    pushes: list[dict] = []
+    hits, code = _run(probe_script, "warning", pushes=pushes)
+
+    assert code == 0
+    assert hits == ["/hb"]
+    assert len(pushes) == 1, pushes
+    assert pushes[0]["headers"]["priority"] == "low"
+    assert pushes[0]["headers"]["title"] == "TCKDB warning"
+    assert "8,388,608 bytes of headroom" in pushes[0]["body"]
+
+
+def test_a_healthy_deployment_with_no_warnings_pushes_nothing(probe_script) -> None:
+    """The common case stays silent even with a topic configured.
+
+    Asserted because the previous test only proves a push *can* happen; this
+    is what proves it is conditional. Together they rule out an
+    implementation that pushes on every run.
+    """
+    pushes: list[dict] = []
+    hits, code = _run(probe_script, "ok", pushes=pushes)
+
+    assert code == 0
+    assert hits == ["/hb"]
+    assert pushes == []
+
+
+def test_a_fault_still_pages_urgently_when_a_warning_rides_along(
+    probe_script,
+) -> None:
+    """The quiet channel must not soften the loud one.
+
+    The deployment is degraded AND warning. Exactly one push goes out, it is
+    the urgent one, and the heartbeat reports failure -- the warning is not
+    delivered separately, because an operator being paged does not need a
+    second notification about the same subsystem.
+    """
+    pushes: list[dict] = []
+    hits, code = _run(probe_script, "warning_and_degraded", pushes=pushes)
+
+    assert code == 1
+    assert hits == ["/hb/fail"]
+    assert len(pushes) == 1, pushes
+    assert pushes[0]["headers"]["priority"] == "urgent"
+    assert "degraded" in pushes[0]["headers"]["title"]
