@@ -44,6 +44,7 @@ from rdkit.Chem import inchi as _inchi
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
@@ -273,9 +274,24 @@ def _select_structure_query(
         )
     if len(supplied) > 1:
         names = sorted(k.value for k, _ in supplied)
-        raise ValueError(
-            "multiple_structure_queries: exactly one structure query "
-            f"field is allowed; got {names!r}."
+        # An *ambiguity*, which is one of the three shapes
+        # ``Shape.relationship`` in ``app.api.code_catalogue`` names: the
+        # request supplied more than one structure query and the code says
+        # which of none. ``context['supplied']`` carries the field names --
+        # the depositor's own query keys, so no row id is involved -- and
+        # the query *values* are deliberately not echoed: a SMARTS pattern
+        # is the caller's, but repeating it adds nothing the field name
+        # does not and grows the body without bound.
+        #
+        # ``message_prefix=True``, so ``detail`` is byte-identical to the
+        # plain ``ValueError`` this replaced; the catalogue entry moves to
+        # ``Surface.coded_exception`` because ``code`` is now declared on
+        # the exception rather than promoted out of the sentence.
+        raise CodedValueError(
+            "multiple_structure_queries",
+            "exactly one structure query "
+            f"field is allowed; got {names!r}.",
+            context={"supplied": [f"query_{name}" for name in names]},
         )
     return supplied[0]
 

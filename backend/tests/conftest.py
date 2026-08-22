@@ -37,10 +37,12 @@ error_body_observer.install()
 
 
 def _check_error_bodies(item) -> None:
-    """Fail the test whose error body carried a database row id.
+    """Fail the test whose error body carried an internal identifier.
 
-    Two failures, in the order they matter. The first is the rule --
-    DR-0028 Requirement 2, no primary key in a user-facing body. The
+    Two failures, in the order they matter. The first is the rule -- no
+    internal identifier in a user-facing body: not a primary key
+    (DR-0028 Requirement 2), and since 2026-08-18 not a raw database
+    constraint name either. Both go to the log. The
     second is the guard on the guard: a sweep that examines nothing
     passes trivially, so a test whose client *received* a JSON error
     while the sweep examined *no* body means one of the two patches in
@@ -53,12 +55,13 @@ def _check_error_bodies(item) -> None:
     observed = error_body_observer.drain()
     if observed.leaks:
         raise AssertionError(
-            f"{item.nodeid} produced an error body containing a database row "
-            "id (DR-0028 Requirement 2): "
+            f"{item.nodeid} produced an error body containing an internal "
+            "identifier: "
             + "; ".join(leak.explain() for leak in observed.leaks)
-            + ". A row id is an implementation detail of one database "
-            "instance -- it does not survive a restore and does not agree "
-            "between the hosted deployment and a lab self-host. Log it "
+            + ". A row id and a constraint name are both implementation "
+            "details of one database instance -- neither survives a restore, "
+            "neither agrees between the hosted deployment and a lab "
+            "self-host, and no public surface is keyed on either. Log it "
             "server-side and name the field the depositor wrote, or the "
             "public ref they supplied, instead."
         )
@@ -82,9 +85,10 @@ def pytest_runtest_teardown(item) -> None:
     cannot make the catalogue's completeness falsifiable, and why the
     comparison is on the pair rather than on the code alone.
 
-    The body sweep is drained here too, and for the same reason: a row id
-    in an error body is a defect of the request that produced it, not of
-    the run. See ``backend/tests/error_body_observer.py``.
+    The body sweep is drained here too, and for the same reason: an
+    internal identifier in an error body is a defect of the request that
+    produced it, not of the run. See
+    ``backend/tests/error_body_observer.py``.
     """
     _check_error_bodies(item)
     unlisted = error_code_observer.drain_unlisted()
@@ -1372,6 +1376,11 @@ _WATCHED_TABLES: tuple[str, ...] = (
     "species_entry_review",
     "dataset_release",
     "release_selection",
+    # operational observation logs, written out-of-request in their own
+    # transactions precisely so they survive the caller's rollback -- which
+    # is also what makes them able to survive a *test's* rollback if the
+    # writer is ever pointed at the wrong session factory.
+    "artifact_storage_capacity_event",
 )
 
 _COUNT_SQL = text(

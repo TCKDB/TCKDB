@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
+from app.api.error_contract import CodedValueError
 from app.api.errors import NotFoundError
 from app.db.models.calculation import (
     Calculation,
@@ -92,10 +93,23 @@ def get_geometry(
     # ``docs/specs/public_read_abuse_controls.md``.
     cap = settings.max_geometry_atoms_public
     if cap and geometry.natoms is not None and geometry.natoms > cap:
-        raise ValueError(
-            "geometry_too_large: geometry has "
-            f"{geometry.natoms} atoms which exceeds the public cap "
-            f"of {cap}. Contact a curator for bulk access."
+        # A relationship code as of 2026-08-18: a supplied geometry's
+        # size and a configured cap, neither named by the code. Both
+        # numbers are publishable.
+        #
+        # ``max_atoms`` is TCKDB's own configuration. ``atoms`` looks at
+        # first like the measured value the disclosure line in
+        # ``app.api.code_catalogue.Shape`` withholds, and it is not: it
+        # is the atom count of *one* record the caller named by handle —
+        # chemistry, not a count of TCKDB's holdings. It carries no
+        # enumeration signal, and it is strictly less than this endpoint
+        # discloses for any request that succeeds, since a geometry
+        # under the cap returns every atom individually.
+        raise CodedValueError(
+            "geometry_too_large",
+            f"geometry has {geometry.natoms} atoms which exceeds the "
+            f"public cap of {cap}. Contact a curator for bulk access.",
+            context={"max_atoms": cap, "atoms": geometry.natoms},
         )
 
     atoms = _load_atoms(session, geometry_id)

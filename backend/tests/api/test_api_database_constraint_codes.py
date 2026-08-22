@@ -23,13 +23,35 @@ they are proved separately:
    constraint name at all, which is why ``DatabaseConstraint`` refuses to
    accept a rejection code for a kind PostgreSQL does not name.
 
-2. **The handler turns that name into the declared code, in the body.**
-   Proved by putting the real ``IntegrityError`` from (1) through the
-   real exception handlers -- ``register_exception_handlers`` is the
-   production wiring -- and asserting ``response.json()["code"]``, not
-   that the code appears somewhere in the prose. The assertion has to be
-   on the field, because matching the message is exactly what passes on
-   the broken system.
+2. **The handler turns that name into the declared code, in the body --
+   and leaves the name behind.** Proved by putting the real
+   ``IntegrityError`` from (1) through the real exception handlers --
+   ``register_exception_handlers`` is the production wiring -- and
+   asserting ``response.json()["code"]``, not that the code appears
+   somewhere in the prose. The assertion has to be on the field, because
+   matching the message is exactly what passes on the broken system.
+
+   The second half of that sentence is a **contract change made on
+   2026-08-18**, and this file is where it bites hardest. Until then this
+   test asserted ``body["context"]["constraint"] == name``: the register
+   path published the raw constraint name, on the argument that it is the
+   key into ``docs/guides/scientific_check_register.md``. Calvin ruled
+   the other way, and the ruling is about what an identifier *is* rather
+   than about how useful it would be -- a constraint name is internal,
+   meaningless to a depositor, unstable across a rename, and a disclosure
+   of schema layout, which is the same reasoning that keeps row ids out
+   of bodies under DR-0028 Requirement 2. What a registered constraint
+   earns is therefore a code and a sentence of its own, which is a public
+   contract; the name goes to the log, and the assertion below is now
+   that it is **absent**.
+
+   An absence assertion is worthless on its own -- it passes against a
+   handler that returns nothing at all -- so each one here sits beside
+   the positive it guards: the status, the declared code, the declared
+   sentence, and an empty ``context``. The absence is additionally
+   enforced for every body in the suite by
+   ``tests/error_body_observer.py``, which is what stops this rule
+   drifting back into three positions.
 
 Provoking a violation without a valid parent row
 ------------------------------------------------
@@ -233,10 +255,45 @@ def test_the_response_body_names_the_scientific_rule(name, db_session, envelope_
         "only that something conflicted."
     )
     assert body["detail"] == expected_detail
-    assert body["context"]["constraint"] == name
     # The sanitization the handler has always promised: no driver text.
     assert "psycopg" not in response.text
     assert "INSERT INTO" not in response.text
+
+
+@pytest.mark.parametrize("name", sorted(PROVOCATIONS))
+def test_the_response_body_does_not_disclose_the_constraint_name(
+    name, db_session, envelope_client
+):
+    """Fact 3, and a contract change: the name stays on this side.
+
+    Until 2026-08-18 this file asserted the opposite -- ``body["context"]
+    ["constraint"] == name`` -- and it was one of three positions the
+    repository held at once. See the module docstring for the ruling.
+
+    The positives are asserted first and deliberately: an assertion that
+    a string is missing from a body passes just as well against a handler
+    that produced no body, so the absence is only evidence when the thing
+    it is carved out of is known to be there.
+    """
+    expected_code, expected_detail = constraint_rejections()[name]
+    envelope_client.holder["exc"] = _provoke(db_session, name)
+
+    response = envelope_client.get("/boom")
+
+    assert response.status_code == 409, response.text
+    body = response.json()
+    assert body["code"] == expected_code
+    assert body["detail"] == expected_detail
+    assert isinstance(body["detail"], str) and body["detail"].strip()
+    # And now the absence, over the whole rendered body rather than one
+    # field, because a name moved to a differently-named key would still
+    # be a disclosure.
+    assert name not in response.text, (
+        f"the raw constraint name {name!r} reached the public body. It is an "
+        "internal identifier; the code above is what a client branches on and "
+        "the name belongs in the log."
+    )
+    assert body["context"] == {}
 
 
 def test_an_unregistered_constraint_still_falls_back_to_its_sqlstate(
@@ -268,5 +325,6 @@ def test_an_unregistered_constraint_still_falls_back_to_its_sqlstate(
     assert response.status_code == 409
     body = response.json()
     assert body["code"] == "state_conflict"
+    assert isinstance(body["detail"], str) and body["detail"].strip()
     assert body["context"] == {}
     assert "null value in column" not in response.text

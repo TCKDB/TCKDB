@@ -574,14 +574,33 @@ class TestOneMessageDeclaresOneCode:
     """
 
     def test_the_scan_sees_the_messages_it_is_written_over(self):
-        """An empty scan would make the next assertion prove nothing."""
+        """An empty scan would make the next assertion prove nothing.
+
+        The floor named ``limit_too_large`` and ``offset_too_large``
+        until 2026-08-18, when the cap family became
+        ``Shape.relationship`` and both moved to
+        ``Surface.coded_exception`` so they could carry their cap in
+        ``context``. They are no longer in ``MESSAGE_PREFIX_CODES``, so
+        this scan -- which reads only that surface -- correctly stops
+        seeing them, and naming them here would pin a spelling the tree
+        no longer has.
+
+        Re-pointed rather than dropped: the floor still names three
+        concrete codes that must be visible, and two of them are still
+        raised from ``validate_pagination``'s own module, so a scan that
+        stops reading ``scientific_read/common.py`` still fails here.
+        """
         messages = _messages_opening_with_a_promotable_code()
         assert len(messages) > 40, (
             f"only {len(messages)} coded messages found; the scan has stopped "
             "reading the tree and the assertion below is vacuous"
         )
         codes = {text.split(":", 1)[0] for _path, _line, text in messages}
-        for expected in ("invalid_pagination", "limit_too_large", "offset_too_large"):
+        for expected in (
+            "invalid_pagination",
+            "client_sort_not_supported",
+            "composed_search_pagination_changed",
+        ):
             assert expected in codes, sorted(codes)
 
     def test_no_coded_message_names_a_second_code(self):
@@ -616,14 +635,40 @@ class TestOneMessageDeclaresOneCode:
         the tree must be classified as ambiguous, and must actually
         degrade when the envelope reads it. Without this the gate could be
         broken -- a pattern that matches nothing -- and stay green.
+
+        The historical shape is still asserted, because it is still the
+        shape the gate exists for. What moved is the *repaired* half: as
+        of 2026-08-18 ``limit_too_large`` is a ``coded_exception``
+        carrying its cap in ``context``, so it is no longer promotable
+        out of a sentence at all and ``_promoted`` of it is now
+        ``validation_error`` by design rather than by defect. Asserting
+        the old value would be asserting the gate's opposite. A code that
+        *is* still ``message_prefix`` is used for the positive half, so
+        the detector is still shown saying yes as well as no -- and the
+        historical pair keeps its own assertion, one line below, so this
+        change tightens the test rather than trading one case for
+        another.
         """
         regressed = "invalid_pagination: limit_too_large: limit must be <= 200 (got 999)"
         assert len(set(_NESTED_CODE_PATTERN.findall(regressed))) > 1
         assert _promoted(regressed) == "validation_error"
 
-        repaired = "limit_too_large: limit must be <= 200 (got 999)"
+        # A code that left MESSAGE_PREFIX_CODES cannot be promoted from
+        # prose even when it is the only token: that is the whole point
+        # of declaring it on the exception instead.
+        assert _promoted("limit_too_large: limit must be <= 200 (got 999)") == (
+            "validation_error"
+        )
+
+        still_ambiguous = (
+            "invalid_pagination: composed_search_invalid_page: page is wrong"
+        )
+        assert len(set(_NESTED_CODE_PATTERN.findall(still_ambiguous))) > 1
+        assert _promoted(still_ambiguous) == "validation_error"
+
+        repaired = "composed_search_invalid_page: page is wrong"
         assert len(set(_NESTED_CODE_PATTERN.findall(repaired))) == 1
-        assert _promoted(repaired) == "limit_too_large"
+        assert _promoted(repaired) == "composed_search_invalid_page"
 
 
 class TestTheLegacyDetailPathIsGatedToo:

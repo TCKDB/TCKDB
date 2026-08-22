@@ -83,6 +83,7 @@ class RejectionCode(str, Enum):
     can be used wherever the raw code was.
     """
 
+    AMBIGUOUS_CONFORMER_SELECTION_LOCATOR = "ambiguous_conformer_selection_locator"
     APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH = "applied_energy_correction_source_calculation_owner_mismatch"
     APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED = "applied_energy_correction_source_key_undeclared"
     ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH = "arrhenius_a_units_molecularity_mismatch"
@@ -214,6 +215,7 @@ class RejectionCode(str, Enum):
     UNIQUE_CONFLICT = "unique_conflict"
     UNKNOWN_CALCULATION_ARTIFACT_REF = "unknown_calculation_artifact_ref"
     UNKNOWN_CALCULATION_REF = "unknown_calculation_ref"
+    UNKNOWN_CONFORMER_SELECTION = "unknown_conformer_selection"
     UNKNOWN_CURATION_POLICY = "unknown_curation_policy"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
@@ -239,6 +241,7 @@ class RejectionCode(str, Enum):
 #: payload may be sent again under the same idempotency key.
 VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
     {
+        RejectionCode.AMBIGUOUS_CONFORMER_SELECTION_LOCATOR,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED,
         RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH,
@@ -395,6 +398,7 @@ CONFLICT_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
 #: wire boundary and again in the schema reports the same code from
 #: both, at two different statuses.
 REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
+    RejectionCode.AMBIGUOUS_CONFORMER_SELECTION_LOCATOR: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.APPLIED_ENERGY_CORRECTION_SOURCE_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.ARRHENIUS_A_UNITS_MOLECULARITY_MISMATCH: frozenset({422}),
@@ -526,6 +530,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNIQUE_CONFLICT: frozenset({409}),
     RejectionCode.UNKNOWN_CALCULATION_ARTIFACT_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CALCULATION_REF: frozenset({404}),
+    RejectionCode.UNKNOWN_CONFORMER_SELECTION: frozenset({404}),
     RejectionCode.UNKNOWN_CURATION_POLICY: frozenset({404}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),

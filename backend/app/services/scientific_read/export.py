@@ -32,6 +32,7 @@ line without materializing the full mechanism.
 from __future__ import annotations
 
 import json
+import logging
 from collections.abc import Iterator
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -39,6 +40,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.api.error_contract import CodedValueError
 from app.db.models.common import (
     ReactionRole,
     RecordReviewStatus,
@@ -75,6 +77,8 @@ from app.services.scientific_read.profile import (
     ResolvedReadProfile,
     current_read_profile,
 )
+
+logger = logging.getLogger(__name__)
 
 #: Schema tag for the selected scientific projection.  This is intentionally
 #: distinct from the future ``tckdb.archive.v1`` lossless archive contract.
@@ -578,9 +582,36 @@ def resolve_seed(
     if seed.all_reactions:
         all_ids = session.scalars(select(ReactionEntry.id)).all()
         if len(all_ids) > all_cap:
-            raise ValueError(
-                "export_all_cap_exceeded: refusing to export "
-                f"{len(all_ids)} reaction entries (cap {all_cap})"
+            # A relationship code as of 2026-08-18, published cap-only.
+            #
+            # ``len(all_ids)`` is an unfiltered ``SELECT`` over
+            # ``reaction_entry``: it is the total number of reaction
+            # entries TCKDB holds. That is the enumeration signal
+            # ``docs/specs/public_identifier_policy.md`` (§"Why this
+            # matters now", item 3) rejects sequential integer primary
+            # keys for -- the total count of objects, and, polled over
+            # time, roughly the upload schedule. ``all=true`` is by
+            # construction the one request whose size the caller did not
+            # state, so echoing the count back is not echoing their own
+            # request: it is answering a census question nothing else
+            # answers.
+            #
+            # The cap is TCKDB's own configuration and is published, so
+            # a client still learns what would have to change. The count
+            # is logged and appears in neither ``context`` nor
+            # ``detail`` -- ``detail`` is published too, and leaving it
+            # there would make the ``context`` omission decorative.
+            logger.info(
+                "export refused as export_all_cap_exceeded; %d reaction "
+                "entries against a cap of %d",
+                len(all_ids),
+                all_cap,
+            )
+            raise CodedValueError(
+                "export_all_cap_exceeded",
+                "refusing to export every reaction entry: the corpus is "
+                f"larger than the export cap of {all_cap}",
+                context={"cap": all_cap, "record_type": "reaction_entry"},
             )
         reaction_entry_ids.update(all_ids)
 

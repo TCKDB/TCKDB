@@ -39,7 +39,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.deps import SessionLocal
 from app.api.startup_checks import server_encoding, template_encoding
-from app.services import artifact_storage
+from app.services import (
+    artifact_storage,
+    artifact_storage_admin,
+    artifact_storage_capacity,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -256,6 +260,86 @@ def _probe_bucket() -> dict:
     return {"healthy": True, "reachable": True, "reason": None}
 
 
+def _outstanding_storage_refusal():
+    """The recorded "the store has no room", after a chance to clear itself.
+
+    Three steps, in this order:
+
+    1. Read the capacity log. This is the fact that survives a restart,
+       and the reason it is a database read rather than a process global.
+    2. If a refusal is outstanding **and a free-space number could answer
+       it**, ask the store how much room it has and record the answer.
+       Skipped entirely when nothing is outstanding, so a healthy store
+       pays no probe; skipped for a bucket-quota refusal, which free space
+       cannot speak to (measured: 418 MiB free while a 2 MiB write was
+       refused).
+    3. Re-read, so a report that answered the refusal takes effect on this
+       very response instead of the next one.
+
+    Best effort throughout. If the database cannot be read, this returns
+    ``None`` and ``/status`` reports what the *probe* found -- the storage
+    block is not the place to report a database outage, and the
+    ``database`` component already does.
+
+    The two reads are separate functions rather than two ``try`` blocks
+    here, because the absorbing-handler gate allows one absorbing handler
+    per function: with two, the sweep cannot address them separately and
+    cannot say which of them it has judged. Splitting is the remedy the
+    gate names first, and it is the honest one -- the two handlers absorb
+    for different reasons.
+    """
+    state = _recorded_refusal()
+    if state is None or not state.clearable_by_capacity_report:
+        return state
+
+    free_bytes = artifact_storage_admin.report_free_bytes(
+        endpoint_url=artifact_storage.S3_ENDPOINT_URL,
+        access_key=artifact_storage.S3_ACCESS_KEY,
+        secret_key=artifact_storage.S3_SECRET_KEY,
+    )
+    if free_bytes is None:
+        # No opinion -- a non-MinIO store, or one that will not say. The
+        # recorded refusal stands untouched.
+        return state
+
+    return _refusal_after_capacity_report(free_bytes=free_bytes, fallback=state)
+
+
+def _recorded_refusal():
+    """Read the capacity log. ``None`` when nothing is outstanding.
+
+    The handler is deliberately broad. ``/status`` exists to answer while
+    things are broken, so a 500 from the endpoint that describes the
+    outage is the one failure mode it must not have: a checker cannot tell
+    "the site is down" from "the status page threw", and those are
+    different pages of the runbook.
+    """
+    try:
+        with SessionLocal() as session:
+            return artifact_storage_capacity.current_full_state(session)
+    except Exception as exc:
+        logger.warning("status: capacity log read failed: %r", exc)
+        return None
+
+
+def _refusal_after_capacity_report(*, free_bytes: int, fallback):
+    """Record what the store said about its free space, then re-read.
+
+    Re-reading rather than reasoning locally, so a report that answered
+    the refusal takes effect on *this* response instead of the next one.
+    On any failure the caller's already-read ``fallback`` stands: a
+    capacity report that could not be written must never look like one
+    that cleared the refusal.
+    """
+    try:
+        artifact_storage_capacity.note_capacity_report(free_bytes=free_bytes)
+        with SessionLocal() as session:
+            return artifact_storage_capacity.current_full_state(session)
+    except Exception as exc:
+        logger.warning("status: capacity report write failed: %r", exc)
+        return fallback
+
+
 def _artifact_storage_status() -> dict:
     """Report whether artifact uploads can actually be stored.
 
@@ -281,13 +365,22 @@ def _artifact_storage_status() -> dict:
       that refuses a 4 MiB one — MinIO's threshold check is sized against
       the incoming object. So the read-only probe reports healthy while
       every real artifact upload fails, and a cheap synthetic write probe
-      would report healthy too. An honest write probe would have to write
-      something the size of a real artifact on every health check, and the
-      S3 API offers no capacity or quota query to ask instead. The signal
-      therefore comes from the real write path's own refusal, latched in
-      :class:`~app.services.artifact_storage.StorageFullObservation`, and
-      is folded in below. Its limits are documented on that class and are
-      real: it needs one upload attempt to fire, and it is per-process.
+      would report healthy too. The authoritative signal therefore comes
+      from the real write path's own refusal, recorded durably in
+      ``artifact_storage_capacity_event`` and folded in below. It survives
+      a restart, which the process-global it replaced did not: the API
+      used to come back up reporting healthy while every upload still
+      failed.
+    * **A free-space probe, but only while already refusing.** MinIO's
+      *admin* API does report free space, with the credentials this
+      process already holds, and the number predicts refusal (measured:
+      ``availspace`` 4,030,464 at the instant a 4,194,304-byte write was
+      refused). It is consulted only when a refusal is outstanding, which
+      is the state where it buys something — recovery detected on the next
+      poll instead of on the next lucky upload — and costs nothing on a
+      healthy store. It can only ever *answer* a refusal, never raise one,
+      because it is MinIO-specific and blind to bucket quotas; see
+      :mod:`app.services.artifact_storage_admin`.
     * **``endpoint`` and ``bucket`` are reported.** They are what makes the
       failure legible in seconds rather than after reading source: the
       incident's whole content was that the endpoint was the wrong one,
@@ -324,17 +417,16 @@ def _artifact_storage_status() -> dict:
         }
     # A reachable bucket is necessary and not sufficient: the probe above
     # cannot distinguish a full store from a healthy one (see the docstring),
-    # so the write path's own refusal is consulted. It only ever *removes*
-    # health -- a latched refusal cannot make an unreachable store look
-    # reachable, and a healthy probe cannot clear a latch, because only a
-    # successful write does that.
+    # so the recorded refusal is consulted. It only ever *removes* health --
+    # a recorded refusal cannot make an unreachable store look reachable,
+    # and a healthy probe cannot clear one, because only evidence of
+    # capacity does that.
     #
     # ``storage_full: false`` deliberately does not claim there is space --
-    # nothing here can know that. It means "no write has been refused for
-    # want of room in this process, and nothing else is claimed", which is
-    # the strongest honest statement available and the reason the field is
+    # nothing here can know that. It means "no refusal is outstanding", which
+    # is the strongest honest statement available and the reason the field is
     # named after the observation rather than after the capacity.
-    full = artifact_storage.last_storage_full_observation()
+    full = _outstanding_storage_refusal()
     block["storage_full"] = full is not None
     block["storage_full_observed_at"] = (
         None if full is None else full.observed_at.isoformat()
@@ -346,12 +438,18 @@ def _artifact_storage_status() -> dict:
             if full.attempted_bytes is None
             else f"a {full.attempted_bytes:,}-byte artifact"
         )
-        # Two reasons can be true at once -- an unreachable store this
-        # process previously found full. The probe's reason is the one an
-        # operator should act on first, so it leads.
+        # Two reasons can be true at once -- an unreachable store that was
+        # recorded full earlier. The probe's reason is the one an operator
+        # should act on first, so it leads.
+        #
+        # The timestamp is the database server's, and naive: these columns
+        # are ``TIMESTAMP WITHOUT TIME ZONE`` filled by ``now()``, as
+        # everywhere else in the schema. It is not stamped with a zone it
+        # has not been checked to be in.
+        code = full.s3_code or "not recorded"
         capacity = (
             f"object store refused {attempted} for want of room at "
-            f"{full.observed_at.isoformat()} (S3 code {full.s3_code}); free "
+            f"{full.observed_at.isoformat()} (S3 code {code}); free "
             f"space or raise the quota"
         )
         outcome["reason"] = (

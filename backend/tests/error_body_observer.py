@@ -1,12 +1,28 @@
-"""Watch every error body the suite produces, and refuse a row id in one.
+"""Watch every error body the suite produces, and refuse an internal id.
 
-DR-0028 Requirement 2: a user-facing error body must never contain a
-database primary key. Row ids go to the log, where the operator is; the
-body names the field the depositor wrote, because that is the identifier
-they can act on. A row id is not secret, but it is not ours to give --
-it does not survive a restore into a fresh database, it does not agree
-between the hosted deployment and a lab self-host, and no public surface
-is keyed on it. ``public_ref`` is.
+Two identifiers, one argument. DR-0028 Requirement 2: a user-facing error
+body must never contain a database primary key. Row ids go to the log,
+where the operator is; the body names the field the depositor wrote,
+because that is the identifier they can act on. A row id is not secret,
+but it is not ours to give -- it does not survive a restore into a fresh
+database, it does not agree between the hosted deployment and a lab
+self-host, and no public surface is keyed on it. ``public_ref`` is.
+
+The second is a **raw database constraint name** -- ``uq_software_name``,
+``fk_species_entry_species_id_species`` -- and Calvin settled it on
+2026-08-18 on exactly the reasoning above: meaningless to a depositor,
+not stable across a migration that renames it, and a disclosure of schema
+layout. It reaches the operator through the handler's log line. The
+sanctioned route from an internal constraint name to a public contract is
+the scientific check register: a constraint that matters enough declares
+a rejection code, and the *code* is what crosses the wire. See
+:func:`app.api.errors._integrity_error_handler`.
+
+Before that ruling the repository held three positions at once -- one
+test asserting the name reached the body for registered constraints, one
+asserting it must not for unregistered ones, and a third silent about
+foreign keys. Three positions is what a per-test rule produces; this
+observer is the reason there can only be one from here on.
 
 Why a runtime observer, when a static scan already exists
 ---------------------------------------------------------
@@ -80,7 +96,27 @@ Three rules were considered. The measurement chose between them:
 
 So: rule 1, over ``context``. The blind spot is honest and stated below.
 
-The one text rule, and why it is not the AST scan again
+The constraint-name rule is the opposite case, and easy
+-------------------------------------------------------
+Where a row id is an integer indistinguishable from the useful integers
+beside it, a constraint name announces itself: ``NAMING_CONVENTION`` in
+``app/db/base.py`` gives every one of them a two-letter kind and an
+underscore, and nothing else in an error body is spelled that way. So
+this one *is* rule 3 -- refuse the shape, no enumeration, no allowlist --
+and it is applied to string **values** anywhere in ``context`` and to
+plain-string ``detail``. See :data:`CONSTRAINT_NAME`.
+
+Measured when it was added (2026-08-18). Exactly one body in the suite
+carried such a name -- the registered-constraint 409's
+``context["constraint"]`` -- and it was removed in the same change; with
+that gone, a full ``pytest backend/tests`` produces no match at all. So
+this rule lands green on a clean tree and every future match is a real
+finding rather than a backlog. Turning it off and putting the name back
+was run in both directions before it was believed: see the mutations
+recorded in the pull request, and the synthetic pair in
+``tests/api/test_error_body_id_gate.py``.
+
+The id text rule, and why it is not the AST scan again
 --------------------------------------------------------
 ``detail`` is also swept, but only where it is a plain string -- the
 ``NotFoundError`` / ``ValueError`` / ``HTTPException`` shape. It is
@@ -158,6 +194,32 @@ ID_IN_PROSE = re.compile(
     re.IGNORECASE,
 )
 
+#: A database constraint or index name, spelled the way
+#: ``NAMING_CONVENTION`` in ``app/db/base.py`` spells every one of them:
+#: a two-letter kind, an underscore, and the table it sits on. Those five
+#: prefixes are the whole vocabulary, which is why this is a shape check
+#: and not a list -- a constraint added tomorrow is caught without anyone
+#: adding it here, and that is the only version of this rule worth having.
+#:
+#: Applied to *values* and to prose, not to key names. The mistake this
+#: catches is publishing the name, and the name is the value; a
+#: ``context`` key literally called ``constraint`` is fine when what it
+#: carries is a code. Deliberately anchored on a non-word character so
+#: ``...uq_x`` inside a longer identifier is not matched, and it requires
+#: at least two characters after the prefix so a bare ``fk_`` in prose
+#: about the convention itself does not fire.
+#:
+#: The one false positive it can have: a depositor who names a *local key*
+#: ``fk_something`` and then triggers a refusal that echoes it back. That
+#: is the caller's own string, so it would not be a disclosure -- the same
+#: carve-out ``_integerish`` makes for ``existing_calculation_id``. It has
+#: not happened, and if it does the fix is a carve-out here rather than a
+#: weaker rule, because the alternative is an allowlist of every schema
+#: object name in the database.
+CONSTRAINT_NAME = re.compile(
+    r"(?:^|[^A-Za-z0-9_])((?:ck|uq|fk|ix|pk)_[a-z][a-z0-9_]*[a-z0-9])"
+)
+
 
 @dataclass(frozen=True)
 class Leak:
@@ -227,8 +289,19 @@ def _integerish(value: Any) -> str | None:
     return None
 
 
-def _sweep_context(node: Any, path: str, found: list[tuple[str, str]]) -> int:
-    """Walk *node*, appending ``(path, why)`` for each id-shaped key.
+def _sweep_context(
+    node: Any,
+    path: str,
+    found: list[tuple[str, str]],
+    named: list[tuple[str, str]],
+) -> int:
+    """Walk *node*, appending to *found* and *named*.
+
+    *found* collects ``(path, why)`` for each id-shaped key carrying an
+    integer; *named* collects ``(path, name)`` for each string value that
+    is spelled like a database constraint. Two lists rather than one
+    because the two findings need different sentences and a caller
+    reading a failure should not have to work out which rule fired.
 
     Returns the number of ``(key, value)`` pairs visited, which is what
     the floor counts: a blinded walk visits none of them.
@@ -242,10 +315,14 @@ def _sweep_context(node: Any, path: str, found: list[tuple[str, str]]) -> int:
                 why = _integerish(value)
                 if why is not None:
                     found.append((here, why))
-            visited += _sweep_context(value, here, found)
+            visited += _sweep_context(value, here, found, named)
     elif isinstance(node, (list, tuple)):
         for index, value in enumerate(node):
-            visited += _sweep_context(value, f"{path}[{index}]", found)
+            visited += _sweep_context(value, f"{path}[{index}]", found, named)
+    elif isinstance(node, str):
+        match = CONSTRAINT_NAME.search(node)
+        if match is not None:
+            named.append((path, match.group(1)))
     return visited
 
 
@@ -259,11 +336,25 @@ def inspect(status: int, content: dict[str, Any]) -> tuple[list[Leak], int]:
     code = code if isinstance(code, str) and code else "<no code>"
 
     found: list[tuple[str, str]] = []
-    visited = _sweep_context(content.get("context"), "context", found)
+    named: list[tuple[str, str]] = []
+    visited = _sweep_context(content.get("context"), "context", found, named)
     leaks = [
         Leak(status=status, code=code, where=where, detail=f"{why} under an id-shaped key")
         for where, why in found
     ]
+    leaks.extend(
+        Leak(
+            status=status,
+            code=code,
+            where=where,
+            detail=(
+                f"database constraint name {name!r} -- an internal "
+                "identifier; register the constraint for a code of its own "
+                "and let the name go to the log"
+            ),
+        )
+        for where, name in named
+    )
 
     detail = content.get("detail")
     if isinstance(detail, str):
@@ -276,6 +367,19 @@ def inspect(status: int, content: dict[str, Any]) -> tuple[list[Leak], int]:
                     code=code,
                     where="detail",
                     detail=f"prose discloses {match.group(0)!r}",
+                )
+            )
+        constraint = CONSTRAINT_NAME.search(detail)
+        if constraint is not None:
+            leaks.append(
+                Leak(
+                    status=status,
+                    code=code,
+                    where="detail",
+                    detail=(
+                        f"prose names database constraint "
+                        f"{constraint.group(1)!r}"
+                    ),
                 )
             )
     return leaks, visited

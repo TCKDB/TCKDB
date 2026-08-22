@@ -6,10 +6,13 @@ review summary into a single response. See docs/specs/read_api_mvp.md §Endpoint
 
 from __future__ import annotations
 
+import logging
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.config import settings
+from app.api.error_contract import CodedValueError
 from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
@@ -98,6 +101,8 @@ from app.services.scientific_read.transition_states import (
     _build_evidence_summary_for_entries,
     build_transition_state_entry_trust_fragment,
 )
+
+logger = logging.getLogger(__name__)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "species",
@@ -1334,6 +1339,28 @@ def _enforce_full_expansion_caps(
     ``atom_map_pairs`` is likewise flattened across the reaction's maps:
     a reaction has few maps and each holds one row per atom per leg, so
     the pairs are the leaf rows and the maps are the grouping ones.
+
+    What the refusal publishes, and what it withholds
+    -------------------------------------------------
+    ``query_too_expensive`` is a
+    :attr:`~app.api.code_catalogue.Shape.relationship` code as of
+    2026-08-18 — it says a sub-array and a cap are the wrong way round
+    and names neither — so it owes a client ``context``. It carries the
+    offending ``section`` and that section's ``cap``, which is the whole
+    repair: narrow ``include=``, or request the section directly with
+    pagination.
+
+    It deliberately does **not** carry ``len(block)``. That number is how
+    many rows TCKDB *holds* for the requested record — how many
+    calculations, geometries, artifacts, conformer groups or atom-map
+    pairs exist. Unlike a geometry's atom count, which is a property of
+    the molecule, this is a count of the corpus, and a caller who can
+    read it off a cheap refusal has a row-counting oracle: set the cap
+    low, sweep records, and recover the holdings profile and roughly the
+    upload schedule that ``docs/specs/public_identifier_policy.md``
+    (§"Why this matters now", item 3) refuses to leak through primary
+    keys. The count is logged instead, and is absent from ``detail`` as
+    well as ``context`` — ``detail`` is published too.
     """
     pairs: list[tuple[str, list | None, int]] = [
         ("calculations", calculations, settings.max_full_calculations_public),
@@ -1354,11 +1381,19 @@ def _enforce_full_expansion_caps(
         if block is None or cap <= 0:
             continue
         if len(block) > cap:
-            raise ValueError(
-                "query_too_expensive: /full expansion for section "
-                f"{section_name!r} would return {len(block)} rows "
-                f"which exceeds the public cap of {cap}. Narrow the "
-                "include= set or request specific sections directly."
+            logger.info(
+                "full expansion refused as query_too_expensive; section %r "
+                "would return %d rows against a cap of %d",
+                section_name,
+                len(block),
+                cap,
+            )
+            raise CodedValueError(
+                "query_too_expensive",
+                f"/full expansion for section {section_name!r} would "
+                f"return more rows than the public cap of {cap}. Narrow "
+                "the include= set or request specific sections directly.",
+                context={"section": section_name, "cap": cap},
             )
 
 

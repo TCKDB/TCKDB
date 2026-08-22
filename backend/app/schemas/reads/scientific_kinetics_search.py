@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import Self
 
 from pydantic import BaseModel, Field, field_validator, model_validator
+from tckdb_schemas.coded_error import CodedValidationError
 
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads._field_bounds import (
@@ -109,11 +110,21 @@ class KineticsSearchRequest(BaseModel):
     @field_validator("reactants", "products")
     @classmethod
     def _bound_participant_lengths(cls, value: list[str]) -> list[str]:
+        """The kinetics-search twin of the reaction-search bound.
+
+        See ``app.schemas.reads.scientific_reactions`` for why this
+        carries the cap and the supplied length and not the string.
+        """
         for item in value:
             if len(item) > _MAX_SMILES_LENGTH:
-                raise ValueError(
-                    "smiles_too_long: participant SMILES exceeds "
-                    f"the maximum length of {_MAX_SMILES_LENGTH}."
+                raise CodedValidationError(
+                    "smiles_too_long",
+                    "participant SMILES exceeds "
+                    f"the maximum length of {_MAX_SMILES_LENGTH}.",
+                    context={
+                        "max_length": _MAX_SMILES_LENGTH,
+                        "length": len(item),
+                    },
                 )
         return value
 

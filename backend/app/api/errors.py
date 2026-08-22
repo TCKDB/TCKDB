@@ -229,20 +229,72 @@ def _no_result_found_handler(
 # constraint that the scientific check register names carries its own
 # code and sentence, looked up by name in ``_constraint_rejections``
 # below; everything else still falls back to the SQLSTATE bucket.
+#
+# What a bucket may say, settled 2026-08-18
+# -----------------------------------------
+# **A raw database constraint name never appears in a user-facing body.**
+# It is an internal identifier: meaningless to a depositor, unstable
+# across a rename, and a disclosure of schema layout — the same reasoning
+# that keeps row ids out of bodies under DR-0028 Requirement 2. The name
+# goes to the log below, where the operator is.
+#
+# So the sentence is what the bucket owes, and it is written to be acted
+# on rather than merely to be true. "Integrity constraint violation." is
+# true of every branch here and tells a depositor nothing; each message
+# below instead says which *kind* of rule refused the write and what
+# would make a second attempt succeed. That is the repair-shaped half of
+# the obligation these four ``Shape.relationship`` codes carry (see
+# :mod:`app.api.code_catalogue`) — the structured half, naming the things
+# that disagreed, stays open, because the only fact available here is the
+# constraint name and that is precisely what may not be disclosed.
+#
+# The sanctioned route from an internal name to a public contract is the
+# **register**: a constraint that matters enough to earn a specific code
+# declares one (``app.scientific_checks.declarations``) and gets a real
+# sentence, as ``uq_app_user_email`` does for ``email_taken`` in
+# :data:`app.api.routes.auth.REGISTRATION_CONFLICTS`. Putting the name in
+# the body is the unsanctioned shortcut around that.
 
 _SQLSTATE_TO_CATEGORY: dict[str, tuple[str, str]] = {
     # (category code, sanitized public message)
-    "23505": ("unique_conflict", "Resource conflicts with an existing record."),
+    "23505": (
+        "unique_conflict",
+        "A uniqueness rule was violated: a record with these values already "
+        "exists. Cite the existing record instead of creating a second one, "
+        "or change the values that have to be unique.",
+    ),
     "23503": (
         "reference_conflict",
-        "Request references an entity that does not exist or is still in use.",
+        "A referenced record does not exist, or is still referenced by "
+        "another record. Deposit or cite the record being referred to before "
+        "referring to it, and detach whatever depends on a record before "
+        "removing it.",
     ),
-    "23514": ("state_conflict", "Request violates a consistency rule."),
-    "23502": ("state_conflict", "Request is missing a required field."),
-    "23P01": ("state_conflict", "Request violates a consistency rule."),
+    "23514": (
+        "state_conflict",
+        "A consistency rule was violated: the submitted values contradict "
+        "one another. Re-check the fields this record constrains together.",
+    ),
+    "23502": (
+        "state_conflict",
+        "A required field was left empty. Supply every field this record "
+        "requires and resubmit.",
+    ),
+    "23P01": (
+        "state_conflict",
+        "An exclusion rule was violated: this record overlaps one that "
+        "already exists. Adjust the overlapping values or amend the existing "
+        "record instead.",
+    ),
 }
 
-_FALLBACK = ("integrity_conflict", "Integrity constraint violation.")
+_FALLBACK = (
+    "integrity_conflict",
+    "The database refused this write because it would have broken a "
+    "consistency rule. Nothing was stored; the rule that fired was logged "
+    "against this request, so quote the X-Request-ID response header when "
+    "reporting it.",
+)
 
 
 @lru_cache(maxsize=1)
@@ -298,18 +350,42 @@ def _integrity_error_handler(
     context: dict[str, Any] = {}
     # Named before classified. A constraint that encodes chemistry is a
     # stronger guarantee than any Python check -- no write path can get
-    # around it -- and until now it was the one a client was told least
-    # about, because every violation collapsed into its SQLSTATE bucket.
+    # around it -- and until the register began naming these constraints
+    # it was the one a client was told least about, because every
+    # violation collapsed into its SQLSTATE bucket.
     # Keyed on the constraint name rather than on the driver's message
     # text: parsing prose is what the typed envelope exists to replace.
+    #
+    # The name is the *key*, and it stays on this side of the wire. Until
+    # 2026-08-18 this branch also published it as
+    # ``context["constraint"]``, and the repository held three positions
+    # about whether that was allowed: this one said yes, the unregistered
+    # buckets said no in as many words ("Internal constraint name must not
+    # leak through the public body"), and the foreign-key bucket said
+    # nothing at all. Calvin settled it in the direction the majority
+    # already pointed -- a raw constraint name is an internal identifier
+    # and never appears in a user-facing body -- so what a registered
+    # constraint earns is a *code and a sentence of its own*, which is a
+    # public contract, rather than a schema object name, which is not.
+    # Looking the rule up in ``docs/guides/scientific_check_register.md``
+    # is done by that code; the name reaches the operator through the log
+    # line below.
+    #
+    # This leaves ``context`` empty on every branch here. That is a known
+    # gap and not a lie: ``unique_conflict``, ``reference_conflict``,
+    # ``state_conflict`` and ``integrity_conflict`` are all
+    # ``Shape.relationship`` codes (see ``app.api.code_catalogue``) and so
+    # owe a client the things that disagreed, but the only fact this seam
+    # holds is the constraint name and that is exactly what may not be
+    # disclosed. Paying them needs a fact from the write path -- the field
+    # a depositor wrote, the local key they declared -- which means
+    # raising a coded exception there rather than letting the driver's
+    # error reach this handler. The messages above are the part that can
+    # be paid here: say which kind of rule refused, and what would make a
+    # second attempt succeed.
     rejection = _constraint_rejections().get(constraint) if constraint else None
     if rejection is not None:
         code, message = rejection
-        # The schema object name, not a row id. It is the key into
-        # ``docs/guides/scientific_check_register.md``, so a client (or a
-        # human reading a traceback) can look up which scientific position
-        # refused the write and what the escape hatch is.
-        context["constraint"] = constraint
     elif constraint == IDEMPOTENCY_UNIQUE_CONSTRAINT:
         code = "idempotency_conflict"
         message = (

@@ -38823,6 +38823,70 @@
         "title": "StereoKind",
         "type": "string"
       },
+      "StorageCapacityClearRequest": {
+        "description": "An operator's assertion that the store has room again.",
+        "properties": {
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "StorageCapacityClearRequest",
+        "type": "object"
+      },
+      "StorageCapacityStateResponse": {
+        "description": "Whether a refusal is outstanding, after whatever was just appended.\n\nCarries no row ids, no digests and no bucket names — this is an\noperational report, and DR-0028 Req. 2 applies to it as much as to an\nerror body.",
+        "properties": {
+          "refused_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refused Bytes"
+          },
+          "s3_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S3 Code"
+          },
+          "storage_full": {
+            "title": "Storage Full",
+            "type": "boolean"
+          },
+          "storage_full_observed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Full Observed At"
+          }
+        },
+        "required": [
+          "storage_full"
+        ],
+        "title": "StorageCapacityStateResponse",
+        "type": "object"
+      },
       "StructureMatchSummary": {
         "description": "Per-record description of how the query matched this entry.\n\n``similarity_score`` is populated only when ``mode == similarity``.\n``matched_query`` echoes the caller-supplied query string verbatim\nso the record is self-describing; ``matched_query_kind`` is the\nrequest field the query came from.",
         "properties": {
@@ -47823,6 +47887,212 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/admin/artifact-storage/capacity": {
+      "get": {
+        "description": "Whether the object store is currently refusing writes for want of room.\n\nThe same head-of-log computation ``/status`` reports, without the\nfree-space probe — this is the operator's view of the record itself.",
+        "operationId": "get_artifact_storage_capacity_api_v1_admin_artifact_storage_capacity_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageCapacityStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Artifact Storage Capacity",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/api/v1/admin/artifact-storage/capacity/clear": {
+      "post": {
+        "description": "Declare a storage-full condition resolved (admin only).\n\nAn operator is who resolves a full disk, so an operator has to be able\nto say so. This is the clearing path of last resort and the only one\nthat can answer a refusal no measurement will: one whose size was\nnever known, or a bucket-quota refusal that a free-space report cannot\nsee.\n\nIt **appends**; it never edits or deletes. The refusal stays in the\nlog as the account of what happened, and this observation supersedes\nit — the same shape as clearing an artifact integrity break, and for\nthe same reason. If the store is in fact still full, the next refused\nupload appends a new refusal and ``/status`` degrades again, which is\nthe system working rather than a clear that was lost.",
+        "operationId": "clear_artifact_storage_capacity_api_v1_admin_artifact_storage_capacity_clear_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Name"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TCKDB-Client-Version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Tckdb-Client-Version"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StorageCapacityClearRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageCapacityStateResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Artifact Storage Capacity",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/machine-review/curator-tasks": {
       "get": {
         "description": "List curator tasks (admin only).\n\nDeterministic ordering: open states first, then highest severity first,\nthen most-recently-updated, with ``id`` as the final tie-break. Filters are\nANDed. Terminal tasks are included; filter on ``workflow_state`` to narrow.",

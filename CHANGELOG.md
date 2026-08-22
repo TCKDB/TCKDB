@@ -48,7 +48,7 @@ Per-package maturity classifiers:
 |---|---|---|
 | `tckdb-backend` | Alpha | HTTP read contracts stabilising; schema still advancing |
 | `tckdb-client` | Beta | Typed methods track the published OpenAPI |
-| `tckdb-schemas` | Alpha | Upload wire contracts; version bumped on every change |
+| `tckdb-schemas` | Alpha | Upload wire contracts; version bumped on every change — **enforced in CI since 2026-08-17; five earlier versions are not unique, listed under Unreleased** |
 | `tckdb-mcp` | Alpha | Agent integration surface |
 | `tckdb-chemkin` | Alpha | Mechanism-export adapter |
 
@@ -58,6 +58,104 @@ wrapper over a contract that is itself still moving.
 ## Unreleased
 
 ### Fixed
+
+- **A linear molecule could deposit a frequency list with one vibration
+  missing, and nothing said a word.** A harmonic analysis of `N` atoms has
+  `3N - 6` vibrations if the molecule is bent and `3N - 5` if it is linear —
+  linear molecules have one *more*, because a bend that would be two distinct
+  motions in a bent molecule stays degenerate along a straight axis. TCKDB
+  already flagged one direction of that one-mode gap (a bent geometry carrying
+  the linear count). The other direction was open: a **linear** geometry
+  carrying `3N - 6` modes is one vibration short, and every check accepted it.
+  The wire-side completeness floor could not catch it either — `3N - 6` *is*
+  that floor and it warns strictly below, so the deposit landed exactly on the
+  accepted line.
+
+  The consequence is the one that matters: a consumer recomputing a partition
+  function from that record gets a *number*, not an error, and the number is
+  wrong. Silently.
+
+  Now reported as `freq_list_bent_mode_count_for_linear_geometry`, an
+  `UploadWarning` on an accepted 201 — advisory, never blocking, because the
+  linear/bent boundary is a tolerance rather than a definition (ADR 0008) and
+  because a genuine partial or frozen-atom Hessian produces the same count
+  honestly. The message names the cause that actually produces it: **a linear
+  molecule's bending modes are doubly degenerate** — CO2's four vibrations are
+  two stretches and one bend counted twice — so a parser that de-duplicates
+  equal frequencies drops one component and lands exactly on `3N - 6`. The
+  generic short-list warning argues from partial Hessians and frozen-atom
+  regions, and would have sent a depositor looking in the wrong place; that is
+  why this is a second code rather than an extension of it.
+
+  The two codes are mutually exclusive by construction, not by convention: the
+  counts differ by one and each is admitted only under the opposite geometry
+  verdict. Reaches every upload shape — the conformer route, the
+  computed-species and computed-reaction bundles, standalone transition
+  states, the statmech/thermo/transport product uploads and the
+  pressure-dependent network route — because all six walkers already funnelled
+  through one judgement function.
+
+- **Two pull requests could claim the same package version, and `git` would
+  merge it silently.** Every change to a published package bumps its version.
+  Two branches that start from the same base therefore bump to the *same next
+  number*, and when the second merges, the version line on both sides is
+  **byte-identical** — so `git` reports no conflict, the file does not appear
+  in the merge diffstat, and one version number ends up describing two
+  different packages. This was caught by hand on 2026-08-17, one line-diff
+  before it shipped.
+
+  A pull-request check now refuses it. It makes **two** comparisons against
+  **two different refs**, because one ref cannot do both: *monotonicity*
+  against the merge base (`git merge-base(base.sha, head.sha)` — not `main`'s
+  tip, or a branch merely behind would be blamed for someone else's merge),
+  and *novelty* against `origin/main` fetched at job runtime plus existing
+  `<name>-v<version>` tags. The near-miss above passes the first check and is
+  caught only by the second. Comparison uses a PEP 440 sort key, not string
+  order, so `0.10.0` correctly exceeds `0.9.0`. Covers `tckdb-client`,
+  `tckdb-schemas`, `tckdb-chemkin` and `tckdb-mcp`; a test fails if a new
+  `pyproject.toml` appears in neither the covered nor the excluded list.
+
+- **Five `tckdb-schemas` versions already carry more than one package, and
+  this is the record of them.** Measured twice, by two independently written
+  scripts that agreed, comparing *tree contents* per version rather than
+  commit counts:
+
+  | Version | Distinct states |
+  |---|---|
+  | `0.2.0` | 3 |
+  | `0.8.0` | 2 |
+  | `0.14.0` | 2 |
+  | `0.30.0` | 2 |
+  | `0.33.0` | 2 |
+
+  `tckdb-mcp` `0.1.0` carries four states — it has never been bumped at all.
+  **`tckdb-client` is clean** across its whole history.
+
+  The difference is not cosmetic. Across the two `0.2.0` states, one lacks
+  `HessianSource`, `TunnelingModel`, and the `lindemann` / `troe` / `sri` /
+  `plog` / `chebyshev` entries entirely: **one state rejects payloads the
+  other accepts.**
+
+  **`0.8.0` is the one to know about.** The annotated tag
+  `tckdb-schemas-v0.8.0` reads *"pinned for tckdb-adapters/tckdb_arc (Phase
+  1)"*, and holds the **first** of its two states —
+  `git merge-base --is-ancestor 7ad5cb99a tckdb-schemas-v0.8.0` returns false.
+  Commit `7ad5cb99a` changed `tckdb_schemas/enums.py` and
+  `tckdb_schemas/workflows/computed_reaction_upload.py` and left
+  `version = "0.8.0"` untouched, so the two states **accept different upload
+  fields**.
+
+  **No consumer resolves a version number**, which is why nothing is being
+  re-published to correct this. These packages were only ever installed from
+  git, never from a package index, and ARC — the only known downstream —
+  installs from a branch with no tag, SHA, or version constraint at all. So a
+  duplicated version cannot mis-resolve for anybody today.
+
+  **The `v0.8.0` tag is deliberately left where it is.** Moving or deleting a
+  tag is its own hazard: anyone who has already fetched it holds the old
+  target either way, and a moved tag makes two clones disagree about what a
+  name means. It is recorded here instead, which is the honest fix for
+  something that has already happened.
 
 - **The `mypy` gate could not see the wire-contract package, and said
   "Success" anyway.** `tckdb-schemas` is a first-party package that lives in
@@ -143,10 +241,41 @@ wrapper over a contract that is itself still moving.
   reports what the real write path was told, as
   `artifact_storage.storage_full` with the observation timestamp, and degrades
   on it. Its limits are documented rather than papered over: `false` means "no
-  write has been refused for room in this process", not "there is space"; it
-  needs one upload attempt to fire; and it is per-process and cleared by a
-  restart. See
+  refusal is outstanding", not "there is space", and onset still needs one
+  upload attempt to fire. See
   [`docs/deployment/troubleshooting.md`](docs/deployment/troubleshooting.md).
+
+- **That observation is now durable, and clears only on evidence of the right
+  size.** It lived in a module global, so a restart forgot it and `/status`
+  reported healthy until the next upload failed. It is now an append-only
+  `artifact_storage_capacity_event` log, with no `is_full` column — "is the
+  store full?" is computed head-of-log, because a stored flag would be a
+  second source of truth able to disagree with the log it summarises (the
+  shape ADR 0007 rejected for curated selections).
+
+  The clearing rule is the point, and the obvious version of it is wrong.
+  "Clear when a write succeeds" would have restored a green light while every
+  real upload still failed, because the same store **refused 8 MiB and
+  accepted 1 byte in the same second**. So a refusal records the *size* it was
+  refused at, and is answered only by a later write of at least that size, a
+  free-space reading of at least that size, or an operator. There is
+  deliberately **no time-based expiry**: a timer guesses, a size-qualified
+  success measures, and a stale "full" an operator can clear in one command is
+  safer than a flag that goes quiet while the disk is still full.
+
+  `/status` additionally consults **MinIO's admin API** for free space while a
+  refusal is outstanding, so recovery is noticed on the next poll instead of
+  on the next sufficiently large upload. It needs no new credentials (the
+  compose file already gives the API MinIO's root user), writes nothing, and
+  is skipped entirely on a healthy store. It is supplementary, never
+  authoritative: any failure — a non-MinIO store, a 403, a timeout — is "no
+  opinion" and changes nothing. It is also, measured, **blind to bucket
+  quotas** (418 MiB reported free while a 2 MiB write was refused), so it may
+  not clear a quota refusal.
+
+  New admin endpoints `GET`/`POST /admin/artifact-storage/capacity[/clear]`
+  let an operator read the state and clear it with a required reason, which is
+  recorded. Clearing appends; it never edits or deletes the refusal.
 
   Also fixed on the way: `artifact_persistence._store_and_record`'s broad
   `except Exception` caught the already-typed `ArtifactStorageUnavailable` and

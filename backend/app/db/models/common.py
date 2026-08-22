@@ -433,6 +433,56 @@ class ArtifactIntegrityDetectionContext(str, Enum):
     reclaim_restore = "reclaim_restore"
 
 
+class ArtifactStorageCapacityObservation(str, Enum):
+    """What was learned about the object store's willingness to accept bytes.
+
+    Four observations, each carrying a byte count that means something
+    slightly different but compares the same way — which is the whole
+    reason they share a table. "Is the store full?" is answered by asking
+    whether the most recent :attr:`refused` has been answered by a later
+    observation whose byte count is at least as large.
+
+    ==================  =============================================
+    observation         what ``observed_bytes`` means
+    ==================  =============================================
+    ``refused``         the size of the write the store would not take
+    ``accepted``        the size of a write the store did take
+    ``capacity_report`` free bytes the store reported it has
+    ``operator_clear``  nothing; it is NULL
+    ==================  =============================================
+
+    Why a size and not a boolean: **"full" is not all-or-nothing.**
+    Measured against MinIO on a filled volume, a 4,194,304-byte write was
+    refused while a 1-byte write succeeded in the same second. An
+    implementation that cleared on any successful write would therefore
+    restore a green light while every real artifact upload still failed.
+    """
+
+    #: The write path was refused for want of room. The authoritative
+    #: onset signal: it comes from a correctly-sized real write, works
+    #: against any S3-compatible store, and is the only observation that
+    #: can see a bucket-quota refusal.
+    refused = "refused"
+
+    #: A real write of this size succeeded. Recorded **only** while a
+    #: refusal is outstanding, so this table stays a log of incidents
+    #: rather than a row per upload — the same discipline
+    #: ``artifact_integrity_event`` applies to its ``verified`` rows.
+    accepted = "accepted"
+
+    #: The store's own admin API reported this many free bytes. Read-only
+    #: and MinIO-specific; see
+    #: :mod:`app.services.artifact_storage_admin`. It exists so recovery
+    #: does not have to wait for a depositor to happen along with a large
+    #: enough upload.
+    capacity_report = "capacity_report"
+
+    #: An operator declared the condition resolved. The clearing path of
+    #: last resort, and the only one that can answer a refusal whose size
+    #: was never known or whose cause a capacity report cannot see.
+    operator_clear = "operator_clear"
+
+
 class HessianSource(str, Enum):
     """Where a stored Cartesian Hessian matrix was obtained from.
 
