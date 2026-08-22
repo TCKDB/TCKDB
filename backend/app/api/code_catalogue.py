@@ -67,7 +67,7 @@ needs -- the borderline calls -- because a classification whose hard cases
 are undocumented is one the next person re-litigates from scratch.
 
 Measured on this file: 73 entries (71 distinct codes) are relationships,
-97 are things. The cap family moved eight of them across on 2026-08-18 --
+98 are things. The cap family moved eight of them across on 2026-08-18 --
 see the first borderline group below.
 
 The groups where the call was genuinely arguable, and the argument:
