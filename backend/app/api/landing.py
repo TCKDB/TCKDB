@@ -12,6 +12,14 @@ end dressed as an introduction. The hero is now a search box that
 queries this deployment's own public read API and renders the records
 it gets back, so the first thing a visitor does is get real data out.
 
+Leading somewhere is also a claim about where. Every product a result
+has expands *in place* into the few fields that say what is in it,
+rather than navigating to the nested JSON document the endpoint
+answers with -- correct for a program, a wall of keys for a person who
+clicked a link on a landing page. The raw document is still one click
+away from inside each panel, under a label that says it is raw JSON.
+Nothing on this page takes a reader somewhere they did not expect.
+
 Design constraints, in the order they constrain things:
 
 * **Self-contained.** No CDN, no external stylesheet, no web font, no
@@ -46,6 +54,17 @@ input, transcribed from an actual run; ``tests/api/test_landing_page.py``
 re-runs the check and fails if the page and the checker ever disagree.
 An invented example on a page whose entire argument is "this system
 does not invent things" would be self-refuting.
+
+That example has to *show* its defect, not assert it. An earlier
+version printed the three deposited frequencies and a sentence saying
+a mode was missing, which is only legible to a reader who already
+knows carbon dioxide's spectrum is 667, 667, 1333, 2349 -- the whole
+point being the 667 that appears twice. Nothing on screen was wrong to
+look at. The panel now prints the deposit above the spectrum the
+molecule has, one frequency per column, with the absent slot drawn as
+an empty cell directly above the frequency that belongs in it. The
+prose is then an explanation of something the reader has already seen
+rather than a substitute for seeing it.
 
 The markup lives in this module as a string rather than as a sibling
 ``.html`` file on purpose: ``backend/pyproject.toml`` declares no
@@ -116,18 +135,36 @@ SEARCH_PLACEHOLDERS = (
 #: The geometry shown in the worked example, and the input the test
 #: feeds back through the real checker. Carbon dioxide, collinear along
 #: z at a 1.162 A bond length.
+#:
+#: The first two lines are the XYZ format's own header -- an atom count
+#: and a comment. They belong to the file the checker parses, so they
+#: live here; the panel renders :func:`hero_atom_lines` instead. A bare
+#: ``3`` alone above three coordinate rows is unremarkable inside a
+#: file and reads on a web page as a stray number.
 HERO_XYZ = """3
 carbon dioxide
 C   0.000000   0.000000   0.000000
 O   0.000000   0.000000   1.162000
 O   0.000000   0.000000  -1.162000"""
 
-#: The frequency list deposited alongside :data:`HERO_XYZ`: the three
-#: distinct wavenumbers a CO2 harmonic analysis prints. Three is 3N-6,
-#: the count for a *bent* three-atom molecule; a linear one has 3N-5=4,
-#: because the bend is doubly degenerate and a de-duplicating parser
-#: reports it once.
-HERO_FREQUENCIES = (667.0, 1333.0, 2349.0)
+#: The vibrational spectrum carbon dioxide actually has. Linear, three
+#: atoms, so 3N-5 = 4 vibrations: the symmetric stretch (~1333), the
+#: asymmetric stretch (~2349), and the bend (~667), which is **doubly
+#: degenerate** -- one bend, in two perpendicular planes, at one
+#: wavenumber -- and is therefore counted twice.
+HERO_TRUE_FREQUENCIES = (667.0, 667.0, 1333.0, 2349.0)
+
+#: The frequency list actually deposited alongside :data:`HERO_XYZ`.
+#:
+#: Derived from the true spectrum by performing exactly the mistake the
+#: example is about -- de-duplicating equal wavenumbers, which drops one
+#: component of the degenerate pair and lands the count on 3N-6, the
+#: count for a *bent* three-atom molecule. Derived rather than typed
+#: because the panel's whole claim is that one of these four modes is
+#: absent from the deposit: computing the deposit from the spectrum
+#: makes that claim a property of the module instead of a coincidence
+#: between two hand-maintained tuples.
+HERO_FREQUENCIES = tuple(dict.fromkeys(HERO_TRUE_FREQUENCIES))
 
 #: The code the checker attaches to that deposit. Advisory: the record
 #: is accepted and annotated, not refused.
@@ -494,6 +531,93 @@ noscript { display: block; margin-top: 1rem; }
   border-color: var(--phase-neg);
   background: var(--phase-neg);
 }
+/*
+ * A product's own records, rendered where the reader already is.
+ *
+ * Following one of these pills used to navigate to a nested JSON
+ * document: the right answer for a program, and an unreadable one for
+ * a person who clicked a link on a landing page. The pill is now a
+ * disclosure that expands in place and shows the few fields that
+ * answer *what is in here*, and every route to the raw document is
+ * labelled as one, so nobody arrives at JSON by surprise.
+ */
+button.pill {
+  cursor: pointer;
+  line-height: inherit;
+}
+.pill[aria-expanded="true"] {
+  border-color: var(--phase-pos);
+  background: var(--surface);
+}
+.pill[aria-expanded]::after { content: " +"; }
+.pill[aria-expanded="true"]::after { content: " -"; }
+.entry-details:empty { display: none; }
+.detail {
+  margin-top: 0.7rem;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--phase-pos);
+  background: var(--paper);
+  padding: 0.75rem 0.9rem;
+}
+.detail-count {
+  margin: 0;
+  max-width: none;
+  font-family: var(--mono);
+  font-size: var(--fs-data);
+  font-weight: 700;
+}
+.detail-note,
+.detail-status {
+  margin: 0.4rem 0 0;
+  max-width: none;
+  font-size: 0.9375rem;
+  color: var(--muted);
+}
+.detail-card {
+  margin-top: 0.7rem;
+  padding-top: 0.7rem;
+  border-top: 1px solid var(--rule);
+}
+.detail-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 0.6rem;
+}
+.detail-title {
+  font-family: var(--mono);
+  font-size: var(--fs-data);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.detail-ref {
+  font-family: var(--mono);
+  font-size: var(--fs-data);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.fields {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 0.15rem 0.8rem;
+  margin: 0.5rem 0 0;
+  font-size: var(--fs-data);
+}
+.fields dt { color: var(--muted); }
+.fields dd {
+  margin: 0;
+  font-family: var(--mono);
+  overflow-wrap: anywhere;
+}
+.detail-raw,
+.raw-link {
+  overflow-wrap: anywhere;
+}
+.detail-raw {
+  margin: 0.7rem 0 0;
+  max-width: none;
+  font-size: 0.9375rem;
+}
 .empty, .failure {
   border: 1px solid var(--rule);
   border-left: 3px solid var(--phase-pos);
@@ -510,33 +634,6 @@ noscript { display: block; margin-top: 1rem; }
   color: var(--phase-neg-text);
 }
 .failure-detail { font-family: var(--mono); font-size: var(--fs-data); overflow-wrap: anywhere; }
-
-/* ---- the four roles ---- */
-.roles { margin: 0; }
-.roles > div {
-  padding: 0.9rem 0;
-  border-top: 1px solid var(--rule);
-}
-.roles > div:last-child { border-bottom: 1px solid var(--rule); }
-.roles dt {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.6rem;
-  font-family: var(--mono);
-  font-size: var(--fs-body);
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.behaviour {
-  font-family: var(--mono);
-  font-size: var(--fs-label);
-  font-weight: 700;
-  letter-spacing: 0.11em;
-  text-transform: uppercase;
-  color: var(--phase-pos);
-}
-.roles dd { margin: 0.3rem 0 0; max-width: 38rem; }
 
 /* ---- the worked example ---- */
 /*
@@ -593,6 +690,72 @@ noscript { display: block; margin-top: 1rem; }
   background: var(--data-bg);
   padding: 0.7rem 0.8rem;
 }
+/*
+ * The deposited list above the spectrum the molecule really has, one
+ * frequency per column. The panel's entire job is "look what TCKDB
+ * caught", so the gap has to be findable by eye before any prose
+ * explains it: the absent mode is an empty dashed cell sitting
+ * directly above the frequency that belongs in it, both drawn in the
+ * negative phase colour, which appears nowhere else in this panel.
+ *
+ * A table rather than an aligned <pre>: two rows of numbers with a row
+ * header each is what a table is, column alignment survives every mono
+ * fallback face, and a screen reader is told which column a value sits
+ * in instead of being read a run of digits.
+ */
+.spectrum-wrap { overflow-x: auto; }
+.spectrum {
+  border-collapse: collapse;
+  margin: 0;
+  width: 100%;
+  font-family: var(--mono);
+  /*
+   * Floors lower than the coordinate block above it. Five columns of
+   * nowrap monospace is the widest thing on the page, and the whole
+   * point is that both rows are in view at once: a 360px reader who
+   * has to swipe the last column into sight loses the comparison the
+   * panel is making.
+   */
+  font-size: clamp(0.625rem, 0.5rem + 0.5vw, var(--fs-data));
+  background: var(--data-bg);
+}
+.spectrum th,
+.spectrum td {
+  padding: 0.4rem 0.25rem;
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+}
+.spectrum th[scope="row"] {
+  padding-left: 0.5rem;
+  text-align: left;
+  color: var(--muted);
+}
+.spectrum td:last-child { padding-right: 0.5rem; }
+.spectrum tr:first-child > * { padding-top: 0.7rem; }
+.spectrum tr:last-child > * { padding-bottom: 0.7rem; }
+.spectrum .gap { padding: 0.3rem 0.3rem; }
+.gap-mark {
+  display: block;
+  border: 1.5px dashed var(--phase-neg);
+  padding: 0.1rem 0.2rem;
+  color: var(--phase-neg-text);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.spectrum .gap-source {
+  border: 1.5px solid var(--phase-neg);
+  color: var(--phase-neg-text);
+  font-weight: 700;
+}
+.spectrum-caption {
+  margin: 0.6rem 0 0;
+  font-size: 0.9375rem;
+  max-width: none;
+}
+.spectrum-caption b { color: var(--phase-neg-text); }
 .panel-sub {
   font-family: var(--mono);
   font-size: var(--fs-label);
@@ -745,57 +908,45 @@ curl -s "$TCKDB__SEARCH_PATH__?formula=CH3"</code></pre>
     <pre class="command"><code>pip install "git+__REPO_URL__.git#subdirectory=clients/python"</code></pre>
   </section>
 
-  <section aria-labelledby="roles-heading">
-    <h2 id="roles-heading">Four roles, one per table</h2>
-    <dl class="roles">
-      <div>
-        <dt>identity <span class="behaviour">deduped</span></dt>
-        <dd>
-          One row per distinct species, reaction or transition state, however
-          often submitted.
-        </dd>
-      </div>
-      <div>
-        <dt>provenance <span class="behaviour">append-only</span></dt>
-        <dd>
-          The software, level of theory and literature behind a number, never
-          rewritten.
-        </dd>
-      </div>
-      <div>
-        <dt>result <span class="behaviour">append-only</span></dt>
-        <dd>
-          The number itself. A better calculation adds a row; nothing already
-          cited changes.
-        </dd>
-      </div>
-      <div>
-        <dt>curation <span class="behaviour">overlay</span></dt>
-        <dd>
-          Review state and release selections sit on top of results, never
-          mutating them.
-        </dd>
-      </div>
-    </dl>
-  </section>
-
   <section aria-labelledby="exchange-heading">
     <h2 id="exchange-heading">What a check looks like</h2>
     <figure class="exchange-figure">
       <div class="exchange">
         <div class="panel deposit">
           <p class="panel-label">Deposited</p>
-          <pre>__HERO_XYZ__</pre>
+          <p class="panel-sub">carbon dioxide, geometry / &#197;</p>
+          <pre>__HERO_GEOMETRY__</pre>
           <p class="panel-sub">frequencies / cm&#8315;&#185;</p>
-          <pre>__HERO_FREQUENCIES__</pre>
+          <div class="spectrum-wrap">
+__HERO_SPECTRUM__
+          </div>
+          <p class="spectrum-caption">
+            The top row is what was deposited. The bottom row is the spectrum
+            carbon dioxide has. <b>667 cm&#8315;&#185; belongs in it twice</b>,
+            and the deposit carries it once.
+          </p>
         </div>
         <div class="panel verdict">
           <p class="panel-label">TCKDB replies</p>
           <code class="verdict-code">__HERO_CODE__</code>
           <p class="verdict-body">
-            Linear geometry: 3N&minus;5 = 4 vibrations, but the list carries
-            three &mdash; a degenerate bend, reported once by a de-duplicating
-            parser. The record is accepted and flagged, not refused.
+            Carbon dioxide is linear, so it has 3N&minus;5 = 4 vibrations:
+            a symmetric stretch, an asymmetric stretch, and a bend.
+          </p>
+          <p class="verdict-body">
+            The bend is <em>doubly degenerate</em>. The molecule bends in two
+            perpendicular planes, and both cost the same energy, so one bend
+            occupies two of the four modes at the same wavenumber.
+          </p>
+          <p class="verdict-body">
+            This list carries that wavenumber once. The usual cause is a
+            parser that de-duplicates equal frequencies, which leaves exactly
+            three &mdash; 3N&minus;6, the vibrational count of a <em>bent</em>
+            three-atom molecule, on a geometry that is not bent.
+          </p>
+          <p class="verdict-body">
+            The record is accepted and flagged, not refused. TCKDB stores the
+            deposit and attaches the code above to it.
           </p>
         </div>
       </div>
@@ -916,6 +1067,317 @@ curl -s "$TCKDB__SEARCH_PATH__?formula=CH3"</code></pre>
     return node;
   }
 
+  /*
+   * ---- what a result leads to -------------------------------------
+   *
+   * Every product a record has becomes a disclosure that opens in
+   * place. The panel names the handful of fields that answer what is
+   * in here, and ends with the same endpoint labelled as raw JSON, so
+   * the machine-readable document stays one click away and is never
+   * somewhere a reader lands unawares.
+   *
+   * The numbers shown are the payload own pagination total and the
+   * per-record count fields. Deliberately never the group-scope
+   * has_* booleans in the conformer payload: each is an OR across
+   * every observation in the group, so it reads as a fact about the
+   * conformer while being a fact about the union. Those are being
+   * replaced by counts; until they are, this page shows none of them.
+   */
+
+  function fixed(value, digits, unit) {
+    if (value === null || value === undefined) { return null; }
+    var text = Number(value).toFixed(digits);
+    return unit ? text + " " + unit : text;
+  }
+
+  /*
+   * A software release prints its own name in some deployments
+   * (Gaussian 16, Revision C.02) and not in others (16). Concatenating
+   * unconditionally gives one of those a stutter and the other a bare
+   * number with no product attached, so the name is prepended only
+   * when the version does not already open with it.
+   */
+  function softwareLabel(release) {
+    if (!release) { return null; }
+    var name = release.software;
+    var version = release.version;
+    if (!name) { return version || null; }
+    if (!version) { return name; }
+    return version.indexOf(name) === 0 ? version : name + " " + version;
+  }
+
+  function levelLabel(level) {
+    if (!level) { return null; }
+    if (level.label) { return level.label; }
+    if (!level.method) { return null; }
+    return level.method + (level.basis ? "/" + level.basis : "");
+  }
+
+  function thermoView(record) {
+    var thermo = record.thermo || {};
+    var coverage = thermo.temperature_coverage || {};
+    var primary = (record.provenance || {}).primary_calculation || {};
+    var span = null;
+    if (coverage.record_min_k !== null && coverage.record_min_k !== undefined) {
+      span = fixed(coverage.record_min_k, 0) + "\u2013" + fixed(coverage.record_max_k, 0, "K");
+    }
+    return {
+      title: (thermo.model_kind || "thermo") + " fit",
+      ref: thermo.thermo_ref,
+      status: thermo.review ? thermo.review.status : null,
+      fields: [
+        ["enthalpy at 298 K", fixed(thermo.h298_kj_mol, 2, "kJ/mol")],
+        ["entropy at 298 K", fixed(thermo.s298_j_mol_k, 2, "J/mol/K")],
+        ["fitted over", span],
+        ["level of theory", levelLabel(primary.level_of_theory)],
+        ["origin", thermo.scientific_origin]
+      ]
+    };
+  }
+
+  function statmechView(record) {
+    var statmech = record.statmech || {};
+    var linear = statmech.is_linear;
+    return {
+      title: (statmech.statmech_treatment || "statmech") +
+        (statmech.rigid_rotor_kind ? " / " + statmech.rigid_rotor_kind + " rotor" : ""),
+      ref: statmech.statmech_ref,
+      status: statmech.review ? statmech.review.status : null,
+      fields: [
+        ["point group", statmech.point_group],
+        ["symmetry number", statmech.external_symmetry],
+        ["optical isomers", statmech.optical_isomers],
+        ["linear", linear === null || linear === undefined ? null : (linear ? "yes" : "no")],
+        ["frequency scale factor", fixed(statmech.frequency_scale_factor_value, 4)],
+        ["origin", statmech.scientific_origin]
+      ]
+    };
+  }
+
+  function transportView(record) {
+    var transport = record.transport || {};
+    var evidence = record.evidence_summary || {};
+    return {
+      title: "Lennard-Jones parameters",
+      ref: transport.transport_ref,
+      status: transport.review ? transport.review.status : null,
+      fields: [
+        ["collision diameter", fixed(transport.sigma_angstrom, 3, "\u00C5")],
+        ["well depth", fixed(transport.epsilon_over_k_k, 1, "K")],
+        ["dipole moment", fixed(transport.dipole_debye, 3, "D")],
+        ["source calculations", evidence.source_calculation_count],
+        ["origin", transport.scientific_origin]
+      ]
+    };
+  }
+
+  function conformerView(record) {
+    var group = record.conformer_group || {};
+    var evidence = record.evidence_summary || {};
+    var observations = record.observations_summary || {};
+    var seen = evidence.observation_count;
+    if (seen === null || seen === undefined) { seen = observations.total; }
+    return {
+      title: group.label || "conformer group",
+      ref: group.conformer_group_ref,
+      status: group.review ? group.review.status : null,
+      fields: [
+        ["deposited as", seen === null || seen === undefined
+          ? null
+          : plural(seen, "observation", "observations") + " of this one group"],
+        ["calculations behind it", evidence.calculation_count],
+        ["distinct geometries", evidence.geometry_count]
+      ]
+    };
+  }
+
+  function calculationView(record) {
+    var calculation = record.calculation || {};
+    var energy = record.energy || {};
+    var software = record.software_release || {};
+    var hartree = energy.energy_hartree;
+    return {
+      title: calculation.calculation_type || "calculation",
+      ref: calculation.calculation_ref,
+      status: calculation.review ? calculation.review.status : null,
+      fields: [
+        ["level of theory", levelLabel(record.level_of_theory)],
+        ["software", softwareLabel(software)],
+        ["energy", hartree === null || hartree === undefined
+          ? null
+          : fixed(hartree, 6, "hartree")],
+        ["quality", calculation.calculation_quality]
+      ]
+    };
+  }
+
+  var SECTIONS = [
+    {
+      key: "thermo",
+      label: "thermo",
+      one: "thermo record",
+      many: "thermo records",
+      shown: function (a) { return !!a.has_thermo; },
+      url: function (ref) { return THERMO + "?species_entry_ref=" + encodeURIComponent(ref); },
+      view: thermoView
+    },
+    {
+      key: "statmech",
+      label: "statmech",
+      one: "statmech record",
+      many: "statmech records",
+      shown: function (a) { return !!a.has_statmech; },
+      url: function (ref) { return ENTRY + encodeURIComponent(ref) + "/statmech"; },
+      view: statmechView
+    },
+    {
+      key: "transport",
+      label: "transport",
+      one: "transport record",
+      many: "transport records",
+      shown: function (a) { return !!a.has_transport; },
+      url: function (ref) { return ENTRY + encodeURIComponent(ref) + "/transport"; },
+      view: transportView
+    },
+    {
+      key: "conformers",
+      label: "conformers",
+      one: "conformer group",
+      many: "conformer groups",
+      note: "A conformer group is one torsional basin -- one conformer. Its " +
+        "observations are the deposited instances assigned to that basin, so a " +
+        "group with five observations is one conformer seen five times, not " +
+        "five conformers.",
+      shown: function (a) { return !!a.has_conformers; },
+      url: function (ref) { return CONFORMERS + "?species_entry_ref=" + encodeURIComponent(ref); },
+      view: conformerView
+    },
+    {
+      key: "calculations",
+      label: "calculations",
+      one: "calculation",
+      many: "calculations",
+      count: function (a) { return a.calculation_count; },
+      shown: function (a) { return !!a.calculation_count; },
+      url: function (ref) {
+        return CALCULATIONS + "?species_entry_ref=" + encodeURIComponent(ref);
+      },
+      view: calculationView
+    }
+  ];
+
+  /*
+   * How many records a panel draws before deferring to the raw
+   * document. An entry can carry dozens of calculations, and a landing
+   * page that answers a click with fifty cards has swapped one wall of
+   * text for another. The count above the cards is the real total, so
+   * the cap shortens the reading and never the answer.
+   */
+  var CARD_LIMIT = 5;
+
+  var panelSeq = 0;
+
+  function pillLabel(section, availability) {
+    if (section.count) {
+      return plural(section.count(availability), section.one, section.many);
+    }
+    return section.label;
+  }
+
+  function rawLink(section, ref) {
+    var node = make("p", "detail-raw");
+    node.appendChild(anchor(section.url(ref), "raw-link", "Open this list as raw JSON"));
+    return node;
+  }
+
+  function detailFields(view) {
+    var list = make("dl", "fields");
+    for (var i = 0; i < view.fields.length; i += 1) {
+      var pair = view.fields[i];
+      if (pair[1] === null || pair[1] === undefined || pair[1] === "") { continue; }
+      list.appendChild(make("dt", null, pair[0]));
+      list.appendChild(make("dd", null, pair[1]));
+    }
+    return list;
+  }
+
+  function detailBody(section, ref, payload) {
+    var fragment = doc.createDocumentFragment();
+    var records = payload.records || [];
+    var pagination = payload.pagination || {};
+    var total = pagination.total;
+    if (total === null || total === undefined) { total = records.length; }
+    fragment.appendChild(make("p", "detail-count", plural(total, section.one, section.many)));
+    if (section.note) { fragment.appendChild(make("p", "detail-note", section.note)); }
+    var shown = Math.min(records.length, CARD_LIMIT);
+    for (var i = 0; i < shown; i += 1) {
+      var view = section.view(records[i]);
+      var card = make("div", "detail-card");
+      var head = make("div", "detail-head");
+      head.appendChild(make("span", "detail-title", view.title));
+      if (view.status) { head.appendChild(reviewBadge(view.status)); }
+      if (view.ref) { head.appendChild(make("span", "detail-ref", view.ref)); }
+      card.appendChild(head);
+      card.appendChild(detailFields(view));
+      fragment.appendChild(card);
+    }
+    if (total > shown) {
+      fragment.appendChild(make("p", "detail-note",
+        "Showing the first " + plural(shown, section.one, section.many) + " of " + total + "."));
+    }
+    fragment.appendChild(rawLink(section, ref));
+    return fragment;
+  }
+
+  function loadDetail(panel, section, ref) {
+    clear(panel);
+    panel.appendChild(make("p", "detail-status", "Loading\u2026"));
+    fetch(section.url(ref), { headers: { "Accept": "application/json" } })
+      .then(function (response) {
+        return response.json().then(function (body) {
+          return { ok: response.ok, body: body };
+        }, function () {
+          return { ok: false, body: null };
+        });
+      })
+      .then(function (result) {
+        clear(panel);
+        if (result.ok) {
+          panel.appendChild(detailBody(section, ref, result.body || {}));
+          return;
+        }
+        panel.appendChild(make("p", "detail-status", "This list could not be read."));
+        panel.appendChild(rawLink(section, ref));
+      }, function () {
+        clear(panel);
+        panel.appendChild(make("p", "detail-status",
+          "The browser could not reach this deployment's API."));
+      });
+  }
+
+  function disclosure(section, ref, availability) {
+    panelSeq += 1;
+    var id = "detail-" + section.key + "-" + panelSeq;
+    var button = make("button", "pill", pillLabel(section, availability));
+    button.setAttribute("type", "button");
+    button.setAttribute("aria-expanded", "false");
+    button.setAttribute("aria-controls", id);
+    var panel = make("div", "detail");
+    panel.id = id;
+    panel.hidden = true;
+    var loaded = false;
+    button.addEventListener("click", function () {
+      var open = button.getAttribute("aria-expanded") === "true";
+      button.setAttribute("aria-expanded", open ? "false" : "true");
+      panel.hidden = open;
+      if (!open && !loaded) {
+        loaded = true;
+        loadDetail(panel, section, ref);
+      }
+    });
+    return { button: button, panel: panel };
+  }
+
   function entryNode(entry) {
     var ref = entry.species_entry_ref || "";
     var availability = entry.availability || {};
@@ -929,29 +1391,18 @@ curl -s "$TCKDB__SEARCH_PATH__?formula=CH3"</code></pre>
     node.appendChild(head);
 
     var links = make("div", "entry-links");
-    var encoded = encodeURIComponent(ref);
-    if (availability.has_thermo) {
-      links.appendChild(anchor(THERMO + "?species_entry_ref=" + encoded, "pill", "thermo"));
-    }
-    if (availability.has_statmech) {
-      links.appendChild(anchor(ENTRY + encoded + "/statmech", "pill", "statmech"));
-    }
-    if (availability.has_transport) {
-      links.appendChild(anchor(ENTRY + encoded + "/transport", "pill", "transport"));
-    }
-    if (availability.has_conformers) {
-      links.appendChild(anchor(CONFORMERS + "?species_entry_ref=" + encoded, "pill", "conformers"));
-    }
-    if (availability.calculation_count) {
-      links.appendChild(anchor(
-        CALCULATIONS + "?species_entry_ref=" + encoded,
-        "pill",
-        plural(availability.calculation_count, "calculation", "calculations")));
+    var panels = make("div", "entry-details");
+    for (var i = 0; i < SECTIONS.length; i += 1) {
+      if (!SECTIONS[i].shown(availability)) { continue; }
+      var pair = disclosure(SECTIONS[i], ref, availability);
+      links.appendChild(pair.button);
+      panels.appendChild(pair.panel);
     }
     if (!links.firstChild) {
       links.appendChild(make("span", "pill pill-none", "no products yet"));
     }
     node.appendChild(links);
+    node.appendChild(panels);
     return node;
   }
 
@@ -966,8 +1417,10 @@ curl -s "$TCKDB__SEARCH_PATH__?formula=CH3"</code></pre>
     var refs = make("p", "record-refs");
     refs.appendChild(make("span", null, record.inchi_key || ""));
     refs.appendChild(doc.createTextNode(" \\u00B7 "));
-    refs.appendChild(anchor(searchUrl("species_ref", record.species_ref), null,
-      record.species_ref || "record"));
+    refs.appendChild(make("span", null, record.species_ref || ""));
+    refs.appendChild(doc.createTextNode(" \u00B7 "));
+    refs.appendChild(anchor(searchUrl("species_ref", record.species_ref), "raw-link",
+      "this record as raw JSON"));
     node.appendChild(refs);
 
     var entries = record.entries || [];
@@ -1044,7 +1497,8 @@ curl -s "$TCKDB__SEARCH_PATH__?formula=CH3"</code></pre>
     if (pagination.total > records.length) {
       var more = make("p", "results-status", "Showing the first page.");
       more.appendChild(doc.createTextNode(" "));
-      more.appendChild(anchor(searchUrl(field, value), null, "Open the full response"));
+      more.appendChild(anchor(searchUrl(field, value), "raw-link",
+        "Open the full response as raw JSON"));
       out.appendChild(more);
     }
   }
@@ -1154,6 +1608,64 @@ def _example_chips() -> str:
     return "\n".join(lines)
 
 
+def hero_atom_lines() -> tuple[str, ...]:
+    """The coordinate rows of :data:`HERO_XYZ`, without the XYZ header.
+
+    The header is real and the checker reads it; it is simply not
+    something to put on a web page on its own. See :data:`HERO_XYZ`.
+    """
+    return tuple(HERO_XYZ.splitlines()[2:])
+
+
+def _spectrum_table() -> str:
+    """The deposited frequency list above the true spectrum, gap marked.
+
+    Built from :data:`HERO_TRUE_FREQUENCIES` and :data:`HERO_FREQUENCIES`
+    rather than written out, so the cell drawn as *missing* is the cell
+    the two tuples really disagree about. A hand-written table could
+    mark the wrong column, or keep marking one after the numbers moved,
+    and would look equally convincing either way.
+
+    The comparison is a multiset one: a degenerate pair is two entries
+    with the same value, so matching by value alone would call both of
+    CO2's 667 cm-1 modes present and mark nothing.
+    """
+    remaining = list(HERO_FREQUENCIES)
+    deposited: list[str] = []
+    spectrum: list[str] = []
+    for value in HERO_TRUE_FREQUENCIES:
+        cell = _html_escape(f"{value:.1f}")
+        if value in remaining:
+            remaining.remove(value)
+            deposited.append(f"<td>{cell}</td>")
+            spectrum.append(f"<td>{cell}</td>")
+        else:
+            deposited.append('<td class="gap"><span class="gap-mark">missing</span></td>')
+            spectrum.append(f'<td class="gap-source">{cell}</td>')
+    if remaining:  # pragma: no cover - a constant-only mistake, caught in tests
+        raise ValueError(
+            "the deposited frequency list carries a mode the true spectrum does not: "
+            f"{remaining}"
+        )
+    indent = " " * 12
+    lines = [
+        f'{indent}<table class="spectrum">',
+        f"{indent}<caption class=\"sr-only\">Carbon dioxide vibrational "
+        "frequencies, in reciprocal centimetres: the deposited list above the "
+        'spectrum the molecule has.</caption>',
+        f"{indent}<tr>",
+        f'{indent}<th scope="row">deposited</th>',
+        *(f"{indent}{cell}" for cell in deposited),
+        f"{indent}</tr>",
+        f"{indent}<tr>",
+        f'{indent}<th scope="row">CO<sub>2</sub> has</th>',
+        *(f"{indent}{cell}" for cell in spectrum),
+        f"{indent}</tr>",
+        f"{indent}</table>",
+    ]
+    return "\n".join(lines)
+
+
 def _html_escape(text: str) -> str:
     return (
         text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
@@ -1209,7 +1721,6 @@ def render_landing_page(*, api_reference_path: str | None) -> str:
             f'<a href="{DOCS_URL}">documentation site</a> carries the endpoint '
             "reference and query guides."
         )
-    frequencies = "   ".join(f"{value:.1f}" for value in HERO_FREQUENCIES)
     return (
         _PAGE_TEMPLATE.replace("__DOCS_URL__", DOCS_URL)
         .replace("__REPO_URL__", REPO_URL)
@@ -1221,8 +1732,8 @@ def render_landing_page(*, api_reference_path: str | None) -> str:
         .replace("__ORIGIN_PLACEHOLDER__", ORIGIN_PLACEHOLDER)
         .replace("__SEED_FIELD__", SEED_FIELD)
         .replace("__SEED_VALUE__", _html_escape(SEED_VALUE))
-        .replace("__HERO_XYZ__", HERO_XYZ)
-        .replace("__HERO_FREQUENCIES__", frequencies)
+        .replace("__HERO_GEOMETRY__", "\n".join(hero_atom_lines()))
+        .replace("__HERO_SPECTRUM__", _spectrum_table())
         .replace("__HERO_CODE__", HERO_CODE)
         .replace("__REFERENCE_BUTTON__", reference_button)
         .replace("__DOCS_BUTTON__", docs_button)
@@ -1257,6 +1768,7 @@ __all__ = [
     "DOCS_URL",
     "HERO_CODE",
     "HERO_FREQUENCIES",
+    "HERO_TRUE_FREQUENCIES",
     "HERO_XYZ",
     "ORIGIN_PLACEHOLDER",
     "REDOC_PATH",
@@ -1266,6 +1778,7 @@ __all__ = [
     "SEED_FIELD",
     "SEED_VALUE",
     "SPECIES_SEARCH_PATH",
+    "hero_atom_lines",
     "landing_router",
     "render_landing_page",
 ]
