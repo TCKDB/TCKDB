@@ -80,16 +80,47 @@ So this module carries its own pair of thresholds and its own three-way
 answer. See :data:`COLLINEAR_MAX_TRANSVERSE_RATIO` and
 :data:`BENT_MIN_TRANSVERSE_RATIO`.
 
-What the check does *not* do
-----------------------------
-It does not report the mirror case — a geometry determined **linear**
-whose list is ``3N - 6``, one mode short of the ``3N - 5`` a linear
-molecule has. That is the same size of slack in the other direction and
-is a reasonable follow-up, but the short-list warning already has an
-owner (``freq_list_incomplete_for_geometry``) whose message and tier were
-argued from partial Hessians, frozen-atom regions and lumped
-participants; extending it to a case those arguments do not cover is its
-own decision, not a rider on this one.
+The mirror case, and why it is a code of its own
+-----------------------------------------------
+The slack is the same width in the other direction: a geometry
+determined **linear** carrying ``3N - 6`` modes is one short of the
+``3N - 5`` a linear molecule has, and nothing reported it. The wire
+floor cannot — ``3N - 6`` *is* its floor, and it warns strictly below —
+so the deposit lands exactly on the accepted line and passes in silence.
+A consumer recomputing a partition function from that pair gets a
+number rather than an error, which is the failure mode this whole
+module exists to close.
+
+That case is now reported, as
+:data:`W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY`, and it is a
+**second code rather than an extension of
+``freq_list_incomplete_for_geometry``** for two reasons.
+
+The structural one decides it: the wire code is emitted by a package
+that cannot reach a collinearity tolerance, and this condition cannot
+be evaluated without one. Emitting that code from here would put a
+coordinate-dependent trigger behind a string whose whole contract is
+that an atom count proves it, and would break the split this module is
+built on — the wire package keeps the strength an atom count can prove,
+the backend adds the strength coordinates can.
+
+The diagnostic one is why a depositor benefits. ``3N - 6`` on a linear
+geometry is not an arbitrary short list; it is *exactly* the count of a
+bent molecule of the same size, and the most common way to produce it
+is not a partial Hessian at all. **A linear molecule's bending modes
+are doubly degenerate** — CO2's four vibrations are two stretches and
+one bend counted twice — so any parser or script that de-duplicates
+equal frequencies silently drops one component and lands on ``3N - 6``.
+The generic short-list message argues from partial Hessians,
+frozen-atom regions and lumped participants and would send a depositor
+looking in the wrong place.
+
+The tier is the same as its mirror, and for the same reason: the
+verdict rests on a tolerance, so ADR 0008 makes it an expectation. It
+is also a shape a correct deposit really can take — a genuine partial
+or frozen-atom Hessian on a linear molecule produces a short list
+honestly — which is the second, independent argument for warning rather
+than refusing.
 """
 
 from __future__ import annotations
@@ -116,6 +147,20 @@ from app.scientific_checks import (
 #: is not linear. Advisory: the record is accepted and annotated.
 W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY = (
     "freq_list_linear_mode_count_for_bent_geometry"
+)
+
+#: The deposited frequency list has exactly the mode count a **bent**
+#: molecule of this size would have, but the geometry it is attached to
+#: is linear — so one vibration is missing, most often one half of a
+#: degenerate bending pair collapsed by a de-duplicating parser.
+#: Advisory: the record is accepted and annotated.
+#:
+#: The wire-side floor cannot reach this case. ``3N - 6`` is that
+#: floor's own threshold and it warns strictly below, so this deposit
+#: sits exactly on the accepted line. The two codes are therefore
+#: mutually exclusive by construction, not merely by convention.
+W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY = (
+    "freq_list_bent_mode_count_for_linear_geometry"
 )
 
 #: At or below this, the geometry is treated as **linear** and the check
@@ -264,6 +309,55 @@ def classify_xyz_linearity(xyz_text: str | None) -> LinearityAssessment:
     return classify_linearity(coordinates)
 
 
+def _bent_count_for_linear_geometry(
+    *,
+    n_modes: int,
+    n_atoms: int,
+    linear_count: int,
+    ratio: float | None,
+    location: str,
+) -> UploadWarning:
+    """The message for a linear geometry carrying a bent molecule's count.
+
+    Split out rather than inlined because the two directions of this
+    check say genuinely different things to a depositor. The bent case
+    says "one of these is not a vibration"; this one says "a vibration
+    is missing", and names the cause that actually produces it most
+    often — a collapsed degenerate bending pair, which the generic
+    short-list warning's partial-Hessian framing would send someone
+    looking past.
+    """
+
+    return UploadWarning(
+        field=location,
+        code=W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
+        message=(
+            f"{location}: the frequency list carries {n_modes} modes, "
+            f"which is 3N-6 for this {n_atoms}-atom geometry -- the "
+            f"vibrational count of a *bent* molecule "
+            f"({W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY}). This "
+            f"geometry is linear: its atoms spread across their long axis "
+            f"by only {ratio:.2g} of their spread along it, against a "
+            f"threshold of {COLLINEAR_MAX_TRANSVERSE_RATIO:g} for calling "
+            f"a geometry linear (exactly collinear is 0). A linear "
+            f"{n_atoms}-atom molecule has 3N-5 = {linear_count} "
+            f"vibrations, so one mode is missing from this list. The "
+            f"usual cause is a degenerate bending pair reported once: a "
+            f"linear molecule's bends are doubly degenerate -- CO2's four "
+            f"vibrations are two stretches and one bend counted twice -- "
+            f"so a parser or script that de-duplicates equal frequencies "
+            f"drops one component and lands exactly here. A genuinely "
+            f"partial or frozen-atom Hessian would also produce a short "
+            f"list, honestly. The record is accepted and flagged, not "
+            f"refused: the boundary between linear and bent is a "
+            f"tolerance rather than a definition, and near-linear "
+            f"geometries are deliberately left unreported. Deposit every "
+            f"mode the job printed, including both components of each "
+            f"degenerate pair."
+        ),
+    )
+
+
 def evaluate_frequency_list_linearity(
     n_modes: int | None,
     xyz_text: str | None,
@@ -272,11 +366,22 @@ def evaluate_frequency_list_linearity(
 ) -> list[UploadWarning]:
     """Judge one deposited frequency list against its geometry's shape.
 
-    Fires on exactly one configuration: ``n_modes == 3N - 5`` for a
-    geometry classified :attr:`GeometryLinearity.bent`. Everything else
-    is silent, including every list the wire-side floor and ceiling
-    already speak about — this check never reports a length those bounds
-    reach, so a payload cannot collect two warnings for one list.
+    Fires on exactly two configurations — the same one-mode slack, once
+    in each direction:
+
+    * ``n_modes == 3N - 5`` on a geometry classified
+      :attr:`GeometryLinearity.bent`: one mode too many, reported as
+      :data:`W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY`.
+    * ``n_modes == 3N - 6`` on a geometry classified
+      :attr:`GeometryLinearity.linear`: one mode too few, reported as
+      :data:`W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY`.
+
+    Everything else is silent, including every list the wire-side floor
+    and ceiling already speak about — this check never reports a length
+    those bounds reach, so a payload cannot collect two warnings for one
+    list. The two lengths here differ by one and each is admitted only
+    under the opposite verdict, so the two codes are mutually exclusive
+    as well.
 
     :param n_modes: Length of the deposited frequency list. ``None``
         means no list was deposited; nothing is reported.
@@ -290,7 +395,7 @@ def evaluate_frequency_list_linearity(
         return []
 
     assessment = classify_xyz_linearity(xyz_text)
-    if assessment.verdict is not GeometryLinearity.bent:
+    if assessment.verdict is GeometryLinearity.undetermined:
         return []
 
     try:
@@ -298,12 +403,29 @@ def evaluate_frequency_list_linearity(
     except (ValueError, TypeError):  # pragma: no cover - classify already parsed
         return []
 
+    # Neither count can go negative and no diatomic reaches either
+    # branch: classify_linearity answers `undetermined` below three
+    # atoms, so a decided verdict already implies N >= 3.
     linear_count = 3 * n_atoms - 5
     bent_count = 3 * n_atoms - 6
+    ratio = assessment.transverse_ratio
+
+    if assessment.verdict is GeometryLinearity.linear:
+        if n_modes != bent_count:
+            return []
+        return [
+            _bent_count_for_linear_geometry(
+                n_modes=n_modes,
+                n_atoms=n_atoms,
+                linear_count=linear_count,
+                ratio=ratio,
+                location=location,
+            )
+        ]
+
     if n_modes != linear_count:
         return []
 
-    ratio = assessment.transverse_ratio
     return [
         UploadWarning(
             field=location,
@@ -615,12 +737,16 @@ def network_pdep_linearity_warnings(request: object) -> list[UploadWarning]:
 CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
     group="Stationary points",
     sort_key=9,
-    code=W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
+    code=(
+        W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
+        W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
+    ),
     asserts=(
-        "A frequency list carrying exactly ``3N - 5`` modes should be "
-        "attached to a collinear geometry, because ``3N - 5`` is the "
-        "vibrational count of a linear molecule and a non-linear one has "
-        "``3N - 6``."
+        "A frequency list's mode count should match the shape of the "
+        "geometry it is attached to: ``3N - 5`` vibrations for a collinear "
+        "molecule and ``3N - 6`` for a non-linear one, so a list carrying "
+        "one count on a geometry of the other shape is one mode wrong in "
+        "whichever direction it leans."
     ),
     tier=CheckTier.warn,
     channel=CodeChannel.upload_warning,
@@ -630,15 +756,21 @@ CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE = ScientificCheck(
         "the line between collinear and bent is drawn — and a rule whose "
         "answer moves when a constant moves is an expectation by "
         "construction. Unlike the ``3N`` ceiling, which no correct deposit "
-        "can trip, this one can: a genuinely quasi-linear molecule sits on "
-        "no side of the line, and a producer who deposited ``3N - 6`` "
+        "can trip, both of these can: a genuinely quasi-linear molecule sits "
+        "on no side of the line; a producer who deposited ``3N - 6`` "
         "vibrations plus one rigid-body eigenvalue on purpose deposited "
-        "something true. So the check declines to answer in the ambiguous "
-        "band and annotates rather than refuses outside it. It is also the "
-        "*second* judgement on one list: the wire package's "
-        "``freq_list_incomplete_for_geometry`` floor keeps exactly the "
-        "strength an atom count can prove, and this adds only the strength "
-        "coordinates can."
+        "something true; and a partial or frozen-atom Hessian on a linear "
+        "molecule produces ``3N - 6`` modes honestly. So the check declines "
+        "to answer in the ambiguous band and annotates rather than refuses "
+        "outside it. It is also the *second* judgement on one list: the wire "
+        "package's ``freq_list_incomplete_for_geometry`` floor keeps exactly "
+        "the strength an atom count can prove, and this adds only the "
+        "strength coordinates can. That is also why the short-list direction "
+        "is a code of its own rather than an extension of that floor — "
+        "``3N - 6`` *is* the floor's threshold and it warns strictly below, "
+        "so the wire package cannot reach this case at all, and emitting its "
+        "code from here would put a coordinate-dependent trigger behind a "
+        "string whose contract is that an atom count proves it."
     ),
     adr="0008",
     enforced_by=(
@@ -720,6 +852,7 @@ __all__ = [
     "BENT_MIN_TRANSVERSE_RATIO",
     "CHECK_FREQ_LIST_MODE_COUNT_MATCHES_GEOMETRY_SHAPE",
     "COLLINEAR_MAX_TRANSVERSE_RATIO",
+    "W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY",
     "W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY",
     "GeometryLinearity",
     "LinearityAssessment",

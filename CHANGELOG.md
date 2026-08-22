@@ -59,6 +59,42 @@ wrapper over a contract that is itself still moving.
 
 ### Fixed
 
+- **A linear molecule could deposit a frequency list with one vibration
+  missing, and nothing said a word.** A harmonic analysis of `N` atoms has
+  `3N - 6` vibrations if the molecule is bent and `3N - 5` if it is linear —
+  linear molecules have one *more*, because a bend that would be two distinct
+  motions in a bent molecule stays degenerate along a straight axis. TCKDB
+  already flagged one direction of that one-mode gap (a bent geometry carrying
+  the linear count). The other direction was open: a **linear** geometry
+  carrying `3N - 6` modes is one vibration short, and every check accepted it.
+  The wire-side completeness floor could not catch it either — `3N - 6` *is*
+  that floor and it warns strictly below, so the deposit landed exactly on the
+  accepted line.
+
+  The consequence is the one that matters: a consumer recomputing a partition
+  function from that record gets a *number*, not an error, and the number is
+  wrong. Silently.
+
+  Now reported as `freq_list_bent_mode_count_for_linear_geometry`, an
+  `UploadWarning` on an accepted 201 — advisory, never blocking, because the
+  linear/bent boundary is a tolerance rather than a definition (ADR 0008) and
+  because a genuine partial or frozen-atom Hessian produces the same count
+  honestly. The message names the cause that actually produces it: **a linear
+  molecule's bending modes are doubly degenerate** — CO2's four vibrations are
+  two stretches and one bend counted twice — so a parser that de-duplicates
+  equal frequencies drops one component and lands exactly on `3N - 6`. The
+  generic short-list warning argues from partial Hessians and frozen-atom
+  regions, and would have sent a depositor looking in the wrong place; that is
+  why this is a second code rather than an extension of it.
+
+  The two codes are mutually exclusive by construction, not by convention: the
+  counts differ by one and each is admitted only under the opposite geometry
+  verdict. Reaches every upload shape — the conformer route, the
+  computed-species and computed-reaction bundles, standalone transition
+  states, the statmech/thermo/transport product uploads and the
+  pressure-dependent network route — because all six walkers already funnelled
+  through one judgement function.
+
 - **Two pull requests could claim the same package version, and `git` would
   merge it silently.** Every change to a published package bumps its version.
   Two branches that start from the same base therefore bump to the *same next

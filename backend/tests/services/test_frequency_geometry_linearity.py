@@ -7,16 +7,31 @@ determined in the wire package, and since ``3N - 5 > 3N - 6`` a linear
 molecule clears a ``3N - 6`` floor without anyone having to choose a
 collinearity tolerance.
 
-The residue that leaves is one mode wide, and it is what this file is
-about: a **non-linear** molecule depositing exactly ``3N - 5`` modes —
-one spurious extra, or one rigid-body mode left in the list — sits inside
-the accepted band and passes silently.
+The residue that leaves is one mode wide, and it runs in **both**
+directions. This file is about both:
+
+* a **non-linear** molecule depositing exactly ``3N - 5`` modes — one
+  spurious extra, or one rigid-body mode left in the list — sits inside
+  the accepted band and passes silently;
+* a **linear** molecule depositing exactly ``3N - 6`` modes is one
+  vibration short, and the wire floor cannot see it either: ``3N - 6``
+  *is* that floor and it warns strictly below, so the deposit lands
+  exactly on the accepted line.
+
+The second direction has a cause the first does not, and it is the one
+worth naming: a linear molecule's bending modes are **doubly
+degenerate**. CO2's four vibrations are two stretches and one bend
+counted twice, so a parser that de-duplicates equal frequencies emits
+three — exactly ``3N - 6``. ``TestThePayloadAdapter`` deposits that
+list.
 
 Every test here uses a real molecule, and both kinds are present on
 purpose. A file testing only bent geometries could not tell this check
 from a rule that flags every ``3N - 5`` deposit; a file testing only
-linear ones could not tell it from today's behaviour, which flags
-nothing. The pair is the test.
+linear ones could not tell it from a rule that flags every ``3N - 6``
+one. The pair is the test, in each direction, and
+``TestTheTwoDirectionsDoNotOverlap`` pins that no deposit can collect
+both.
 """
 
 from __future__ import annotations
@@ -27,6 +42,7 @@ import pytest
 from app.services.frequency_geometry_linearity import (
     BENT_MIN_TRANSVERSE_RATIO,
     COLLINEAR_MAX_TRANSVERSE_RATIO,
+    W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
     W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
     GeometryLinearity,
     calculation_linearity_warnings,
@@ -393,6 +409,241 @@ class TestThePayloadAdapter:
                 self._calc(None),
                 location="calculations[1].freq_result.modes",
                 fallback_xyz_text=WATER_XYZ,
+            )
+            == []
+        )
+
+
+class TestTheMirrorWarningFiresOnlyForLinearGeometries:
+    """The other direction: a linear geometry one vibration short.
+
+    Nothing reported this before. The wire-side floor for an N-atom
+    geometry is ``3N - 6`` and it warns strictly below, so a linear
+    molecule depositing exactly ``3N - 6`` sits on the accepted line and
+    passed in silence — while a consumer recomputing a partition
+    function from it got a number rather than an error.
+    """
+
+    def test_carbon_dioxide_with_three_modes_is_flagged(self):
+        """Three modes is 3N-6: the count a *bent* triatomic has.
+
+        CO2 has four vibrations. The wire floor is 3 and warns below 3,
+        the ceiling is 9, so this deposit tripped nothing at all.
+        """
+        warnings = evaluate_frequency_list_linearity(3, CO2_XYZ, location="x")
+        assert [w.code for w in warnings] == [
+            W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY
+        ]
+
+    def test_water_with_three_modes_is_not_flagged(self):
+        """The same atom count, the same mode count, the opposite verdict.
+
+        This is what separates the check from a rule that flags every
+        ``3N - 6`` deposit: water genuinely has three vibrations, and it
+        is the single most common molecule in the database.
+        """
+        assert evaluate_frequency_list_linearity(3, WATER_XYZ, location="x") == []
+
+    def test_hydrogen_cyanide_with_three_modes_is_flagged(self):
+        """Linear but not symmetric.
+
+        A check that keyed on symmetry rather than collinearity would
+        part company with reality here, so HCN is tested in both
+        directions rather than only the silent one.
+        """
+        warnings = evaluate_frequency_list_linearity(3, HCN_XYZ, location="x")
+        assert [w.code for w in warnings] == [
+            W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY
+        ]
+
+    def test_acetylene_with_six_modes_is_flagged(self):
+        """Four atoms, so the arithmetic runs away from the smallest case."""
+        warnings = evaluate_frequency_list_linearity(6, ACETYLENE_XYZ, location="x")
+        assert [w.code for w in warnings] == [
+            W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY
+        ]
+
+    def test_acetylene_with_its_seven_modes_is_not_flagged(self):
+        assert evaluate_frequency_list_linearity(7, ACETYLENE_XYZ, location="x") == []
+
+    def test_methanol_with_its_twelve_modes_is_not_flagged(self):
+        """3N-6 on a bent molecule is simply correct."""
+        assert evaluate_frequency_list_linearity(12, METHANOL_XYZ, location="x") == []
+
+    def test_a_near_linear_geometry_is_never_flagged(self):
+        """178 degrees with three modes: silent, because the verdict is.
+
+        Symmetric with the bent direction. A warning here would rest a
+        confident claim on a two-degree bend, and quasi-linear molecules
+        are exactly where that claim would be wrong.
+        """
+        assert evaluate_frequency_list_linearity(3, CO2_178_XYZ, location="x") == []
+
+
+class TestItStaysOutOfTheOtherChecksWayInTheMirrorDirection:
+    @pytest.mark.parametrize("n_modes", [0, 1, 2, 4, 5, 6, 7, 8, 9, 10])
+    def test_only_the_bent_count_is_ever_reported(self, n_modes):
+        """Every other length belongs to the floor, the ceiling, or nobody.
+
+        CO2's floor is 3 and its ceiling 9; this check speaks only at 3,
+        which is the one length the floor cannot reach because the floor
+        warns strictly below itself. So a payload cannot collect this
+        warning and a completeness one for the same list.
+        """
+        assert evaluate_frequency_list_linearity(n_modes, CO2_XYZ, location="x") == []
+
+    def test_no_list_is_not_a_wrong_list(self):
+        assert evaluate_frequency_list_linearity(None, CO2_XYZ, location="x") == []
+
+    def test_no_geometry_means_no_opinion(self):
+        assert evaluate_frequency_list_linearity(3, None, location="x") == []
+
+
+class TestTheTwoDirectionsDoNotOverlap:
+    """No deposit may collect both codes, and each must reach one.
+
+    The two counts differ by one and each is admitted only under the
+    opposite verdict, so exclusivity is structural rather than a
+    convention. Asserted anyway: a future edit that made the verdict
+    check non-exclusive would otherwise produce two contradictory
+    warnings on one list, telling a depositor their molecule is both too
+    long and too short.
+    """
+
+    @pytest.mark.parametrize(
+        "xyz",
+        [WATER_XYZ, CO2_XYZ, HCN_XYZ, ACETYLENE_XYZ, METHANOL_XYZ, CO2_178_XYZ],
+    )
+    def test_no_length_on_any_geometry_yields_both(self, xyz):
+        for n_modes in range(0, 25):
+            codes = {
+                w.code
+                for w in evaluate_frequency_list_linearity(n_modes, xyz, location="x")
+            }
+            assert len(codes) <= 1, f"{n_modes} modes produced {codes}"
+
+    def test_both_codes_are_reachable(self):
+        """Guard the guard.
+
+        The exclusivity test above passes vacuously if neither code can
+        ever fire, which is precisely the shape of a check that has
+        quietly stopped checking.
+        """
+        seen = set()
+        for xyz in (WATER_XYZ, CO2_XYZ, HCN_XYZ, ACETYLENE_XYZ, METHANOL_XYZ):
+            for n_modes in range(0, 25):
+                seen.update(
+                    w.code
+                    for w in evaluate_frequency_list_linearity(
+                        n_modes, xyz, location="x"
+                    )
+                )
+        assert seen == {
+            W_FREQ_LIST_LINEAR_COUNT_FOR_BENT_GEOMETRY,
+            W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY,
+        }
+
+
+class TestTheMirrorMessage:
+    def _warning(self):
+        return evaluate_frequency_list_linearity(
+            3, CO2_XYZ, location="calculations[0].freq_result.modes"
+        )[0]
+
+    def test_it_names_the_code_the_counts_and_the_measure(self):
+        warning = self._warning()
+        assert warning.field == "calculations[0].freq_result.modes"
+        assert W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY in warning.message
+        assert "3 modes" in warning.message
+        assert "3N-5 = 4" in warning.message
+        assert "accepted and flagged" in warning.message
+
+    def test_it_names_the_cause_a_depositor_can_act_on(self):
+        """The degenerate bending pair, named explicitly.
+
+        This is the whole reason the case is a code of its own rather
+        than an extension of ``freq_list_incomplete_for_geometry``, whose
+        message argues from partial Hessians and frozen-atom regions and
+        would send a depositor looking in the wrong place.
+        """
+        message = self._warning().message
+        assert "degenerate" in message
+        assert "de-duplicates" in message
+
+    def test_it_carries_no_database_identifiers(self):
+        """DR-0028 Requirement 2: nothing a depositor cannot act on."""
+        message = self._warning().message
+        assert "_id" not in message
+        assert "id=" not in message
+
+
+class TestTheMirrorPayloadAdapter:
+    def _calc(self, frequencies: list[float] | None):
+        from app.schemas.fragments.calculation import CalculationWithResultsPayload
+
+        freq_result: dict = {"n_imag": 0}
+        if frequencies is not None:
+            freq_result["modes"] = [
+                {
+                    "mode_index": index + 1,
+                    "frequency_cm1": value,
+                    "is_imaginary": False,
+                }
+                for index, value in enumerate(frequencies)
+            ]
+        return CalculationWithResultsPayload.model_validate(
+            {
+                "type": "freq",
+                "software_release": {"name": "Gaussian", "version": "16"},
+                "level_of_theory": {"method": "B3LYP", "basis": "6-31G(d)"},
+                "freq_result": freq_result,
+            }
+        )
+
+    def test_a_deduplicated_degenerate_pair_is_flagged(self):
+        """The real defect, deposited as it actually arrives.
+
+        CO2's spectrum is [667, 667, 1333, 2349] — the bend is doubly
+        degenerate and appears twice. A parser that collapses equal
+        frequencies emits three modes, which is what this deposits.
+        """
+        warnings = calculation_linearity_warnings(
+            self._calc([667.0, 1333.0, 2349.0]),
+            location="calculations[1].freq_result.modes",
+            fallback_xyz_text=CO2_XYZ,
+        )
+        assert [w.code for w in warnings] == [
+            W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY
+        ]
+
+    def test_the_intact_degenerate_pair_is_silent(self):
+        """The same molecule, correctly deposited. Both 667s present."""
+        assert (
+            calculation_linearity_warnings(
+                self._calc([667.0, 667.0, 1333.0, 2349.0]),
+                location="calculations[1].freq_result.modes",
+                fallback_xyz_text=CO2_XYZ,
+            )
+            == []
+        )
+
+    def test_the_calculations_own_linear_geometry_wins_over_a_bent_fallback(self):
+        warnings = evaluate_deposited_frequency_list_linearity(
+            3,
+            input_geometry_xyz_text=CO2_XYZ,
+            fallback_xyz_text=WATER_XYZ,
+            location="x",
+        )
+        assert [w.code for w in warnings] == [
+            W_FREQ_LIST_BENT_COUNT_FOR_LINEAR_GEOMETRY
+        ]
+
+    def test_a_calculation_with_no_frequency_list_is_silent(self):
+        assert (
+            calculation_linearity_warnings(
+                self._calc(None),
+                location="calculations[1].freq_result.modes",
+                fallback_xyz_text=CO2_XYZ,
             )
             == []
         )
