@@ -22,11 +22,17 @@ The tests are grouped as:
   the page still searches. The one control that cannot work without
   script ships disabled rather than silently searching the wrong
   field, and ``<noscript>`` offers a plain form per identifier.
+* :class:`TestResultsExpandInPlace` -- following a result must not
+  drop the reader into a nested JSON document without warning. Each
+  product is a disclosure that opens on the page, and every route to
+  the raw document says that is what it is.
 * :class:`TestHeroExampleIsReal` -- the worked example in the hero is
   re-run through the real checker on every test run. If the page and
   ``app.services.frequency_geometry_linearity`` ever disagree, this
   fails rather than leaving a plausible-looking fiction on a public
-  page.
+  page. It also has to *show* the defect it describes: the deposited
+  list and the true spectrum are both on screen, with the missing mode
+  marked, so the reader sees the gap before reading about it.
 * :class:`TestDocSurfaceExposure` -- the three-way matrix of
   ``EXPOSE_API_DOCS`` x ``EXPOSE_API_REFERENCE``, including the one
   that matters for the hosted deployment: ReDoc on, Swagger still 404.
@@ -55,6 +61,7 @@ from app.api.landing import (
     DOCS_URL,
     HERO_CODE,
     HERO_FREQUENCIES,
+    HERO_TRUE_FREQUENCIES,
     HERO_XYZ,
     REPO_URL,
     SEARCH_EXAMPLES,
@@ -62,17 +69,13 @@ from app.api.landing import (
     SEED_FIELD,
     SEED_VALUE,
     SPECIES_SEARCH_PATH,
+    hero_atom_lines,
     render_landing_page,
 )
 from app.api.startup_checks import validate_deployment_safety
 from app.services.frequency_geometry_linearity import (
     evaluate_frequency_list_linearity,
 )
-
-#: The four write-behaviour roles the page must name. These are the
-#: repository's central organising idea, not decoration: every table is
-#: exactly one of them, and the role fixes how the table may be written.
-DATA_ROLES = ("identity", "provenance", "result", "curation")
 
 #: Every review state the API can put on a record. All five must have a
 #: human word on the page: a badge that falls through to a raw enum name
@@ -178,17 +181,25 @@ class TestLandingPageResponse:
         assert f'href="{DOCS_URL}"' in body
         assert f'href="{REPO_URL}"' in body
 
-    def test_page_names_every_data_role_with_its_write_behaviour(self, client_factory):
+    def test_the_page_does_not_teach_the_table_role_taxonomy(self, client_factory):
+        """Schema philosophy is documentation, not landing-page content.
+
+        The identity / provenance / result / curation split is how this
+        repository is organised and it is on the documentation site. It
+        answers no question a visitor to the base URL is asking, and a
+        section of it sat between the search box and the worked example
+        for exactly as long as it took someone to read the page.
+
+        This is not a weakened version of the test that used to check
+        the section's wording: that section is deliberately gone, and
+        what replaces its test is the assertion that it stays gone.
+        """
         with client_factory() as c:
             body = c.get("/").text
-        for role in DATA_ROLES:
-            assert f"<dt>{role} " in body, f"landing page does not name the {role} role"
-        # The behaviour word is the load-bearing half of the label: a page
-        # that lists four nouns and omits how each is written has not said
-        # the thing the roles exist to say.
-        assert body.count('<span class="behaviour">append-only</span>') == 2
-        assert '<span class="behaviour">deduped</span>' in body
-        assert '<span class="behaviour">overlay</span>' in body
+        assert "append-only" not in body
+        assert "roles-heading" not in body
+        assert 'class="behaviour"' not in body
+        assert re.search(r"<dt>(identity|provenance|result|curation)\b", body) is None
 
     def test_page_separates_citing_the_software_from_citing_a_release(self, client_factory):
         with client_factory() as c:
@@ -372,12 +383,12 @@ class TestLiveSearch:
         assert entry_renderer is not None
         assert "reviewBadge(entry.review" in entry_renderer.group(1)
 
-    def test_a_result_links_onward_to_its_own_records(self, script):
+    def test_a_result_leads_onward_to_every_product_it_has(self, script):
         """A landing page that leads nowhere is the defect being fixed.
 
-        Every product the search says a record has becomes a link to
-        the endpoint that serves it, so a visitor can follow a result
-        into the data rather than reading about it.
+        Every product the search says a record has gets its own control
+        aimed at the endpoint that serves it, so a visitor can follow a
+        result into the data rather than reading about it.
         """
         for path in (
             "/api/v1/scientific/thermo/search",
@@ -469,6 +480,124 @@ class TestSearchDegradesWithoutJavaScript:
         assert document.find("a", **{"class": "chip"})
 
 
+class TestResultsExpandInPlace:
+    """Following a result must not surprise the reader with raw JSON.
+
+    The endpoints behind a result answer with a nested JSON document.
+    That is the right shape for a client and an unreadable one for a
+    person who clicked a link on a landing page -- and it misleads: an
+    array index reads as a count, an observation total reads as a
+    conformer count. So each product opens on the page instead, and
+    every remaining route to the raw document is labelled as one.
+    """
+
+    def test_each_product_is_a_disclosure_rather_than_a_navigation(self, script):
+        """The pill expands the card; it does not leave the page.
+
+        A ``<button>`` with ``aria-expanded`` rather than an ``<a>``,
+        because an anchor pointing at the JSON is a middle-click away
+        from the wall of keys however its click handler behaves.
+        """
+        assert 'make("button", "pill"' in script
+        assert 'button.setAttribute("aria-expanded", "false")' in script
+        assert 'button.setAttribute("aria-controls", id)' in script
+        assert "loadDetail(panel, section, ref)" in script
+        # No product control is an anchor any more.
+        assert 'anchor(THERMO' not in script
+        assert 'anchor(CONFORMERS' not in script
+        assert 'anchor(CALCULATIONS' not in script
+
+    def test_every_route_to_the_raw_document_says_it_is_raw_json(self, script):
+        """Nobody may be surprised by where a link takes them.
+
+        Three anchors still point at an API document -- the per-product
+        link inside an expanded panel, the per-record one, and the
+        "there are more pages" one -- and each names its destination.
+        The assertion is on the anchors the script builds rather than
+        on a count of the phrase, so an anchor added later without a
+        label fails here.
+
+        The example chips are the one exception and are excluded by
+        name. They are anchors *because* they must work with scripting
+        off, which is the whole reason their ``href`` is the endpoint;
+        with the script running their click is intercepted and never
+        navigates, and the results area says in prose that without
+        JavaScript the examples go to the API's JSON.
+        """
+        anchors = re.findall(r"anchor\((.*?)\);", script, flags=re.DOTALL)
+        json_anchors = [
+            call
+            for call in anchors
+            if ("section.url(" in call or "searchUrl(" in call) and '"chip"' not in call
+        ]
+        assert len(json_anchors) >= 3
+        for call in json_anchors:
+            assert "raw JSON" in call, call
+        assert "the box and examples go" in render_landing_page(api_reference_path=None)
+
+    def test_a_panel_reports_counts_and_never_the_group_scope_booleans(self, script):
+        """``has_*`` on a conformer group is an OR across observations.
+
+        A group-scoped ``has_scf_stability`` says *some* observation in
+        the group has it, while reading as a fact about the conformer.
+        Those fields are being replaced with counts in a separate
+        change; presenting them here would put a wrong sentence on a
+        public page and would still be wrong after the fix lands. The
+        panel shows counts the payload states outright instead.
+        """
+        for field in (
+            "observation_count",
+            "calculation_count",
+            "geometry_count",
+            "source_calculation_count",
+        ):
+            assert field in script, field
+        for boolean in ("has_scf_stability", "has_opt", "has_freq", "has_sp"):
+            assert boolean not in script, boolean
+
+    def test_an_observation_count_is_never_called_a_conformer_count(self, script):
+        """Five observations are one conformer seen five times.
+
+        A conformer group is one torsional basin -- identity, deduped.
+        An observation is one deposited instance assigned to that basin
+        -- provenance, append-only. Labelling the second as the first
+        is the specific misreading this panel exists to prevent, so the
+        count line counts groups and the observation line says what it
+        is counting.
+        """
+        conformers = re.search(
+            r'\{\s*key: "conformers",(.*?)\n    \}', script, flags=re.DOTALL
+        )
+        assert conformers is not None
+        block = conformers.group(1)
+        assert 'one: "conformer group"' in block
+        assert 'many: "conformer groups"' in block
+        assert "torsional basin" in block
+        assert "one conformer seen five times" in block
+        assert "five conformers" in block
+
+        view = re.search(
+            r"function conformerView\(record\) \{(.*?)\n  \}", script, flags=re.DOTALL
+        )
+        assert view is not None
+        assert '"observation", "observations"' in view.group(1)
+        assert "of this one group" in view.group(1)
+
+    def test_the_no_script_fallback_is_untouched_by_the_expansion(self, document):
+        """None of the above may cost the scripting-off reader anything.
+
+        The expansion is script-only by construction: it renders search
+        results, which only exist once a fetch has run. What has to
+        survive is everything that works before one does.
+        """
+        fallback_forms = [
+            attrs for attrs, ancestors in document.find("form") if "noscript" in ancestors
+        ]
+        assert len(fallback_forms) == len(SEARCH_FIELDS) - 1
+        assert document.find("input", id="search-input")
+        assert document.find("a", **{"class": "chip"})
+
+
 class TestHeroExampleIsReal:
     """The worked example is the checker's own output, not a mock-up."""
 
@@ -504,10 +633,94 @@ class TestHeroExampleIsReal:
         assert "accepted and flagged, not refused" in page
         assert HERO_CODE in page
 
-    def test_the_hero_deposit_is_shown_verbatim(self):
+    def test_the_hero_geometry_is_shown_verbatim_without_the_xyz_header(self):
+        """The coordinates are the deposit; the header is file plumbing.
+
+        Every atom row appears exactly as deposited. The count and
+        comment lines do not: alone above three coordinates on a web
+        page, a bare ``3`` reads as a stray number rather than as an
+        XYZ field, and the panel labels the block instead.
+        """
         page = render_landing_page(api_reference_path=None)
-        for line in HERO_XYZ.splitlines():
+        atoms = hero_atom_lines()
+        assert len(atoms) == 3
+        for line in atoms:
             assert line in page
+        assert "<pre>" + "\n".join(atoms) + "</pre>" in page
+        assert ">3\ncarbon dioxide" not in page
+
+    def test_the_true_spectrum_is_the_one_carbon_dioxide_has(self):
+        """3N-5 = 4 modes, with the doubly degenerate bend counted twice.
+
+        Carbon dioxide is linear and has three atoms, so it has four
+        vibrations: two stretches and one bend, and the bend occupies
+        two of the four because it is doubly degenerate. Getting this
+        wrong would put a false spectrum on a public page under a
+        heading claiming it is what the molecule has.
+        """
+        n_atoms = len(hero_atom_lines())
+        assert len(HERO_TRUE_FREQUENCIES) == 3 * n_atoms - 5
+        assert HERO_TRUE_FREQUENCIES == (667.0, 667.0, 1333.0, 2349.0)
+        assert HERO_TRUE_FREQUENCIES.count(667.0) == 2
+
+    def test_the_deposit_is_the_true_spectrum_with_the_degeneracy_collapsed(self):
+        """The deposit is derived by the very mistake being illustrated.
+
+        Exactly one mode short, and short by a duplicate rather than by
+        an arbitrary omission, because a de-duplicating parser is what
+        produces this deposit in the wild.
+        """
+        assert HERO_FREQUENCIES == (667.0, 1333.0, 2349.0)
+        assert len(HERO_FREQUENCIES) == len(HERO_TRUE_FREQUENCIES) - 1
+        assert set(HERO_FREQUENCIES) == set(HERO_TRUE_FREQUENCIES)
+        assert len(HERO_FREQUENCIES) == len(set(HERO_FREQUENCIES))
+
+    def test_the_panel_shows_both_lists_with_the_missing_mode_marked(self):
+        """The gap must be visible, not asserted.
+
+        Three frequencies with nothing unusual about any of them, plus
+        a sentence saying one is missing, is legible only to a reader
+        who already knows the answer. Both rows are on the page, one
+        frequency per column, and the absent slot is a marked cell
+        sitting directly above the frequency that belongs in it.
+        """
+        page = render_landing_page(api_reference_path=None)
+        rows = re.findall(r"<tr>(.*?)</tr>", page, flags=re.DOTALL)
+        assert len(rows) == 2, "the panel should carry the deposit and the spectrum"
+        deposited, spectrum = rows
+
+        assert '<th scope="row">deposited</th>' in deposited
+        assert "has</th>" in spectrum
+
+        # The spectrum row carries every true mode, in order.
+        assert re.findall(r"<td[^>]*>([\d.]+)</td>", spectrum) == [
+            f"{value:.1f}" for value in HERO_TRUE_FREQUENCIES
+        ]
+        # The deposited row carries every deposited mode, and one gap.
+        assert re.findall(r"<td[^>]*>(?:<span[^>]*>)?([\w.]+)", deposited) == [
+            "667.0",
+            "missing",
+            "1333.0",
+            "2349.0",
+        ]
+        assert deposited.count('class="gap"') == 1
+        # The marked cell in the spectrum row is under the marked gap,
+        # and it is the 667 the deposit dropped.
+        marked = re.findall(r'<td class="gap-source">([\d.]+)</td>', spectrum)
+        assert marked == ["667.0"]
+
+    def test_the_panel_explains_the_degeneracy_rather_than_compressing_it(self):
+        """Three ideas in one clause is what made the panel unreadable.
+
+        "a degenerate bend, reported once by a de-duplicating parser"
+        packs the degeneracy, the parser and the consequence into nine
+        words. Each gets its own sentence now, and the word that does
+        the work -- doubly degenerate -- is on the page.
+        """
+        page = render_landing_page(api_reference_path=None)
+        assert "doubly degenerate" in page
+        assert "perpendicular planes" in page
+        assert "de-duplicates equal frequencies" in page
 
 
 class TestDocSurfaceExposure:
