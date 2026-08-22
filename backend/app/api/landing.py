@@ -12,6 +12,25 @@ end dressed as an introduction. The hero is now a search box that
 queries this deployment's own public read API and renders the records
 it gets back, so the first thing a visitor does is get real data out.
 
+There are two such searches -- species and reactions -- behind a
+switch rather than stacked, because a reader who wants the second
+should not have to scroll past a page of the first one's results to
+find it. The switch is built by the script; with scripting off both
+panels are simply on the page, each under its own heading, each a
+working ``<form method="get">``.
+
+A reaction query is a **set per side**, and that governs the design of
+the whole reaction control. ``?reactants=A&reactants=B`` asks for the
+reactions whose reactants include both A and B; ``?reactants=A,B``
+asks for a species whose name is the three characters ``A,B``, which
+is not an error and matches nothing -- the worst answer an API can
+give. So no part of this page ever holds a side as one joined string:
+the markup is one ``<input>`` per species, the add button appends
+another input, and both the script's URL builder and
+:func:`reaction_query` emit one parameter per element. The
+``<noscript>`` forms carry repeated same-named inputs, which a plain
+HTML form submits as repeated parameters with no script at all.
+
 Leading somewhere is also a claim about where. Every product a result
 has expands *in place* into the few fields that say what is in it,
 rather than navigating to the nested JSON document the endpoint
@@ -131,6 +150,47 @@ SEARCH_PLACEHOLDERS = (
     ("smiles", "[OH]"),
     ("inchi_key", "WCYWZMWISLQXQU-UHFFFAOYSA-N"),
 )
+
+#: The other read endpoint the hero searches. Public, no key, same
+#: origin, exactly like the species one.
+REACTION_SEARCH_PATH = "/api/v1/scientific/reactions/search"
+
+#: The two sides of a reaction search, as ``(query parameter, label,
+#: singular noun)``. Both are **repeated** parameters: the endpoint
+#: reads ``?reactants=A&reactants=B`` as the set {A, B} and
+#: ``?reactants=A,B`` as one species literally named ``A,B``, which
+#: matches nothing. Every URL this page builds -- in the markup, in the
+#: script and in the ``curl`` example -- therefore emits one parameter
+#: per species and never joins them.
+REACTION_SIDES = (
+    ("reactants", "Reactants", "Reactant"),
+    ("products", "Products", "Product"),
+)
+
+#: What the reaction boxes are pre-filled with. Two-sided on purpose:
+#: it returns records, it shows the shape of the question, and it means
+#: the plain form has no empty field to submit (see
+#: ``REACTION_SIDES`` and the ``required`` attributes in the template).
+SEED_REACTANTS = ("NN",)
+SEED_PRODUCTS = ("[H][H]",)
+
+#: Offered under the reaction boxes and again in its empty state, as
+#: ``(reactants, products)``. The middle one constrains only products
+#: and carries two of them, so the example a reader is most likely to
+#: click is itself the repeated-parameter form.
+REACTION_EXAMPLES = (
+    (("NN",), ()),
+    ((), ("[H][H]", "N=N")),
+    (("[NH2]", "[NH2]"), ()),
+)
+
+#: How many reaction rows the script renders before handing off to the
+#: raw document. One chemical reaction can have many entries -- the
+#: same equation deposited by several submissions -- so an uncapped
+#: render answers a landing-page search with a column of near-identical
+#: cards. The count above them is the endpoint's own total, so the cap
+#: shortens the reading and never the answer.
+REACTION_RENDER_LIMIT = 10
 
 #: The geometry shown in the worked example, and the input the test
 #: feeds back through the real checker. Carbon dioxide, collinear along
@@ -400,7 +460,20 @@ noscript { display: block; margin-top: 1rem; }
   background: var(--surface);
 }
 .fallback p { margin: 0 0 0.6rem; font-size: 0.9375rem; }
-.fallback form { display: inline-flex; gap: 0.35rem; margin: 0 0.5rem 0.4rem 0; }
+/*
+ * ``max-width`` and ``flex-wrap`` because a fallback form can carry
+ * two fields: two inputs at their default size plus a button is wider
+ * than a 360px screen, and an <input> does not shrink below its size
+ * attribute unless it is told it may.
+ */
+.fallback form {
+  display: inline-flex;
+  flex-wrap: wrap;
+  max-width: 100%;
+  gap: 0.35rem;
+  margin: 0 0.5rem 0.4rem 0;
+}
+.fallback input { flex: 1 1 8rem; min-width: 0; }
 .fallback input, .fallback button {
   font-family: var(--mono);
   font-size: var(--fs-data);
@@ -408,6 +481,133 @@ noscript { display: block; margin-top: 1rem; }
   border: 1px solid var(--rule);
   background: var(--paper);
   color: var(--ink);
+}
+.fallback-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0.6rem 0 0.2rem;
+}
+
+/* ---- the species / reactions switch ---- */
+/*
+ * Two searches, one hero. Stacking them would push the second below a
+ * page of the first one's results, and the second is the one this
+ * deployment was most recently asked for; the switch keeps both at the
+ * top and the page the length it was.
+ *
+ * The buttons ship ``hidden`` and the script unhides them, because a
+ * tab that cannot change what is displayed is worse than no tab. With
+ * scripting off there is no switch and both panels are simply on the
+ * page, each under its own heading, each a working form.
+ */
+.modes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.1rem 0 0;
+}
+/*
+ * ``display: flex`` above beats the user agent's ``[hidden]`` rule, so
+ * without this the switch would be visible to exactly the readers who
+ * cannot use it.
+ */
+.modes[hidden] { display: none; }
+.mode {
+  font-family: var(--mono);
+  font-size: var(--fs-data);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  padding: 0.5rem 1rem;
+  min-height: 2.5rem;
+  cursor: pointer;
+  border: 1.5px solid var(--rule);
+  background: var(--surface);
+  color: var(--phase-pos);
+}
+.mode[aria-selected="true"] {
+  background: var(--phase-pos);
+  color: var(--surface);
+  border-color: var(--phase-pos);
+}
+.search-panel + .search-panel { margin-top: 2rem; }
+
+/* ---- reaction search ---- */
+/*
+ * One input per species, never one input holding several. The endpoint
+ * reads repeated ``reactants=`` as a set and a comma-joined string as
+ * one species named after the whole string, so the control that
+ * collects them is a list of fields and the "add" button appends
+ * another real field rather than a separator to a shared box.
+ */
+.rxn-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.5rem 0.75rem;
+}
+.rxn-side { flex: 1 1 11rem; min-width: 0; }
+.rxn-label {
+  display: block;
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.3rem;
+}
+.rxn-inputs { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+.rxn-inputs input { flex: 1 1 7rem; }
+/*
+ * Narrow first: the two sides cannot sit side by side inside 360px, so
+ * the arrow takes its own centred line between them rather than being
+ * squeezed onto the end of the reactants row, where it reads as a
+ * label for that box instead of as the relation between two.
+ */
+.rxn-arrow {
+  flex: 1 0 100%;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: var(--fs-data);
+  color: var(--muted);
+  padding: 0.1rem 0;
+}
+@media (min-width: 34rem) {
+  .rxn-arrow {
+    flex: 0 0 auto;
+    text-align: left;
+    padding: 0 0 0.7rem;
+  }
+}
+/*
+ * Higher specificity than ``.search button`` on purpose -- that rule is
+ * the big filled submit button, and this one is a quiet secondary
+ * control sitting under the fields it adds to.
+ */
+.search .rxn-add {
+  margin-top: 0.4rem;
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 700;
+  cursor: pointer;
+  padding: 0.3rem 0.55rem;
+  min-height: 0;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  color: var(--phase-pos);
+}
+.search .rxn-add:hover { border-color: var(--phase-pos); }
+.equation {
+  font-family: var(--mono);
+  font-size: 1.0625rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 /* ---- results ---- */
@@ -840,11 +1040,21 @@ footer p { max-width: none; margin: 0; }
 <main id="main">
 
   <section class="hero" aria-labelledby="search-heading">
-    <h2 id="search-heading">Search species</h2>
+    <h2 id="search-heading">Search</h2>
     <p class="note">
       Records under review are served, not withheld; every result says how
       far it has been checked.
     </p>
+
+    <div class="modes" id="modes" hidden>
+      <button type="button" class="mode" id="mode-species"
+              aria-controls="panel-species">Species</button>
+      <button type="button" class="mode" id="mode-reactions"
+              aria-controls="panel-reactions">Reactions</button>
+    </div>
+
+    <div class="search-panel" id="panel-species" aria-labelledby="title-species">
+    <h3 class="panel-title" id="title-species">Species</h3>
 
     <form id="search-form" class="search" method="get" action="__SEARCH_PATH__">
       <div class="search-row">
@@ -890,6 +1100,62 @@ __EXAMPLE_CHIPS__
         straight to the API's JSON.
       </p>
     </div>
+    </div>
+
+    <div class="search-panel" id="panel-reactions" aria-labelledby="title-reactions">
+    <h3 class="panel-title" id="title-reactions">Reactions</h3>
+    <p class="note">
+      Either side alone works. <em>Matched in reverse</em> is the equation
+      read right to left.
+    </p>
+
+    <form id="rxn-form" class="search" method="get" action="__REACTION_SEARCH_PATH__">
+      <div class="rxn-row">
+        <div class="rxn-side" role="group" aria-labelledby="rxn-reactants-label">
+          <span class="rxn-label" id="rxn-reactants-label">Reactants</span>
+          <div class="rxn-inputs" id="rxn-reactants">
+__SEED_REACTANT_INPUTS__
+          </div>
+          <button type="button" class="rxn-add" id="rxn-add-reactants" hidden>+ reactant</button>
+        </div>
+        <span class="rxn-arrow" aria-hidden="true">&lt;=&gt;</span>
+        <div class="rxn-side" role="group" aria-labelledby="rxn-products-label">
+          <span class="rxn-label" id="rxn-products-label">Products</span>
+          <div class="rxn-inputs" id="rxn-products">
+__SEED_PRODUCT_INPUTS__
+          </div>
+          <button type="button" class="rxn-add" id="rxn-add-products" hidden>+ product</button>
+        </div>
+        <button type="submit">Search</button>
+      </div>
+    </form>
+
+    <p class="examples" id="rxn-examples">
+      <span>Try</span>
+__REACTION_EXAMPLE_CHIPS__
+    </p>
+
+    <noscript>
+      <div class="fallback">
+        <p>
+          JavaScript is off, so the form above submits as a plain form and
+          needs both sides filled. These ask about one side, and about two
+          species on one side:
+        </p>
+__REACTION_FALLBACK_FORMS__
+      </div>
+    </noscript>
+
+    <div id="rxn-results" class="results" aria-live="polite">
+      <!--
+        Shorter than the species one on purpose: the reader who needs
+        the "without JavaScript this goes to the API's JSON" sentence
+        is the reader whose browser is about to render the
+        ``<noscript>`` block above, which says it.
+      -->
+      <p class="results-status">Results land here.</p>
+    </div>
+    </div>
   </section>
 
   <section aria-labelledby="quickstart-heading">
@@ -899,7 +1165,13 @@ __EXAMPLE_CHIPS__
       open; depositing needs an account.
     </p>
     <pre class="command"><code>TCKDB=<span id="curl-origin">__ORIGIN_PLACEHOLDER__</span>
-curl -s "$TCKDB__SEARCH_PATH__?formula=CH3"</code></pre>
+curl -sg "$TCKDB__SEARCH_PATH__?smiles=[OH]"
+curl -sg "$TCKDB__REACTION_SEARCH_PATH__?products=[H][H]&amp;products=N=N"</code></pre>
+    <p class="note">
+      <code>-g</code> so bracketed SMILES like <code>[OH]</code> are not read
+      as shell globs, and one <code>products=</code> per species: a
+      comma-joined list is one species name, and matches nothing.
+    </p>
     <p>__API-REFERENCE__</p>
     <p>
       A Python client, <code>tckdb-client</code>, handles auth, retries and
@@ -994,14 +1266,28 @@ __HERO_SPECTRUM__
   var out = doc.getElementById("results");
   if (!form || !input || !picker || !out) { return; }
 
+  var rxnForm = doc.getElementById("rxn-form");
+  var rxnOut = doc.getElementById("rxn-results");
+
   var SEARCH = "__SEARCH_PATH__";
   var ENTRY = "/api/v1/scientific/species-entries/";
   var THERMO = "/api/v1/scientific/thermo/search";
   var CONFORMERS = "/api/v1/scientific/conformers/search";
   var CALCULATIONS = "/api/v1/scientific/species-calculations/search";
+  var RXN_SEARCH = "__REACTION_SEARCH_PATH__";
+  var KINETICS = "/api/v1/scientific/reaction-entries/";
+  var TRANSITION_STATES = "/api/v1/scientific/transition-states/search";
 
   var PLACEHOLDERS = __PLACEHOLDERS_JSON__;
   var EXAMPLES = __EXAMPLES_JSON__;
+  var RXN_EXAMPLES = __REACTION_EXAMPLES_JSON__;
+  var RXN_LIMIT = __REACTION_RENDER_LIMIT__;
+  /* ``[[query parameter, singular noun], ...]``, in form order. */
+  var RXN_SIDES = __REACTION_SIDES_JSON__;
+  var SIDE_WORDS = {};
+  for (var sideIndex = 0; sideIndex < RXN_SIDES.length; sideIndex += 1) {
+    SIDE_WORDS[RXN_SIDES[sideIndex][0]] = RXN_SIDES[sideIndex][1];
+  }
   var REVIEW_WORDS = {
     approved: "approved",
     under_review: "under review",
@@ -1009,6 +1295,22 @@ __HERO_SPECTRUM__
     deprecated: "deprecated",
     rejected: "rejected"
   };
+  /*
+   * ``matched_direction`` says which way round the equation had to be
+   * read for the query to match it, and "reverse" is information a
+   * reader needs: their reactants are that reaction's products. It is
+   * on every row rather than only on the reverse ones, so that its
+   * absence never has to be interpreted.
+   */
+  var DIRECTION_WORDS = {
+    forward: "matched forward",
+    reverse: "matched in reverse",
+    either: "matched either way"
+  };
+  var MODES = [
+    ["mode-species", "panel-species", "title-species", function () {}],
+    ["mode-reactions", "panel-reactions", "title-reactions", submitRxn]
+  ];
 
   function make(tag, cls, text) {
     var node = doc.createElement(tag);
@@ -1532,6 +1834,367 @@ __HERO_SPECTRUM__
     });
   }
 
+  /*
+   * ---- reaction search ---------------------------------------------
+   *
+   * The same machinery as above, pointed at the other public search
+   * endpoint, with one difference that governs the whole design: a
+   * reaction query is a *set* per side. The endpoint reads repeated
+   * ``reactants=`` parameters as that set and reads
+   * ``?reactants=A,B`` as one species whose name is the six characters
+   * "A,B" -- a query that is not an error and matches nothing, which is
+   * the worst kind. So there is no place in this page where a side is
+   * ever a single joined string: the markup is one input per species,
+   * the add button appends another input, and rxnUrl emits one
+   * parameter per element.
+   */
+
+  function ask(url) {
+    return fetch(url, { headers: { "Accept": "application/json" } }).then(function (response) {
+      return response.json().then(function (body) {
+        return { ok: response.ok, status: response.status, body: body };
+      }, function () {
+        return { ok: false, status: response.status, body: null };
+      });
+    });
+  }
+
+  function trim(value) {
+    return String(value).replace(/^\\s+|\\s+$/g, "");
+  }
+
+  function rxnUrl(reactants, products, limit) {
+    var parts = [];
+    var i;
+    for (i = 0; i < reactants.length; i += 1) {
+      parts.push("reactants=" + encodeURIComponent(reactants[i]));
+    }
+    for (i = 0; i < products.length; i += 1) {
+      parts.push("products=" + encodeURIComponent(products[i]));
+    }
+    if (limit) { parts.push("limit=" + limit); }
+    /*
+     * No participant and no ref is a real 422 from the endpoint --
+     * missing_reaction_search_filter -- and asking for it is how the
+     * reader is told what the endpoint needs, in the endpoint's own
+     * words, instead of being second-guessed here.
+     */
+    if (!parts.length) { return RXN_SEARCH; }
+    return RXN_SEARCH + "?" + parts.join("&");
+  }
+
+  function rxnEntryUrl(ref) {
+    return RXN_SEARCH + "?reaction_entry_ref=" + encodeURIComponent(ref);
+  }
+
+  function sideBox(side) {
+    return doc.getElementById("rxn-" + side);
+  }
+
+  function sideValues(side) {
+    var nodes = sideBox(side).getElementsByTagName("input");
+    var values = [];
+    for (var i = 0; i < nodes.length; i += 1) {
+      var value = trim(nodes[i].value);
+      if (value) { values.push(value); }
+    }
+    return values;
+  }
+
+  function relabel(side) {
+    var nodes = sideBox(side).getElementsByTagName("input");
+    var word = SIDE_WORDS[side];
+    for (var i = 0; i < nodes.length; i += 1) {
+      nodes[i].setAttribute("aria-label", nodes.length === 1 ? word : word + " " + (i + 1));
+    }
+  }
+
+  function rxnField(side, value) {
+    var node = make("input");
+    node.type = "search";
+    node.name = side;
+    node.value = value || "";
+    node.setAttribute("autocomplete", "off");
+    node.setAttribute("autocapitalize", "off");
+    node.setAttribute("spellcheck", "false");
+    return node;
+  }
+
+  function setSide(side, values) {
+    var box = sideBox(side);
+    clear(box);
+    var list = values && values.length ? values : [""];
+    for (var i = 0; i < list.length; i += 1) {
+      box.appendChild(rxnField(side, list[i]));
+    }
+    relabel(side);
+  }
+
+  function addField(side) {
+    var node = rxnField(side, "");
+    sideBox(side).appendChild(node);
+    relabel(side);
+    node.focus();
+  }
+
+  function sidePhrase(word, values) {
+    return word + " " + values.join(" + ");
+  }
+
+  function rxnLabel(reactants, products) {
+    var parts = [];
+    if (reactants.length) { parts.push(sidePhrase("reactants", reactants)); }
+    if (products.length) { parts.push(sidePhrase("products", products)); }
+    return parts.join("; ");
+  }
+
+  function rxnChip(index) {
+    var pair = RXN_EXAMPLES[index];
+    var node = anchor(rxnUrl(pair[0], pair[1]), "chip rxn-chip", rxnLabel(pair[0], pair[1]));
+    node.setAttribute("data-example", String(index));
+    node.addEventListener("click", function (event) {
+      event.preventDefault();
+      applyExample(pair);
+    });
+    return node;
+  }
+
+  function rxnExampleList(intro) {
+    var node = make("p", "examples");
+    node.appendChild(make("span", null, intro));
+    for (var i = 0; i < RXN_EXAMPLES.length; i += 1) {
+      node.appendChild(rxnChip(i));
+    }
+    return node;
+  }
+
+  function kineticsView(record) {
+    var params = record.parameters || {};
+    var coverage = record.temperature_coverage || {};
+    var span = null;
+    if (coverage.record_min_k !== null && coverage.record_min_k !== undefined) {
+      span = fixed(coverage.record_min_k, 0) + "\\u2013" + fixed(coverage.record_max_k, 0, "K");
+    }
+    var prefactor = null;
+    if (params.A !== null && params.A !== undefined) {
+      prefactor = params.A_units ? params.A + " " + params.A_units : String(params.A);
+    }
+    return {
+      title: (record.model_kind || "kinetics") + " rate",
+      ref: record.kinetics_ref,
+      status: record.review ? record.review.status : null,
+      fields: [
+        ["pre-exponential A", prefactor],
+        ["temperature exponent n", params.n],
+        ["activation energy", fixed(params.Ea_kj_mol, 2, "kJ/mol")],
+        ["fitted over", span],
+        ["direction", record.direction],
+        ["origin", record.scientific_origin]
+      ]
+    };
+  }
+
+  function transitionStateView(record) {
+    var entry = record.transition_state_entry || {};
+    var state = record.transition_state || {};
+    var evidence = record.evidence_summary || {};
+    return {
+      title: state.label || "transition state",
+      ref: entry.transition_state_entry_ref,
+      status: entry.review ? entry.review.status : null,
+      fields: [
+        ["saddle point", entry.status],
+        ["charge", entry.charge],
+        ["multiplicity", entry.multiplicity],
+        ["calculations behind it", evidence.calculation_count]
+      ]
+    };
+  }
+
+  var RXN_SECTIONS = [
+    {
+      key: "kinetics",
+      label: "kinetics",
+      one: "kinetics record",
+      many: "kinetics records",
+      count: function (a) { return a.kinetics_count; },
+      shown: function (a) { return !!a.has_kinetics || !!a.kinetics_count; },
+      url: function (ref) { return KINETICS + encodeURIComponent(ref) + "/kinetics"; },
+      view: kineticsView
+    },
+    {
+      key: "transition-state",
+      label: "transition state",
+      one: "transition state",
+      many: "transition states",
+      shown: function (a) { return !!a.has_transition_state; },
+      url: function (ref) {
+        return TRANSITION_STATES + "?reaction_entry_ref=" + encodeURIComponent(ref);
+      },
+      view: transitionStateView
+    }
+  ];
+
+  function rxnRecordNode(record) {
+    var ref = record.reaction_entry_ref || "";
+    var availability = record.availability || {};
+    var node = make("article", "record");
+
+    var head = make("div", "record-head");
+    head.appendChild(make("span", "equation", record.equation || "(no equation)"));
+    head.appendChild(reviewBadge(record.review ? record.review.status : null));
+    node.appendChild(head);
+
+    var meta = make("p", "record-refs");
+    meta.appendChild(make("span", null,
+      DIRECTION_WORDS[record.matched_direction] || String(record.matched_direction)));
+    if (record.family) {
+      meta.appendChild(doc.createTextNode(" · "));
+      meta.appendChild(make("span", null, record.family));
+    }
+    meta.appendChild(doc.createTextNode(" · "));
+    meta.appendChild(make("span", null, ref));
+    meta.appendChild(doc.createTextNode(" · "));
+    meta.appendChild(anchor(rxnEntryUrl(ref), "raw-link", "this record as raw JSON"));
+    node.appendChild(meta);
+
+    var links = make("div", "entry-links");
+    var panels = make("div", "entry-details");
+    for (var i = 0; i < RXN_SECTIONS.length; i += 1) {
+      if (!RXN_SECTIONS[i].shown(availability)) { continue; }
+      var pair = disclosure(RXN_SECTIONS[i], ref, availability);
+      links.appendChild(pair.button);
+      panels.appendChild(pair.panel);
+    }
+    if (!links.firstChild) {
+      links.appendChild(make("span", "pill pill-none", "no kinetics or transition state yet"));
+    }
+    node.appendChild(links);
+    node.appendChild(panels);
+    return node;
+  }
+
+  function rxnEmptyNode(reactants, products) {
+    var node = make("div", "empty");
+    var asked = rxnLabel(reactants, products);
+    node.appendChild(make("p", null,
+      asked ? "Nothing matched " + asked + "." : "Nothing matched."));
+    node.appendChild(rxnExampleList("These return records:"));
+    return node;
+  }
+
+  function rxnRender(payload, reactants, products) {
+    var records = payload.records || [];
+    if (!records.length) {
+      rxnOut.appendChild(rxnEmptyNode(reactants, products));
+      return;
+    }
+    rxnOut.appendChild(summaryNode(payload));
+    for (var i = 0; i < records.length; i += 1) {
+      rxnOut.appendChild(rxnRecordNode(records[i]));
+    }
+    var pagination = payload.pagination || {};
+    if (pagination.total > records.length) {
+      var more = make("p", "results-status", "Showing the first page.");
+      more.appendChild(doc.createTextNode(" "));
+      more.appendChild(anchor(rxnUrl(reactants, products), "raw-link",
+        "Open the full response as raw JSON"));
+      rxnOut.appendChild(more);
+    }
+  }
+
+  function runRxn(reactants, products) {
+    rxnOut.setAttribute("aria-busy", "true");
+    clear(rxnOut);
+    rxnOut.appendChild(make("p", "results-status", "Searching\\u2026"));
+    ask(rxnUrl(reactants, products, RXN_LIMIT)).then(function (result) {
+      clear(rxnOut);
+      if (result.ok) {
+        rxnRender(result.body || {}, reactants, products);
+      } else {
+        rxnOut.appendChild(failureNode(result.status, result.body));
+      }
+    }, function () {
+      clear(rxnOut);
+      var node = make("div", "failure");
+      node.appendChild(make("p", "failure-detail",
+        "The browser could not reach this deployment's API."));
+      rxnOut.appendChild(node);
+    }).then(function () {
+      rxnOut.setAttribute("aria-busy", "false");
+    });
+  }
+
+  function submitRxn() {
+    runRxn(sideValues("reactants"), sideValues("products"));
+  }
+
+  function applyExample(pair) {
+    setSide("reactants", pair[0]);
+    setSide("products", pair[1]);
+    runRxn(pair[0], pair[1]);
+  }
+
+  /*
+   * ---- the species / reactions switch -------------------------------
+   *
+   * Built here rather than in the markup because a tab control that
+   * cannot change what is shown is a lie. With scripting off the
+   * buttons stay hidden and both panels stay on the page, each under
+   * its own heading and each a working form; this promotes them to a
+   * tablist and takes the now-duplicated headings out.
+   */
+  function setupModes() {
+    var modes = doc.getElementById("modes");
+    if (!modes) { return; }
+    var tabs = [];
+    var panels = [];
+    var i;
+    for (i = 0; i < MODES.length; i += 1) {
+      var tab = doc.getElementById(MODES[i][0]);
+      var panel = doc.getElementById(MODES[i][1]);
+      if (!tab || !panel) { return; }
+      tabs.push(tab);
+      panels.push(panel);
+    }
+    var loaded = [true, false];
+
+    function select(index, focus) {
+      for (var j = 0; j < tabs.length; j += 1) {
+        var on = j === index;
+        tabs[j].setAttribute("aria-selected", on ? "true" : "false");
+        tabs[j].setAttribute("tabindex", on ? "0" : "-1");
+        panels[j].hidden = !on;
+      }
+      if (focus) { tabs[index].focus(); }
+      if (!loaded[index]) {
+        loaded[index] = true;
+        MODES[index][3]();
+      }
+    }
+
+    modes.hidden = false;
+    modes.setAttribute("role", "tablist");
+    for (i = 0; i < tabs.length; i += 1) {
+      tabs[i].setAttribute("role", "tab");
+      panels[i].setAttribute("role", "tabpanel");
+      panels[i].setAttribute("tabindex", "0");
+      panels[i].setAttribute("aria-labelledby", tabs[i].id);
+      var title = doc.getElementById(MODES[i][2]);
+      if (title) { title.hidden = true; }
+      (function (index) {
+        tabs[index].addEventListener("click", function () { select(index, false); });
+        tabs[index].addEventListener("keydown", function (event) {
+          if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") { return; }
+          event.preventDefault();
+          var step = event.key === "ArrowRight" ? 1 : tabs.length - 1;
+          select((index + step) % tabs.length, true);
+        });
+      })(i);
+    }
+    select(0, false);
+  }
+
   function syncField() {
     input.name = picker.value;
     input.setAttribute("placeholder", PLACEHOLDERS[picker.value] || "");
@@ -1565,6 +2228,46 @@ __HERO_SPECTRUM__
         });
       })(links[i]);
     }
+  }
+
+  if (rxnForm && rxnOut) {
+    /*
+     * The markup marks every reaction field ``required`` so that a
+     * plain no-script submit can never send ``products=`` empty --
+     * which the endpoint AND-combines and answers with nothing. The
+     * script skips blank fields itself and must therefore let a side
+     * be cleared, so it takes the browser's validation off the form it
+     * has just taken over.
+     */
+    rxnForm.noValidate = true;
+    rxnForm.addEventListener("submit", function (event) {
+      event.preventDefault();
+      submitRxn();
+    });
+
+    for (var s = 0; s < RXN_SIDES.length; s += 1) {
+      (function (name) {
+        var button = doc.getElementById("rxn-add-" + name);
+        if (!button) { return; }
+        button.hidden = false;
+        button.addEventListener("click", function () { addField(name); });
+      })(RXN_SIDES[s][0]);
+    }
+
+    var rxnSeeded = doc.getElementById("rxn-examples");
+    if (rxnSeeded) {
+      var rxnLinks = rxnSeeded.getElementsByTagName("a");
+      for (var r = 0; r < rxnLinks.length; r += 1) {
+        (function (node) {
+          node.addEventListener("click", function (event) {
+            event.preventDefault();
+            applyExample(RXN_EXAMPLES[Number(node.getAttribute("data-example"))]);
+          });
+        })(rxnLinks[r]);
+      }
+    }
+
+    setupModes();
   }
 
   var origin = doc.getElementById("curl-origin");
@@ -1606,6 +2309,140 @@ def _example_chips() -> str:
             f"{_html_escape(value)}</a>"
         )
     return "\n".join(lines)
+
+
+def reaction_query(reactants: tuple[str, ...], products: tuple[str, ...]) -> str:
+    """The reaction-search URL for one query, as repeated parameters.
+
+    One ``reactants=`` per reactant and one ``products=`` per product.
+    Never ``reactants=A,B``: the endpoint takes each value as one whole
+    species name, so a joined list asks for a species called ``A,B``,
+    which is not an error and matches nothing.
+
+    Used for the example links in the markup, which have to run the
+    same query with scripting off that the script runs with it on.
+    """
+    parts = [f"reactants={_url_quote(value)}" for value in reactants]
+    parts += [f"products={_url_quote(value)}" for value in products]
+    if not parts:
+        return REACTION_SEARCH_PATH
+    return REACTION_SEARCH_PATH + "?" + "&".join(parts)
+
+
+def reaction_label(reactants: tuple[str, ...], products: tuple[str, ...]) -> str:
+    """How one reaction query reads on a chip: ``products A + B``.
+
+    The ``+`` here is a separator a person reads, never one that
+    reaches a URL; :func:`reaction_query` is what builds the URL. The
+    script has the same function so a chip and the empty state label
+    the same query the same way.
+    """
+    parts = []
+    if reactants:
+        parts.append("reactants " + " + ".join(reactants))
+    if products:
+        parts.append("products " + " + ".join(products))
+    return "; ".join(parts)
+
+
+def _side_word(side: str) -> str:
+    """The singular noun for one side, from :data:`REACTION_SIDES`."""
+    return next(word for key, _, word in REACTION_SIDES if key == side)
+
+
+def _reaction_inputs(side: str, values: tuple[str, ...], indent: str) -> str:
+    """One ``<input>`` per species, all ``required``.
+
+    ``required`` is what makes the no-script path correct rather than
+    merely present: the browser refuses to submit a blank field, so a
+    plain GET from this form can never carry ``products=`` with nothing
+    after it -- which the endpoint reads as a filter that matches
+    nothing rather than as an absent one. The script removes the
+    constraint when it takes the form over, because it can skip blank
+    fields properly.
+    """
+    word = _side_word(side)
+    lines = []
+    for index, value in enumerate(values, start=1):
+        label = word if len(values) == 1 else f"{word} {index}"
+        lines.append(
+            f'{indent}<input name="{side}" type="search" value="{_html_escape(value)}"'
+            f' required aria-label="{label}"'
+            ' autocomplete="off" autocapitalize="off" spellcheck="false">'
+        )
+    return "\n".join(lines)
+
+
+def _reaction_example_chips() -> str:
+    lines = []
+    for index, (reactants, products) in enumerate(REACTION_EXAMPLES):
+        href = _html_escape(reaction_query(reactants, products))
+        label = _html_escape(reaction_label(reactants, products))
+        lines.append(
+            f'      <a class="chip rxn-chip" data-example="{index}" href="{href}">'
+            f"{label}</a>"
+        )
+    return "\n".join(lines)
+
+
+def _pair_placeholders(side: str) -> tuple[str, str]:
+    """Two real values for the two-deep fallback form's hints.
+
+    Taken from whichever offered example really carries two species on
+    that side, so the hint is a query that returns records rather than
+    the same value typed twice.
+    """
+    for reactants, products in REACTION_EXAMPLES:
+        values = reactants if side == "reactants" else products
+        if len(values) == 2:
+            return (values[0], values[1])
+    seed = SEED_REACTANTS if side == "reactants" else SEED_PRODUCTS
+    return (seed[0], seed[0])
+
+
+def _reaction_fallback_forms() -> str:
+    """The scripting-off reaction forms: one side each, one and two deep.
+
+    Separate forms per shape for the same reason the species fallback
+    has one form per identifier -- an empty sibling parameter is not an
+    absent one, and a single form covering every shape would always
+    submit some field blank. Every input is ``required``, so the
+    browser will not let one through empty.
+
+    The two-deep forms are the point of this block: a plain HTML form
+    emits repeated same-named inputs as repeated query parameters, so
+    ``reactants=A&reactants=B`` is reachable with no script at all.
+    """
+    blocks = []
+    for side, plural_word, word in REACTION_SIDES:
+        seed = SEED_REACTANTS if side == "reactants" else SEED_PRODUCTS
+        placeholder = _html_escape(seed[0])
+        pair = _pair_placeholders(side)
+        singles = (
+            f'        <span class="fallback-label">one {word.lower()}</span>\n'
+            f'        <form method="get" action="{REACTION_SEARCH_PATH}">\n'
+            f'          <label class="sr-only" for="fallback-{side}">{word}</label>\n'
+            f'          <input id="fallback-{side}" name="{side}" type="search"'
+            f' placeholder="{placeholder}" required>\n'
+            "          <button type=\"submit\">Search</button>\n"
+            "        </form>"
+        )
+        pair_inputs = "\n".join(
+            f'          <label class="sr-only" for="fallback-{side}-{n}">{word} {n}</label>\n'
+            f'          <input id="fallback-{side}-{n}" name="{side}" type="search"'
+            f' placeholder="{_html_escape(pair[n - 1])}" required>'
+            for n in (1, 2)
+        )
+        pairs = (
+            f'        <span class="fallback-label">two {plural_word.lower()}</span>\n'
+            f'        <form method="get" action="{REACTION_SEARCH_PATH}">\n'
+            f"{pair_inputs}\n"
+            "          <button type=\"submit\">Search</button>\n"
+            "        </form>"
+        )
+        blocks.append(singles)
+        blocks.append(pairs)
+    return "\n".join(blocks)
 
 
 def hero_atom_lines() -> tuple[str, ...]:
@@ -1680,6 +2517,21 @@ def _json_pairs(pairs: tuple[tuple[str, str], ...]) -> str:
     return json.dumps([list(pair) for pair in pairs])
 
 
+def _reaction_examples_json() -> str:
+    """The example queries as ``[[reactants, products], ...]``.
+
+    Lists, not a joined string, all the way from here into the script:
+    the shape the page carries a multi-species side in is the shape it
+    sends, so there is nowhere for a comma to be introduced.
+    """
+    return json.dumps([[list(reactants), list(products)] for reactants, products in REACTION_EXAMPLES])
+
+
+def _reaction_sides_json() -> str:
+    """``[[query parameter, singular noun], ...]`` in form order."""
+    return json.dumps([[side, word] for side, _, word in REACTION_SIDES])
+
+
 def _placeholders_json() -> str:
     """Per-identifier ``placeholder`` text, keyed by query parameter.
 
@@ -1724,6 +2576,23 @@ def render_landing_page(*, api_reference_path: str | None) -> str:
     return (
         _PAGE_TEMPLATE.replace("__DOCS_URL__", DOCS_URL)
         .replace("__REPO_URL__", REPO_URL)
+        # Reaction placeholders first: every one of them is a longer
+        # spelling of a species placeholder, and substituting the short
+        # name first would eat the tail of the long one.
+        .replace("__REACTION_SEARCH_PATH__", REACTION_SEARCH_PATH)
+        .replace("__REACTION_EXAMPLE_CHIPS__", _reaction_example_chips())
+        .replace("__REACTION_EXAMPLES_JSON__", _reaction_examples_json())
+        .replace("__REACTION_FALLBACK_FORMS__", _reaction_fallback_forms())
+        .replace("__REACTION_RENDER_LIMIT__", str(REACTION_RENDER_LIMIT))
+        .replace("__REACTION_SIDES_JSON__", _reaction_sides_json())
+        .replace(
+            "__SEED_REACTANT_INPUTS__",
+            _reaction_inputs("reactants", SEED_REACTANTS, " " * 12),
+        )
+        .replace(
+            "__SEED_PRODUCT_INPUTS__",
+            _reaction_inputs("products", SEED_PRODUCTS, " " * 12),
+        )
         .replace("__SEARCH_PATH__", SPECIES_SEARCH_PATH)
         .replace("__FIELD_OPTIONS__", _field_options(SEED_FIELD))
         .replace("__EXAMPLE_CHIPS__", _example_chips())
@@ -1771,14 +2640,22 @@ __all__ = [
     "HERO_TRUE_FREQUENCIES",
     "HERO_XYZ",
     "ORIGIN_PLACEHOLDER",
+    "REACTION_EXAMPLES",
+    "REACTION_RENDER_LIMIT",
+    "REACTION_SEARCH_PATH",
+    "REACTION_SIDES",
     "REDOC_PATH",
     "REPO_URL",
     "SEARCH_EXAMPLES",
     "SEARCH_FIELDS",
     "SEED_FIELD",
+    "SEED_PRODUCTS",
+    "SEED_REACTANTS",
     "SEED_VALUE",
     "SPECIES_SEARCH_PATH",
     "hero_atom_lines",
     "landing_router",
+    "reaction_label",
+    "reaction_query",
     "render_landing_page",
 ]

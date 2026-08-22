@@ -22,6 +22,21 @@ The tests are grouped as:
   the page still searches. The one control that cannot work without
   script ships disabled rather than silently searching the wrong
   field, and ``<noscript>`` offers a plain form per identifier.
+* :class:`TestReactionSearchTakesASetPerSide` -- the other search. A
+  reaction query is a set per side, spelled as repeated query
+  parameters; ``?reactants=A,B`` asks for a species named ``A,B`` and
+  answers ``200`` with nothing, so these check the shape of every
+  reaction URL the page builds rather than checking that a box exists.
+* :class:`TestBothSearchesSurviveWithoutTheSwitch` -- the species /
+  reactions switch is script-built. Both panels are markup, and the
+  tab strip ships hidden rather than shipping inert.
+* :class:`TestReviewStateIsInformation` -- ``under_review`` is the
+  ordinary state of a served record and must not be drawn in the
+  colour reserved for a rejected one.
+* :class:`TestShownCommandsRunAsPrinted` -- ``curl`` reads ``[...]``
+  as a glob, so a reader who substitutes ``[OH]`` into a printed
+  command gets a client-side failure that reads as a broken API.
+  Every shown command carries ``-g``.
 * :class:`TestResultsExpandInPlace` -- following a result must not
   drop the reader into a nested JSON document without warning. Each
   product is a disclosure that opens on the page, and every route to
@@ -44,9 +59,10 @@ The tests are grouped as:
 
 from __future__ import annotations
 
+import html
 import re
 from html.parser import HTMLParser
-from urllib.parse import quote
+from urllib.parse import parse_qs, quote, urlparse
 
 import pytest
 from fastapi import APIRouter
@@ -63,13 +79,19 @@ from app.api.landing import (
     HERO_FREQUENCIES,
     HERO_TRUE_FREQUENCIES,
     HERO_XYZ,
+    REACTION_EXAMPLES,
+    REACTION_SEARCH_PATH,
+    REACTION_SIDES,
     REPO_URL,
     SEARCH_EXAMPLES,
     SEARCH_FIELDS,
     SEED_FIELD,
+    SEED_PRODUCTS,
+    SEED_REACTANTS,
     SEED_VALUE,
     SPECIES_SEARCH_PATH,
     hero_atom_lines,
+    reaction_query,
     render_landing_page,
 )
 from app.api.startup_checks import validate_deployment_safety
@@ -133,6 +155,23 @@ class _Document(HTMLParser):
             if all(element_attrs.get(key) == value for key, value in attrs.items()):
                 found.append((element_attrs, ancestors))
         return found
+
+
+def _noscript_forms(document: "_Document", action: str) -> list[dict[str, str | None]]:
+    """The ``<noscript>`` forms aimed at one endpoint.
+
+    The page has two searches and therefore two sets of fallback
+    forms. Scoping by action keeps each set's assertions about that
+    set: without it, "every fallback form points at species search"
+    would be false the moment reaction search existed, and the honest
+    repair is to say which forms are being counted rather than to
+    loosen what is required of them.
+    """
+    return [
+        attrs
+        for attrs, ancestors in document.find("form")
+        if "noscript" in ancestors and attrs["action"] == action
+    ]
 
 
 @pytest.fixture(scope="module")
@@ -303,15 +342,24 @@ class TestLiveSearch:
     """
 
     def test_the_search_is_a_real_form_aimed_at_the_public_read_endpoint(self, document):
+        """Two searches, two real GET forms, and nothing else.
+
+        This asserted one form until reaction search was added. It is
+        still an exhaustive assertion -- the count is pinned and both
+        actions are named -- so a third form, or a form aimed anywhere
+        but a public read endpoint, still fails here.
+        """
         forms = [
-            (attrs, ancestors)
+            attrs
             for attrs, ancestors in document.find("form")
             if "noscript" not in ancestors
         ]
-        assert len(forms) == 1
-        attrs, _ = forms[0]
-        assert attrs["action"] == SPECIES_SEARCH_PATH
-        assert attrs["method"] == "get"
+        assert [attrs["action"] for attrs in forms] == [
+            SPECIES_SEARCH_PATH,
+            REACTION_SEARCH_PATH,
+        ]
+        for attrs in forms:
+            assert attrs["method"] == "get"
 
     def test_the_box_is_seeded_with_a_query_that_returns_a_record(self, document):
         """Nobody's first sight of the search is an empty box.
@@ -450,18 +498,17 @@ class TestSearchDegradesWithoutJavaScript:
         fallback is one single-field form per identifier rather than
         one form carrying all three.
         """
-        fallback_forms = [
-            attrs for attrs, ancestors in document.find("form") if "noscript" in ancestors
-        ]
+        fallback_forms = _noscript_forms(document, SPECIES_SEARCH_PATH)
         assert fallback_forms
         for attrs in fallback_forms:
-            assert attrs["action"] == SPECIES_SEARCH_PATH
             assert attrs["method"] == "get"
 
         named = {
             attrs["name"]
             for attrs, ancestors in document.find("input")
-            if "noscript" in ancestors and attrs.get("name")
+            if "noscript" in ancestors
+            and attrs.get("name")
+            and attrs["name"] not in {side for side, _, _ in REACTION_SIDES}
         }
         offered = {field for field, _ in SEARCH_FIELDS}
         assert named == offered - {SEED_FIELD}
@@ -478,6 +525,357 @@ class TestSearchDegradesWithoutJavaScript:
         assert document.find("input", id="search-input")
         assert document.find("button", type="submit")
         assert document.find("a", **{"class": "chip"})
+
+
+class TestReactionSearchTakesASetPerSide:
+    """The half of the hero that searches reactions, not species.
+
+    One property dominates this class and is worth stating once. A
+    reaction query is a *set* per side, and the endpoint spells a set
+    as repeated query parameters::
+
+        ?reactants=NN&reactants=[OH]     the reactions with both among
+                                         their reactants
+        ?reactants=NN,[OH]               one species literally named
+                                         "NN,[OH]"
+
+    The second is not an error. It returns ``200`` with nothing in it,
+    which is the least debuggable answer an API can give -- so the
+    tests below check the *shape of every URL the page builds*, in the
+    markup, in the script, and in the ``curl`` example, rather than
+    checking that a reaction box exists.
+    """
+
+    def test_two_species_on_one_side_become_two_parameters(self):
+        """The mistake this whole design exists to avoid.
+
+        Joining the side with a comma would leave this URL parsing to
+        ``{"reactants": ["[NH2],NN"]}`` -- one value, one species name,
+        nothing matched -- so this fails on exactly that regression and
+        on nothing else.
+        """
+        url = reaction_query(("[NH2]", "NN"), ())
+        assert parse_qs(urlparse(url).query) == {"reactants": ["[NH2]", "NN"]}
+        assert url.count("reactants=") == 2
+        assert "," not in url
+
+    def test_both_sides_repeat_independently(self):
+        url = reaction_query(("NN", "[OH]"), ("N=N", "O"))
+        assert parse_qs(urlparse(url).query) == {
+            "reactants": ["NN", "[OH]"],
+            "products": ["N=N", "O"],
+        }
+
+    def test_a_side_left_out_is_left_out_rather_than_sent_empty(self):
+        """An empty sibling is not an absent one.
+
+        ``?reactants=NN&products=`` is AND-combined by the endpoint and
+        returns nothing, so "unconstrained on the other side" has to be
+        the *absence* of the parameter, never a present-but-blank one.
+        """
+        url = reaction_query(("NN",), ())
+        assert parse_qs(urlparse(url).query, keep_blank_values=True) == {"reactants": ["NN"]}
+        assert "products" not in url
+
+    def test_no_reaction_url_anywhere_on_the_page_joins_a_side(self, page):
+        """Every link, chip and shown command, checked the same way.
+
+        A builder can be correct while one hand-written ``href`` on the
+        page is not, and that ``href`` is what a reader with scripting
+        off actually follows. So this parses every reaction-search URL
+        in the rendered document and asserts no single value carries a
+        separator -- and that at least one of them really does repeat a
+        parameter, or the assertion above it would be vacuous.
+        """
+        urls = re.findall(r'href="([^"]*' + re.escape(REACTION_SEARCH_PATH) + r'[^"]*)"', page)
+        assert urls
+        repeated = 0
+        for raw in urls:
+            query = parse_qs(urlparse(html.unescape(raw)).query, keep_blank_values=True)
+            for name, values in query.items():
+                assert name in {side for side, _, _ in REACTION_SIDES}, name
+                if len(values) > 1:
+                    repeated += 1
+                for value in values:
+                    assert value, "a blank side is an absent side, not an empty parameter"
+                    assert "," not in value, value
+                    assert " " not in value, value
+        assert repeated, "no offered link exercises the repeated-parameter form"
+
+    def test_the_script_builds_one_parameter_per_species(self, script):
+        """The same property, in the code the browser actually runs.
+
+        Checked structurally because the assertion is about a URL the
+        test suite cannot execute: the loop that pushes one
+        ``reactants=`` per element, and the absence of any join with a
+        separator anywhere in the script.
+        """
+        builder = re.search(r"function rxnUrl\(.*?\n  \}", script, flags=re.DOTALL)
+        assert builder is not None
+        source = builder.group(0)
+        for side, _, _ in REACTION_SIDES:
+            assert f'parts.push("{side}=" + encodeURIComponent({side}[i]))' in source, side
+        assert 'parts.join("&")' in source
+        assert 'join(",")' not in script
+        assert 'join(", ")' not in script
+
+    def test_the_chips_and_the_builder_cannot_drift(self, document):
+        """Each offered example is a real link to the query it names."""
+        chips = document.find("a", **{"class": "chip rxn-chip"})
+        assert len(chips) == len(REACTION_EXAMPLES)
+        for index, ((attrs, _), (reactants, products)) in enumerate(
+            zip(chips, REACTION_EXAMPLES, strict=True)
+        ):
+            assert attrs["data-example"] == str(index)
+            assert html.unescape(attrs["href"]) == reaction_query(reactants, products)
+        assert any(len(reactants) > 1 or len(products) > 1 for reactants, products in REACTION_EXAMPLES), (
+            "one offered example must carry two species on a side"
+        )
+
+    def test_the_form_is_seeded_with_a_query_that_returns_records(self, document):
+        """Nobody's first sight of reaction search is an empty box.
+
+        Both sides are seeded, and every field is ``required``: a plain
+        no-script submit therefore cannot send a blank side, which the
+        endpoint would read as a filter matching nothing.
+        """
+        for side, values in (("reactants", SEED_REACTANTS), ("products", SEED_PRODUCTS)):
+            fields = [
+                attrs
+                for attrs, ancestors in document.find("input")
+                if attrs.get("name") == side and "noscript" not in ancestors
+            ]
+            assert [attrs["value"] for attrs in fields] == list(values)
+            for attrs in fields:
+                assert "required" in attrs
+                assert attrs.get("aria-label")
+        assert SEED_REACTANTS and SEED_PRODUCTS
+
+    def test_the_script_takes_the_validation_off_the_form_it_took_over(self, script):
+        """``required`` is for the no-script path and only that path.
+
+        With the script running, blank fields are skipped rather than
+        submitted, so leaving a side empty must be allowed; the browser
+        would otherwise refuse the submit before the handler saw it.
+        """
+        assert "rxnForm.noValidate = true" in script
+        assert "if (value) { values.push(value); }" in script
+
+    def test_noscript_can_still_ask_for_two_species_on_a_side(self, document):
+        """A plain form emits repeated same-named inputs. Use that.
+
+        This is the whole reason the fallback is a set of forms rather
+        than a sentence apologising: without a script, HTML alone can
+        express ``reactants=A&reactants=B``.
+        """
+        forms = _noscript_forms(document, REACTION_SEARCH_PATH)
+        assert forms
+        counted = {}
+        for side, _, _ in REACTION_SIDES:
+            names = [
+                attrs
+                for attrs, ancestors in document.find("input")
+                if "noscript" in ancestors and attrs.get("name") == side
+            ]
+            assert names, side
+            for attrs in names:
+                assert "required" in attrs, "an empty sibling parameter matches nothing"
+            counted[side] = len(names)
+        # One single-field form and one two-field form per side.
+        assert counted == {side: 3 for side, _, _ in REACTION_SIDES}
+        assert len(forms) == 2 * len(REACTION_SIDES)
+
+    def test_a_result_shows_the_equation_and_how_far_it_was_checked(self, script):
+        """The equation is the legible thing; the review state is honest.
+
+        ``under_review`` is a normal state for a served record and is
+        drawn with the same neutral badge as everything else -- the
+        assertion for that is on the stylesheet, in
+        :meth:`TestReviewStateIsInformation.test_only_deprecated_and_rejected_use_the_negative_phase`.
+        """
+        renderer = re.search(r"function rxnRecordNode\(record\) \{.*?\n  \}", script, re.DOTALL)
+        assert renderer is not None
+        source = renderer.group(0)
+        assert 'make("span", "equation", record.equation' in source
+        assert "reviewBadge(record.review" in source
+
+    def test_a_result_says_which_way_round_the_query_matched(self, script):
+        """``reverse`` is information: the reactants asked for are its products."""
+        assert "DIRECTION_WORDS[record.matched_direction]" in script
+        for word in ("matched forward", "matched in reverse", "matched either way"):
+            assert f'"{word}"' in script, word
+
+    def test_a_result_leads_onward_to_the_evidence_it_has(self, script):
+        """A landing page that leads nowhere is the defect being fixed."""
+        for path in (
+            "/api/v1/scientific/reaction-entries/",
+            "/api/v1/scientific/transition-states/search",
+        ):
+            assert f'"{path}"' in script, path
+        sections = re.search(r"var RXN_SECTIONS = \[.*?\n  \];", script, flags=re.DOTALL)
+        assert sections is not None
+        assert "a.has_transition_state" in sections.group(0)
+        assert "a.kinetics_count" in sections.group(0)
+        assert "no kinetics or transition state yet" in script
+
+    def test_an_empty_result_reads_as_an_outcome_and_offers_one_that_works(self, script):
+        empty = re.search(
+            r"function rxnEmptyNode\(reactants, products\) \{.*?\n  \}", script, re.DOTALL
+        )
+        assert empty is not None
+        assert "Nothing matched" in empty.group(0)
+        assert "rxnExampleList(" in empty.group(0)
+        assert '"These return records:"' in script
+
+    def test_a_query_with_no_filter_shows_the_endpoints_own_refusal(self, script, page):
+        """The 422 is ``missing_reaction_search_filter``, so show that.
+
+        Clearing both sides omits every participant parameter, which is
+        what produces the real refusal; its ``code`` and ``detail`` are
+        then rendered. The code is deliberately not written anywhere on
+        this page -- what the reader sees is what the endpoint said.
+        """
+        assert re.search(r"if \(!parts\.length\) \{ return RXN_SEARCH; \}", script)
+        assert "body.code" in script
+        assert "body.detail" in script
+        assert not [
+            literal for literal in re.findall(r'"([^"]*)"', script)
+            if "missing_reaction_search_filter" in literal
+        ], "the code is the endpoint's to state, not this page's to guess"
+        prose = re.sub(r"<script>.*?</script>", "", page, flags=re.DOTALL)
+        prose = re.sub(r"<style>.*?</style>", "", prose, flags=re.DOTALL)
+        assert "missing_reaction_search_filter" not in prose
+
+    def test_the_render_is_capped_and_never_lies_about_the_total(self, script):
+        """The count is the endpoint's; the cap is only how much is drawn."""
+        assert "RXN_LIMIT" in script
+        assert 'parts.push("limit=" + limit)' in script
+        assert "rxnUrl(reactants, products, RXN_LIMIT)" in script
+        # The "more than fits" line links the *uncapped* URL.
+        assert "rxnUrl(reactants, products)" in script
+        assert "Open the full response as raw JSON" in script
+
+    def test_the_results_area_is_announced_when_it_changes(self, document):
+        regions = document.find("div", id="rxn-results")
+        assert len(regions) == 1
+        assert regions[0][0]["aria-live"] == "polite"
+
+
+class TestBothSearchesSurviveWithoutTheSwitch:
+    """The species/reactions switch is an enhancement, never a gate."""
+
+    def test_both_panels_are_markup_before_any_script_runs(self, document):
+        for panel, action in (
+            ("panel-species", SPECIES_SEARCH_PATH),
+            ("panel-reactions", REACTION_SEARCH_PATH),
+        ):
+            found = document.find("div", id=panel)
+            assert len(found) == 1, panel
+            assert "hidden" not in found[0][0], panel
+            assert [
+                attrs
+                for attrs, ancestors in document.find("form")
+                if attrs["action"] == action and "noscript" not in ancestors
+            ], action
+
+    def test_the_switch_ships_hidden_and_the_script_builds_it(self, document, page, script):
+        """A tab that cannot change what is shown is worse than no tab.
+
+        And ``.modes`` sets ``display: flex``, which beats the user
+        agent's ``[hidden]`` rule -- so the stylesheet has to turn it
+        off explicitly or the control would be visible to exactly the
+        readers who cannot use it.
+        """
+        modes = document.find("div", id="modes")
+        assert len(modes) == 1
+        assert "hidden" in modes[0][0]
+        assert ".modes[hidden] { display: none; }" in page
+        assert "modes.hidden = false" in script
+        assert 'modes.setAttribute("role", "tablist")' in script
+        assert 'setAttribute("role", "tabpanel")' in script
+
+    def test_the_page_keeps_exactly_one_top_level_heading(self, document):
+        assert len(document.find("h1")) == 1
+
+    def test_a_two_field_fallback_form_is_allowed_to_wrap(self, page):
+        """Measured, not guessed: this regressed and was caught in a browser.
+
+        A reaction fallback form carries two inputs and a button. At
+        their default size that is 542px of content inside a 360px
+        viewport, and an ``<input>`` will not shrink below its size
+        attribute unless it is told it may -- so with scripting off the
+        whole document scrolled sideways, which is the one thing the
+        narrow layout is not allowed to do.
+        """
+        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL).group(1)
+        form_rule = re.search(r"\.fallback form \{([^}]*)\}", css)
+        assert form_rule is not None
+        assert "flex-wrap: wrap" in form_rule.group(1)
+        assert "max-width: 100%" in form_rule.group(1)
+        input_rule = re.search(r"\.fallback input \{([^}]*)\}", css)
+        assert input_rule is not None
+        assert "min-width: 0" in input_rule.group(1)
+
+
+class TestReviewStateIsInformation:
+    """Under review is a state, not a warning, on every result."""
+
+    def test_only_deprecated_and_rejected_use_the_negative_phase(self, page):
+        """Most of what this deployment serves is under review.
+
+        Drawing that in the colour reserved for a rejected record would
+        put a warning on the ordinary case, which is both wrong and the
+        opposite of what the review model is for.
+        """
+        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL).group(1)
+        flagged = set()
+        for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+            if "--phase-neg" not in body:
+                continue
+            flagged.update(re.findall(r"\.badge-(\w+)", selectors))
+        assert flagged == {"deprecated", "rejected"}
+
+
+class TestShownCommandsRunAsPrinted:
+    """A command a reader pastes has to work when they change the value."""
+
+    def test_every_curl_disables_globbing(self, page):
+        """``curl`` reads ``[...]`` as a glob, and SMILES are full of it.
+
+        ``curl -s ".../search?smiles=[OH]"`` fails in the client before
+        it reaches any server, with an error about a bad range -- which
+        reads as the API being broken. ``-g`` turns globbing off, and
+        every command on the page carries it because the page invites
+        substitution.
+        """
+        commands = re.findall(r"curl [^\n<]*", page)
+        assert commands
+        for command in commands:
+            flags = re.match(r"curl\s+(-[A-Za-z]+)", command)
+            assert flags is not None, command
+            assert "g" in flags.group(1), command
+        assert any("[" in command for command in commands), (
+            "no shown command contains a bracketed SMILES, so -g would be untested"
+        )
+
+    def test_the_page_says_why_the_flag_is_there(self, page):
+        assert "shell globs" in page
+        assert "<code>-g</code>" in page
+
+    def test_the_reaction_command_shows_the_repeated_parameter_form(self, page):
+        """The shape is the lesson, and one shown command teaches it.
+
+        Pasted with a comma instead -- ``?products=[H][H],N=N`` -- the
+        same command returns ``200`` and nothing, so the example has to
+        be the correct shape rather than merely a working URL.
+        """
+        commands = [c for c in re.findall(r"curl [^\n<]*", page) if REACTION_SEARCH_PATH in c]
+        assert len(commands) == 1
+        command = html.unescape(commands[0])
+        query = parse_qs(command.split("?", 1)[1].rstrip('"'))
+        assert len(query["products"]) == 2, command
+        for value in query["products"]:
+            assert "," not in value
 
 
 class TestResultsExpandInPlace:
@@ -590,10 +988,7 @@ class TestResultsExpandInPlace:
         results, which only exist once a fetch has run. What has to
         survive is everything that works before one does.
         """
-        fallback_forms = [
-            attrs for attrs, ancestors in document.find("form") if "noscript" in ancestors
-        ]
-        assert len(fallback_forms) == len(SEARCH_FIELDS) - 1
+        assert len(_noscript_forms(document, SPECIES_SEARCH_PATH)) == len(SEARCH_FIELDS) - 1
         assert document.find("input", id="search-input")
         assert document.find("a", **{"class": "chip"})
 
