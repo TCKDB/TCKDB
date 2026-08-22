@@ -125,6 +125,29 @@ class Settings(BaseSettings):
     # registers ``/docs``, ``/redoc``, or ``/openapi.json``.
     expose_api_docs: bool = True
 
+    # Read-only API reference exposure, independent of the switch above.
+    #
+    # ``EXPOSE_API_DOCS`` is all-or-nothing and hosted deployments must
+    # keep it off: the startup guard in :mod:`app.api.startup_checks`
+    # refuses to boot a hosted mode with it on, because it registers
+    # Swagger UI at ``/docs`` -- an interactive request console pointed
+    # at the live deployment. That is the thing hosted mode does not
+    # want. It is not the same thing as *published API documentation*,
+    # which a hosted instance very much does want, since the reason
+    # anyone opens the base URL is to find out what the API offers.
+    #
+    # When this is true, ReDoc (``/redoc``) and the OpenAPI document
+    # (``/openapi.json``) are registered and Swagger UI is not. ReDoc
+    # renders the schema as a static reference with no "Try it out"
+    # button, so it publishes the contract without handing an anonymous
+    # reader a request builder.
+    #
+    # Defaults to ``False`` so no existing deployment becomes more
+    # exposed by upgrading; an operator opts in per deployment. It is
+    # deliberately *not* in the startup guard's violation list -- it is
+    # a safe thing to turn on in hosted mode, which is its whole point.
+    expose_api_reference: bool = False
+
     # Legacy entity-read auth gate. The public scientific surface
     # lives under ``/api/v1/scientific/*``; the older
     # ``/api/v1/{thermo,kinetics,...}`` routes pre-date the
