@@ -10345,61 +10345,6 @@
         "title": "ConformerAssignmentScopeKind",
         "type": "string"
       },
-      "ConformerCalculationEvidenceSummary": {
-        "description": "Bounded calculation-evidence projection for a conformer group or\nobservation.\n\n``observation_count`` is the number of observation rows under the\ngroup (always ``1`` on the observation detail surface).\n``calculation_count`` is the number of calculations whose\n``conformer_observation_id`` belongs to the in-scope observation\nset (the parent group, or this single observation).\n``geometry_count`` is the number of distinct\n``calculation_output_geometry`` rows reached through that\ncalculation set.",
-        "properties": {
-          "calculation_count": {
-            "title": "Calculation Count",
-            "type": "integer"
-          },
-          "geometry_count": {
-            "title": "Geometry Count",
-            "type": "integer"
-          },
-          "has_freq": {
-            "title": "Has Freq",
-            "type": "boolean"
-          },
-          "has_geometry_validation": {
-            "title": "Has Geometry Validation",
-            "type": "boolean"
-          },
-          "has_opt": {
-            "title": "Has Opt",
-            "type": "boolean"
-          },
-          "has_scf_stability": {
-            "title": "Has Scf Stability",
-            "type": "boolean"
-          },
-          "has_sp": {
-            "title": "Has Sp",
-            "type": "boolean"
-          },
-          "observation_count": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Observation Count"
-          }
-        },
-        "required": [
-          "calculation_count",
-          "has_opt",
-          "has_freq",
-          "has_sp",
-          "has_geometry_validation",
-          "has_scf_stability",
-          "geometry_count"
-        ],
-        "title": "ConformerCalculationEvidenceSummary",
-        "type": "object"
-      },
       "ConformerCalculationIn": {
         "additionalProperties": false,
         "description": "A conformer-upload calculation that can be named by a local key.\n\nThe key is what the nested statmech block points at. It exists so a\ndepositor can say \"the statmech's vibrational basis is *that* freq\njob\" using a name they chose, rather than a calculation row id they\nwould have to query for (DR-0029 Requirement 1).\n\nOptional by design: a payload with no statmech cross-references never\nneeds one, and every payload written before keys existed stays valid.\n\n:param key: Optional local name for this calculation, unique within\n    the request. Referenced from\n    ``statmech.source_calculations[*].calculation_key`` and\n    ``statmech.torsions[*].source_scan_calculation_key``.",
@@ -10789,6 +10734,49 @@
         "title": "ConformerContextBlock",
         "type": "object"
       },
+      "ConformerEvidenceCoverage": {
+        "description": "How many observations in scope carry each kind of evidence.\n\nEvery value counts **observations**, never calculations. An\nobservation with three ``freq`` calculations contributes ``1`` to\n``freq``, not ``3``. The shared denominator is\n``ConformerGroupEvidenceSummary.observation_count``, so a caller\nreads each field as \"*n* of *observation_count*\".\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == observation_count`` says the coverage is **complete** —\nevery observation in the basin has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the five may sit at five different levels of theory,\nfrom five different codes, at five different geometries. A count is\nhonest about coverage, not about consistency. A caller who needs\nconsistency must inspect the per-calculation level-of-theory /\nsoftware provenance under ``include=calculations``; no number in\nthis block can stand in for that.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",
+        "properties": {
+          "freq": {
+            "title": "Freq",
+            "type": "integer"
+          },
+          "geometry_validation": {
+            "title": "Geometry Validation",
+            "type": "integer"
+          },
+          "opt": {
+            "title": "Opt",
+            "type": "integer"
+          },
+          "scf_stability": {
+            "title": "Scf Stability",
+            "type": "integer"
+          },
+          "sp": {
+            "title": "Sp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "opt",
+          "freq",
+          "sp",
+          "geometry_validation",
+          "scf_stability"
+        ],
+        "title": "ConformerEvidenceCoverage",
+        "type": "object"
+      },
+      "ConformerEvidenceMatch": {
+        "description": "Quantifier applied to the ``has_*`` evidence filters.\n\nA conformer group holds several observations, so \"does this group\nhave frequency evidence?\" has two honest readings. This parameter\nmakes the caller pick one at the call site instead of hiding the\nchoice inside a bare boolean.\n\n``any_observation`` (default, and the historical behaviour)\n    The group matches ``has_freq=true`` when **at least one** of its\n    observations has a ``freq`` calculation. ``has_freq=false`` is\n    the negation: **no** observation has one.\n\n``all_observations``\n    The group matches ``has_freq=true`` when it has at least one\n    observation and **every** observation has a ``freq``\n    calculation — the complete-coverage question the old boolean\n    could not express. ``has_freq=false`` is again the negation of\n    that: the group has at least one observation and **at least one\n    of them lacks** ``freq`` — i.e. coverage is *incomplete*, which\n    includes zero coverage.\n\nA group with no observations at all matches neither direction under\n``all_observations``. \"Every observation has freq\" must not be\nvacuously true of a basin with nothing in it.\n\nThe quantifier applies to the whole evidence family\n(``has_calculations``, ``has_opt``, ``has_freq``, ``has_sp``,\n``has_geometries``, ``has_geometry_validation``,\n``has_scf_stability``). It is a modifier, not a filter: supplying it\nalone does not satisfy the at-least-one-filter rule.",
+        "enum": [
+          "any_observation",
+          "all_observations"
+        ],
+        "title": "ConformerEvidenceMatch",
+        "type": "string"
+      },
       "ConformerGeometryLink": {
         "description": "One output-geometry link reached through a conformer's\nsupporting calculations.\n\nWraps the existing :class:`CalculationGeometryLinkSummary` shape\nwith the additional ``calculation_ref`` pointer so a caller can\ntell *which* supporting calculation produced this geometry without\na second round-trip. Full XYZ / atom / coordinate payloads remain\nonly behind ``GET /scientific/geometries/{geometry_ref}``.",
         "properties": {
@@ -10977,6 +10965,40 @@
           "species_entry_id"
         ],
         "title": "ConformerGroupDetailRead",
+        "type": "object"
+      },
+      "ConformerGroupEvidenceSummary": {
+        "description": "Bounded calculation-evidence projection for a conformer **group**.\n\n``observation_count`` is the number of observation rows under the\ngroup. ``calculation_count`` is the number of calculations whose\n``conformer_observation_id`` belongs to that observation set.\n``geometry_count`` is the number of distinct\n``calculation_output_geometry`` rows reached through that\ncalculation set. ``evidence_coverage`` reports, per evidence kind,\nhow many of the ``observation_count`` observations carry it.\n\nWhy counts here and booleans on the observation surface\n-------------------------------------------------------\nThis block deliberately has a **different shape** from\n:class:`ConformerObservationEvidenceSummary`. That asymmetry is the\npoint, not an oversight, and it should not be smoothed over.\n\nA group pools several observations. The booleans this block used to\ncarry (``has_opt`` / ``has_freq`` / …) were a plain OR across all of\nthem, which made them asymmetrically informative: ``false`` was\nstrong (nothing in the group has it) while ``true`` was nearly\nempty (one calculation out of a hundred made it ``true``). A reader\nseeing ``has_freq: true`` on a five-observation basin could not tell\nwhether five observations had frequencies or one did. Counts answer\nthat question — ``freq: 2`` with ``observation_count: 5`` shows an\nunevenly covered basin at a glance — and ``count > 0`` reproduces\nthe old boolean exactly, so nothing that the boolean expressed was\nlost.\n\nAn observation is a single provenance row, so on that surface the\nbooleans are unambiguous and are kept as they were.",
+        "properties": {
+          "calculation_count": {
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "evidence_coverage": {
+            "$ref": "#/components/schemas/ConformerEvidenceCoverage"
+          },
+          "geometry_count": {
+            "title": "Geometry Count",
+            "type": "integer"
+          },
+          "observation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Count"
+          }
+        },
+        "required": [
+          "calculation_count",
+          "evidence_coverage",
+          "geometry_count"
+        ],
+        "title": "ConformerGroupEvidenceSummary",
         "type": "object"
       },
       "ConformerGroupRead": {
@@ -11273,6 +11295,61 @@
           "review"
         ],
         "title": "ConformerObservationCoreBlock",
+        "type": "object"
+      },
+      "ConformerObservationEvidenceSummary": {
+        "description": "Bounded calculation-evidence projection for one conformer\n**observation**.\n\nScope is this single observation: ``observation_count`` is always\n``1`` and every ``has_*`` boolean describes that one provenance row,\nwhere a boolean is unambiguous — it cannot pool a covered\nobservation with an uncovered one, which is what made the same\nbooleans misleading at group scope (see\n:class:`ConformerGroupEvidenceSummary`).\n\n``calculation_count`` and ``geometry_count`` carry the same meaning\nas on the group block, restricted to this observation's own\ncalculations.\n\nAs with the group block's counts, ``has_freq: true`` says frequency\nevidence exists — not that it is comparable with the frequency\nevidence on any sibling observation.",
+        "properties": {
+          "calculation_count": {
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "geometry_count": {
+            "title": "Geometry Count",
+            "type": "integer"
+          },
+          "has_freq": {
+            "title": "Has Freq",
+            "type": "boolean"
+          },
+          "has_geometry_validation": {
+            "title": "Has Geometry Validation",
+            "type": "boolean"
+          },
+          "has_opt": {
+            "title": "Has Opt",
+            "type": "boolean"
+          },
+          "has_scf_stability": {
+            "title": "Has Scf Stability",
+            "type": "boolean"
+          },
+          "has_sp": {
+            "title": "Has Sp",
+            "type": "boolean"
+          },
+          "observation_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observation Count"
+          }
+        },
+        "required": [
+          "calculation_count",
+          "has_opt",
+          "has_freq",
+          "has_sp",
+          "has_geometry_validation",
+          "has_scf_stability",
+          "geometry_count"
+        ],
+        "title": "ConformerObservationEvidenceSummary",
         "type": "object"
       },
       "ConformerObservationRead": {
@@ -12131,6 +12208,10 @@
               }
             ],
             "title": "Conformer Observation Ref"
+          },
+          "evidence_match": {
+            "$ref": "#/components/schemas/ConformerEvidenceMatch",
+            "default": "any_observation"
           },
           "has_calculations": {
             "anyOf": [
@@ -28818,7 +28899,7 @@
             "type": "string"
           },
           "evidence_summary": {
-            "$ref": "#/components/schemas/ConformerCalculationEvidenceSummary"
+            "$ref": "#/components/schemas/ConformerGroupEvidenceSummary"
           },
           "observations_summary": {
             "$ref": "#/components/schemas/ConformerObservationsSummary"
@@ -31987,7 +32068,7 @@
             "$ref": "#/components/schemas/ConformerGroupCoreBlock"
           },
           "evidence_summary": {
-            "$ref": "#/components/schemas/ConformerCalculationEvidenceSummary"
+            "$ref": "#/components/schemas/ConformerGroupEvidenceSummary"
           },
           "geometries": {
             "anyOf": [
@@ -32127,7 +32208,7 @@
             "$ref": "#/components/schemas/ConformerObservationCoreBlock"
           },
           "evidence_summary": {
-            "$ref": "#/components/schemas/ConformerCalculationEvidenceSummary"
+            "$ref": "#/components/schemas/ConformerObservationEvidenceSummary"
           },
           "geometries": {
             "anyOf": [
@@ -63380,6 +63461,15 @@
                 }
               ],
               "title": "Has Scf Stability"
+            }
+          },
+          {
+            "in": "query",
+            "name": "evidence_match",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ConformerEvidenceMatch",
+              "default": "any_observation"
             }
           },
           {

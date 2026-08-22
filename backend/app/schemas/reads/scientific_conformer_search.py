@@ -11,6 +11,7 @@ See ``backend/docs/specs/scientific_conformer_reads.md``.
 
 from __future__ import annotations
 
+from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -43,6 +44,43 @@ from app.schemas.reads.scientific_common import (
 from app.schemas.reads.scientific_conformer import (
     ScientificConformerGroupRecord,
 )
+
+
+class ConformerEvidenceMatch(str, Enum):
+    """Quantifier applied to the ``has_*`` evidence filters.
+
+    A conformer group holds several observations, so "does this group
+    have frequency evidence?" has two honest readings. This parameter
+    makes the caller pick one at the call site instead of hiding the
+    choice inside a bare boolean.
+
+    ``any_observation`` (default, and the historical behaviour)
+        The group matches ``has_freq=true`` when **at least one** of its
+        observations has a ``freq`` calculation. ``has_freq=false`` is
+        the negation: **no** observation has one.
+
+    ``all_observations``
+        The group matches ``has_freq=true`` when it has at least one
+        observation and **every** observation has a ``freq``
+        calculation — the complete-coverage question the old boolean
+        could not express. ``has_freq=false`` is again the negation of
+        that: the group has at least one observation and **at least one
+        of them lacks** ``freq`` — i.e. coverage is *incomplete*, which
+        includes zero coverage.
+
+    A group with no observations at all matches neither direction under
+    ``all_observations``. "Every observation has freq" must not be
+    vacuously true of a basin with nothing in it.
+
+    The quantifier applies to the whole evidence family
+    (``has_calculations``, ``has_opt``, ``has_freq``, ``has_sp``,
+    ``has_geometries``, ``has_geometry_validation``,
+    ``has_scf_stability``). It is a modifier, not a filter: supplying it
+    alone does not satisfy the at-least-one-filter rule.
+    """
+
+    any_observation = "any_observation"
+    all_observations = "all_observations"
 
 
 class ConformersSearchRequest(BaseModel):
@@ -83,6 +121,9 @@ class ConformersSearchRequest(BaseModel):
     has_sp: bool | None = None
     has_geometry_validation: bool | None = None
     has_scf_stability: bool | None = None
+    evidence_match: ConformerEvidenceMatch = (
+        ConformerEvidenceMatch.any_observation
+    )
 
     # --- provenance filters ----------------------------------------------
     scientific_origin: ScientificOriginKind | None = None
@@ -131,6 +172,7 @@ class ScientificConformersSearchResponse(BaseModel):
 
 
 __all__ = [
+    "ConformerEvidenceMatch",
     "ConformersSearchRequest",
     "RequestEcho",
     "ScientificConformersSearchResponse",

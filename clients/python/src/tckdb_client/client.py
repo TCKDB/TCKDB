@@ -2103,6 +2103,7 @@ class TCKDBClient:
         has_sp: bool | None = None,
         has_geometry_validation: bool | None = None,
         has_scf_stability: bool | None = None,
+        evidence_match: str | None = None,
         scientific_origin: str | None = None,
         method: str | None = None,
         basis: str | None = None,
@@ -2120,7 +2121,17 @@ class TCKDBClient:
         profile: str | None = None,
         method_http: _ScientificSearchMethod = "POST",
     ) -> ConformerSearchResponse:
-        """Search conformer groups by species, evidence, or selection state."""
+        """Search conformer groups by species, evidence, or selection state.
+
+        ``evidence_match`` picks the quantifier the ``has_*`` filters use
+        over a group's observations: ``"any_observation"`` (the server
+        default, and the historical behaviour) matches a group where at
+        least one observation carries the evidence; ``"all_observations"``
+        matches only groups where every observation does, and with
+        ``has_x=False`` matches groups whose coverage is incomplete. A
+        group with no observations matches neither under
+        ``"all_observations"``. Leave it ``None`` to keep the default.
+        """
 
         body = {
             "species_ref": species_ref,
@@ -2138,6 +2149,7 @@ class TCKDBClient:
             "has_sp": has_sp,
             "has_geometry_validation": has_geometry_validation,
             "has_scf_stability": has_scf_stability,
+            "evidence_match": evidence_match,
             "scientific_origin": scientific_origin,
             "method": method,
             "basis": basis,

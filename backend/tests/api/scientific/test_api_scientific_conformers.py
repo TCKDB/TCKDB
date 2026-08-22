@@ -205,6 +205,12 @@ def test_cg_detail_observations_summary_counts(client, db_session):
 
 
 def test_cg_detail_evidence_summary_with_calcs(client, db_session):
+    """Rewritten from ``has_opt``/``has_freq``/``has_sp`` booleans.
+
+    Same scenario as before; the group surface now reports observation
+    coverage instead. ``coverage > 0`` is the exact replacement for the
+    retired ``has_x is True``.
+    """
     entry, cg, obs = _make_group_with_obs(db_session)
     _attach_calc(
         db_session,
@@ -222,10 +228,183 @@ def test_cg_detail_evidence_summary_with_calcs(client, db_session):
     ev = body["record"]["evidence_summary"]
     assert ev["observation_count"] == 1
     assert ev["calculation_count"] == 2
-    assert ev["has_opt"] is True
-    assert ev["has_freq"] is True
-    assert ev["has_sp"] is False
+    assert ev["evidence_coverage"] == {
+        "opt": 1,
+        "freq": 1,
+        "sp": 0,
+        "geometry_validation": 0,
+        "scf_stability": 0,
+    }
     assert ev["geometry_count"] == 0
+
+
+def test_cg_detail_evidence_coverage_reports_partial_observation_cover(
+    client, db_session
+):
+    """The case the boolean could not express.
+
+    Two observations under one group; only one has a ``freq``
+    calculation. The retired ``has_freq`` reported ``true`` here, which
+    a reader takes as "this basin has frequency evidence" when half of
+    it does not. Coverage says ``1`` of ``2``.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.freq,
+    )
+    _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[1],
+        calc_type=CalculationType.opt,
+    )
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["observation_count"] == 2
+    assert ev["calculation_count"] == 2
+    assert ev["evidence_coverage"]["freq"] == 1
+    assert ev["evidence_coverage"]["opt"] == 1
+    # Both kinds would have read ``true`` under the old shape; only the
+    # denominator distinguishes "half covered" from "fully covered".
+    assert ev["evidence_coverage"]["freq"] < ev["observation_count"]
+
+
+def test_cg_detail_evidence_coverage_complete_across_observations(
+    client, db_session
+):
+    """Five of five — the coverage-is-complete reading."""
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=5)
+    for o in obs:
+        _attach_calc(
+            db_session,
+            species_entry=entry,
+            conformer_observation=o,
+            calc_type=CalculationType.freq,
+        )
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["observation_count"] == 5
+    assert ev["evidence_coverage"]["freq"] == 5
+    assert ev["calculation_count"] == 5
+
+
+def test_cg_detail_evidence_coverage_zero_when_no_observation_has_it(
+    client, db_session
+):
+    """Zero of five — as strong as the old ``has_x is False``."""
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=5)
+    for o in obs:
+        _attach_calc(
+            db_session,
+            species_entry=entry,
+            conformer_observation=o,
+            calc_type=CalculationType.opt,
+        )
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["observation_count"] == 5
+    assert ev["evidence_coverage"]["opt"] == 5
+    assert ev["evidence_coverage"]["freq"] == 0
+    assert ev["evidence_coverage"]["sp"] == 0
+
+
+def test_cg_detail_evidence_coverage_counts_observations_not_calculations(
+    client, db_session
+):
+    """Three ``freq`` calculations on one observation cover **one**.
+
+    This is the property the whole field rests on: the denominator is
+    observations, so the numerator must be too. A coverage value that
+    counted calculations could exceed ``observation_count`` and would be
+    unreadable against it.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    for _ in range(3):
+        _attach_calc(
+            db_session,
+            species_entry=entry,
+            conformer_observation=obs[0],
+            calc_type=CalculationType.freq,
+        )
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["observation_count"] == 2
+    assert ev["calculation_count"] == 3
+    assert ev["evidence_coverage"]["freq"] == 1
+    assert ev["evidence_coverage"]["freq"] <= ev["observation_count"]
+
+
+def test_cg_detail_evidence_coverage_for_validation_and_stability(
+    client, db_session
+):
+    """Coverage for the two joined-evidence kinds, partially covered.
+
+    The covered observation carries **two** validated calculations, so
+    this also pins the counts-observations-not-calculations property on
+    the joined-evidence path — a coverage of ``2`` here would exceed the
+    number of observations that actually have the evidence.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    calc_a, _ = _attach_calc(
+        db_session, species_entry=entry, conformer_observation=obs[0]
+    )
+    calc_b, _ = _attach_calc(
+        db_session, species_entry=entry, conformer_observation=obs[0]
+    )
+    _attach_calc(db_session, species_entry=entry, conformer_observation=obs[1])
+    for calc in (calc_a, calc_b):
+        attach_geometry_validation(db_session, calculation=calc)
+        attach_scf_stability(db_session, calculation=calc)
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    coverage = ev["evidence_coverage"]
+    assert ev["observation_count"] == 2
+    assert ev["calculation_count"] == 3
+    assert coverage["geometry_validation"] == 1
+    assert coverage["scf_stability"] == 1
+
+
+def test_cg_detail_evidence_coverage_empty_group(client, db_session):
+    """A basin with no observations is 0 of 0 — never vacuously covered."""
+    _, cg = _make_group(db_session)
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["observation_count"] == 0
+    assert ev["calculation_count"] == 0
+    assert ev["geometry_count"] == 0
+    assert ev["evidence_coverage"] == {
+        "opt": 0,
+        "freq": 0,
+        "sp": 0,
+        "geometry_validation": 0,
+        "scf_stability": 0,
+    }
+
+
+def test_cg_detail_evidence_summary_carries_no_boolean_flags(
+    client, db_session
+):
+    """The misleading group-scope booleans are gone, not merely joined."""
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.freq,
+    )
+    body = client.get(_cg_url(cg.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    for retired in (
+        "has_opt",
+        "has_freq",
+        "has_sp",
+        "has_geometry_validation",
+        "has_scf_stability",
+    ):
+        assert retired not in ev
 
 
 def test_cg_detail_available_sections_present(client, db_session):
@@ -669,6 +848,32 @@ def test_co_detail_evidence_summary_with_validation_evidence(
     assert ev["has_scf_stability"] is True
 
 
+def test_co_detail_evidence_summary_keeps_booleans(client, db_session):
+    """The observation surface is deliberately shaped differently.
+
+    One observation is one provenance row, so a boolean there cannot
+    pool a covered observation with an uncovered one — the failure that
+    forced the group surface onto counts. The booleans stay, and the
+    group's ``evidence_coverage`` block must not appear here.
+    """
+    entry, _, obs = _make_group_with_obs(db_session, n_observations=2)
+    _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.freq,
+    )
+    body = client.get(_co_url(obs[0].public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["observation_count"] == 1
+    assert ev["has_freq"] is True
+    assert ev["has_opt"] is False
+    assert "evidence_coverage" not in ev
+
+    sibling = client.get(_co_url(obs[1].public_ref)).json()
+    assert sibling["record"]["evidence_summary"]["has_freq"] is False
+
+
 # ===========================================================================
 # Conformer search (group grain)
 # ===========================================================================
@@ -919,6 +1124,217 @@ def test_search_by_has_scf_stability(client, db_session):
     body = client.get(_search_url(has_scf_stability="true")).json()
     refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
     assert refs == {cg_a.public_ref}
+
+
+# --- evidence_match (any vs all observations) -------------------------------
+
+
+def _group_with_freq_coverage(db_session, *, label, covered, total):
+    """Build a group of *total* observations where *covered* have freq."""
+    entry, cg, obs = _make_group_with_obs(
+        db_session, label=label, n_observations=total
+    )
+    for index, o in enumerate(obs):
+        _attach_calc(
+            db_session,
+            species_entry=entry,
+            conformer_observation=o,
+            calc_type=(
+                CalculationType.freq if index < covered else CalculationType.opt
+            ),
+        )
+    return entry, cg, obs
+
+
+def test_search_has_freq_defaults_to_any_observation(client, db_session):
+    """Unchanged default: one covered observation is enough to match.
+
+    Existing clients pass no ``evidence_match``; they must keep seeing
+    the partially covered group.
+    """
+    _, cg_partial, _ = _group_with_freq_coverage(
+        db_session, label="partial", covered=1, total=2
+    )
+    _, cg_none, _ = _group_with_freq_coverage(
+        db_session, label="none", covered=0, total=2
+    )
+    body = client.get(_search_url(has_freq="true")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_partial.public_ref}
+    assert cg_none.public_ref not in refs
+
+
+def test_search_has_freq_all_observations_requires_every_observation(
+    client, db_session
+):
+    """``all_observations`` is the question the boolean could not ask."""
+    _, cg_partial, _ = _group_with_freq_coverage(
+        db_session, label="partial", covered=1, total=2
+    )
+    _, cg_full, _ = _group_with_freq_coverage(
+        db_session, label="full", covered=2, total=2
+    )
+    body = client.get(
+        _search_url(has_freq="true", evidence_match="all_observations")
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_full.public_ref}
+    assert cg_partial.public_ref not in refs
+
+    # ...and the same two groups under the default quantifier: both match.
+    any_body = client.get(_search_url(has_freq="true")).json()
+    any_refs = {
+        r["conformer_group"]["conformer_group_ref"] for r in any_body["records"]
+    }
+    assert any_refs == {cg_partial.public_ref, cg_full.public_ref}
+
+
+def test_search_has_freq_all_observations_false_finds_incomplete_cover(
+    client, db_session
+):
+    """Under ``all_observations``, ``false`` means coverage is incomplete."""
+    _, cg_partial, _ = _group_with_freq_coverage(
+        db_session, label="partial", covered=1, total=2
+    )
+    _, cg_full, _ = _group_with_freq_coverage(
+        db_session, label="full", covered=2, total=2
+    )
+    _, cg_none, _ = _group_with_freq_coverage(
+        db_session, label="none", covered=0, total=2
+    )
+    body = client.get(
+        _search_url(has_freq="false", evidence_match="all_observations")
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert cg_partial.public_ref in refs
+    assert cg_none.public_ref in refs
+    assert cg_full.public_ref not in refs
+
+
+def test_search_has_freq_any_observations_false_needs_zero_coverage(
+    client, db_session
+):
+    """Default ``false`` stays strict: no observation may have freq."""
+    _, cg_partial, _ = _group_with_freq_coverage(
+        db_session, label="partial", covered=1, total=2
+    )
+    _, cg_none, _ = _group_with_freq_coverage(
+        db_session, label="none", covered=0, total=2
+    )
+    body = client.get(_search_url(has_freq="false")).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert cg_none.public_ref in refs
+    assert cg_partial.public_ref not in refs
+
+
+def test_search_all_observations_never_matches_an_empty_group(
+    client, db_session
+):
+    """"Every observation has freq" must not be vacuously true of nothing."""
+    _, cg_empty = _make_group(db_session, label="empty")
+    _, cg_full, _ = _group_with_freq_coverage(
+        db_session, label="full", covered=1, total=1
+    )
+    true_body = client.get(
+        _search_url(has_freq="true", evidence_match="all_observations")
+    ).json()
+    true_refs = {
+        r["conformer_group"]["conformer_group_ref"] for r in true_body["records"]
+    }
+    assert cg_empty.public_ref not in true_refs
+    assert cg_full.public_ref in true_refs
+
+    false_body = client.get(
+        _search_url(has_freq="false", evidence_match="all_observations")
+    ).json()
+    false_refs = {
+        r["conformer_group"]["conformer_group_ref"]
+        for r in false_body["records"]
+    }
+    assert cg_empty.public_ref not in false_refs
+
+
+def test_search_all_observations_applies_to_geometry_validation(
+    client, db_session
+):
+    """The quantifier covers the whole evidence family, not just types."""
+    entry, cg_partial, obs_partial = _make_group_with_obs(
+        db_session, label="partial", n_observations=2
+    )
+    calc_a, _ = _attach_calc(
+        db_session, species_entry=entry, conformer_observation=obs_partial[0]
+    )
+    _attach_calc(
+        db_session, species_entry=entry, conformer_observation=obs_partial[1]
+    )
+    attach_geometry_validation(db_session, calculation=calc_a)
+
+    entry_b, cg_full, obs_full = _make_group_with_obs(
+        db_session, label="full", n_observations=2
+    )
+    for o in obs_full:
+        calc, _ = _attach_calc(
+            db_session, species_entry=entry_b, conformer_observation=o
+        )
+        attach_geometry_validation(db_session, calculation=calc)
+
+    body = client.get(
+        _search_url(
+            has_geometry_validation="true",
+            evidence_match="all_observations",
+        )
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_full.public_ref}
+
+
+def test_search_evidence_match_alone_is_not_a_filter(client, db_session):
+    """A modifier must not satisfy the at-least-one-filter rule."""
+    resp = client.get(_search_url(evidence_match="all_observations"))
+    assert resp.status_code == 422
+    assert "missing_filter" in resp.text
+
+
+def test_search_echoes_evidence_match(client, db_session):
+    """The echo must say which quantifier produced the result set."""
+    _, cg, _ = _group_with_freq_coverage(
+        db_session, label="full", covered=1, total=1
+    )
+    default_body = client.get(_search_url(has_freq="true")).json()
+    assert default_body["request"]["filter"]["evidence_match"] == (
+        "any_observation"
+    )
+    explicit_body = client.get(
+        _search_url(has_freq="true", evidence_match="all_observations")
+    ).json()
+    assert explicit_body["request"]["filter"]["evidence_match"] == (
+        "all_observations"
+    )
+    assert cg.public_ref  # the fixture is real, not a no-op
+
+
+def test_search_post_accepts_evidence_match(client, db_session):
+    """GET/POST parity for the new parameter."""
+    _, cg_partial, _ = _group_with_freq_coverage(
+        db_session, label="partial", covered=1, total=2
+    )
+    _, cg_full, _ = _group_with_freq_coverage(
+        db_session, label="full", covered=2, total=2
+    )
+    body = client.post(
+        _search_url(),
+        json={"has_freq": True, "evidence_match": "all_observations"},
+    ).json()
+    refs = {r["conformer_group"]["conformer_group_ref"] for r in body["records"]}
+    assert refs == {cg_full.public_ref}
+    assert cg_partial.public_ref not in refs
+
+
+def test_search_rejects_unknown_evidence_match_value(client, db_session):
+    resp = client.get(
+        _search_url(has_freq="true", evidence_match="most_observations")
+    )
+    assert resp.status_code == 422
 
 
 # --- provenance filters -----------------------------------------------------

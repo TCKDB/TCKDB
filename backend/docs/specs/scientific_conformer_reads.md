@@ -279,22 +279,69 @@ calculation surface so a generic client parser can reuse code.
 
 ### 4.5 Calculation evidence summary (bounded)
 
+The two surfaces are deliberately shaped differently. A group pools
+several observations; an observation is one provenance row.
+
 ```python
-class ConformerCalculationEvidenceSummary(BaseModel):
+class ConformerEvidenceCoverage(BaseModel):
+    opt: int
+    freq: int
+    sp: int
+    geometry_validation: int
+    scf_stability: int
+
+
+class ConformerGroupEvidenceSummary(BaseModel):
+    observation_count: int | None
+    calculation_count: int
+    evidence_coverage: ConformerEvidenceCoverage
+    geometry_count: int
+
+
+class ConformerObservationEvidenceSummary(BaseModel):
+    observation_count: int | None      # always 1
     calculation_count: int
     has_opt: bool
     has_freq: bool
     has_sp: bool
-    has_irc: bool             # rare on conformer obs but kept for parity
-    has_path_search: bool     # ditto
     has_geometry_validation: bool
     has_scf_stability: bool
+    geometry_count: int
 ```
 
-Same shape as `TransitionStateCalculationEvidenceSummary` so the same
-parser handles both. Builder reuses `_build_evidence_summary_for_entries`-
-style helper but keyed off `Calculation.conformer_observation_id ∈
-{ids belonging to this group}`.
+**Group scope reports counts, not booleans.** Until 2026-08 the group
+block carried the same `has_*` booleans as the observation block,
+computed as a plain OR over every calculation under the group. That made
+them asymmetrically informative: `false` was strong (nothing in the
+group has it) while `true` was nearly empty (one calculation out of a
+hundred made it `true`). On a five-observation basin, `has_freq: true`
+could not be told apart from "one of five has frequencies" — which is
+the reading nobody takes from it.
+
+Each `evidence_coverage` value is **the number of observations in scope
+with at least one calculation of that kind**, never the number of
+calculations: an observation with three `freq` calculations contributes
+`1`. The shared denominator is `observation_count`, so a client reads
+`freq: 2` against `observation_count: 5` as "2 of 5". `count > 0`
+reproduces the retired boolean exactly, which is the whole client
+migration.
+
+**What a full count does not say.** `freq == observation_count` says the
+coverage is *complete*, not that the five frequency calculations are
+*comparable* — they may sit at five different levels of theory. A count
+is honest about coverage, not about consistency; a caller who needs
+consistency reads the per-calculation provenance under
+`include=calculations`.
+
+**Observation scope keeps its booleans** because there a boolean cannot
+pool a covered observation with an uncovered one. The two surfaces are
+therefore not parseable by one evidence parser, and that is correct
+rather than an oversight.
+
+Builders: `_build_group_evidence_summary` (coverage via
+`COUNT(DISTINCT Calculation.conformer_observation_id)`) and
+`_build_observation_evidence_summary`, both keyed off
+`Calculation.conformer_observation_id ∈ {ids in scope}`.
 
 ### 4.6 Geometry summary (links only)
 
@@ -325,7 +372,7 @@ class ScientificConformerGroupRecord(BaseModel):
     species: ConformerSpeciesContext
     observations_summary: ConformerObservationsSummary
     selection_summary: list[ConformerSelectionSummary]   # always present, may be []
-    evidence_summary: ConformerCalculationEvidenceSummary
+    evidence_summary: ConformerGroupEvidenceSummary          # counts (§4.5)
     available_sections: AvailableConformerSections
 
     # Optional include blocks
@@ -340,7 +387,7 @@ class ScientificConformerObservationRecord(BaseModel):
     conformer_group: ConformerGroupCoreBlock     # parent context, always present
     species: ConformerSpeciesContext
     assignment_scheme: ConformerAssignmentSchemeSummary | None = None
-    evidence_summary: ConformerCalculationEvidenceSummary
+    evidence_summary: ConformerObservationEvidenceSummary    # booleans (§4.5)
     available_sections: AvailableConformerSections
 
     # Optional include blocks
@@ -464,6 +511,11 @@ has_freq
 has_sp
 has_geometry_validation
 has_scf_stability
+evidence_match                 (any_observation | all_observations —
+                                quantifier for the has_* family, see
+                                §6.2 below; a modifier, not a filter, so
+                                it does not satisfy the at-least-one-
+                                filter rule)
 scientific_origin              (filters at the observation grain — see
                                 §6.1 below)
 method
@@ -499,14 +551,47 @@ belongs to it.
 This matches the way the TS search treats per-entry has_* evidence
 filters at the entry-grain.
 
-### 6.2 At-least-one-filter rule
+### 6.2 `evidence_match` — any vs all observations
+
+The `has_*` evidence filters ask a question about a group, but the
+evidence lives on its observations, so the question has two honest
+readings. `evidence_match` makes the caller pick one at the call site
+rather than hiding the choice inside a bare boolean.
+
+```text
+any_observation (default, historical behaviour)
+  has_freq=true   → at least one observation has a freq calculation
+  has_freq=false  → no observation has one
+
+all_observations
+  has_freq=true   → the group has >=1 observation and EVERY observation
+                    has a freq calculation
+  has_freq=false  → the group has >=1 observation and AT LEAST ONE lacks
+                    it, i.e. coverage is incomplete (zero included)
+```
+
+A group with no observations matches **neither** direction under
+`all_observations`: "every observation has freq" must not be vacuously
+true of a basin with nothing in it. The clause is written as
+`EXISTS(observation) AND (NOT) EXISTS(observation lacking the evidence)`
+precisely so the emptiness term is explicit.
+
+The quantifier applies to the whole evidence family
+(`has_calculations`, `has_opt`, `has_freq`, `has_sp`, `has_geometries`,
+`has_geometry_validation`, `has_scf_stability`). The default keeps
+existing callers on exactly the behaviour they had. `evidence_match` is
+always reported in the response's `request.filter` echo, including when
+defaulted — a filter set echoed without its quantifier would be
+ambiguous in the way the parameter exists to fix.
+
+### 6.3 At-least-one-filter rule
 
 Pure pagination / include / review knobs do not satisfy the filter
 gate. A request that supplies none of the meaningful filters above
 returns 422 `missing_filter`. Same code, same UX as the calculation
 and TS search surfaces.
 
-### 6.3 Default deterministic ordering
+### 6.4 Default deterministic ordering
 
 ```text
 review_rank ASC
@@ -627,7 +712,7 @@ class ReactionFullConformerGroupItem(BaseModel):
     summary: ConformerGroupCoreBlock          # core block reused
     observations_summary: ConformerObservationsSummary
     selection_summary: list[ConformerSelectionSummary]
-    evidence_summary: ConformerCalculationEvidenceSummary
+    evidence_summary: ConformerGroupEvidenceSummary
 ```
 
 Top-level: `conformers: list[ReactionFullSpeciesConformers] | None`.
@@ -866,9 +951,12 @@ Cross-endpoint equality (anti-drift):
 
 ```text
 search record core block == group detail record core block
-group detail evidence_summary == observation detail evidence_summary
-  (when restricted to the observation's id) — only if reuse helper
-  guarantees identity; otherwise document the boundary
+group detail evidence_summary is NOT comparable to observation detail
+  evidence_summary: the group block reports evidence_coverage counts,
+  the observation block reports has_* booleans (§4.5). The boundary is
+  documented rather than papered over; tests assert each shape on its
+  own surface and assert the retired booleans are absent from the group
+  block
 ```
 
 Reaction-full conformer section tests (Phase 3):

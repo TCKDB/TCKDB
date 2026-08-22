@@ -30,6 +30,7 @@ from app.schemas.reads.scientific_conformer import (
     ScientificConformerObservationDetailResponse,
 )
 from app.schemas.reads.scientific_conformer_search import (
+    ConformerEvidenceMatch,
     ConformersSearchRequest,
     ScientificConformersSearchResponse,
 )
@@ -74,6 +75,9 @@ def scientific_conformers_search_get(
     has_sp: bool | None = Query(None),
     has_geometry_validation: bool | None = Query(None),
     has_scf_stability: bool | None = Query(None),
+    evidence_match: ConformerEvidenceMatch = Query(
+        ConformerEvidenceMatch.any_observation
+    ),
     scientific_origin: ScientificOriginKind | None = Query(None),
     method: str | None = Query(None),
     basis: str | None = Query(None),
@@ -113,6 +117,7 @@ def scientific_conformers_search_get(
         has_sp=has_sp,
         has_geometry_validation=has_geometry_validation,
         has_scf_stability=has_scf_stability,
+        evidence_match=evidence_match,
         scientific_origin=scientific_origin,
         method=method,
         basis=basis,

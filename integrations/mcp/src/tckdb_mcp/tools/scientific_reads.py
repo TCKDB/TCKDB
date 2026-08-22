@@ -216,6 +216,9 @@ _register_search(
                 "has_sp",
                 "has_geometry_validation",
                 "has_scf_stability",
+                # Quantifier for the has_* family over a group's
+                # observations: any_observation (default) | all_observations.
+                "evidence_match",
                 "scientific_origin",
                 "method",
                 "basis",
