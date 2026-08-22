@@ -146,7 +146,7 @@ def document(page: str) -> _Document:
 @pytest.fixture(scope="module")
 def script(page: str) -> str:
     """The inline script's source, on its own."""
-    match = re.search(r"<script>(.*?)</script>", page, flags=re.DOTALL)
+    match = re.search(r"<script>(.*?)</script>", page, flags=re.DOTALL | re.IGNORECASE)
     assert match is not None, "the page carries no inline script"
     return match.group(1)
 
@@ -240,8 +240,8 @@ class TestLandingPageIsSelfContained:
         """
         with client_factory() as c:
             body = c.get("/").text
-        assert re.search(r"<(link|img|iframe|source|object|embed)\b", body) is None
-        assert re.findall(r"<script\b([^>]*)>", body) == [""]
+        assert re.search(r"<(link|img|iframe|source|object|embed)\b", body, re.IGNORECASE) is None
+        assert re.findall(r"<script\b([^>]*)>", body, re.IGNORECASE) == [""]
 
     def test_the_inline_script_reaches_only_this_origin(self, client_factory):
         """Same-origin paths only: the API is served by this same app.
@@ -252,7 +252,7 @@ class TestLandingPageIsSelfContained:
         """
         with client_factory() as c:
             body = c.get("/").text
-        source = re.search(r"<script>(.*?)</script>", body, flags=re.DOTALL).group(1)
+        source = re.search(r"<script>(.*?)</script>", body, flags=re.DOTALL | re.IGNORECASE).group(1)
         literals = re.findall(r"\"([^\"]*)\"", source)
         assert literals, "no string literals found -- the script did not parse as expected"
         for literal in literals:
