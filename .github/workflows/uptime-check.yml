@@ -62,6 +62,21 @@ name: uptime-check
 #   The heartbeat is supplementary. If its secret is unset, or healthchecks.io
 #   is unreachable, this job's ntfy alerting is untouched.
 #
+# WARNINGS, WHICH MUST NOT PAGE AND MUST NOT REDDEN THE RUN
+#   /status carries two verdict fields. `degraded` lists components that are
+#   BROKEN; this job pushes urgent and exits 1 on it, every fifteen minutes
+#   until it clears. `warnings` lists things that are TRUE BUT NOT YET BROKEN
+#   -- today, an object store whose remaining room has fallen below the
+#   largest artifact TCKDB accepts.
+#
+#   A warning is pushed at Priority: low, the heartbeat still reports SUCCESS,
+#   and the job still exits 0. Routing it any other way would page an operator
+#   about a deployment where every upload works, turn the dashboard red on the
+#   same evidence, and -- because this job repeats every fifteen minutes with
+#   no state between runs -- do both again four times an hour until somebody
+#   silenced the channel. A muted channel is worse than no warning, because it
+#   takes the outage alerts down with it.
+#
 # SETUP
 #   gh secret set TCKDB_NTFY_TOPIC --repo TCKDB/TCKDB
 #   (the same topic the Pi-side checker publishes to, so both classes of alarm
@@ -100,6 +115,12 @@ jobs:
           NTFY_TOPIC: ${{ secrets.TCKDB_NTFY_TOPIC }}
           HEARTBEAT_URL: ${{ secrets.TCKDB_DEPLOYMENT_HEARTBEAT_URL }}
           STATUS_URL: https://tckdb.homecalvin.com/api/v1/status
+          # Overridable so the shell below can be executed against a local
+          # stand-in and the pushes it sends can be asserted on. The Pi-side
+          # checker has always had TCKDB_NTFY_SERVER for the same reason; this
+          # job hard-coded ntfy.sh, which meant no test could see whether it
+          # published at all, let alone at what priority.
+          NTFY_SERVER: https://ntfy.sh
         run: |
           set -uo pipefail
 
@@ -125,6 +146,30 @@ jobs:
               || echo "::warning::failed to ping the deployment heartbeat"
           }
 
+          # notify <title> <priority> <tags> <body>. --fail because here an
+          # HTTP error IS the answer: a 401 from a protected topic or a 5xx
+          # from ntfy means the push reached nobody, and without it curl exits
+          # 0 and this job logs a delivered alert that was never delivered.
+          # The same bug was fixed in the Pi-side checker; it lived on here.
+          notify() {
+            if [ -z "${NTFY_TOPIC}" ]; then
+              return 0
+            fi
+            curl -sS --fail --max-time 25 \
+              -H "Title: $1" \
+              -H "Priority: $2" \
+              -H "Tags: $3" \
+              -d "$4" \
+              "${NTFY_SERVER:-https://ntfy.sh}/${NTFY_TOPIC}" >/dev/null \
+              || echo "::warning::failed to publish to ntfy"
+          }
+
+          # Set on the 200 path only; declared here because `set -u` is on and
+          # the unreachable and non-200 paths never reach the parser. Empty
+          # means "no warnings", which is also the right answer for a build
+          # too old to carry the field.
+          warnings=""
+
           raw="$(curl -sS --max-time 25 -w '\n%{http_code}' "$STATUS_URL" 2>/dev/null)"
           rc=$?
           code="$(tail -n1 <<<"$raw")"
@@ -140,6 +185,7 @@ jobs:
             state="$(jq -r '.status // "unparseable"' <<<"$body")"
             degraded="$(jq -r '(.degraded // []) | join(", ")' <<<"$body")"
             reasons="$(jq -r '[.components // {} | to_entries[] | select(.value.healthy == false) | "\(.key): \(.value.reason // "unhealthy")"] | join("; ")' <<<"$body")"
+            warnings="$(jq -r '[.warnings // [] | .[] | .summary // .code // "unspecified warning"] | join(" | ")' <<<"$body")"
 
             # Both fields decide. They derive from the same set of unhealthy
             # components today, so reading only `status` works today -- and
@@ -149,9 +195,21 @@ jobs:
             # this deployment has already had once.
             if [ "$state" = "ok" ] && [ -z "$degraded" ]; then
               echo "TCKDB ok"
+              # A warning rides out on this path, not the failure path below.
+              # ::notice:: rather than ::error:: so the run stays green, and
+              # Priority: low so the push lands without a siren. Deliberately
+              # BEFORE the heartbeat and the exit, so a failure to publish
+              # cannot change either.
+              if [ -n "$warnings" ]; then
+                echo "::notice::TCKDB warning: ${warnings}"
+                notify "TCKDB warning" "low" "warning" \
+                  "$(printf '%s\n\nNothing is broken and every upload still works; this is the notice that arrives before one stops working. Checked from GitHub Actions.' "$warnings")"
+              fi
               # The only place a success ping is sent, and it is sent on the
               # same condition the job exits 0 on -- so the heartbeat page and
-              # this workflow's own verdict cannot disagree.
+              # this workflow's own verdict cannot disagree. A warning does
+              # not touch it: the deployment is well, and saying otherwise
+              # would make the dashboard disagree with the exit code.
               heartbeat ""
               exit 0
             fi
@@ -167,21 +225,8 @@ jobs:
 
           echo "::error::${summary}"
 
-          if [ -n "${NTFY_TOPIC}" ]; then
-            message="$(printf '%s\n\nChecked from GitHub Actions, which runs independently of the deployment host. Repeats every ~15 minutes until resolved.' "$detail")"
-            # --fail because here an HTTP error IS the answer: a 401 from a
-            # protected topic or a 5xx from ntfy means the push reached
-            # nobody, and without it curl exits 0 and this job logs a
-            # delivered alert that was never delivered. The same bug was
-            # fixed in the Pi-side checker; it lived on here.
-            curl -sS --fail --max-time 25 \
-              -H "Title: ${summary}" \
-              -H "Priority: urgent" \
-              -H "Tags: rotating_light" \
-              -d "$message" \
-              "https://ntfy.sh/${NTFY_TOPIC}" >/dev/null \
-              || echo "::warning::failed to publish to ntfy"
-          fi
+          message="$(printf '%s\n\nChecked from GitHub Actions, which runs independently of the deployment host. Repeats every ~15 minutes until resolved.' "$detail")"
+          notify "${summary}" "urgent" "rotating_light" "$message"
 
           # Every failure, including "it did not answer", so the heartbeat page
           # agrees with the push that has just gone out. Self-limiting: if this
