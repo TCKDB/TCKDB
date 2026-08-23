@@ -132,15 +132,25 @@ class SupersessionNotice(TypedDict):
     chain_length: Required[int]
 
 
-class ThermoSearchRecord(TypedDict):
-    """One composed thermo-search row with resolved species context."""
-
-    species: JSONDict
-    thermo: JSONDict  # Nested wire block remains unexpanded for backward-compatible search typing.
-
-
 class ThermoDetailRecord(TypedDict, total=False):
-    """One flat record from the species-entry thermo subresource."""
+    """One thermo wire block, from the subresource or nested in a search row.
+
+    The same block on both surfaces, which is why the search row below
+    points at this type rather than at an opaque dict.
+
+    **``trust`` may be absent, and that is not the same as ``null``.** It
+    appears only when the request carried ``include=trust``; a *present*
+    ``null`` would mean the rubric produced nothing for the record. Under
+    ``total=False`` every optional key here is ``NotRequired``, so a type
+    checker will now flag ``record["thermo"]["trust"]`` on a request that
+    did not ask for it -- which is the point of typing the block, since
+    this and its kinetics twin were the only sections a consumer could have
+    been subscripting with no type error at all.
+
+    ``include=all`` does **not** expand to ``trust`` on any search or detail
+    surface: the evidence graph behind it is large and has to be asked for
+    by name.
+    """
 
     thermo_ref: Required[str]
     scientific_origin: Required[str]
@@ -152,20 +162,35 @@ class ThermoDetailRecord(TypedDict, total=False):
     thermo_id: int
     h298_kj_mol: float | None
     s298_j_mol_k: float | None
+    h298_uncertainty_kj_mol: float | None
+    s298_uncertainty_j_mol_k: float | None
+    # Model blocks. Each is ``null`` when this record does not carry that
+    # representation -- a fact about the chemistry, not about the request,
+    # so these keys are on the wire whether or not anything was included.
+    nasa: JSONDict | None
+    nasa9: list[JSONDict] | None
+    wilhoit: JSONDict | None
+    points: list[JSONDict] | None
+    group_additivity: JSONDict | None
     temperature_coverage: JSONDict | None
     trust: JSONDict | None
     assessments: PublicAssessmentSummary | None
 
 
-class KineticsSearchRecord(TypedDict):
-    """One composed kinetics-search row with resolved reaction context."""
+class ThermoSearchRecord(TypedDict):
+    """One composed thermo-search row with resolved species context."""
 
-    reaction: JSONDict
-    kinetics: JSONDict  # Nested wire block remains unexpanded for backward-compatible search typing.
+    species: JSONDict
+    thermo: ThermoDetailRecord
 
 
 class KineticsDetailRecord(TypedDict, total=False):
-    """One flat record from the reaction-entry kinetics subresource."""
+    """One kinetics wire block, from the subresource or nested in a search row.
+
+    See :class:`ThermoDetailRecord` on ``trust`` -- absent unless requested,
+    never reached by ``include=all``, and ``null`` only when the rubric
+    genuinely produced nothing.
+    """
 
     kinetics_ref: Required[str]
     scientific_origin: Required[str]
@@ -178,10 +203,31 @@ class KineticsDetailRecord(TypedDict, total=False):
     supersession: SupersessionNotice | None
     kinetics_id: int
     direction: str | None
+    tunneling_model: str | None
+    is_third_body: bool
+    pressure_context: JSONDict | None
     pressure_bar: float | None
+    pressure_coverage: JSONDict | None
+    reaction_path_degeneracy: JSONDict | None
+    interpretation_assignments: list[JSONDict] | None
+    tunneling_application: JSONDict | None
+    # Model blocks, ``null`` for a record of another kind. Facts about the
+    # fit, not about the request.
+    multi_arrhenius: list[JSONDict] | None
+    plog_entries: list[JSONDict] | None
+    chebyshev: JSONDict | None
+    falloff: JSONDict | None
+    third_body_efficiencies: list[JSONDict] | None
     temperature_coverage: JSONDict | None
     trust: JSONDict | None
     assessments: PublicAssessmentSummary | None
+
+
+class KineticsSearchRecord(TypedDict):
+    """One composed kinetics-search row with resolved reaction context."""
+
+    reaction: JSONDict
+    kinetics: KineticsDetailRecord
 
 
 # Backward-compatible names for the composed search-row shapes published in

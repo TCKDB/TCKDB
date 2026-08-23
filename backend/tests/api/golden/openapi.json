@@ -32260,6 +32260,20 @@
             ],
             "title": "Geometries"
           },
+          "observations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScientificConformerObservationRecord"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Observations"
+          },
           "review_history": {
             "anyOf": [
               {
@@ -34542,6 +34556,20 @@
             ],
             "title": "Calculations"
           },
+          "entries": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ScientificTransitionStateEntryRecord"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Entries"
+          },
           "evidence_summary": {
             "$ref": "#/components/schemas/TransitionStateEntryEvidenceSummary"
           },
@@ -34694,6 +34722,20 @@
           },
           "transition_state": {
             "$ref": "#/components/schemas/TransitionStateCoreBlock"
+          },
+          "validation_evidence": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/TransitionStateEntryValidationEvidence"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Validation Evidence"
           }
         },
         "required": [
@@ -43337,6 +43379,28 @@
         ],
         "title": "TransitionStateEntryStatus",
         "type": "string"
+      },
+      "TransitionStateEntryValidationEvidence": {
+        "description": "One entry's validation evidence, on a TS-*concept* response.\n\nKeyed by entry ref rather than unioned across the concept's entries.\nA concept is a collection of entries computed at different levels of\ntheory; an OR across them would report \"validated\" for a concept whose\nentries disagree, and would not say which entry carried the evidence.\nThe list is per entry and empty for an entry that deposited none.",
+        "properties": {
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          },
+          "validation_evidence": {
+            "items": {
+              "$ref": "#/components/schemas/TransitionStateValidationEvidenceSummary"
+            },
+            "title": "Validation Evidence",
+            "type": "array"
+          }
+        },
+        "required": [
+          "transition_state_entry_ref",
+          "validation_evidence"
+        ],
+        "title": "TransitionStateEntryValidationEvidence",
+        "type": "object"
       },
       "TransitionStateEvidenceCoverage": {
         "description": "How many TS entries in scope carry each kind of evidence.\n\nEvery value counts **entries**, never calculations. An entry with\nthree ``freq`` calculations contributes ``1`` to ``freq``, not\n``3``. The shared denominator is\n``TransitionStateEvidenceSummary.entry_count``, so a caller reads\neach field as \"*n* of *entry_count*\"; a value can never exceed that\ndenominator, and one that did would mean the query had started\ncounting calculations again.\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == entry_count`` says the coverage is **complete** — every\ncandidate saddle point under this TS has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the entries may sit at different levels of theory,\ncome from different codes, and describe different geometries. A\ncount is honest about coverage, not about consistency. A caller who\nneeds consistency must inspect the per-calculation level-of-theory /\nsoftware provenance under ``include=calculations``; no number in\nthis block can stand in for that.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",

@@ -52,8 +52,22 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.public_assessments import (
+    attach_kinetics_trust,
+)
 from app.services.scientific_read.reactions import search_reactions
 
+# ``trust`` is legal here, and it was not always. This surface used to
+# declare ``records[*].kinetics.trust`` — one level down, inside the
+# ``kinetics`` wrapper — while rejecting ``include=trust`` with
+# ``422 unknown_include_token``, so the field could never carry a value and
+# shipped as a permanent ``null``. The token is legal now, the value is
+# built for the returned page (see :func:`attach_kinetics_trust` below), and
+# the route drops the key when the caller did not ask for it.
+#
+# It is **internal-tokenized**: ``include=all`` does not expand to it. The
+# evaluator walks a 14-entry eager-load graph, and a convenience token must
+# not buy that on a caller's behalf.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
     "calculations",
@@ -66,8 +80,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
     "assessments",
+    "trust",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 
 # Tokens passed through to the kinetics detail endpoint (it has its own
 # legal set; intersection prevents 422 noise from cross-endpoint tokens).
@@ -234,6 +249,16 @@ def search_kinetics(
         limit=limit,
         collapse_first=collapse_first,
     )
+
+    # Trust is resolved for the returned page and for nothing else — see the
+    # matching comment in ``thermo_search``. Forwarding the token into
+    # ``get_reaction_kinetics`` would load the evidence graph once per
+    # matched reaction entry, over every candidate the search walked.
+    if "trust" in includes:
+        attach_kinetics_trust(
+            session,
+            [(rec.kinetics, rec.kinetics.kinetics_id) for rec in returned],
+        )
 
     summary = review_summary(rec.kinetics.review for rec in flat)
 

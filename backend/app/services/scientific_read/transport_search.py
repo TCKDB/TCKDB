@@ -51,6 +51,7 @@ from app.services.scientific_read.supersession import fetch_supersession_notices
 from app.services.scientific_read.transport import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
+    TRANSPORT_TRUST_EAGER_LOADS,
     build_transport_record,
 )
 
@@ -335,9 +336,12 @@ def _materialize_records(
 ) -> list[ScientificTransportRecord]:
     if not page_ids:
         return []
-    rows = session.scalars(
-        select(Transport).where(Transport.id.in_(page_ids))
-    ).all()
+    stmt = select(Transport).where(Transport.id.in_(page_ids))
+    if "trust" in includes:
+        # One grouped load per relationship for the whole page, not one per
+        # record: ``selectinload`` batches, the lazy loads it replaces do not.
+        stmt = stmt.options(*TRANSPORT_TRUST_EAGER_LOADS)
+    rows = session.scalars(stmt).all()
     by_id = {r.id: r for r in rows}
     # Correction notices for the page, batched. Two queries whatever the page
     # size — resolving a chain per row would be the N+1 trap this shape

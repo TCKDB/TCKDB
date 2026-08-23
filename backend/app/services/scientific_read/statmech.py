@@ -90,9 +90,22 @@ from app.services.trust import (
 # ---------------------------------------------------------------------------
 
 
-# Public include tokens shared by search and species-entry surfaces.
-# ``trust`` remains detail/subresource-only, while opt-in compact
-# ``assessments`` are available on every scientific statmech response.
+# Public include tokens shared by every scientific statmech surface —
+# detail, species-entry subresource and search alike.
+#
+# ``trust`` used to be missing here, and the search surface was the reason:
+# only the detail paths eager-loaded the graph the evaluator walks, so the
+# narrower search vocabulary kept trust out of list responses entirely.
+# That left ``/scientific/statmech/search`` declaring a ``trust`` field
+# that no request could fill — the route strips it unconditionally, so the
+# key was permanently absent and nothing in the response hinted that a
+# verdict had been computed for the record. It had: the same verdict is
+# one token away under ``include=assessments``.
+#
+# The token is now legal on search too, and the eager-load argument is
+# answered rather than dodged: the search materializer applies
+# ``_TRUST_EAGER_LOADS`` to the page query, so the 19-entry chain is paid
+# once per page and never once per record.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
     "torsions",
@@ -102,17 +115,19 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "review",
     "internal_ids",
     "assessments",
+    "trust",
     "all",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
+# ``trust`` is internal-tokenized like ``internal_ids`` and ``assessments``:
+# ``include=all`` never expands to it, so no caller buys the evidence graph
+# by convenience. It has to be asked for by name.
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 
-# ``trust`` is legal only on the trust-bearing surfaces: the standalone
-# statmech detail endpoint and the species-entry statmech subresource. Like
-# ``internal_ids`` and ``assessments``, it is internal-tokenized on those
-# surfaces so ``include=all`` does not pull it in — callers must opt in with
-# ``include=trust`` explicitly. The narrower ``_LEGAL_INCLUDE_TOKENS`` set
-# used by search keeps trust out of broad list/search responses entirely.
-_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
+# Kept as the name the detail and species-entry subresource surfaces cite.
+# The two sets are now identical because ``trust`` is legal everywhere; the
+# alias survives so its importers keep reading as statements about *their*
+# surface rather than about a set they happen to share.
+_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS
 _TRUST_EAGER_LOADS = (
     selectinload(Statmech.species_entry),
     selectinload(Statmech.frequency_scale_factor),

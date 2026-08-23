@@ -67,11 +67,46 @@ because the calculation references no workflow tool and must stay `null`, and
 one nested inside the include-gated `execution_environment` block, which
 disappears with its section.
 
+### Every legal token produces a field
+
+A token this API accepts must produce an observable effect, and a field a
+record declares must be reachable by some request. Both halves failed
+somewhere before they were stated as a rule:
+
+- Five search surfaces — thermo, kinetics, transition-states, statmech and
+  transport — declared a `trust` field while rejecting `include=trust` with
+  `422 unknown_include_token`. Three shipped the field as a permanent `null`;
+  two stripped it unconditionally, so a reader had no sign a verdict existed.
+  All five accept the token now.
+- Three tokens were accepted and produced nothing: `entries` on
+  `/transition-states/search` (which was also silently dropped from
+  `request.include`, so the echo reported a request the caller had not made),
+  `validation_evidence` on `/transition-states/{ref}`, and `observations` on
+  `/conformer-observations/{ref}`. Each populates a field now, under one rule:
+  *on a member-grained record, a collection token populates the collection the
+  record belongs to.*
+
+The rule is not cosmetic. Under omission, "the key is absent" has to mean "you
+did not ask" and nothing else; a token that produces no field in either state
+makes that sentence untrue for one section and unfalsifiable for a test.
+
+**A legal token is not necessarily part of `include=all`.** `all` expands to
+the surface's *public* tokens; a token whose cost has to be opted into is
+marked internal and must be named. `internal_ids` and `assessments` were
+already such tokens. `trust` is one on every surface that has it — its
+evidence-graph eager load runs from 9 chain entries on transport to 23 on
+transition-states — and so is `entries` on `/transition-states/search`, where
+the block's size follows how many entries the page's parents have. Where two
+tokens can answer the same question — `trust` and
+`assessments.deterministic_trust` — both are projected from a single
+evaluation, so they cannot become two answers.
+
 ### Scope today
 
 `/api/v1/scientific/calculations/*` omits all 18 of its heavy sections, and
-`trust` and `assessments` are omitted wherever their helpers run. Every other
-include-gated section still serializes as `null`; those surfaces are being
+`trust` and `assessments` are omitted wherever their helpers run — which is now
+every surface that declares either, the five search surfaces included. Every
+other include-gated section still serializes as `null`; those surfaces are being
 converted one declared table at a time, and each conversion adds the
 `x-tckdb-include-gated` marker to the hosted OpenAPI document at the same time,
 so the document never claims a key is normally absent before the runtime omits

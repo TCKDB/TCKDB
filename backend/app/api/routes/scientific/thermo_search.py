@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
-from app.api.routes.scientific._response import prepare_assessment_response
+from app.api.routes.scientific._response import (
+    ANYWHERE_SCOPE,
+    omit_trust_unless_requested,
+    prepare_assessment_response,
+)
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
@@ -96,11 +100,19 @@ def thermo_search_get(
         limit=limit,
     )
     payload = search_thermo(session, request)
-    return prepare_assessment_response(
+    visibility = prepare_assessment_response(
         session,
         payload,
         attach_assessments=attach_thermo_assessments,
     )
+    # ``ANYWHERE_SCOPE``, not ``SEARCH_SCOPE``. A record's top level here is
+    # exactly ``['species', 'thermo']``; ``trust`` sits inside the ``thermo``
+    # wrapper one level down, so a search-scoped strip would iterate the
+    # records, pop nothing, and leave every assertion that "no error
+    # occurred" passing. The same asymmetry is why ``assessments`` — which
+    # hard-codes the payload-wide scope — has always behaved correctly at
+    # this exact depth on this exact response.
+    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
 
 
 @router.post("/search", response_model=ScientificThermoSearchResponse)
@@ -126,8 +138,9 @@ def thermo_search_post(
             ),
         )
     payload = search_thermo(session, body)
-    return prepare_assessment_response(
+    visibility = prepare_assessment_response(
         session,
         payload,
         attach_assessments=attach_thermo_assessments,
     )
+    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)

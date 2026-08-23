@@ -129,15 +129,23 @@ row carries them + evidence summary + available_sections.
 - `GET /scientific/statmech/{ref_or_id}` (standalone detail)
 - `GET /scientific/species-entries/{id}/statmech` (per-entry subresource)
 
-Broad `GET|POST /scientific/statmech/search` follows the global
-search/list policy and **does not expose trust**: `include=trust`
-returns 422 `unknown_include_token`, and `include=all` never expands to
-`trust`. On the two trust-bearing surfaces `trust` is likewise
-internal-tokenized — `include=all` does not pull it in; callers must
-request `include=trust` explicitly. Mechanically this is the
-`_DETAIL_LEGAL_INCLUDE_TOKENS` (detail/subresource) vs
-`_LEGAL_INCLUDE_TOKENS` (search) split in
-`services/scientific_read/statmech.py`, mirroring `transport.py`.
+Broad `GET|POST /scientific/statmech/search` **also exposes trust**, and
+did not always. The search vocabulary used to omit the token while the
+route stripped `records[*].trust` unconditionally, so the field was
+permanently absent and nothing in the response hinted that a verdict had
+been computed for the record — one had, and `include=assessments` returned
+it. Legalising the token was the whole edit there: the existing strip
+became conditional by itself.
+
+`trust` is internal-tokenized on every statmech surface, search included —
+`include=all` does not pull it in; callers must request `include=trust`
+explicitly. The search materializer applies `_TRUST_EAGER_LOADS` to the page
+query, so the 19-entry chain costs a fixed number of statements whatever
+`limit` is; `test_trust_include_statement_cost.py` is the gate on that.
+Mechanically the detail/subresource and search surfaces now share one
+`_LEGAL_INCLUDE_TOKENS` set in `services/scientific_read/statmech.py`, and
+`_DETAIL_LEGAL_INCLUDE_TOKENS` survives as the name its importers cite.
+`transport.py` mirrors it.
 
 ### Assessment token policy
 

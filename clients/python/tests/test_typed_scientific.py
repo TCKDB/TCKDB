@@ -73,6 +73,26 @@ def test_detail_and_composed_record_types_are_distinct_and_exported() -> None:
     assert "species" not in ThermoDetailRecord.__annotations__
     assert "kinetics_ref" in KineticsDetailRecord.__annotations__
     assert "reaction" not in KineticsDetailRecord.__annotations__
+    # The nested wire block on a search row is the same block the detail
+    # surface returns, and it is typed rather than opaque. These two were
+    # the only sections in the include-omission change a consumer could have
+    # been subscripting with no type error at all -- ``record["thermo"]
+    # ["trust"]`` type-checked against a bare dict and now raises KeyError
+    # on any request that did not carry ``include=trust``.
+    assert get_type_hints(ThermoSearchRecord)["thermo"] is ThermoDetailRecord
+    assert get_type_hints(KineticsSearchRecord)["kinetics"] is KineticsDetailRecord
+    # ``trust`` is optional on both: absent unless requested, and never
+    # reached by ``include=all``. ``__required_keys__`` is what a type
+    # checker consults, so that is what is asserted.
+    assert "trust" not in ThermoDetailRecord.__required_keys__
+    assert "trust" not in KineticsDetailRecord.__required_keys__
+    # The model blocks stay typed as always-present-and-nullable: whether a
+    # thermo record carries a NASA-9 fit is a fact about the chemistry, not
+    # about what the caller asked for, so it keeps its null.
+    for key in ("nasa", "nasa9", "wilhoit", "points", "group_additivity"):
+        assert key in ThermoDetailRecord.__annotations__
+    for key in ("plog_entries", "chebyshev", "falloff", "multi_arrhenius"):
+        assert key in KineticsDetailRecord.__annotations__
     # A correction notice is part of the default detail shape on both product
     # reads, not an opt-in block, so it must be typed as always-present and
     # nullable rather than NotRequired.

@@ -8,9 +8,9 @@ set) plus the shared review / pagination / sort helpers.
 
 Mirrors ``get_species_thermo``. ``trust`` is an *internal* include
 token here (so ``include=all`` never expands to it) — matching the
-transport detail endpoint and the per-entry thermo contract.
-``search_transport`` deliberately does not accept ``trust`` at all, so
-delegating to it would make per-entry trust impossible.
+transport detail endpoint, the per-entry thermo contract, and
+``search_transport``, which accepts the token too now that its
+materializer loads the evidence graph once per page.
 
 See ``backend/docs/specs/scientific_transport_reads.md`` and
 ``backend/docs/specs/trust_read_api_current.md``.

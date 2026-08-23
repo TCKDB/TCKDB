@@ -1155,13 +1155,42 @@ def test_search_include_all_does_not_restore_internal_ids(client, db_session):
     assert "statmech_id" not in body["records"][0]["statmech"]
 
 
-def test_search_include_trust_returns_422(client, db_session):
-    """Broad statmech search must reject ``include=trust`` — trust is a
-    detail/subresource-only token, never exposed on list/search."""
+def test_search_accepts_trust_and_keeps_it_out_of_all(client, db_session):
+    """Statmech search accepts ``include=trust``; ``include=all`` does not.
+
+    This test asserted a 422 until the field it guarded was noticed to be
+    unreachable. ``ScientificStatmechRecord`` declares ``trust`` and this
+    route has always stripped it — correctly, at the right scope — so the
+    key was **permanently absent** and nothing in the sixteen top-level
+    keys of a search record hinted that a verdict existed for it. One did:
+    ``include=assessments`` returned ``computed_statmech`` on the same
+    record, one token away.
+
+    That is why the fix here was the vocabulary and nothing else. The strip
+    call in ``routes/scientific/statmech.py`` is untouched; once the token
+    became legal, the unconditional strip became conditional by itself.
+
+    ``trust`` remains internal-tokenized, so ``include=all`` still never
+    expands to it: the evaluator's 19-entry eager-load chain is a cost a
+    caller opts into by name.
+    """
     _, _, sm = _make_statmech(db_session)
-    resp = client.get(_search_url(statmech_ref=sm.public_ref, include="trust"))
-    assert resp.status_code == 422
-    assert "unknown_include_token" in resp.text
+
+    asked = client.get(_search_url(statmech_ref=sm.public_ref, include="trust"))
+    assert asked.status_code == 200, asked.text
+    body = asked.json()
+    assert body["request"]["include"] == ["trust"]
+    assert body["records"]
+    assert body["records"][0]["trust"]["trust_status"]
+
+    everything = client.get(
+        _search_url(statmech_ref=sm.public_ref, include="all")
+    ).json()
+    assert "trust" not in everything["request"]["include"]
+    assert "trust" not in everything["records"][0]
+
+    default = client.get(_search_url(statmech_ref=sm.public_ref)).json()
+    assert "trust" not in default["records"][0]
 
 
 def test_assessments_are_opt_in_and_report_freshness(client, db_session):

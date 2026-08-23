@@ -67,6 +67,7 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateEntryCoreBlock,
     TransitionStateEntryDetailRequest,
     TransitionStateEntryEvidenceSummary,
+    TransitionStateEntryValidationEvidence,
     TransitionStateEvidenceCoverage,
     TransitionStateEvidenceSummary,
     TransitionStateReactionContext,
@@ -113,13 +114,17 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
-# ``trust`` is legal *only* on the standalone TS-entry detail surface.
-# The parent-TS detail surface and the search surface keep the narrower
-# ``_LEGAL_INCLUDE_TOKENS`` set, so a caller passing ``include=trust`` to
-# those endpoints gets a 422 ``unknown_include_token`` — trust is never
-# exposed through embedded entries or list/search responses (and, like
-# ``internal_ids``, it is internal-tokenized so ``include=all`` does not
-# pull it in).
+# ``trust`` is legal on the two **entry-grained** surfaces: the standalone
+# TS-entry detail endpoint and ``/transition-states/search``, whose search
+# vocabulary lives in ``transition_states_search`` and adds the token to
+# this set. The parent-TS **concept** surface keeps the set below and still
+# answers 422 ``unknown_include_token`` — a concept is a collection of
+# entries evaluated at different levels of theory, and one trust verdict
+# for the collection would be an aggregation, not a reading.
+#
+# On both surfaces where it is legal, ``trust`` is internal-tokenized, so
+# ``include=all`` does not pull it in: the evaluator walks a 23-entry
+# eager-load graph and a caller must ask for that by name.
 _TSE_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
 _TSE_DETAIL_INTERNAL_INCLUDE_TOKENS: set[str] = _INTERNAL_INCLUDE_TOKENS | {
     "trust"
@@ -219,6 +224,12 @@ _TRUST_EAGER_LOADS = (
     .selectinload(Calculation.path_search_result),
 )
 
+# Public seam for the search service, which must load the same evidence
+# graph over a whole page before ``build_entry_record`` reads it. Named
+# rather than reached for through the private alias so a reader of the
+# search module can see it is the *same* chain and not a second opinion.
+TRANSITION_STATE_ENTRY_TRUST_EAGER_LOADS = _TRUST_EAGER_LOADS
+
 
 # Calculation types that carry a primary "evidence" role for a TS entry.
 _EVIDENCE_TYPES: tuple[CalculationType, ...] = (
@@ -303,6 +314,9 @@ def get_transition_state(
     entry_records_block: list[ScientificTransitionStateEntryRecord] | None = None
     if "entries" in includes:
         ts_core = _build_ts_core_block(ts, ts_badge)
+        # Without ``entries`` in the nested set, every embedded entry would
+        # resolve the same sibling list this block already is.
+        nested_includes = includes - {"entries"}
         entry_records_block = [
             _build_entry_record(
                 session,
@@ -313,7 +327,7 @@ def get_transition_state(
                     e.id,
                     RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
                 ),
-                includes=includes,
+                includes=nested_includes,
             )
             for e in entries
         ]
@@ -332,6 +346,26 @@ def get_transition_state(
             session, SubmissionRecordType.transition_state, ts.id
         )
 
+    # ``validation_evidence`` was legal on this surface and produced nothing:
+    # the concept record had no such field, while its own
+    # ``available_sections`` advertised ``has_validation_evidence``. The
+    # block is keyed by entry ref rather than unioned across entries. A
+    # concept is a collection of entries computed at different levels of
+    # theory, and collapsing their evidence into one verdict is an
+    # aggregation error — the same one ``0a6271c8`` removed from
+    # conformer-group evidence summaries.
+    ts_validation_block: (
+        list[TransitionStateEntryValidationEvidence] | None
+    ) = None
+    if "validation_evidence" in includes:
+        ts_validation_block = [
+            TransitionStateEntryValidationEvidence(
+                transition_state_entry_ref=e.public_ref,
+                validation_evidence=_build_validation_evidence(session, e.id),
+            )
+            for e in entries
+        ]
+
     record = ScientificTransitionStateRecord(
         transition_state=_build_ts_core_block(ts, ts_badge),
         reaction=reaction,
@@ -342,6 +376,7 @@ def get_transition_state(
         calculations=ts_calcs_block,
         geometries=ts_geoms_block,
         review_history=ts_review_block,
+        validation_evidence=ts_validation_block,
     )
 
     return ScientificTransitionStateDetailResponse(
@@ -441,6 +476,7 @@ def build_entry_record(
     reaction: TransitionStateReactionContext,
     entry_badge: RecordReviewBadge,
     includes: set[str],
+    entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
 ) -> ScientificTransitionStateEntryRecord:
     """Public alias for :func:`_build_entry_record`.
 
@@ -454,6 +490,7 @@ def build_entry_record(
         reaction=reaction,
         entry_badge=entry_badge,
         includes=includes,
+        entries_block=entries_block,
     )
 
 
@@ -465,7 +502,17 @@ def _build_entry_record(
     reaction: TransitionStateReactionContext,
     entry_badge: RecordReviewBadge,
     includes: set[str],
+    entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
 ) -> ScientificTransitionStateEntryRecord:
+    """Project one TS entry into the shared record shape.
+
+    ``entries_block`` lets a caller that has already grouped the sibling
+    entries over a whole page hand them in, so the search surface pays one
+    load for the page instead of one per record. A caller that passes
+    nothing and asks for ``include=entries`` gets the siblings resolved
+    here — the parent always has at least this entry under it, so ``None``
+    unambiguously means "not supplied" and never "supplied and empty".
+    """
     evidence = _build_entry_evidence_summary(session, entry.id)
     available = _build_available_sections(session, [entry], [entry.id])
 
@@ -487,11 +534,32 @@ def _build_entry_record(
     if "validation_evidence" in includes:
         validation_block = _build_validation_evidence(session, entry.id)
 
-    # ``trust`` is only ever in *includes* on the standalone TS-entry detail
-    # surface (the parent-TS and search surfaces reject the token), and only
-    # that path eager-loads the graph the evaluator walks. Building it here
-    # keeps the per-record shape identical across the detail surfaces while
-    # never populating trust for embedded entries / search records.
+    # ``entries`` on an entry-grained record answers "what else is under
+    # this transition state" — the one piece of context an entry-grained
+    # response cannot otherwise give. It was legal on this shape and did
+    # nothing: the search service discarded the token before it reached a
+    # builder, and the record had no field to put it in.
+    #
+    # The nested records are built without ``entries`` in their include set,
+    # which is not an optimisation but the thing that terminates the
+    # recursion: a sibling that resolved its own siblings would resolve this
+    # record again, and so on.
+    if entries_block is None and "entries" in includes:
+        entries_block = _build_sibling_entry_records(
+            session,
+            entry=entry,
+            ts_core=ts_core,
+            reaction=reaction,
+            includes=includes,
+        )
+
+    # ``trust`` is populated wherever the token is legal — the standalone
+    # TS-entry detail surface and, since the search vocabulary was widened,
+    # ``/transition-states/search``. Both paths eager-load the graph the
+    # evaluator walks before reaching this builder: the detail path for one
+    # row, the search path for the whole page. Nothing here issues that load
+    # itself, because anything this function loads is multiplied by the page
+    # size.
     trust_block: TrustFragment | None = None
     if "trust" in includes:
         trust_block = build_transition_state_entry_trust_fragment(
@@ -516,12 +584,90 @@ def _build_entry_record(
         evidence_summary=evidence,
         validation=_build_validation_descriptor(session, entry.id),
         available_sections=available,
+        entries=entries_block,
         calculations=calcs_block,
         geometries=geoms_block,
         review_history=review_block,
         validation_evidence=validation_block,
         trust=trust_block,
     )
+
+
+def build_sibling_entry_records(
+    session: Session,
+    *,
+    entry: TransitionStateEntry,
+    ts_core: TransitionStateCoreBlock,
+    reaction: TransitionStateReactionContext,
+    includes: set[str],
+) -> list[ScientificTransitionStateEntryRecord]:
+    """Public alias for :func:`_build_sibling_entry_records`.
+
+    Exported so the search service can group the sibling lists over a whole
+    page and hand each one to ``build_entry_record``.
+    """
+    return _build_sibling_entry_records(
+        session,
+        entry=entry,
+        ts_core=ts_core,
+        reaction=reaction,
+        includes=includes,
+    )
+
+
+def _build_sibling_entry_records(
+    session: Session,
+    *,
+    entry: TransitionStateEntry,
+    ts_core: TransitionStateCoreBlock,
+    reaction: TransitionStateReactionContext,
+    includes: set[str],
+) -> list[ScientificTransitionStateEntryRecord]:
+    """Every entry under *entry*'s parent transition state, this one included.
+
+    The same list, in the same shape and the same order, that the TS-concept
+    detail surface returns under ``include=entries``. The parent and its
+    reaction context are shared by construction, so they are passed through
+    rather than re-resolved per sibling.
+    """
+    stmt = (
+        select(TransitionStateEntry)
+        .where(
+            TransitionStateEntry.transition_state_id == entry.transition_state_id
+        )
+        .order_by(TransitionStateEntry.id.asc())
+    )
+    if "trust" in includes:
+        # The siblings carry ``trust`` on the same terms as the record they
+        # hang off, so they need the same graph loaded before the evaluator
+        # walks it — grouped over the sibling set, never per sibling.
+        stmt = stmt.options(*_TRUST_EAGER_LOADS)
+    siblings = session.scalars(stmt).all()
+    sibling_ids = [e.id for e in siblings]
+    badges = (
+        fetch_review_badges(
+            session,
+            record_type=SubmissionRecordType.transition_state_entry,
+            record_ids=sibling_ids,
+        )
+        if sibling_ids
+        else {}
+    )
+    nested_includes = includes - {"entries"}
+    return [
+        _build_entry_record(
+            session,
+            entry=sibling,
+            ts_core=ts_core,
+            reaction=reaction,
+            entry_badge=badges.get(
+                sibling.id,
+                RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
+            ),
+            includes=nested_includes,
+        )
+        for sibling in siblings
+    ]
 
 
 def build_transition_state_entry_trust_fragment(

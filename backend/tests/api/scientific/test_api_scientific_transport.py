@@ -875,13 +875,39 @@ def test_search_include_all_does_not_restore_internal_ids(client, db_session):
     assert "transport_id" not in body["records"][0]["transport"]
 
 
-def test_search_include_trust_returns_422(client, db_session):
-    """Broad transport search rejects ``include=trust`` — trust is a
-    detail/subresource-only token, never exposed on list/search."""
+def test_search_accepts_trust_and_keeps_it_out_of_all(client, db_session):
+    """Transport search accepts ``include=trust``; ``include=all`` does not.
+
+    Same shape of defect and same repair as the statmech twin:
+    ``ScientificTransportRecord`` declared ``trust``, this route already
+    stripped it correctly, and the token that would have filled it was
+    illegal — so the key was permanently absent and the response gave no
+    sign a verdict existed. The strip in ``routes/scientific/transport.py``
+    is untouched; the vocabulary was the whole edit.
+
+    The cost objection was weakest here of the five surfaces: transport's
+    eager-load chain is 9 tuple entries against statmech's 19, with no
+    ``torsions`` subtree and no ``lot`` / ``software_release`` /
+    ``workflow_tool_release`` / ``scf_stability`` / ``child_dependencies``
+    branches. ``trust`` is still internal-tokenized, so a caller names it.
+    """
     _, _, tr = _make_transport(db_session)
-    resp = client.get(_search_url(transport_ref=tr.public_ref, include="trust"))
-    assert resp.status_code == 422
-    assert "unknown_include_token" in resp.text
+
+    asked = client.get(_search_url(transport_ref=tr.public_ref, include="trust"))
+    assert asked.status_code == 200, asked.text
+    body = asked.json()
+    assert body["request"]["include"] == ["trust"]
+    assert body["records"]
+    assert body["records"][0]["trust"]["trust_status"]
+
+    everything = client.get(
+        _search_url(transport_ref=tr.public_ref, include="all")
+    ).json()
+    assert "trust" not in everything["request"]["include"]
+    assert "trust" not in everything["records"][0]
+
+    default = client.get(_search_url(transport_ref=tr.public_ref)).json()
+    assert "trust" not in default["records"][0]
 
 
 def test_assessments_are_opt_in_and_report_freshness(client, db_session):

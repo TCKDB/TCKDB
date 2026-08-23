@@ -91,11 +91,13 @@ from app.services.scientific_read.internal_ids import (
 # ---------------------------------------------------------------------------
 
 
-# Same legal set on both detail surfaces. ``observations`` and
-# ``selections`` are no-op on the observation surface (the record IS an
-# observation; selections belong to the parent group); kept legal so a
-# generic client can pass the same include set everywhere — mirrors the
-# TS surface's ``entries`` token policy.
+# Same legal set on both detail surfaces, and every token on it now
+# produces a field on both. ``observations`` used to be a documented no-op
+# on the observation surface, on the reading that the record already *is*
+# an observation; it populates the sibling observations in the same
+# conformer group there, which is the one thing an observation-grained
+# record cannot say about itself. ``selections`` belong to the parent
+# group and are exposed from it on both surfaces.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "observations",
     "selections",
@@ -214,6 +216,9 @@ def build_group_record(
             if obs_ids
             else {}
         )
+        # Without ``observations`` in the nested set, every embedded
+        # observation would resolve the same sibling list this block is.
+        nested_includes = includes - {"observations"}
         observations_block = [
             _build_observation_record(
                 session,
@@ -224,7 +229,7 @@ def build_group_record(
                     o.id,
                     RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
                 ),
-                includes=includes,
+                includes=nested_includes,
             )
             for o in obs_rows
         ]
@@ -278,10 +283,9 @@ def get_conformer_observation(
     Same handle / 422 / 404 contract as :func:`get_conformer_group`.
     Returns the observation core block + parent group + species
     context + bounded evidence/available_sections summaries.
-    ``include=observations`` and ``include=selections`` are silently a
-    no-op on this surface (the record IS an observation; selections
-    belong to the parent group) — kept legal so a generic client can
-    pass the same include set across all conformer detail surfaces.
+    ``include=observations`` returns the sibling observations in this
+    record's conformer group, in the shape the group surface returns;
+    ``include=selections`` returns the parent group's selections.
     """
     includes = validate_includes(
         include or [],
@@ -350,6 +354,13 @@ def _build_observation_record(
     Evidence-and-available-sections summaries are scoped to **this
     observation only** (calcs where ``conformer_observation_id ==
     observation.id``).
+
+    ``include=observations`` populates the sibling observations in the same
+    conformer group, in the shape the group surface returns under the same
+    token. It used to be documented as a no-op here on the reading that the
+    record already *is* an observation; what it can say is which other
+    observations share the basin, which an observation-grained record has
+    no other way to report.
     """
     obs_ids = [observation.id]
     evidence = _build_observation_evidence_summary(session, observation.id)
@@ -374,6 +385,16 @@ def _build_observation_record(
     scheme_summary = _build_assignment_scheme_summary(
         session, observation.assignment_scheme_id
     )
+
+    observations_block: list[ScientificConformerObservationRecord] | None = None
+    if "observations" in includes:
+        observations_block = _build_sibling_observation_records(
+            session,
+            observation=observation,
+            cg_core=cg_core,
+            species_context=species_context,
+            includes=includes,
+        )
 
     selections_block: list[ConformerSelectionSummary] | None = None
     if "selections" in includes:
@@ -413,11 +434,61 @@ def _build_observation_record(
         assignment_scheme=scheme_summary,
         evidence_summary=evidence,
         available_sections=available,
+        observations=observations_block,
         selections=selections_block,
         calculations=calculations_block,
         geometries=geometries_block,
         review_history=review_block,
     )
+
+
+def _build_sibling_observation_records(
+    session: Session,
+    *,
+    observation: ConformerObservation,
+    cg_core: ConformerGroupCoreBlock,
+    species_context: ConformerSpeciesContext,
+    includes: set[str],
+) -> list[ScientificConformerObservationRecord]:
+    """Every observation in *observation*'s group, this one included.
+
+    The nested records are built without ``observations`` in their include
+    set. That is not a size optimisation: a sibling that resolved its own
+    siblings would resolve this record again, without end.
+    """
+    siblings = session.scalars(
+        select(ConformerObservation)
+        .where(
+            ConformerObservation.conformer_group_id
+            == observation.conformer_group_id
+        )
+        .order_by(ConformerObservation.id.asc())
+    ).all()
+    sibling_ids = [o.id for o in siblings]
+    badges = (
+        fetch_review_badges(
+            session,
+            record_type=SubmissionRecordType.conformer_observation,
+            record_ids=sibling_ids,
+        )
+        if sibling_ids
+        else {}
+    )
+    nested_includes = includes - {"observations"}
+    return [
+        _build_observation_record(
+            session,
+            observation=sibling,
+            cg_core=cg_core,
+            species_context=species_context,
+            observation_badge=badges.get(
+                sibling.id,
+                RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
+            ),
+            includes=nested_includes,
+        )
+        for sibling in siblings
+    ]
 
 
 # ---------------------------------------------------------------------------
