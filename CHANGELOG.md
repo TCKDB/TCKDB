@@ -59,6 +59,56 @@ wrapper over a contract that is itself still moving.
 
 ### Changed
 
+- **A transition state now says how many of its entries have the evidence,
+  not that one does.** `GET /api/v1/scientific/transition-states/{ref}`
+  returned an `evidence_summary` carrying seven `has_*` booleans —
+  `has_opt`, `has_freq`, `has_sp`, `has_irc`, `has_path_search`,
+  `has_geometry_validation`, `has_scf_stability` — OR-ed across **every
+  entry** under the transition state. `has_sp: true` therefore meant "at
+  least one entry somewhere under this TS has a single point", which a
+  reader takes as "this transition state has a single point". The flag was
+  asymmetrically informative: `false` was strong (nothing anywhere has it)
+  while `true` was nearly empty, so it was reliable only in the direction
+  nobody reads it for.
+
+  TS-concept scope now reports **`entry_count`** and an
+  **`evidence_coverage`** block: per evidence kind, how many of those
+  entries have at least one calculation of that kind. Coverage counts
+  *entries*, never calculations — an entry with three `freq` jobs
+  contributes `1` — so a value can never exceed `entry_count` and
+  `sp: 1` against `entry_count: 3` shows an unevenly covered TS at a
+  glance. `count > 0` reproduces the retired boolean exactly.
+
+  A **full** count says coverage is complete, not that the entries are
+  **comparable**: they may sit at different levels of theory, come from
+  different codes, and describe different geometries. Coverage is not
+  consistency; that still requires `include=calculations`.
+
+  **TS-entry scope keeps its booleans** and is unchanged — one entry, one
+  set of calculations, nothing for a `true` to hide behind. That covers
+  `GET /scientific/transition-state-entries/{ref}`, the search surface
+  (which returns entry-grain records and therefore needed no quantifier
+  knob), and the `transition_states[*].evidence_summary` block embedded in
+  `/reaction-entries/{id}/full`.
+
+  **Breaking for callers reading `has_*` off the TS-concept detail
+  endpoint. Migration: `has_x` becomes `evidence_coverage.x > 0`.** The
+  defect is **latent today** — measured against the hosted instance, all
+  34 transition states have exactly one entry, so the OR cannot currently
+  differ from that entry's own value and nobody has been misled yet. It is
+  a bug waiting for its trigger: the first second entry deposited under one
+  transition state (a re-optimisation at another level, say) makes it
+  silently wrong, with nothing in the response to mark the change. Fixing
+  it while it is still latent is why the migration costs one expression
+  rather than a data audit. No database schema or migration impact — this
+  is a read projection, not a table. No client or MCP change: `tckdb-client`
+  types this block as an opaque JSON object and the MCP search allowlist
+  gains no field.
+
+  Sibling of the conformer-group fix in the same release, which replaced
+  the same OR-across-children booleans with `evidence_coverage` at group
+  scope.
+
 - **Reaction search now means containment, and a one-sided query finally
   works.** `GET|POST /api/v1/scientific/reactions/search` accepted
   `reactants` or `products` alone, and the validator said so explicitly —

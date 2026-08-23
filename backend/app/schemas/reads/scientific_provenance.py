@@ -39,7 +39,7 @@ from app.schemas.reads.scientific_conformer import (
 )
 from app.schemas.reads.scientific_kinetics import KineticsRecord
 from app.schemas.reads.scientific_transition_state import (
-    TransitionStateCalculationEvidenceSummary,
+    TransitionStateEntryEvidenceSummary,
 )
 from app.services.trust.models import TrustFragment
 
@@ -254,7 +254,7 @@ class TransitionStateInFull(BaseModel):
     transition_state_entry_ref: str
     status: TransitionStateEntryStatus | None = None
     review: RecordReviewBadge
-    evidence_summary: TransitionStateCalculationEvidenceSummary
+    evidence_summary: TransitionStateEntryEvidenceSummary
     calculations: dict[str, TransitionStateCalculationSlot] = Field(default_factory=dict)
     dependencies: list[TransitionStateDependency] = Field(default_factory=list)
     trust: TrustFragment | None = None

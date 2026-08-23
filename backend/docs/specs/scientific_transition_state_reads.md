@@ -88,11 +88,55 @@ Defined in [scientific_transition_state.py](../../app/schemas/reads/scientific_t
 - `TransitionStateReactionContext` — reaction + reaction-entry refs,
   rendered equation (`"A + B <=> C + D"` for reversible, `"->"` for
   irreversible), reaction family name when present.
-- `TransitionStateCalculationEvidenceSummary` — calc count + `has_*`
-  booleans for opt / freq / sp / irc / path_search /
-  geometry_validation / scf_stability. Primary-per-type calculation
-  selection is **deferred** to a later PR — the data model does not
-  currently carry a unique notion of "primary" per type.
+- `TransitionStateEvidenceSummary` — **TS-concept scope**:
+  `entry_count`, `calculation_count`, and an `evidence_coverage` block.
+- `TransitionStateEvidenceCoverage` — per evidence kind (opt / freq /
+  sp / irc / path_search / geometry_validation / scf_stability), how
+  many of the `entry_count` entries have **at least one** calculation
+  of that kind. Every value counts *entries*, never calculations: an
+  entry with three `freq` jobs contributes `1`, so a coverage value can
+  never exceed `entry_count`.
+- `TransitionStateEntryEvidenceSummary` — **TS-entry scope**:
+  `calculation_count` + the `has_*` booleans for the same seven
+  evidence kinds, restricted to this one entry's calculations.
+
+  Primary-per-type calculation selection is **deferred** on both blocks
+  — the data model does not currently carry a unique notion of
+  "primary" per type.
+
+### Why the two scopes have different shapes
+
+The concept block and the entry block deliberately disagree, and the
+disagreement is the design.
+
+Until this split both surfaces shared one class carrying the seven
+`has_*` booleans. At entry scope that is unambiguous — one entry, one
+set of calculations. At concept scope the booleans were an OR across
+every entry under the TS, which made them asymmetrically informative:
+`false` was strong (nothing anywhere under the TS has it) while `true`
+was nearly empty (one calculation under one of many entries). A reader
+seeing `has_sp: true` on a three-entry TS could not tell whether three
+entries had single points or one did — and `true` is the direction
+readers actually act on.
+
+Counts answer the question the boolean could not: `sp: 1` against
+`entry_count: 3` shows an unevenly covered TS at a glance, and
+`count > 0` reproduces the retired boolean exactly, so nothing the
+boolean expressed was lost.
+
+What a **full** count does *not* say: `freq == entry_count` means every
+entry has frequency evidence, not that the entries are **comparable**.
+They may sit at different levels of theory, come from different codes,
+and describe different geometries. Coverage is not consistency; a
+caller who needs consistency must read the per-calculation
+level-of-theory / software provenance under `include=calculations`.
+
+The search surface needs no matching quantifier knob. It returns
+records at the **TS-entry grain**, so its `has_*` filters are already
+scoped to a single entry and were never ambiguous. (This is where the
+transition-state surface differs from the conformer one, whose search
+returns conformer-*group* records and therefore gained an
+`evidence_match=any_observation|all_observations` parameter.)
 - `TransitionStateCalculationSummary` — compact calculation projection
   (ref, type, quality, review, LoT, software, workflow) used by the
   `include=calculations` token. Heavy include sections (results,

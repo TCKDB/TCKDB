@@ -294,17 +294,211 @@ def test_ts_detail_entries_summary_counts(client, db_session):
 
 
 def test_ts_detail_evidence_summary_counts(client, db_session):
+    """Concept scope: coverage counts, not booleans (single-entry shape).
+
+    Rewritten from the ``has_*`` form when the TS-concept evidence block
+    moved to counts. This is the shape every TS in the live corpus has
+    today — exactly one entry — so it pins the no-regression case:
+    ``count == 1`` where the retired boolean said ``true``, ``0`` where
+    it said ``false``.
+    """
     _, _, ts, entries = _make_reaction_with_ts(db_session)
     lot = make_lot(db_session)
     _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.opt, lot=lot)
     _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.freq, lot=lot)
     body = client.get(_ts_detail_url(ts.public_ref)).json()
     ev = body["record"]["evidence_summary"]
+    assert ev["entry_count"] == 1
     assert ev["calculation_count"] == 2
-    assert ev["has_opt"] is True
-    assert ev["has_freq"] is True
-    assert ev["has_sp"] is False
-    assert ev["has_irc"] is False
+    coverage = ev["evidence_coverage"]
+    assert coverage["opt"] == 1
+    assert coverage["freq"] == 1
+    assert coverage["sp"] == 0
+    assert coverage["irc"] == 0
+    # The retired booleans are gone from this surface entirely — a client
+    # reading ``has_opt`` here must be updated, not silently served a
+    # stale key.
+    assert "has_opt" not in ev
+    assert "has_freq" not in ev
+
+
+def test_ts_detail_evidence_coverage_partial_across_entries(client, db_session):
+    """The case the boolean could not express, and the reason for the PR.
+
+    Two entries under one TS; one has an ``sp`` calculation and one does
+    not. The retired ``has_sp`` OR-ed across entries and reported
+    ``true``, which a reader takes as "this transition state has a
+    single point". Coverage reports ``1`` of ``2``.
+    """
+    _, _, ts, entries = _make_reaction_with_ts(
+        db_session,
+        n_entries=2,
+        statuses=[
+            TransitionStateEntryStatus.optimized,
+            TransitionStateEntryStatus.optimized,
+        ],
+    )
+    lot = make_lot(db_session)
+    _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.opt, lot=lot)
+    _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.sp, lot=lot)
+    _attach_calc(db_session, tse=entries[1], calc_type=CalculationType.opt, lot=lot)
+
+    body = client.get(_ts_detail_url(ts.public_ref)).json()
+    ev = body["record"]["evidence_summary"]
+    assert ev["entry_count"] == 2
+    assert ev["calculation_count"] == 3
+    coverage = ev["evidence_coverage"]
+    # Both entries were optimised; only one has a single point.
+    assert coverage["opt"] == 2
+    assert coverage["sp"] == 1
+    # ``count > 0`` is what the old boolean said. It is still true here,
+    # and still says almost nothing on its own — which is the point.
+    assert coverage["sp"] > 0
+    assert coverage["sp"] < ev["entry_count"]
+
+
+def test_ts_detail_evidence_coverage_all_entries_covered(client, db_session):
+    """Complete coverage reads as ``count == entry_count``."""
+    _, _, ts, entries = _make_reaction_with_ts(
+        db_session,
+        n_entries=3,
+        statuses=[TransitionStateEntryStatus.optimized] * 3,
+    )
+    lot = make_lot(db_session)
+    for entry in entries:
+        _attach_calc(db_session, tse=entry, calc_type=CalculationType.freq, lot=lot)
+
+    ev = client.get(_ts_detail_url(ts.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["entry_count"] == 3
+    assert ev["evidence_coverage"]["freq"] == 3
+    assert ev["evidence_coverage"]["opt"] == 0
+
+
+def test_ts_detail_evidence_coverage_no_entries_covered(client, db_session):
+    """No evidence anywhere reads as ``0`` — as strong as the old ``false``."""
+    _, _, ts, _entries = _make_reaction_with_ts(
+        db_session,
+        n_entries=2,
+        statuses=[TransitionStateEntryStatus.optimized] * 2,
+    )
+    ev = client.get(_ts_detail_url(ts.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["entry_count"] == 2
+    assert ev["calculation_count"] == 0
+    assert ev["evidence_coverage"] == {
+        "opt": 0,
+        "freq": 0,
+        "sp": 0,
+        "irc": 0,
+        "path_search": 0,
+        "geometry_validation": 0,
+        "scf_stability": 0,
+    }
+
+
+def test_ts_detail_evidence_coverage_counts_entries_not_calculations(
+    client, db_session
+):
+    """An entry with several calculations of one kind counts **once**.
+
+    Getting this backwards lets a coverage value exceed ``entry_count``,
+    which is nonsense on its face: "four of two entries have freq".
+    """
+    _, _, ts, entries = _make_reaction_with_ts(
+        db_session,
+        n_entries=2,
+        statuses=[TransitionStateEntryStatus.optimized] * 2,
+    )
+    lot = make_lot(db_session)
+    for _ in range(3):
+        _attach_calc(
+            db_session, tse=entries[0], calc_type=CalculationType.freq, lot=lot
+        )
+    _attach_calc(db_session, tse=entries[1], calc_type=CalculationType.freq, lot=lot)
+
+    ev = client.get(_ts_detail_url(ts.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["entry_count"] == 2
+    # Four freq calculations across two entries.
+    assert ev["calculation_count"] == 4
+    assert ev["evidence_coverage"]["freq"] == 2
+    assert ev["evidence_coverage"]["freq"] <= ev["entry_count"]
+
+
+def test_ts_detail_evidence_coverage_joined_kinds_count_entries(
+    client, db_session
+):
+    """``geometry_validation`` / ``scf_stability`` count entries too.
+
+    These two are reached through a join rather than a calculation type,
+    so they are the ones most likely to drift back to counting rows.
+    """
+    _, _, ts, entries = _make_reaction_with_ts(
+        db_session,
+        n_entries=2,
+        statuses=[TransitionStateEntryStatus.optimized] * 2,
+    )
+    lot = make_lot(db_session)
+    first = _attach_calc(
+        db_session, tse=entries[0], calc_type=CalculationType.opt, lot=lot
+    )
+    second = _attach_calc(
+        db_session, tse=entries[0], calc_type=CalculationType.freq, lot=lot
+    )
+    # Both validated rows sit under the SAME entry — coverage is 1 of 2.
+    attach_geometry_validation(db_session, calculation=first)
+    attach_geometry_validation(db_session, calculation=second)
+    attach_scf_stability(db_session, calculation=first)
+    # The second entry carries a calculation with neither joined row.
+    _attach_calc(db_session, tse=entries[1], calc_type=CalculationType.opt, lot=lot)
+
+    ev = client.get(_ts_detail_url(ts.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert ev["entry_count"] == 2
+    assert ev["evidence_coverage"]["geometry_validation"] == 1
+    assert ev["evidence_coverage"]["scf_stability"] == 1
+
+
+def test_tse_detail_evidence_summary_keeps_booleans(client, db_session):
+    """Entry scope keeps ``has_*``.
+
+    One entry means one set of calculations, so the boolean cannot pool
+    a covered entry with an uncovered one — there is nothing for a
+    ``true`` to hide behind. The coverage block belongs to the concept
+    surface and is deliberately absent here.
+    """
+    _, _, _ts, entries = _make_reaction_with_ts(
+        db_session,
+        n_entries=2,
+        statuses=[TransitionStateEntryStatus.optimized] * 2,
+    )
+    lot = make_lot(db_session)
+    _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.opt, lot=lot)
+    _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.sp, lot=lot)
+    _attach_calc(db_session, tse=entries[1], calc_type=CalculationType.opt, lot=lot)
+
+    covered = client.get(_tse_detail_url(entries[0].public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert covered["calculation_count"] == 2
+    assert covered["has_opt"] is True
+    assert covered["has_sp"] is True
+    assert covered["has_freq"] is False
+    assert "evidence_coverage" not in covered
+
+    # The sibling entry has no single point, and says so — where the
+    # concept-scope OR reported ``has_sp: true`` for the whole TS.
+    uncovered = client.get(_tse_detail_url(entries[1].public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+    assert uncovered["calculation_count"] == 1
+    assert uncovered["has_opt"] is True
+    assert uncovered["has_sp"] is False
 
 
 def test_ts_detail_available_sections_present(client, db_session):

@@ -98,7 +98,7 @@ from app.services.scientific_read.transition_states import (
     _TRUST_EAGER_LOADS as _TS_ENTRY_TRUST_EAGER_LOADS,
 )
 from app.services.scientific_read.transition_states import (
-    _build_evidence_summary_for_entries,
+    _build_entry_evidence_summary,
     build_transition_state_entry_trust_fragment,
 )
 
@@ -703,7 +703,7 @@ def _build_transition_states_section(
         # surface so the block surfaced under /full is byte-identical
         # to ``record.evidence_summary`` from
         # ``GET /scientific/transition-state-entries/{ref}``.
-        evidence = _build_evidence_summary_for_entries(session, [ts_entry.id])
+        evidence = _build_entry_evidence_summary(session, ts_entry.id)
         out.append(
             TransitionStateInFull(
                 transition_state_id=ts_entry.transition_state_id,

@@ -60,13 +60,15 @@ from app.schemas.reads.scientific_transition_state import (
     ScientificTransitionStateEntryDetailResponse,
     ScientificTransitionStateEntryRecord,
     ScientificTransitionStateRecord,
-    TransitionStateCalculationEvidenceSummary,
     TransitionStateCalculationSummary,
     TransitionStateCoreBlock,
     TransitionStateDetailRequest,
     TransitionStateEntriesSummary,
     TransitionStateEntryCoreBlock,
     TransitionStateEntryDetailRequest,
+    TransitionStateEntryEvidenceSummary,
+    TransitionStateEvidenceCoverage,
+    TransitionStateEvidenceSummary,
     TransitionStateReactionContext,
     TransitionStateReviewEntry,
     TransitionStateValidationDescriptor,
@@ -285,9 +287,7 @@ def get_transition_state(
     entry_ids = [e.id for e in entries]
 
     entries_summary = _build_entries_summary(entries)
-    evidence_summary = _build_evidence_summary_for_entries(
-        session, entry_ids
-    )
+    evidence_summary = _build_concept_evidence_summary(session, entry_ids)
     available = _build_available_sections(session, entries, entry_ids)
 
     entry_badges = (
@@ -466,7 +466,7 @@ def _build_entry_record(
     entry_badge: RecordReviewBadge,
     includes: set[str],
 ) -> ScientificTransitionStateEntryRecord:
-    evidence = _build_evidence_summary_for_entries(session, [entry.id])
+    evidence = _build_entry_evidence_summary(session, entry.id)
     available = _build_available_sections(session, [entry], [entry.id])
 
     calcs_block: list[TransitionStateCalculationSummary] | None = None
@@ -679,23 +679,132 @@ def _build_entries_summary(
     return TransitionStateEntriesSummary(total=len(entries), by_status=by_status)
 
 
-def _build_evidence_summary_for_entries(
+def _build_concept_evidence_summary(
     session: Session, entry_ids: list[int]
-) -> TransitionStateCalculationEvidenceSummary:
-    """Compute the calculation-evidence summary for a set of TS entries."""
+) -> TransitionStateEvidenceSummary:
+    """Compute the TS-concept-scope calculation-evidence summary.
+
+    ``calculation_count`` is the total across every entry under the TS —
+    a sum is honest about a sum.
+
+    ``evidence_coverage`` is deliberately **not** a calculation count.
+    Each value is the number of *entries* in *entry_ids* with at least
+    one calculation of that kind, so an entry carrying three ``freq``
+    calculations contributes ``1``. That is what makes the value
+    readable against the ``entry_count`` denominator, and it is why the
+    coverage queries count ``DISTINCT
+    Calculation.transition_state_entry_id`` rather than
+    ``Calculation.id``. Counting calculations here would let a coverage
+    value exceed ``entry_count``, which is nonsense on its face.
+
+    This block replaced a set of ``has_*`` booleans that OR-ed every
+    calculation under the TS together; see
+    :class:`TransitionStateEvidenceSummary` for why. ``count > 0``
+    reproduces the retired boolean exactly.
+    """
     if not entry_ids:
-        return TransitionStateCalculationEvidenceSummary(
+        # No entries: every coverage value is 0 out of 0. Nothing is
+        # vacuously "covered" here — a caller reading ``freq == 0``
+        # against ``entry_count == 0`` sees an empty TS, not a complete
+        # one.
+        return TransitionStateEvidenceSummary(
+            entry_count=0,
             calculation_count=0,
-            has_opt=False,
-            has_freq=False,
-            has_sp=False,
-            has_irc=False,
-            has_path_search=False,
-            has_geometry_validation=False,
-            has_scf_stability=False,
+            evidence_coverage=TransitionStateEvidenceCoverage(
+                opt=0,
+                freq=0,
+                sp=0,
+                irc=0,
+                path_search=0,
+                geometry_validation=0,
+                scf_stability=0,
+            ),
         )
 
-    # Single GROUP BY query: count + per-type presence.
+    # One pass gives both the calculation total (COUNT(id)) and the
+    # per-type entry coverage (COUNT(DISTINCT transition_state_entry_id)).
+    type_rows = session.execute(
+        select(
+            Calculation.type,
+            func.count(Calculation.id),
+            func.count(func.distinct(Calculation.transition_state_entry_id)),
+        )
+        .where(Calculation.transition_state_entry_id.in_(entry_ids))
+        .group_by(Calculation.type)
+    ).all()
+    calc_counts: dict[CalculationType, int] = {row[0]: row[1] for row in type_rows}
+    entry_coverage: dict[CalculationType, int] = {
+        row[0]: row[2] for row in type_rows
+    }
+
+    return TransitionStateEvidenceSummary(
+        entry_count=len(entry_ids),
+        calculation_count=sum(calc_counts.values()),
+        evidence_coverage=TransitionStateEvidenceCoverage(
+            opt=entry_coverage.get(CalculationType.opt, 0),
+            freq=entry_coverage.get(CalculationType.freq, 0),
+            sp=entry_coverage.get(CalculationType.sp, 0),
+            irc=entry_coverage.get(CalculationType.irc, 0),
+            path_search=entry_coverage.get(CalculationType.path_search, 0),
+            geometry_validation=_entry_coverage_via_join(
+                session,
+                entry_ids,
+                joined=CalculationGeometryValidation,
+                onclause=(
+                    CalculationGeometryValidation.calculation_id
+                    == Calculation.id
+                ),
+            ),
+            scf_stability=_entry_coverage_via_join(
+                session,
+                entry_ids,
+                joined=CalculationSCFStability,
+                onclause=CalculationSCFStability.calculation_id
+                == Calculation.id,
+            ),
+        ),
+    )
+
+
+def _entry_coverage_via_join(
+    session: Session,
+    entry_ids: list[int],
+    *,
+    joined,
+    onclause,
+) -> int:
+    """Count TS entries with >=1 calculation carrying a joined evidence row.
+
+    DISTINCT is on ``transition_state_entry_id``, so an entry with three
+    qualifying calculations still counts once.
+    """
+    return int(
+        session.scalar(
+            select(
+                func.count(
+                    func.distinct(Calculation.transition_state_entry_id)
+                )
+            )
+            .select_from(Calculation)
+            .join(joined, onclause)
+            .where(Calculation.transition_state_entry_id.in_(entry_ids))
+        )
+        or 0
+    )
+
+
+def _build_entry_evidence_summary(
+    session: Session, entry_id: int
+) -> TransitionStateEntryEvidenceSummary:
+    """Compute the TS-entry-scope calculation-evidence summary.
+
+    Scope is one candidate saddle point, so the ``has_*`` booleans here
+    are unambiguous — there is no second entry for a ``true`` to hide
+    behind. They are kept as booleans for exactly that reason; the TS
+    concept surface reports counts instead (see
+    :class:`TransitionStateEvidenceSummary`).
+    """
+    entry_ids = [entry_id]
     type_rows = session.execute(
         select(Calculation.type, func.count(Calculation.id))
         .where(Calculation.transition_state_entry_id.in_(entry_ids))
@@ -731,7 +840,7 @@ def _build_evidence_summary_for_entries(
         )
     )
 
-    return TransitionStateCalculationEvidenceSummary(
+    return TransitionStateEntryEvidenceSummary(
         calculation_count=total,
         has_opt=type_counts.get(CalculationType.opt, 0) > 0,
         has_freq=type_counts.get(CalculationType.freq, 0) > 0,

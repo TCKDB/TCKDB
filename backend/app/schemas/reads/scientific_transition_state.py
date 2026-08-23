@@ -159,18 +159,100 @@ class TransitionStateCalculationSummary(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class TransitionStateCalculationEvidenceSummary(BaseModel):
-    """Compact calculation-evidence projection for a TS or TS-entry.
+class TransitionStateEvidenceCoverage(BaseModel):
+    """How many TS entries in scope carry each kind of evidence.
 
-    Counts and ``has_*`` booleans are computed from cheap EXISTS-style
-    queries against the calculation tables under the TS entry. Primary
-    calculation refs are deferred to a later PR — the data model does
-    not currently carry a unique notion of "primary" per type, so we
-    expose counts/booleans only.
+    Every value counts **entries**, never calculations. An entry with
+    three ``freq`` calculations contributes ``1`` to ``freq``, not
+    ``3``. The shared denominator is
+    ``TransitionStateEvidenceSummary.entry_count``, so a caller reads
+    each field as "*n* of *entry_count*"; a value can never exceed that
+    denominator, and one that did would mean the query had started
+    counting calculations again.
 
-    For a TS concept, the counts are summed across all entries under
-    the TS. For a TS entry, the counts are restricted to that entry's
-    calculations.
+    What a full count does and does not say
+    ---------------------------------------
+    ``freq == entry_count`` says the coverage is **complete** — every
+    candidate saddle point under this TS has at least one frequency
+    calculation. It does **not** say those calculations are
+    *comparable*: the entries may sit at different levels of theory,
+    come from different codes, and describe different geometries. A
+    count is honest about coverage, not about consistency. A caller who
+    needs consistency must inspect the per-calculation level-of-theory /
+    software provenance under ``include=calculations``; no number in
+    this block can stand in for that.
+
+    ``0`` is exactly as strong as the old ``has_x is False`` was:
+    nothing in scope carries that evidence.
+    """
+
+    opt: int
+    freq: int
+    sp: int
+    irc: int
+    path_search: int
+    geometry_validation: int
+    scf_stability: int
+
+
+class TransitionStateEvidenceSummary(BaseModel):
+    """Compact calculation-evidence projection for a TS **concept**.
+
+    ``entry_count`` is the number of ``transition_state_entry`` rows
+    under the TS — the same number as ``entries_summary.total``,
+    repeated here so the coverage block is readable without
+    cross-referencing another block. ``calculation_count`` is the number
+    of calculations across all of those entries.
+    ``evidence_coverage`` reports, per evidence kind, how many of the
+    ``entry_count`` entries carry it.
+
+    Primary calculation refs are deferred — the data model does not
+    currently carry a unique notion of "primary" per type, so this block
+    exposes counts only.
+
+    Why counts here and booleans on the entry surface
+    -------------------------------------------------
+    This block deliberately has a **different shape** from
+    :class:`TransitionStateEntryEvidenceSummary`. That asymmetry is the
+    point, not an oversight, and it should not be smoothed over.
+
+    A TS concept pools several candidate entries. The booleans this
+    block used to carry (``has_opt`` / ``has_freq`` / …) were a plain OR
+    across all of them, which made them asymmetrically informative:
+    ``false`` was strong (nothing under the TS has it) while ``true``
+    was nearly empty (one calculation under one entry made it ``true``).
+    A reader seeing ``has_sp: true`` on a three-entry TS could not tell
+    whether three entries had single points or one did. Counts answer
+    that question — ``sp: 1`` against ``entry_count: 3`` shows an
+    unevenly covered TS at a glance — and ``count > 0`` reproduces the
+    retired boolean exactly, so nothing the boolean expressed was lost.
+
+    A TS entry is a single candidate saddle point, so on that surface
+    the booleans are unambiguous and are kept as they were.
+    """
+
+    entry_count: int
+    calculation_count: int
+    evidence_coverage: TransitionStateEvidenceCoverage
+
+
+class TransitionStateEntryEvidenceSummary(BaseModel):
+    """Compact calculation-evidence projection for one TS **entry**.
+
+    Scope is this single entry: ``calculation_count`` and every ``has_*``
+    boolean are restricted to the calculations whose
+    ``transition_state_entry_id`` is this entry. A boolean is
+    unambiguous here — it cannot pool a covered entry with an uncovered
+    one, which is what made the same booleans misleading at TS-concept
+    scope (see :class:`TransitionStateEvidenceSummary`).
+
+    Counts and booleans are computed from cheap EXISTS-style queries
+    against the calculation tables. Primary calculation refs are
+    deferred for the same reason as on the concept block.
+
+    As with the concept block's counts, ``has_freq: true`` says
+    frequency evidence exists — not that it is comparable with the
+    frequency evidence on any sibling entry.
     """
 
     calculation_count: int
@@ -272,7 +354,7 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     transition_state_entry: TransitionStateEntryCoreBlock
     transition_state: TransitionStateCoreBlock
     reaction: TransitionStateReactionContext
-    evidence_summary: TransitionStateCalculationEvidenceSummary
+    evidence_summary: TransitionStateEntryEvidenceSummary
     validation: TransitionStateValidationDescriptor
     available_sections: AvailableTransitionStateSections
     calculations: list[TransitionStateCalculationSummary] | None = None
@@ -312,7 +394,7 @@ class ScientificTransitionStateRecord(BaseModel):
     transition_state: TransitionStateCoreBlock
     reaction: TransitionStateReactionContext
     entries_summary: TransitionStateEntriesSummary
-    evidence_summary: TransitionStateCalculationEvidenceSummary
+    evidence_summary: TransitionStateEvidenceSummary
     available_sections: AvailableTransitionStateSections
     entries: list[ScientificTransitionStateEntryRecord] | None = None
     calculations: list[TransitionStateCalculationSummary] | None = None
@@ -349,13 +431,15 @@ __all__ = [
     "ScientificTransitionStateEntryDetailResponse",
     "ScientificTransitionStateEntryRecord",
     "ScientificTransitionStateRecord",
-    "TransitionStateCalculationEvidenceSummary",
     "TransitionStateCalculationSummary",
     "TransitionStateCoreBlock",
     "TransitionStateDetailRequest",
     "TransitionStateEntriesSummary",
     "TransitionStateEntryCoreBlock",
     "TransitionStateEntryDetailRequest",
+    "TransitionStateEntryEvidenceSummary",
+    "TransitionStateEvidenceCoverage",
+    "TransitionStateEvidenceSummary",
     "TransitionStateReactionContext",
     "TransitionStateReviewEntry",
     "TransitionStateValidationEvidenceSummary",
