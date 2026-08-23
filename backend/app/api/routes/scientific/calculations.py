@@ -14,13 +14,15 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    omit_trust_unless_requested,
+    omit_unrequested_calculation_sections,
+)
 from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
@@ -154,7 +156,7 @@ def scientific_calculations_search_get(
     )
     payload = search_calculations(session, request_obj)
     visibility = apply_internal_ids_visibility(payload)
-    visibility = _omit_unrequested_heavy_sections(
+    visibility = omit_unrequested_calculation_sections(
         visibility, payload, scope="search"
     )
     return omit_trust_unless_requested(visibility, payload, scope="search")
@@ -185,7 +187,7 @@ def scientific_calculations_search_post(
         )
     payload = search_calculations(session, body)
     visibility = apply_internal_ids_visibility(payload)
-    visibility = _omit_unrequested_heavy_sections(
+    visibility = omit_unrequested_calculation_sections(
         visibility, payload, scope="search"
     )
     return omit_trust_unless_requested(visibility, payload, scope="search")
@@ -223,84 +225,5 @@ def scientific_calculation_detail(
         request=request,
     )
     visibility = apply_internal_ids_visibility(payload)
-    visibility = _omit_unrequested_heavy_sections(visibility, payload)
+    visibility = omit_unrequested_calculation_sections(visibility, payload)
     return omit_trust_unless_requested(visibility, payload)
-
-
-# ---------------------------------------------------------------------------
-# Conditional-include omission
-# ---------------------------------------------------------------------------
-
-
-# Heavy include tokens whose corresponding ``record`` field is omitted
-# when the caller did not opt in. The mapping is (token → record key) so
-# each new heavy include only needs one entry.
-_OMITTABLE_RECORD_KEYS: dict[str, str] = {
-    "results": "results",
-    "dependencies": "dependencies",
-    "artifacts": "artifacts",
-    "input_geometries": "input_geometries",
-    "output_geometries": "output_geometries",
-    "geometry_validation": "geometry_validation",
-    "scf_stability": "scf_stability",
-    "wavefunction_diagnostic": "wavefunction_diagnostic",
-    "spin_diagnostic": "spin_diagnostic",
-    "parameters": "parameters",
-    "constraints": "constraints",
-    "review": "review_history",
-    "freq_modes": "freq_modes",
-    "imaginary_mode_projections": "imaginary_mode_projections",
-    "scan": "scan",
-    "irc": "irc",
-    "path_search": "path_search",
-    "execution_environment": "execution_environment",
-}
-
-
-def _omit_unrequested_heavy_sections(visibility, payload, *, scope: str = "detail"):
-    """Drop ``record.<key>`` fields for heavy includes the caller didn't request.
-
-    The Phase D :func:`apply_internal_ids_visibility` returns either the
-    Pydantic model unchanged (when the deployment allows internal ids
-    *and* the caller opted in) or a :class:`JSONResponse` carrying a
-    pre-stripped dict. In the JSONResponse branch we mutate the
-    serialized dict; in the Pydantic-model branch we re-serialize via
-    ``model_dump`` so we can also drop keys. The OpenAPI / response_model
-    contract is preserved in both branches because the dropped keys are
-    declared ``... | None = None`` on the schema.
-
-    Distinguishing "did not ask" (key absent) from "asked, no row"
-    (key present, value ``null``) lets clients tell the two cases apart
-    without having to re-read ``request.include``.
-
-    ``scope='detail'`` operates on the singular ``record`` field;
-    ``scope='search'`` operates on every entry of the ``records`` list.
-    """
-    requested = set(payload.request.include)
-    to_drop = {
-        record_key
-        for token, record_key in _OMITTABLE_RECORD_KEYS.items()
-        if token not in requested
-    }
-    if not to_drop:
-        return visibility
-
-    if isinstance(visibility, JSONResponse):
-        import json
-
-        data = json.loads(visibility.body)
-    else:
-        data = visibility.model_dump(mode="json")
-
-    if scope == "detail":
-        record = data.get("record")
-        if isinstance(record, dict):
-            for key in to_drop:
-                record.pop(key, None)
-    else:  # scope == "search"
-        for record in data.get("records", []) or []:
-            if isinstance(record, dict):
-                for key in to_drop:
-                    record.pop(key, None)
-
-    return JSONResponse(data)

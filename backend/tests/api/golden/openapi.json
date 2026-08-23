@@ -31678,7 +31678,8 @@
                 "type": "null"
               }
             ],
-            "title": "Artifacts"
+            "title": "Artifacts",
+            "x-tckdb-include-gated": "artifacts"
           },
           "available_sections": {
             "$ref": "#/components/schemas/AvailableCalculationSections"
@@ -31698,7 +31699,8 @@
                 "type": "null"
               }
             ],
-            "title": "Constraints"
+            "title": "Constraints",
+            "x-tckdb-include-gated": "constraints"
           },
           "dependencies": {
             "anyOf": [
@@ -31712,7 +31714,8 @@
                 "type": "null"
               }
             ],
-            "title": "Dependencies"
+            "title": "Dependencies",
+            "x-tckdb-include-gated": "dependencies"
           },
           "execution_environment": {
             "anyOf": [
@@ -31722,7 +31725,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "execution_environment"
           },
           "freq_modes": {
             "anyOf": [
@@ -31736,7 +31740,8 @@
                 "type": "null"
               }
             ],
-            "title": "Freq Modes"
+            "title": "Freq Modes",
+            "x-tckdb-include-gated": "freq_modes"
           },
           "geometry_validation": {
             "anyOf": [
@@ -31750,7 +31755,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometry Validation"
+            "title": "Geometry Validation",
+            "x-tckdb-include-gated": "geometry_validation"
           },
           "imaginary_mode_projections": {
             "anyOf": [
@@ -31760,7 +31766,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "imaginary_mode_projections"
           },
           "input_geometries": {
             "anyOf": [
@@ -31774,7 +31781,8 @@
                 "type": "null"
               }
             ],
-            "title": "Input Geometries"
+            "title": "Input Geometries",
+            "x-tckdb-include-gated": "input_geometries"
           },
           "irc": {
             "anyOf": [
@@ -31784,7 +31792,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "irc"
           },
           "level_of_theory": {
             "anyOf": [
@@ -31818,7 +31827,8 @@
                 "type": "null"
               }
             ],
-            "title": "Output Geometries"
+            "title": "Output Geometries",
+            "x-tckdb-include-gated": "output_geometries"
           },
           "owner": {
             "$ref": "#/components/schemas/CalculationOwnerSummary"
@@ -31835,7 +31845,8 @@
                 "type": "null"
               }
             ],
-            "title": "Parameters"
+            "title": "Parameters",
+            "x-tckdb-include-gated": "parameters"
           },
           "path_search": {
             "anyOf": [
@@ -31845,7 +31856,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "path_search"
           },
           "provenance": {
             "$ref": "#/components/schemas/CalculationEvidenceProvenanceSummary"
@@ -31858,7 +31870,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "results"
           },
           "review_history": {
             "anyOf": [
@@ -31872,7 +31885,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "scan": {
             "anyOf": [
@@ -31882,7 +31896,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "scan"
           },
           "scf_stability": {
             "anyOf": [
@@ -31896,7 +31911,8 @@
                 "type": "null"
               }
             ],
-            "title": "Scf Stability"
+            "title": "Scf Stability",
+            "x-tckdb-include-gated": "scf_stability"
           },
           "software_release": {
             "anyOf": [
@@ -31920,7 +31936,8 @@
                 "type": "null"
               }
             ],
-            "title": "Spin Diagnostic"
+            "title": "Spin Diagnostic",
+            "x-tckdb-include-gated": "spin_diagnostic"
           },
           "trust": {
             "anyOf": [
@@ -31930,7 +31947,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "trust"
           },
           "wavefunction_diagnostic": {
             "anyOf": [
@@ -31944,7 +31962,8 @@
                 "type": "null"
               }
             ],
-            "title": "Wavefunction Diagnostic"
+            "title": "Wavefunction Diagnostic",
+            "x-tckdb-include-gated": "wavefunction_diagnostic"
           },
           "workflow_tool_release": {
             "anyOf": [

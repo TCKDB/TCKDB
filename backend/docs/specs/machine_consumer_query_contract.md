@@ -8,7 +8,74 @@ Requirement 10 remains ongoing as each surface expands.
 - Additive response fields are backward compatible. Removing or changing the meaning/type of a field requires a versioned contract.
 - A declared filter is either enforced or rejected. It must never be accepted and ignored.
 - Public refs are stable identifiers. Integer database IDs are deployment-policy fields and are optional in hosted response schemas.
+- An include-gated section that the caller did not request is **omitted** from the response, not returned as `null`. That is the rule; it holds today on `/api/v1/scientific/calculations/*` and for `trust`/`assessments`, and the remaining surfaces are being converted to it one declared table at a time. See [Include-gated sections](#include-gated-sections-absent-means-you-did-not-ask) for the three-state rule and its hard boundary.
 - Pagination metadata reports `total` for the complete filtered candidate set before collapse and `post_collapse_total` after collapse but before page slicing. Collapse is applied first, so `collapse=first&offset=1` returns an empty page while retaining `total >= 1` and `post_collapse_total = 1`.
+
+## Include-gated sections: absent means "you did not ask"
+
+A section a caller did not request and a section that does not exist for this
+record are different facts. Giving them one wire value makes them
+indistinguishable, and the failure mode of guessing wrong is silent — a reader
+concludes the database is empty. So there are three states and three
+representations:
+
+| Case | Wire |
+|---|---|
+| Not requested | key absent |
+| Requested, nothing there | key present, `null` (or `[]` for a list section) |
+| Requested, something there | key present, populated |
+
+The middle row is as load-bearing as the top one. Collapsing "requested, nothing
+there" into "not requested" restores the same ambiguity from the other
+direction, so a requested-but-empty section keeps its `null`.
+
+`request.include` echoes the **resolved** token set — `include=all` as its
+expansion, and never a token the deployment's policy dropped — so a reader can
+always recover what was asked without inferring it from what came back.
+`available_sections` answers the other question, "is there any of this?", and
+answers it without being asked.
+
+**Omission is not removal.** The field stays declared, stays typed, and is
+returned whenever it is requested. What changes is the wire representation of a
+case the contract never assigned a meaning to, so this sits inside the existing
+contract rather than requiring a versioned one.
+
+### The hard boundary
+
+**Only include-gated sections are omitted. No blanket "drop null optional
+fields" rule applies to a scientific response, at any layer, ever.**
+
+Nullability means different things in different places, and in at least one it
+is a live protocol signal read in the opposite direction. The Python client
+treats an **absent** `next_cursor` as "this server predates the keyset contract
+— restart the traversal from offset zero" and a **present-and-null**
+`next_cursor` as "this was the last page, you are done". A blanket null-strip
+would turn every completed traversal into a restart and silently yield the
+whole result set twice. Fields such as `next_cursor`, `post_collapse_total`,
+`supersession`, `conformer`, `formula`, `software_release.version`,
+`assessment_ref` and `xyz_text` are `X | None` for reasons unrelated to
+`include`, and they keep their `null`. The same rule read from the other side:
+never null a field a client tests for presence, and never omit a field a client
+tests for nullity.
+
+The strip is therefore driven by a declared per-surface token → section table
+(`IncludeGatedSections` in `app/api/routes/scientific/_response.py`) and by
+nothing else. The table is declared rather than derived from field names
+because names collide: one calculation response carries two fields called
+`workflow_tool_release` — the record's own provenance field, which is `null`
+because the calculation references no workflow tool and must stay `null`, and
+one nested inside the include-gated `execution_environment` block, which
+disappears with its section.
+
+### Scope today
+
+`/api/v1/scientific/calculations/*` omits all 18 of its heavy sections, and
+`trust` and `assessments` are omitted wherever their helpers run. Every other
+include-gated section still serializes as `null`; those surfaces are being
+converted one declared table at a time, and each conversion adds the
+`x-tckdb-include-gated` marker to the hosted OpenAPI document at the same time,
+so the document never claims a key is normally absent before the runtime omits
+it.
 
 ## Ordered requirements
 
@@ -16,7 +83,7 @@ Requirement 10 remains ongoing as each surface expands.
 
 2. **Fail closed on ignored filters — implemented.** Non-null `inchi` on species search (including composed thermo and species-calculation search), species-calculation `scientific_origin`, frequency-scale-factor `model_kind`/`software_version`, and energy-correction-scheme `software`/`software_version`/`used_by_thermo` return 422 `unsupported_filter`. No subset of a request is silently applied.
 
-3. **Hosted JSON and OpenAPI agree — implemented.** All successful scientific-response component schemas are followed transitively. Policy-hidden internal-ID properties remain documented but are not required and carry `x-tckdb-policy-hidden: true`. A real hosted, ID-stripped species response is validated against the served OpenAPI document.
+3. **Hosted JSON and OpenAPI agree — implemented.** All successful scientific-response component schemas are followed transitively. Policy-hidden internal-ID properties remain documented but are not required and carry `x-tckdb-policy-hidden: true`. Include-gated section properties remain documented and carry `x-tckdb-include-gated: "<token>"`, naming the `include=` token that produces them; a property is marked only once every operation returning its component omits it, so the document never runs ahead of the runtime. A real hosted, ID-stripped species response is validated against the served OpenAPI document.
 
 4. **Canonical pressure query — implemented.** `pressure_bar` is canonical on reaction-entry and chemistry-first kinetics reads; `pressure` remains a deprecated alias. Both accept only finite positive values at every GET/POST request boundary. After numeric parsing, equal aliases (for example `1` and `1.0`) are canonicalized to `pressure_bar`; any exact inequality returns 422 `pressure_alias_conflict` without tolerance. A valid pressure includes pressure-independent rates; matches exact apparent-pressure records; applies bounded PLOG/Chebyshev coverage; accepts populated falloff/third-body models; and excludes high-pressure-limit, out-of-range, or indeterminate pressure-dependent records. Incompatible records are filtered out rather than silently broadened. A non-null `reaction_path_degeneracy` reports an explicit `convention`: `already_applied` maps to `true/false`, `not_applied` maps to `false/true`, and `unknown` maps to `null/null` for `reported_rate_coefficient_includes_degeneracy` / `apply_to_rate_coefficient`. Legacy rows are backfilled as `unknown`; semantics are never inferred from the numeric degeneracy. Null degeneracy remains unknown, not one.
 
