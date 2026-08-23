@@ -125,10 +125,10 @@ time. The guard was removed when it was no longer doing useful work
 Adding a new `include=<token>` to the scientific calculation
 detail/search surface touches six layers. Skipping a step doesn't
 always fail tests — the most common drift is a missing
-`_OMITTABLE_RECORD_KEYS` entry, which makes the field leak as `null`
-on default reads instead of being omitted entirely.
+`CALCULATION_RECORD_SECTIONS` entry, which makes the field leak as
+`null` on default reads instead of being omitted entirely.
 
-> ⚠️ **A missing `_OMITTABLE_RECORD_KEYS` entry causes the field to
+> ⚠️ **A missing `CALCULATION_RECORD_SECTIONS` entry causes the field to
 > leak as `null` on default reads, violating the
 > omitted-unless-requested contract.** This is the failure mode the
 > `include=all` equivalence test catches in CI; without that test,
@@ -163,11 +163,13 @@ When implementing a new heavy include, walk this list in order:
    early), add it to `_NOT_IMPLEMENTED_INCLUDE_TOKENS` so callers
    get `include_not_implemented_yet` instead of an empty payload.
    Remove the token from this set once the loader lands.
-6. **Omittable record keys** — add a `(token → record_key)` entry
-   to `_OMITTABLE_RECORD_KEYS` in
-   `app/api/routes/scientific/calculations.py`. Without this entry
-   the field appears in every default response as `null`,
-   violating the "omitted unless requested" contract.
+6. **Omittable record keys** — add a `(token → record fields)` entry
+   to `CALCULATION_RECORD_SECTIONS` in
+   `app/api/routes/scientific/_response.py` (it lived in
+   `routes/scientific/calculations.py` as `_OMITTABLE_RECORD_KEYS`
+   until the table was generalised). Without this entry the field
+   appears in every default response as `null`, violating the
+   "omitted unless requested" contract.
 7. **`include=all` equivalence coverage** — if the token is
    summary-safe, it is part of the `include=all` expansion. The
    existing `_ALL_EXPANSION_TOKENS` constant in both
@@ -178,7 +180,7 @@ When implementing a new heavy include, walk this list in order:
    constant**. The equivalence test will then prove that
    `include=all` produces the same record as enumerating every
    token explicitly — which is the property that catches drift
-   like a missing `_OMITTABLE_RECORD_KEYS` entry.
+   like a missing `CALCULATION_RECORD_SECTIONS` entry.
 8. **Forbidden-payload defense** — if the include could
    accidentally surface large or sensitive payloads (artifact body
    bytes, per-point arrays, raw XYZ, geometry-atom rows,

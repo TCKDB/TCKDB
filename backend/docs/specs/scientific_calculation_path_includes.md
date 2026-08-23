@@ -474,7 +474,8 @@ endpoints, and the `include=all` flip).
    `COUNT(*)` for `point_count`, optional `MIN/MAX(electronic_energy_hartree)`
    for the energy envelope.
 3. Move `scan` out of `_NOT_IMPLEMENTED_INCLUDE_TOKENS`; add
-   `scan → scan` to `_OMITTABLE_RECORD_KEYS`.
+   `scan → scan` to `CALCULATION_RECORD_SECTIONS` (in
+   `app/api/routes/scientific/_response.py`).
 4. Tests: detail + search × {empty, populated, ordering, ID policy,
    combined-with-other-includes, canary-with-still-unimplemented}.
 

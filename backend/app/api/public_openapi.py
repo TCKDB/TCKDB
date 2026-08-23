@@ -4,15 +4,27 @@ Internal Pydantic models retain integer primary keys because local/debug
 deployments may opt into them.  Hosted JSON removes those keys at the response
 seam.  This module projects the generated schema through the same policy
 without duplicating every response model.
+
+Two runtime policies narrow what a real hosted payload contains without
+narrowing what the generated schema declares, and both are stamped here so
+the document says so rather than merely failing to contradict it:
+
+- ``x-tckdb-policy-hidden: true`` — an internal integer id, removed from
+  ``required`` and absent unless the deployment opts in.
+- ``x-tckdb-include-gated: "<token>"`` — an include-gated section, absent
+  unless the caller supplies that ``include=`` token. Its declared type is
+  unchanged and it is returned whenever it is requested, so this is a
+  narrowing of the payload, not a removal of the field.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from typing import Any
 
 from fastapi import FastAPI
 
+from app.api.routes.scientific._response import INCLUDE_GATED_COMPONENTS
 from app.services.scientific_read.internal_ids import is_internal_id_key
 
 _SCIENTIFIC_PATH_PREFIX = "/api/v1/scientific/"
@@ -82,6 +94,28 @@ def _make_internal_ids_optional(node: object) -> None:
                 _make_internal_ids_optional(item)
 
 
+def _mark_include_gated(
+    component: dict[str, Any], gating: Mapping[str, str]
+) -> None:
+    """Stamp ``x-tckdb-include-gated`` on the properties *gating* names.
+
+    Names come from the declared token -> section tables in
+    ``app.api.routes.scientific._response``, never from a scan of the
+    document, so the marker cannot drift onto a same-named field that is
+    nullable for an unrelated reason. An include-gated property is
+    already declared ``... | None = None`` and so is already absent from
+    ``required``; nothing needs removing, only saying.
+    """
+
+    properties = component.get("properties")
+    if not isinstance(properties, dict):
+        return
+    for name, token in gating.items():
+        property_schema = properties.get(name)
+        if isinstance(property_schema, dict):
+            property_schema["x-tckdb-include-gated"] = token
+
+
 def project_hosted_openapi(schema: dict[str, Any]) -> dict[str, Any]:
     """Mutate and return generated OpenAPI as the hosted public contract."""
 
@@ -90,6 +124,11 @@ def project_hosted_openapi(schema: dict[str, Any]) -> dict[str, Any]:
         component = component_schemas.get(name)
         if isinstance(component, dict):
             _make_internal_ids_optional(component)
+
+    for name, gating in INCLUDE_GATED_COMPONENTS.items():
+        component = component_schemas.get(name)
+        if isinstance(component, dict):
+            _mark_include_gated(component, gating)
 
     validation_error = component_schemas.get("HTTPValidationError")
     if isinstance(validation_error, dict):
