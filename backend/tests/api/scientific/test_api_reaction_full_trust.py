@@ -441,8 +441,9 @@ def test_full_include_trust_alone_keeps_default_sections(client, db_session):
     assert body["species"] is not None
     assert body["kinetics"] is not None
     assert body["transition_states"] is not None
-    # Calculations not in default include set; still omitted.
-    assert body["calculations"] is None
+    # Calculations not in default include set, so the key is absent —
+    # ``trust`` is a modifier, it does not add sections.
+    assert "calculations" not in body
 
 
 # ---------------------------------------------------------------------------

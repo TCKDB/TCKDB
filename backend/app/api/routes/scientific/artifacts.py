@@ -18,6 +18,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, get_db, require_curator_or_admin
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.routes.scientific._response import (
+    ARTIFACT_RECORD_SECTIONS,
+    SEARCH_SCOPE,
+    omit_unrequested_sections,
+)
 from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArtifactIntegrityDetectionContext,
@@ -153,7 +158,14 @@ def artifacts_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(search_artifacts(session, request))
+    payload = search_artifacts(session, request)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=ARTIFACT_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
 
 
 @router.post("/search", response_model=ScientificArtifactSearchResponse)
@@ -180,7 +192,14 @@ def artifacts_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_artifacts(session, body))
+    payload = search_artifacts(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=ARTIFACT_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
 
 
 @router.get("/integrity", response_model=ScientificArtifactIntegrityResponse)

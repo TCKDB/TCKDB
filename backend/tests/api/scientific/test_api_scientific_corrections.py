@@ -158,7 +158,11 @@ def test_fsf_detail_default_response_shape(client, db_session):
         "available_sections",
     ):
         assert key in record
-    assert record["used_by"] is None
+    assert "used_by" not in record
+    # ``literature`` is *not* include-gated here despite the token of that
+    # name being legal: the field is built from the row's own foreign key
+    # whether or not the token is supplied, so it keeps its null.
+    assert "literature" in record and record["literature"] is None
     # FSF is non-reviewable; the summary is always empty.
     assert body["review_summary"]["total"] == 0
 
@@ -493,8 +497,10 @@ def test_ecs_detail_default_response_shape(client, db_session):
         "available_sections",
     ):
         assert key in record
-    assert record["corrections"] is None
-    assert record["used_by"] is None
+    assert "corrections" not in record
+    assert "used_by" not in record
+    # Same as FSF: the ``literature`` token gates nothing on this surface.
+    assert "literature" in record and record["literature"] is None
 
 
 def test_ecs_detail_include_corrections_all_kinds(client, db_session):

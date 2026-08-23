@@ -46,6 +46,14 @@ DETAIL_SCOPE = "detail"
 SEARCH_SCOPE = "search"
 FULL_SCOPE = "full"
 ANYWHERE_SCOPE = "anywhere"
+# The document root itself. ``/reaction-entries/{id}/full`` keeps its ten
+# include-gated sections *beside* ``request`` and ``review_summary`` rather
+# than under any ``record``/``records`` key, so none of the scopes above can
+# reach them. ``FULL_SCOPE`` is the trap in the neighbourhood: it is named
+# after the same route but yields that document's *embedded record lists*,
+# which is where ``trust`` lives and where the document's own sections do
+# not. Reaching for it here is a silent no-op, not an error.
+DOCUMENT_SCOPE = "document"
 
 # The composite ``/reaction-entries/{id}/full`` document embeds records
 # under these three keys rather than under ``record``/``records``.
@@ -176,20 +184,244 @@ ASSESSMENTS_SECTION = IncludeGatedSections(
     sections={"assessments": ("assessments",)},
 )
 
+# ---------------------------------------------------------------------------
+# Per-surface tables
+#
+# Every entry below was read off the service module that owns the token
+# vocabulary — the ``if "<token>" in includes:`` that decides whether the
+# field is built — and never off a list of nullable fields on the record
+# schema. That distinction is the whole of decision 2 and it is not
+# stylistic: most of what is ``| None`` on these records is an ungated
+# scientific fact. ``nasa9``, ``chebyshev``, ``plog_entries``, ``wilhoit``,
+# ``group_additivity``, ``assignment_scheme``, ``supersession``,
+# ``literature``, ``software_release`` and their kind are *absent facts
+# about the chemistry*, not unrequested sections, and none of them appears
+# in any table here. If one ever does, the wire stops being able to say
+# "this record has no NASA-9 polynomial" — which is the original defect
+# restored from the other side.
+# ---------------------------------------------------------------------------
+
+# ``GET /species/search``. The four summaries sit two levels below the
+# record root, at ``records[*].entries[*]``, and no token name equals its
+# field name. ``include=review`` is legal here and gates nothing — every
+# entry already carries its review badge (``services/…/species.py``).
+SPECIES_SEARCH_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/species/search",
+    sections={
+        "thermo": ("thermo_summary",),
+        "statmech": ("statmech_summary",),
+        "transport": ("transport_summary",),
+        "conformers": ("conformers_summary",),
+    },
+)
+
+# ``GET /reaction-entries/{id}/kinetics``. One token, two fields — the
+# reason the table maps to a *tuple* rather than a name. A live probe sees
+# only ``interpretation_assignments`` move, because the record measured
+# carried no tunneling block; source is what says both are gated.
+#
+# Deliberately not applied to ``/kinetics/search`` or to the kinetics
+# records embedded in ``/full``: ``interpretations`` is not a legal token
+# on either, so applying it there would not omit an *unrequested* section,
+# it would delete a section no request on that surface can ever produce.
+# Those two keep their permanent ``null`` and the marker registry below
+# reflects that.
+KINETICS_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/reaction-entries/{id}/kinetics",
+    sections={
+        "interpretations": ("interpretation_assignments", "tunneling_application"),
+    },
+)
+
+# ``GET /reaction-entries/{id}/full``. Ten sections at the **document
+# root**, which is why ``DOCUMENT_SCOPE`` had to exist. ``review_records``
+# is not here: it is produced by the separate ``include_review`` query
+# parameter, not by any include token, so no include-driven strip can
+# describe it correctly and it keeps its ``null``. ``review`` is a legal
+# token on this surface that gates nothing at all.
+REACTION_FULL_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/reaction-entries/{id}/full",
+    sections={
+        "species": ("species",),
+        "kinetics": ("kinetics",),
+        "transition_states": ("transition_states",),
+        "calculations": ("calculations",),
+        "path_search": ("path_search",),
+        "irc": ("irc",),
+        "scans": ("scans",),
+        "conformers": ("conformers",),
+        "artifacts": ("artifacts",),
+        "atom_map": ("atom_map",),
+    },
+)
+
+# The three transition-state surfaces share one record vocabulary and one
+# builder, so they share one table. Applied at ``ANYWHERE_SCOPE`` because
+# every one of these fields is materialised at two depths: on the record
+# itself and again on each ``entries[*]`` sibling record beneath it.
+# Verified against a live payload that each name occurs at exactly those
+# depths and nowhere else.
+TRANSITION_STATE_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/transition-states",
+    sections={
+        "entries": ("entries",),
+        "calculations": ("calculations",),
+        "geometries": ("geometries",),
+        "review": ("review_history",),
+        "validation_evidence": ("validation_evidence",),
+    },
+)
+
+# ``/conformers/search``, ``/conformer-groups/{ref}``,
+# ``/conformer-observations/{ref}`` — one vocabulary, two record shapes
+# that carry the same five fields, and the same two-depth nesting as the
+# transition-state family (``observations[*].selections`` and friends).
+# ``assignment_scheme`` is *not* here: no token names it, and it is ``null``
+# because this observation has no scheme.
+CONFORMER_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/conformers",
+    sections={
+        "observations": ("observations",),
+        "selections": ("selections",),
+        "calculations": ("calculations",),
+        "geometries": ("geometries",),
+        "review": ("review_history",),
+    },
+)
+
+# ``/statmech/search``, ``/statmech/{ref}``,
+# ``/species-entries/{id}/statmech`` — one builder, no nesting.
+STATMECH_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/statmech",
+    sections={
+        "source_calculations": ("source_calculations",),
+        "torsions": ("torsions",),
+        "electronic_levels": ("electronic_levels",),
+        "frequencies": ("frequencies",),
+        "conformers": ("conformers",),
+        "review": ("review_history",),
+    },
+)
+
+# ``/transport/search``, ``/transport/{ref}``,
+# ``/species-entries/{id}/transport``.
+TRANSPORT_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/transport",
+    sections={
+        "source_calculations": ("source_calculations",),
+        "review": ("review_history",),
+    },
+)
+
+NETWORK_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/networks",
+    sections={
+        "species": ("species",),
+        "reactions": ("reactions",),
+        "states": ("states",),
+        "channels": ("channels",),
+        "solves": ("solves",),
+        "kinetics": ("kinetics",),
+        "source_calculations": ("source_calculations",),
+        "review": ("review_history",),
+    },
+)
+
+NETWORK_SOLVE_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/network-solves",
+    sections={
+        "bath_gas": ("bath_gas",),
+        "energy_transfer": ("energy_transfer",),
+        "state_energies": ("state_energies",),
+        "channel_barriers": ("channel_barriers",),
+        "kinetics": ("kinetics",),
+        "source_calculations": ("source_calculations",),
+        "review": ("review_history",),
+    },
+)
+
+# ``plog`` and ``points`` each govern a section *and* the two truncation
+# companions that describe it. The companions are built inside the same
+# ``if``, so a caller who did not ask for ``points`` has no more business
+# seeing ``point_count_total`` than ``points`` itself.
+# ``coefficients`` has no top-level companions — its truncation metadata is
+# nested inside the payload it describes and travels with it.
+NETWORK_KINETICS_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/network-kinetics",
+    sections={
+        "coefficients": ("coefficients",),
+        "plog": ("plog", "plog_entry_count_total", "plog_entries_truncated"),
+        "points": ("points", "point_count_total", "points_truncated"),
+        "source_calculations": ("source_calculations",),
+        "review": ("review_history",),
+    },
+)
+
+# ``literature`` is a legal token on both provenance surfaces below and
+# gates nothing: the record's ``literature`` field is built unconditionally
+# from the row's own foreign key, so it is an ungated fact and stays out of
+# both tables.
+FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/frequency-scale-factors",
+    sections={"used_by": ("used_by",)},
+)
+
+ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/energy-correction-schemes",
+    sections={
+        "corrections": ("corrections",),
+        "used_by": ("used_by",),
+    },
+)
+
+# ``/artifacts/search``. ``review`` is legal and gates no data field (the
+# history is built and discarded); ``calculation`` gates three summaries
+# *nested inside* the always-present calculation context rather than a
+# section on the record, and those three are the exact names the
+# collision warning on :class:`IncludeGatedSections` is about. Neither is
+# in the table.
+ARTIFACT_RECORD_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/artifacts/search",
+    sections={"owner": ("owner",)},
+)
+
+# ``GET /literature/{ref}/records``. Note the requested-but-empty case is
+# live here for a second reason: a linked record whose type is not
+# reviewable keeps ``review: null`` even when the token is present.
+LITERATURE_RECORDS_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/literature/{ref}/records",
+    sections={"review": ("review",)},
+)
+
 # Component-scoped view of the tables above, consumed by
 # ``app.api.public_openapi`` to stamp ``x-tckdb-include-gated`` on the
 # hosted document.
 #
-# A component is listed here only when **every** operation that can return
-# it already omits the property, because the marker is a claim about the
-# hosted runtime and the document must not run ahead of it.
-# ``ScientificCalculationRecord`` is the only such component today: it is
-# returned by the three ``/calculations/*`` operations and nothing else,
-# and all three strip both tables below. Components whose ``trust`` or
-# ``assessments`` is omitted on some operations and nulled on others —
-# ``KineticsRecord``, ``ThermoRecord``,
-# ``ScientificTransitionStateEntryRecord`` — join this registry when the
-# surfaces that null them are flipped, not before.
+# The marker is stamped on a *component property*; the strip is applied by
+# an *operation*. Those do not align on their own, so the registry follows
+# one rule: **a property is marked when it is include-gated on at least one
+# operation that returns the component, and never when any operation
+# returns it unconditionally.** The second half is what keeps the document
+# honest — a marker on a key some operation always sends would tell a
+# machine consumer that a permanently-present field is requestable.
+#
+# Two consequences are visible below and are deliberate.
+#
+# ``KineticsRecord`` is marked for ``trust`` alone. Its ``assessments`` is
+# stripped on both kinetics surfaces but emitted unconditionally by the
+# ``KineticsRecord`` list embedded in ``/reaction-entries/{id}/full``, and
+# its ``interpretation_assignments`` / ``tunneling_application`` are gated
+# only on ``/reaction-entries/{id}/kinetics`` — ``interpretations`` is not
+# a legal token on ``/kinetics/search`` or on ``/full``, so both surfaces
+# emit those two keys unconditionally as ``null``. All three properties
+# therefore fail the second half of the rule and stay unmarked.
+#
+# ``ScientificCalculationRecord`` keeps the two residue properties the
+# rule exists for: ``imaginary_mode_projections`` and ``trust`` are gated
+# on ``/calculations/{ref}`` and unconditionally *absent* on
+# ``/calculations/search``, whose vocabulary lacks both tokens. Absent more
+# often than the marker promises is the harmless direction; present when it
+# promises absent is not.
 INCLUDE_GATED_COMPONENTS: Mapping[str, Mapping[str, str]] = MappingProxyType(
     {
         "ScientificCalculationRecord": MappingProxyType(
@@ -197,6 +429,69 @@ INCLUDE_GATED_COMPONENTS: Mapping[str, Mapping[str, str]] = MappingProxyType(
                 **CALCULATION_RECORD_SECTIONS.fields_by_token(),
                 **TRUST_SECTION.fields_by_token(),
             }
+        ),
+        "SpeciesEntryScientificRecord": MappingProxyType(
+            SPECIES_SEARCH_SECTIONS.fields_by_token()
+        ),
+        "KineticsRecord": MappingProxyType(TRUST_SECTION.fields_by_token()),
+        "ThermoRecord": MappingProxyType(
+            {
+                **TRUST_SECTION.fields_by_token(),
+                **ASSESSMENTS_SECTION.fields_by_token(),
+            }
+        ),
+        "ScientificStatmechRecord": MappingProxyType(
+            {
+                **STATMECH_RECORD_SECTIONS.fields_by_token(),
+                **TRUST_SECTION.fields_by_token(),
+                **ASSESSMENTS_SECTION.fields_by_token(),
+            }
+        ),
+        "ScientificTransportRecord": MappingProxyType(
+            {
+                **TRANSPORT_RECORD_SECTIONS.fields_by_token(),
+                **TRUST_SECTION.fields_by_token(),
+                **ASSESSMENTS_SECTION.fields_by_token(),
+            }
+        ),
+        "ScientificTransitionStateRecord": MappingProxyType(
+            TRANSITION_STATE_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificTransitionStateEntryRecord": MappingProxyType(
+            {
+                **TRANSITION_STATE_RECORD_SECTIONS.fields_by_token(),
+                **TRUST_SECTION.fields_by_token(),
+            }
+        ),
+        "ScientificConformerGroupRecord": MappingProxyType(
+            CONFORMER_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificConformerObservationRecord": MappingProxyType(
+            CONFORMER_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificNetworkRecord": MappingProxyType(
+            NETWORK_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificNetworkSolveRecord": MappingProxyType(
+            NETWORK_SOLVE_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificNetworkKineticsRecord": MappingProxyType(
+            NETWORK_KINETICS_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificFrequencyScaleFactorRecord": MappingProxyType(
+            FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificEnergyCorrectionSchemeRecord": MappingProxyType(
+            ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS.fields_by_token()
+        ),
+        "ScientificArtifactRecord": MappingProxyType(
+            ARTIFACT_RECORD_SECTIONS.fields_by_token()
+        ),
+        "LiteratureLinkedRecordSummary": MappingProxyType(
+            LITERATURE_RECORDS_SECTIONS.fields_by_token()
+        ),
+        "ScientificReactionFullResponse": MappingProxyType(
+            REACTION_FULL_SECTIONS.fields_by_token()
         ),
     }
 )
@@ -219,7 +514,9 @@ def _every_dict(node: Any) -> Iterator[dict[str, Any]]:
 
 def _record_nodes(data: dict[str, Any], scope: str) -> Iterator[dict[str, Any]]:
     """Yield the dicts a strip of *scope* is allowed to pop keys from."""
-    if scope == DETAIL_SCOPE:
+    if scope == DOCUMENT_SCOPE:
+        yield data
+    elif scope == DETAIL_SCOPE:
         record = data.get("record")
         if isinstance(record, dict):
             yield record
@@ -237,8 +534,8 @@ def _record_nodes(data: dict[str, Any], scope: str) -> Iterator[dict[str, Any]]:
     else:
         raise ValueError(
             f"unknown response scope {scope!r}; expected one of "
-            f"{DETAIL_SCOPE!r}, {SEARCH_SCOPE!r}, {FULL_SCOPE!r}, "
-            f"{ANYWHERE_SCOPE!r}"
+            f"{DOCUMENT_SCOPE!r}, {DETAIL_SCOPE!r}, {SEARCH_SCOPE!r}, "
+            f"{FULL_SCOPE!r}, {ANYWHERE_SCOPE!r}"
         )
 
 
@@ -273,10 +570,18 @@ def omit_unrequested_sections(
     out on :class:`IncludeGatedSections` itself.
 
     ``scope`` selects which part of the envelope holds records —
-    ``"detail"`` (the singular ``record``), ``"search"`` (every entry of
-    ``records``), ``"full"`` (the composite ``/reaction-entries/{id}/full``
-    document's embedded record lists) or ``"anywhere"`` (every dict in the
-    payload, for a field that can nest at any depth).
+    ``"document"`` (the response object itself), ``"detail"`` (the singular
+    ``record``), ``"search"`` (every entry of ``records``), ``"full"`` (the
+    composite ``/reaction-entries/{id}/full`` document's embedded record
+    lists) or ``"anywhere"`` (every dict in the payload, for a field that
+    can nest at any depth).
+
+    ``"document"`` and ``"full"`` are the two that name the same route and
+    mean opposite things. ``/reaction-entries/{id}/full`` keeps its own ten
+    sections at the document root, which only ``"document"`` yields;
+    ``"full"`` yields the records embedded *inside* those sections, which is
+    where the nested ``trust`` lives. Neither is a substitute for the other,
+    and the wrong one strips nothing and raises nothing.
     """
     if not isinstance(table, IncludeGatedSections):
         raise TypeError(
@@ -369,14 +674,60 @@ def omit_unrequested_calculation_sections(
     )
 
 
+#: Every declared table, keyed by the constant name. The behaviour test
+#: enumerates *these objects* — not a copy of them — so a table that is
+#: declared and never wired, or wired and never declared, cannot pass.
+ALL_INCLUDE_GATED_TABLES: Mapping[str, IncludeGatedSections] = MappingProxyType(
+    {
+        "ARTIFACT_RECORD_SECTIONS": ARTIFACT_RECORD_SECTIONS,
+        "ASSESSMENTS_SECTION": ASSESSMENTS_SECTION,
+        "CALCULATION_RECORD_SECTIONS": CALCULATION_RECORD_SECTIONS,
+        "CONFORMER_RECORD_SECTIONS": CONFORMER_RECORD_SECTIONS,
+        "ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS": (
+            ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS
+        ),
+        "FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS": (
+            FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS
+        ),
+        "KINETICS_RECORD_SECTIONS": KINETICS_RECORD_SECTIONS,
+        "LITERATURE_RECORDS_SECTIONS": LITERATURE_RECORDS_SECTIONS,
+        "NETWORK_KINETICS_RECORD_SECTIONS": NETWORK_KINETICS_RECORD_SECTIONS,
+        "NETWORK_RECORD_SECTIONS": NETWORK_RECORD_SECTIONS,
+        "NETWORK_SOLVE_RECORD_SECTIONS": NETWORK_SOLVE_RECORD_SECTIONS,
+        "REACTION_FULL_SECTIONS": REACTION_FULL_SECTIONS,
+        "SPECIES_SEARCH_SECTIONS": SPECIES_SEARCH_SECTIONS,
+        "STATMECH_RECORD_SECTIONS": STATMECH_RECORD_SECTIONS,
+        "TRANSITION_STATE_RECORD_SECTIONS": TRANSITION_STATE_RECORD_SECTIONS,
+        "TRANSPORT_RECORD_SECTIONS": TRANSPORT_RECORD_SECTIONS,
+        "TRUST_SECTION": TRUST_SECTION,
+    }
+)
+
+
 __all__ = [
+    "ALL_INCLUDE_GATED_TABLES",
     "ANYWHERE_SCOPE",
+    "ARTIFACT_RECORD_SECTIONS",
     "ASSESSMENTS_SECTION",
     "CALCULATION_RECORD_SECTIONS",
+    "CONFORMER_RECORD_SECTIONS",
     "DETAIL_SCOPE",
+    "DOCUMENT_SCOPE",
+    "ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS",
+    "FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS",
     "FULL_SCOPE",
     "INCLUDE_GATED_COMPONENTS",
+    "KINETICS_RECORD_SECTIONS",
+    "LITERATURE_RECORDS_SECTIONS",
+    "NETWORK_KINETICS_RECORD_SECTIONS",
+    "NETWORK_RECORD_SECTIONS",
+    "NETWORK_SOLVE_RECORD_SECTIONS",
+    "REACTION_FULL_SECTIONS",
     "SEARCH_SCOPE",
+    "SPECIES_SEARCH_SECTIONS",
+    "STATMECH_RECORD_SECTIONS",
+    "TRANSITION_STATE_RECORD_SECTIONS",
+    "TRANSPORT_RECORD_SECTIONS",
     "TRUST_SECTION",
     "IncludeGatedSections",
     "omit_assessments_unless_requested",

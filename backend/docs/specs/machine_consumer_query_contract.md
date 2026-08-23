@@ -8,7 +8,7 @@ Requirement 10 remains ongoing as each surface expands.
 - Additive response fields are backward compatible. Removing or changing the meaning/type of a field requires a versioned contract.
 - A declared filter is either enforced or rejected. It must never be accepted and ignored.
 - Public refs are stable identifiers. Integer database IDs are deployment-policy fields and are optional in hosted response schemas.
-- An include-gated section that the caller did not request is **omitted** from the response, not returned as `null`. That is the rule; it holds today on `/api/v1/scientific/calculations/*` and for `trust`/`assessments`, and the remaining surfaces are being converted to it one declared table at a time. See [Include-gated sections](#include-gated-sections-absent-means-you-did-not-ask) for the three-state rule and its hard boundary.
+- An include-gated section that the caller did not request is **omitted** from the response, not returned as `null`. That is the rule and it now holds on every scientific read surface. A key that *is* present and `null` therefore says something about the data — this record has no NASA-9 polynomial, no Chebyshev fit, no PLOG entries — and never about the request. See [Include-gated sections](#include-gated-sections-absent-means-you-did-not-ask) for the three-state rule and its hard boundary.
 - Pagination metadata reports `total` for the complete filtered candidate set before collapse and `post_collapse_total` after collapse but before page slicing. Collapse is applied first, so `collapse=first&offset=1` returns an empty page while retaining `total >= 1` and `post_collapse_total = 1`.
 
 ## Include-gated sections: absent means "you did not ask"
@@ -103,14 +103,36 @@ evaluation, so they cannot become two answers.
 
 ### Scope today
 
-`/api/v1/scientific/calculations/*` omits all 18 of its heavy sections, and
-`trust` and `assessments` are omitted wherever their helpers run — which is now
-every surface that declares either, the five search surfaces included. Every
-other include-gated section still serializes as `null`; those surfaces are being
-converted one declared table at a time, and each conversion adds the
-`x-tckdb-include-gated` marker to the hosted OpenAPI document at the same time,
-so the document never claims a key is normally absent before the runtime omits
-it.
+**Every include-gated section on every scientific read surface is omitted when
+it was not requested.** Fifteen declared per-surface tables cover 81 sections
+across 40 operations, and the two cross-cutting tables — `trust` and
+`assessments` — are applied wherever their helpers run, which is every surface
+that declares either. Nothing include-gated serializes as `null` because it was
+not asked for any more.
+
+Two consequences worth stating in the contract rather than leaving to be
+discovered.
+
+`/reaction-entries/{id}/full` keeps its sections at the document root, and
+`include` **replaces** its defaults rather than extending them. A bare request
+resolves to `species`, `kinetics` and `transition_states`; `?include=irc`
+resolves to `irc` alone, and the three defaults are now *absent* rather than
+`null`. That behaviour is not new — the sections were already empty — but it is
+now visible, which is an argument for the change rather than against it.
+`review_records` on that surface is the one gated key that is not include-gated:
+it is produced by the separate `include_review` parameter and keeps its `null`,
+with `request.include_review` echoed beside `request.include` so a reader can
+still tell "you did not ask" from "there are none".
+
+A legal token is not a promise of a field. Several tokens are accepted, echoed
+and produce nothing at all — `review` on `/species/search`, on
+`/reaction-entries/{id}/full` and on `/artifacts/search`, `literature` on
+`/frequency-scale-factors/*` and `/energy-correction-schemes/*`, all four
+content tokens on `/reactions/search`, and every public token on
+`/literature/{ref}` — because the data they name is either already
+unconditional or not carried by that record. None of them is in a declared
+table, so none of them changes shape here, and a caller who supplies one gets
+the same response either way.
 
 ## Ordered requirements
 

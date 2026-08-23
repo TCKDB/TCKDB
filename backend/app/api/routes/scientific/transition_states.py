@@ -20,7 +20,9 @@ from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     ANYWHERE_SCOPE,
+    TRANSITION_STATE_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
 )
 from app.db.models.common import (
     RecordReviewStatus,
@@ -145,8 +147,18 @@ def scientific_transition_states_search_get(
     # nulled at depth. ``ANYWHERE_SCOPE`` is licensed here because ``trust``
     # names one thing wherever it occurs in this payload, which
     # ``test_search_trust_include`` asserts rather than assumes.
-    return omit_trust_unless_requested(
+    visibility = omit_trust_unless_requested(
         visibility, payload, scope=ANYWHERE_SCOPE
+    )
+    # Same argument as ``trust`` above, for the same reason: every gated
+    # section on this record is materialised again on each nested
+    # ``entries[*]`` sibling, so a record-shaped scope would leave the
+    # nested copies nulled at depth.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=TRANSITION_STATE_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
     )
 
 
@@ -175,8 +187,18 @@ def scientific_transition_states_search_post(
         )
     payload = search_transition_states(session, body)
     visibility = apply_internal_ids_visibility(payload)
-    return omit_trust_unless_requested(
+    visibility = omit_trust_unless_requested(
         visibility, payload, scope=ANYWHERE_SCOPE
+    )
+    # Same argument as ``trust`` above, for the same reason: every gated
+    # section on this record is materialised again on each nested
+    # ``entries[*]`` sibling, so a record-shaped scope would leave the
+    # nested copies nulled at depth.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=TRANSITION_STATE_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
     )
 
 
@@ -204,12 +226,23 @@ def scientific_transition_state_detail(
     supplied *and* the deployment permits it.
     """
     req = TransitionStateDetailRequest(include=parse_include(include))
-    return apply_internal_ids_visibility(
-        get_transition_state(
-            session,
-            transition_state_handle=transition_state_ref_or_id,
-            request=req,
-        )
+    payload = get_transition_state(
+        session,
+        transition_state_handle=transition_state_ref_or_id,
+        request=req,
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    # ``trust`` is not a legal token on the concept surface, so this pop is
+    # unconditional: it removes the ``entries[*].trust`` key that no request
+    # here can ever fill, rather than one the caller declined to ask for.
+    visibility = omit_trust_unless_requested(
+        visibility, payload, scope=ANYWHERE_SCOPE
+    )
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=TRANSITION_STATE_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
     )
 
 
@@ -243,4 +276,12 @@ def scientific_transition_state_entry_detail(
         request=req,
     )
     visibility = apply_internal_ids_visibility(payload)
-    return omit_trust_unless_requested(visibility, payload)
+    visibility = omit_trust_unless_requested(
+        visibility, payload, scope=ANYWHERE_SCOPE
+    )
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=TRANSITION_STATE_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
+    )

@@ -22,7 +22,11 @@ from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
+    DETAIL_SCOPE,
+    SEARCH_SCOPE,
+    STATMECH_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
 )
 from app.db.models.common import (
@@ -118,7 +122,13 @@ def scientific_statmech_search_get(
     visibility = prepare_assessment_response(
         session, payload, attach_assessments=attach_statmech_assessments
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=STATMECH_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
 
 
 @router.post(
@@ -148,7 +158,13 @@ def scientific_statmech_search_post(
     visibility = prepare_assessment_response(
         session, payload, attach_assessments=attach_statmech_assessments
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=STATMECH_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
 
 
 @router.get(
@@ -174,4 +190,10 @@ def scientific_statmech_detail(
     visibility = prepare_assessment_response(
         session, payload, attach_assessments=attach_statmech_assessments
     )
-    return omit_trust_unless_requested(visibility, payload)
+    visibility = omit_trust_unless_requested(visibility, payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=STATMECH_RECORD_SECTIONS,
+        scope=DETAIL_SCOPE,
+    )

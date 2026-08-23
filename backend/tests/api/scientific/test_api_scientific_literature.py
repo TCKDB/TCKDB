@@ -587,7 +587,10 @@ def test_records_endpoint_include_review_adds_badges(client, db_session):
         status=RecordReviewStatus.approved,
     )
     body_no = client.get(_records_url(lit.public_ref)).json()
-    assert body_no["records"][0]["review"] is None
+    # This transport row *is* approved. Under the old shape the default
+    # response said ``review: null``, which is what an unreviewed record
+    # said too.
+    assert "review" not in body_no["records"][0]
 
     body_yes = client.get(
         _records_url(lit.public_ref, include="review")

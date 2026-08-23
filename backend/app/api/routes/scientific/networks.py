@@ -8,6 +8,14 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.routes.scientific._response import (
+    DETAIL_SCOPE,
+    NETWORK_KINETICS_RECORD_SECTIONS,
+    NETWORK_RECORD_SECTIONS,
+    NETWORK_SOLVE_RECORD_SECTIONS,
+    SEARCH_SCOPE,
+    omit_unrequested_sections,
+)
 from app.db.models.common import (
     NetworkKineticsModelKind,
     NetworkSolveKind,
@@ -135,8 +143,13 @@ def scientific_networks_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_networks(session, request_obj)
+    payload = search_networks(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -159,7 +172,14 @@ def scientific_networks_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_networks(session, body))
+    payload = search_networks(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
 
 
 @router.get(
@@ -177,12 +197,17 @@ def scientific_network_detail(
     the form ``net_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_network(
-            session,
-            network_handle=network_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_network(
+        session,
+        network_handle=network_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_RECORD_SECTIONS,
+        scope=DETAIL_SCOPE,
     )
 
 
@@ -261,8 +286,13 @@ def scientific_network_solves_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_network_solves(session, request_obj)
+    payload = search_network_solves(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_SOLVE_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -285,8 +315,13 @@ def scientific_network_solves_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(
-        search_network_solves(session, body)
+    payload = search_network_solves(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_SOLVE_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -305,12 +340,17 @@ def scientific_network_solve_detail(
     ref of the form ``nsolve_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_network_solve(
-            session,
-            network_solve_handle=network_solve_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_network_solve(
+        session,
+        network_solve_handle=network_solve_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_SOLVE_RECORD_SECTIONS,
+        scope=DETAIL_SCOPE,
     )
 
 
@@ -390,8 +430,13 @@ def scientific_network_kinetics_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_network_kinetics(session, request_obj)
+    payload = search_network_kinetics(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_KINETICS_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -414,8 +459,13 @@ def scientific_network_kinetics_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(
-        search_network_kinetics(session, body)
+    payload = search_network_kinetics(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_KINETICS_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -443,10 +493,15 @@ def scientific_network_kinetics_detail(
     ``points_truncated`` + ``point_count_total`` so callers can detect
     the cap and refine their request.
     """
-    return apply_internal_ids_visibility(
-        get_network_kinetics(
-            session,
-            network_kinetics_handle=network_kinetics_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_network_kinetics(
+        session,
+        network_kinetics_handle=network_kinetics_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=NETWORK_KINETICS_RECORD_SECTIONS,
+        scope=DETAIL_SCOPE,
     )

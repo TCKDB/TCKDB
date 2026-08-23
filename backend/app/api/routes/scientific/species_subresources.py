@@ -29,7 +29,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._response import (
+    SEARCH_SCOPE,
+    STATMECH_RECORD_SECTIONS,
+    TRANSPORT_RECORD_SECTIONS,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
 )
 from app.db.models.common import RecordReviewStatus
@@ -106,7 +110,13 @@ def species_statmech(
     visibility = prepare_assessment_response(
         session, payload, attach_assessments=attach_statmech_assessments
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=STATMECH_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
 
 
 @router.get(
@@ -162,4 +172,10 @@ def species_transport(
     visibility = prepare_assessment_response(
         session, payload, attach_assessments=attach_transport_assessments
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=TRANSPORT_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )
