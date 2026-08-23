@@ -1823,7 +1823,43 @@ def test_ts_concept_detail_rejects_trust_token(client, db_session):
     assert "unknown_include_token" in resp.text
 
 
-def test_ts_search_rejects_trust_token(client, db_session):
-    resp = client.get(_search_url(has_opt="true", include="trust"))
-    assert resp.status_code == 422
-    assert "unknown_include_token" in resp.text
+def test_ts_search_accepts_trust_token_and_keeps_it_out_of_all(
+    client, db_session
+):
+    """Search accepts ``trust``; ``include=all`` still does not reach it.
+
+    This test used to assert the opposite — a 422 — and the reversal is the
+    decision rather than a relaxation of it. The search response carried a
+    ``trust`` field at the record root on every record while refusing the
+    only token that could fill it, so the field was permanently ``null``:
+    a slot advertised and never fillable.
+
+    What survives unchanged is the half that costs. The evaluator walks a
+    23-entry eager-load chain here — the largest of the five search
+    surfaces, and the only four-hop one — so ``trust`` stays
+    internal-tokenized and a caller has to name it. An ``include=all`` that
+    bought that chain per page would break nothing until it met a real page
+    size on the hosted instance.
+    """
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    _attach_calc(db_session, tse=entries[0], calc_type=CalculationType.opt)
+
+    asked = client.get(_search_url(has_opt="true", include="trust"))
+    assert asked.status_code == 200, asked.text
+    body = asked.json()
+    assert body["request"]["include"] == ["trust"]
+    assert body["records"]
+    for record in body["records"]:
+        assert record["trust"] is not None
+        assert record["trust"]["trust_status"]
+
+    everything = client.get(_search_url(has_opt="true", include="all")).json()
+    assert "trust" not in everything["request"]["include"]
+    for record in everything["records"]:
+        assert "trust" not in record
+
+    default = client.get(_search_url(has_opt="true")).json()
+    for record in default["records"]:
+        assert "trust" not in record, (
+            "an unrequested trust key is the defect this reversal removed"
+        )

@@ -171,10 +171,13 @@ include=calculations   — compact calc summaries for this entry
 include=geometries     — output-geometry links for this entry's calcs
 include=review         — record_review row history for the entry
 include=all            — calculations + geometries + review
-include=entries        — silently no-op on this surface (the entry IS
-                         the record); kept legal so a generic client
-                         can pass the same include set to both detail
-                         surfaces and the search surface
+include=entries        — every entry under this record's parent
+                         transition state, this one included; the same
+                         list the concept surface returns under the same
+                         token. Was a documented no-op until PR 2.
+include=validation_evidence — IRC validation evidence for this entry
+include=trust          — computed_transition_state_v2 fragment;
+                         internal-tokenized, so include=all skips it
 include=internal_ids   — Phase D policy gate
 ```
 
@@ -184,8 +187,25 @@ Search (`/transition-states/search`):
 include=calculations   — embed compact calc summaries on each record
 include=geometries     — embed geometry-link lists on each record
 include=review         — embed record_review history per record
-include=all            — calculations + geometries + review (entries
-                         silently dropped as above)
+include=entries        — embed each record's parent's entry list, one
+                         grouped resolution per distinct parent on the
+                         page. This token used to be *discarded* before
+                         the service read it, which also dropped it from
+                         request.include — so the echo reported a request
+                         the caller had not made. Internal-tokenized here
+                         (not on the detail surfaces): the block's cost
+                         follows how many entries the page's parents have,
+                         so it is asked for by name.
+include=validation_evidence — IRC validation evidence per record
+include=trust          — computed_transition_state_v2 fragment at
+                         records[*].trust. The page query eager-loads the
+                         23-entry evidence graph once for the whole page.
+                         Internal-tokenized: include=all does not reach it.
+include=all            — calculations + geometries + review +
+                         validation_evidence. Not entries, and not trust:
+                         both are internal-tokenized on this surface
+                         because their cost is opted into, not implied.
+                         Never internal_ids.
 include=internal_ids   — Phase D policy gate
 ```
 

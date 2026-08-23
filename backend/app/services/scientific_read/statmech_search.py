@@ -76,6 +76,7 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.statmech import (
     _INTERNAL_INCLUDE_TOKENS,
     _LEGAL_INCLUDE_TOKENS,
+    STATMECH_TRUST_EAGER_LOADS,
     build_statmech_record,
 )
 from app.services.scientific_read.supersession import fetch_supersession_notices
@@ -416,9 +417,17 @@ def _materialize_records(
 ) -> list[ScientificStatmechRecord]:
     if not page_ids:
         return []
-    rows = session.scalars(
-        select(Statmech).where(Statmech.id.in_(page_ids))
-    ).all()
+    stmt = select(Statmech).where(Statmech.id.in_(page_ids))
+    if "trust" in includes:
+        # The trust evaluator walks a 19-entry graph. Loading it here, as
+        # options on the page query, costs a fixed number of statements
+        # whatever ``limit`` is: ``selectinload`` issues one query per
+        # relationship for the whole batch. Letting ``build_statmech_record``
+        # trip the lazy loads per row instead would multiply that by the page
+        # size, which is the cost the old search vocabulary avoided by
+        # refusing the token outright.
+        stmt = stmt.options(*STATMECH_TRUST_EAGER_LOADS)
+    rows = session.scalars(stmt).all()
     by_id = {r.id: r for r in rows}
     # Correction notices for the page, batched. Two queries whatever the page
     # size — resolving a chain per row would be the N+1 trap this shape

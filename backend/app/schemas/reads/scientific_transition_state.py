@@ -287,6 +287,20 @@ class TransitionStateValidationEvidenceSummary(BaseModel):
     transition_state_geometry_ref: str | None = None
 
 
+class TransitionStateEntryValidationEvidence(BaseModel):
+    """One entry's validation evidence, on a TS-*concept* response.
+
+    Keyed by entry ref rather than unioned across the concept's entries.
+    A concept is a collection of entries computed at different levels of
+    theory; an OR across them would report "validated" for a concept whose
+    entries disagree, and would not say which entry carried the evidence.
+    The list is per entry and empty for an entry that deposited none.
+    """
+
+    transition_state_entry_ref: str
+    validation_evidence: list[TransitionStateValidationEvidenceSummary]
+
+
 class TransitionStateValidationDescriptor(BaseModel):
     """One compact, machine-readable statement of validation status.
 
@@ -357,17 +371,27 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     evidence_summary: TransitionStateEntryEvidenceSummary
     validation: TransitionStateValidationDescriptor
     available_sections: AvailableTransitionStateSections
+
+    #: Every entry under this record's parent transition state, this one
+    #: included — the same list the TS-concept surface returns under the
+    #: same token. Populated under ``include=entries``, which is what an
+    #: entry-grained record can answer only by looking up to its parent:
+    #: *what else is under this transition state*. Never populated on a
+    #: record that is itself nested inside another record's ``entries``.
+    entries: list[ScientificTransitionStateEntryRecord] | None = None
     calculations: list[TransitionStateCalculationSummary] | None = None
     geometries: list[CalculationGeometryLinkSummary] | None = None
     review_history: list[TransitionStateReviewEntry] | None = None
     validation_evidence: list[TransitionStateValidationEvidenceSummary] | None = None
 
-    # Deterministic trust / evidence fragment. Populated only by the
-    # standalone TS-entry detail surface under ``include=trust`` — the
-    # parent-TS detail (embedded entries) and the search surface never
-    # populate it (``trust`` is not a legal include token there), and the
-    # detail route strips this field entirely when trust is not requested
-    # so the default response stays byte-identical to its pre-trust shape.
+    # Deterministic trust / evidence fragment, populated under
+    # ``include=trust`` on the standalone TS-entry detail surface and on
+    # ``/transition-states/search``. ``include=all`` does not expand to the
+    # token on either, and both routes strip the field when it was not
+    # requested — so an absent ``trust`` means "you did not ask", never
+    # "there is no verdict". A record nested inside another record's
+    # ``entries`` block carries it on the same terms as its parent: the
+    # token governs the whole response, not one depth of it.
     trust: TrustFragment | None = None
 
 
@@ -400,6 +424,15 @@ class ScientificTransitionStateRecord(BaseModel):
     calculations: list[TransitionStateCalculationSummary] | None = None
     geometries: list[CalculationGeometryLinkSummary] | None = None
     review_history: list[TransitionStateReviewEntry] | None = None
+
+    #: IRC validation evidence for the concept's entries, one list per
+    #: entry, populated under ``include=validation_evidence``. The token was
+    #: legal on this surface before the field existed, so it was accepted,
+    #: echoed, and produced nothing — while ``available_sections``
+    #: advertised ``has_validation_evidence`` on the same record.
+    validation_evidence: (
+        list[TransitionStateEntryValidationEvidence] | None
+    ) = None
 
 
 # ---------------------------------------------------------------------------
@@ -438,6 +471,7 @@ __all__ = [
     "TransitionStateEntryCoreBlock",
     "TransitionStateEntryDetailRequest",
     "TransitionStateEntryEvidenceSummary",
+    "TransitionStateEntryValidationEvidence",
     "TransitionStateEvidenceCoverage",
     "TransitionStateEvidenceSummary",
     "TransitionStateReactionContext",

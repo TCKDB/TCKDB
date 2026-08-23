@@ -55,8 +55,18 @@ request `include=trust`.
 deterministic trust fragment explicit even on read surfaces where `include=all`
 expands other summary-safe sections.
 
-Search/list endpoints do not expose trust fragments. Trust is currently a
-detail/read-surface feature for the endpoints listed above.
+Five search endpoints expose trust fragments: `/scientific/thermo/search`,
+`/kinetics/search`, `/transition-states/search`, `/statmech/search` and
+`/transport/search`. Each of them already declared a `trust` field on its
+record shape while rejecting the token that would fill it, so the field was
+one no request could ever populate — permanently `null` on three of them,
+permanently absent on the other two. Every other search/list endpoint still
+has no trust fragment, because its record shape declares none.
+
+Where the token is legal on a search surface, the service loads the evidence
+graph **once per page** rather than once per record, and `include=all` still
+does not expand to `trust` — the graph runs from 9 chain entries on transport
+to 23 on transition-states, and a caller has to ask for that by name.
 
 Internal database ids remain hidden by default. In trust evidence payloads,
 `record_id` is hidden unless `include=internal_ids` is explicitly requested and
@@ -100,7 +110,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_kinetics_v1` |
 | Default behavior | Without `include=trust`, each kinetics record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | Broad kinetics search/list endpoints do not expose trust. Trust is computed for returned kinetics records only. |
+| Notes/limitations | Trust is computed for returned kinetics records only. `GET`/`POST /scientific/kinetics/search` also accept `include=trust`, at `records[*].kinetics.trust` — the field is one level down, inside the `kinetics` wrapper. `include=all` does not expand to trust on either surface. |
 
 ### Species-Entry Thermo
 
@@ -111,7 +121,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_thermo_v1` |
 | Default behavior | Without `include=trust`, each thermo record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | Broad thermo search/list endpoints do not expose trust. Trust is computed for returned thermo records only. |
+| Notes/limitations | Trust is computed for returned thermo records only. `GET`/`POST /scientific/thermo/search` also accept `include=trust`, at `records[*].thermo.trust` — the field is one level down, inside the `thermo` wrapper. `include=all` does not expand to trust on either surface. |
 
 ### Statmech Detail
 
@@ -122,7 +132,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_statmech_v1` |
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | `include=all` does not include trust. Broad statmech search/list endpoints do not expose trust. |
+| Notes/limitations | `include=all` does not include trust. `GET`/`POST /scientific/statmech/search` also accept `include=trust`, at `records[*].trust`; the search path loads the 19-entry evidence graph once per page. |
 
 ### Transport Detail
 
@@ -133,7 +143,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_transport_v1` |
 | Default behavior | Without `include=trust`, the response omits `record.trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | `include=all` does not include trust. Broad transport search/list endpoints do not expose trust. |
+| Notes/limitations | `include=all` does not include trust. `GET`/`POST /scientific/transport/search` also accept `include=trust`, at `records[*].trust`; the search path loads the 9-entry evidence graph once per page. |
 
 ### Species-Entry Statmech
 
@@ -144,7 +154,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_statmech_v1` (per returned record) |
 | Default behavior | Without `include=trust`, each statmech record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the statmech record projection and deterministic ordering. Broad statmech search/list endpoints still do not expose trust. |
+| Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the statmech record projection and deterministic ordering. `/scientific/statmech/search` exposes trust under the same token. |
 
 ### Species-Entry Transport
 
@@ -155,7 +165,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_transport_v1` (per returned record) |
 | Default behavior | Without `include=trust`, each transport record omits `trust`. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the transport record projection and deterministic ordering. Broad transport search/list endpoints still do not expose trust. |
+| Notes/limitations | `include=all` does not include trust. A species-entry-scoped subresource read (mirrors species-entry thermo), not a broad search; it reuses the transport record projection and deterministic ordering. `/scientific/transport/search` exposes trust under the same token. |
 
 ### Transition-State Entry Detail (standalone)
 
@@ -166,7 +176,7 @@ This is true even when a submission has AI Review Assistant audit events.
 | Rubric used | `computed_transition_state_v1` |
 | Default behavior | Without `include=trust`, the response omits `record.trust` and is byte-identical to its pre-trust shape. |
 | Internal IDs | `trust.evidence.record_id` is hidden by default and is exposed only when `include=internal_ids` is requested and allowed. |
-| Notes/limitations | `include=all` does not include trust. Trust is wired to the *standalone* TS-entry detail surface only. The parent TS-concept detail (`/scientific/transition-states/{ref}`, including its embedded `entries`) and the TS-entry search/list surface reject the `trust` include token (422 `unknown_include_token`) and never populate `trust`. Frequency policy is status-aware: `optimized`/`validated` TS entries with `n_imag` in `{0, >1}` hard-fail; `guess`-stage entries with the same signal only lower evidence completeness. IRC and path-search evidence are additive (missing is never a hard fail in v1). TS-entry trust is **also** propagated into the composite `/reaction-entries/{id}/full` read under `transition_states[*].trust` (same `computed_transition_state_v1` fragment) — see the Reaction-Entry Full row below. |
+| Notes/limitations | `include=all` does not include trust. Trust is wired to the two **entry-grained** surfaces: this one and `GET`/`POST /scientific/transition-states/search`, where it sits at `records[*].trust`. The parent **TS-concept** detail (`/scientific/transition-states/{ref}`, including its embedded `entries`) still rejects the token with 422 `unknown_include_token` and never populates `trust` — a concept is a collection of entries evaluated at different levels of theory, and one verdict for the collection would be an aggregation rather than a reading. The search path loads the 23-entry evidence graph once per page, never once per record. Frequency policy is status-aware: `optimized`/`validated` TS entries with `n_imag` in `{0, >1}` hard-fail; `guess`-stage entries with the same signal only lower evidence completeness. IRC and path-search evidence are additive (missing is never a hard fail in v1). TS-entry trust is **also** propagated into the composite `/reaction-entries/{id}/full` read under `transition_states[*].trust` (same `computed_transition_state_v1` fragment) — see the Reaction-Entry Full row below. |
 
 ### Reaction-Entry Full (composite)
 
@@ -284,7 +294,7 @@ the backend in the current shipped behavior.
 
 The current backend does not provide:
 
-- trust fragments on broad search/list endpoints
+- trust fragments on the broad search/list endpoints that do **not** declare a `trust` field (calculations, species-calculations, conformers, networks, network-kinetics, network-solves, artifacts, structure, energy-correction-schemes, frequency-scale-factors). The five that do — thermo, kinetics, transition-states, statmech and transport — accept `include=trust`; `include=all` reaches it on none of them.
 - trust fragments through `include=all`
 - transport trust rubrics
 - experimental trust rubrics

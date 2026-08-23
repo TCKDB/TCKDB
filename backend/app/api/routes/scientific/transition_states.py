@@ -18,7 +18,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    ANYWHERE_SCOPE,
+    omit_trust_unless_requested,
+)
 from app.db.models.common import (
     RecordReviewStatus,
     TransitionStateEntryStatus,
@@ -134,8 +137,16 @@ def scientific_transition_states_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_transition_states(session, request_obj)
+    payload = search_transition_states(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    # ``trust`` sits at the record root on this surface, so ``SEARCH_SCOPE``
+    # would reach it — but ``include=entries`` nests entry records that
+    # carry the same field, and a search-scoped strip would leave those
+    # nulled at depth. ``ANYWHERE_SCOPE`` is licensed here because ``trust``
+    # names one thing wherever it occurs in this payload, which
+    # ``test_search_trust_include`` asserts rather than assumes.
+    return omit_trust_unless_requested(
+        visibility, payload, scope=ANYWHERE_SCOPE
     )
 
 
@@ -162,7 +173,11 @@ def scientific_transition_states_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_transition_states(session, body))
+    payload = search_transition_states(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_trust_unless_requested(
+        visibility, payload, scope=ANYWHERE_SCOPE
+    )
 
 
 # ---------------------------------------------------------------------------

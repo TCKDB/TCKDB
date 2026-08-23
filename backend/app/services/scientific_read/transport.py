@@ -67,15 +67,33 @@ from app.services.trust import (
     evaluate_loaded_transport,
 )
 
+# Public include tokens shared by every scientific transport surface —
+# detail, species-entry subresource and search alike.
+#
+# ``trust`` was absent from the search half of this vocabulary while
+# ``ScientificTransportRecord`` declared the field and the search route
+# stripped it unconditionally, so no request could ever fill it and the
+# response gave no sign a verdict existed. It is legal on search now.
+#
+# The eager-load objection is weakest here of the five surfaces this change
+# touches: transport's chain is 9 entries against statmech's 19, with no
+# ``torsions`` subtree and no ``lot`` / ``software_release`` /
+# ``workflow_tool_release`` / ``scf_stability`` / ``child_dependencies``
+# branches. The search materializer still applies it to the page query, so
+# the cost is per page and not per record.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "source_calculations",
     "review",
     "internal_ids",
     "assessments",
+    "trust",
     "all",
 }
-_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS | {"trust"}
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
+# Kept as the name the detail and species-entry subresource surfaces cite;
+# identical to the shared set now that ``trust`` is legal everywhere.
+_DETAIL_LEGAL_INCLUDE_TOKENS: set[str] = _LEGAL_INCLUDE_TOKENS
+# ``trust`` is internal-tokenized, so ``include=all`` never expands to it.
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 _TRUST_EAGER_LOADS = (
     selectinload(Transport.species_entry),
     selectinload(Transport.source_calculations)

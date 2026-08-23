@@ -647,15 +647,13 @@ blocks are unchanged.
 `/scientific/transition-states/search` (the existing TS-entry-grain
 search; see
 [scientific_transition_state_reads.md §2](scientific_transition_state_reads.md#2-endpoint-list))
-remains free of trust fragments in this slice, following the existing
-search-grain policy
-([trust_read_api_current.md](trust_read_api_current.md)):
-
-> Search/list endpoints do not expose trust fragments. Trust is
-> currently a detail/read-surface feature.
-
-When the project promotes trust to search grain globally (a separate
-spec; not in scope here), TS search will follow.
+remains free of trust fragments in this slice. **That is no longer the
+current behaviour** — `GET|POST /scientific/transition-states/search`
+accepts `include=trust` and returns the fragment at `records[*].trust`,
+loading the evidence graph once per page. The parent TS-concept detail
+surface still rejects the token. See
+[trust_read_api_current.md](trust_read_api_current.md) for the contract per
+endpoint.
 
 ---
 

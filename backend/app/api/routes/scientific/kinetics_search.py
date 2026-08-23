@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
-from app.api.routes.scientific._response import prepare_assessment_response
+from app.api.routes.scientific._response import (
+    ANYWHERE_SCOPE,
+    omit_trust_unless_requested,
+    prepare_assessment_response,
+)
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_kinetics_search import (
@@ -107,11 +111,15 @@ def kinetics_search_get(
         limit=limit,
     )
     payload = search_kinetics(session, request)
-    return prepare_assessment_response(
+    visibility = prepare_assessment_response(
         session,
         payload,
         attach_assessments=attach_kinetics_assessments,
     )
+    # ``ANYWHERE_SCOPE``, not ``SEARCH_SCOPE``: a record's top level here is
+    # exactly ``['kinetics', 'reaction']`` and ``trust`` sits inside the
+    # ``kinetics`` wrapper. See the longer note on the thermo twin.
+    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)
 
 
 @router.post("/search", response_model=ScientificKineticsSearchResponse)
@@ -137,8 +145,9 @@ def kinetics_search_post(
             ),
         )
     payload = search_kinetics(session, body)
-    return prepare_assessment_response(
+    visibility = prepare_assessment_response(
         session,
         payload,
         attach_assessments=attach_kinetics_assessments,
     )
+    return omit_trust_unless_requested(visibility, payload, scope=ANYWHERE_SCOPE)

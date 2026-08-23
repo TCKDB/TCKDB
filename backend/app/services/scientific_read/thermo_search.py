@@ -52,9 +52,22 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.public_assessments import attach_thermo_trust
 from app.services.scientific_read.species import search_species
 from app.services.scientific_read.thermo import get_species_thermo
 
+# ``trust`` is legal here, and it was not always. This surface used to
+# declare ``records[*].thermo.trust`` — one level down, inside the ``thermo``
+# wrapper — while rejecting ``include=trust`` with
+# ``422 unknown_include_token``, so the field was structurally incapable of
+# carrying a value and shipped as a permanent ``null`` on every record. The
+# token is legal now, the value is built for the returned page (see
+# :func:`attach_thermo_trust` below), and the route drops the key when the
+# caller did not ask for it.
+#
+# It is **internal-tokenized**: ``include=all`` does not expand to it. The
+# evaluator walks a 20-entry eager-load graph, and a convenience token must
+# not buy that on a caller's behalf.
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
     "calculations",
@@ -63,8 +76,9 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "internal_ids",
     "all",
     "assessments",
+    "trust",
 }
-_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids", "assessments", "trust"}
 
 # Tokens forwarded to the inner thermo retrieval. The set matches the
 # public legal tokens minus ``internal_ids`` / ``all`` — there are no
@@ -254,6 +268,18 @@ def search_thermo(
         limit=limit,
         collapse_first=collapse_first,
     )
+
+    # Trust is resolved for the returned page and for nothing else.
+    # Forwarding ``trust`` into ``get_species_thermo`` would have been the
+    # shorter change and the wrong one: that call runs once per matched
+    # species entry, over every candidate the search walked, so the evidence
+    # graph would be loaded for records the caller never sees and the cost
+    # would scale with the corpus instead of with ``limit``.
+    if "trust" in includes:
+        attach_thermo_trust(
+            session,
+            [(rec.thermo, rec.thermo.thermo_id) for rec in returned],
+        )
 
     summary = review_summary(rec.thermo.review for rec in flat)
 

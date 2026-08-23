@@ -3,6 +3,18 @@
 The public contract is intentionally compact.  It reports the current
 deterministic evidence rubric and the latest immutable reproducibility claim,
 including whether that claim still matches the evidence visible today.
+
+**Two readouts, one source.** A record can carry the same verdict under two
+include tokens: ``assessments.deterministic_trust`` (compact rubric name,
+version and grade, alongside the reproducibility claim) and ``trust`` (the
+fuller fragment with the evidence object and the curator review status).
+They must never be two independently maintained opinions, so both are built
+here from a single :func:`_evaluate` call — one grouped load of the evidence
+graph per page, one ``evaluate_loaded_*`` invocation per record, and two
+projections of its result. ``deterministic_trust.grade`` and
+``trust.trust_status`` are therefore the same string by construction rather
+than by agreement, and
+``backend/tests/api/scientific/test_search_trust_include.py`` pins that.
 """
 
 from __future__ import annotations
@@ -39,6 +51,7 @@ from app.services.scientific_read.statmech import STATMECH_TRUST_EAGER_LOADS
 from app.services.scientific_read.thermo import THERMO_TRUST_EAGER_LOADS
 from app.services.scientific_read.transport import TRANSPORT_TRUST_EAGER_LOADS
 from app.services.trust import (
+    build_trust_fragment,
     evaluate_loaded_kinetics,
     evaluate_loaded_statmech,
     evaluate_loaded_thermo,
@@ -101,6 +114,42 @@ def attach_transport_assessments(session: Session, payload: Any) -> Any:
     return payload
 
 
+def attach_thermo_trust(
+    session: Session, records: list[tuple[Any, int]]
+) -> None:
+    """Populate ``trust`` on a page of ``ThermoRecord``s.
+
+    ``records`` pairs each record with its ``thermo.id``. Called by
+    ``/scientific/thermo/search`` after pagination, so the evidence graph is
+    loaded for the page the caller will actually receive rather than for
+    every candidate the search walked.
+    """
+    attach_trust_fragments(
+        session,
+        records=records,
+        model=Thermo,
+        eager_loads=THERMO_TRUST_EAGER_LOADS,
+        evaluator=evaluate_loaded_thermo,
+    )
+
+
+def attach_kinetics_trust(
+    session: Session, records: list[tuple[Any, int]]
+) -> None:
+    """Populate ``trust`` on a page of ``KineticsRecord``s.
+
+    ``records`` pairs each record with its ``kinetics.id``. See
+    :func:`attach_thermo_trust`.
+    """
+    attach_trust_fragments(
+        session,
+        records=records,
+        model=Kinetics,
+        eager_loads=KINETICS_TRUST_EAGER_LOADS,
+        evaluator=evaluate_loaded_kinetics,
+    )
+
+
 def _kinetics_records(payload: Any) -> Iterable[tuple[Any, int]]:
     for item in payload.records:
         record = item.kinetics if hasattr(item, "kinetics") else item
@@ -125,6 +174,73 @@ def _transport_records(payload: Any) -> Iterable[tuple[Any, int]]:
         yield record, record.transport.transport_id
 
 
+def _evaluate(
+    session: Session,
+    *,
+    ids: list[int],
+    model: type[Any],
+    eager_loads: tuple[Any, ...],
+    evaluator: Callable[[Any], EvidenceEvaluation],
+) -> dict[int, EvidenceEvaluation]:
+    """Evaluate the deterministic rubric for a whole page in one load.
+
+    The single source both public readouts are derived from. The eager-load
+    tuple is the one the evaluator's check runners expect to find already
+    loaded, applied as options on **one** statement over the page's ids, so
+    the graph costs a fixed number of statements whatever the page size.
+    """
+    targets = session.scalars(
+        select(model).where(model.id.in_(ids)).options(*eager_loads)
+    ).all()
+    target_by_id = {target.id: target for target in targets}
+    return {
+        record_id: evaluator(target_by_id[record_id])
+        for record_id in ids
+        if record_id in target_by_id
+    }
+
+
+def attach_trust_fragments(
+    session: Session,
+    *,
+    records: list[tuple[Any, int]],
+    model: type[Any],
+    eager_loads: tuple[Any, ...],
+    evaluator: Callable[[Any], EvidenceEvaluation],
+) -> None:
+    """Populate ``record.trust`` for a page, from the same evaluation.
+
+    Used by the chemistry-search services, whose records are built by the
+    detail-endpoint builders and so arrive with ``trust`` still ``None``.
+    Resolving it here rather than inside the per-record builder is what
+    keeps the evidence graph a per-page cost: the builders run once per
+    record, and anything they load is multiplied by ``limit``.
+
+    ``review_status`` comes off the record's own review badge, which the
+    builder has already resolved — the read layer owns that half of the
+    fragment, the evaluator owns the evidence half.
+    """
+    if not records:
+        return
+    ids = list(dict.fromkeys(record_id for _, record_id in records))
+    evaluations = _evaluate(
+        session,
+        ids=ids,
+        model=model,
+        eager_loads=eager_loads,
+        evaluator=evaluator,
+    )
+    for record, record_id in records:
+        evaluation = evaluations.get(record_id)
+        if evaluation is None:  # pragma: no cover — race with delete
+            continue
+        badge = getattr(record, "review", None)
+        record.trust = build_trust_fragment(
+            evaluation,
+            review_status=getattr(badge, "status", None),
+        )
+
+
 def _attach(
     session: Session,
     *,
@@ -137,14 +253,18 @@ def _attach(
     if not records:
         return
     ids = list(dict.fromkeys(record_id for _, record_id in records))
-    targets = session.scalars(select(model).where(model.id.in_(ids)).options(*eager_loads)).all()
-    target_by_id = {target.id: target for target in targets}
+    evaluations = _evaluate(
+        session,
+        ids=ids,
+        model=model,
+        eager_loads=eager_loads,
+        evaluator=evaluator,
+    )
     latest = _latest_assessments(session, record_type=record_type, record_ids=ids)
 
     summaries: dict[int, PublicAssessmentSummary] = {}
     for record_id in ids:
-        target = target_by_id[record_id]
-        trust = evaluator(target)
+        trust = evaluations[record_id]
         assessment = latest.get(record_id)
         summaries[record_id] = PublicAssessmentSummary(
             deterministic_trust=DeterministicTrustSummary(

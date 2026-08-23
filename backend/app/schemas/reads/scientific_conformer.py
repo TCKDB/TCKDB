@@ -390,6 +390,13 @@ class ScientificConformerObservationRecord(BaseModel):
     available_sections: AvailableConformerSections
 
     # Optional include blocks
+    #: Every observation in this record's conformer group, this one
+    #: included — the same list the group surface returns under the same
+    #: token. Populated under ``include=observations``, which on an
+    #: observation-grained record is the one question the record cannot
+    #: answer from itself: *what else is in this basin*. Never populated on
+    #: a record nested inside another record's ``observations`` block.
+    observations: list[ScientificConformerObservationRecord] | None = None
     selections: list[ConformerSelectionSummary] | None = None
     calculations: list[ConformerCalculationSummary] | None = None
     geometries: list[ConformerGeometryLink] | None = None

@@ -736,15 +736,35 @@ def test_co_detail_include_review(client, db_session):
     assert rh[0]["status"] == "under_review"
 
 
-def test_co_detail_include_observations_is_no_op_legal(client, db_session):
-    """``include=observations`` on the observation surface is silently
-    dropped from the response data (the record IS an observation); the
-    token still flows through validation as legal and appears in
-    request.include if the resolver kept it."""
+def test_co_detail_include_observations_returns_the_basin(client, db_session):
+    """``include=observations`` returns the sibling observations, this one included.
+
+    This test asserted the opposite — that the token was legal and produced
+    no field — on the reading that the record already *is* an observation
+    so there was nothing for the token to say. There was: which other
+    observations share the basin, which is the one question an
+    observation-grained record cannot answer from itself. A token that is
+    accepted, echoed, and produces nothing is indistinguishable to a client
+    from one that failed silently.
+
+    The nested records carry no ``observations`` of their own. That is not
+    a size optimisation but the thing that terminates the recursion.
+    """
     _, _, obs = _make_group_with_obs(db_session)
+    expected = sorted(o.public_ref for o in obs)
+
     body = client.get(_co_url(obs[0].public_ref, include="observations")).json()
-    # Heavy ``observations`` block is not on the observation record schema.
-    assert "observations" not in body["record"]
+
+    assert body["request"]["include"] == ["observations"]
+    block = body["record"]["observations"]
+    assert block is not None
+    assert sorted(
+        o["conformer_observation"]["conformer_observation_ref"] for o in block
+    ) == expected
+    assert all(o["observations"] is None for o in block)
+
+    default = client.get(_co_url(obs[0].public_ref)).json()
+    assert default["record"]["observations"] is None
 
 
 def test_co_detail_include_selections_surfaces_parent_group_selections(

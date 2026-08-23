@@ -8,12 +8,12 @@ for the same include set) plus the shared review / pagination / sort
 helpers.
 
 Mirrors ``get_species_thermo`` rather than delegating to
-``search_statmech``: the per-entry subresource *does* expose ``trust``
-(via the trust-bearing ``_DETAIL_LEGAL_INCLUDE_TOKENS`` set, with
-``trust`` internal-tokenized so ``include=all`` never expands to it),
-whereas broad ``search_statmech`` uses the narrower
-``_LEGAL_INCLUDE_TOKENS`` set and rejects ``include=trust`` outright —
-trust is detail/subresource only, never on broad search.
+``search_statmech``. Both surfaces now expose ``trust`` — the search
+vocabulary gained the token once its per-page eager-load was in place —
+and on both it is internal-tokenized, so ``include=all`` never expands to
+it. The reason not to delegate is the ordering and pagination contract,
+not the include vocabulary: this read is pinned to one species entry and
+sorts as the thermo subresource does.
 
 See ``backend/docs/specs/scientific_statmech_reads.md`` and
 ``backend/docs/specs/trust_read_api_current.md``.

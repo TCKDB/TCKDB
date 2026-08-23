@@ -12,6 +12,13 @@ time, and no assertion anywhere would notice.
 This measures the *slope* — statements per additional record — rather than the
 total, because the slope is the property that matters and it does not move
 when the fixed overhead of a page changes.
+
+The ``include=trust`` cases live next door in
+``test_trust_include_statement_cost.py``, one per search surface, because they
+measure a different number: the *marginal* cost of one token rather than the
+cost of a record. They belong to the same gate — anything that scales with the
+page size on a search surface is the same defect — and they are separate only
+so that each of the five surfaces can fail while the others pass.
 """
 
 from __future__ import annotations

@@ -461,13 +461,13 @@ include=calculations    — calc summaries for this observation only
 include=geometries      — output-geometry links for this observation's
                           calcs
 include=review          — record_review row history for the observation
-include=all             — calculations + geometries + review (never
-                          internal_ids)
-include=observations    — silently a no-op (the observation IS the
-                          record); kept legal so a generic client can
-                          pass the same set everywhere
-include=selections      — silently a no-op (selections belong to the
-                          parent group)
+include=observations    — the sibling observations in this record's
+                          conformer group, this one included; the same
+                          list the group surface returns under the same
+                          token. Was a documented no-op until PR 2.
+include=selections      — the parent group's selections
+include=all             — observations + selections + calculations +
+                          geometries + review (never internal_ids)
 include=internal_ids    — Phase D policy gate
 ```
 

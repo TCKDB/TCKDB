@@ -76,12 +76,50 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.transition_states import (
-    _INTERNAL_INCLUDE_TOKENS,
-    _LEGAL_INCLUDE_TOKENS,
+    _INTERNAL_INCLUDE_TOKENS as _CONCEPT_INTERNAL_INCLUDE_TOKENS,
+)
+from app.services.scientific_read.transition_states import (
+    _LEGAL_INCLUDE_TOKENS as _CONCEPT_LEGAL_INCLUDE_TOKENS,
+)
+from app.services.scientific_read.transition_states import (
+    TRANSITION_STATE_ENTRY_TRUST_EAGER_LOADS,
     _build_reaction_context,
     _build_ts_core_block,
     build_entry_record,
+    build_sibling_entry_records,
 )
+
+# ``trust`` is legal on this surface, and it was not always. The search
+# response has always carried ``records[*].trust`` — at the record root
+# here, unlike the thermo and kinetics search twins — while rejecting
+# ``include=trust`` with ``422 unknown_include_token``, so the field was
+# permanently ``null`` on all 34 records of an observed page. The token is
+# legal now and the route drops the key when the caller did not ask.
+#
+# It is **internal-tokenized**, so ``include=all`` never expands to it.
+# That matters most here: of the five search surfaces this change touches,
+# this one carries the largest eager-load chain (23 entries), the only
+# four-hop chain, and the only one rooted on a *collection*
+# (``TransitionStateEntry.calculations``) rather than a scalar
+# relationship. ``_materialize_records`` applies it to the page query so
+# the cost is per page, not per record.
+#
+# ``entries`` is internal-tokenized on *this* surface too, and only here.
+# Its cost follows the fan-out under the page's parents rather than the
+# page: a record's block is every entry of its transition state, and each
+# of those is a full record build. Measured on a 20-entry parent it is 162
+# statements — flat in ``limit``, because the block is resolved once per
+# distinct parent, but not flat in how many entries those parents have. It
+# was previously *discarded* on this surface, so ``include=all`` never paid
+# it; keeping it out of the expansion means ``include=all`` here returns
+# exactly what it returned before, and a caller who wants the sibling lists
+# asks for them. It stays public on the two detail surfaces, where the
+# block is bounded by one record's parent.
+_LEGAL_INCLUDE_TOKENS: set[str] = _CONCEPT_LEGAL_INCLUDE_TOKENS | {"trust"}
+_INTERNAL_INCLUDE_TOKENS: set[str] = _CONCEPT_INTERNAL_INCLUDE_TOKENS | {
+    "trust",
+    "entries",
+}
 
 # Filter knobs that count as "meaningful" for the at-least-one-filter rule.
 # Pure pagination / include / review knobs are deliberately excluded.
@@ -130,11 +168,12 @@ def search_transition_states(
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )
     includes = filter_internal_ids_from_resolved(includes)
-    # ``include=entries`` is meaningful only on the TS-concept detail
-    # endpoint. On search it would be a no-op (each record IS an entry),
-    # so silently drop it without raising — keeps a generic client able
-    # to pass the same include set to both surfaces.
-    includes.discard("entries")
+    # ``include=entries`` used to be discarded here, on the reading that a
+    # record already *is* an entry so the token had nothing to say. It had:
+    # the parent transition state's other entries, which an entry-grained
+    # search cannot otherwise report. Discarding it also dropped the token
+    # from ``request.include``, so the echo told the caller their request
+    # had been understood as something they did not send.
 
     _enforce_at_least_one_filter(request)
 
@@ -470,11 +509,20 @@ def _materialize_records(
         return []
     # Bulk-load entries, parent TS rows, and TS review badges. Each page
     # is small (limit <= 200), so per-entry parent lookups are bounded.
-    entries = session.scalars(
-        select(TransitionStateEntry).where(
-            TransitionStateEntry.id.in_(page_ids)
-        )
-    ).all()
+    entry_stmt = select(TransitionStateEntry).where(
+        TransitionStateEntry.id.in_(page_ids)
+    )
+    if "trust" in includes:
+        # The chain the trust evaluator walks: 23 entries, four hops deep,
+        # rooted on a collection. Applied here, as options on the page
+        # query, ``selectinload`` issues a fixed number of statements for
+        # the whole batch. Left to the per-record builder it would be that
+        # many lazy loads *per record*, which on the largest observed page
+        # (34 records) is the N+1 the old search vocabulary avoided by
+        # refusing the token outright. This is the load-bearing line of the
+        # whole trust-on-search change.
+        entry_stmt = entry_stmt.options(*TRANSITION_STATE_ENTRY_TRUST_EAGER_LOADS)
+    entries = session.scalars(entry_stmt).all()
     entry_by_id = {e.id: e for e in entries}
 
     ts_ids = {e.transition_state_id for e in entries}
@@ -497,6 +545,13 @@ def _materialize_records(
     # the participants when several TS entries share a parent.
     reaction_cache: dict[int | None, Any] = {}
 
+    # ``include=entries`` gives every record its parent's entry list. Built
+    # once per distinct parent on the page and shared, because search pages
+    # cluster: several entries of one transition state routinely match the
+    # same filter, and resolving the same sibling list once per record is
+    # the shape this module's docstring calls the N+1 trap.
+    entries_blocks: dict[int, list[ScientificTransitionStateEntryRecord]] = {}
+
     records: list[ScientificTransitionStateEntryRecord] = []
     for cid in page_ids:
         entry = entry_by_id.get(cid)
@@ -514,6 +569,17 @@ def _materialize_records(
         if re_id not in reaction_cache:
             reaction_cache[re_id] = _build_reaction_context(session, re_id)
         reaction = reaction_cache[re_id]
+        entries_block: list[ScientificTransitionStateEntryRecord] | None = None
+        if "entries" in includes:
+            if ts.id not in entries_blocks:
+                entries_blocks[ts.id] = build_sibling_entry_records(
+                    session,
+                    entry=entry,
+                    ts_core=ts_core,
+                    reaction=reaction,
+                    includes=includes,
+                )
+            entries_block = entries_blocks[ts.id]
         records.append(
             build_entry_record(
                 session,
@@ -522,6 +588,7 @@ def _materialize_records(
                 reaction=reaction,
                 entry_badge=badges[cid],
                 includes=includes,
+                entries_block=entries_block,
             )
         )
     return records

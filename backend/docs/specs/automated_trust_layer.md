@@ -544,9 +544,14 @@ ships as `COMPUTED_TRANSITION_STATE_V1` in
 `GET /scientific/transition-state-entries/{ref}?include=trust` read. It
 is also propagated into the composite
 `GET /scientific/reaction-entries/{id}/full?include=trust` read under
-`transition_states[*].trust`. It is **not** wired into the parent
-TS-concept detail read (`/scientific/transition-states/{ref}`) or the
-TS-entry search/list surface — both reject the `trust` include token.
+`transition_states[*].trust`. It is also available on the entry-grained
+`GET|POST /scientific/transition-states/search` under the same token, at
+`records[*].trust`, where the page query eager-loads the evidence graph
+once for the whole page. It is **not** wired into the parent TS-concept
+detail read (`/scientific/transition-states/{ref}`), which still rejects
+the token: a concept is a collection of entries evaluated at different
+levels of theory, and a single verdict for the collection would be an
+aggregation rather than a reading.
 See `trust_read_api_current.md` for the exact contract per endpoint.
 
 ### 9.8 `experimental_thermo_v1`
