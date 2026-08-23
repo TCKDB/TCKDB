@@ -34524,7 +34524,7 @@
             "title": "Calculations"
           },
           "evidence_summary": {
-            "$ref": "#/components/schemas/TransitionStateCalculationEvidenceSummary"
+            "$ref": "#/components/schemas/TransitionStateEntryEvidenceSummary"
           },
           "geometries": {
             "anyOf": [
@@ -34640,7 +34640,7 @@
             "$ref": "#/components/schemas/TransitionStateEntriesSummary"
           },
           "evidence_summary": {
-            "$ref": "#/components/schemas/TransitionStateCalculationEvidenceSummary"
+            "$ref": "#/components/schemas/TransitionStateEvidenceSummary"
           },
           "geometries": {
             "anyOf": [
@@ -42859,55 +42859,6 @@
         "title": "TorsionTreatmentKind",
         "type": "string"
       },
-      "TransitionStateCalculationEvidenceSummary": {
-        "description": "Compact calculation-evidence projection for a TS or TS-entry.\n\nCounts and ``has_*`` booleans are computed from cheap EXISTS-style\nqueries against the calculation tables under the TS entry. Primary\ncalculation refs are deferred to a later PR — the data model does\nnot currently carry a unique notion of \"primary\" per type, so we\nexpose counts/booleans only.\n\nFor a TS concept, the counts are summed across all entries under\nthe TS. For a TS entry, the counts are restricted to that entry's\ncalculations.",
-        "properties": {
-          "calculation_count": {
-            "title": "Calculation Count",
-            "type": "integer"
-          },
-          "has_freq": {
-            "title": "Has Freq",
-            "type": "boolean"
-          },
-          "has_geometry_validation": {
-            "title": "Has Geometry Validation",
-            "type": "boolean"
-          },
-          "has_irc": {
-            "title": "Has Irc",
-            "type": "boolean"
-          },
-          "has_opt": {
-            "title": "Has Opt",
-            "type": "boolean"
-          },
-          "has_path_search": {
-            "title": "Has Path Search",
-            "type": "boolean"
-          },
-          "has_scf_stability": {
-            "title": "Has Scf Stability",
-            "type": "boolean"
-          },
-          "has_sp": {
-            "title": "Has Sp",
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "calculation_count",
-          "has_opt",
-          "has_freq",
-          "has_sp",
-          "has_irc",
-          "has_path_search",
-          "has_geometry_validation",
-          "has_scf_stability"
-        ],
-        "title": "TransitionStateCalculationEvidenceSummary",
-        "type": "object"
-      },
       "TransitionStateCalculationSlot": {
         "description": "One calculation slot within the TS sub-record (ts_opt, ts_freq, etc.).\n\nPhase B: ``calculation_ref`` is the public stable handle alongside\n``calculation_id``.",
         "properties": {
@@ -43170,6 +43121,55 @@
         "title": "TransitionStateEntryCoreBlock",
         "type": "object"
       },
+      "TransitionStateEntryEvidenceSummary": {
+        "description": "Compact calculation-evidence projection for one TS **entry**.\n\nScope is this single entry: ``calculation_count`` and every ``has_*``\nboolean are restricted to the calculations whose\n``transition_state_entry_id`` is this entry. A boolean is\nunambiguous here — it cannot pool a covered entry with an uncovered\none, which is what made the same booleans misleading at TS-concept\nscope (see :class:`TransitionStateEvidenceSummary`).\n\nCounts and booleans are computed from cheap EXISTS-style queries\nagainst the calculation tables. Primary calculation refs are\ndeferred for the same reason as on the concept block.\n\nAs with the concept block's counts, ``has_freq: true`` says\nfrequency evidence exists — not that it is comparable with the\nfrequency evidence on any sibling entry.",
+        "properties": {
+          "calculation_count": {
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "has_freq": {
+            "title": "Has Freq",
+            "type": "boolean"
+          },
+          "has_geometry_validation": {
+            "title": "Has Geometry Validation",
+            "type": "boolean"
+          },
+          "has_irc": {
+            "title": "Has Irc",
+            "type": "boolean"
+          },
+          "has_opt": {
+            "title": "Has Opt",
+            "type": "boolean"
+          },
+          "has_path_search": {
+            "title": "Has Path Search",
+            "type": "boolean"
+          },
+          "has_scf_stability": {
+            "title": "Has Scf Stability",
+            "type": "boolean"
+          },
+          "has_sp": {
+            "title": "Has Sp",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "calculation_count",
+          "has_opt",
+          "has_freq",
+          "has_sp",
+          "has_irc",
+          "has_path_search",
+          "has_geometry_validation",
+          "has_scf_stability"
+        ],
+        "title": "TransitionStateEntryEvidenceSummary",
+        "type": "object"
+      },
       "TransitionStateEntryOwnerSummary": {
         "description": "Compact TS / TS-entry owner shape for a calculation.",
         "properties": {
@@ -43319,6 +43319,73 @@
         "title": "TransitionStateEntryStatus",
         "type": "string"
       },
+      "TransitionStateEvidenceCoverage": {
+        "description": "How many TS entries in scope carry each kind of evidence.\n\nEvery value counts **entries**, never calculations. An entry with\nthree ``freq`` calculations contributes ``1`` to ``freq``, not\n``3``. The shared denominator is\n``TransitionStateEvidenceSummary.entry_count``, so a caller reads\neach field as \"*n* of *entry_count*\"; a value can never exceed that\ndenominator, and one that did would mean the query had started\ncounting calculations again.\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == entry_count`` says the coverage is **complete** — every\ncandidate saddle point under this TS has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the entries may sit at different levels of theory,\ncome from different codes, and describe different geometries. A\ncount is honest about coverage, not about consistency. A caller who\nneeds consistency must inspect the per-calculation level-of-theory /\nsoftware provenance under ``include=calculations``; no number in\nthis block can stand in for that.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",
+        "properties": {
+          "freq": {
+            "title": "Freq",
+            "type": "integer"
+          },
+          "geometry_validation": {
+            "title": "Geometry Validation",
+            "type": "integer"
+          },
+          "irc": {
+            "title": "Irc",
+            "type": "integer"
+          },
+          "opt": {
+            "title": "Opt",
+            "type": "integer"
+          },
+          "path_search": {
+            "title": "Path Search",
+            "type": "integer"
+          },
+          "scf_stability": {
+            "title": "Scf Stability",
+            "type": "integer"
+          },
+          "sp": {
+            "title": "Sp",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "opt",
+          "freq",
+          "sp",
+          "irc",
+          "path_search",
+          "geometry_validation",
+          "scf_stability"
+        ],
+        "title": "TransitionStateEvidenceCoverage",
+        "type": "object"
+      },
+      "TransitionStateEvidenceSummary": {
+        "description": "Compact calculation-evidence projection for a TS **concept**.\n\n``entry_count`` is the number of ``transition_state_entry`` rows\nunder the TS — the same number as ``entries_summary.total``,\nrepeated here so the coverage block is readable without\ncross-referencing another block. ``calculation_count`` is the number\nof calculations across all of those entries.\n``evidence_coverage`` reports, per evidence kind, how many of the\n``entry_count`` entries carry it.\n\nPrimary calculation refs are deferred — the data model does not\ncurrently carry a unique notion of \"primary\" per type, so this block\nexposes counts only.\n\nWhy counts here and booleans on the entry surface\n-------------------------------------------------\nThis block deliberately has a **different shape** from\n:class:`TransitionStateEntryEvidenceSummary`. That asymmetry is the\npoint, not an oversight, and it should not be smoothed over.\n\nA TS concept pools several candidate entries. The booleans this\nblock used to carry (``has_opt`` / ``has_freq`` / …) were a plain OR\nacross all of them, which made them asymmetrically informative:\n``false`` was strong (nothing under the TS has it) while ``true``\nwas nearly empty (one calculation under one entry made it ``true``).\nA reader seeing ``has_sp: true`` on a three-entry TS could not tell\nwhether three entries had single points or one did. Counts answer\nthat question — ``sp: 1`` against ``entry_count: 3`` shows an\nunevenly covered TS at a glance — and ``count > 0`` reproduces the\nretired boolean exactly, so nothing the boolean expressed was lost.\n\nA TS entry is a single candidate saddle point, so on that surface\nthe booleans are unambiguous and are kept as they were.",
+        "properties": {
+          "calculation_count": {
+            "title": "Calculation Count",
+            "type": "integer"
+          },
+          "entry_count": {
+            "title": "Entry Count",
+            "type": "integer"
+          },
+          "evidence_coverage": {
+            "$ref": "#/components/schemas/TransitionStateEvidenceCoverage"
+          }
+        },
+        "required": [
+          "entry_count",
+          "calculation_count",
+          "evidence_coverage"
+        ],
+        "title": "TransitionStateEvidenceSummary",
+        "type": "object"
+      },
       "TransitionStateIn": {
         "additionalProperties": false,
         "description": "A transition state for one micro reaction.\n\n:param key: Local key for this transition state.\n:param micro_reaction_key: Local key referencing a micro reaction.\n:param charge: Net charge of the TS structure.\n:param multiplicity: Spin multiplicity.\n:param geometry: Geometry of the saddle point (with a reusable key).\n:param calculation: The optimization calculation that produced this TS geometry.\n:param calculations: Additional calculations on this TS (freq, sp, irc).\n:param label: Optional human-readable label.\n:param note: Optional note.",
@@ -43425,7 +43492,7 @@
             "type": "array"
           },
           "evidence_summary": {
-            "$ref": "#/components/schemas/TransitionStateCalculationEvidenceSummary"
+            "$ref": "#/components/schemas/TransitionStateEntryEvidenceSummary"
           },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
