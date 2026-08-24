@@ -769,11 +769,18 @@ def _species_calculations_page(session: Session, entry, *, limit: int, include):
 
 
 def test_a_species_calculations_page_costs_one_freq_statement(db_session):
-    """Flat in ``limit``: the frequency summary is loaded for the page.
+    """One statement, whatever the page: the summary is loaded in bulk.
 
     Fifty records is this endpoint's default page and two hundred is its
     ceiling, so a query per record here is a hundredfold cost, not a
     rounding error.
+
+    The exact assertion is ``== 1`` rather than a slope, and that is the
+    stronger pin here. This surface builds every record *before* it
+    paginates, so its loaders run over the whole candidate set rather
+    than over ``limit`` — a regression to a query per record therefore
+    shows up as the same large number at both page sizes, which a
+    slope comparison would read as flat and pass.
     """
     entry = _freq_calculations_page(
         db_session, tag="sum", calculations=_FREQ_LARGE_PAGE + 5
@@ -799,7 +806,7 @@ def test_a_species_calculations_page_costs_one_freq_statement(db_session):
     assert small_results == large_results == _FREQ_STATEMENTS_PER_PAGE, (
         f"{small_results} calc_freq_result statements for "
         f"{_FREQ_SMALL_PAGE} records against {large_results} for "
-        f"{_FREQ_LARGE_PAGE}: the summary is loading per record "
+        f"{_FREQ_LARGE_PAGE}: the summary is loading one row at a time "
         f"(totals {small_total} and {large_total})"
     )
     assert small_modes == large_modes == 0, (
@@ -809,7 +816,7 @@ def test_a_species_calculations_page_costs_one_freq_statement(db_session):
 
 
 def test_include_freq_modes_costs_a_page_one_more_statement(db_session):
-    """The opt-in array is one statement for the page, not one per record."""
+    """The opt-in array is one statement for the page, not one per calculation."""
     entry = _freq_calculations_page(
         db_session, tag="mod", calculations=_FREQ_LARGE_PAGE + 5
     )
@@ -834,7 +841,8 @@ def test_include_freq_modes_costs_a_page_one_more_statement(db_session):
     assert small_modes == large_modes == _FREQ_STATEMENTS_PER_PAGE, (
         f"{small_modes} calc_freq_mode statements for {_FREQ_SMALL_PAGE} "
         f"records against {large_modes} for {_FREQ_LARGE_PAGE}: the array "
-        f"is loading per record (totals {small_total} and {large_total})"
+        f"is loading one calculation at a time "
+        f"(totals {small_total} and {large_total})"
     )
     assert small_results == large_results == _FREQ_STATEMENTS_PER_PAGE, (
         "asking for the modes must not also multiply the summary "
