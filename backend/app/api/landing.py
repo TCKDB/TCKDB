@@ -39,6 +39,17 @@ clicked a link on a landing page. The raw document is still one click
 away from inside each panel, under a label that says it is raw JSON.
 Nothing on this page takes a reader somewhere they did not expect.
 
+An expanded panel also says **how far its evidence has been checked**,
+which is the claim that distinguishes this database from a folder of
+output files. Each card carries the deterministic rubric's verdict --
+its label, its passed-of-possible check counts, and the named checks
+that are and are not present, collapsed -- alongside, and never in
+place of, the record's human review state. The verdict is opt-in and
+is asked for by name: ``include=trust`` is deliberately outside
+``include=all`` on every surface, so the convenience token would pay
+for a large eager-load chain and deliver no verdict at all. The two
+lists that do not offer the token are not asked, and say so.
+
 Design constraints, in the order they constrain things:
 
 * **Self-contained.** No CDN, no external stylesheet, no web font, no
@@ -809,6 +820,83 @@ button.pill {
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
+/*
+ * ---- how far the evidence behind a record has been checked ----
+ *
+ * Two independent facts share one card and must never be read as one.
+ * The badge in the card head says whether a *person* has reviewed the
+ * record. This block says how much of the evidence a deterministic
+ * rubric expects is actually present. A record is routinely
+ * "well supported" and "under review" at the same time, so neither is
+ * ever drawn as a stand-in for the other.
+ *
+ * Every grade is drawn in the same neutral chip, on purpose. The API
+ * publishes a *set* of named verdicts -- well_supported,
+ * mostly_supported, partial, sparse, unsupported, hard_failed -- and
+ * does not publish a rank, a score or a severity. Painting them red to
+ * green, or as stars, would assert an ordering that is not in the
+ * contract. The word is the verdict; the named checks inside the
+ * disclosure are the reason for it.
+ */
+.trust {
+  margin-top: 0.6rem;
+  font-size: var(--fs-data);
+}
+.trust-line {
+  margin: 0;
+  max-width: none;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.5rem;
+}
+.trust-label {
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.trust-grade {
+  font-family: var(--mono);
+  font-weight: 700;
+  border: 1px solid var(--rule);
+  background: var(--data-bg);
+  padding: 0.05rem 0.45rem;
+}
+.trust-tally,
+.trust-rubric,
+.trust-none {
+  font-family: var(--mono);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+.trust-none { margin: 0; max-width: none; }
+.trust-why { margin-top: 0.45rem; }
+.trust-why > summary {
+  cursor: pointer;
+  color: var(--phase-pos);
+  width: fit-content;
+}
+.trust-checks { margin-top: 0.5rem; }
+.trust-checks-title {
+  margin: 0;
+  max-width: none;
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.trust-check-list {
+  margin: 0.15rem 0 0;
+  padding-left: 1.15rem;
+  font-family: var(--mono);
+}
+.trust-check-list li { overflow-wrap: anywhere; }
+.trust-explains {
+  margin: 0.5rem 0 0;
+  max-width: none;
+  color: var(--muted);
+}
 .detail-raw,
 .raw-link {
   overflow-wrap: anywhere;
@@ -1307,6 +1395,62 @@ __HERO_SPECTRUM__
     reverse: "matched in reverse",
     either: "matched either way"
   };
+  /*
+   * ---- the trust verdict -------------------------------------------
+   *
+   * What a record *has* is one question; how far what it has has been
+   * checked is another, and the second one is the reason this database
+   * exists rather than a folder of output files. The read API answers
+   * it under ``trust`` on the record.
+   *
+   * It is opt-in and is spelled out. ``include=trust`` is deliberately
+   * NOT part of ``include=all`` on any surface, because evaluating a
+   * verdict pulls a large eager-load chain -- nine to twenty-three
+   * entries depending on the surface, up to four hops, one of them
+   * rooted on a collection. A page that reached for the convenience
+   * token would buy that whole graph on every panel, including the
+   * panels that cannot show a verdict at all. So every URL below names
+   * the one token it wants, and none of them names ``all``.
+   *
+   * Two surfaces the page already opens -- the conformer list and the
+   * calculation list -- do not offer the token (asking answers
+   * ``unknown_include_token``). Those panels say the verdict is not
+   * assessed there rather than implying a bad one.
+   */
+  var TRUST_PARAM = "include=trust";
+
+  /*
+   * The rubric's own label set, given readable wording and nothing
+   * else. These are the six values of ``EvidenceBadge`` with the
+   * underscores taken out: no stars, no percentage, no traffic light.
+   * The API publishes named verdicts, not a scale, and a page that
+   * invented one would be asserting an ordering the contract does not
+   * make. Anything unrecognised is printed as it arrived rather than
+   * being bucketed into the nearest known word.
+   */
+  var TRUST_WORDS = {
+    well_supported: "well supported",
+    mostly_supported: "mostly supported",
+    partial: "partial",
+    sparse: "sparse",
+    unsupported: "unsupported",
+    hard_failed: "hard failed"
+  };
+  /*
+   * Absence is a third state and reads as one. A list that carries no
+   * verdict, and a record whose verdict did not arrive, are both "not
+   * assessed" -- never a low grade, which is what silence would look
+   * like next to the cards that do carry one.
+   */
+  var TRUST_NOT_ASSESSED = "evidence completeness not assessed for this record";
+  var TRUST_NOT_ON_LIST =
+    "This list does not carry an evidence verdict, so how far these " +
+    "records have been checked is not assessed here.";
+  var TRUST_VS_REVIEW =
+    "This verdict counts evidence; it is not a review. The badge above " +
+    "says whether a person has looked at the record. The two are " +
+    "independent: a well supported record can be under review, and on " +
+    "this deployment most are.";
   var MODES = [
     ["mode-species", "panel-species", "title-species", function () {}],
     ["mode-reactions", "panel-reactions", "title-reactions", submitRxn]
@@ -1520,7 +1664,15 @@ __HERO_SPECTRUM__
       one: "thermo record",
       many: "thermo records",
       shown: function (a) { return !!a.has_thermo; },
-      url: function (ref) { return THERMO + "?species_entry_ref=" + encodeURIComponent(ref); },
+      url: function (ref) {
+        return THERMO + "?species_entry_ref=" + encodeURIComponent(ref) + "&" + TRUST_PARAM;
+      },
+      /*
+       * The one surface that nests it. A thermo search row is
+       * ``{species, thermo}`` and the verdict rides on the thermo half;
+       * everywhere else the fragment sits on the record itself.
+       */
+      trust: function (record) { return (record.thermo || {}).trust; },
       view: thermoView
     },
     {
@@ -1529,7 +1681,10 @@ __HERO_SPECTRUM__
       one: "statmech record",
       many: "statmech records",
       shown: function (a) { return !!a.has_statmech; },
-      url: function (ref) { return ENTRY + encodeURIComponent(ref) + "/statmech"; },
+      url: function (ref) {
+        return ENTRY + encodeURIComponent(ref) + "/statmech?" + TRUST_PARAM;
+      },
+      trust: function (record) { return record.trust; },
       view: statmechView
     },
     {
@@ -1538,7 +1693,10 @@ __HERO_SPECTRUM__
       one: "transport record",
       many: "transport records",
       shown: function (a) { return !!a.has_transport; },
-      url: function (ref) { return ENTRY + encodeURIComponent(ref) + "/transport"; },
+      url: function (ref) {
+        return ENTRY + encodeURIComponent(ref) + "/transport?" + TRUST_PARAM;
+      },
+      trust: function (record) { return record.trust; },
       view: transportView
     },
     {
@@ -1603,6 +1761,63 @@ __HERO_SPECTRUM__
     return list;
   }
 
+  /*
+   * The named checks behind a verdict. ``ts_single_point_present``
+   * sitting in ``missing_checks`` is the whole point: it turns "why is
+   * this only mostly supported?" from a guess into a list. It ships
+   * collapsed because a card that opens into thirty check names has
+   * traded one wall of text for another.
+   */
+  function checkList(title, names) {
+    var node = make("div", "trust-checks");
+    node.appendChild(make("p", "trust-checks-title", title));
+    var list = make("ul", "trust-check-list");
+    for (var i = 0; i < names.length; i += 1) {
+      list.appendChild(make("li", null, names[i]));
+    }
+    node.appendChild(list);
+    return node;
+  }
+
+  function trustNode(trust) {
+    var node = make("div", "trust");
+    if (!trust || !trust.trust_status) {
+      node.appendChild(make("p", "trust-none", TRUST_NOT_ASSESSED));
+      return node;
+    }
+    var evidence = trust.evidence || {};
+    var line = make("p", "trust-line");
+    line.appendChild(make("span", "trust-label", "evidence"));
+    line.appendChild(make("span", "trust-grade",
+      TRUST_WORDS[trust.trust_status] || String(trust.trust_status)));
+    /*
+     * The rubric's own two counts, and never a percentage: the spec
+     * says the completeness ratio is not to be restated as one, and a
+     * count of named checks is the thing the reader can go and read.
+     */
+    if (evidence.possible_count) {
+      line.appendChild(make("span", "trust-tally",
+        evidence.passed_count + " of " + evidence.possible_count + " checks present"));
+    }
+    if (evidence.rubric) { line.appendChild(make("span", "trust-rubric", evidence.rubric)); }
+    node.appendChild(line);
+    if (evidence.hard_fail_reason) {
+      node.appendChild(make("p", "trust-explains",
+        "A structural check failed outright: " + evidence.hard_fail_reason));
+    }
+    var missing = evidence.missing_checks || [];
+    var passed = evidence.passed_checks || [];
+    if (missing.length || passed.length) {
+      var why = make("details", "trust-why");
+      why.appendChild(make("summary", null, "What the rubric checked"));
+      if (missing.length) { why.appendChild(checkList("not present", missing)); }
+      if (passed.length) { why.appendChild(checkList("present", passed)); }
+      why.appendChild(make("p", "trust-explains", TRUST_VS_REVIEW));
+      node.appendChild(why);
+    }
+    return node;
+  }
+
   function detailBody(section, ref, payload) {
     var fragment = doc.createDocumentFragment();
     var records = payload.records || [];
@@ -1611,16 +1826,27 @@ __HERO_SPECTRUM__
     if (total === null || total === undefined) { total = records.length; }
     fragment.appendChild(make("p", "detail-count", plural(total, section.one, section.many)));
     if (section.note) { fragment.appendChild(make("p", "detail-note", section.note)); }
+    if (!section.trust) { fragment.appendChild(make("p", "detail-note", TRUST_NOT_ON_LIST)); }
     var shown = Math.min(records.length, CARD_LIMIT);
     for (var i = 0; i < shown; i += 1) {
+      var trust = section.trust ? section.trust(records[i]) : null;
       var view = section.view(records[i]);
       var card = make("div", "detail-card");
       var head = make("div", "detail-head");
       head.appendChild(make("span", "detail-title", view.title));
-      if (view.status) { head.appendChild(reviewBadge(view.status)); }
+      /*
+       * The review badge stays in the head, where it has always been,
+       * and stays the record's own review state. The verdict below is
+       * a separate sentence about a separate thing. Where a record
+       * carries no review block of its own the fragment's copy is used
+       * rather than leaving the head silent.
+       */
+      var reviewed = view.status || (trust ? trust.review_status : null);
+      if (reviewed) { head.appendChild(reviewBadge(reviewed)); }
       if (view.ref) { head.appendChild(make("span", "detail-ref", view.ref)); }
       card.appendChild(head);
       card.appendChild(detailFields(view));
+      if (section.trust) { card.appendChild(trustNode(trust)); }
       fragment.appendChild(card);
     }
     if (total > shown) {
@@ -2019,7 +2245,10 @@ __HERO_SPECTRUM__
       many: "kinetics records",
       count: function (a) { return a.kinetics_count; },
       shown: function (a) { return !!a.has_kinetics || !!a.kinetics_count; },
-      url: function (ref) { return KINETICS + encodeURIComponent(ref) + "/kinetics"; },
+      url: function (ref) {
+        return KINETICS + encodeURIComponent(ref) + "/kinetics?" + TRUST_PARAM;
+      },
+      trust: function (record) { return record.trust; },
       view: kineticsView
     },
     {
@@ -2029,8 +2258,10 @@ __HERO_SPECTRUM__
       many: "transition states",
       shown: function (a) { return !!a.has_transition_state; },
       url: function (ref) {
-        return TRANSITION_STATES + "?reaction_entry_ref=" + encodeURIComponent(ref);
+        return TRANSITION_STATES + "?reaction_entry_ref=" + encodeURIComponent(ref) +
+          "&" + TRUST_PARAM;
       },
+      trust: function (record) { return record.trust; },
       view: transitionStateView
     }
   ];

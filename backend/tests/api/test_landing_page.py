@@ -98,6 +98,7 @@ from app.api.startup_checks import validate_deployment_safety
 from app.services.frequency_geometry_linearity import (
     evaluate_frequency_list_linearity,
 )
+from app.services.trust.models import EvidenceBadge
 
 #: Every review state the API can put on a record. All five must have a
 #: human word on the page: a badge that falls through to a raw enum name
@@ -991,6 +992,234 @@ class TestResultsExpandInPlace:
         assert len(_noscript_forms(document, SPECIES_SEARCH_PATH)) == len(SEARCH_FIELDS) - 1
         assert document.find("input", id="search-input")
         assert document.find("a", **{"class": "chip"})
+
+
+class TestTrustVerdictIsShown:
+    """An expanded result says how far its evidence has been checked.
+
+    The page already showed what evidence a record *has*. What it did
+    not show is the thing that separates this database from a folder of
+    output files: how much of the evidence a rubric expects is actually
+    there. That verdict rides under ``trust`` on the record and is
+    opt-in.
+
+    Two properties are load-bearing and are checked against the running
+    API rather than against the page's own prose:
+
+    * the token is asked for **by name**. ``include=trust`` is
+      deliberately excluded from ``include=all`` on every surface,
+      because evaluating a verdict pulls a large eager-load chain, so a
+      page that reached for the convenience token would pay for the
+      graph and still get no verdict.
+    * the two lists that cannot serve it are not asked. Both answer
+      ``422 unknown_include_token``, which would replace a working
+      panel with an error.
+    """
+
+    #: Section keys whose list can carry a verdict, and the ones whose
+    #: list cannot. Every section in the script must be in exactly one.
+    TRUST_KEYS = frozenset({"thermo", "statmech", "transport", "kinetics", "transition-state"})
+    NO_TRUST_KEYS = frozenset({"conformers", "calculations"})
+
+    @staticmethod
+    def _section(script: str, key: str) -> str:
+        """One entry of ``SECTIONS`` / ``RXN_SECTIONS``, by its key."""
+        block = re.search(
+            r'\{\s*key: "' + re.escape(key) + r'",(.*?)\n    \}', script, flags=re.DOTALL
+        )
+        assert block is not None, key
+        return block.group(1)
+
+    @staticmethod
+    def _function(script: str, signature: str) -> str:
+        body = re.search(
+            r"function " + re.escape(signature) + r" \{(.*?)\n  \}", script, flags=re.DOTALL
+        )
+        assert body is not None, signature
+        return body.group(1)
+
+    def test_every_section_is_classified_and_none_was_forgotten(self, script):
+        """The two buckets above account for every section on the page.
+
+        Without this, a section added later is silently outside both
+        lists and every other test here keeps passing while saying
+        nothing about it.
+        """
+        keys = set(re.findall(r'\n    \{\n      key: "([^"]+)"', script))
+        assert keys == self.TRUST_KEYS | self.NO_TRUST_KEYS, keys
+
+    def test_a_list_that_can_carry_a_verdict_asks_for_it_by_name(self, script):
+        """``include=trust``, spelled out, on exactly the lists that serve it."""
+        assert 'var TRUST_PARAM = "include=trust";' in script
+        for key in self.TRUST_KEYS:
+            block = self._section(script, key)
+            assert "trust: function (record)" in block, key
+            url = re.search(r"url: function \(ref\) \{(.*?)\n      \}", block, flags=re.DOTALL)
+            assert url is not None, key
+            assert "TRUST_PARAM" in url.group(1), key
+        for key in self.NO_TRUST_KEYS:
+            block = self._section(script, key)
+            assert "trust:" not in block, key
+            assert "TRUST_PARAM" not in block, key
+
+    def test_the_page_never_reaches_for_the_convenience_token(self, script):
+        """``include=all`` would cost the eager-load graph and yield no verdict.
+
+        Not a style preference: ``trust`` is an internal token on every
+        surface here, so ``all`` expands *without* it. Swapping the two
+        would buy the whole selectinload chain and render nothing.
+
+        Asserted over the script's string literals rather than over the
+        page text, because the comment above ``TRUST_PARAM`` names the
+        token it is refusing to use and should keep doing so.
+        """
+        literals = re.findall(r"\"([^\"]*)\"", script)
+        assert literals
+        for literal in literals:
+            assert "include=all" not in literal, literal
+        assert "include=trust" in literals
+
+    @pytest.mark.parametrize(
+        "path",
+        (
+            "/api/v1/scientific/thermo/search?species_entry_ref=spe_x",
+            "/api/v1/scientific/transition-states/search?reaction_entry_ref=rxe_x",
+        ),
+    )
+    def test_asking_for_all_would_not_have_delivered_the_verdict(self, client_factory, path):
+        """The API itself decides this, so ask it.
+
+        Each search echoes the include set it *resolved*. ``trust``
+        resolves to itself; ``all`` resolves to a set that does not
+        contain it. The nonsense token is the control: it proves this
+        endpoint validates the include set at all, so a pass here can
+        never come from the request being rejected earlier for some
+        other reason.
+        """
+        with client_factory() as c:
+            control = c.get(f"{path}&include=zzz_not_a_token")
+            assert control.status_code == 422
+            assert control.json()["code"] == "unknown_include_token"
+
+            asked = c.get(f"{path}&include=trust")
+            assert asked.status_code == 200
+            assert "trust" in asked.json()["request"]["include"]
+
+            convenient = c.get(f"{path}&include=all")
+            assert convenient.status_code == 200
+            assert "trust" not in convenient.json()["request"]["include"]
+
+    @pytest.mark.parametrize(
+        "path",
+        (
+            "/api/v1/scientific/conformers/search?species_entry_ref=spe_x",
+            "/api/v1/scientific/species-calculations/search?species_entry_ref=spe_x",
+        ),
+    )
+    def test_the_lists_that_refuse_the_token_are_not_asked(self, client_factory, path):
+        """Asking these would replace a working panel with a 422."""
+        with client_factory() as c:
+            refused = c.get(f"{path}&include=trust")
+            assert refused.status_code == 422
+            assert refused.json()["code"] == "unknown_include_token"
+
+    def test_every_verdict_the_rubric_can_return_has_a_word(self, script):
+        """No badge may fall through to a raw enum name.
+
+        The label set is read off the rubric's own enum, so a verdict
+        added there fails here until the page has wording for it.
+        """
+        for badge in EvidenceBadge:
+            word = badge.value.replace("_", " ")
+            assert f"{badge.value}: \"{word}\"" in script, badge.value
+
+    def test_the_words_are_the_rubrics_own_and_invent_no_scale(self, script, page):
+        """Named verdicts, not stars, not a percentage, not a traffic light.
+
+        The API publishes a *set* of labels and no ordering over them.
+        Drawing them as a rank would assert something the contract does
+        not, so every grade gets the same neutral chip: one ``.trust-grade``
+        rule, no per-verdict selector, and no negative phase colour
+        anywhere in the block.
+        """
+        css = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL | re.IGNORECASE).group(1)
+        for selectors, body in re.findall(r"([^{}]+)\{([^}]*)\}", css):
+            if ".trust" not in selectors:
+                continue
+            assert "--phase-neg" not in body, selectors
+        for badge in EvidenceBadge:
+            assert f".trust-{badge.value}" not in css, badge.value
+        # The ratio exists on the wire and is deliberately not restated:
+        # the spec forbids showing it as a percentage, and the counts of
+        # named checks are what a reader can actually follow up.
+        assert "evidence_completeness" not in script
+        assert "passed_count" in script
+        assert "possible_count" in script
+
+    def test_the_verdict_and_the_review_state_stay_two_different_facts(self, script):
+        """A record is routinely well supported *and* under review.
+
+        ``trust_status`` is a deterministic rubric's verdict;
+        ``review.status`` is whether a person has looked. Showing one in
+        place of the other would report the corpus as either better or
+        worse checked than it is, so the card carries both and neither
+        vocabulary leaks into the other's renderer.
+        """
+        trust_words = dict(re.findall(r"\n    (\w+): \"([^\"]+)\"\n?", script))
+        verdicts = {badge.value for badge in EvidenceBadge}
+        grades = {word for key, word in trust_words.items() if key in verdicts}
+        reviews = set(REVIEW_STATES)
+        assert grades, "no verdict wording found"
+        assert grades & reviews == set()
+
+        body = self._function(script, "trustNode(trust)")
+        assert "trust.trust_status" in body
+        assert "reviewBadge" not in body, "the verdict must not be dressed as a review state"
+
+        detail = self._function(script, "detailBody(section, ref, payload)")
+        assert "reviewBadge(reviewed)" in detail
+        # A record with no review block of its own still shows one: the
+        # fragment carries the same field and the head must not go silent.
+        assert "trust ? trust.review_status : null" in detail
+
+    def test_an_absent_verdict_reads_as_not_assessed_rather_than_as_a_bad_one(self, script):
+        """Silence next to graded cards would read as the lowest grade.
+
+        Two absences, one wording: a list that carries no verdict at
+        all, and a record whose verdict did not come back.
+        """
+        messages = re.findall(r"var TRUST_NOT_(?:ASSESSED|ON_LIST) =\s*(.*?);\n", script, re.DOTALL)
+        assert len(messages) == 2
+        for message in messages:
+            assert "not assessed" in message, message
+            for badge in EvidenceBadge:
+                assert badge.value.replace("_", " ") not in message, message
+
+        body = self._function(script, "trustNode(trust)")
+        assert "if (!trust || !trust.trust_status) {" in body
+        assert "TRUST_NOT_ASSESSED" in body
+
+        detail = self._function(script, "detailBody(section, ref, payload)")
+        assert "if (!section.trust) {" in detail
+        assert "TRUST_NOT_ON_LIST" in detail
+
+    def test_the_named_missing_checks_are_shown_and_ship_collapsed(self, script):
+        """"Why only mostly supported?" has a published answer -- show it.
+
+        ``ts_single_point_present`` in ``missing_checks`` is the gap a
+        reader can otherwise only guess at. It ships inside a closed
+        ``<details>`` because a card that opens into thirty check names
+        is the wall of text the expansion exists to avoid.
+        """
+        body = self._function(script, "trustNode(trust)")
+        assert "evidence.missing_checks" in body
+        assert "evidence.passed_checks" in body
+        assert 'make("details", "trust-why")' in body
+        assert 'make("summary", null, "What the rubric checked")' in body
+        assert "open" not in re.sub(r"[^\w]", " ", body).split(), "the detail must ship collapsed"
+        assert 'checkList("not present", missing)' in body
+        assert 'checkList("present", passed)' in body
+        assert "evidence.hard_fail_reason" in body
 
 
 class TestHeroExampleIsReal:
