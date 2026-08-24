@@ -57,6 +57,35 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Added
+
+- **A conformer basin now says how many optimisations back it, not how many
+  optimisation jobs were run.** A two-stage geometry optimisation deposits two
+  `opt` calculations — a coarse pre-optimisation and the refinement it feeds,
+  joined by `calculation_dependency.dependency_role = 'optimized_from'`. Both
+  belong to the basin; between them they are one optimisation.
+  `evidence_summary.optimization_chain_count` on the conformer-group read
+  counts optimisation **chains**, so a staged optimisation contributes `1`.
+
+  Measured on the hosted instance: **156 anchored `opt` rows across 66
+  conformer groups collapse to 136 chains**, with the 20 collapsed chains
+  falling across 16 groups. Carbon dioxide, the landing page's showcase
+  panel, has 3 `opt` rows and 2 optimisations.
+
+  Only `optimized_from` collapses. `freq_on` (63 both-anchored pairs),
+  `single_point_on` (65) and `scan_parent` (46) also join two calculations,
+  but a frequency job on an optimised geometry is genuinely different evidence
+  from the optimisation that produced the geometry, and folding those together
+  would be a scientific error rather than a tidier number. The collapse also
+  stops at the observation boundary and is correct for a chain of any length.
+
+  **No previously published number changes.** `evidence_coverage.opt` counts
+  observations, not calculations, so a basin whose observation carries a
+  two-stage optimisation already read `1` for it; `calculation_count` and
+  `geometry_count` deliberately stay row counts, because each is the length of
+  a list `include=calculations` / `include=geometries` will hand back. The
+  field is additive.
+
 ### Changed
 
 - **A depositor can now download their own artifacts. Until now, nobody could.**
