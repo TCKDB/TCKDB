@@ -600,13 +600,21 @@ def _build_observations_summary(
     )
 
 
-#: An ``opt`` calculation is *scaffolding* when a ``calculation_dependency``
+#: An ``opt`` calculation is *superseded* when a ``calculation_dependency``
 #: row with ``dependency_role = 'optimized_from'`` names it as the parent of
 #: another calculation anchored to the **same** conformer observation. That
-#: is the coarse pre-optimisation of a staged geometry optimisation: it
-#: belongs to the basin, but the refinement it fed is what the basin
-#: actually got, so counting both reports one optimisation as two pieces of
-#: evidence.
+#: is an earlier stage of a staged geometry optimisation -- a coarse
+#: pre-optimisation, or (as on every deployed pair, measured 2026-08-24) a
+#: restart at the same level of theory. It belongs to the basin, but the
+#: refinement it fed is what the basin actually got, so counting both
+#: reports one optimisation as two pieces of evidence.
+#:
+#: The edge direction is the writer's, not an assumption:
+#: :mod:`app.services.calculation_resolution` documents ``optimized_from``
+#: as "restart-from" for an ``opt`` parent, and for a ``path_search``
+#: parent as "the path search runs first ... and the primary opt is then
+#: ``optimized_from`` that guess". The parent is the starting point; the
+#: child is the result.
 #:
 #: Three properties of this predicate are load-bearing.
 #:
@@ -633,12 +641,11 @@ def _build_observations_summary(
 #: database -- all 20 both-anchored ``optimized_from`` pairs are within one
 #: observation -- and if one ever does, both ends count.
 #:
-#: The surviving end is the **refinement**, never the coarse stage, because
-#: it is the one whose level of theory, geometry and convergence are what
-#: the basin actually obtained; the coarse stage is scaffolding that was
-#: thrown away. ``NULL`` never equals the parent's observation id, so a
-#: chain with only its refinement anchored also counts once -- which is
-#: precisely what makes anchoring an orphaned coarse stage later a no-op
+#: The surviving end is the **refinement** (the child), never the stage it
+#: superseded, because its geometry and convergence are what the basin
+#: actually obtained. ``NULL`` never equals the parent's observation id, so
+#: a chain with only its refinement anchored also counts once -- which is
+#: precisely what makes anchoring an orphaned earlier stage later a no-op
 #: for this number.
 def _feeds_a_refinement_on_the_same_observation():
     """SQL predicate: this calculation is a superseded optimisation stage."""

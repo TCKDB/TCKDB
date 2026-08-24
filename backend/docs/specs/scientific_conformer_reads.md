@@ -395,9 +395,12 @@ Three properties of the collapse are load-bearing:
   exists to make. No such pair is deployed — all 20 sit inside one
   observation — and if one appears, both ends count.
 
-The surviving end is the **refinement**, never the coarse stage: its
-level of theory, geometry and convergence are what the basin actually
-obtained, and the coarse stage is scaffolding that was discarded. A
+The surviving end is the **refinement** — the dependency's *child*, since
+`optimized_from` is written "restart-from" with the parent as the
+starting point (`app/services/calculation_resolution.py`). Its geometry
+and convergence are what the basin actually obtained. Note that on every
+deployed pair both ends sit at the *same* level of theory, so "coarse"
+and "fine" here describe staging and convergence, not level. A
 consequence worth stating, because a backfill depends on it: a chain
 with only its refinement anchored already counts `1`, so anchoring its
 orphaned coarse stage later leaves this number — and every
