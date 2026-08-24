@@ -72,6 +72,7 @@ from app.schemas.reads.scientific_provenance import (
     TransitionStateDependency,
     TransitionStateInFull,
 )
+from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.calculations import (
     _TRUST_EAGER_LOADS as _CALCULATION_TRUST_EAGER_LOADS,
 )
@@ -691,6 +692,12 @@ def _build_transition_states_section(
     ts_entry_ids = [t.id for t in ts_entry_rows]
     calcs_by_ts_entry = _calcs_by_ts_entry(session, ts_entry_ids)
     deps_by_ts_entry = _deps_by_ts_entry(session, calcs_by_ts_entry)
+    # One statement for the document's whole TS-entry set, matching the
+    # ``_calcs_by_ts_entry`` / ``_deps_by_ts_entry`` batching above rather
+    # than adding a round trip inside the loop.
+    ts_levels = levels_of_theory.for_transition_state_entries(
+        session, ts_entry_ids
+    )
 
     out: list[TransitionStateInFull] = []
     for ts_entry in ts_entry_rows:
@@ -703,7 +710,9 @@ def _build_transition_states_section(
         # surface so the block surfaced under /full is byte-identical
         # to ``record.evidence_summary`` from
         # ``GET /scientific/transition-state-entries/{ref}``.
-        evidence = _build_entry_evidence_summary(session, ts_entry.id)
+        evidence = _build_entry_evidence_summary(
+            session, ts_entry.id, levels_index=ts_levels
+        )
         out.append(
             TransitionStateInFull(
                 transition_state_id=ts_entry.transition_state_id,
@@ -968,6 +977,11 @@ def _build_conformers_section(
         else {}
     )
 
+    # As above: one statement for every conformer group in the document.
+    group_levels = levels_of_theory.for_conformer_groups(
+        session, list(all_group_ids)
+    )
+
     out: list[ReactionFullSpeciesConformers] = []
     for row in participant_rows:
         se_badge = se_badges[row.entry_id]
@@ -983,6 +997,7 @@ def _build_conformers_section(
                 cg=cg,
                 cg_badge=cg_badge,
                 includes=set(),  # /full keeps the summary-safe default shape
+                levels_map=group_levels.for_owner(cg.id),
             )
             items.append(
                 ReactionFullConformerGroupItem(

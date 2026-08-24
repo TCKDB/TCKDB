@@ -99,6 +99,26 @@ Defined in [scientific_transition_state.py](../../app/schemas/reads/scientific_t
 - `TransitionStateEntryEvidenceSummary` — **TS-entry scope**:
   `calculation_count` + the `has_*` booleans for the same seven
   evidence kinds, restricted to this one entry's calculations.
+- `levels_of_theory` — on **both** blocks, a map from calculation type
+  to the `LevelOfTheorySummary` list observed for it. Entry scope is
+  this entry; concept scope is the union across its entries. Always
+  present, never include-gated, `{}` when nothing is attached.
+  - The value is a **list even at length one**: 12 of the 34
+    transition-state entries on the deployed instance carry two levels
+    (optimise and take frequencies cheaply, one expensive single point
+    at that geometry), and nothing forbids two calculations of the
+    *same* type at different levels — 27 such (species entry, type)
+    pairs already exist.
+  - **An absent key means no calculation of that type**; a key with an
+    **empty list** means calculations of that type exist and none names
+    a level (`calculation.lot_id` is nullable). Different facts, so
+    different representations.
+  - It **reports and never judges**. No `levels_consistent`, no
+    `comparable`: such a flag would mark those 12 correct records as
+    suspect. Comparability judgements belong to the trust rubrics,
+    which are versioned, named and opt-in.
+  - Cost is one grouped statement per *page*, not per record; pinned by
+    `tests/services/scientific_read/test_record_builder_statement_cost.py`.
 
   Primary-per-type calculation selection is **deferred** on both blocks
   — the data model does not currently carry a unique notion of

@@ -19,6 +19,12 @@ measure a different number: the *marginal* cost of one token rather than the
 cost of a record. They belong to the same gate — anything that scales with the
 page size on a search surface is the same defect — and they are separate only
 so that each of the five surfaces can fail while the others pass.
+The ``evidence_summary.levels_of_theory`` cases at the bottom follow the same
+per-surface rule for the same reason: the transition-state page and the
+conformer page resolve the same block through different owner columns — one
+directly on ``calculation``, one joined through ``conformer_observation`` —
+so either can regress to a query per record while the other stays flat. One
+aggregate case would hide that.
 """
 
 from __future__ import annotations
@@ -28,18 +34,38 @@ import hashlib
 from sqlalchemy import event
 from sqlalchemy.orm import Session
 
-from app.db.models.common import CalculationType
+from app.db.models.common import (
+    CalculationType,
+    TransitionStateEntryStatus,
+)
 from app.schemas.reads.scientific_calculation_search import (
     CalculationsSearchRequest,
 )
+from app.schemas.reads.scientific_conformer_search import (
+    ConformersSearchRequest,
+)
+from app.schemas.reads.scientific_transition_state_search import (
+    TransitionStatesSearchRequest,
+)
 from app.services.scientific_read.calculations_search import search_calculations
+from app.services.scientific_read.conformers_search import search_conformers
+from app.services.scientific_read.transition_states_search import (
+    search_transition_states,
+)
 from tests.services.scientific_read._factories import (
     attach_artifact,
     attach_freq_result,
     make_calculation,
+    make_calculation_with_conformer,
+    make_chem_reaction,
+    make_conformer_group,
+    make_conformer_observation,
     make_lot,
+    make_reaction_entry,
     make_species,
     make_species_entry,
+    make_transition_state,
+    make_transition_state_entry,
     next_inchi_key,
 )
 
@@ -407,4 +433,222 @@ def test_the_adr_0012_fields_cost_no_extra_statement_per_record(db_session):
     assert (small_mode, large_mode) == (0, 0), (
         f"{small_mode} / {large_mode} standalone calc_freq_mode statements: "
         "the count above tau has become a second round trip per record"
+    )
+
+
+# ---------------------------------------------------------------------------
+# What ``evidence_summary.levels_of_theory`` costs, per surface
+# ---------------------------------------------------------------------------
+
+#: A search page of *N* records must pay **one** statement for the whole
+#: page's levels of theory, not *N*. Both surfaces resolve theirs from the
+#: page's id list before the per-record builders run, so the number below is
+#: flat in ``limit`` — and flatness, not the value, is the claim.
+#:
+#: The failure this guards is specific and would be invisible otherwise. The
+#: obvious implementation puts the query inside the evidence-summary builder,
+#: which runs once per record; every assertion about the *content* of the
+#: block still passes, the block is still correct, and a 200-record page
+#: quietly costs 200 extra round trips. Nothing else in the suite counts
+#: statements on these two surfaces.
+_LEVELS_STATEMENTS_PER_PAGE = 1
+
+#: A statement that reaches ``level_of_theory`` through an outer join is the
+#: levels-of-theory query and nothing else. The ``method``/``basis`` search
+#: *filters* join the same table, but they join it inner and they join it on
+#: the candidate query rather than the page; the per-calculation provenance
+#: loader selects from it without a join at all. Matching the join shape
+#: rather than the bare table name is what keeps this counting one thing.
+_LEVELS_MARKER = "LEFT OUTER JOIN level_of_theory"
+
+_LEVELS_SMALL_PAGE = 4
+_LEVELS_LARGE_PAGE = 20
+
+
+def _levels_statements(session: Session, run) -> tuple[int, int]:
+    """Return (statements resolving levels of theory, statements in total)."""
+    levels = 0
+    total = 0
+    engine = session.connection().engine
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        nonlocal levels, total
+        total += 1
+        if _LEVELS_MARKER in statement:
+            levels += 1
+
+    try:
+        run()
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+    return levels, total
+
+
+def _ts_entries_page(db_session, *, label: str, entries: int):
+    """One transition state carrying *entries* entries, each with two levels.
+
+    Two levels per entry, not one: the composite workflow is the shape the
+    block exists for, and a fixture at one level would not exercise the
+    grouping.
+    """
+    species = [
+        make_species(db_session, inchi_key=next_inchi_key(f"C{label[:2]}{i}"))
+        for i in range(4)
+    ]
+    species_entries = [make_species_entry(db_session, s) for s in species]
+    chem = make_chem_reaction(
+        db_session, reactants=species[:2], products=species[2:]
+    )
+    rxe = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=species_entries[:2],
+        product_entries=species_entries[2:],
+    )
+    ts = make_transition_state(db_session, reaction_entry=rxe, label=label)
+    cheap = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    dear = make_lot(db_session, method="MRCI+Davidson", basis="aug-cc-pVTZ")
+    for _ in range(entries):
+        entry = make_transition_state_entry(
+            db_session,
+            transition_state=ts,
+            status=TransitionStateEntryStatus.optimized,
+        )
+        for calc_type, lot in (
+            (CalculationType.opt, cheap),
+            (CalculationType.freq, cheap),
+            (CalculationType.sp, dear),
+        ):
+            make_calculation(
+                db_session,
+                type=calc_type,
+                transition_state_entry_id=entry.id,
+                lot_id=lot.id,
+            )
+    return ts
+
+
+def test_the_levels_map_costs_a_ts_search_page_one_statement(db_session):
+    """Flat in ``limit`` on ``/transition-states/search``.
+
+    Measured on this fixture: one statement for a 4-record page and one for
+    a 20-record page. A per-record implementation would spend 4 and 20.
+    """
+    ts = _ts_entries_page(
+        db_session, label="lot-cost-ts", entries=_LEVELS_LARGE_PAGE + 5
+    )
+
+    def page(limit: int):
+        def run():
+            response = search_transition_states(
+                db_session,
+                TransitionStatesSearchRequest(
+                    transition_state_ref=ts.public_ref, limit=limit
+                ),
+            )
+            assert len(response.records) == limit, (
+                "the page must be full to be comparable"
+            )
+            assert response.records[0].evidence_summary.levels_of_theory, (
+                "the block must actually be populated -- a cost assertion "
+                "over an empty map proves nothing"
+            )
+
+        return run
+
+    small_levels, small_total = _levels_statements(
+        db_session, page(_LEVELS_SMALL_PAGE)
+    )
+    large_levels, large_total = _levels_statements(
+        db_session, page(_LEVELS_LARGE_PAGE)
+    )
+
+    assert small_levels >= 1, (
+        "no statement resolved a level of theory: either the marker stopped "
+        "matching or the block stopped being built"
+    )
+    assert small_levels == large_levels == _LEVELS_STATEMENTS_PER_PAGE, (
+        f"{small_levels} levels-of-theory statements for "
+        f"{_LEVELS_SMALL_PAGE} records against {large_levels} for "
+        f"{_LEVELS_LARGE_PAGE}: the block is resolving per record "
+        f"(totals {small_total} and {large_total})"
+    )
+
+
+def _conformer_groups_page(db_session, *, tag: str, groups: int):
+    """One species entry carrying *groups* basins, each at two levels."""
+    species = make_species(db_session, inchi_key=next_inchi_key(f"CG{tag}"))
+    entry = make_species_entry(db_session, species)
+    cheap = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    dear = make_lot(db_session, method="CCSD(T)-F12", basis="cc-pVTZ-F12")
+    for index in range(groups):
+        group = make_conformer_group(db_session, entry, label=f"{tag}-{index}")
+        observation = make_conformer_observation(
+            db_session, conformer_group=group
+        )
+        for calc_type, lot in (
+            (CalculationType.opt, cheap),
+            (CalculationType.sp, dear),
+        ):
+            make_calculation_with_conformer(
+                db_session,
+                species_entry=entry,
+                conformer_observation=observation,
+                type=calc_type,
+                lot_id=lot.id,
+            )
+    return entry
+
+
+def test_the_levels_map_costs_a_conformer_search_page_one_statement(
+    db_session,
+):
+    """Flat in ``limit`` on ``/conformers/search``, and by a different route.
+
+    This surface holds *group* ids while the calculations hang off
+    *observations*, so the page query joins through ``conformer_observation``
+    to key the result by group. That join is the whole reason this case is
+    separate from the transition-state one rather than parametrised with it:
+    the two resolve the same block through different owner columns, and
+    either can regress while the other stays flat.
+    """
+    entry = _conformer_groups_page(
+        db_session, tag="cost", groups=_LEVELS_LARGE_PAGE + 5
+    )
+
+    def page(limit: int):
+        def run():
+            response = search_conformers(
+                db_session,
+                ConformersSearchRequest(
+                    species_entry_ref=entry.public_ref, limit=limit
+                ),
+            )
+            assert len(response.records) == limit, (
+                "the page must be full to be comparable"
+            )
+            assert response.records[0].evidence_summary.levels_of_theory, (
+                "the block must actually be populated -- a cost assertion "
+                "over an empty map proves nothing"
+            )
+
+        return run
+
+    small_levels, small_total = _levels_statements(
+        db_session, page(_LEVELS_SMALL_PAGE)
+    )
+    large_levels, large_total = _levels_statements(
+        db_session, page(_LEVELS_LARGE_PAGE)
+    )
+
+    assert small_levels >= 1, (
+        "no statement resolved a level of theory: either the marker stopped "
+        "matching or the block stopped being built"
+    )
+    assert small_levels == large_levels == _LEVELS_STATEMENTS_PER_PAGE, (
+        f"{small_levels} levels-of-theory statements for "
+        f"{_LEVELS_SMALL_PAGE} records against {large_levels} for "
+        f"{_LEVELS_LARGE_PAGE}: the block is resolving per record "
+        f"(totals {small_total} and {large_total})"
     )

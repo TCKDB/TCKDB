@@ -177,10 +177,17 @@ class TransitionStateEvidenceCoverage(BaseModel):
     calculation. It does **not** say those calculations are
     *comparable*: the entries may sit at different levels of theory,
     come from different codes, and describe different geometries. A
-    count is honest about coverage, not about consistency. A caller who
-    needs consistency must inspect the per-calculation level-of-theory /
-    software provenance under ``include=calculations``; no number in
-    this block can stand in for that.
+    count is honest about coverage, not about consistency, and no number
+    in this block can stand in for that.
+
+    Half of that gap is now answerable without a second request.
+    ``TransitionStateEvidenceSummary.levels_of_theory``, beside this
+    block, lists the levels used per calculation type — so
+    ``freq == entry_count`` with two entries under ``freq`` is visibly a
+    fully covered TS whose frequencies come from two levels. It still
+    does not *assert* comparability; it just stops charging a round trip
+    to find out. The software and geometry halves are still only under
+    ``include=calculations``.
 
     ``0`` is exactly as strong as the old ``has_x is False`` was:
     nothing in scope carries that evidence.
@@ -234,6 +241,15 @@ class TransitionStateEvidenceSummary(BaseModel):
     entry_count: int
     calculation_count: int
     evidence_coverage: TransitionStateEvidenceCoverage
+    #: Levels of theory used under this TS, per calculation type, pooled
+    #: across every entry. See
+    #: ``app/services/scientific_read/levels_of_theory.py`` for the shape's
+    #: whole argument: lists because 12 of 34 deployed TS entries carry two
+    #: levels, an absent key because that type has no calculation here, and
+    #: an empty list because it has one that names no level. This is the
+    #: block ``evidence_coverage``'s docstring says a count cannot stand in
+    #: for — and it reports, it does not judge.
+    levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 
 
 class TransitionStateEntryEvidenceSummary(BaseModel):
@@ -263,6 +279,14 @@ class TransitionStateEntryEvidenceSummary(BaseModel):
     has_path_search: bool
     has_geometry_validation: bool
     has_scf_stability: bool
+    #: Levels of theory used on this entry, per calculation type. The
+    #: originating case for the whole block: an entry optimised at
+    #: wb97xd/def2tzvp with its single point at MRCI+Davidson reports both,
+    #: under the type each was run for, and no field anywhere claims the
+    #: entry has *a* level. Keys mirror the ``has_*`` booleans above —
+    #: ``has_sp`` false and an absent ``sp`` key are the same fact said
+    #: twice. See ``app/services/scientific_read/levels_of_theory.py``.
+    levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 
 
 class TransitionStateValidationEvidenceSummary(BaseModel):

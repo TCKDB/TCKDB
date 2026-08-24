@@ -296,6 +296,7 @@ class ConformerGroupEvidenceSummary(BaseModel):
     calculation_count: int
     evidence_coverage: ConformerEvidenceCoverage
     geometry_count: int
+    levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 
 
 class ConformerObservationEvidenceSummary(BaseModel):
@@ -307,7 +308,27 @@ class ConformerObservationEvidenceSummary(BaseModel):
     has_geometry_validation: bool
     has_scf_stability: bool
     geometry_count: int
+    levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 ```
+
+**`levels_of_theory` answers what a count cannot.** `evidence_coverage`
+says how many observations carry each kind of evidence; it says nothing
+about whether they are *comparable*, and its own docstring named that
+limitation. This map states the levels used, keyed by calculation type —
+group scope is the union across the basin's observations, observation
+scope is that one row. Always present, never include-gated, `{}` when
+nothing is attached.
+
+- The value is a **list even at length one**, because a record can
+  legitimately span two levels and nothing forbids two calculations of
+  the same type at different levels.
+- **An absent key means no calculation of that type**; a key with an
+  **empty list** means calculations of that type exist and none names a
+  level (`calculation.lot_id` is nullable).
+- It **reports and never judges** — no consistency or comparability
+  flag rides along. That call belongs to the trust rubrics.
+- Cost is one grouped statement per *page*: the group search resolves
+  the whole page through `conformer_observation` in a single query.
 
 **Group scope reports counts, not booleans.** Until 2026-08 the group
 block carried the same `has_*` booleans as the observation block,
