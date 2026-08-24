@@ -12,6 +12,7 @@ from __future__ import annotations
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.chemistry.reaction_family_display import reaction_family_display_name
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import ChemReaction, ReactionFamily
 from app.db.models.software import Software
@@ -50,6 +51,13 @@ def list_reaction_families(session: Session) -> list[dict]:
     Lists the seeded ``reaction_family`` vocabulary and how many reactions
     reference each — the discoverable set of valid ``family=`` filter
     values for reaction search.
+
+    ``value`` stays the raw RMG identifier: it is the filter token, and a
+    client that echoes a display name back as ``family=`` must not match.
+    ``display_name`` is the readable form, derived at read time by
+    :func:`app.chemistry.reaction_family_display.reaction_family_display_name`
+    — for a handful of families whose meaning is genuinely unresolved it is
+    the identifier itself, unchanged, rather than a half-translation.
     """
     rows = session.execute(
         select(ReactionFamily.name, func.count(ChemReaction.id))
@@ -59,4 +67,11 @@ def list_reaction_families(session: Session) -> list[dict]:
         .group_by(ReactionFamily.name)
         .order_by(func.count(ChemReaction.id).desc(), ReactionFamily.name.asc())
     ).all()
-    return [{"value": name, "count": count} for name, count in rows]
+    return [
+        {
+            "value": name,
+            "display_name": reaction_family_display_name(name),
+            "count": count,
+        }
+        for name, count in rows
+    ]
