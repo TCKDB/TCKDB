@@ -159,6 +159,35 @@ wrapper over a contract that is itself still moving.
 
 ### Added
 
+- **Every token TCKDB puts on the wire now has a published definition.**
+  `matched_direction: "reverse"`, `under_review` beside `not_reviewed`,
+  `"ts_graph_or_smiles_present": "missing"`, `spc_` beside `spe_` — each is
+  a real distinction the code takes seriously and none is guessable from
+  the string, and nothing in the API or the documentation said what they
+  meant. `docs/guides/api_vocabulary.md` is a glossary of 438 of them: the
+  review statuses, the trust badges and check outcomes, the 143 trust check
+  names, the identifier prefixes with their content-derived/opaque split,
+  the reaction-search vocabulary, and every refusal code a caller can
+  receive.
+
+  It is **generated** from the sources that define those tokens — the
+  read-schema enums, `public_refs.PREFIXES`, the trust rubrics, the code
+  catalogue — by `backend/scripts/generate_api_vocabulary.py`, and
+  `backend/tests/scripts/test_api_vocabulary.py` fails if the committed
+  document drifts from a fresh render, if an entry names a token no source
+  has, or if an enum every response carries has no entry. A hand-written
+  glossary would be stale the first time somebody added a status, and a
+  stale glossary answers confidently and wrongly.
+
+  Inclusion is two halves: a reader must be able to meet the token (checked
+  mechanically against the enums the read schemas and the trust fragment can
+  serialise) and chemistry must not already decode it (declared per
+  vocabulary). Chemistry-valued vocabulary is deliberately out. Reaction
+  family display names are recorded as a **gap** rather than invented:
+  `reaction_family` holds only `id`, `name` and `created_at`, so
+  "Hydrogen Abstraction" for `H_Abstraction` is not a fact this database
+  holds.
+
 - **The base URL now answers a person.** `https://<host>/` served a bare
   `404 application/json` blob, and so did `/docs`, `/redoc` and
   `/openapi.json`, because hosted deployments set `EXPOSE_API_DOCS=false`
