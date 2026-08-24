@@ -1,8 +1,10 @@
-"""Scientific artifact metadata search and approved-byte download.
+"""Scientific artifact metadata search and gated byte download.
 
 Search remains metadata-only. A separate content-addressed download route
-serves bytes only when an owning calculation is explicitly approved and
-re-verifies the persisted digest and size before returning content.
+serves bytes to authenticated callers when the owning calculation is
+explicitly approved, or when the caller is the depositor of that
+calculation, and re-verifies the persisted digest and size before
+returning content on either path.
 """
 
 from __future__ import annotations
@@ -50,7 +52,7 @@ from app.services.artifact_storage import (
     load_artifact_bytes,
 )
 from app.services.scientific_read.artifact_download import (
-    resolve_approved_artifact_by_sha256,
+    resolve_downloadable_artifact_by_sha256,
 )
 from app.services.scientific_read.artifact_integrity_reads import (
     artifact_integrity_history,
@@ -287,7 +289,12 @@ def artifact_integrity_detail(
     responses={
         200: {"content": {"application/octet-stream": {}}},
         401: {"description": "Authentication required."},
-        404: {"description": "No approved artifact has this digest."},
+        404: {
+            "description": (
+                "No artifact with this digest is approved, and none of the "
+                "caller's own deposits carries it."
+            )
+        },
         502: {
             "description": (
                 "A recorded break in custody, and retrying will not clear "
@@ -309,7 +316,7 @@ def download_approved_artifact(
     user: AppUser = Depends(get_current_user),
     session: Session = Depends(get_db),
 ) -> Response:
-    """Download curator-approved bytes by their content-addressed digest.
+    """Download approved bytes, or the caller's own, by content digest.
 
     Unlike the metadata search endpoints, which are part of the public
     read surface, raw-artifact bytes are served only to authenticated
@@ -318,7 +325,10 @@ def download_approved_artifact(
     must never reach anonymous clients. This gate is unconditional (no
     opt-out flag) so no deployment can accidentally re-expose the bytes;
     see ``docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md``.
-    The digest is still re-verified against the stored bytes below.
+    The digest is still re-verified against the stored bytes below, on
+    every path — an owner's download is verified exactly like anyone
+    else's, because integrity is a claim about the store, not about who
+    is asking.
 
     When that verification fails, this route does more than answer: it
     writes an ``artifact_integrity_event``, which hard-fails the owning
@@ -326,12 +336,31 @@ def download_approved_artifact(
     therefore not a private incident between one caller and the store —
     it is a recorded break in TCKDB's custody of the evidence
     (``docs/adr/0014-custody-of-stored-evidence-is-recorded-not-logged.md``).
+
+    *Which* authenticated callers get the bytes has two answers, and
+    until 2026-08-24 it had only one. Curator approval publishes evidence
+    to every authenticated caller, and that is unchanged. But approval is
+    a curator action on a store where curation has barely begun — 563 of
+    563 artifacts on the hosted instance belonged to ``not_reviewed``
+    calculations — so an approval-only gate had never opened for anyone,
+    the depositor of the file included. A depositor may therefore always
+    fetch back what they deposited, judged by the same ownership rule the
+    upload route authorizes attaching with
+    (``app.services.deposit_ownership``). ADR 0004's argument for gating
+    raw logs is not overturned by this; only its unargued choice of
+    *review status* as the gate is.
+
+    A caller who owns nothing here still cannot tell an unapproved digest
+    from an unknown one: both are 404.
     """
 
-    artifact = resolve_approved_artifact_by_sha256(session, sha256)
+    artifact = resolve_downloadable_artifact_by_sha256(session, sha256, user)
     if artifact is None:
         # Deliberately indistinguishable from an unknown digest: callers cannot
-        # probe whether non-approved/private content exists.
+        # probe whether non-approved/private content exists. 404 and not 403,
+        # for the same reason — a 403 would confirm the digest is real. The
+        # sentence is unchanged for a stranger; what changed is that an owner
+        # no longer reaches this line.
         raise HTTPException(status_code=404, detail="Approved artifact not found.")
 
     try:

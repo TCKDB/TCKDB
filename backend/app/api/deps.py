@@ -5,24 +5,23 @@ from __future__ import annotations
 from typing import Iterator
 
 from fastapi import Cookie, Depends, Header, HTTPException, Query
-from sqlalchemy import create_engine, event, select
+from sqlalchemy import create_engine, event
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.config import settings
 from app.db.models.app_user import AppUser
 from app.db.models.calculation import Calculation
-from app.db.models.common import (
-    AppUserRole,
-    SubmissionRecordType,
-    SubmissionStatus,
-)
-from app.db.models.submission import Submission, SubmissionRecordLink
+from app.db.models.common import AppUserRole
 from app.services.auth import (
     API_KEY_HEADER,
     SESSION_COOKIE_NAME,
     authenticate_api_key,
     resolve_session,
+)
+from app.services.deposit_ownership import (
+    ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES,
+    user_owns_calculation_deposit,
 )
 
 engine = create_engine(settings.database_url, pool_pre_ping=True)
@@ -199,18 +198,11 @@ def require_session_user(
 
 _CURATION_ROLES = frozenset({AppUserRole.curator, AppUserRole.admin})
 
-#: Submission lifecycle states that count as live ownership for authorization.
-#: Rejected and superseded submissions explicitly do *not* grant the
-#: contributor permission to attach artifacts to the calculations they once
-#: produced — those calculations are no longer in that submission's lineage.
-_ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES = frozenset(
-    {
-        SubmissionStatus.pending,
-        SubmissionStatus.precheck_passed,
-        SubmissionStatus.auto_flagged,
-        SubmissionStatus.approved,
-    }
-)
+#: Re-exported for the call sites and tests that already import it from
+#: here. The list itself lives with the ownership rule it qualifies, in
+#: ``app.services.deposit_ownership``, so the read path and the write path
+#: cannot drift into two different ideas of a "live" submission.
+_ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES = ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES
 
 
 def can_modify_calculation_artifacts(
@@ -232,33 +224,19 @@ def can_modify_calculation_artifacts(
        submissions intentionally do not authorize uploads.
     3. Curator/admin override — ``user.role`` in :data:`_CURATION_ROLES`.
 
+    Paths 1 and 2 are :func:`~app.services.deposit_ownership.user_owns_calculation_deposit`
+    — the single ownership rule, shared with the artifact download route so
+    that upload and download cannot disagree about whose file it is. Path 3
+    is this function's own addition and stays here: writing to someone
+    else's deposit is a curator act, being its owner is not.
+
     Caller is responsible for raising HTTP 403 on False; this function
     does not raise. The 403 detail must not leak any internal id.
     """
-    if calculation.created_by is not None and calculation.created_by == user.id:
+    if user_owns_calculation_deposit(session, calculation, user):
         return True
 
-    submission_owner = session.scalar(
-        select(Submission.id)
-        .join(
-            SubmissionRecordLink,
-            SubmissionRecordLink.submission_id == Submission.id,
-        )
-        .where(
-            SubmissionRecordLink.record_type == SubmissionRecordType.calculation,
-            SubmissionRecordLink.record_id == calculation.id,
-            Submission.created_by == user.id,
-            Submission.status.in_(_ARTIFACT_AUTHORIZING_SUBMISSION_STATUSES),
-        )
-        .limit(1)
-    )
-    if submission_owner is not None:
-        return True
-
-    if user.role in _CURATION_ROLES:
-        return True
-
-    return False
+    return user.role in _CURATION_ROLES
 
 
 def require_curator_or_admin(
