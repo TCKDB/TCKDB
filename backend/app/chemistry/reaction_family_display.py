@@ -10,7 +10,10 @@ The derivation is deliberately two layers plus one refusal:
 1. **Mechanical.** Split the identifier on ``_`` and ``-``, split camelCase,
    join with single spaces. ``R_Addition_MultipleBond`` becomes
    "R Addition Multiple Bond". No chemistry knowledge is applied, so this
-   layer cannot be wrong.
+   layer cannot be wrong — with two carve-outs where a general rule would
+   have flattened punctuation that carries chemical meaning: a hyphen
+   between two single capitals is a bond and is kept (``C-C``), and a
+   camelCase split narrow enough to leave ``vdW`` alone.
 2. **Token expansion.** :data:`TOKEN_EXPANSIONS` maps a small set of
    confirmed abbreviations to words, turning "H Abstraction" into
    "Hydrogen Abstraction". **A token with no entry is left exactly as the
@@ -68,8 +71,28 @@ from __future__ import annotations
 
 import re
 
-# Word separators in an RMG family identifier. Both become a single space.
-_SEPARATORS = re.compile(r"[_\-]+")
+# Word separators in an RMG family identifier. Both become a single space --
+# except for the one hyphen that is not a separator at all; see _BOND below.
+_UNDERSCORES = re.compile(r"_+")
+_HYPHENS = re.compile(r"-+")
+
+# A hyphen between two single capital letters is a BOND, not a separator:
+# ``C-C`` in ``6_membered_central_C-C_shift`` is one carbon-carbon bond, and
+# the general split turned it into two loose carbons ("central C C shift").
+# This is the same shape as ``2+2`` below -- punctuation carrying chemical
+# meaning that a general rule flattened -- and it is narrowed the same way:
+# by the one form that can only be read as chemistry.
+#
+# Measured over the 125 stored identifiers, six carry a hyphen and this
+# pattern matches exactly one of them. ``Baeyer-Villiger_step1_cat`` (two
+# surnames), ``Disproportionation-Y`` and ``1,2-Birad_to_alkene`` all have a
+# multi-character side, so they keep splitting on their hyphen as before.
+# The bond is left spelled with the ASCII hyphen the identifier uses. An en
+# dash would be better typography for a bond, but it would also make the
+# display name stop being a copy of the characters that arrived, and the
+# display name is a derived, searchable string that clients hand back to
+# people.
+_BOND = re.compile(r"^[A-Z](?:-[A-Z])+$")
 
 # camelCase boundary: an uppercase letter that both follows a lowercase
 # letter and starts a lowercase word. Deliberately narrower than the usual
@@ -164,8 +187,20 @@ UNRESOLVED_FAMILIES: frozenset[str] = frozenset(
 
 
 def _separator_tokens(identifier: str) -> list[str]:
-    """Split on ``_`` and ``-`` only — no camelCase split yet."""
-    return [token for token in _SEPARATORS.split(identifier) if token]
+    """Split on ``_`` and ``-`` only — no camelCase split yet.
+
+    A hyphen that :data:`_BOND` recognises is kept: ``C-C`` is one token,
+    because that hyphen is a bond rather than a word break.
+    """
+    tokens: list[str] = []
+    for chunk in _UNDERSCORES.split(identifier):
+        if not chunk:
+            continue
+        if _BOND.match(chunk):
+            tokens.append(chunk)
+            continue
+        tokens.extend(part for part in _HYPHENS.split(chunk) if part)
+    return tokens
 
 
 def _expand(token: str) -> str:

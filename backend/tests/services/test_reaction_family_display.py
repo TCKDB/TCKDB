@@ -14,6 +14,8 @@ that an incomplete chemistry dictionary is safe. Three properties carry that:
 
 from __future__ import annotations
 
+import re
+
 import pytest
 from sqlalchemy import select
 
@@ -114,6 +116,78 @@ def test_mechanical_layer(identifier, expected):
 )
 def test_camel_split_does_not_mangle_formulas(identifier, expected):
     assert reaction_family_display_name(identifier) == expected
+
+
+# ---------------------------------------------------------------------------
+# Layer 1 — a hyphen that is a bond, not a separator
+# ---------------------------------------------------------------------------
+
+#: Every stored identifier that carries a hyphen, with what it must render as.
+#: Five of the six are word breaks and split; one is a bond and does not. The
+#: hyphen rule can only touch these six names, so pinning all of them is the
+#: whole regression surface of the narrowing.
+HYPHEN_FAMILIES = {
+    "1,2-Birad_to_alkene": "1,2 Biradical to alkene",
+    "6_membered_central_C-C_shift": "6 membered central C-C shift",
+    "Baeyer-Villiger_step1_cat": "Baeyer Villiger step1 cat",
+    "Baeyer-Villiger_step2": "Baeyer Villiger step2",
+    "Baeyer-Villiger_step2_cat": "Baeyer Villiger step2 cat",
+    "Disproportionation-Y": "Disproportionation Y",
+}
+
+
+def test_the_six_hyphenated_families_are_the_whole_hyphen_surface():
+    """Measured over the real vocabulary, so the pinned six cannot go stale.
+
+    If a 126th family arrives with a hyphen in it, this fails and whoever
+    added it has to say which reading its hyphen carries.
+    """
+    assert {name for name in CANONICAL_REACTION_FAMILIES if "-" in name} == set(HYPHEN_FAMILIES)
+
+
+@pytest.mark.parametrize("identifier, expected", sorted(HYPHEN_FAMILIES.items()))
+def test_a_bond_hyphen_survives_and_every_other_hyphen_splits(identifier, expected):
+    """``C-C`` is one carbon-carbon bond; ``Baeyer-Villiger`` is two surnames.
+
+    The general "split on ``_`` and ``-``" rule read the bond as a word break
+    and produced "6 membered central C C shift" -- two loose carbons where the
+    identifier named a bond. This is the same class of mistake as reading
+    ``2+2`` as a locant: punctuation carrying chemical meaning, flattened by a
+    general rule.
+
+    The narrowing is a hyphen between two *single capital letters*, which is
+    the only form here that can only be read as chemistry. It deliberately
+    leaves the other five alone: each of those has a multi-character side.
+    """
+    assert reaction_family_display_name(identifier) == expected
+
+
+def test_exactly_one_canonical_family_keeps_a_hyphen():
+    """The before/after evidence, as a test rather than as a claim.
+
+    Every one of the 125 stored identifiers is driven through the renderer;
+    exactly one display name comes out carrying a hyphen. Widening the rule
+    (``Baeyer-Villiger`` stops splitting) or reverting it (``C-C`` splits
+    again) both change this set, so neither can land quietly.
+    """
+    kept = {
+        name
+        for name in CANONICAL_REACTION_FAMILIES
+        if "-" in reaction_family_display_name(name) and name not in EXPECTED_RAW_FAMILIES
+    }
+    assert kept == {"6_membered_central_C-C_shift"}
+
+
+def test_a_surviving_hyphen_is_always_between_two_single_capitals():
+    """Whatever the rule is, its output has one shape -- checked, not assumed."""
+    for name in sorted(CANONICAL_REACTION_FAMILIES):
+        if name in EXPECTED_RAW_FAMILIES:
+            continue  # returned verbatim; the renderer never touched it
+        display = reaction_family_display_name(name)
+        for word in display.split(" "):
+            if "-" not in word:
+                continue
+            assert re.fullmatch(r"[A-Z](?:-[A-Z])+", word), (name, display)
 
 
 # ---------------------------------------------------------------------------

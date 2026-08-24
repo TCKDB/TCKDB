@@ -46,6 +46,12 @@ The tests are grouped as:
   human labels, units rendered as units, numbers rounded to what the
   quantity supports, absent values that say they are absent, and a
   size hierarchy that puts the molecule first and the public ref last.
+* :class:`TestACheckNameDoesNotRepeatItsHeading` -- the named checks sit
+  under a heading that already states the outcome, so a check called
+  ``charge_present`` prints as "Charge". Trailing only, and only where
+  the rest of the name does not say "present" as well: the twelve
+  conditional checks keep both presences, because the second one is a
+  condition and not the outcome.
 * :class:`TestHeroExampleIsReal` -- the worked example in the hero is
   re-run through the real checker on every test run. If the page and
   ``app.services.frequency_geometry_linearity`` ever disagree, this
@@ -65,6 +71,7 @@ The tests are grouped as:
 from __future__ import annotations
 
 import html
+import json
 import re
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, quote, urlparse
@@ -98,6 +105,8 @@ from app.api.landing import (
     hero_atom_lines,
     reaction_query,
     render_landing_page,
+    trust_check_label,
+    trust_check_names,
 )
 from app.api.startup_checks import validate_deployment_safety
 from app.db.models.common import ArrheniusAUnits, CalculationType, KineticsModelKind
@@ -1578,6 +1587,195 @@ class TestTrustVerdictIsShown:
         assert 'checkList("not present", missing)' in body
         assert 'checkList("present", passed)' in body
         assert "evidence.hard_fail_reason" in body
+
+
+class TestACheckNameDoesNotRepeatItsHeading:
+    """The list says the outcome once, in the heading above it.
+
+    The panel groups the named checks under "present" and "not present"
+    and then printed the wire name, so a reader got the outcome twice --
+    "present: charge present" -- and under the other heading got what
+    reads as a contradiction: "not present: path search evidence
+    present". The suffix is redundant *because the heading states the
+    outcome*: a fact about this page, not about the wire. The API still
+    names the check ``charge_present`` and ``evidence.checks`` is
+    unchanged.
+
+    The rule is **trailing-only, and only when nothing else says
+    present**, which is the property these tests exist to hold:
+
+    * ``charge_present`` -> "Charge". The word was the heading's job.
+    * ``dipole_source_present_if_dipole_present`` -> unchanged. Its
+      second presence is a *condition* ("if a dipole is present"), not
+      the outcome; "dipole source present if dipole" is broken English
+      and a different claim. One wrong entry is worse than twelve
+      slightly long ones.
+    * ``at_least_one_thermo_representation_present`` -> "At least one
+      thermo representation". "present" is spelled inside
+      "re**present**ation", so a substring rule keeps a suffix that is
+      genuinely redundant. The comparison is over whole tokens.
+    * ``multiplicity_valid`` -> "Multiplicity valid". Not a presence
+      claim; nothing to remove.
+    """
+
+    @staticmethod
+    def _conditionals() -> set[str]:
+        """Checks that end in ``_present`` *and* carry an earlier one.
+
+        They are the reason the rule is not a global replace, and they are
+        read out of the registry rather than listed here so the set cannot
+        quietly go stale.
+        """
+        return {
+            name
+            for name in trust_check_names()
+            if name.endswith("_present") and "present" in name.split("_")[:-1]
+        }
+
+    def test_the_registry_still_contains_the_case_that_forbids_a_global_replace(self):
+        """If this ever empties, the trailing-only rule stops being load-bearing.
+
+        Without it every later test here would keep passing while proving
+        nothing about the distinction it was written for.
+        """
+        assert "dipole_source_present_if_dipole_present" in self._conditionals()
+        assert len(self._conditionals()) == 3
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("charge_present", "Charge"),
+            ("path_search_evidence_present", "Path search evidence"),
+            ("transition_state_entry_present", "Transition state entry"),
+            ("ts_single_point_present", "TS single point"),
+            ("ts_graph_or_smiles_present", "TS graph or SMILES"),
+            ("source_calculation_lot_present", "Source calculation LOT"),
+            ("nasa_coefficients_present", "NASA coefficients"),
+            ("irc_evidence_present", "IRC evidence"),
+        ],
+    )
+    def test_a_trailing_present_goes_because_the_heading_already_said_it(self, name, expected):
+        assert name in trust_check_names()
+        assert trust_check_label(name) == expected
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            (
+                "dipole_source_present_if_dipole_present",
+                "Dipole source present if dipole present",
+            ),
+            (
+                "polarizability_source_present_if_polarizability_present",
+                "Polarizability source present if polarizability present",
+            ),
+            ("scan_source_present_if_torsions_present", "Scan source present if torsions present"),
+        ],
+    )
+    def test_a_conditional_keeps_both_of_its_presences(self, name, expected):
+        """The test that must fail if anyone widens this to a global replace.
+
+        "A dipole source is present **if a dipole is present**" is one
+        claim with a condition attached. Removing either "present"
+        changes what the check says it checked.
+        """
+        assert trust_check_label(name) == expected
+        assert trust_check_label(name).endswith("present")
+        assert trust_check_label(name).count("present") == 2
+
+    def test_present_spelled_inside_a_word_is_not_a_presence_claim(self):
+        """"re-present-ation" must not defend a suffix that is redundant."""
+        name = "at_least_one_thermo_representation_present"
+        assert name in trust_check_names()
+        assert trust_check_label(name) == "At least one thermo representation"
+
+    @pytest.mark.parametrize(
+        "name, expected",
+        [
+            ("multiplicity_valid", "Multiplicity valid"),
+            ("ts_status_not_rejected", "TS status not rejected"),
+            ("ts_status_recorded", "TS status recorded"),
+            ("quality_recorded", "Quality recorded"),
+        ],
+    )
+    def test_a_check_that_makes_no_presence_claim_loses_nothing(self, name, expected):
+        assert trust_check_label(name) == expected
+        assert len(trust_check_label(name).split(" ")) == len(name.split("_"))
+
+    def test_no_label_drops_or_invents_a_word_anywhere_in_the_vocabulary(self):
+        """Driven over every check the rubrics can emit, not over examples.
+
+        A label is the name's own tokens, in the name's own order, with
+        at most one word gone -- a trailing "present", and only where no
+        other token spells it. Nothing is expanded, translated,
+        reordered or abbreviated; the only other difference permitted is
+        letter case.
+
+        This is what a global replace fails: it would strip the middle
+        "present" out of the three conditionals as well.
+        """
+        conditionals = self._conditionals()
+        assert trust_check_names(), "the registry produced no checks to drive"
+        for name in trust_check_names():
+            tokens = name.split("_")
+            expected = tokens
+            if tokens[-1] == "present" and name not in conditionals:
+                expected = tokens[:-1]
+            label = trust_check_label(name)
+            assert [word.lower() for word in label.split(" ")] == expected, name
+            assert label[:1] == label[:1].upper(), name
+
+    def test_exactly_the_measured_share_of_the_vocabulary_is_shortened(self):
+        """The counts, so a silent widening or narrowing has to be admitted.
+
+        Measured 2026-08-24 over the registry: 100 distinct checks, 66 of
+        them ending in the word, 63 shortened and 3 held back as
+        conditionals.
+        """
+        names = trust_check_names()
+        shortened = [n for n in names if trust_check_label(n).lower() != n.replace("_", " ")]
+        assert len(names) == 100
+        assert len([n for n in names if n.endswith("_present")]) == 66
+        assert len(shortened) == 63
+        assert len(self._conditionals()) == 66 - 63
+
+    def test_the_page_ships_a_label_for_every_check_the_rubrics_can_emit(self, script):
+        """A check added tomorrow cannot arrive on the page unlabelled.
+
+        The map is built on the server from the rubric registry, so this
+        also proves the page and :func:`trust_check_label` agree -- the
+        page cannot drift from the rule the tests above pin.
+        """
+        match = re.search(r"var CHECK_WORDS = (\{.*?\});\n", script, flags=re.DOTALL)
+        assert match is not None, "the page carries no check-name label map"
+        shipped = json.loads(match.group(1))
+        assert set(shipped) == set(trust_check_names())
+        assert shipped == {name: trust_check_label(name) for name in trust_check_names()}
+
+    def test_the_list_prints_the_label_and_keeps_the_raw_name_reachable(self, script):
+        """The wire token stays recoverable -- it is what a bug report quotes.
+
+        Not on screen (that is the redundancy this removed) but on the
+        item itself, alongside the raw JSON every card already links to.
+        """
+        body = TestTrustVerdictIsShown._function(script, "checkList(title, names)")
+        assert 'make("li", null, checkLabel(names[i]))' in body
+        assert 'item.setAttribute("title", names[i]);' in body
+
+        lookup = TestTrustVerdictIsShown._function(script, "checkLabel(name)")
+        assert "Object.prototype.hasOwnProperty.call(CHECK_WORDS, name)" in lookup
+        assert "return words(name);" in lookup
+
+    def test_the_headings_still_state_the_outcome(self, script):
+        """The suffix is redundant *because* these two lines say it.
+
+        Delete either heading and the shortening becomes a loss of
+        information rather than a removal of a repeat, so the rule and
+        the headings are pinned together.
+        """
+        body = TestTrustVerdictIsShown._function(script, "trustNode(trust)")
+        assert 'checkList("not present", missing)' in body
+        assert 'checkList("present", passed)' in body
 
 
 class TestHeroExampleIsReal:
