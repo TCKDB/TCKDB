@@ -354,9 +354,24 @@ conformers       — full conformer block (not just summary); includes torsion_f
 geometry         — accepted but deferred in v0 (returns IDs only by default; future phase may embed full XYZ)
 validation       — geometry_validation summary block
 scf_stability    — scf_stability summary block
+freq_modes       — the full ordered per-mode array from calc_freq_mode (same token, same field name and same item schema as on /scientific/calculations/*)
 internal_ids     — Phase D opt-in: restore integer *_id fields and the bare integer-id arrays (input_geometry_ids, output_geometry_ids, supporting_calculation_ids) when the deployment allows it
 all              — every legal token above **except** internal_ids
 ```
+
+**`freq_modes` is opt-in but public**, so `include=all` expands to it.
+That is the opposite of `points` on `/network-kinetics/*`, and the
+difference is boundedness rather than taste: a tabulated k(T,P) table
+has no bound, while a frequency list is bounded by the molecule's
+`3N-6` / `3N-5` degrees of freedom. It is still gated rather than
+default because a search page multiplies it by `limit` (default 50,
+ceiling 200), which the single-record detail endpoint does not.
+
+The array is loaded for the whole page in **one statement**, keyed
+`calculation_id IN (…)`, as is the `frequency` summary beside it.
+Pinned by `tests/services/scientific_read/
+test_record_builder_statement_cost.py::test_a_species_calculations_page_costs_one_freq_statement`
+and `::test_include_freq_modes_costs_a_page_one_more_statement`.
 
 Unknown tokens → 422 `unknown_include_token` with the legal list (Phase 4 convention).
 Known but illegal-elsewhere tokens (e.g. `kinetics`, `transition_states`) → 422 same code.
@@ -481,6 +496,7 @@ Standard scientific envelope:
     "energy_hartree": -154.123456,
     "energy_kind": "electronic_energy"
   },
+  "frequency": null,
   "level_of_theory": {
     "level_of_theory_id": 8,
     "method": "wb97xd",
@@ -521,11 +537,62 @@ Standard scientific envelope:
 }
 ```
 
-`energy` is present only when the calculation has a populated energy
-result (SP `electronic_energy_hartree` for `sp`, opt `final_energy_hartree`
-for `opt`). For other calculation types the `energy` key is `null` —
-omitted-entirely is also acceptable; v0 implementation should pick one
-and stick with it (recommend `null` so the JSON shape is stable).
+### `energy` and `frequency`: one rule, two blocks
+
+The v0 design note here read "`energy` is present only when the
+calculation has a populated energy result … omitted-entirely is also
+acceptable". The implementation resolved that open choice and the rule
+is now binding, because a second result block joined it and the two have
+to agree.
+
+**The key is on the wire whenever this kind of record can carry that
+result, and `null` when it cannot.**
+
+| Calculation type | `energy` | `frequency` |
+|---|---|---|
+| `sp` | `{"energy_hartree": …, "energy_kind": "electronic_energy"}` | `null` |
+| `opt` | `{"energy_hartree": …, "energy_kind": "final_energy"}` | `null` |
+| `freq` | `null` | the `calc_freq_result` projection |
+| anything else | `null` | `null` |
+
+One refinement to the `frequency` column: a **stored row wins over the
+type**. A composite job deposited as `opt` that also produced a Hessian
+has a real `calc_freq_result` row, and that row is served rather than
+suppressed — keying the block off the calculation type alone would store
+data the surface could never return.
+
+Within a present block, a `null` field means the number belongs there
+and was never parsed — an `sp` calculation whose `calc_sp_result` row is
+missing returns `{"energy_hartree": null, …}`, and a `freq` calculation
+whose `calc_freq_result` row is missing returns an all-`null` frequency
+object. `null` for the whole block and an all-`null` block are therefore
+**different statements** and must not be collapsed into each other:
+absence-of-key describes the request, `null` describes the data.
+
+`frequency` is the same fragment `/scientific/calculations/*` serves as
+`results.freq` — imported, not re-declared, so one table has one public
+shape. It carries ADR 0012's stored judgement with `n_imag`, per §4.5.1
+of [`backend/docs/specs/scientific_calculation_reads.md`](../../backend/docs/specs/scientific_calculation_reads.md).
+Two of those fields (`reaction_coordinate_mode_index`,
+`imaginary_mode_structural_flag`) read `null` on every record this
+endpoint returns, because `StationaryPointKind` has no saddle-point
+member — a species entry is a `minimum` or a `vdw_complex`. They are
+kept rather than trimmed into a species-only variant: `null` there is
+the honest answer, and the other two ADR 0012 fields are not
+transition-state business at all. `imaginary_mode_tau_cm1` /
+`imaginary_mode_tau_basis` are recorded for every frequency upload
+taken since ADR 0012 shipped, minima included — nothing was
+backfilled, so a record deposited before it (measured: the live
+`calc_o7ooidqwrsrykgtkzuf5m4jyne` on `[CH3]`) carries all four as
+`null`, which reads "never judged" rather than "judged and clean". And
+`n_imag_at_or_above_tau`, where a tau is stored, is what tells a reader
+that a structure filed here as a minimum has an imaginary mode above
+the noise floor and is not one.
+
+A `freq` record before this landed carried neither block — only
+`energy: null` — which the public landing page rendered as a card
+titled "frequencies" whose one line read *Electronic energy — not
+recorded*. The numbers were stored the whole time.
 
 `workflow_tool_release` and `conformer` are `null` when not present —
 keys are always emitted so clients can rely on a stable shape (matches

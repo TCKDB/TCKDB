@@ -44,11 +44,17 @@ from app.schemas.reads.scientific_calculation_search import (
 from app.schemas.reads.scientific_conformer_search import (
     ConformersSearchRequest,
 )
+from app.schemas.reads.scientific_species_calculations import (
+    SpeciesCalculationsSearchRequest,
+)
 from app.schemas.reads.scientific_transition_state_search import (
     TransitionStatesSearchRequest,
 )
 from app.services.scientific_read.calculations_search import search_calculations
 from app.services.scientific_read.conformers_search import search_conformers
+from app.services.scientific_read.species_calculations_search import (
+    search_species_calculations,
+)
 from app.services.scientific_read.transition_states_search import (
     search_transition_states,
 )
@@ -651,4 +657,186 @@ def test_the_levels_map_costs_a_conformer_search_page_one_statement(
         f"{_LEVELS_SMALL_PAGE} records against {large_levels} for "
         f"{_LEVELS_LARGE_PAGE}: the block is resolving per record "
         f"(totals {small_total} and {large_total})"
+    )
+
+
+# ---------------------------------------------------------------------------
+# What the frequency blocks cost a species-calculations page
+# ---------------------------------------------------------------------------
+
+#: One statement for the whole page, per table, no matter how many records
+#: are on it. Both frequency tables have a natural per-record shape --
+#: ``calc_freq_result`` is keyed by ``calculation_id`` and ``calc_freq_mode``
+#: hangs off the same key -- which is exactly why a builder called once per
+#: record is the obvious wrong implementation, and why this is pinned rather
+#: than assumed. The correlated ``count(*)`` subqueries ADR 0012 needs ride
+#: *inside* the one result statement; they are not extra round trips, and a
+#: regression to a subquery per record would show here because this counts
+#: statements.
+_FREQ_STATEMENTS_PER_PAGE = 1
+
+_FREQ_RESULT_MARKER = "FROM calc_freq_result"
+_FREQ_MODE_MARKER = "FROM calc_freq_mode"
+
+_FREQ_SMALL_PAGE = 5
+_FREQ_LARGE_PAGE = 50
+
+
+def _freq_statements(session: Session, run) -> tuple[int, int, int]:
+    """Return (freq-result statements, freq-mode statements, total).
+
+    The result statement carries the two correlated aggregates over
+    ``calc_freq_mode`` in its own text, so the two markers are tested as
+    an if/elif rather than independently -- otherwise the summary loader
+    would be counted as a mode loader too and the two numbers would blur
+    into one.
+    """
+    results = 0
+    modes = 0
+    total = 0
+    engine = session.connection().engine
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        nonlocal results, modes, total
+        total += 1
+        if _FREQ_RESULT_MARKER in statement:
+            results += 1
+        elif _FREQ_MODE_MARKER in statement:
+            modes += 1
+
+    try:
+        run()
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+    return results, modes, total
+
+
+def _freq_calculations_page(db_session, *, tag: str, calculations: int):
+    """One species entry carrying *calculations* frequency calculations.
+
+    Every one of them gets a full six-mode frequency result, so the page
+    is the worst case for both loaders rather than a page where most
+    records have nothing to fetch.
+    """
+    lot = make_lot(db_session, method=f"freq-cost-{tag}", basis="def2tzvp")
+    entry = make_species_entry(
+        db_session,
+        make_species(db_session, inchi_key=next_inchi_key(f"FQ{tag}")),
+    )
+    for _ in range(calculations):
+        calc = make_calculation(
+            db_session,
+            type=CalculationType.freq,
+            species_entry_id=entry.id,
+            lot_id=lot.id,
+        )
+        attach_freq_result(
+            db_session,
+            calculation=calc,
+            frequencies_cm1=[580.0, 1400.0, 1400.0, 3050.0, 3230.0, 3230.0],
+            zpe_hartree=0.029723,
+            imaginary_mode_tau_cm1=50.0,
+            imaginary_mode_tau_basis="analytic_default",
+        )
+    return entry
+
+
+def _species_calculations_page(session: Session, entry, *, limit: int, include):
+    def run():
+        response = search_species_calculations(
+            session,
+            SpeciesCalculationsSearchRequest(
+                species_entry_ref=entry.public_ref,
+                limit=limit,
+                include=list(include),
+            ),
+        )
+        assert len(response.records) == limit, (
+            "the page must be full to be comparable"
+        )
+        assert response.records[0].frequency is not None, (
+            "the frequency block must actually be populated -- a cost "
+            "assertion over an absent block proves nothing"
+        )
+        if include:
+            assert response.records[0].freq_modes, (
+                "include=freq_modes must actually return modes -- a cost "
+                "assertion over an empty array proves nothing"
+            )
+
+    return run
+
+
+def test_a_species_calculations_page_costs_one_freq_statement(db_session):
+    """Flat in ``limit``: the frequency summary is loaded for the page.
+
+    Fifty records is this endpoint's default page and two hundred is its
+    ceiling, so a query per record here is a hundredfold cost, not a
+    rounding error.
+    """
+    entry = _freq_calculations_page(
+        db_session, tag="sum", calculations=_FREQ_LARGE_PAGE + 5
+    )
+
+    small_results, small_modes, small_total = _freq_statements(
+        db_session,
+        _species_calculations_page(
+            db_session, entry, limit=_FREQ_SMALL_PAGE, include=()
+        ),
+    )
+    large_results, large_modes, large_total = _freq_statements(
+        db_session,
+        _species_calculations_page(
+            db_session, entry, limit=_FREQ_LARGE_PAGE, include=()
+        ),
+    )
+
+    assert small_results >= 1, (
+        "no statement read calc_freq_result: either the marker stopped "
+        "matching or the block stopped being built"
+    )
+    assert small_results == large_results == _FREQ_STATEMENTS_PER_PAGE, (
+        f"{small_results} calc_freq_result statements for "
+        f"{_FREQ_SMALL_PAGE} records against {large_results} for "
+        f"{_FREQ_LARGE_PAGE}: the summary is loading per record "
+        f"(totals {small_total} and {large_total})"
+    )
+    assert small_modes == large_modes == 0, (
+        "the per-mode array is behind include=freq_modes; a default search "
+        f"read calc_freq_mode {small_modes}/{large_modes} times"
+    )
+
+
+def test_include_freq_modes_costs_a_page_one_more_statement(db_session):
+    """The opt-in array is one statement for the page, not one per record."""
+    entry = _freq_calculations_page(
+        db_session, tag="mod", calculations=_FREQ_LARGE_PAGE + 5
+    )
+
+    small_results, small_modes, small_total = _freq_statements(
+        db_session,
+        _species_calculations_page(
+            db_session, entry, limit=_FREQ_SMALL_PAGE, include=("freq_modes",)
+        ),
+    )
+    large_results, large_modes, large_total = _freq_statements(
+        db_session,
+        _species_calculations_page(
+            db_session, entry, limit=_FREQ_LARGE_PAGE, include=("freq_modes",)
+        ),
+    )
+
+    assert small_modes >= 1, (
+        "no statement read calc_freq_mode under include=freq_modes: either "
+        "the marker stopped matching or the array stopped being built"
+    )
+    assert small_modes == large_modes == _FREQ_STATEMENTS_PER_PAGE, (
+        f"{small_modes} calc_freq_mode statements for {_FREQ_SMALL_PAGE} "
+        f"records against {large_modes} for {_FREQ_LARGE_PAGE}: the array "
+        f"is loading per record (totals {small_total} and {large_total})"
+    )
+    assert small_results == large_results == _FREQ_STATEMENTS_PER_PAGE, (
+        "asking for the modes must not also multiply the summary "
+        f"({small_results} against {large_results})"
     )

@@ -1,9 +1,10 @@
 """Read schemas for /api/v1/scientific/species-calculations/search.
 
 Chemistry-first species calculation/conformer search. Calculation-centered
-records that include species identity, energy (when available), level of
-theory, software, conformer context (nullable), geometry IDs, validation,
-and review state — so workflow tools can decide reuse without hidden policy.
+records that include species identity, energy or frequency results
+(whichever the calculation type produces), level of theory, software,
+conformer context (nullable), geometry IDs, validation, and review state
+— so workflow tools can decide reuse without hidden policy.
 
 See docs/specs/species_calculation_search_api.md for the contract.
 """
@@ -51,6 +52,10 @@ from app.schemas.reads._field_bounds import (
 )
 from app.schemas.reads._field_bounds import (
     MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
+)
+from app.schemas.reads.scientific_calculation import (
+    CalculationFreqModeSummary,
+    CalculationFreqResultSummary,
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
@@ -288,11 +293,63 @@ class CalculationProvenanceBlock(BaseModel):
 
 
 class SpeciesCalculationsSearchRecord(BaseModel):
-    """One result row: species + calculation + energy + conformer/geometry/validation."""
+    """One result row: species + calculation + energy/frequency + conformer/geometry/validation.
+
+    ``energy`` and ``frequency`` are the two per-result blocks, and they
+    follow one rule between them: **the key is on the wire whenever this
+    kind of record can carry that result, and ``null`` when it cannot.**
+    An ``sp`` record carries ``energy`` (with ``energy_hartree: null`` if
+    the number was never parsed) and ``frequency: null``; a ``freq``
+    record carries the mirror. So ``null`` says "no such result belongs
+    here", a populated block with null fields says "one belongs here and
+    is missing", and the two are never confused.
+
+    Before ``frequency`` existed, a ``freq`` record carried neither — the
+    only result key on it was ``energy: null``, which a renderer read as
+    "frequencies: electronic energy not recorded". The data was stored
+    the whole time on ``calc_freq_result`` / ``calc_freq_mode``; nothing
+    on this surface projected it.
+    """
 
     species: SpeciesCalculationsSpeciesContext
     calculation: CalculationCoreBlock
     energy: CalculationEnergyBlock | None = None
+
+    #: Summary projection of this calculation's ``calc_freq_result`` row:
+    #: ``n_imag``, the imaginary wavenumber, the ZPE, and ADR 0012's
+    #: stored judgement. The **same fragment** the
+    #: ``/scientific/calculations/*`` surface serves as ``results.freq``,
+    #: imported rather than re-declared, so one table has one public
+    #: shape and a consumer moving between the two surfaces parses one
+    #: thing.
+    #:
+    #: Two of ADR 0012's four persisted fields are transition-state
+    #: business (``reaction_coordinate_mode_index``,
+    #: ``imaginary_mode_structural_flag``) and read ``null`` on every
+    #: record this surface returns, because ``StationaryPointKind`` has
+    #: no saddle-point member: a species entry is a ``minimum`` or a
+    #: ``vdw_complex``, never a TS. They are kept anyway rather than
+    #: trimmed into a species-only variant, because ``null`` there is the
+    #: honest answer ("no reaction coordinate was designated"), and
+    #: because the other two are *not* TS-specific at all.
+    #: ``imaginary_mode_tau_cm1`` / ``imaginary_mode_tau_basis`` are
+    #: recorded for every frequency upload taken since ADR 0012 shipped,
+    #: minima included; nothing was backfilled, so a record older than
+    #: that carries all four as ``null`` — "never judged", not "judged
+    #: and clean". And where a tau *is* stored,
+    #: ``n_imag_at_or_above_tau`` is what tells a reader that a structure
+    #: filed here as a minimum has an imaginary mode above the noise
+    #: floor and is not one.
+    frequency: CalculationFreqResultSummary | None = None
+
+    #: The full ordered per-mode array from ``calc_freq_mode``, behind
+    #: ``include=freq_modes`` — same token and same field name as on
+    #: ``/scientific/calculations/*``. Absent unless requested; ``[]``
+    #: when requested and this calculation has no parsed modes. Bounded
+    #: by the molecule's ``3N-6`` / ``3N-5`` degrees of freedom, so it is
+    #: inlined whole rather than paginated, but it still multiplies by
+    #: the page size, which is why it is opt-in rather than default.
+    freq_modes: list[CalculationFreqModeSummary] | None = None
     level_of_theory: LevelOfTheorySummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None

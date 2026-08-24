@@ -1534,9 +1534,11 @@ class TCKDBClient:
         species calculation/conformer search.
 
         Returns calculation-centered records that include resolved species
-        identity, energy (when applicable), level of theory, software,
-        conformer context (when present), geometry IDs, validation, review
-        state, and provenance. ``ranking='lowest_energy'`` requires
+        identity, energy or frequency results (whichever the calculation
+        type produces), level of theory, software, conformer context (when
+        present), geometry IDs, validation, review state, and provenance.
+        ``include=['freq_modes']`` adds the per-mode harmonic frequency
+        array. ``ranking='lowest_energy'`` requires
         ``calculation_type='sp'`` or ``calculation_type='opt'``.
 
         Defaults to POST. Pass ``method_http='GET'`` to use the

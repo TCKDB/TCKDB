@@ -58,6 +58,7 @@ from app.api.routes.scientific._response import (
     NETWORK_SOLVE_RECORD_SECTIONS,
     REACTION_FULL_SECTIONS,
     SEARCH_SCOPE,
+    SPECIES_CALCULATIONS_SEARCH_SECTIONS,
     SPECIES_SEARCH_SECTIONS,
     STATMECH_RECORD_SECTIONS,
     TRANSITION_STATE_RECORD_SECTIONS,
@@ -367,6 +368,23 @@ CASES: tuple[Case, ...] = (
         ),
     ),
     Case(
+        "GET /species-calculations/search",
+        SPECIES_CALCULATIONS_SEARCH_SECTIONS,
+        SEARCH_SCOPE,
+        lambda c: (
+            f"{_SCI}/species-calculations/search"
+            f"?species_entry_ref={c['species_entry_ref']}"
+        ),
+    ),
+    Case(
+        "POST /species-calculations/search",
+        SPECIES_CALCULATIONS_SEARCH_SECTIONS,
+        SEARCH_SCOPE,
+        lambda c: f"{_SCI}/species-calculations/search",
+        method="POST",
+        body=lambda c: {"species_entry_ref": c["species_entry_ref"]},
+    ),
+    Case(
         "GET /conformers/search",
         CONFORMER_RECORD_SECTIONS,
         ANYWHERE_SCOPE,
@@ -661,7 +679,7 @@ def test_the_parametrisation_asserts_its_own_size():
     numbers, so adding a section to a table without adding a case fails
     here instead of passing silently.
     """
-    assert len(CASES) == 40
+    assert len(CASES) == 42
 
     sections_under_test = {
         (case.table.surface, token, field_name)
@@ -678,10 +696,12 @@ def test_the_parametrisation_asserts_its_own_size():
     }
 
     assert sections_under_test == declared_sections
-    # 81 before ``energy_corrections`` joined CALCULATION_RECORD_SECTIONS.
+    # 81 before ``energy_corrections`` joined CALCULATION_RECORD_SECTIONS;
+    # 82 before ``freq_modes`` joined the species-calculations search.
     # One, not three: the tuples are keyed on the table's *surface*, which
-    # the three calculation cases share.
-    assert len(sections_under_test) == 82
+    # the three calculation cases share -- and, for the same reason, the
+    # GET and POST species-calculations cases contribute one between them.
+    assert len(sections_under_test) == 83
 
 
 # ---------------------------------------------------------------------------
