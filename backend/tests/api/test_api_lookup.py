@@ -556,6 +556,10 @@ class TestReactionLookup:
         rxn = next(r for r in resp.json()["results"] if r["resource_type"] == "reaction")
         assert rxn["summary"]["reversible"] is True
         assert rxn["links"]["self"].startswith("/api/v1/reactions/")
+        # The identifier is what a client filters on; the display name is
+        # derived at read time and is never stored.
+        assert rxn["summary"]["reaction_family"] == "H_Abstraction"
+        assert rxn["summary"]["reaction_family_display"] == "Hydrogen Abstraction"
 
     def test_entry_includes_participant_structure(self, client):
         client.post("/api/v1/uploads/reactions", json=_reaction_payload())

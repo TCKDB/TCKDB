@@ -40,6 +40,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.errors import NotFoundError
+from app.chemistry.reaction_family_display import reaction_family_display_name
 from app.chemistry.species import canonical_species_identity
 from app.db.models.calculation import (
     Calculation,
@@ -552,11 +553,22 @@ def _resolve_reaction(
     elif chem_rxn.reaction_family_raw:
         family_name = chem_rxn.reaction_family_raw
 
+    # ``reaction_family`` stays the stored identifier — it is what a client
+    # filters on. ``reaction_family_display`` is the readable form, derived,
+    # never stored.
+    family_display = None
+    if family_name and family_name.strip():
+        family_display = reaction_family_display_name(family_name)
+
     results: list[LookupResultItem] = [LookupResultItem(
         resource_type="reaction",
         id=chem_rxn.id,
         links=ResourceLink(self=f"/api/v1/reactions/{chem_rxn.id}"),
-        summary={"reversible": chem_rxn.reversible, "reaction_family": family_name},
+        summary={
+            "reversible": chem_rxn.reversible,
+            "reaction_family": family_name,
+            "reaction_family_display": family_display,
+        },
     )]
     return chem_rxn, results
 
