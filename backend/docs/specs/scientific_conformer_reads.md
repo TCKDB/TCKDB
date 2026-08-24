@@ -295,6 +295,7 @@ class ConformerGroupEvidenceSummary(BaseModel):
     observation_count: int | None
     calculation_count: int
     evidence_coverage: ConformerEvidenceCoverage
+    optimization_chain_count: int
     geometry_count: int
     levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 
@@ -359,8 +360,73 @@ pool a covered observation with an uncovered one. The two surfaces are
 therefore not parseable by one evidence parser, and that is correct
 rather than an oversight.
 
+**A staged optimisation is one optimisation.** A two-stage geometry
+optimisation deposits two `opt` calculations — a coarse pre-optimisation
+and the refinement it feeds — joined by a `calculation_dependency` row
+with `dependency_role = 'optimized_from'`, the coarse stage as parent.
+Both belong to the basin; between them they are *one* optimisation, and
+so one piece of evidence. `optimization_chain_count` is the number that
+says so: optimisations counted as **chains**, a chain of any length
+contributing `1`.
+
+Measured on the deployed database, 2026-08-24: 156 anchored `opt` rows
+across 66 conformer groups collapse to 136 chains. The 20 collapsed
+chains fall across 16 groups; carbon dioxide
+(`cg_qcpxjnlsqhcz3h6s7i24zvticm`) is one of them, with 3 `opt` rows and
+2 optimisations.
+
+Three properties of the collapse are load-bearing:
+
+- **Only `optimized_from` collapses.** `freq_on` (63 both-anchored pairs
+  deployed), `single_point_on` (65) and `scan_parent` (46) join two
+  calculations as well, but a frequency job on an optimised geometry is
+  *genuinely different evidence* from the optimisation that produced the
+  geometry. Folding them together would be a scientific error, not a
+  tidier number.
+- **Any chain length.** The predicate is local — "does this row feed a
+  refinement on this observation?" — so in coarse→medium→fine both
+  coarse and medium are suppressed and only the refinement survives. No
+  chain longer than two nodes exists on the deployed database; the code
+  does not depend on that.
+- **It stops at the observation boundary.** The refinement must be
+  anchored to the *same* observation as the stage it supersedes. A chain
+  spanning two observations describes two provenance rows, and crediting
+  one to the other would erase the distinction `conformer_observation`
+  exists to make. No such pair is deployed — all 20 sit inside one
+  observation — and if one appears, both ends count.
+
+The surviving end is the **refinement** — the dependency's *child*, since
+`optimized_from` is written "restart-from" with the parent as the
+starting point (`app/services/calculation_resolution.py`). Its geometry
+and convergence are what the basin actually obtained. Note that on every
+deployed pair both ends sit at the *same* level of theory, so "coarse"
+and "fine" here describe staging and convergence, not level. A
+consequence worth stating, because a backfill depends on it: a chain
+with only its refinement anchored already counts `1`, so anchoring its
+orphaned coarse stage later leaves this number — and every
+`evidence_coverage` value — unchanged.
+
+**`calculation_count` and `geometry_count` stay row counts.** Both are
+*inventories* rather than measures of evidence. `calculation_count` is
+the length of the list `include=calculations` returns; `geometry_count`
+counts distinct geometry rows, and a coarse pre-optimisation has a
+genuinely distinct output geometry that `include=geometries` hands back.
+A count that disagreed with the list it summarises would be a worse
+defect than the one `optimization_chain_count` exists to fix. A reader
+comparing `calculation_count` against `evidence_coverage` and finding
+them inconsistent is answered by `optimization_chain_count`, not by
+quietly redefining an inventory.
+
+`evidence_coverage.opt` is **not** affected by the collapse, and cannot
+be: it counts observations, and a chain restricted to one observation
+always has a surviving refinement, so the observation stays covered
+either way. It is stated here because the natural reading of "count each
+chain once" is that some published coverage number drops, and none does.
+
 Builders: `_build_group_evidence_summary` (coverage via
-`COUNT(DISTINCT Calculation.conformer_observation_id)`) and
+`COUNT(DISTINCT Calculation.conformer_observation_id)`, chains via
+`COUNT(*) FILTER (WHERE NOT _feeds_a_refinement_on_the_same_observation())`
+in the same statement — no extra round trip on a paginated page) and
 `_build_observation_evidence_summary`, both keyed off
 `Calculation.conformer_observation_id ∈ {ids in scope}`.
 

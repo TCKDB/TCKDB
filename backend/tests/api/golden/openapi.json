@@ -11210,11 +11210,16 @@
               }
             ],
             "title": "Observation Count"
+          },
+          "optimization_chain_count": {
+            "title": "Optimization Chain Count",
+            "type": "integer"
           }
         },
         "required": [
           "calculation_count",
           "evidence_coverage",
+          "optimization_chain_count",
           "geometry_count",
           "levels_of_theory"
         ],

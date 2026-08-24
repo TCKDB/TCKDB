@@ -17,16 +17,18 @@ See ``backend/docs/specs/scientific_conformer_reads.md``.
 from __future__ import annotations
 
 from sqlalchemy import and_, exists, func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
+    CalculationDependency,
     CalculationGeometryValidation,
     CalculationOutputGeometry,
     CalculationSCFStability,
 )
 from app.db.models.common import (
+    CalculationDependencyRole,
     CalculationType,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -598,6 +600,74 @@ def _build_observations_summary(
     )
 
 
+#: An ``opt`` calculation is *superseded* when a ``calculation_dependency``
+#: row with ``dependency_role = 'optimized_from'`` names it as the parent of
+#: another calculation anchored to the **same** conformer observation. That
+#: is an earlier stage of a staged geometry optimisation -- a coarse
+#: pre-optimisation, or (as on every deployed pair, measured 2026-08-24) a
+#: restart at the same level of theory. It belongs to the basin, but the
+#: refinement it fed is what the basin actually got, so counting both
+#: reports one optimisation as two pieces of evidence.
+#:
+#: The edge direction is the writer's, not an assumption:
+#: :mod:`app.services.calculation_resolution` documents ``optimized_from``
+#: as "restart-from" for an ``opt`` parent, and for a ``path_search``
+#: parent as "the path search runs first ... and the primary opt is then
+#: ``optimized_from`` that guess". The parent is the starting point; the
+#: child is the result.
+#:
+#: Three properties of this predicate are load-bearing.
+#:
+#: *It is guarded on the role.* Only ``optimized_from`` collapses. A
+#: ``freq_on`` or ``single_point_on`` edge also joins two calculations, but
+#: a frequency job on an optimised geometry is genuinely different evidence
+#: from the optimisation that produced the geometry -- folding those
+#: together would be a scientific error, not a tidier number. Same for
+#: ``scan_parent``. On the deployed database (measured 2026-08-24) there
+#: are 63 both-anchored ``freq_on`` pairs, 65 ``single_point_on`` and 46
+#: ``scan_parent``; every one of them must keep counting twice.
+#:
+#: *It is correct for a chain of any length.* The test is local -- "does
+#: this row feed a refinement?" -- so in a coarse-medium-fine chain both
+#: coarse and medium answer yes and only ``fine`` survives. Nothing here
+#: assumes two stages. (The deployed database has no chain longer than two
+#: nodes today; the code does not depend on that staying true.)
+#:
+#: *It does not collapse across observations.* The child must be anchored
+#: to the same observation as the parent. A chain whose two ends sit on two
+#: different observations describes two provenance rows, and silently
+#: crediting one of them to the other would erase a distinction the
+#: observation table exists to make. No such pair occurs on the deployed
+#: database -- all 20 both-anchored ``optimized_from`` pairs are within one
+#: observation -- and if one ever does, both ends count.
+#:
+#: The surviving end is the **refinement** (the child), never the stage it
+#: superseded, because its geometry and convergence are what the basin
+#: actually obtained. ``NULL`` never equals the parent's observation id, so
+#: a chain with only its refinement anchored also counts once -- which is
+#: precisely what makes anchoring an orphaned earlier stage later a no-op
+#: for this number.
+def _feeds_a_refinement_on_the_same_observation():
+    """SQL predicate: this calculation is a superseded optimisation stage."""
+    refinement = aliased(Calculation)
+    return exists(
+        select(1)
+        .select_from(CalculationDependency)
+        .join(
+            refinement,
+            refinement.id == CalculationDependency.child_calculation_id,
+        )
+        .where(
+            CalculationDependency.dependency_role
+            == CalculationDependencyRole.optimized_from,
+            CalculationDependency.parent_calculation_id == Calculation.id,
+            refinement.conformer_observation_id
+            == Calculation.conformer_observation_id,
+        )
+        .correlate(Calculation)
+    )
+
+
 def _build_group_evidence_summary(
     session: Session,
     observation_ids: list[int],
@@ -611,6 +681,29 @@ def _build_group_evidence_summary(
     *observation_ids* (geometry over distinct
     ``calculation_output_geometry.geometry_id`` reached through that calc
     set).
+
+    ``optimization_chain_count`` is the one number in this block that
+    counts optimisation *chains* rather than rows: a staged optimisation
+    (coarse pre-opt feeding a refinement, joined by ``optimized_from``)
+    contributes ``1``. See
+    :func:`_feeds_a_refinement_on_the_same_observation` for why only that
+    role collapses, why the predicate is correct for chains longer than
+    two, and why it stops at the observation boundary. It is computed in
+    the same statement as the other two aggregates -- a ``FILTER`` clause,
+    not a second round trip -- because this builder runs once per record
+    on a paginated search page.
+
+    ``calculation_count`` and ``geometry_count`` stay **row** counts on
+    purpose. Both are inventories of what is on file rather than measures
+    of evidence: ``calculation_count`` is the length of the list
+    ``include=calculations`` returns, and ``geometry_count`` counts
+    distinct geometry rows, of which a coarse pre-optimisation has a
+    genuine one that ``include=geometries`` will hand back. Making either
+    disagree with the list it summarises would trade one confusion for a
+    worse one. The reader who compares ``calculation_count`` against
+    ``evidence_coverage`` and finds them inconsistent -- the confusion
+    that started this work -- is answered by ``optimization_chain_count``,
+    not by quietly redefining an inventory.
 
     ``evidence_coverage`` is deliberately **not** a calculation count.
     Each value is the number of *observations* in *observation_ids* with
@@ -648,6 +741,7 @@ def _build_group_evidence_summary(
         return ConformerGroupEvidenceSummary(
             observation_count=0,
             calculation_count=0,
+            optimization_chain_count=0,
             evidence_coverage=ConformerEvidenceCoverage(
                 opt=0,
                 freq=0,
@@ -661,13 +755,22 @@ def _build_group_evidence_summary(
             levels_of_theory={},
         )
 
-    # One pass gives both the calculation total (COUNT(id)) and the
-    # per-type observation coverage (COUNT(DISTINCT observation_id)).
+    # One pass gives all three per-type aggregates: the calculation total
+    # (COUNT(id)), the observation coverage (COUNT(DISTINCT
+    # observation_id)), and the chain count (COUNT(id) FILTER (WHERE this
+    # row is not a superseded optimisation stage)). Three columns rather
+    # than three statements, because this function runs once per record on
+    # a paginated page -- the slope
+    # ``tests/services/scientific_read/test_record_builder_statement_cost.py``
+    # fails on.
     type_rows = session.execute(
         select(
             Calculation.type,
             func.count(Calculation.id),
             func.count(func.distinct(Calculation.conformer_observation_id)),
+            func.count(Calculation.id).filter(
+                ~_feeds_a_refinement_on_the_same_observation()
+            ),
         )
         .where(Calculation.conformer_observation_id.in_(observation_ids))
         .group_by(Calculation.type)
@@ -677,6 +780,9 @@ def _build_group_evidence_summary(
     }
     obs_coverage: dict[CalculationType, int] = {
         row[0]: row[2] for row in type_rows
+    }
+    chain_counts: dict[CalculationType, int] = {
+        row[0]: row[3] for row in type_rows
     }
     total = sum(calc_counts.values())
 
@@ -705,6 +811,13 @@ def _build_group_evidence_summary(
     return ConformerGroupEvidenceSummary(
         observation_count=len(observation_ids),
         calculation_count=total,
+        # ``opt`` only. The filter is applied to every type in the one
+        # statement above, but the predicate can only be true of an
+        # ``optimized_from`` parent, and this field promises optimisation
+        # chains -- so the value is read from the ``opt`` bucket by name
+        # rather than summed, which would silently start meaning
+        # "calculations that are not superseded opt stages".
+        optimization_chain_count=chain_counts.get(CalculationType.opt, 0),
         evidence_coverage=ConformerEvidenceCoverage(
             opt=obs_coverage.get(CalculationType.opt, 0),
             freq=obs_coverage.get(CalculationType.freq, 0),
