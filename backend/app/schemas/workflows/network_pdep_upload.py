@@ -60,6 +60,7 @@ from tckdb_schemas.fragments.ts_validation_evidence import (
 )
 from tckdb_schemas.local_key_codes import (
     W_CALCULATION_KEY_UNDECLARED,
+    W_CONFORMER_KEY_UNDECLARED,
     W_GEOMETRY_KEY_UNRESOLVED,
     W_MICRO_REACTION_KEY_UNDECLARED,
     W_NETWORK_CHANNEL_KEY_UNDECLARED,
@@ -139,9 +140,16 @@ class NetworkSpeciesIn(SchemaBase):
     :param label: Optional human-readable display label.
     :param conformers: Optional conformer uploads (geometry + opt calculation).
     :param calculations: Additional calculations on this species (sp, freq, etc.).
-        Their ``geometry_key`` must point to one of this species's conformer
-        geometries so the backend can anchor each calculation to the correct
-        conformer observation.
+        Their ``geometry_key``, when given, must point to one of this
+        species's conformer geometries -- it names the geometry the
+        calculation ran on.
+
+        Anchoring is ``conformer_key``'s job. This docstring used to
+        attribute it to ``geometry_key``, matching a helper in
+        ``app.workflows.network_pdep`` that dropped the anchor without a word
+        whenever ``geometry_key`` was absent. Both said the same wrong thing,
+        so neither contradicted the other. See
+        ``app.services.conformer_anchoring``.
     :param statmech: Optional statistical-mechanics interpretation for this
         species (external symmetry, optical isomers, hindered rotors, etc.).
         Reuses the bundle's statmech payload; ``source_calculations`` reference
@@ -169,6 +177,32 @@ class NetworkSpeciesIn(SchemaBase):
                 raise ValueError(
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"(type={calc.type.value}) requires geometry_key."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_species_calc_conformer_keys(self) -> Self:
+        """Require a calculation's ``conformer_key`` to name one of this species's conformers.
+
+        The same refusal, code and context as the computed-reaction bundle's
+        ``validate_calc_conformer_keys``. Both routes resolve the anchor
+        through one seam now, so they must also refuse the same mistake the
+        same way -- the two copies of the anchoring helper diverging is the
+        failure this whole change exists to close.
+        """
+        conformer_keys = {conf.key for conf in self.conformers}
+        for calc in self.calculations:
+            if calc.conformer_key is None:
+                continue
+            if calc.conformer_key not in conformer_keys:
+                raise undeclared_key_error(
+                    W_CONFORMER_KEY_UNDECLARED,
+                    f"Species '{self.key}' calculation '{calc.key}' "
+                    f"conformer_key must reference one of that species's "
+                    f"own conformers.",
+                    field=f"calculations['{calc.key}'].conformer_key",
+                    key=calc.conformer_key,
+                    declared=conformer_keys,
                 )
         return self
 

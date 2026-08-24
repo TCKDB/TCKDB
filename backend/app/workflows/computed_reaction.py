@@ -68,6 +68,9 @@ from app.services.calculation_scan_resolution import persist_calculation_scan
 from app.services.charge_multiplicity_extraction import (
     try_reconcile_charge_multiplicity_from_output_upload,
 )
+from app.services.conformer_anchoring import (
+    anchor_species_calculation_to_observation,
+)
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.energy_correction_resolution import (
     create_applied_energy_correction,
@@ -249,24 +252,6 @@ def _persist_calculation(
         persist_calculation_scan(session, calculation.id, calc_in.scan_result)
 
     return calculation
-
-
-def _anchor_species_calculation_to_observation(
-    calculation: Calculation,
-    calc_in: ComputedReactionCalculationIn,
-    observation_id_by_geometry_key: dict[str, int],
-) -> None:
-    """Anchor a species-owned calculation to the conformer observation for its geometry key."""
-    if calc_in.geometry_key is None:
-        return
-
-    observation_id = observation_id_by_geometry_key.get(calc_in.geometry_key)
-    if observation_id is None:
-        raise ValueError(
-            f"Species calculation '{calc_in.key}' geometry_key "
-            f"'{calc_in.geometry_key}' does not resolve to a conformer observation."
-        )
-    calculation.conformer_observation_id = observation_id
 
 
 def _index_species_sp_calcs(
@@ -547,10 +532,13 @@ def persist_computed_reaction_upload(
                 RecordRef(SubmissionRecordType.calculation, calculation.id)
             )
 
-            _anchor_species_calculation_to_observation(
+            anchor_species_calculation_to_observation(
                 calculation,
                 calc_in,
-                observation_id_by_geometry_key,
+                observation_id_by_conformer_key=conformers_by_key,
+                observation_id_by_geometry_key=observation_id_by_geometry_key,
+                warnings=sp_energy_warnings,
+                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
             )
 
     session.flush()

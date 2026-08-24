@@ -91,6 +91,8 @@ from app.schemas.workflows.computed_reaction_upload import (
     BundleKineticsIn,
     ComputedReactionUploadRequest,
 )
+from app.services.conformer_anchoring import W_CALCULATION_ANCHOR_UNRESOLVED
+from app.services.local_key_resolution import W_CONFORMER_KEY_UNDECLARED
 from app.workflows.computed_reaction import persist_computed_reaction_upload
 
 # ---------------------------------------------------------------------------
@@ -107,6 +109,16 @@ _XYZ_CH3 = (
     "H  1.080  0.000  0.000\n"
     "H -0.540  0.935  0.000\n"
     "H -0.540 -0.935  0.000"
+)
+#: A second methyl geometry, pyramidalised out of plane. Distinct from
+#: ``_XYZ_CH3`` so a species can declare two conformers and a test can say
+#: which of the two an anchor landed on.
+_XYZ_CH3_B = (
+    "4\nmethyl, pyramidal\n"
+    "C  0.000  0.000  0.100\n"
+    "H  1.070  0.000 -0.050\n"
+    "H -0.535  0.927 -0.050\n"
+    "H -0.535 -0.927 -0.050"
 )
 _XYZ_CH4 = (
     "5\nmethane\n"
@@ -3738,3 +3750,266 @@ def test_statmech_source_role_must_match_calculation_type(db_conn) -> None:
     assert excinfo.value.code == "statmech_source_role_type_mismatch"
     assert excinfo.value.context["declared_role"] == "sp"
     assert excinfo.value.context["actual_calculation_type"] == "freq"
+
+
+# ---------------------------------------------------------------------------
+# Conformer anchoring: which basin a species calculation is evidence for
+# ---------------------------------------------------------------------------
+#
+# ``calculation.conformer_observation_id`` is the load-bearing anchor -- a
+# calculation carrying a NULL one is evidence for no basin at all. It used to
+# be resolved from ``geometry_key`` alone, by a helper that returned silently
+# when a producer had not supplied one. That is exactly the case a coarse
+# pre-optimisation lands in: the wire schema excuses ``opt`` from supplying
+# ``geometry_key``, because a coarse stage's output geometry genuinely is not
+# a declared conformer geometry -- so the one type allowed to omit the key was
+# the one type whose anchor was then dropped, without a word to anybody. 43
+# rows on the deployed database were persisted that way.
+#
+# ``conformer_key`` answers the anchoring question directly, and these tests
+# pin the three outcomes the seam can now produce -- anchored by conformer
+# key, decided by conformer key when both are present, and not anchored but
+# *reported* -- plus the refusal for a key that names nothing.
+
+
+def _coarse_preopt_payload(
+    *, conformer_key: str | None, geometry_key: str | None
+) -> dict:
+    """A CH3 + H -> CH4 bundle whose extra CH3 calc is a coarse pre-optimisation.
+
+    Shaped like the deployed rows this change repairs: ``type='opt'``, a
+    coarse ``optimization_stage`` in ``parameters_json``, and no geometry of
+    its own among the declared conformer geometries -- which is precisely why
+    it is entitled to omit ``geometry_key``.
+    """
+    payload = _minimal_payload()
+    coarse: dict = {
+        "key": "ch3-coarse",
+        "type": "opt",
+        "software_release": _SOFTWARE_GAUSSIAN,
+        "level_of_theory": _LOT_DFT,
+        "opt_converged": True,
+        "parameters_json": {"final_settings": {"optimization_stage": "coarse"}},
+    }
+    if conformer_key is not None:
+        coarse["conformer_key"] = conformer_key
+    if geometry_key is not None:
+        coarse["geometry_key"] = geometry_key
+    payload["species"][0]["calculations"].append(coarse)
+    return payload
+
+
+def _the_coarse_calculation(session: Session) -> Calculation | None:
+    """The one calculation carrying the coarse-stage marker."""
+    return session.scalar(
+        select(Calculation).where(
+            Calculation.parameters_json
+            == {"final_settings": {"optimization_stage": "coarse"}}
+        )
+    )
+
+
+def _anchor_warnings(summary: dict) -> list:
+    return [
+        w for w in summary["warnings"]
+        if w.code == W_CALCULATION_ANCHOR_UNRESOLVED
+    ]
+
+
+def test_coarse_preopt_anchors_to_its_declared_conformer_key(db_conn) -> None:
+    """The fix: a calculation that names its basin is anchored to it.
+
+    This is the payload the old write path could not anchor at all. It
+    declares no ``geometry_key`` -- correctly, because its output geometry is
+    not the basin's -- and would previously have been persisted with a NULL
+    anchor and nothing said about it.
+    """
+    with _isolated_session(db_conn) as session:
+        session.add(AppUser(id=531, username="anchor_tester_1"))
+        session.flush()
+
+        request = ComputedReactionUploadRequest(
+            **_coarse_preopt_payload(conformer_key="ch3-conf", geometry_key=None)
+        )
+        summary = persist_computed_reaction_upload(session, request, created_by=531)
+
+        coarse = _the_coarse_calculation(session)
+        assert coarse is not None, "the coarse pre-optimisation was not persisted"
+        assert coarse.conformer_observation_id is not None, (
+            "the coarse pre-optimisation was persisted with no anchor -- the "
+            "defect the conformer_key field exists to close"
+        )
+
+        # Anchored under its own species entry, not into a sibling's basin.
+        observation = session.get(
+            ConformerObservation, coarse.conformer_observation_id
+        )
+        assert observation is not None
+        group = session.get(ConformerGroup, observation.conformer_group_id)
+        assert group.species_entry_id == coarse.species_entry_id
+
+        # Nothing reported, because nothing went unresolved.
+        assert _anchor_warnings(summary) == []
+
+
+def test_unanchorable_calculation_is_stored_and_reported(db_conn) -> None:
+    """The silent ``return`` is gone: an unanchored calculation now says so.
+
+    Naming neither key is still accepted -- the row is real and the deposit
+    stands -- but the upload carries a warning naming the calculation and the
+    field that would have fixed it. That is this codebase's established
+    channel for "accepted, and here is something you probably wanted that did
+    not happen"; the same list already carries SP-energy reconciliation and
+    provenance-presence warnings out of this very workflow.
+
+    A refusal would be wrong here. A transition-state calculation is
+    *correctly* unanchored -- a conformer group requires a species entry and
+    has no TS counterpart -- so refusing an unresolved anchor outright would
+    refuse correct science.
+    """
+    with _isolated_session(db_conn) as session:
+        session.add(AppUser(id=532, username="anchor_tester_2"))
+        session.flush()
+
+        request = ComputedReactionUploadRequest(
+            **_coarse_preopt_payload(conformer_key=None, geometry_key=None)
+        )
+        summary = persist_computed_reaction_upload(session, request, created_by=532)
+
+        coarse = _the_coarse_calculation(session)
+        assert coarse is not None, "the deposit was refused; it should be accepted"
+        assert coarse.conformer_observation_id is None
+
+        reported = _anchor_warnings(summary)
+        assert len(reported) == 1, (
+            "an anchor was dropped and nothing reported it -- the silent "
+            "no-op this change exists to remove"
+        )
+        assert reported[0].field == "species['ch3'].calculations['ch3-coarse']"
+        assert "conformer_key" in reported[0].message
+
+
+def test_conformer_key_decides_the_anchor_when_both_keys_are_present(
+    db_conn,
+) -> None:
+    """``conformer_key`` is the anchor; ``geometry_key`` is only the fallback.
+
+    Both fields are supplied and they point at *different* conformers of the
+    same species, so the resulting anchor says unambiguously which field the
+    seam consulted. Without a disagreement the precedence is untested and a
+    reordering of the two branches would pass.
+    """
+    payload = _minimal_payload()
+    ch3 = payload["species"][0]
+    ch3["conformers"].append(
+        {
+            "key": "ch3-conf-b",
+            "geometry": {"key": "ch3-geom-b", "xyz_text": _XYZ_CH3_B},
+            "calculation": {
+                "key": "ch3-opt-b",
+                "type": "opt",
+                "software_release": _SOFTWARE_GAUSSIAN,
+                "level_of_theory": _LOT_DFT,
+                "opt_converged": True,
+            },
+        }
+    )
+    ch3["calculations"].append(
+        {
+            "key": "ch3-coarse",
+            "type": "opt",
+            "software_release": _SOFTWARE_GAUSSIAN,
+            "level_of_theory": _LOT_DFT,
+            "opt_converged": True,
+            "parameters_json": {"final_settings": {"optimization_stage": "coarse"}},
+            # Disagreeing on purpose: the geometry names conformer A, the
+            # conformer key names conformer B.
+            "conformer_key": "ch3-conf-b",
+            "geometry_key": "ch3-geom",
+        }
+    )
+
+    with _isolated_session(db_conn) as session:
+        session.add(AppUser(id=533, username="anchor_tester_3"))
+        session.flush()
+
+        request = ComputedReactionUploadRequest(**payload)
+        persist_computed_reaction_upload(session, request, created_by=533)
+
+        coarse = _the_coarse_calculation(session)
+        assert coarse is not None
+
+        # The two observations of the CH3 entry, in declaration order.
+        observations = list(
+            session.scalars(
+                select(ConformerObservation)
+                .join(
+                    ConformerGroup,
+                    ConformerGroup.id == ConformerObservation.conformer_group_id,
+                )
+                .where(ConformerGroup.species_entry_id == coarse.species_entry_id)
+                .order_by(ConformerObservation.id)
+            )
+        )
+        assert len(observations) == 2, (
+            "expected exactly two CH3 observations; the ordering below is only "
+            "unambiguous if the species declared the two conformers it was given"
+        )
+        conformer_a, conformer_b = observations
+
+        assert coarse.conformer_observation_id == conformer_b.id, (
+            "the geometry_key won over the conformer_key -- conformer_key is "
+            "the field that means 'which basin', and it must decide"
+        )
+        assert coarse.conformer_observation_id != conformer_a.id
+
+
+def test_conformer_key_naming_no_conformer_is_refused_with_its_code() -> None:
+    """A local key that names nothing is a broken promise about the payload.
+
+    Refused at the request-schema layer, which is also where a client holding
+    no connection to a server gets the answer. The code and the context are
+    the wire package's, shared with the workflow seam, so which layer fired is
+    invisible to a caller (ADR 0017).
+    """
+    payload = _coarse_preopt_payload(
+        conformer_key="not-a-conformer", geometry_key=None
+    )
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+
+    causes = [err.get("ctx", {}).get("error") for err in excinfo.value.errors()]
+    coded = [
+        c for c in causes
+        if getattr(c, "code", None) == W_CONFORMER_KEY_UNDECLARED
+    ]
+    assert coded, (
+        f"expected a {W_CONFORMER_KEY_UNDECLARED!r} refusal, got "
+        f"{[getattr(c, 'code', c) for c in causes]}"
+    )
+    context = coded[0].context
+    assert context["key"] == "not-a-conformer"
+    # The names that *would* have worked -- what makes the refusal fixable.
+    assert "ch3-conf" in context["declared_keys"]
+    # Three facts, and never a row id (DR-0028 Requirement 2).
+    assert set(context) == {"field", "key", "declared_keys"}
+
+
+def test_a_sibling_species_conformer_is_not_in_scope() -> None:
+    """The namespace is the owning species's own conformers, and only those.
+
+    That scoping is what makes the anchor owner-correct by construction
+    rather than by a separate ownership check -- the property
+    ``source_conformer_key`` already relies on. ``h-conf`` is a real conformer
+    key, declared by this very payload, just not by the species naming it; a
+    namespace that pooled the bundle's conformers would accept this and file a
+    methyl calculation under a hydrogen atom's basin.
+    """
+    payload = _coarse_preopt_payload(conformer_key="h-conf", geometry_key=None)
+    with pytest.raises(ValidationError) as excinfo:
+        ComputedReactionUploadRequest(**payload)
+    codes = [
+        getattr(err.get("ctx", {}).get("error"), "code", None)
+        for err in excinfo.value.errors()
+    ]
+    assert W_CONFORMER_KEY_UNDECLARED in codes

@@ -70,6 +70,9 @@ from app.services.calculation_resolution import (
     resolve_and_persist_calculation_with_results,
     resolve_workflow_tool_release_ref,
 )
+from app.services.conformer_anchoring import (
+    anchor_species_calculation_to_observation,
+)
 from app.services.conformer_resolution import resolve_conformer_group
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.literature_resolution import resolve_or_create_literature
@@ -214,24 +217,6 @@ def _persist_calculation(
     return calculation
 
 
-def _anchor_species_calculation_to_observation(
-    calculation: Calculation,
-    calc_in: CalculationIn,
-    observation_id_by_geometry_key: dict[str, int],
-) -> None:
-    """Anchor a species-owned calculation to the conformer observation for its geometry key."""
-    if calc_in.geometry_key is None:
-        return
-
-    observation_id = observation_id_by_geometry_key.get(calc_in.geometry_key)
-    if observation_id is None:
-        raise ValueError(
-            f"Species calculation '{calc_in.key}' geometry_key "
-            f"'{calc_in.geometry_key}' does not resolve to a conformer observation."
-        )
-    calculation.conformer_observation_id = observation_id
-
-
 def _infer_species_role(
     state_kind: str,
     state_key: str,
@@ -280,6 +265,10 @@ def persist_network_pdep_upload(
     reaction_key_to_entry: dict[str, object] = {}
     ts_key_to_entry: dict[str, TransitionStateEntry] = {}
     observation_id_by_geometry_key: dict[str, int] = {}
+    # Conformer keys are scoped to the species that declared them, which
+    # is what makes a calculation's ``conformer_key`` owner-correct by
+    # construction: it can only name its own species's conformers.
+    observation_id_by_conformer_key: dict[str, dict[str, int]] = {}
     # Review-row targets accumulated as records are written; used at the end
     # of the workflow to apply the caller's ReviewPolicy to all of them.
     review_targets: list[RecordRef] = []
@@ -352,6 +341,9 @@ def persist_network_pdep_upload(
             session.add(observation)
             session.flush()
             observation_id_by_geometry_key[conf.geometry.key] = observation.id
+            observation_id_by_conformer_key.setdefault(sp.key, {})[
+                conf.key
+            ] = observation.id
             review_targets.append(
                 RecordRef(SubmissionRecordType.conformer_group, conformer_group.id)
             )
@@ -384,10 +376,15 @@ def persist_network_pdep_upload(
             review_targets.append(
                 RecordRef(SubmissionRecordType.calculation, calculation.id)
             )
-            _anchor_species_calculation_to_observation(
+            anchor_species_calculation_to_observation(
                 calculation,
                 calc_in,
-                observation_id_by_geometry_key,
+                observation_id_by_conformer_key=(
+                    observation_id_by_conformer_key.get(sp.key, {})
+                ),
+                observation_id_by_geometry_key=observation_id_by_geometry_key,
+                warnings=warning_sink,
+                field=f"species['{sp.key}'].calculations['{calc_in.key}']",
             )
 
     # ------------------------------------------------------------------

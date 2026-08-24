@@ -81,6 +81,7 @@ from tckdb_schemas.coded_error import CodedValidationError
 __all__ = [
     "W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED",
     "W_CALCULATION_KEY_UNDECLARED",
+    "W_CONFORMER_KEY_UNDECLARED",
     "W_GEOMETRY_KEY_UNRESOLVED",
     "W_MICRO_REACTION_KEY_UNDECLARED",
     "W_NETWORK_CHANNEL_KEY_UNDECLARED",
@@ -140,6 +141,22 @@ W_MICRO_REACTION_KEY_UNDECLARED = "micro_reaction_key_undeclared"
 
 #: A payload names a transition state key that the same upload never declared.
 W_TRANSITION_STATE_KEY_UNDECLARED = "transition_state_key_undeclared"
+
+#: A calculation's ``conformer_key`` names no conformer its own species declared.
+#:
+#: Its own code, by the same rule as the five above: the repair is made in
+#: one specific block of the depositor's payload -- that species's
+#: ``conformers`` list -- and no other code points there. It is deliberately
+#: *not* :data:`W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED`, which also spans
+#: conformer names: that code answers "which source did this correction come
+#: from?", is pinned on ``/uploads/conformers``, and its remedy sentence talks
+#: about correction sources. Reusing it for a calculation's anchor would give
+#: a client one code for two different questions.
+#:
+#: The namespace is scoped to the species that declared it, exactly like
+#: ``source_conformer_key``: a sibling species's conformer is not in scope, so
+#: ``declared_keys`` lists only the owning species's own conformer keys.
+W_CONFORMER_KEY_UNDECLARED = "conformer_key_undeclared"
 
 #: A calculation's ``geometry_key`` names no geometry this upload has resolved
 #: for it.

@@ -56,6 +56,27 @@ class CalculationIn(SchemaBase):
     :param geometry_key: Local key referencing a geometry defined elsewhere
         in the payload. For species calculations, typically points to a
         conformer's geometry. For TS calculations, defaults to the TS geometry.
+
+        This names **this calculation's geometry** and nothing else. It used
+        to carry a second job -- deciding which conformer observation a
+        species calculation is anchored to -- and the two questions come
+        apart for any calculation whose geometry is not a declared conformer
+        geometry. A coarse pre-optimisation is the worked example: its output
+        geometry is genuinely not the basin's geometry, so a producer
+        correctly omits ``geometry_key``, and until ``conformer_key`` existed
+        that silently cost the calculation its anchor. Use ``conformer_key``
+        to say which basin a calculation belongs to.
+    :param conformer_key: Local key of the conformer, declared by this
+        calculation's own species, whose observation this calculation is
+        evidence for. This is the anchor, and it is the only field that means
+        it. A sibling species's conformer is not in scope.
+
+        Optional, and resolved server-side against the request's own
+        conformer namespace -- never a database id. When it is absent the
+        workflow still falls back to ``geometry_key``, so payloads written
+        before this field existed keep anchoring exactly as they did. When
+        neither field resolves, the calculation is stored unanchored and the
+        upload reports a warning rather than dropping the anchor silently.
     :param software_release: Required software provenance reference.
     :param level_of_theory: Required level-of-theory reference.
     :param workflow_tool_release: Optional workflow-tool provenance reference.
@@ -89,6 +110,7 @@ class CalculationIn(SchemaBase):
     quality: CalculationQuality = CalculationQuality.raw
 
     geometry_key: str | None = Field(default=None, min_length=1)
+    conformer_key: str | None = Field(default=None, min_length=1)
 
     software_release: SoftwareReleaseRef
     level_of_theory: LevelOfTheoryRef
