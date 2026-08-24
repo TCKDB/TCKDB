@@ -59,6 +59,39 @@ wrapper over a contract that is itself still moving.
 
 ### Changed
 
+- **A depositor can now download their own artifacts. Until now, nobody could.**
+  `GET /api/v1/scientific/artifacts/{sha256}/download` served raw bytes only
+  when a curator had marked the owning calculation `approved`. Measured on the
+  hosted instance, **563 of 563 artifacts** belonged to calculations still
+  `not_reviewed`, so the gate had never opened for anybody, including the
+  person who uploaded the file. Approval publishes evidence to every
+  authenticated caller; it was never a statement about who may see their own
+  upload, and using it as one locked every depositor out of everything they
+  had deposited.
+
+  The gate is now **approved OR deposited by the caller**. Ownership is not a
+  new rule: it is the predicate the upload route already authorizes attaching
+  artifacts with — the `created_by` of a live submission that deposited the
+  calculation, or `calculation.created_by` for deposits that predate
+  submissions — extracted to `app.services.deposit_ownership` so the read path
+  and the write path cannot drift into two answers.
+
+  **The authentication gate is unchanged.** Ownership is a reason to serve an
+  authenticated caller and never a reason to serve an anonymous one; every
+  download path still requires a credential, and public access remains a
+  separate, unbuilt scrub-on-download design. A caller who owns nothing still
+  gets the same anti-probing 404 for an unapproved digest as for an unknown
+  one — 404 and not 403, because a 403 would confirm the digest exists.
+  Stored bytes are still verified against their SHA-256 and byte count on
+  every path, the owner's included, and a verification failure is still
+  recorded as a custody break (ADR 0014).
+
+  [ADR 0004](docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md)'s
+  argument for gating raw logs at all — they carry scratch paths, usernames
+  and scheduler ids, and scrubbing them at rest would break
+  content-addressing — is untouched and restated; only its unargued choice of
+  *review status* as the gate is amended. No schema or migration change.
+
 - **A transition state now says how many of its entries have the evidence,
   not that one does.** `GET /api/v1/scientific/transition-states/{ref}`
   returned an `evidence_summary` carrying seven `has_*` booleans —
