@@ -209,6 +209,7 @@ The response carries both the resolved species/species-entry identity
                 "charge": 0,
                 "multiplicity": 2,
                 "species_entry_id": 31,
+                "species_entry_label": None,
                 "species_entry_kind": "minimum",
                 "electronic_state_kind": "ground",
                 "species_entry_review": {"status": "not_reviewed"},
@@ -319,11 +320,17 @@ The response is a search envelope:
             "inchi_key": "...",
             "charge": 0,
             "multiplicity": 2,
+            "stereo_kind": "achiral",
             "entries": [
                 {
                     "species_entry_id": 31,
                     "species_entry_kind": "minimum",
                     "electronic_state_kind": "ground",
+                    "stereo_label": None,
+                    "electronic_state_label": None,
+                    "term_symbol": None,
+                    "isotope_key": None,
+                    "species_entry_label": None,
                     "review": {"status": "not_reviewed"},
                     "availability": {
                         "has_thermo": True,

@@ -181,6 +181,7 @@ def search_thermo(
                 multiplicity=sp_record.multiplicity,
                 species_entry_id=entry.species_entry_id,
                 species_entry_ref=entry.species_entry_ref,
+                species_entry_label=entry.species_entry_label,
                 species_entry_kind=entry.species_entry_kind,
                 electronic_state_kind=entry.electronic_state_kind,
                 species_entry_review=entry.review,

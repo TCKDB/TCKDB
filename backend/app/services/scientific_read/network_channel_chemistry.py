@@ -13,7 +13,6 @@ from collections.abc import Sequence
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.db.models.common import SpeciesEntryStateKind
 from app.db.models.network_pdep import (
     NetworkChannel,
     NetworkKinetics,
@@ -27,6 +26,11 @@ from app.schemas.reads.scientific_network_composition import (
 from app.schemas.reads.scientific_network_kinetics_search import (
     NetworkKineticsSearchRequest,
 )
+
+# The entry discriminator is shared with the species and structure searches;
+# see app/services/scientific_read/species_identity.py for why it has one
+# definition rather than one per surface.
+from app.services.scientific_read.species_identity import species_entry_label
 
 
 def build_network_state_composition(
@@ -95,50 +99,6 @@ def build_network_state_composition(
         participants_truncated=truncated,
         state_label=render_state_label(participants, truncated=truncated),
     )
-
-
-def species_entry_label(
-    *,
-    stereo_label: str | None,
-    electronic_state_kind: SpeciesEntryStateKind | None,
-    electronic_state_label: str | None,
-    term_symbol: str | None,
-    isotope_key: str | None,
-) -> str | None:
-    """Return the short discriminator that tells two entries of one species apart.
-
-    Built from every column of ``uq_species_entry_species_id`` except the
-    species itself, which is what makes the result a real discriminator rather
-    than a hint: two entries of one species differ in at least one of these by
-    construction, so they cannot both render as ``None`` and cannot render the
-    same. Two entries that agree on all five are one row.
-
-    ``ground`` electronic state is omitted because it is the default and
-    saying so of every ordinary species would bury the one entry that is not
-    ground in noise. Everything else is spelled as stored: these are the
-    depositor's own labels (``E``, ``Z``, ``T1``, a term symbol, an isotope
-    key) and rewording them would put a spelling in a plot title that appears
-    nowhere else in the record.
-
-    :returns: A compact label, or ``None`` for the plain ground-state,
-        all-standard, stereo-unlabelled entry.
-    """
-
-    parts: list[str] = []
-    if stereo_label:
-        parts.append(stereo_label)
-    if (
-        electronic_state_kind is not None
-        and electronic_state_kind != SpeciesEntryStateKind.ground
-    ):
-        parts.append(electronic_state_kind.value)
-    if electronic_state_label:
-        parts.append(electronic_state_label)
-    if term_symbol:
-        parts.append(term_symbol)
-    if isotope_key:
-        parts.append(isotope_key)
-    return " ".join(parts) if parts else None
 
 
 def render_state_label(

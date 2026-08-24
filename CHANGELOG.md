@@ -279,6 +279,115 @@ wrapper over a contract that is itself still moving.
 
 ### Fixed
 
+- **The species search served cis- and trans-diazene as the same record, and
+  a reader picking one had even odds of citing the other molecule.** `GET
+  /api/v1/scientific/species/search?smiles=N=N` returned two species entries
+  whose *every served field* was byte-identical apart from an opaque
+  `species_entry_ref`: same `species_entry_kind`, same
+  `electronic_state_kind`, same availability counts, same review badge. The
+  database knew exactly what they were — `stereo_label = Z` (cis-diazene) and
+  `stereo_label = E` (trans-diazene), two molecules with different
+  thermochemistry — and the read projection dropped the column. Nothing on
+  the wire hinted that anything had been withheld, so a reader asking for
+  diazene statmech chose a ref at random. That is a wrong scientific answer,
+  not a missing feature, and it was live and anonymous.
+
+  The two **species-discovery** surfaces — `/species/search` and
+  `/species/structure-search` — now serve the entry's identity columns:
+  **`stereo_label`, `electronic_state_label`, `term_symbol` and
+  `isotope_key`** (`electronic_state_kind` was already served), plus
+  **`species_entry_label`** — those five rendered as one short string
+  (`"E"`, `"excited T1"`). Those five columns are exactly
+  `uq_species_entry_species_id` minus the species itself, which is what makes
+  the set a real discriminator rather than a hint: two entries of one species
+  differ in at least one of them by construction, so they cannot both render
+  as `null` and cannot render the same. Both records also gain
+  **`stereo_kind`** from the parent species, which is what makes a *null*
+  stereo label readable — `achiral` says there is nothing to label,
+  `ez_isomer` says stereoisomers exist and this entry has not been labelled.
+
+  **The same defect was on nine further blocks, and they are fixed too.**
+  Discovery is where a reader picks a ref, but it is not where they read a
+  number. A statmech search for the deployed `N=N` species returns *eight*
+  records spanning both diazene entries, and every one of their `species`
+  context blocks reported `canonical_smiles: "N=N"` and nothing else — so a
+  reader could not tell which partition function belonged to which molecule
+  even after picking correctly. Each of these blocks now carries
+  `species_entry_label`:
+
+  | Block | Surface |
+  |---|---|
+  | `StatmechSpeciesContext` | `/statmech/search`, statmech detail |
+  | `ThermoSearchSpeciesContext` | `/thermo/search` |
+  | `TransportSpeciesContext` | `/transport/search`, transport detail |
+  | `ConformerSpeciesContext` | conformer search + detail |
+  | `SpeciesCalculationsSpeciesContext` | `/species/calculations/search` |
+  | `SpeciesEntryOwnerSummary` | calculation detail |
+  | `NetworkSpeciesSummary` | `/networks/{ref}?include=species` |
+  | `ReactionParticipantSummary` | `/reactions/search` |
+  | `ReactionFullSpeciesParticipant` | `/reaction-entries/{ref}/full` |
+
+  A test enumerates `app.schemas.reads` and fails on **any** response block
+  that names a species (`canonical_smiles` or `smiles`) together with a
+  `species_entry_ref` but carries no `species_entry_label`. The guard is
+  written over the schema package rather than over a list of surfaces,
+  because the defect was on eleven blocks at once — a checklist would have
+  missed the twelfth.
+
+  **One thing deliberately not changed: the reaction `equation` string.** It
+  is still rendered from participant `smiles` alone, so `NN <=> N=N + [H][H]`
+  does not say which diazene. Fixing it would change a served value that
+  consumers parse, which this release is not doing; the participant blocks
+  now carry what is needed to render the equation unambiguously, and
+  changing the default rendering is its own decision.
+
+  The derivation is **not new**. `species_entry_label` already existed for
+  the pressure-dependent network surface, which hit this same defect on this
+  same species (the hydrazine network's two diazene wells) and solved it
+  there — for network *state* composition only, while the network's own
+  `include=species` block still had it. It has moved to
+  `app/services/scientific_read/species_identity.py` and every surface
+  imports it, so a species reads the same way in a species search, a
+  structure search, a statmech record and a network state label. Two
+  functions producing species labels that can disagree is a failure this
+  project has hit repeatedly (`points`, `literature`, `parameters`,
+  `workflow_tool_release`, `R`, `CO`, `F`). A second test asserts the
+  derivation reads every column of `uq_species_entry_species_id`, read off
+  the ORM model rather than restated, so adding a sixth identity column
+  cannot silently turn the label back into a hint.
+
+  **Default projection, not an `include=` token.** A field whose absence
+  makes two records indistinguishable belongs in the default, because a
+  reader who does not know to ask is exactly the reader who gets the wrong
+  molecule. Every value comes from a row the surface already loaded — the
+  discovery surfaces hold the ORM entity, the context builders gained four
+  columns on a `SELECT` they were already running — so this costs no
+  additional query anywhere.
+
+  **A null column renders as `null`, never `""`.** Measured against the
+  hosted instance: 60 species entries, of which **9** carry a stereo label
+  (`S`x4, `E`x3, `Z`x1, `R`x1) and **51** carry none;
+  `electronic_state_label`, `term_symbol`, `isotope_key`,
+  `isotopologue_label` and non-`ground` `electronic_state_kind` are at **0**.
+  `stereo_kind` is non-nullable and populated on all 59 species. So the acute
+  case is narrow — `N=N` is the only species with two entries — and the
+  under-description was broader. The four zero-population columns are served
+  anyway because they are identity components: the first entry that carries
+  one must be distinguishable the day it lands, not the day someone notices.
+
+  `isotopologue_label` is deliberately **not** served. It is deprecated, is
+  no longer part of the entry's unique identity, and is never written by the
+  application, so it cannot discriminate between two entries; serving it
+  would advertise an identity component that is not one.
+
+  Purely additive — no served field is removed, renamed, or changed in value.
+  No database schema or migration impact: this is a read projection, not a
+  table. `tckdb-client` **0.55.0 -> 0.56.0** declares `stereo_kind` on
+  `SpeciesRecord` and the five identity fields plus `stereo_kind` on
+  `SpeciesStructureRecord` (`SpeciesRecord.entries` was already an untyped
+  JSON list, so nested entry fields flow through either way). No MCP change:
+  `tckdb-mcp` passes the search response through without knowing its shape.
+
 - **A linear molecule could deposit a frequency list with one vibration
   missing, and nothing said a word.** A harmonic analysis of `N` atoms has
   `3N - 6` vibrations if the molecule is bent and `3N - 5` if it is linear —

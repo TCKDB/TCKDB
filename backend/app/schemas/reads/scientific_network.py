@@ -117,6 +117,13 @@ class NetworkSpeciesSummary(BaseModel):
 
     species_entry_id: int | None = None
     species_entry_ref: str
+    #: The short discriminator that says which entry of the species this
+    #: participant is. ``canonical_smiles`` is the *species'* and is shared
+    #: by every entry under it -- the hydrazine network carries two diazene
+    #: entries under one ``N=N``, and without this they read as the same
+    #: participant listed twice. ``None`` for the plain ground-state,
+    #: stereo-unlabelled entry.
+    species_entry_label: str | None = None
     species_ref: str
     role: NetworkSpeciesRole
     canonical_smiles: str | None = None

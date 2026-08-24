@@ -122,12 +122,26 @@ class ConformerSpeciesContext(BaseModel):
     Mirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by
     the calculation surface so a generic client can reuse one parser
     for both surfaces. Integer ids are Phase D policy-gated.
+
+    ``species_entry_label`` is the short discriminator that says *which*
+    entry of that species this is -- ``"E"``, ``"Z"``, ``"excited T1"``.
+    ``canonical_smiles`` is the species' graph identity and is shared by
+    every entry under it, so without the label a search that returns
+    records for two entries of one species labels them identically. That
+    is not hypothetical: a statmech search for the deployed ``N=N``
+    species returns eight records across cis- and trans-diazene,
+    molecules with different thermochemistry, and every one of them
+    reads ``N=N``. ``None`` for the plain ground-state, all-standard,
+    stereo-unlabelled entry -- never ``""``. Derived by
+    :func:`app.services.scientific_read.species_identity.species_entry_label`,
+    the one definition every surface shares.
     """
 
     species_id: int | None = None
     species_ref: str
     species_entry_id: int | None = None
     species_entry_ref: str
+    species_entry_label: str | None = None
     canonical_smiles: str | None = None
     inchi_key: str | None = None
     charge: int | None = None

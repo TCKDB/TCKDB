@@ -114,6 +114,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.species import search_species
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "provenance",
@@ -492,6 +495,7 @@ def _resolve_species_entry_context(
                 species_ref=sp_record.species_ref,
                 species_entry_id=entry.species_entry_id,
                 species_entry_ref=entry.species_entry_ref,
+                species_entry_label=entry.species_entry_label,
                 canonical_smiles=sp_record.canonical_smiles,
                 inchi_key=sp_record.inchi_key,
                 charge=sp_record.charge,
@@ -510,6 +514,7 @@ def _species_context_from_orm(
         species_ref=species.public_ref,
         species_entry_id=entry.id,
         species_entry_ref=entry.public_ref,
+        species_entry_label=species_entry_label_for(entry),
         canonical_smiles=species.smiles,
         inchi_key=species.inchi_key,
         charge=species.charge,
