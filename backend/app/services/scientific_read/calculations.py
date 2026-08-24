@@ -14,6 +14,7 @@ from sqlalchemy import exists, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, not_found
+from app.chemistry.units import convert_energy_to_hartree
 from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
@@ -45,6 +46,12 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
+from app.db.models.energy_correction import (
+    AppliedEnergyCorrection,
+    AppliedEnergyCorrectionComponent,
+    EnergyCorrectionScheme,
+    FrequencyScaleFactor,
+)
 from app.db.models.geometry import Geometry
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.literature import Literature
@@ -56,6 +63,8 @@ from app.db.models.submission import Submission, SubmissionRecordLink
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_calculation import (
+    AppliedEnergyCorrectionComponentSummary,
+    AppliedEnergyCorrectionSummary,
     AvailableCalculationSections,
     CalculationArtifactSummary,
     CalculationConstraintSummary,
@@ -132,6 +141,7 @@ _NOT_IMPLEMENTED_INCLUDE_TOKENS: frozenset[str] = frozenset()
 _HEAVY_INCLUDE_TOKENS: frozenset[str] = frozenset(
     {
         "results",
+        "energy_corrections",
         "dependencies",
         "artifacts",
         "input_geometries",
@@ -329,6 +339,10 @@ def build_record(
     if "results" in includes:
         results_summary = _build_result_summary(session, calc, calc.id)
 
+    energy_corrections_block: list[AppliedEnergyCorrectionSummary] | None = None
+    if "energy_corrections" in includes:
+        energy_corrections_block = _build_energy_corrections(session, calc.id)
+
     dependencies_block: list[CalculationDependencySummary] | None = None
     if "dependencies" in includes:
         dependencies_block = _build_dependencies(session, calc.id)
@@ -433,6 +447,7 @@ def build_record(
         provenance=provenance,
         available_sections=available,
         results=results_summary,
+        energy_corrections=energy_corrections_block,
         dependencies=dependencies_block,
         artifacts=artifacts_block,
         execution_environment=execution_environment_block,
@@ -783,6 +798,16 @@ def _build_provenance_and_sections(
             _exists_for_calc(CalculationHessian, calculation_id).label(
                 "has_hessian"
             ),
+            # Not ``_exists_for_calc``: the applied-correction table names
+            # its calculation ``source_calculation_id``, not
+            # ``calculation_id``, because the column is provenance ("the
+            # energy this correction was computed against") rather than
+            # ownership.
+            exists()
+            .where(
+                AppliedEnergyCorrection.source_calculation_id == calculation_id
+            )
+            .label("has_energy_corrections"),
             # ``calculation_id`` is the primary key of both of these
             # tables, so each subquery returns at most one row and is
             # scalar by construction — no ``LIMIT`` needed to make it so.
@@ -813,6 +838,7 @@ def _build_provenance_and_sections(
     has_spin_diagnostic = probes.has_spin_diagnostic
     has_freq_modes = probes.has_freq_modes
     has_hessian = probes.has_hessian
+    has_energy_corrections = probes.has_energy_corrections
 
     validation_row = probes.validation_status
     validation_status = (
@@ -858,6 +884,7 @@ def _build_provenance_and_sections(
         has_irc=has_irc,
         has_path_search=has_path_search,
         has_execution_environment=has_execution_environment,
+        has_energy_corrections=has_energy_corrections,
     )
     return provenance, sections
 
@@ -1148,6 +1175,209 @@ def _build_path_search_summary(
             note=row.note,
         ),
     )
+
+
+# ---------------------------------------------------------------------------
+# include=energy_corrections loader
+# ---------------------------------------------------------------------------
+
+#: Cap on breakdown rows served per applied correction. A Petersson BAC on
+#: a small molecule has a handful (measured on the hosted instance: 354
+#: rows across 145 corrections that have any, at most 6 on one); a
+#: bond-instance-resolved Melius BAC on a large molecule grows with the
+#: structure. ``component_count`` is always the full count, so a truncated
+#: breakdown says so rather than looking complete.
+_CORRECTION_COMPONENT_LIMIT = 200
+
+#: Target kind → the scientific endpoint segment that serves it.
+_CORRECTION_TARGET_ENDPOINTS: dict[str, str] = {
+    "species_entry": "species-entries",
+    "reaction_entry": "reaction-entries",
+    "transition_state_entry": "transition-state-entries",
+}
+
+
+def _build_energy_corrections(
+    session: Session, calculation_id: int
+) -> list[AppliedEnergyCorrectionSummary]:
+    """Return every applied energy correction sourced from *calculation_id*.
+
+    The rows are found by ``source_calculation_id``, which is the row's
+    statement about *which energy* it corrects — the energy this very
+    record serves. That is the join the caller cannot make for
+    themselves: the correction's ``target_*_entry_id`` points at the
+    species or transition-state entry, not at the calculation, so an index
+    keyed on the target alone never says which of an entry's calculations
+    the number belongs to.
+
+    Nothing here recomputes or reconciles. The stored total is served as
+    stored; the breakdown is served as stored; the only derived quantity is
+    the hartree projection of the total, and it is named for its unit.
+    """
+    rows = session.execute(
+        select(
+            AppliedEnergyCorrection.id,
+            AppliedEnergyCorrection.application_role,
+            AppliedEnergyCorrection.value,
+            AppliedEnergyCorrection.value_unit,
+            AppliedEnergyCorrection.temperature_k,
+            AppliedEnergyCorrection.note,
+            AppliedEnergyCorrection.target_species_entry_id,
+            AppliedEnergyCorrection.target_reaction_entry_id,
+            AppliedEnergyCorrection.target_transition_state_entry_id,
+            EnergyCorrectionScheme.public_ref.label("scheme_ref"),
+            EnergyCorrectionScheme.name.label("scheme_name"),
+            EnergyCorrectionScheme.kind.label("scheme_kind"),
+            FrequencyScaleFactor.public_ref.label("fsf_ref"),
+        )
+        .select_from(AppliedEnergyCorrection)
+        .outerjoin(
+            EnergyCorrectionScheme,
+            EnergyCorrectionScheme.id == AppliedEnergyCorrection.scheme_id,
+        )
+        .outerjoin(
+            FrequencyScaleFactor,
+            FrequencyScaleFactor.id
+            == AppliedEnergyCorrection.frequency_scale_factor_id,
+        )
+        .where(AppliedEnergyCorrection.source_calculation_id == calculation_id)
+        .order_by(AppliedEnergyCorrection.id.asc())
+    ).all()
+    if not rows:
+        return []
+
+    correction_ids = [row.id for row in rows]
+    counts = dict(
+        session.execute(
+            select(
+                AppliedEnergyCorrectionComponent.applied_correction_id,
+                func.count(),
+            )
+            .where(
+                AppliedEnergyCorrectionComponent.applied_correction_id.in_(
+                    correction_ids
+                )
+            )
+            .group_by(AppliedEnergyCorrectionComponent.applied_correction_id)
+        ).all()
+    )
+
+    targets = {}
+    for row in rows:
+        target_type, target_id = _correction_target(row)
+        if target_type is not None and target_id is not None:
+            targets.setdefault(target_type, set()).add(target_id)
+    refs = _correction_target_refs(session, targets)
+
+    out: list[AppliedEnergyCorrectionSummary] = []
+    for row in rows:
+        target_type, target_id = _correction_target(row)
+        if target_type is None or target_id is None:
+            # Unreachable while the row's ``exactly_one_target`` CHECK
+            # holds; skipping beats emitting a record whose target the
+            # schema cannot type.
+            continue
+        target_ref = refs.get((target_type, target_id))
+        total = int(counts.get(row.id, 0))
+        components = (
+            _build_energy_correction_components(session, row.id)
+            if total
+            else []
+        )
+        out.append(
+            AppliedEnergyCorrectionSummary(
+                applied_energy_correction_id=row.id,
+                application_role=row.application_role,
+                applied_value=row.value,
+                applied_value_unit=row.value_unit,
+                applied_value_hartree=convert_energy_to_hartree(
+                    row.value, row.value_unit
+                ),
+                temperature_k=row.temperature_k,
+                note=row.note,
+                target_record_type=target_type,
+                target_record_ref=target_ref,
+                target_record_id=target_id,
+                target_endpoint=(
+                    "/api/v1/scientific/"
+                    f"{_CORRECTION_TARGET_ENDPOINTS[target_type]}/{target_ref}"
+                    if target_ref is not None
+                    else None
+                ),
+                energy_correction_scheme_ref=row.scheme_ref,
+                energy_correction_scheme_name=row.scheme_name,
+                energy_correction_scheme_kind=row.scheme_kind,
+                frequency_scale_factor_ref=row.fsf_ref,
+                component_count=total,
+                components_truncated=total > _CORRECTION_COMPONENT_LIMIT,
+                components=components,
+            )
+        )
+    return out
+
+
+def _correction_target(row) -> tuple[str | None, int | None]:
+    """Return the ``(kind, id)`` of the one populated target FK."""
+    if row.target_species_entry_id is not None:
+        return "species_entry", row.target_species_entry_id
+    if row.target_reaction_entry_id is not None:
+        return "reaction_entry", row.target_reaction_entry_id
+    if row.target_transition_state_entry_id is not None:
+        return "transition_state_entry", row.target_transition_state_entry_id
+    return None, None
+
+
+def _correction_target_refs(
+    session: Session, targets: dict[str, set[int]]
+) -> dict[tuple[str, int], str]:
+    """Resolve every target's public ref in one statement per target table.
+
+    One statement per *kind*, not one per correction: this builder runs
+    once per record and a search page multiplies whatever it costs.
+    """
+    models = {
+        "species_entry": SpeciesEntry,
+        "reaction_entry": ReactionEntry,
+        "transition_state_entry": TransitionStateEntry,
+    }
+    out: dict[tuple[str, int], str] = {}
+    for kind, ids in targets.items():
+        model_cls = models[kind]
+        for row_id, ref in session.execute(
+            select(model_cls.id, model_cls.public_ref).where(
+                model_cls.id.in_(ids)
+            )
+        ).all():
+            out[(kind, row_id)] = ref
+    return out
+
+
+def _build_energy_correction_components(
+    session: Session, applied_correction_id: int
+) -> list[AppliedEnergyCorrectionComponentSummary]:
+    rows = session.scalars(
+        select(AppliedEnergyCorrectionComponent)
+        .where(
+            AppliedEnergyCorrectionComponent.applied_correction_id
+            == applied_correction_id
+        )
+        .order_by(
+            AppliedEnergyCorrectionComponent.component_kind.asc(),
+            AppliedEnergyCorrectionComponent.key.asc(),
+            AppliedEnergyCorrectionComponent.id.asc(),
+        )
+        .limit(_CORRECTION_COMPONENT_LIMIT)
+    ).all()
+    return [
+        AppliedEnergyCorrectionComponentSummary(
+            component_kind=row.component_kind,
+            key=row.key,
+            multiplicity=row.multiplicity,
+            parameter_value=row.parameter_value,
+            contribution_value=row.contribution_value,
+        )
+        for row in rows
+    ]
 
 
 # ---------------------------------------------------------------------------

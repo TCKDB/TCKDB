@@ -678,7 +678,10 @@ def test_the_parametrisation_asserts_its_own_size():
     }
 
     assert sections_under_test == declared_sections
-    assert len(sections_under_test) == 81
+    # 81 before ``energy_corrections`` joined CALCULATION_RECORD_SECTIONS.
+    # One, not three: the tuples are keyed on the table's *surface*, which
+    # the three calculation cases share.
+    assert len(sections_under_test) == 82
 
 
 # ---------------------------------------------------------------------------

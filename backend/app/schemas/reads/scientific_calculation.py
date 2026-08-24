@@ -15,6 +15,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, computed_field
 
 from app.db.models.common import (
+    AppliedCorrectionComponentKind,
     ArtifactKind,
     CalculationDependencyRole,
     CalculationGeometryRole,
@@ -22,6 +23,9 @@ from app.db.models.common import (
     CalculationType,
     ConstraintKind,
     CoordinateUnit,
+    EnergyCorrectionApplicationRole,
+    EnergyCorrectionSchemeKind,
+    EnergyUnit,
     ImaginaryModeDisposition,
     IRCDirection,
     PathSearchMethod,
@@ -1015,6 +1019,136 @@ class CalculationSpinDiagnosticSummary(BaseModel):
     created_at: datetime | None = None
 
 
+#: What an applied energy correction was applied *to*. The database
+#: enforces exactly one of the three target foreign keys
+#: (``ck_applied_energy_correction_exactly_one_target``), so this is a
+#: closed set of three and never a fourth value.
+CorrectionTargetRecordType = Literal[
+    "species_entry",
+    "reaction_entry",
+    "transition_state_entry",
+]
+
+
+class AppliedEnergyCorrectionComponentSummary(BaseModel):
+    """One term of an applied correction's breakdown.
+
+    Reads ``applied_energy_correction_component`` verbatim. It answers
+    *why* the total is what it is: ``"6 x C-H at -0.2347 contributes
+    -1.408"`` is one of these rows.
+
+    ``parameter_value`` is the scheme parameter that was looked up and
+    ``contribution_value`` is what that lookup contributed to the total,
+    both in the parent correction's ``applied_value_unit``. They are
+    **not** required to satisfy ``contribution = multiplicity x
+    parameter``: for an atom-energy scheme the depositor's contribution
+    also carries the atom's enthalpy-of-formation reference, so the two
+    numbers legitimately differ by that reference. Both are served as
+    stored and neither is recomputed from the other.
+    """
+
+    component_kind: AppliedCorrectionComponentKind
+    key: str
+    multiplicity: int
+    parameter_value: float
+    contribution_value: float
+
+
+class AppliedEnergyCorrectionSummary(BaseModel):
+    """One ``applied_energy_correction`` row, projected for a calculation.
+
+    **The energy this sits beside is the uncorrected one.** Every energy
+    the calculation surface serves —
+    :attr:`CalculationSPResultSummary.electronic_energy_hartree`,
+    :attr:`CalculationOptResultSummary.final_energy_hartree`, the scan and
+    IRC point energies — is the value the electronic-structure program
+    printed, stored verbatim on deposit (``services/sp_energy_extraction.py``
+    only ever *fills* a missing one from the log; nothing adds a correction
+    to it). A correction is therefore an **addend a consumer applies**, not
+    an adjustment already folded in. Whether to apply it is the consumer's
+    call and this projection does not make it: it reports what was applied
+    to the record, in what role, and by which scheme.
+
+    **Units.** ``applied_value`` and ``applied_value_unit`` are the stored
+    pair, reproduced exactly. The unit genuinely varies by scheme in
+    deposited data — a Petersson BAC total arrives in kcal/mol and an
+    atom-energy total in hartree, in the same database — so a single
+    fixed-unit column would have to convert one of them on the way in, and
+    a bare ``applied_value`` with no unit beside it would be the trap the
+    unit policy names. :attr:`applied_value_hartree` is the derived
+    convenience: the same quantity in the unit of the energy on this very
+    record, so ``electronic_energy_hartree + applied_value_hartree`` is a
+    sum a consumer can take without carrying a conversion factor. It is
+    derived, not stored, and it is ``None`` — never ``0.0`` — for a unit
+    this build has no factor for.
+    """
+
+    #: Stripped unless ``include=internal_ids`` and the deployment allows it.
+    applied_energy_correction_id: int | None = None
+
+    #: The semantic role the depositor assigned: which term of the energy
+    #: expression this correction is. Reported, not interpreted.
+    application_role: EnergyCorrectionApplicationRole
+
+    #: The stored magnitude and the unit it is stored in. Verbatim.
+    applied_value: float
+    applied_value_unit: EnergyUnit
+
+    #: :attr:`applied_value` in hartree. ``None`` when the stored unit has
+    #: no conversion factor in this build.
+    applied_value_hartree: float | None = None
+
+    #: Present on corrections that are temperature-dependent (thermal
+    #: corrections); ``None`` on the temperature-independent ones.
+    temperature_k: float | None = None
+    note: str | None = None
+
+    #: What the correction was applied to. A correction sourced from this
+    #: calculation may target a species entry, a reaction entry or a
+    #: transition-state entry, and the target is not always the
+    #: calculation's own owner.
+    target_record_type: CorrectionTargetRecordType
+    target_record_ref: str | None = None
+    target_record_id: int | None = None
+    target_endpoint: str | None = None
+
+    #: Exactly one of the scheme / frequency-scale-factor provenance
+    #: pointers is populated, per the row's database CHECK. Follow it to
+    #: the parameter set the value was computed from.
+    energy_correction_scheme_ref: str | None = None
+    energy_correction_scheme_name: str | None = None
+    energy_correction_scheme_kind: EnergyCorrectionSchemeKind | None = None
+    frequency_scale_factor_ref: str | None = None
+
+    #: How many breakdown rows exist for this correction, counted in full
+    #: even when :attr:`components` is truncated. ``0`` means the depositor
+    #: recorded a total with no breakdown, which is a different fact from a
+    #: breakdown that did not fit.
+    component_count: int
+
+    #: ``True`` when :attr:`components` carries fewer rows than
+    #: :attr:`component_count`.
+    #:
+    #: **This flag decides whether the components may be summed.** Measured
+    #: on every one of the hosted instance's 164 applied corrections, the
+    #: served ``contribution_value`` rows sum exactly to the served
+    #: ``applied_value`` — both are read off the same stored rows, neither
+    #: is recomputed, so a reader who adds the components reaches the
+    #: total. That identity holds **only over a complete set**. When this
+    #: flag is ``True`` the served rows are a prefix and their sum is
+    #: meaningless: :attr:`applied_value` remains the whole, authoritative
+    #: correction and the partial rows are for inspection only. Do not
+    #: re-aggregate them, and do not treat their sum as a smaller
+    #: correction.
+    components_truncated: bool = False
+
+    #: The stored breakdown rows, ordered by ``(component_kind, key, id)``
+    #: and capped — see :attr:`components_truncated` before summing them.
+    components: list[AppliedEnergyCorrectionComponentSummary] = Field(
+        default_factory=list
+    )
+
+
 class CalculationDependencySummary(BaseModel):
     """One edge in the calculation-dependency graph, projected for the
     ``include=dependencies`` heavy include of the calculation detail
@@ -1096,6 +1230,14 @@ class AvailableCalculationSections(BaseModel):
     has_irc: bool
     has_path_search: bool
     has_execution_environment: bool
+    #: Whether any ``applied_energy_correction`` row cites this calculation
+    #: as the source of the energy it corrects. On the *default* projection
+    #: on purpose: the energies this record serves are uncorrected (see
+    #: :class:`AppliedEnergyCorrectionSummary`), and a reader who does not
+    #: know a correction exists cannot know to ask for it. A flag a
+    #: consumer has to already know about does not reach the consumer who
+    #: did not.
+    has_energy_corrections: bool
 
 
 # ---------------------------------------------------------------------------
@@ -1124,6 +1266,11 @@ class ScientificCalculationRecord(BaseModel):
     provenance: CalculationEvidenceProvenanceSummary
     available_sections: AvailableCalculationSections
     results: CalculationResultSummary | None = None
+    #: ``include=energy_corrections``. Every ``applied_energy_correction``
+    #: row sourced from this calculation, with the applied magnitude. An
+    #: empty list means the caller asked and the calculation has none;
+    #: absent means the caller did not ask.
+    energy_corrections: list[AppliedEnergyCorrectionSummary] | None = None
     dependencies: list[CalculationDependencySummary] | None = None
     artifacts: list[CalculationArtifactSummary] | None = None
     execution_environment: ExecutionEnvironmentManifestSummary | None = None
@@ -1155,6 +1302,8 @@ class ScientificCalculationDetailResponse(BaseModel):
 
 
 __all__ = [
+    "AppliedEnergyCorrectionComponentSummary",
+    "AppliedEnergyCorrectionSummary",
     "AvailableCalculationSections",
     "CalculationArtifactSummary",
     "CalculationConstraintSummary",
@@ -1181,6 +1330,7 @@ __all__ = [
     "CalculationScanSummary",
     "CalculationSpinDiagnosticSummary",
     "CalculationWavefunctionDiagnosticSummary",
+    "CorrectionTargetRecordType",
     "DeclarationAgreementValue",
     "ExecutionEnvironmentManifestSummary",
     "ImaginaryModeProjectionEntry",

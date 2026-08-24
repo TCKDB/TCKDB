@@ -150,6 +150,7 @@ CALCULATION_RECORD_SECTIONS = IncludeGatedSections(
     surface="/api/v1/scientific/calculations",
     sections={
         "results": ("results",),
+        "energy_corrections": ("energy_corrections",),
         "dependencies": ("dependencies",),
         "artifacts": ("artifacts",),
         "input_geometries": ("input_geometries",),
