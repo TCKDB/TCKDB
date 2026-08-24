@@ -11210,11 +11210,16 @@
               }
             ],
             "title": "Observation Count"
+          },
+          "optimization_chain_count": {
+            "title": "Optimization Chain Count",
+            "type": "integer"
           }
         },
         "required": [
           "calculation_count",
           "evidence_coverage",
+          "optimization_chain_count",
           "geometry_count",
           "levels_of_theory"
         ],
@@ -36905,7 +36910,7 @@
         "type": "object"
       },
       "SpeciesScientificRecord": {
-        "description": "One species row returned from /scientific/species/search.\n\nPhase B: ``species_ref`` is the public stable handle alongside\nthe integer ``species_id``.\n\n``stereo_kind`` is a property of the *species* graph, not of any one\nentry, and it is what makes a null ``stereo_label`` on an entry\nreadable. ``achiral`` says the null means there is no stereochemistry\nto label; ``ez_isomer`` or ``enantiomer`` says stereoisomers exist and\nthis entry simply has not been labelled — a materially different\nthing to know before citing it. Non-nullable in the schema, so it is\npopulated on every species row.",
+        "description": "One species row returned from /scientific/species/search.\n\nPhase B: ``species_ref`` is the public stable handle alongside\nthe integer ``species_id``.\n\n``stereo_kind`` is a property of the *species* graph, not of any one\nentry, and it is what makes a null ``stereo_label`` on an entry\nreadable. ``achiral`` says the null means there is no stereochemistry\nto label; ``ez_isomer`` or ``enantiomer`` says stereoisomers exist and\nthis entry simply has not been labelled — a materially different\nthing to know before citing it. Non-nullable in the schema, so it is\npopulated on every species row.\n\n``formula`` is not a stored column. It is derived at read time by the\nsame RDKit-cartridge expression the ``formula=`` filter matches on\n(``species.py::_formula_expr``), so a caller who searched by formula\nreads back exactly the string that was matched. Hill notation with a\ntrailing charge suffix for ions (``H2O``, ``CH3``, ``HO-``, ``H4N+``);\nisotopes are not distinguished. It stays nullable because a species\nwhose SMILES will not parse has no formula to derive — that is the\nonly case in which it is null.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",

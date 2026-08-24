@@ -124,6 +124,11 @@ from app.schemas.reads.scientific_conformer import (
     ConformerEvidenceCoverage,
     ConformerGroupEvidenceSummary,
 )
+from app.schemas.reads.scientific_species_calculations import (
+    CalculationEnergyBlock,
+    ConformerContextBlock,
+    SpeciesCalculationsSearchRecord,
+)
 from app.schemas.reads.scientific_statmech import StatmechEvidenceSummary
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery, ThermoRecord
 from app.schemas.reads.scientific_thermo_search import ThermoSearchRecord
@@ -2468,3 +2473,224 @@ class TestTheVocabularyIsLinkedWhereTheTokensAre:
         with client_factory() as c:
             assert VOCABULARY_URL in c.get("/").text
             assert c.get("/guides/api_vocabulary/").status_code == 404
+
+
+class TestACalculationCardStatesOnlyWhatTheRecordStates:
+    """Four ways the calculations panel used to say something untrue.
+
+    All four were found on one live entry -- ``[CH3]``, fourteen
+    calculations, one conformer group -- and none of them was a wrong
+    number. Each was a true number given a frame that made it read as
+    something else, which is the failure mode a rendered page has and
+    a JSON document does not.
+
+    * **A frequencies card announced "Electronic energy -- not
+      recorded".** A freq job has no electronic energy to report. The
+      read API says so by carrying no energy block, and the card
+      collapsed that into an energy block with the reading missing.
+    * **No card said which conformer it belonged to**, although every
+      record carries one or carries an explicit nothing.
+    * **The entry advertised fourteen calculations and the conformer
+      group card said eleven.** Both counts are right and they count
+      different sets; nothing on the page said which set either was.
+    * **The cap was confessed underneath the cards it had already
+      applied.**
+    """
+
+    def test_a_calculation_with_no_energy_block_gets_no_energy_row(self, script):
+        """Absence is about the shape of the answer; null is about the data.
+
+        The read API draws that line deliberately and the card erased
+        it: ``record.energy || {}`` turns "this job reports no
+        electronic energy" into "this job's electronic energy is
+        missing", and the second is an accusation the payload never
+        made. The guard is on the block, never on a table of which
+        calculation types are supposed to have one -- the payload
+        already knows, and a lookup table here would be this page
+        inventing an expectation it is not entitled to hold.
+        """
+        # Read off the schema rather than off the one payload this was
+        # found on: the block is optional on the record and the reading
+        # is optional inside it, which is exactly the pair the card has
+        # to keep apart. A schema that stopped drawing that line would
+        # fail here rather than quietly making the guard meaningless.
+        record = SpeciesCalculationsSearchRecord.model_fields["energy"]
+        assert not record.is_required()
+        assert str(record.annotation).endswith("CalculationEnergyBlock | None")
+        assert not CalculationEnergyBlock.model_fields["energy_hartree"].is_required()
+
+        body = _js_function(script, "calculationView(record)")
+        code = _js_code(body)
+        assert "var energy = record.energy;" in code
+        assert "record.energy || {}" not in code
+        headline = re.search(r"headline: energy\s*\?(.*?)\n      facts:", code, re.DOTALL)
+        assert headline is not None, code
+        assert "Electronic energy" in headline.group(1)
+        assert ": null" in headline.group(1)
+        # No calculation type decides this. The payload does.
+        after_energy = code.split("var energy")[1]
+        for token in ('"freq"', '"opt"', '"sp"'):
+            assert token not in after_energy, token
+
+    def test_an_energy_block_that_is_present_and_empty_still_says_not_recorded(self, script):
+        """That one is a real gap, and a real gap keeps the sentinel.
+
+        The fix must not become "hide the row whenever the number is
+        missing", which would trade one silent misreading for another:
+        a job that should have reported an energy and did not is
+        exactly the case a reader needs to see.
+        """
+        body = _js_code(_js_function(script, "calculationView(record)"))
+        # The row is emitted on the strength of the block alone, and
+        # the reading inside it goes through the same formatter every
+        # other quantity uses -- which answers a null with ABSENT.
+        assert 'fixed(energy.energy_hartree, 6, "hartree")' in body
+        assert "energy.energy_hartree ?" not in body
+        assert "energy.energy_hartree !=" not in body
+        assert "energy.energy_hartree ===" not in body
+        filler = _js_function(script, "fillValue(node, value)")
+        assert "value === null || value === undefined" in filler
+        assert "ABSENT" in filler
+
+    def test_the_card_renderer_writes_no_heading_without_rows_to_put_under_it(self, script):
+        """The same guard the level-of-theory block already had.
+
+        A view that sets no ``headline`` and a record whose surface
+        carries none both arrive as a falsy value and both draw
+        nothing. This is asserted beside the ``levels`` guard on
+        purpose: they are one rule, and a later edit that keeps one and
+        drops the other should fail here.
+        """
+        detail = _js_function(script, "detailBody(section, ref, payload)")
+        assert "if (view.headline && view.headline.length) {" in detail
+        assert "if (view.levels && view.levels.length) {" in detail
+        assert detail.count("quantityBlock(view.headline)") == 1
+
+    def test_a_calculation_card_names_the_conformer_it_belongs_to(self, script):
+        """The record has carried it all along.
+
+        It goes in the facts rather than under "how it was produced".
+        Which basin a geometry sits in is what the calculation is
+        about, not a fact about the machinery that produced it, and the
+        provenance group is for the second kind.
+        """
+        # The two field names the card reads are the schema's, checked
+        # against it so a rename breaks the test rather than the page.
+        assert not SpeciesCalculationsSearchRecord.model_fields["conformer"].is_required()
+        for field in ("conformer_group_label", "conformer_group_ref"):
+            assert field in ConformerContextBlock.model_fields, field
+
+        body = _js_code(_js_function(script, "calculationView(record)"))
+        assert '["Conformer", conformerText(record.conformer)]' in body
+        facts = body.split("facts:")[1].split("provenance:")[0]
+        assert "Conformer" in facts
+        assert "Conformer" not in body.split("provenance:")[1]
+
+        helper = _js_code(_js_function(script, "conformerText(conformer)"))
+        assert "conformer.conformer_group_label" in helper
+        # A group the payload does not name falls back to its ref
+        # before it falls back to the sentinel.
+        assert helper.index("conformer_group_label") < helper.index("conformer_group_ref")
+
+    def test_a_calculation_with_no_conformer_says_that_and_not_not_recorded(self, script):
+        """Three of the fourteen have none, and that is the whole story.
+
+        "not recorded" would read as a gap in the deposit. The
+        calculation was deposited without a conformer, which is a
+        different fact and the one that explains why a group counts
+        fewer calculations than its entry does -- so the page has to
+        be able to say *which* nothing it is looking at.
+        """
+        helper = _js_code(_js_function(script, "conformerText(conformer)"))
+        sentence = re.search(r"if \(!conformer\) \{ return \{ sentence: \"([^\"]+)\" \}; \}", helper)
+        assert sentence is not None, helper
+        assert sentence.group(1) != "not recorded"
+        assert "conformer" in sentence.group(1)
+        assert sentence.group(1) == sentence.group(1).lower()
+
+        # Rendered as a sentence about the record, in the same body
+        # face as the sentinel, so it cannot be read as the name of a
+        # conformer group that happens to be called that.
+        filler = _js_function(script, "fillValue(node, value)")
+        stated = re.search(
+            r"if \(typeof value === \"object\" && value\.sentence\) \{(.*?)\n    \}",
+            filler,
+            re.DOTALL,
+        )
+        assert stated is not None, filler
+        assert "absent" in stated.group(1)
+        assert "value.sentence" in stated.group(1)
+        # Before the quantity branch, or a ``{sentence}`` would fall
+        # into it and print "undefined".
+        assert filler.index("value.sentence") < filler.index('make("span", "unit", value.unit)')
+
+    def test_the_conformer_note_says_which_calculations_the_count_counts(self, script):
+        """Fourteen and eleven are both right, and they count different sets.
+
+        The entry counts every calculation deposited against it; the
+        group counts the ones assigned to that basin. Read side by side
+        with nothing between them, the pair reads as arithmetic that
+        does not work, and a reader who concludes the database cannot
+        add up has been misled by the page rather than by the data.
+        """
+        conformers = re.search(
+            r'\{\s*key: "conformers",(.*?)\n    \}', script, flags=re.DOTALL
+        )
+        assert conformers is not None
+        note = re.search(r"note: (.*?),\n", conformers.group(1), flags=re.DOTALL)
+        assert note is not None, conformers.group(1)
+        prose = " ".join(re.findall(r'"([^"]*)"', note.group(1)))
+        assert "Calculations behind it" in prose
+        assert "not every calculation on the entry" in prose
+        assert "without a conformer" in prose
+        # The field label the note explains still exists to be explained.
+        assert '["Calculations behind it", evidence.calculation_count]' in script
+
+    def test_the_page_never_subtracts_the_two_counts(self, script):
+        """Fourteen minus eleven is three, and three is not a finding.
+
+        Whether those three ought to carry a conformer is a question
+        about the deposit, not about the rendering, and a page that
+        prints the remainder has answered it. Each number says what it
+        counts; the reader draws their own conclusion or goes to the
+        raw list.
+        """
+        detail = _js_code(_js_function(script, "detailBody(section, ref, payload)"))
+        conformer_view = _js_code(_js_function(script, "conformerView(record)"))
+        calculation_view = _js_code(_js_function(script, "calculationView(record)"))
+        for body in (detail, conformer_view, calculation_view):
+            assert not re.search(r"calculation_count\s*-", body), body
+            assert not re.search(r"-\s*evidence\.calculation_count", body), body
+            assert "unassigned" not in body
+
+    def test_the_cap_is_stated_before_the_cards_and_not_only_after(self, script):
+        """A promise and its correction have to arrive in that order.
+
+        The count line says fourteen, five cards follow, and a note
+        underneath them used to be the first mention that five was all
+        there would ever be -- by which point the reader has spent the
+        scroll looking for the other nine.
+        """
+        code = _js_code(_js_function(script, "detailBody(section, ref, payload)"))
+        for fragment in ('"detail-count"', '"Showing the first "', "for (var i = 0; i < shown"):
+            assert fragment in code, fragment
+        promise = code.index('"detail-count"')
+        confession = code.index('"Showing the first "')
+        cards = code.index("for (var i = 0; i < shown; i += 1)")
+        assert promise < confession < cards, (promise, confession, cards)
+        # ``shown`` has to be known before it can be stated.
+        assert code.index("var shown = Math.min(records.length, CARD_LIMIT);") < confession
+
+    def test_the_total_above_the_cards_is_still_the_endpoints_own(self, script):
+        """The cap shortens the reading, never the answer.
+
+        Stating the cap earlier must not turn the headline count into
+        the number of cards drawn, which is the obvious wrong way to
+        make the two agree.
+        """
+        code = _js_code(_js_function(script, "detailBody(section, ref, payload)"))
+        assert 'make("p", "detail-count", plural(total, section.one, section.many))' in code
+        assert "var total = pagination.total;" in code
+        # And the foot of the list no longer repeats the same sentence.
+        assert code.count('"Showing the first "') == 1
+        assert '"The remaining " + section.many' in code

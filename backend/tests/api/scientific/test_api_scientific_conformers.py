@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from app.db.models.calculation import CalculationOutputGeometry
 from app.db.models.common import (
+    CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationType,
     ConformerSelectionKind,
@@ -19,6 +20,7 @@ from app.db.models.common import (
 )
 from tests.services.scientific_read._factories import (
     attach_conformer_selection,
+    attach_dependency,
     attach_geometry_validation,
     attach_scf_stability,
     make_calculation_with_conformer,
@@ -366,6 +368,275 @@ def test_cg_detail_evidence_coverage_for_validation_and_stability(
     assert ev["calculation_count"] == 3
     assert coverage["geometry_validation"] == 1
     assert coverage["scf_stability"] == 1
+
+
+# ---------------------------------------------------------------------------
+# optimization_chain_count -- optimisation evidence counted as chains
+#
+# A staged geometry optimisation deposits two ``opt`` calculations, a coarse
+# pre-optimisation and the refinement it feeds, joined by a
+# ``calculation_dependency`` row with ``dependency_role = 'optimized_from'``
+# (coarse is the parent). Both are calculations and both belong to the basin,
+# but between them they are *one* optimisation, so they are one piece of
+# evidence. ``calculation_count`` still counts both, on purpose -- it is the
+# inventory of rows ``include=calculations`` will hand back.
+# ---------------------------------------------------------------------------
+
+
+def test_cg_chain_count_collapses_a_two_stage_optimization(client, db_session):
+    """Coarse then fine is one optimisation, not two.
+
+    ``calculation_count`` stays ``2`` in the same breath: the coarse stage
+    is still on file and still listed under ``include=calculations``, so
+    the inventory must keep reporting it. The two numbers differing is the
+    point, not an inconsistency.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session)
+    coarse, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+    )
+    fine, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+    )
+    attach_dependency(
+        db_session,
+        parent=coarse,
+        child=fine,
+        role=CalculationDependencyRole.optimized_from,
+    )
+    ev = client.get(_cg_url(cg.public_ref)).json()["record"]["evidence_summary"]
+    assert ev["optimization_chain_count"] == 1
+    assert ev["calculation_count"] == 2
+
+
+def test_cg_chain_count_collapses_a_three_stage_optimization(
+    client, db_session
+):
+    """coarse then medium then fine is still one optimisation.
+
+    Nothing in the predicate assumes two stages: it asks each row "do you
+    feed a refinement on this observation?", which is true of coarse and
+    of medium and false only of fine. The deployed database happens to
+    have no chain longer than two nodes (measured 2026-08-24); this test
+    is what stops that accident from becoming a dependency.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session)
+    coarse, medium, fine = (
+        _attach_calc(
+            db_session,
+            species_entry=entry,
+            conformer_observation=obs[0],
+            calc_type=CalculationType.opt,
+        )[0]
+        for _ in range(3)
+    )
+    attach_dependency(
+        db_session,
+        parent=coarse,
+        child=medium,
+        role=CalculationDependencyRole.optimized_from,
+    )
+    attach_dependency(
+        db_session,
+        parent=medium,
+        child=fine,
+        role=CalculationDependencyRole.optimized_from,
+    )
+    ev = client.get(_cg_url(cg.public_ref)).json()["record"]["evidence_summary"]
+    assert ev["optimization_chain_count"] == 1
+    assert ev["calculation_count"] == 3
+
+
+def test_cg_chain_count_does_not_collapse_a_freq_on_pair(client, db_session):
+    """``freq_on`` is a chain too, and must never collapse.
+
+    A frequency job run on an optimised geometry is genuinely different
+    evidence from the optimisation that produced it. The deployed database
+    carries 63 both-anchored ``freq_on`` pairs; deduplicating them would be
+    a scientific error, not a tidier number. Same for ``single_point_on``
+    and ``scan_parent``.
+
+    The ``opt`` here is the ``freq_on`` *parent* -- exactly the position
+    that gets suppressed under ``optimized_from`` -- so a predicate that
+    forgot to guard on the role would report ``0`` and fail this.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session)
+    opt, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+    )
+    freq, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.freq,
+    )
+    attach_dependency(
+        db_session,
+        parent=opt,
+        child=freq,
+        role=CalculationDependencyRole.freq_on,
+    )
+    ev = client.get(_cg_url(cg.public_ref)).json()["record"]["evidence_summary"]
+    assert ev["optimization_chain_count"] == 1
+    assert ev["calculation_count"] == 2
+    assert ev["evidence_coverage"]["opt"] == 1
+    assert ev["evidence_coverage"]["freq"] == 1
+
+
+def test_cg_chain_count_keeps_a_half_anchored_chain(client, db_session):
+    """A chain with only its refinement anchored still counts once.
+
+    43 of the deployed database's ``optimized_from`` chains are in exactly
+    this shape: the coarse stage carries no ``conformer_observation_id``
+    at all. The refinement is anchored and is the terminal node, so it
+    counts, and the number is ``1`` -- the same ``1`` it will be after the
+    coarse stage is anchored. See
+    ``test_cg_chain_count_is_neutral_when_a_coarse_stage_is_anchored``.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session)
+    unanchored = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        type=CalculationType.opt,
+    )
+    unanchored.conformer_observation_id = None
+    db_session.flush()
+    fine, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+    )
+    attach_dependency(
+        db_session,
+        parent=unanchored,
+        child=fine,
+        role=CalculationDependencyRole.optimized_from,
+    )
+    ev = client.get(_cg_url(cg.public_ref)).json()["record"]["evidence_summary"]
+    assert ev["optimization_chain_count"] == 1
+    # The unanchored coarse stage is not under this basin at all, so the
+    # inventory does not see it either.
+    assert ev["calculation_count"] == 1
+
+
+def test_cg_chain_count_is_neutral_when_a_coarse_stage_is_anchored(
+    client, db_session
+):
+    """The invariant the anchoring backfill depends on.
+
+    A follow-up will anchor 43 coarse pre-optimisations that currently
+    carry no ``conformer_observation_id``. That backfill must not change
+    how much evidence any basin appears to have. This asserts it directly:
+    read the summary, anchor the coarse stage to the same observation its
+    refinement sits on, read again.
+
+    ``optimization_chain_count`` and every ``evidence_coverage`` value are
+    unchanged. ``calculation_count`` and ``geometry_count`` do move, and
+    that is correct -- a row and a geometry genuinely entered the basin's
+    inventory, and both are now reachable under ``include=calculations``
+    and ``include=geometries``.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session)
+    coarse, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+        with_geom=True,
+    )
+    fine, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+        with_geom=True,
+    )
+    attach_dependency(
+        db_session,
+        parent=coarse,
+        child=fine,
+        role=CalculationDependencyRole.optimized_from,
+    )
+    coarse_observation_id = coarse.conformer_observation_id
+    coarse.conformer_observation_id = None
+    db_session.flush()
+
+    before = client.get(_cg_url(cg.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+
+    coarse.conformer_observation_id = coarse_observation_id
+    db_session.flush()
+
+    after = client.get(_cg_url(cg.public_ref)).json()["record"][
+        "evidence_summary"
+    ]
+
+    assert before["optimization_chain_count"] == 1
+    assert (
+        after["optimization_chain_count"]
+        == before["optimization_chain_count"]
+    )
+    assert after["evidence_coverage"] == before["evidence_coverage"]
+    # Inventory, not evidence: these are expected to move.
+    assert before["calculation_count"] == 1
+    assert after["calculation_count"] == 2
+    assert before["geometry_count"] == 1
+    assert after["geometry_count"] == 2
+
+
+def test_cg_chain_count_does_not_collapse_across_two_observations(
+    client, db_session
+):
+    """Two observations, one chain spanning them: both ends count.
+
+    Collapsing here would credit one provenance row's optimisation to
+    another and erase the distinction the observation table exists to
+    make. No such pair exists on the deployed database -- all 20
+    both-anchored ``optimized_from`` chains sit inside a single
+    observation (measured 2026-08-24) -- so this is a guard against a
+    future one being silently swallowed.
+    """
+    entry, cg, obs = _make_group_with_obs(db_session, n_observations=2)
+    coarse, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[0],
+        calc_type=CalculationType.opt,
+    )
+    fine, _ = _attach_calc(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs[1],
+        calc_type=CalculationType.opt,
+    )
+    attach_dependency(
+        db_session,
+        parent=coarse,
+        child=fine,
+        role=CalculationDependencyRole.optimized_from,
+    )
+    ev = client.get(_cg_url(cg.public_ref)).json()["record"]["evidence_summary"]
+    assert ev["optimization_chain_count"] == 2
+    assert ev["evidence_coverage"]["opt"] == 2
+
+
+def test_cg_chain_count_zero_on_an_empty_group(client, db_session):
+    """No observations, so no optimisations, so ``0`` -- never vacuous."""
+    _, cg = _make_group(db_session)
+    ev = client.get(_cg_url(cg.public_ref)).json()["record"]["evidence_summary"]
+    assert ev["optimization_chain_count"] == 0
 
 
 def test_cg_detail_evidence_coverage_empty_group(client, db_session):

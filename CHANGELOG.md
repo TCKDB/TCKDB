@@ -57,6 +57,35 @@ wrapper over a contract that is itself still moving.
 
 ## Unreleased
 
+### Added
+
+- **A conformer basin now says how many optimisations back it, not how many
+  optimisation jobs were run.** A two-stage geometry optimisation deposits two
+  `opt` calculations — a coarse pre-optimisation and the refinement it feeds,
+  joined by `calculation_dependency.dependency_role = 'optimized_from'`. Both
+  belong to the basin; between them they are one optimisation.
+  `evidence_summary.optimization_chain_count` on the conformer-group read
+  counts optimisation **chains**, so a staged optimisation contributes `1`.
+
+  Measured on the hosted instance: **156 anchored `opt` rows across 66
+  conformer groups collapse to 136 chains**, with the 20 collapsed chains
+  falling across 16 groups. Carbon dioxide, the landing page's showcase
+  panel, has 3 `opt` rows and 2 optimisations.
+
+  Only `optimized_from` collapses. `freq_on` (63 both-anchored pairs),
+  `single_point_on` (65) and `scan_parent` (46) also join two calculations,
+  but a frequency job on an optimised geometry is genuinely different evidence
+  from the optimisation that produced the geometry, and folding those together
+  would be a scientific error rather than a tidier number. The collapse also
+  stops at the observation boundary and is correct for a chain of any length.
+
+  **No previously published number changes.** `evidence_coverage.opt` counts
+  observations, not calculations, so a basin whose observation carries a
+  two-stage optimisation already read `1` for it; `calculation_count` and
+  `geometry_count` deliberately stay row counts, because each is the length of
+  a list `include=calculations` / `include=geometries` will hand back. The
+  field is additive.
+
 ### Changed
 
 - **A depositor can now download their own artifacts. Until now, nobody could.**
@@ -278,6 +307,35 @@ wrapper over a contract that is itself still moving.
   fonts from Google Fonts; the landing page does not.
 
 ### Fixed
+
+- **A species found by searching for its formula was served without one.**
+  `GET /api/v1/scientific/species/search?formula=CH3` matched the methyl
+  radical and returned it with `"formula": null` — the field was declared on
+  `SpeciesScientificRecord` and assigned by nothing. The database had already
+  computed the formula in order to answer the query, through the functional
+  index `ix_species_formula_lookup` over
+  `mol_formula(mol_from_smiles(smiles))`, and then the read path discarded it.
+  The landing page renders a **Formula** row for every species; it had always
+  read "not recorded".
+
+  The formula is now **the same SQL expression that answered the filter**,
+  projected onto the page's species rows. Not a second implementation in
+  Python: search and display cannot disagree about the formula of one row
+  because there is one expression, used twice, in one function. No stored
+  column and no migration — `species` still has no `formula`, and the value
+  stays derived.
+
+  What arrives is Hill notation as the RDKit cartridge spells it: `H2O`,
+  `C6H6`, and `CH3` for the `[CH3]` radical — **radicals carry no marker** —
+  with a trailing charge suffix for ions (`HO-`, `H4N+`, `Fe+2`). Isotopes are
+  not distinguished, so heavy water reports as `H2O`. The landing page needed
+  no change: it subscripts a formula only when the parsed element/count
+  sequence round-trips to the original string, so the ionic forms print
+  verbatim rather than being rendered wrongly.
+
+  `formula` stays `str | None` and is now null in exactly one case: a species
+  whose stored SMILES will not parse, where the cartridge yields SQL NULL
+  rather than raising.
 
 - **The species search served cis- and trans-diazene as the same record, and
   a reader picking one had even odds of citing the other molecule.** `GET
