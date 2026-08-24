@@ -144,6 +144,11 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 from app.api.config import settings
+from app.chemistry.reaction_family_display import (
+    is_unresolved_reaction_family,
+    reaction_family_display_name,
+)
+from app.schemas.reaction_family import CANONICAL_REACTION_FAMILIES
 from app.services.trust.rubrics import RUBRIC_REGISTRY
 
 #: Published documentation site, built from ``docs/`` by
@@ -152,6 +157,31 @@ DOCS_URL = "https://tckdb.github.io/TCKDB/"
 
 #: Canonical source repository.
 REPO_URL = "https://github.com/TCKDB/TCKDB"
+
+#: The generated token glossary, at the path ``mkdocs.yml`` publishes it
+#: on under *Concepts*. Every status, prefix, check name and refusal code
+#: this page can print is defined there, generated from the same
+#: declarations the API answers with.
+#:
+#: Split from :data:`DOCS_URL` rather than written out whole so that a
+#: deployment pointing at its own documentation build gets the glossary
+#: from that build too, and so that nothing on this page can link to a
+#: vocabulary belonging to a different version of the API.
+VOCABULARY_PATH = "guides/api_vocabulary/"
+VOCABULARY_URL = DOCS_URL + VOCABULARY_PATH
+
+#: Fragments inside the glossary, for the two in-situ links. Both are
+#: section ids the docs build generates from the headings, and both are
+#: substituted into the script rather than written there, so the page has
+#: exactly one spelling of each.
+#:
+#: The link is deliberately *not* one per token. A reader stuck on
+#: ``not_applicable`` is inside the trust disclosure and a reader stuck on
+#: ``matched_direction`` is looking at the direction chip; those are the
+#: two places the confusion actually happens. The note above the search
+#: box carries the general link, in static markup, for everything else.
+VOCABULARY_TRUST_FRAGMENT = "#what-tckdb-can-check-by-itself"
+VOCABULARY_DIRECTION_FRAGMENT = "#reaction-direction"
 
 #: Path the ReDoc API reference is registered on when this deployment
 #: serves one. FastAPI's default, kept as a constant so the page and the
@@ -863,6 +893,31 @@ noscript { display: block; margin-top: 1rem; }
   overflow-wrap: anywhere;
 }
 .formula { color: var(--ink); }
+/*
+ * A reaction family that has a readable name is set in the body face,
+ * because it is prose. One that has none keeps ``.ident-value`` above
+ * -- monospace, muted, the way every ref on this page is drawn -- so
+ * that "Hydrogen Abstraction" and ``Surface_Carbonate_2F_Decomposition``
+ * cannot be mistaken for the same kind of thing.
+ */
+.family-name {
+  font-family: var(--sans);
+  font-size: var(--fs-data);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+/*
+ * The glossary links, in the two places a token is actually being
+ * read. Small and quiet: they are a way out of a confusion, not a
+ * feature of the record.
+ */
+.vocab-link {
+  font-family: var(--sans);
+  font-size: var(--fs-label);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.state-cell .vocab-link { margin-top: 0.1rem; }
 .copy {
   font-family: var(--mono);
   font-size: var(--fs-label);
@@ -1056,6 +1111,14 @@ sub, sup { line-height: 0; font-size: 0.75em; }
 }
 .fields-quiet { margin-top: 0.25rem; }
 .fields-quiet dd { color: var(--muted); }
+/*
+ * Levels of theory, one per line. A record with two of them under one
+ * calculation type is the ordinary composite workflow, not a fault, so
+ * the second line is drawn exactly like the first: same face, same
+ * weight, same colour, no marker and no warning.
+ */
+.levels dd { display: flex; flex-direction: column; }
+.levels .level { overflow-wrap: anywhere; }
 .detail-card .idents { margin-top: 0.8rem; }
 /*
  * ---- how far the evidence behind a record has been checked ----
@@ -1368,7 +1431,10 @@ footer p { max-width: none; margin: 0; }
     <h2 id="search-heading">Search</h2>
     <p class="note">
       Records under review are served, not withheld; every result says how
-      far it has been checked.
+      far it has been checked. Every token a result prints &mdash;
+      <code>not_reviewed</code>, <code>matched_direction</code>, a check
+      name, a refusal code &mdash; is defined in the
+      <a id="vocabulary-link" href="__VOCABULARY_URL__">API vocabulary</a>.
     </p>
 
     <div class="modes" id="modes" hidden>
@@ -1691,6 +1757,49 @@ __HERO_SPECTRUM__
    */
   var CHECK_WORDS = __CHECK_WORDS_JSON__;
   /*
+   * ---- the glossary, linked where the confusion happens -------------
+   *
+   * The published vocabulary defines every token this page can print.
+   * The URL is read out of the anchor in the search panel rather than
+   * written here, for two reasons. It keeps the script free of any
+   * absolute URL -- the same property that keeps this page loading no
+   * off-host subresource is asserted over the script's string literals
+   * -- and it means the scripting-off reader and the scripted one
+   * follow the same link, because there is only one.
+   *
+   * Restraint is deliberate. Two in-situ links, at the two places a
+   * reader is actually stuck: inside the trust disclosure, where the
+   * check outcomes live, and beside the direction chip on a reaction
+   * row. Not one link per token.
+   */
+  var VOCABULARY = (function () {
+    var link = doc.getElementById("vocabulary-link");
+    return link ? link.getAttribute("href") : null;
+  }());
+  var VOCABULARY_TRUST = "__VOCABULARY_TRUST_FRAGMENT__";
+  var VOCABULARY_DIRECTION = "__VOCABULARY_DIRECTION_FRAGMENT__";
+
+  /*
+   * ---- reaction families, as names where a name exists -------------
+   *
+   * ``family`` arrives as the RMG identifier -- ``H_Abstraction``,
+   * ``Surface_Adsorption_Bidentate`` -- and a raw identifier sitting in
+   * a rendered record reads as something the page failed to render.
+   * The readable names are derived on the server by
+   * ``app/chemistry/reaction_family_display.py`` and arrive here
+   * already resolved, so no chemistry is decided in the browser.
+   *
+   * A family with no entry is shown as its identifier, monospace, the
+   * way every other ref on this page is shown. That covers the six
+   * families that module deliberately refuses to translate -- they
+   * carry a token nobody could decode -- and any family this build has
+   * never heard of, which are the same fact to a reader: no name was
+   * given, so what you are looking at is a machine token. It is also
+   * the token a client hands back as ``?family=``, which is why it is
+   * kept recoverable on the resolved ones too, in ``title``.
+   */
+  var FAMILY_WORDS = __REACTION_FAMILY_WORDS_JSON__;
+  /*
    * Absence is a third state and reads as one. A list that carries no
    * verdict, and a record whose verdict did not arrive, are both "not
    * assessed" -- never a low grade, which is what silence would look
@@ -1721,6 +1830,17 @@ __HERO_SPECTRUM__
     var node = make("a", cls, text);
     node.setAttribute("href", href);
     return node;
+  }
+
+  /*
+   * Append a glossary link to *node*, or append nothing. A page served
+   * without the anchor -- which cannot happen, but is one deleted line
+   * away -- loses the link and keeps the panel, rather than throwing
+   * inside the renderer and losing the whole card.
+   */
+  function addVocabLink(node, fragment, text) {
+    if (!VOCABULARY) { return; }
+    node.appendChild(anchor(VOCABULARY + fragment, "vocab-link", text));
   }
 
   function clear(node) {
@@ -1809,6 +1929,34 @@ __HERO_SPECTRUM__
       list.appendChild(cell);
     }
     return list;
+  }
+
+  /*
+   * A reaction family, rendered as what it is.
+   *
+   * A name this build can give is prose, in the body face, with the
+   * identifier kept in ``title`` because that string is what a client
+   * passes back as a filter. Everything else is an identifier and is
+   * drawn as one -- ``code.ident-value``, the same monospace the refs
+   * beside it use -- so that a reader can see at a glance which of the
+   * two they are looking at. That distinction is the whole point:
+   * ``Surface_Carbonate_2F_Decomposition`` shown as prose would claim
+   * to be a translation, and a half-translated name reads as
+   * authoritative when it is not.
+   *
+   * ``hasOwnProperty`` rather than a bare lookup, so a family that
+   * happens to spell an inherited property of ``Object`` cannot come
+   * back as a function.
+   */
+  function familyNode(name) {
+    if (name === null || name === undefined || name === "") { return null; }
+    var identifier = String(name);
+    if (!Object.prototype.hasOwnProperty.call(FAMILY_WORDS, identifier)) {
+      return make("code", "ident-value", identifier);
+    }
+    var named = make("span", "family-name", FAMILY_WORDS[identifier]);
+    named.setAttribute("title", identifier);
+    return named;
   }
 
   /*
@@ -2094,6 +2242,190 @@ __HERO_SPECTRUM__
   }
 
   /*
+   * ---- at what level was this computed -----------------------------
+   *
+   * The evidence block says how *much* evidence a record carries.
+   * ``levels_of_theory`` says at what level, per calculation type, and
+   * it is a map of lists on purpose: 12 of the 34 transition-state
+   * entries on this deployment carry two distinct levels, which is not
+   * an inconsistency but the standard composite workflow -- optimise
+   * and take frequencies cheaply, then one expensive single point at
+   * that geometry. So this block **reports and never judges**. There
+   * is no warning for a record with two levels, no styling that reads
+   * as a fault, and no attempt anywhere to collapse the map to "the"
+   * level of the record, which would be fabricating an answer on a
+   * third of the corpus.
+   *
+   * The API distinguishes three states and so does this:
+   *
+   *   type present, list filled   the levels, all of them
+   *   type present, list empty    a calculation of that type exists and
+   *                               names no level
+   *   type absent                 no calculation of that type at all
+   *
+   * The third is why the rows are driven by the record's own coverage
+   * block and not only by the keys that arrived. The gap the project
+   * owner spotted by eye was a transition state with no ``sp`` key --
+   * no high-level single point behind it -- and a renderer that draws
+   * only what it is sent cannot show an absence. Nothing is invented
+   * to do it: the coverage block is a field the API sent, saying which
+   * types this record has, and a row exists only where it spoke.
+   *
+   * Two coverage shapes, because the two surfaces disagree on purpose
+   * and both are right: a TS entry carries per-type booleans, one per
+   * calculation type, which are unambiguous because an entry is a
+   * single provenance row; a conformer group carries
+   * ``evidence_coverage`` counts, because pooled over six observations
+   * a boolean would hide an unevenly covered basin. Neither is ever
+   * printed. Both are normalised to "does this record have any", which
+   * is all a level row needs to know.
+   *
+   * Keys the coverage block names that are not calculation types --
+   * ``geometry_validation``, ``scf_stability`` -- get no row. They are
+   * evidence facets rather than jobs, they can never appear in
+   * ``levels_of_theory``, and a row saying they have no level would be
+   * reporting an absence that was never a possibility.
+   */
+  var LEVEL_NONE = "no calculation of this type";
+  var LEVEL_UNRECORDED = "no level of theory recorded";
+
+  function coverageOf(evidence) {
+    var seen = {};
+    var name;
+    var coverage = evidence.evidence_coverage;
+    if (coverage) {
+      for (name in coverage) {
+        if (Object.prototype.hasOwnProperty.call(coverage, name)) {
+          seen[name] = !!coverage[name];
+        }
+      }
+    }
+    for (name in evidence) {
+      if (Object.prototype.hasOwnProperty.call(evidence, name)
+        && name.indexOf("has_") === 0) {
+        seen[name.slice(4)] = !!evidence[name];
+      }
+    }
+    return seen;
+  }
+
+  /*
+   * One row. ``found`` is the list the API sent for this type, or null
+   * when it sent no key at all; ``covered`` is what the coverage block
+   * says about the same type.
+   *
+   * Every element of the list is rendered, and nothing here indexes
+   * the first one: on a composite workflow the *second* entry is the
+   * expensive single point, which is the one a reader came for.
+   */
+  function levelRow(type, found, covered) {
+    var label = CALCULATION_WORDS[type] || words(type) || String(type);
+    var row = {
+      label: label.charAt(0).toUpperCase() + label.slice(1),
+      displays: [],
+      note: LEVEL_NONE
+    };
+    if (!found) {
+      /*
+       * No key for this type. Normally that means no calculation of it
+       * exists, which is the note this row was built with. A coverage
+       * block saying otherwise is a contradiction between two fields
+       * of one payload, and the honest reading is the weaker one: a
+       * calculation exists and its level did not reach us.
+       */
+      row.note = covered ? LEVEL_UNRECORDED : LEVEL_NONE;
+      return row;
+    }
+    for (var i = 0; i < found.length; i += 1) {
+      /*
+       * ``display`` is computed by the API and is used exactly as
+       * sent. Its parts are beside it and are deliberately not
+       * reassembled here: two spellings of one string is one spelling
+       * too many, and the second one drifts first.
+       */
+      if (found[i] && found[i].display) { row.displays.push(found[i].display); }
+    }
+    /*
+     * The key arrived, so a calculation of this type exists. An empty
+     * list therefore means it names no level -- a different fact from
+     * having no such calculation, and it must not borrow that sentence.
+     */
+    row.note = LEVEL_UNRECORDED;
+    return row;
+  }
+
+  /*
+   * The rows for one record, or null when there is nothing to say.
+   *
+   * Null in two cases, and both matter. A surface that does not carry
+   * ``levels_of_theory`` at all -- statmech, transport, network, whose
+   * sources are keyed by role rather than by calculation type and whose
+   * own design for this is still open -- must render no heading, no
+   * empty list and no hint that something is missing, because nothing
+   * is: the field does not exist there. And a record that carries the
+   * field but no level anywhere gets no block either, since a column of
+   * "no calculation of this type" says only what the calculation count
+   * beside it already said.
+   */
+  function levelRows(evidence) {
+    var levels = evidence.levels_of_theory;
+    if (!levels) { return null; }
+    var coverage = coverageOf(evidence);
+    var rows = [];
+    var carried = false;
+    var type;
+    var row;
+    for (type in CALCULATION_WORDS) {
+      if (!Object.prototype.hasOwnProperty.call(CALCULATION_WORDS, type)) { continue; }
+      var found = Object.prototype.hasOwnProperty.call(levels, type) ? levels[type] : null;
+      if (!found && !Object.prototype.hasOwnProperty.call(coverage, type)) { continue; }
+      row = levelRow(type, found, !!coverage[type]);
+      if (row.displays.length) { carried = true; }
+      rows.push(row);
+    }
+    /*
+     * A calculation type this build has no word for still gets its
+     * levels printed, after the ones it does. Dropping it would make
+     * the block quietly incomplete, which is the one thing it must not
+     * be.
+     */
+    for (type in levels) {
+      if (Object.prototype.hasOwnProperty.call(levels, type)
+        && !Object.prototype.hasOwnProperty.call(CALCULATION_WORDS, type)) {
+        row = levelRow(type, levels[type], true);
+        if (row.displays.length) { carried = true; }
+        rows.push(row);
+      }
+    }
+    return carried ? rows : null;
+  }
+
+  /*
+   * Each level on its own line, because a type with two of them is a
+   * list and reads as one. The absent cases take the page's ``absent``
+   * rendering -- body face, italic -- so that "no calculation of this
+   * type" cannot be misread as the name of a level.
+   */
+  function levelsBlock(rows) {
+    var list = make("dl", "fields fields-quiet levels");
+    for (var i = 0; i < rows.length; i += 1) {
+      list.appendChild(make("dt", null, rows[i].label));
+      var cell = make("dd", null);
+      var displays = rows[i].displays;
+      if (displays.length) {
+        for (var j = 0; j < displays.length; j += 1) {
+          cell.appendChild(make("span", "level", displays[j]));
+        }
+      } else {
+        cell.className = "absent";
+        cell.appendChild(doc.createTextNode(rows[i].note));
+      }
+      list.appendChild(cell);
+    }
+    return list;
+  }
+
+  /*
    * ---- what a card is, once it stops being a field list ------------
    *
    * A thermo record is not fifteen equal fields. It is one or two
@@ -2220,7 +2552,8 @@ __HERO_SPECTRUM__
       facts: [
         ["Calculations behind it", evidence.calculation_count],
         ["Distinct geometries", evidence.geometry_count]
-      ]
+      ],
+      levels: levelRows(evidence)
     };
   }
 
@@ -2495,7 +2828,16 @@ __HERO_SPECTRUM__
       why.appendChild(make("summary", null, "What the rubric checked"));
       if (missing.length) { why.appendChild(checkList("not present", missing)); }
       if (passed.length) { why.appendChild(checkList("present", passed)); }
-      why.appendChild(make("p", "trust-explains", TRUST_VS_REVIEW));
+      var explains = make("p", "trust-explains", TRUST_VS_REVIEW);
+      /*
+       * ``not_applicable`` beside a check name is the outcome readers
+       * ask about, and the answer is four paragraphs of rubric
+       * definition that do not belong on a landing page. The link puts
+       * them one click from the list they are looking at.
+       */
+      explains.appendChild(doc.createTextNode(" "));
+      addVocabLink(explains, VOCABULARY_TRUST, "What each check and outcome means");
+      why.appendChild(explains);
       node.appendChild(why);
     }
     return node;
@@ -2531,6 +2873,18 @@ __HERO_SPECTRUM__
         card.appendChild(quantityBlock(view.headline));
       }
       if (view.facts && view.facts.length) { card.appendChild(fieldList(view.facts)); }
+      /*
+       * Guarded on the rows, not on the surface. A view that never
+       * sets ``levels`` and a record whose surface does not carry the
+       * field both arrive here as a falsy value and both render
+       * nothing -- no heading, no empty list. A blank "at what level"
+       * on a statmech card would say the data is missing when the
+       * field simply does not exist there.
+       */
+      if (view.levels && view.levels.length) {
+        card.appendChild(groupLabel("at what level"));
+        card.appendChild(levelsBlock(view.levels));
+      }
       if (view.provenance && view.provenance.length) {
         card.appendChild(groupLabel("how it was produced"));
         card.appendChild(fieldList(view.provenance, "fields fields-quiet"));
@@ -3007,7 +3361,8 @@ __HERO_SPECTRUM__
       facts: [
         ["Saddle point", words(entry.status)],
         ["Calculations behind it", evidence.calculation_count]
-      ]
+      ],
+      levels: levelRows(evidence)
     };
   }
 
@@ -3062,8 +3417,18 @@ __HERO_SPECTRUM__
       equationText(record.equation) || "(no equation)"));
     head.appendChild(equation);
     var state = make("div", "state");
-    state.appendChild(stateCell("query",
-      DIRECTION_WORDS[record.matched_direction] || words(record.matched_direction), null));
+    /*
+     * "matched in reverse" is the single line on this page that most
+     * often gets read as a fault in the record, so the glossary link
+     * goes here rather than only in the panel header. It explains that
+     * ``matched_direction`` describes the query, and that the rate
+     * coefficients carry their own ``direction`` -- the distinction
+     * nobody guesses.
+     */
+    var matched = stateCell("query",
+      DIRECTION_WORDS[record.matched_direction] || words(record.matched_direction), null);
+    addVocabLink(matched, VOCABULARY_DIRECTION, "what this means");
+    state.appendChild(matched);
     state.appendChild(stateCell("reversible",
       record.reversible === null || record.reversible === undefined
         ? null
@@ -3073,7 +3438,7 @@ __HERO_SPECTRUM__
     node.appendChild(head);
 
     node.appendChild(identList([
-      ["Reaction family", record.family, false],
+      ["Reaction family", familyNode(record.family), false],
       ["Entry ref", ref, true]
     ]));
 
@@ -3579,6 +3944,37 @@ def _check_words_json() -> str:
     return json.dumps({name: trust_check_label(name) for name in trust_check_names()})
 
 
+def reaction_family_display_names() -> dict[str, str]:
+    """``{identifier: readable name}`` for every family that has one.
+
+    Derived, not stored: :func:`reaction_family_display_name` produces the
+    name at read time, and this is that function applied once per canonical
+    family so the browser never has to reproduce the derivation. It is the
+    same arrangement ``CHECK_WORDS`` uses -- the judgement stays on the
+    server beside the vocabulary it is judging, and the page transcribes it.
+
+    **The six deliberately unresolved families are absent**, and their
+    absence is the instruction. A family with no entry here is one this
+    build cannot name: either it was refused by
+    :func:`is_unresolved_reaction_family` because it carries a token nobody
+    could decode, or it is not in the canonical set at all. Both are the
+    same fact to a reader -- *no translation was given* -- and both must
+    render as the machine identifier they are rather than as prose. Giving
+    the refusals their own key mapping to themselves would have made an
+    unknown family the only case with no branch, which is exactly the case
+    most likely to arrive.
+    """
+    return {
+        name: reaction_family_display_name(name)
+        for name in sorted(CANONICAL_REACTION_FAMILIES)
+        if not is_unresolved_reaction_family(name)
+    }
+
+
+def _reaction_family_words_json() -> str:
+    return json.dumps(reaction_family_display_names())
+
+
 def render_landing_page(*, api_reference_path: str | None) -> str:
     """Return the complete landing-page HTML document.
 
@@ -3612,7 +4008,14 @@ def render_landing_page(*, api_reference_path: str | None) -> str:
             "reference and query guides."
         )
     return (
-        _PAGE_TEMPLATE.replace("__DOCS_URL__", DOCS_URL)
+        # The vocabulary URL is a longer spelling of ``__DOCS_URL__`` and
+        # is substituted first for the same reason the reaction
+        # placeholders are: the short name would otherwise eat its head
+        # and leave the path fragment stranded.
+        _PAGE_TEMPLATE.replace("__VOCABULARY_URL__", VOCABULARY_URL)
+        .replace("__VOCABULARY_TRUST_FRAGMENT__", VOCABULARY_TRUST_FRAGMENT)
+        .replace("__VOCABULARY_DIRECTION_FRAGMENT__", VOCABULARY_DIRECTION_FRAGMENT)
+        .replace("__DOCS_URL__", DOCS_URL)
         .replace("__REPO_URL__", REPO_URL)
         # Reaction placeholders first: every one of them is a longer
         # spelling of a species placeholder, and substituting the short
@@ -3636,6 +4039,7 @@ def render_landing_page(*, api_reference_path: str | None) -> str:
         .replace("__EXAMPLE_CHIPS__", _example_chips())
         .replace("__PLACEHOLDERS_JSON__", _placeholders_json())
         .replace("__CHECK_WORDS_JSON__", _check_words_json())
+        .replace("__REACTION_FAMILY_WORDS_JSON__", _reaction_family_words_json())
         .replace("__EXAMPLES_JSON__", _json_pairs(SEARCH_EXAMPLES))
         .replace("__ORIGIN_PLACEHOLDER__", ORIGIN_PLACEHOLDER)
         .replace("__SEED_FIELD__", SEED_FIELD)
@@ -3693,8 +4097,13 @@ __all__ = [
     "SEED_VALUE",
     "SPECIES_SEARCH_PATH",
     "TRUST_CHECK_INITIALISMS",
+    "VOCABULARY_DIRECTION_FRAGMENT",
+    "VOCABULARY_PATH",
+    "VOCABULARY_TRUST_FRAGMENT",
+    "VOCABULARY_URL",
     "hero_atom_lines",
     "landing_router",
+    "reaction_family_display_names",
     "reaction_label",
     "reaction_query",
     "render_landing_page",

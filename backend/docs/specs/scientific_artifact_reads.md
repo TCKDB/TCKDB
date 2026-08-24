@@ -66,12 +66,29 @@ that the underlying storage bucket is private. Specifically:
 - No TCKDB endpoint accepts a caller-supplied artifact `uri` as input for
   download, presign, or proxy.
 
-The download route instead resolves an exact lowercase SHA-256 only when at
-least one owning calculation has an explicit `approved` review state. It reads
-the content-addressed object and verifies both digest and persisted byte count
-before returning it. Unknown, under-review, rejected, deprecated, and otherwise
-non-approved digests all return the same 404 response so existence cannot be
-probed.
+The download route instead resolves an exact lowercase SHA-256, and serves it
+to an authenticated caller on either of two grounds: at least one owning
+calculation has an explicit `approved` review state, **or** the caller is the
+depositor of an owning calculation. Ownership is the same predicate the upload
+route authorizes attachment with — `submission.created_by` on a live
+submission, or `calculation.created_by` for a deposit that predates
+submissions (`app.services.deposit_ownership`) — so a file a caller was
+allowed to attach is a file they are allowed to fetch back. It reads the
+content-addressed object and verifies both digest and persisted byte count
+before returning it, on both grounds alike; ownership is a reason to serve
+bytes, never a reason to skip verifying them.
+
+Approval-only was the whole rule until 2026-08-24, and it had never once
+opened: every one of the 563 artifacts on the hosted instance hung off a
+`not_reviewed` calculation, so the depositor could not retrieve their own
+upload. See the 2026-08-24 amendment to
+[ADR 0004](../../../docs/adr/0004-store-artifacts-verbatim-gate-raw-log-access.md);
+the authentication gate itself is unchanged and no download path is anonymous.
+
+To a caller with neither ground, unknown, under-review, rejected, deprecated,
+and otherwise non-approved digests all still return the same 404 response, so
+existence cannot be probed. 404 and not 403, deliberately: a 403 would confirm
+the digest is real.
 
 Failure to serve the bytes splits three ways, and the split is by what the
 object store said rather than by which check noticed:
@@ -98,7 +115,8 @@ and a 410 would tell a client to drop the reference that
 `restore_held_object` needs in order to put the object back.
 
 Successful downloads require cache revalidation so a later review-state change
-can take effect. They carry an ETag equal to the quoted SHA-256,
+can take effect, and are `private, no-store` so a shared cache can never serve
+one caller's own bytes to another. They carry an ETag equal to the quoted SHA-256,
 `X-Content-SHA256`, `X-Content-Type-Options: nosniff`, and a content-disposition
 filename derived from the approved upload-event row.
 
