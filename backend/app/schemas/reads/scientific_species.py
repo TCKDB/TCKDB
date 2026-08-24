@@ -185,6 +185,15 @@ class SpeciesScientificRecord(BaseModel):
     this entry simply has not been labelled — a materially different
     thing to know before citing it. Non-nullable in the schema, so it is
     populated on every species row.
+
+    ``formula`` is not a stored column. It is derived at read time by the
+    same RDKit-cartridge expression the ``formula=`` filter matches on
+    (``species.py::_formula_expr``), so a caller who searched by formula
+    reads back exactly the string that was matched. Hill notation with a
+    trailing charge suffix for ions (``H2O``, ``CH3``, ``HO-``, ``H4N+``);
+    isotopes are not distinguished. It stays nullable because a species
+    whose SMILES will not parse has no formula to derive — that is the
+    only case in which it is null.
     """
 
     species_id: int
