@@ -2557,18 +2557,47 @@ __HERO_SPECTRUM__
     };
   }
 
+  /*
+   * Which conformer this calculation was deposited against. A
+   * calculation with no conformer is not one whose conformer went
+   * unrecorded -- it was deposited without one, and it is the whole
+   * reason a group can count fewer calculations than its entry does.
+   * So it says which absence this is, rather than falling through to
+   * the general sentinel and reading as a gap nobody noticed. A
+   * calculation that *is* assigned to a group the payload does not
+   * name falls back to the group's ref and then to the sentinel,
+   * which at that point is the honest answer.
+   */
+  function conformerText(conformer) {
+    if (!conformer) { return { sentence: "not assigned to a conformer" }; }
+    return conformer.conformer_group_label || conformer.conformer_group_ref || null;
+  }
+
   function calculationView(record) {
     var calculation = record.calculation || {};
-    var energy = record.energy || {};
+    /*
+     * Guarded on the block, not on the reading inside it -- the same
+     * distinction ``levels`` makes further down, for the same reason.
+     * A frequencies job has no electronic energy to report and the
+     * payload says so by carrying no energy block at all, while an
+     * energy block holding a null reading is a genuine gap and keeps
+     * its "not recorded". The old ``|| {}`` collapsed the two, so a
+     * freq card announced a missing energy that was never expected:
+     * absence describes the shape of the answer, null describes the
+     * data, and printing the sentinel over the first claims the
+     * second.
+     */
+    var energy = record.energy;
     var type = calculation.calculation_type;
     return {
       title: CALCULATION_WORDS[type] || words(type) || "calculation",
       ref: calculation.calculation_ref,
       status: calculation.review ? calculation.review.status : null,
-      headline: [
-        ["Electronic energy", fixed(energy.energy_hartree, 6, "hartree")]
-      ],
+      headline: energy
+        ? [["Electronic energy", fixed(energy.energy_hartree, 6, "hartree")]]
+        : null,
       facts: [
+        ["Conformer", conformerText(record.conformer)],
         ["Quality", words(calculation.calculation_quality)]
       ],
       provenance: [
@@ -2626,10 +2655,23 @@ __HERO_SPECTRUM__
       label: "conformers",
       one: "conformer group",
       many: "conformer groups",
+      /*
+       * The second sentence is here because the first number a reader
+       * meets is the entry's own calculation count, and Calculations
+       * behind it is smaller. Both are right and they count different
+       * sets, so the page says which set each one is rather than
+       * leaving the pair to read as arithmetic that does not add up.
+       * It states what the field counts; it does not subtract the two
+       * and present the remainder as a finding, because the page is
+       * not entitled to say why a calculation carries no conformer.
+       */
       note: "A conformer group is one torsional basin -- one conformer. Its " +
         "observations are the deposited instances assigned to that basin, so a " +
         "group with five observations is one conformer seen five times, not " +
-        "five conformers.",
+        "five conformers. Calculations behind it counts the calculations " +
+        "assigned to this one group, not every calculation on the entry: a " +
+        "calculation deposited without a conformer belongs to no group and is " +
+        "counted by none of them.",
       shown: function (a) { return !!a.has_conformers; },
       url: function (ref) { return CONFORMERS + "?species_entry_ref=" + encodeURIComponent(ref); },
       view: conformerView
@@ -2675,13 +2717,27 @@ __HERO_SPECTRUM__
   /*
    * One place decides what a value looks like, so a quantity cannot be
    * formatted one way in a headline and another in a list. A value is
-   * either a plain string, a ``{value, unit, exponent}`` quantity, or
-   * absent -- and absent is a rendering, never a skipped row.
+   * either a plain string, a ``{value, unit, exponent}`` quantity, a
+   * ``{sentence}`` the page states in its own words, or absent -- and
+   * absent is a rendering, never a skipped row.
    */
   function fillValue(node, value) {
     if (value === null || value === undefined || value === "") {
       node.className = node.className ? node.className + " absent" : "absent";
       node.appendChild(doc.createTextNode(ABSENT));
+      return node;
+    }
+    /*
+     * A named absence. "not recorded" is the page's answer when it
+     * knows only that the record carries nothing; where it knows
+     * *which* nothing, it says that instead. Both are sentences about
+     * the record rather than readings from it, so both are drawn in
+     * the same body face for the same reason -- a reader must not be
+     * able to mistake either for a value the record actually holds.
+     */
+    if (typeof value === "object" && value.sentence) {
+      node.className = node.className ? node.className + " absent" : "absent";
+      node.appendChild(doc.createTextNode(value.sentence));
       return node;
     }
     if (typeof value === "object") {
@@ -2849,10 +2905,24 @@ __HERO_SPECTRUM__
     var pagination = payload.pagination || {};
     var total = pagination.total;
     if (total === null || total === undefined) { total = records.length; }
+    var shown = Math.min(records.length, CARD_LIMIT);
     fragment.appendChild(make("p", "detail-count", plural(total, section.one, section.many)));
+    /*
+     * Before the cards, because a promise and its correction have to
+     * arrive in that order. The count line says fourteen; five cards
+     * follow; a reader who learns only underneath them that five was
+     * all they were ever going to get has already spent the scroll
+     * looking for the other nine. The total above is still the real
+     * total -- the cap shortens the reading, never the answer -- and
+     * saying so up front is what keeps that true on screen.
+     */
+    if (total > shown) {
+      fragment.appendChild(make("p", "detail-note",
+        "Showing the first " + plural(shown, section.one, section.many) + " of " + total
+        + " below. The full list is one link away, at the foot of this panel."));
+    }
     if (section.note) { fragment.appendChild(make("p", "detail-note", section.note)); }
     if (!section.trust) { fragment.appendChild(make("p", "detail-note", TRUST_NOT_ON_LIST)); }
-    var shown = Math.min(records.length, CARD_LIMIT);
     for (var i = 0; i < shown; i += 1) {
       var trust = section.trust ? section.trust(records[i]) : null;
       var view = section.view(records[i]);
@@ -2895,9 +2965,17 @@ __HERO_SPECTRUM__
       }
       fragment.appendChild(card);
     }
+    /*
+     * The foot of the list still says the list ended because of the
+     * cap and not because it ran out, which is a different fact from
+     * the one stated above the cards and is needed at a different
+     * moment. It no longer repeats that sentence word for word, and
+     * it counts nothing: subtracting the two numbers here would put a
+     * figure on the page that no payload states.
+     */
     if (total > shown) {
       fragment.appendChild(make("p", "detail-note",
-        "Showing the first " + plural(shown, section.one, section.many) + " of " + total + "."));
+        "The remaining " + section.many + " are in the raw list below."));
     }
     fragment.appendChild(rawLink(section, ref));
     return fragment;

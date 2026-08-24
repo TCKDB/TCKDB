@@ -99,6 +99,35 @@ _DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
 _NO_VISIBLE_ENTRY_RANK = max(REVIEW_RANK.values()) + 1
 
 
+def _formula_expr():
+    """The species' molecular formula, derived in SQL by the RDKit cartridge.
+
+    ``species`` has no stored formula column. ``mol_formula()`` over
+    ``mol_from_smiles(sp.smiles)`` yields Hill notation (e.g. ``H2O``,
+    ``C3H6``), with a trailing charge suffix for ions (``HO-``, ``H4N+``,
+    ``Fe+2``). Radicals carry no marker: ``[CH3]`` is ``CH3``. Isotopes are
+    not distinguished — the cartridge's default ``mol_formula()`` ignores
+    isotope labels, so heavy water reports as ``H2O``, the same as light
+    water. ``mol_from_smiles()`` returns SQL NULL for any row whose SMILES
+    fails to parse, so such a row yields a NULL formula rather than raising.
+
+    **One expression, two uses, deliberately.** This is both the ``formula=``
+    filter predicate and the ``formula`` field served on every record. A
+    caller who searched by formula therefore reads back the very string that
+    was matched, because it is the same expression over the same column — not
+    a second formula implementation that happens to agree today. The
+    functional index ``ix_species_formula_lookup`` is written over this
+    expression too, which is what makes the filter cheap.
+
+    Depending on the cartridge here costs nothing new: the base Alembic
+    revision ``60b67e360daf`` runs ``CREATE EXTENSION IF NOT EXISTS rdkit``
+    before any table exists, so a database this code can talk to has it.
+    Deriving the string in Python instead would reach for the ``rdkit``
+    wheel, which ``pyproject.toml`` declares as an opt-in ``[rdkit]`` extra.
+    """
+    return func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
+
+
 def search_species(
     session: Session, request: SpeciesSearchRequest
 ) -> ScientificSpeciesSearchResponse:
@@ -285,21 +314,15 @@ def _candidate_species_stmt(
             .scalar_subquery()
         )
     if request.formula is not None:
-        # Species has no stored formula column, but the RDKit cartridge can
-        # derive it on the fly from the identity SMILES: mol_formula() over
-        # mol_from_smiles(sp.smiles) yields Hill notation (e.g. "H2O",
-        # "C3H6"), with a trailing charge suffix for ions (e.g. "HO-",
-        # "H4N+"). This is computed per-query rather than stored, so it is
-        # exact-match only and does NOT distinguish isotopologues (the
-        # cartridge's default mol_formula() ignores isotope labels — heavy
-        # water reports as "H2O", same as light water). mol_from_smiles()
-        # returns SQL NULL for any row whose SMILES fails to parse, which
-        # simply excludes that row rather than raising.
+        # Derived per-query by the cartridge rather than stored: see
+        # _formula_expr() for the notation, the isotope caveat and the
+        # NULL-on-unparseable behavior (which excludes such a row here
+        # rather than raising). Match is case-sensitive and exact; we only
+        # strip incidental surrounding whitespace from client input.
         #
-        # Match is case-sensitive and exact; we only strip incidental
-        # surrounding whitespace from client input.
-        formula_expr = func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
-        stmt = stmt.where(formula_expr == request.formula.strip())
+        # _build_page_records() serves the same expression as the record's
+        # `formula`, so what a caller filtered on is what they read back.
+        stmt = stmt.where(_formula_expr() == request.formula.strip())
     return stmt
 
 
@@ -511,12 +534,14 @@ def _build_page_records(
     if not page_species_ids:
         return []
 
-    species_by_id = {
-        species.id: species
-        for species in session.scalars(
-            select(Species).where(Species.id.in_(page_species_ids))
-        )
-    }
+    # The formula rides along with the species row rather than being fetched
+    # separately: it is derived from a column of that same row, and the page
+    # is already bounded, so the cartridge evaluates it at most `limit` times.
+    species_rows = session.execute(
+        select(Species, _formula_expr()).where(Species.id.in_(page_species_ids))
+    ).all()
+    species_by_id = {species.id: species for species, _ in species_rows}
+    formula_by_id = {species.id: formula for species, formula in species_rows}
     entries = _load_page_entries(
         session,
         page_species_ids,
@@ -547,7 +572,7 @@ def _build_page_records(
                 species_ref=species.public_ref,
                 canonical_smiles=species.smiles,
                 inchi_key=species.inchi_key,
-                formula=None,  # not stored on Species; future addition
+                formula=formula_by_id[species_id],
                 charge=species.charge,
                 multiplicity=species.multiplicity,
                 stereo_kind=species.stereo_kind,
