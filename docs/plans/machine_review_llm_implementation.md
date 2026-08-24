@@ -35,8 +35,8 @@ Read these first — they are authoritative and this plan defers to them:
 ## 0. The one hard constraint (do not move)
 
 The LLM **never** influences the deterministic evidence-completeness score. That
-score — `evidence_completeness`, `passed_checks`, `missing_checks`,
-`warning_checks`, `not_applicable_checks`, `hard_fail_reason`, `trust_status` — is
+score — `evidence_completeness`, `checks` (the check-name → outcome map),
+`hard_fail_reason`, `trust_status` — is
 computed entirely by `app/services/trust/*` (`evaluator.py` → `fragment.py`) from
 schema rows, deterministically and reproducibly
 (`automated_trust_layer.md` §3.3/§3.4, principle 4). The LLM is a **consumer** of

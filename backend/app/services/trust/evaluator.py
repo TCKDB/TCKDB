@@ -125,8 +125,8 @@ def _detect_calculation_hard_fail(calc: Calculation) -> Optional[HardFailReason]
 # correct high-temperature science as structurally broken. The cap is *demoted*,
 # not deleted: it survives as the graded ``temperature_range_valid`` check in
 # :mod:`app.services.trust.rubrics` (``EvidenceCheckKind.optional``), which lowers
-# completeness and explains itself under ``missing_checks`` without ever labelling
-# a record ``hard_failed``.
+# completeness and explains itself as a ``missing`` outcome in ``checks`` without
+# ever labelling a record ``hard_failed``.
 
 def validity_range_is_definitionally_invalid(tmin_k: float, tmax_k: float) -> bool:
     """Return True when a *validity range* is definitionally invalid.
@@ -404,52 +404,59 @@ def _aggregate_results(
     rubric: EvidenceRubric,
     check_results: tuple[EvidenceCheckResult, ...],
 ) -> tuple[
-    tuple[str, ...],
-    tuple[str, ...],
-    tuple[str, ...],
-    tuple[str, ...],
+    dict[str, EvidenceOutcome],
     int,
     int,
     float,
     bool,
 ]:
-    """Bucket check results and compute the completeness numerator/denominator.
+    """Map each check to its outcome and compute the completeness ratio.
 
-    Returns ``(passed, missing, warning, not_applicable, passed_count,
-    possible_count, completeness, all_required_passed)``. ``passed`` and
-    ``missing`` include only required/optional checks; ``warning`` lists
-    fired warning-kind checks; ``not_applicable`` lists every skipped
-    check regardless of kind.
+    Returns ``(checks, passed_count, possible_count, completeness,
+    all_required_passed)``.
+
+    ``checks`` is keyed by check name and valued by the outcome that
+    check produced, in the order ``check_results`` arrives — which is
+    :attr:`EvidenceRubric.checks` order, because every entrypoint builds
+    ``check_results`` by iterating the rubric. That ordering is part of
+    the public contract (see :class:`EvidenceEvaluation`), so this
+    function must never sort or regroup.
+
+    A warning-kind check is recorded only when it actually fires. It
+    carries zero weight either way, and recording a non-fired one as
+    ``passed`` would put a name in the map that ``passed_count`` does
+    not count.
     """
-    passed: list[str] = []
-    missing: list[str] = []
-    warning: list[str] = []
-    not_applicable: list[str] = []
+    checks: dict[str, EvidenceOutcome] = {}
 
+    passed_count = 0
+    missing_count = 0
     passed_weight = 0
     possible_weight = 0
     all_required_passed = True
 
     for result in check_results:
         if result.outcome is EvidenceOutcome.not_applicable:
-            not_applicable.append(result.name)
+            checks[result.name] = EvidenceOutcome.not_applicable
             continue
         if result.kind is EvidenceCheckKind.warning:
             if result.outcome is EvidenceOutcome.warning:
-                warning.append(result.name)
+                checks[result.name] = EvidenceOutcome.warning
             continue
         # required / optional
         possible_weight += result.weight
         if result.outcome is EvidenceOutcome.passed:
-            passed.append(result.name)
+            checks[result.name] = EvidenceOutcome.passed
+            passed_count += 1
             passed_weight += result.weight
         elif result.outcome is EvidenceOutcome.warning:
             # required/optional checks should not return warning, but
             # be defensive: treat as a soft pass for now and record the warning.
-            warning.append(result.name)
+            checks[result.name] = EvidenceOutcome.warning
             possible_weight -= result.weight  # do not count toward ratio
         else:
-            missing.append(result.name)
+            checks[result.name] = EvidenceOutcome.missing
+            missing_count += 1
             if result.kind is EvidenceCheckKind.required:
                 all_required_passed = False
 
@@ -457,15 +464,22 @@ def _aggregate_results(
     completeness = round(completeness, 4)
 
     return (
-        tuple(passed),
-        tuple(missing),
-        tuple(warning),
-        tuple(not_applicable),
-        len(passed),
-        len(passed) + len(missing),
+        checks,
+        passed_count,
+        passed_count + missing_count,
         completeness,
         all_required_passed,
     )
+
+
+def _all_not_applicable(rubric: EvidenceRubric) -> dict[str, EvidenceOutcome]:
+    """Return the check map for an evaluation that ran no check at all.
+
+    Used by the structural hard-fail shortcuts: the record the rubric
+    would have graded is absent, so every check is unanswerable rather
+    than failed.
+    """
+    return {spec.name: EvidenceOutcome.not_applicable for spec in rubric.checks}
 
 
 def _empty_evaluation_for_missing_calculation(
@@ -484,10 +498,7 @@ def _empty_evaluation_for_missing_calculation(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=EvidenceBadge.hard_failed,
-        passed_checks=(),
-        missing_checks=(),
-        warning_checks=(),
-        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        checks=_all_not_applicable(rubric),
         passed_count=0,
         possible_count=0,
         evidence_completeness=0.0,
@@ -508,10 +519,7 @@ def _empty_evaluation_for_missing_kinetics(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=EvidenceBadge.hard_failed,
-        passed_checks=(),
-        missing_checks=(),
-        warning_checks=(),
-        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        checks=_all_not_applicable(rubric),
         passed_count=0,
         possible_count=0,
         evidence_completeness=0.0,
@@ -532,10 +540,7 @@ def _empty_evaluation_for_missing_thermo(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=EvidenceBadge.hard_failed,
-        passed_checks=(),
-        missing_checks=(),
-        warning_checks=(),
-        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        checks=_all_not_applicable(rubric),
         passed_count=0,
         possible_count=0,
         evidence_completeness=0.0,
@@ -556,10 +561,7 @@ def _empty_evaluation_for_missing_statmech(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=EvidenceBadge.hard_failed,
-        passed_checks=(),
-        missing_checks=(),
-        warning_checks=(),
-        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        checks=_all_not_applicable(rubric),
         passed_count=0,
         possible_count=0,
         evidence_completeness=0.0,
@@ -581,10 +583,7 @@ def _empty_evaluation_for_missing_transition_state_entry(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=EvidenceBadge.hard_failed,
-        passed_checks=(),
-        missing_checks=(),
-        warning_checks=(),
-        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        checks=_all_not_applicable(rubric),
         passed_count=0,
         possible_count=0,
         evidence_completeness=0.0,
@@ -683,10 +682,7 @@ def _empty_evaluation_for_missing_transport(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=EvidenceBadge.hard_failed,
-        passed_checks=(),
-        missing_checks=(),
-        warning_checks=(),
-        not_applicable_checks=tuple(spec.name for spec in rubric.checks),
+        checks=_all_not_applicable(rubric),
         passed_count=0,
         possible_count=0,
         evidence_completeness=0.0,
@@ -737,10 +733,7 @@ def evaluate_loaded_calculation(
 
     results_tuple = tuple(check_results)
     (
-        passed,
-        missing,
-        warning,
-        not_applicable,
+        checks,
         passed_count,
         possible_count,
         completeness,
@@ -761,10 +754,7 @@ def evaluate_loaded_calculation(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
-        passed_checks=passed,
-        missing_checks=missing,
-        warning_checks=warning,
-        not_applicable_checks=not_applicable,
+        checks=checks,
         passed_count=passed_count,
         possible_count=possible_count,
         evidence_completeness=completeness,
@@ -811,10 +801,7 @@ def evaluate_loaded_kinetics(
 
     results_tuple = tuple(check_results)
     (
-        passed,
-        missing,
-        warning,
-        not_applicable,
+        checks,
         passed_count,
         possible_count,
         completeness,
@@ -835,10 +822,7 @@ def evaluate_loaded_kinetics(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
-        passed_checks=passed,
-        missing_checks=missing,
-        warning_checks=warning,
-        not_applicable_checks=not_applicable,
+        checks=checks,
         passed_count=passed_count,
         possible_count=possible_count,
         evidence_completeness=completeness,
@@ -885,10 +869,7 @@ def evaluate_loaded_thermo(
 
     results_tuple = tuple(check_results)
     (
-        passed,
-        missing,
-        warning,
-        not_applicable,
+        checks,
         passed_count,
         possible_count,
         completeness,
@@ -909,10 +890,7 @@ def evaluate_loaded_thermo(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
-        passed_checks=passed,
-        missing_checks=missing,
-        warning_checks=warning,
-        not_applicable_checks=not_applicable,
+        checks=checks,
         passed_count=passed_count,
         possible_count=possible_count,
         evidence_completeness=completeness,
@@ -959,10 +937,7 @@ def evaluate_loaded_statmech(
 
     results_tuple = tuple(check_results)
     (
-        passed,
-        missing,
-        warning,
-        not_applicable,
+        checks,
         passed_count,
         possible_count,
         completeness,
@@ -983,10 +958,7 @@ def evaluate_loaded_statmech(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
-        passed_checks=passed,
-        missing_checks=missing,
-        warning_checks=warning,
-        not_applicable_checks=not_applicable,
+        checks=checks,
         passed_count=passed_count,
         possible_count=possible_count,
         evidence_completeness=completeness,
@@ -1033,10 +1005,7 @@ def evaluate_loaded_transport(
 
     results_tuple = tuple(check_results)
     (
-        passed,
-        missing,
-        warning,
-        not_applicable,
+        checks,
         passed_count,
         possible_count,
         completeness,
@@ -1057,10 +1026,7 @@ def evaluate_loaded_transport(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
-        passed_checks=passed,
-        missing_checks=missing,
-        warning_checks=warning,
-        not_applicable_checks=not_applicable,
+        checks=checks,
         passed_count=passed_count,
         possible_count=possible_count,
         evidence_completeness=completeness,
@@ -1116,10 +1082,7 @@ def evaluate_loaded_transition_state_entry(
 
     results_tuple = tuple(check_results)
     (
-        passed,
-        missing,
-        warning,
-        not_applicable,
+        checks,
         passed_count,
         possible_count,
         completeness,
@@ -1140,10 +1103,7 @@ def evaluate_loaded_transition_state_entry(
         rubric=rubric.name,
         rubric_version=rubric.version,
         label=label,
-        passed_checks=passed,
-        missing_checks=missing,
-        warning_checks=warning,
-        not_applicable_checks=not_applicable,
+        checks=checks,
         passed_count=passed_count,
         possible_count=possible_count,
         evidence_completeness=completeness,

@@ -19,6 +19,7 @@ from datetime import datetime, timezone
 from app.services.machine_review import (
     GeometryValidationContext,
     MachineReviewCurrencyState,
+    MachineReviewEvidenceContext,
     MachineReviewStaleReason,
     MachineReviewStatus,
     RecordMachineReview,
@@ -29,7 +30,12 @@ from app.services.machine_review import (
     stored_projection_from_record_machine_review,
 )
 from app.services.trust.fragment import build_trust_fragment
-from app.services.trust.models import EvidenceBadge, EvidenceEvaluation, HardFailReason
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceEvaluation,
+    EvidenceOutcome,
+    HardFailReason,
+)
 
 _T0 = datetime(2026, 5, 31, 12, 0, 0, tzinfo=timezone.utc)
 
@@ -37,6 +43,21 @@ _RECORD_TYPE = "kinetics"
 _RECORD_REF = "kin_9001"
 _PROMPT = "prompt_v3"
 _RUBRICS = {"kinetics": "computed_kinetics_v1"}
+
+
+def _checks_map(
+    passed: tuple[str, ...],
+    missing: tuple[str, ...],
+    warning: tuple[str, ...],
+    not_applicable: tuple[str, ...],
+) -> dict[str, EvidenceOutcome]:
+    """Fold four bucket tuples into the check-name -> outcome map."""
+    return {
+        **dict.fromkeys(passed, EvidenceOutcome.passed),
+        **dict.fromkeys(missing, EvidenceOutcome.missing),
+        **dict.fromkeys(warning, EvidenceOutcome.warning),
+        **dict.fromkeys(not_applicable, EvidenceOutcome.not_applicable),
+    }
 
 
 def _evaluation(
@@ -49,17 +70,22 @@ def _evaluation(
     rubric_version: int = 1,
     is_certified: bool = False,
 ) -> EvidenceEvaluation:
-    """Build a representative deterministic evidence evaluation."""
+    """Build a representative deterministic evidence evaluation.
+
+    The four bucket arguments are kept as the *test's* vocabulary because the
+    hashed context still carries four check sets; they are folded here into
+    the single ``checks`` map the evaluation now exposes, which is exactly the
+    projection the adapter has to invert.
+    """
     return EvidenceEvaluation(
         record_type=_RECORD_TYPE,
         record_id=9001,
         rubric="computed_kinetics",
         rubric_version=rubric_version,
         label=EvidenceBadge.mostly_supported,
-        passed_checks=passed_checks,
-        missing_checks=missing_checks,
-        warning_checks=warning_checks,
-        not_applicable_checks=not_applicable_checks,
+        checks=_checks_map(
+            passed_checks, missing_checks, warning_checks, not_applicable_checks
+        ),
         passed_count=2,
         possible_count=3,
         evidence_completeness=0.67,
@@ -134,6 +160,46 @@ def test_build_context_from_trust_preserves_evidence_fields():
     # Read-only human-review context inputs, observed not owned.
     assert context.review_status == "not_reviewed"
     assert context.is_certified is False
+
+
+def test_digest_is_unchanged_by_the_check_map_shape_move():
+    """The reader-facing shape moved; the hashed context did not.
+
+    ``trust.evidence`` used to carry four arrays and now carries one
+    ``{name: outcome}`` map. The machine-review context is a *versioned
+    digest contract*, not a readout, so it still carries the four sets — the
+    adapter inverts the map back into them. If that inversion were not
+    value-for-value, every stored machine review would silently go stale on
+    deploy for a change that altered no evidence.
+
+    This builds the context the pre-change adapter built (four literal
+    tuples, transcribed) and the one the current adapter produces from the
+    map, and asserts the digests are the same bytes. No literal hash is
+    pinned, so the test keeps working if the canonicalisation is ever
+    revised deliberately — it only refuses a drift caused by this shape.
+    """
+    pre_change = MachineReviewEvidenceContext(
+        record_type=_RECORD_TYPE,
+        record_ref=_RECORD_REF,
+        rubric_name="computed_kinetics_v1",
+        rubric_version=1,
+        passed_checks=("a_present", "ea_present"),
+        missing_checks=("uncertainty_present",),
+        warning_checks=("thin_provenance",),
+        not_applicable_checks=("irc_evidence_present",),
+        hard_fail_reason=None,
+        review_status="not_reviewed",
+        is_certified=False,
+    )
+    from_map = build_machine_review_evidence_context_from_trust(
+        record_type=_RECORD_TYPE,
+        record_ref=_RECORD_REF,
+        trust_fragment=_fragment(),
+    )
+
+    assert build_machine_review_context_hash(
+        pre_change
+    ) == build_machine_review_context_hash(from_map)
 
 
 def test_build_context_does_not_mutate_trust_fragment():

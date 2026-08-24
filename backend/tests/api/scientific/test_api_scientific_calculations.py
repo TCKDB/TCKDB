@@ -71,6 +71,11 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
+# Every value in ``trust.evidence.checks`` is one of the four
+# ``EvidenceOutcome`` members; a fifth would mean the rubric grew a state
+# no consumer knows how to read.
+LEGAL_OUTCOMES = {"passed", "missing", "warning", "not_applicable"}
+
 # All heavy include tokens have shipped a summary loader. The only
 # include token still rejected is ``all``, which is policy-deferred
 # until a separate PR explicitly enables it (see the
@@ -382,10 +387,8 @@ def test_detail_include_trust_returns_fragment(client, db_session):
     assert evidence["rubric"] == "computed_calculation_v1"
     assert evidence["rubric_version"] == 1
     assert "evidence_completeness" in evidence
-    assert "passed_checks" in evidence
-    assert "missing_checks" in evidence
-    assert "warning_checks" in evidence
-    assert "not_applicable_checks" in evidence
+    assert evidence["checks"], "the calculation rubric ran, so checks cannot be empty"
+    assert set(evidence["checks"].values()) <= LEGAL_OUTCOMES
     # Phase D default internal-ID policy still applies inside trust evidence.
     assert "record_id" not in evidence
 
@@ -437,9 +440,9 @@ def test_detail_include_trust_sparse_calculation_reports_missing_checks(
     evidence = body["record"]["trust"]["evidence"]
 
     assert evidence["label"] in {"sparse", "unsupported", "partial"}
-    assert "level_of_theory_present" in evidence["missing_checks"]
-    assert "input_geometry_present" in evidence["missing_checks"]
-    assert "result_block_present" in evidence["missing_checks"]
+    assert evidence["checks"]["level_of_theory_present"] == "missing"
+    assert evidence["checks"]["input_geometry_present"] == "missing"
+    assert evidence["checks"]["result_block_present"] == "missing"
 
 
 def test_detail_include_trust_rich_calculation_scores_higher(

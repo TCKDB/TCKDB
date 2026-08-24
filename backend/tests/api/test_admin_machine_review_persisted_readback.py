@@ -66,7 +66,11 @@ from app.services.submission import (
     record_machine_review_v2_audit_event,
 )
 from app.services.trust import build_trust_fragment
-from app.services.trust.models import EvidenceBadge, EvidenceEvaluation
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceEvaluation,
+    EvidenceOutcome,
+)
 
 _INSPECT_BASE = "/api/v1/admin/submissions"
 _TASKS_BASE = "/api/v1/admin/machine-review/curator-tasks"
@@ -534,10 +538,10 @@ def test_persisted_v2_ingestion_does_not_change_public_trust_or_submission(
         rubric="computed_kinetics",
         rubric_version=1,
         label=EvidenceBadge.partial,
-        passed_checks=("rate_present",),
-        missing_checks=("tunneling_model",),
-        warning_checks=(),
-        not_applicable_checks=(),
+        checks={
+            "rate_present": EvidenceOutcome.passed,
+            "tunneling_model": EvidenceOutcome.missing,
+        },
         passed_count=1,
         possible_count=2,
         evidence_completeness=0.5,

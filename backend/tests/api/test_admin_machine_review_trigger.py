@@ -57,7 +57,11 @@ from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import Species, SpeciesEntry
 from app.services.trust import build_trust_fragment
-from app.services.trust.models import EvidenceBadge, EvidenceEvaluation
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceEvaluation,
+    EvidenceOutcome,
+)
 
 _BASE = "/api/v1/admin/machine-review/records"
 
@@ -469,10 +473,10 @@ def test_admin_fake_machine_review_does_not_change_public_trust_shape(
         rubric="computed_calculation",
         rubric_version=1,
         label=EvidenceBadge.partial,
-        passed_checks=("opt_converged",),
-        missing_checks=("source_artifact_present",),
-        warning_checks=(),
-        not_applicable_checks=(),
+        checks={
+            "opt_converged": EvidenceOutcome.passed,
+            "source_artifact_present": EvidenceOutcome.missing,
+        },
         passed_count=1,
         possible_count=2,
         evidence_completeness=0.5,

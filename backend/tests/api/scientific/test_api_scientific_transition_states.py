@@ -1551,10 +1551,7 @@ def test_tse_detail_include_trust_returns_fragment(client, db_session):
     assert evidence["rubric_version"] == 2
     # Evidence object carries the deterministic check breakdown.
     for key in (
-        "passed_checks",
-        "missing_checks",
-        "warning_checks",
-        "not_applicable_checks",
+        "checks",
         "passed_count",
         "possible_count",
         "evidence_completeness",
@@ -1631,7 +1628,7 @@ def test_tse_detail_trust_sparse_entry_reports_missing_checks(
         _tse_detail_url(entries[0].public_ref, include="trust")
     ).json()
     evidence = body["record"]["trust"]["evidence"]
-    assert "supporting_calculations_present" in evidence["missing_checks"]
+    assert evidence["checks"]["supporting_calculations_present"] == "missing"
     assert evidence["passed_count"] < evidence["possible_count"]
 
 
@@ -1648,9 +1645,9 @@ def test_tse_detail_trust_optimized_n_imag_one_passes_freq_check(
     ).json()
     trust = body["record"]["trust"]
     assert trust["trust_status"] != "hard_failed"
-    passed = set(trust["evidence"]["passed_checks"])
-    assert "reaction_coordinate_designated_for_ts" in passed
-    assert "imaginary_frequency_count_recorded" in passed
+    checks = trust["evidence"]["checks"]
+    assert checks["reaction_coordinate_designated_for_ts"] == "passed"
+    assert checks["imaginary_frequency_count_recorded"] == "passed"
 
 
 def test_tse_detail_trust_validated_n_imag_one_passes_freq_check(
@@ -1666,8 +1663,8 @@ def test_tse_detail_trust_validated_n_imag_one_passes_freq_check(
     ).json()["record"]["trust"]
     assert trust["trust_status"] != "hard_failed"
     assert (
-        "reaction_coordinate_designated_for_ts"
-        in trust["evidence"]["passed_checks"]
+        trust["evidence"]["checks"]["reaction_coordinate_designated_for_ts"]
+        == "passed"
     )
 
 
@@ -1722,8 +1719,8 @@ def test_tse_detail_trust_guess_n_imag_not_one_warns_not_hard_fail(
     # required check but is NOT collapsed to hard_failed.
     assert trust["trust_status"] != "hard_failed"
     assert (
-        "reaction_coordinate_designated_for_ts"
-        in trust["evidence"]["missing_checks"]
+        trust["evidence"]["checks"]["reaction_coordinate_designated_for_ts"]
+        == "missing"
     )
 
 
@@ -1762,9 +1759,8 @@ def test_tse_detail_trust_irc_and_path_search_increase_completeness(
         _tse_detail_url(rich_entries[0].public_ref, include="trust")
     ).json()["record"]["trust"]["evidence"]
 
-    rich_passed = set(rich["passed_checks"])
-    assert "irc_evidence_present" in rich_passed
-    assert "path_search_evidence_present" in rich_passed
+    assert rich["checks"]["irc_evidence_present"] == "passed"
+    assert rich["checks"]["path_search_evidence_present"] == "passed"
     assert rich["evidence_completeness"] >= base["evidence_completeness"]
 
 
