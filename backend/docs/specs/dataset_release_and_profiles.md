@@ -47,7 +47,7 @@ prose. The prose lives in this document.
 
 ### 2.2 Why exploratory is the default
 
-Every record on the deployed database is currently `under_review`. A curated
+Every record on the deployed database is currently `not_reviewed`. A curated
 default would return empty result sets and read as a broken database.
 
 The miscitation risk that creates is mitigated by **disclosure, not by
@@ -147,7 +147,7 @@ them cover the whole read surface:
    *returns*. Scoping parents (`species_entry`, `reaction_entry`, …) are
    excluded: they say which records to look under, and gating them would hide
    an approved thermo behind an identity row that merely had not been reviewed
-   — on a corpus where everything starts `under_review`, that 404s the entire
+   — on a corpus where everything starts `not_reviewed`, that 404s the entire
    curated surface. Structure, vocabulary and provenance (geometry, level of
    theory, literature) are excluded because they carry no reviewable claim.
 

@@ -180,7 +180,7 @@ def prefix_for(model_cls: type) -> str:
 #: (``/species-entries/{ref}/thermo``), where they say *which* records to look
 #: under, not what is returned. Gating them would hide an approved thermo
 #: behind an identity row that merely had not been reviewed yet — and on a
-#: corpus where everything starts ``under_review``, it would 404 the entire
+#: corpus where everything starts ``not_reviewed``, it would 404 the entire
 #: curated surface. The floor for those reads is applied where it belongs, to
 #: the products themselves, by ``visible_statuses``.
 _REVIEWABLE_HANDLE_TYPES: dict[type, SubmissionRecordType] = {

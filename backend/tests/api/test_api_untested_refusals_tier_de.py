@@ -603,7 +603,7 @@ def test_an_all_reactions_export_over_its_cap_is_refused(
     monkeypatch.setitem(iter_export_ndjson.__kwdefaults__, "all_cap", 0)
     body = _assert_code(
         client.get(
-            _EXPORT_URL, params={"all": "true", "min_review_status": "under_review"}
+            _EXPORT_URL, params={"all": "true", "min_review_status": "not_reviewed"}
         ),
         "export_all_cap_exceeded",
     )
@@ -631,7 +631,7 @@ def test_the_same_export_under_its_cap_is_accepted(
     assert client.post(_REACTION_URL, json=_bundle(_map())).status_code == 201
     login_as(_api_curator_user)
     response = client.get(
-        _EXPORT_URL, params={"all": "true", "min_review_status": "under_review"}
+        _EXPORT_URL, params={"all": "true", "min_review_status": "not_reviewed"}
     )
     assert response.status_code == 200, response.text
 
@@ -670,7 +670,7 @@ def test_an_all_species_ml_export_over_its_cap_is_refused(
     body = _assert_code(
         client.get(
             _ML_EXPORT_URL,
-            params={"all": "true", "min_review_status": "under_review"},
+            params={"all": "true", "min_review_status": "not_reviewed"},
         ),
         "ml_export_all_cap_exceeded",
     )
@@ -691,7 +691,7 @@ def test_the_same_ml_export_under_its_cap_is_accepted(
     )
     login_as(_api_curator_user)
     response = client.get(
-        _ML_EXPORT_URL, params={"all": "true", "min_review_status": "under_review"}
+        _ML_EXPORT_URL, params={"all": "true", "min_review_status": "not_reviewed"}
     )
     assert response.status_code == 200, response.text
 

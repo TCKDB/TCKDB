@@ -365,12 +365,14 @@ def ensure_record_review(
     upload that creates the row first is adopted rather than collided with.
     See :func:`_insert_or_adopt_review` for why that is the correct outcome.
 
-    The default ``status=not_reviewed`` is for internal/nested callers that
-    create records outside a contribution event. Both ingestion pathways —
-    direct ``/uploads/*`` and hosted ``/bundles/submit`` — pass
-    ``status=under_review`` and a ``submission_id`` explicitly (see
-    :class:`ReviewPolicy`). Callers must never rely on this helper inferring
-    moderation context.
+    ``status=not_reviewed`` is the default, for internal/nested callers that
+    create records outside a contribution event. It is also what both
+    ingestion pathways — direct ``/uploads/*`` and hosted ``/bundles/submit``
+    — now pass, explicitly, alongside a ``submission_id`` (see
+    :class:`ReviewPolicy`). That agreement is a coincidence of *value*, not
+    of meaning: callers must never rely on this helper inferring moderation
+    context, and a pathway that stops passing the status explicitly has
+    stopped recording one.
     """
     if status in _TERMINAL_STATUSES:
         # Terminal statuses require an explicit reviewer, so they can't be
@@ -624,13 +626,21 @@ class ReviewPolicy:
 
     * legacy direct ingest → ``ReviewPolicy()`` (default, ``not_reviewed``,
       no submission link) — kept for nested/internal callers and tests,
-    * direct ``/uploads/*`` ingest → ``ReviewPolicy(status=under_review,
+    * direct ``/uploads/*`` ingest → ``ReviewPolicy(status=not_reviewed,
       submission_id=submission.id, link_records=True)``: every produced
-      record is initialised under review *and* linked to the submission,
-    * hosted bundle submission → ``ReviewPolicy(status=under_review,
+      record is initialised as awaiting review *and* linked to the submission,
+    * hosted bundle submission → ``ReviewPolicy(status=not_reviewed,
       submission_id=submission.id)``: the bundle workflow creates its own
       curated ``submission_record_link`` rows, so it leaves
       ``link_records`` False to avoid linking the full target set twice.
+
+    **No ingestion pathway deposits at ``under_review``**, and none should.
+    That status is a claim that a human has the record open; it is entered by
+    a curator through :func:`set_record_review_status`, never by an upload.
+    Both pathways used to stamp it at deposit, which is why every one of the
+    1153 ``under_review`` rows on the deployed database had a null
+    ``reviewed_by``, a null ``reviewed_at`` and a null ``first_approved_at``
+    — see revision ``c1d8f4a25b30``, which moved them.
 
     ``link_records`` only takes effect when ``submission_id`` is set.
     """

@@ -2,10 +2,15 @@
 
 Every accepted ``/uploads/*`` call is a reviewable contribution: it creates a
 ``submission`` wrapper, links the produced scientific records to it, and
-initialises their ``record_review`` rows at ``under_review`` — without
-implying curator approval. These tests cover the computed-reaction and
+initialises their ``record_review`` rows at ``not_reviewed`` — reviewable,
+and not yet reviewed by anyone. These tests cover the computed-reaction and
 remaining direct-upload kinds, transactional rollback on failure, and
 idempotent-replay de-duplication.
+
+``not_reviewed`` and not ``under_review``: an upload landing means the record
+is queued, not that a human has it open. ``under_review`` is entered later, by
+a curator, and is asserted here to be *absent* at deposit precisely because it
+used to be the value every deposit got.
 
 Direct thermo / computed-species coverage lives in
 ``test_api_record_reviews.py``; this module covers the rest plus the
@@ -60,7 +65,7 @@ def _links_for(db_session, submission_id: int) -> list[SubmissionRecordLink]:
 
 
 class TestComputedReactionUploadSubmission:
-    def test_creates_submission_links_and_under_review_rows(
+    def test_creates_submission_links_and_not_reviewed_rows(
         self, client, db_session
     ):
         before = _submission_count(db_session)
@@ -90,7 +95,7 @@ class TestComputedReactionUploadSubmission:
             if link.record_type is SubmissionRecordType.reaction_entry
         }
 
-        # (6) every linked record is under_review and points at the submission.
+        # (6) every linked record is not_reviewed and points at the submission.
         for link in links:
             review = db_session.scalar(
                 select(RecordReview).where(
@@ -99,8 +104,12 @@ class TestComputedReactionUploadSubmission:
                 )
             )
             assert review is not None, f"missing review for {link.record_type}"
-            assert review.status is RecordReviewStatus.under_review
+            assert review.status is RecordReviewStatus.not_reviewed
             assert review.submission_id == submission_id
+            # The three columns whose emptiness makes under_review a lie.
+            assert review.reviewed_by is None
+            assert review.reviewed_at is None
+            assert review.first_approved_at is None
 
 
 # ---------------------------------------------------------------------------
@@ -156,8 +165,10 @@ class TestDirectProductUploadsCreateSubmissions:
             )
         )
         assert review is not None
-        assert review.status is RecordReviewStatus.under_review
+        assert review.status is RecordReviewStatus.not_reviewed
         assert review.submission_id == submission_id
+        assert review.reviewed_by is None
+        assert review.reviewed_at is None
 
 
 # ---------------------------------------------------------------------------

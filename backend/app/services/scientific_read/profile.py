@@ -5,7 +5,7 @@ under. See ``backend/docs/specs/dataset_release_and_profiles.md``.
 
 Why ``exploratory`` is the default
 ----------------------------------
-Every record on the deployed database is currently ``under_review``. A curated
+Every record on the deployed database is currently ``not_reviewed``. A curated
 default would return empty result sets and read as a broken database, so
 ``exploratory`` is the default and ``curated`` is opt-in. The miscitation risk
 that creates is mitigated by *disclosure*, not by narrowing: the resolved

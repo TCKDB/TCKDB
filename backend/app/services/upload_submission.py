@@ -3,7 +3,7 @@ reviewable submission.
 
 Every accepted API upload is a contribution event: it creates a
 :class:`~app.db.models.submission.Submission` wrapper, runs the existing
-per-family workflow under an ``under_review`` :class:`ReviewPolicy` that links
+per-family workflow under a ``not_reviewed`` :class:`ReviewPolicy` that links
 every produced record back to the submission, and appends an
 ``ingestion_succeeded`` audit event on success.
 
@@ -46,7 +46,17 @@ and never a scientific record.
 
 A submission is the audit wrapper for an upload event; it is *not* a claim of
 scientific approval. ``submission.status`` stays ``pending`` (awaiting curator
-review) and the records' ``record_review.status`` is ``under_review``.
+review) and the records' ``record_review.status`` is ``not_reviewed``.
+
+``not_reviewed``, and deliberately not ``under_review``. A deposit landing
+says nothing about a human having picked it up, and ``under_review`` asserts
+exactly that — a reviewer who does not exist, on a record with no
+``reviewed_by`` and no ``reviewed_at``. The status is entered later, by a
+curator, through :func:`app.services.record_review.set_record_review_status`:
+the ``not_reviewed → under_review`` transition the policy table has always
+permitted. Stamping it at deposit made the word describe the queue rather
+than anyone's attention, and left "is anyone actually looking at this?"
+unanswerable from the database.
 """
 
 from __future__ import annotations
@@ -77,9 +87,9 @@ logger = logging.getLogger(__name__)
 
 
 def review_policy_for_submission(submission: Submission) -> ReviewPolicy:
-    """Standard ingest policy: records enter review and link to the submission."""
+    """Standard ingest policy: records await review and link to the submission."""
     return ReviewPolicy(
-        status=RecordReviewStatus.under_review,
+        status=RecordReviewStatus.not_reviewed,
         submission_id=submission.id,
         link_records=True,
     )
@@ -141,10 +151,10 @@ def open_upload_submission(
 ) -> UploadSubmissionContext:
     """Create the submission shell and the review policy for one upload.
 
-    The returned ``policy`` is ``ReviewPolicy(status=under_review,
+    The returned ``policy`` is ``ReviewPolicy(status=not_reviewed,
     submission_id=..., link_records=True)`` — pass it to the per-family
-    workflow so every produced record is initialised under review and linked
-    to the submission. Call :func:`mark_upload_ingested` only after the
+    workflow so every produced record is initialised as awaiting review and
+    linked to the submission. Call :func:`mark_upload_ingested` only after the
     workflow returns successfully.
     """
     submission = create_submission(
@@ -156,7 +166,7 @@ def open_upload_submission(
         summary=summary,
     )
     policy = ReviewPolicy(
-        status=RecordReviewStatus.under_review,
+        status=RecordReviewStatus.not_reviewed,
         submission_id=submission.id,
         link_records=True,
     )

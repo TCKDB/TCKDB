@@ -15,8 +15,15 @@ review scaffolding around the scientific records they persist.
 
 **Successful ingestion is not scientific approval.** A submission whose
 records persisted sits at `submission.status = pending` with its records at
-`record_review.status = under_review`; curator approval is a separate, later
+`record_review.status = not_reviewed`; curator approval is a separate, later
 step (`POST /submissions/{id}/approve`).
+
+**And ingestion is not review, either.** Until 2026-08-24 both pathways
+stamped `under_review` at deposit, which asserted that a human had the record
+open when none had — all 1153 such rows on the hosted database carried a null
+`reviewed_by`, a null `reviewed_at` and a null `first_approved_at`.
+`under_review` now means what it says: a curator has picked the record up.
+Revision `c1d8f4a25b30` moved the existing rows.
 
 ## What every accepted upload does
 
@@ -28,7 +35,7 @@ For each successful `POST /uploads/*` (and for `POST /bundles/submit`):
    audit event once the records persist,
 3. persist the scientific records through the existing per-family workflow,
 4. create `submission_record_link` rows for the created/affected records,
-5. initialise each created record's `record_review` row at `under_review`
+5. initialise each created record's `record_review` row at `not_reviewed`
    with `submission_id` set.
 
 | | Direct `/uploads/*` | Hosted `/bundles/submit` |
@@ -36,10 +43,10 @@ For each successful `POST /uploads/*` (and for `POST /bundles/submit`):
 | `submission` | yes (`pending`) | yes (`pending`) |
 | `submission_audit_event` | yes (`submission_created`, `ingestion_succeeded`) | yes |
 | `submission_record_link` | yes — the workflow's full record set | yes — curated product + parent set |
-| `record_review` | `under_review`, `submission_id` set | `under_review`, `submission_id` set |
+| `record_review` | `not_reviewed`, `submission_id` set | `not_reviewed`, `submission_id` set |
 | differs by | payload shape (single computed bundle, product, conformer, …) | payload shape (multi-record contribution bundle) |
 
-The two paths use the same `ReviewPolicy(status=under_review, submission_id=…)`
+The two paths use the same `ReviewPolicy(status=not_reviewed, submission_id=…)`
 seam. Direct uploads additionally set `link_records=True` so the workflow's full
 review-target set is linked; the bundle path keeps its own curated, role-bearing
 `submission_record_link` rows.
@@ -127,8 +134,8 @@ Async uploads are wrapped in the **same** submission model, on the Option-C
    event is therefore auditable from the moment it is accepted — even if the
    worker never runs.
 2. **Worker success**: the worker runs the ingestion under the job's submission
-   (`ReviewPolicy(under_review, submission_id, link_records=True)`), so records
-   are persisted under review, linked to the submission, and an
+   (`ReviewPolicy(not_reviewed, submission_id, link_records=True)`), so records
+   are persisted awaiting review, linked to the submission, and an
    `ingestion_succeeded` audit event is appended. Status stays `pending`.
 3. **Worker terminal failure** (retries exhausted): in a transaction separate
    from the rolled-back persistence attempt, the worker appends an

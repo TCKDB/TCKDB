@@ -56,7 +56,7 @@ graph TD
         Route["Route handler<br/>routes/uploads.py"]
     end
 
-    Route -->|"1. open_upload_submission()"| Sub["Submission (status=pending)<br/>+ ReviewPolicy (under_review)"]
+    Route -->|"1. open_upload_submission()"| Sub["Submission (status=pending)<br/>+ ReviewPolicy (not_reviewed)"]
     Route -->|"2. persist_*_upload()"| WF
 
     subgraph WF["Workflow — app/workflows/"]
@@ -103,9 +103,11 @@ open_upload_submission()  →  persist_*_upload()  →  mark_upload_ingested()
 ```
 
 `open_upload_submission()` creates a `Submission` row at
-`status=pending` and a `ReviewPolicy` at `status=under_review`. This is
-*not* an approval judgment — `pending`/`under_review` is simply the
-initial state of anything a curator can later see. Submission statuses:
+`status=pending` and a `ReviewPolicy` at `status=not_reviewed`. This is
+*not* an approval judgment — `pending`/`not_reviewed` is simply the
+initial state of anything a curator can later see. `under_review` is a
+later state, reached when a curator picks the record up; a deposit does
+not claim one. Submission statuses:
 `pending → approved | rejected`, plus `failed` (ingestion error).
 
 A successful ingest calls `mark_upload_ingested()`, which appends an

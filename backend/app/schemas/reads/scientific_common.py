@@ -88,6 +88,13 @@ class SelectionPolicy(str, Enum):
 
 
 # Map review status to ranking key per L2. Lower wins.
+#
+# ``under_review`` ranks above ``not_reviewed`` and stays there. Before
+# revision ``c1d8f4a25b30`` that looked wrong, because every deposited record
+# was stamped ``under_review`` and the rank was sorting the whole corpus above
+# an empty set. The label was the defect, not the order: ``under_review`` now
+# means a curator has the record open, and a record someone is looking at is a
+# better bet than one nobody has touched. Do not reorder these two.
 REVIEW_RANK: dict[RecordReviewStatus, int] = {
     RecordReviewStatus.approved: 0,
     RecordReviewStatus.under_review: 1,

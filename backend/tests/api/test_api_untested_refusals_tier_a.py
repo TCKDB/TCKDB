@@ -231,7 +231,7 @@ def test_export_ndjson_refuses_a_seed_ref_that_names_nothing(
         _EXPORT_NDJSON,
         params={
             "species_ref": species_entry.public_ref,
-            "min_review_status": "under_review",
+            "min_review_status": "not_reviewed",
         },
     )
     assert accepted.status_code == 200, accepted.text
@@ -261,7 +261,7 @@ def test_ml_species_export_refuses_a_species_ref_that_names_nothing(
         _EXPORT_ML_SPECIES,
         params={
             "species_ref": species_entry.public_ref,
-            "min_review_status": "under_review",
+            "min_review_status": "not_reviewed",
         },
     )
     assert accepted.status_code == 200, accepted.text
@@ -293,7 +293,7 @@ def test_ml_species_export_refuses_an_unknown_level_of_theory_filter(
         params={
             "species_ref": species_entry.public_ref,
             "lot_ref": "lot_nosuchlevel",
-            "min_review_status": "under_review",
+            "min_review_status": "not_reviewed",
         },
     )
     _assert_refusal(refused, status=422, code="ml_export_lot_unresolved")
@@ -303,7 +303,7 @@ def test_ml_species_export_refuses_an_unknown_level_of_theory_filter(
         params={
             "species_ref": species_entry.public_ref,
             "lot_ref": lot.public_ref,
-            "min_review_status": "under_review",
+            "min_review_status": "not_reviewed",
         },
     )
     assert accepted.status_code == 200, accepted.text
