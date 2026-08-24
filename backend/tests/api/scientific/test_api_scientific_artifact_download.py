@@ -1,4 +1,14 @@
-"""API tests for approved, integrity-verified artifact downloads."""
+"""API tests for integrity-verified artifact downloads.
+
+Two ways in, and they are tested as two: *approved* (a curator published
+it, any authenticated caller may pull it) and *owned* (the caller
+deposited it). The second was added 2026-08-24; before it, an
+approval-only gate had never opened on the hosted instance — 563 of 563
+artifacts hung off ``not_reviewed`` calculations — so the depositor could
+not retrieve their own upload. What did *not* change is the auth gate:
+ownership is a reason to serve an authenticated caller, never a reason to
+serve an anonymous one.
+"""
 
 from __future__ import annotations
 
@@ -10,17 +20,24 @@ from sqlalchemy import select
 
 from app.api.app import create_app
 from app.api.deps import get_db, get_write_db
+from app.db.models.app_user import AppUser
 from app.db.models.calculation import ArtifactIntegrityEvent
 from app.db.models.common import (
+    AppUserRole,
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
     RecordReviewStatus,
+    SubmissionKind,
     SubmissionRecordType,
+    SubmissionSourceKind,
+    SubmissionStatus,
 )
+from app.db.models.submission import Submission, SubmissionRecordLink
 from app.services.artifact_storage import (
     ArtifactIntegrityError,
     ArtifactStorageUnavailable,
 )
+from app.services.deposit_ownership import user_owns_calculation_deposit
 from tests.services.test_artifact_integrity import _SessionProxy
 
 #: Where the explanatory log line for a download 502/503 is now emitted.
@@ -72,10 +89,23 @@ def _record_into(monkeypatch, db_session):
     monkeypatch.setattr("app.api.deps.SessionLocal", _SessionProxy(db_session))
 
 
-def _downloadable_artifact(db_session, *, status: RecordReviewStatus):
+def _downloadable_artifact(
+    db_session,
+    *,
+    status: RecordReviewStatus,
+    deposited_by: int | None = None,
+):
+    """One artifact with a real digest, at a given review status.
+
+    ``deposited_by`` writes ``calculation.created_by``, which is the first
+    of the two ownership paths. Left ``None`` the calculation belongs to
+    nobody, which is what makes the approved-artifact tests below a
+    genuine test of the *approval* path rather than of ownership.
+    """
     content = b"curator-approved artifact bytes"
     sha256 = hashlib.sha256(content).hexdigest()
     _, _, calculation = _make_species_owned_calc(db_session)
+    calculation.created_by = deposited_by
     artifact = attach_artifact(db_session, calculation=calculation)
     artifact.sha256 = sha256
     artifact.bytes = len(content)
@@ -87,6 +117,38 @@ def _downloadable_artifact(db_session, *, status: RecordReviewStatus):
     )
     db_session.flush()
     return artifact, content
+
+
+def _link_submission(
+    db_session,
+    *,
+    calculation_id: int,
+    owner_id: int,
+    status: SubmissionStatus = SubmissionStatus.pending,
+) -> Submission:
+    """Give ``owner_id`` a submission that deposited ``calculation_id``.
+
+    The second ownership path, and the one ADR 0018 names: a deposit is
+    owned by the ``created_by`` of the submission that made it, which is
+    not necessarily whoever ran the process that wrote the rows.
+    """
+    submission = Submission(
+        created_by=owner_id,
+        submission_kind=SubmissionKind.conformer,
+        source_kind=SubmissionSourceKind.api,
+        status=status,
+    )
+    db_session.add(submission)
+    db_session.flush()
+    db_session.add(
+        SubmissionRecordLink(
+            submission_id=submission.id,
+            record_type=SubmissionRecordType.calculation,
+            record_id=calculation_id,
+        )
+    )
+    db_session.flush()
+    return submission
 
 
 def test_approved_artifact_download_returns_verified_bytes(
@@ -117,10 +179,22 @@ def test_approved_artifact_download_returns_verified_bytes(
 
 
 def test_nonapproved_artifact_download_is_indistinguishable_from_missing(
-    client, db_session, monkeypatch
+    client, db_session, monkeypatch, _api_other_user
 ) -> None:
+    """A stranger still cannot tell an unapproved digest from an unknown one.
+
+    Rewritten 2026-08-24. It used to assert that *nobody* could download
+    an unapproved artifact, which was true and was the defect: the
+    depositor was in "nobody". The claim that survives is the narrower and
+    correct one — the refusal applies to a caller who did not deposit it,
+    and it is a 404, not a 403, so the response is not an existence
+    oracle. Asserted by comparing the answer to a digest that genuinely
+    does not exist, which is what a 403 regression could not survive.
+    """
     artifact, _content = _downloadable_artifact(
-        db_session, status=RecordReviewStatus.under_review
+        db_session,
+        status=RecordReviewStatus.under_review,
+        deposited_by=_api_other_user,
     )
     called = False
 
@@ -135,9 +209,175 @@ def test_nonapproved_artifact_download_is_indistinguishable_from_missing(
     response = client.get(
         f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
     )
+    unknown = client.get(f"/api/v1/scientific/artifacts/{'e' * 64}/download")
 
     assert response.status_code == 404
     assert called is False
+    # Same status *and* same body: nothing in the answer says "this exists".
+    assert (response.status_code, response.json()) == (
+        unknown.status_code,
+        unknown.json(),
+    ), (response.text, unknown.text)
+
+
+def test_depositor_downloads_their_own_unapproved_artifact(
+    client, db_session, monkeypatch, _api_test_user
+) -> None:
+    """The justifying case: your own file, before any curator looked at it.
+
+    Refused before 2026-08-24, and it is the whole point of the change.
+    Approval is a curator action on a store where curation has barely
+    begun, so gating a depositor's own bytes behind it locked every
+    depositor out of every file they had ever uploaded.
+    """
+    artifact, content = _downloadable_artifact(
+        db_session,
+        status=RecordReviewStatus.not_reviewed,
+        deposited_by=_api_test_user,
+    )
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes",
+        lambda *_a, **_k: content,
+    )
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.content == content
+    assert response.headers["x-content-sha256"] == artifact.sha256
+    assert response.headers["cache-control"] == "private, no-store"
+
+
+def test_submission_owner_downloads_a_deposit_they_did_not_write(
+    client, db_session, monkeypatch, _api_test_user, _api_other_user
+) -> None:
+    """Ownership is the submission's ``created_by``, not the row writer's.
+
+    This is the case that decides between the two candidate notions of
+    "owner", and it is not hypothetical: a submission made on someone's
+    behalf — an agent, a group account, a pipeline running under a service
+    identity — writes ``calculation.created_by`` as itself while the
+    accountable principal is the one who owns the submission. ADR 0018
+    puts ownership on ``submission.created_by`` for exactly this reason,
+    and the upload route already authorizes attachment the same way.
+    """
+    artifact, content = _downloadable_artifact(
+        db_session,
+        status=RecordReviewStatus.not_reviewed,
+        deposited_by=_api_other_user,
+    )
+    _link_submission(
+        db_session,
+        calculation_id=artifact.calculation_id,
+        owner_id=_api_test_user,
+    )
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes",
+        lambda *_a, **_k: content,
+    )
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.content == content
+
+
+def test_a_retired_submission_does_not_carry_download_ownership(
+    client, db_session, monkeypatch, _api_test_user, _api_other_user
+) -> None:
+    """A rejected submission is no longer live lineage — on both paths.
+
+    The upload route already refuses to let a rejected submission's owner
+    attach artifacts to the calculations it once produced. The download
+    path is the *same* predicate, so it inherits that judgement rather
+    than inventing a second, more generous one. The depositor of the
+    calculation itself is unaffected; what is refused here is authority
+    held only by way of a submission that has been retired.
+    """
+    artifact, _content = _downloadable_artifact(
+        db_session,
+        status=RecordReviewStatus.not_reviewed,
+        deposited_by=_api_other_user,
+    )
+    curator = AppUser(username="dl-rejecter", role=AppUserRole.curator)
+    db_session.add(curator)
+    db_session.flush()
+    submission = _link_submission(
+        db_session,
+        calculation_id=artifact.calculation_id,
+        owner_id=_api_test_user,
+        status=SubmissionStatus.pending,
+    )
+    submission.status = SubmissionStatus.rejected
+    submission.rejection_reason = "not this time"
+    submission.rejected_by = curator.id
+    db_session.flush()
+
+    called = False
+
+    def fake_load(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return b"must not be returned"
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 404, response.text
+    assert called is False
+
+
+def test_owner_download_still_verifies_stored_bytes(
+    client, db_session, monkeypatch, _api_test_user
+) -> None:
+    """Integrity is a claim about the store, not about who is asking.
+
+    The ownership path must not become a way to receive bytes that no
+    longer match their digest — and the custody break it discovers is
+    recorded exactly as on the approved path (ADR 0014).
+    """
+    artifact, content = _downloadable_artifact(
+        db_session,
+        status=RecordReviewStatus.not_reviewed,
+        deposited_by=_api_test_user,
+    )
+    observed = hashlib.sha256(b"tampered").hexdigest()
+
+    def fake_load(sha256: str, *, expected_bytes: int | None = None) -> bytes:
+        # The verification that runs on the approved path runs here too:
+        # the route hands the store the expected size, and the store's
+        # digest check is what raises.
+        assert expected_bytes == len(content)
+        raise ArtifactIntegrityError(
+            "corrupt",
+            finding=ArtifactIntegrityFinding.digest_mismatch,
+            sha256=sha256,
+            observed_sha256=observed,
+            expected_bytes=len(content),
+        )
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+    _record_into(monkeypatch, db_session)
+
+    response = client.get(
+        f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+    )
+
+    assert response.status_code == 502, response.text
+    assert response.json()["code"] == "artifact_integrity_failed", response.text
+    (event,) = _events_for(db_session, artifact.sha256)
+    assert event.observed_sha256 == observed
+    assert event.detected_during is ArtifactIntegrityDetectionContext.download
 
 
 def test_artifact_download_maps_integrity_failure_to_502(
@@ -525,13 +765,28 @@ def test_anonymous_artifact_download_returns_401(db_session, monkeypatch) -> Non
 
 
 def test_authenticated_user_can_download_approved_artifact(
-    client, db_session, monkeypatch
+    client, db_session, monkeypatch, _api_test_user, _api_other_user
 ) -> None:
     """A regular authenticated user (the default client actor) may pull
-    approved bytes — the gate requires authentication, not a curator role."""
+    approved bytes — the gate requires authentication, not a curator role.
+
+    Amended 2026-08-24 to pin the actor as a *non-owner*: the calculation
+    is deposited by someone else, and the ownership predicate is asserted
+    to say so before the request is made. Without that, the new ownership
+    path could silently be what serves these bytes, and a regression that
+    lost approval-based access entirely would still pass here.
+    """
     artifact, content = _downloadable_artifact(
-        db_session, status=RecordReviewStatus.approved
+        db_session,
+        status=RecordReviewStatus.approved,
+        deposited_by=_api_other_user,
     )
+    actor = db_session.get(AppUser, _api_test_user)
+    assert (
+        user_owns_calculation_deposit(db_session, artifact.calculation, actor)
+        is False
+    ), "actor must not own this deposit, or the test proves nothing about approval"
+
     monkeypatch.setattr(
         "app.api.routes.scientific.artifacts.load_artifact_bytes",
         lambda *_a, **_k: content,
@@ -541,3 +796,48 @@ def test_authenticated_user_can_download_approved_artifact(
     )
     assert response.status_code == 200
     assert response.content == content
+
+
+def test_anonymous_is_refused_even_bytes_it_would_own_if_it_authenticated(
+    db_session, monkeypatch, _api_test_user
+) -> None:
+    """Ownership is a reason to serve an *authenticated* caller. Only that.
+
+    The property this asserts is the one the ownership change must leave
+    untouched: no download path became anonymous. The artifact here is
+    unapproved and deposited by the seeded API user — the exact row that
+    user now downloads successfully one test above — and the request
+    carries no credential, so it must be refused by the auth gate before
+    any ownership question is even asked, and before any byte is loaded.
+
+    ADR 0004 is why: an unredacted log carries producer-side scratch
+    paths, usernames and scheduler ids, and that is a property of the ESS
+    output format rather than something scrubbable at rest. Public access
+    is a separate design (scrub-on-download), not this.
+    """
+    artifact, _content = _downloadable_artifact(
+        db_session,
+        status=RecordReviewStatus.not_reviewed,
+        deposited_by=_api_test_user,
+    )
+    called = False
+
+    def fake_load(*_args, **_kwargs):
+        nonlocal called
+        called = True
+        return b"must not be returned"
+
+    monkeypatch.setattr(
+        "app.api.routes.scientific.artifacts.load_artifact_bytes", fake_load
+    )
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db_session
+    app.dependency_overrides[get_write_db] = lambda: db_session
+    with TestClient(app) as anon:
+        response = anon.get(
+            f"/api/v1/scientific/artifacts/{artifact.sha256}/download"
+        )
+
+    assert response.status_code == 401, response.text
+    assert called is False
