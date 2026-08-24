@@ -46,6 +46,7 @@ from app.services.trust import build_trust_fragment
 from app.services.trust.models import (
     EvidenceBadge,
     EvidenceEvaluation,
+    EvidenceOutcome,
     TrustFragment,
     TrustLLMPrecheck,
 )
@@ -66,10 +67,11 @@ def _evaluation(*, is_certified: bool = False) -> EvidenceEvaluation:
         rubric="computed_calculation",
         rubric_version=1,
         label=EvidenceBadge.partial,
-        passed_checks=("final_geometry_present", "opt_converged"),
-        missing_checks=("source_artifact_present",),
-        warning_checks=(),
-        not_applicable_checks=(),
+        checks={
+            "final_geometry_present": EvidenceOutcome.passed,
+            "opt_converged": EvidenceOutcome.passed,
+            "source_artifact_present": EvidenceOutcome.missing,
+        },
         passed_count=2,
         possible_count=3,
         evidence_completeness=0.6667,

@@ -60,7 +60,7 @@ throughout.
 1. **Deterministic trust/evidence** — the public scientific read fragments
    (`trust.evidence`, `trust_status`, evidence rubrics like
    `computed_kinetics_v1`). It has **no LLM dependency** and is the sole owner
-   of `evidence_completeness`, `passed/missing/warning/not_applicable_checks`,
+   of `evidence_completeness`, `checks` (the check-name → outcome map),
    `hard_fail_reason`, and `trust_status`. See `trust_read_api_current.md` and
    `automated_trust_layer.md`.
 
@@ -189,7 +189,7 @@ the deterministic evidence or the human review status.
 
 | Layer | Question it answers | Who/what produces it | Authoritative for |
 |---|---|---|---|
-| **Deterministic evidence** (rubric) | "Does the record carry expected metadata?" | `computed_*_v1` evaluators | `evidence_completeness`, `passed/missing/warning/not_applicable_checks`, `hard_fail_reason`, `trust_status` |
+| **Deterministic evidence** (rubric) | "Does the record carry expected metadata?" | `computed_*_v1` evaluators | `evidence_completeness`, `checks` (check name → outcome), `hard_fail_reason`, `trust_status` |
 | **Machine review** (this spec) | "Does anything look inconsistent or under-supported, beyond what the checklist sees?" | LLM / automated reviewer | A *provisional, advisory* `machine_review.status` + `findings`. Authoritative for **nothing** the other two layers own. |
 | **Human review** | "Is this curator-endorsed / certified?" | Human curator | `review_status` (`RecordReviewStatus`), `benchmark_reference`, `is_certified` |
 
@@ -198,7 +198,7 @@ first axis, informs the third, and overwrites neither.
 
 The machine reviewer **may**:
 
-- interpret deterministic evidence (read `passed/missing/warning_checks`),
+- interpret deterministic evidence (read the `checks` map),
 - detect inconsistencies (notes vs. structured fields, contradictory
   provenance, implausible values),
 - assign a **provisional** machine-review state,
@@ -757,10 +757,7 @@ Machine review **must not** change any deterministic field:
 
 ```text
 evidence_completeness
-passed_checks
-missing_checks
-warning_checks
-not_applicable_checks
+checks
 hard_fail_reason
 trust_status
 is_certified

@@ -29,6 +29,11 @@ from tests.services.scientific_read._factories import (
     set_review,
 )
 
+# Every value in ``trust.evidence.checks`` is one of the four
+# ``EvidenceOutcome`` members; a fifth would mean the rubric grew a state
+# no consumer knows how to read.
+LEGAL_OUTCOMES = {"passed", "missing", "warning", "not_applicable"}
+
 
 def _entry(db_session):
     rs = make_species(db_session, smiles="A", inchi_key=next_inchi_key("KAPI1"))
@@ -256,10 +261,8 @@ def test_include_trust_returns_fragment(client, db_session):
     assert evidence["rubric"] == "computed_kinetics_v1"
     assert evidence["rubric_version"] == 1
     assert "record_id" not in evidence
-    assert "passed_checks" in evidence
-    assert "missing_checks" in evidence
-    assert "warning_checks" in evidence
-    assert "not_applicable_checks" in evidence
+    assert evidence["checks"], "the kinetics rubric ran, so checks cannot be empty"
+    assert set(evidence["checks"].values()) <= LEGAL_OUTCOMES
 
 
 def test_include_trust_sparse_kinetics_reports_missing_checks(client, db_session):
@@ -280,8 +283,8 @@ def test_include_trust_sparse_kinetics_reports_missing_checks(client, db_session
     evidence = body["records"][0]["trust"]["evidence"]
 
     assert evidence["label"] in {"sparse", "unsupported", "partial"}
-    assert "arrhenius_parameters_complete" in evidence["missing_checks"]
-    assert "source_calculations_present" in evidence["missing_checks"]
+    assert evidence["checks"]["arrhenius_parameters_complete"] == "missing"
+    assert evidence["checks"]["source_calculations_present"] == "missing"
 
 
 def test_include_trust_source_calculations_score_higher(client, db_session):

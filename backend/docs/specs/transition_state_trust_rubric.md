@@ -689,7 +689,7 @@ deliverables of this spec.
 | Test | What it proves |
 |---|---|
 | `tests/trust/test_ts_missing_entry_hard_fails.py` | Evaluator called with no TS entry → `hard_failed`, reason `transition_state_entry_missing`. |
-| `tests/trust/test_ts_rejected_entry_hard_fails.py` | TS entry with `status == rejected` → `hard_failed`, reason `ts_entry_status_rejected`; rubric checks still run and surface in `missing_checks` honestly. |
+| `tests/trust/test_ts_rejected_entry_hard_fails.py` | TS entry with `status == rejected` → `hard_failed`, reason `ts_entry_status_rejected`; rubric checks still run and surface their real outcome in `checks` honestly. |
 | `tests/trust/test_ts_sparse_entry_low_completeness.py` | Guess-stage TS entry with only identity facts → label `sparse` or `unsupported`; no hard fail. |
 | `tests/trust/test_ts_with_opt_freq_passes.py` | TS entry with opt + freq (`n_imag == 1`) + LoT + software → label at least `mostly_supported`. |
 | `tests/trust/test_ts_freq_nimag_one_passes.py` | `reaction_coordinate_designated_for_ts` passes when `n_imag == 1`. |

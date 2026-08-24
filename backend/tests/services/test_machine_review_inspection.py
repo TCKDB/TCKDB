@@ -403,10 +403,7 @@ def test_inspection_view_forbids_mutation_payload_fields():
         "benchmark_reference",
         "is_certified",
         "evidence_completeness",
-        "passed_checks",
-        "missing_checks",
-        "warning_checks",
-        "not_applicable_checks",
+        "checks",
         "hard_fail_reason",
         "trust_status",
     )

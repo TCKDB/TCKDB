@@ -30,7 +30,11 @@ from app.services.machine_review import (
 )
 from app.services.submission import create_submission
 from app.services.trust.fragment import build_trust_fragment
-from app.services.trust.models import EvidenceBadge, EvidenceEvaluation
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceEvaluation,
+    EvidenceOutcome,
+)
 
 _T0 = datetime(2026, 5, 31, 12, 0, 0)
 _T1 = _T0 + timedelta(hours=1)
@@ -53,10 +57,11 @@ def _fragment(
         rubric="computed_kinetics",
         rubric_version=1,
         label=EvidenceBadge.mostly_supported,
-        passed_checks=("a_present", "ea_present"),
-        missing_checks=missing_checks,
-        warning_checks=(),
-        not_applicable_checks=(),
+        checks={
+            "a_present": EvidenceOutcome.passed,
+            "ea_present": EvidenceOutcome.passed,
+            **dict.fromkeys(missing_checks, EvidenceOutcome.missing),
+        },
         passed_count=2,
         possible_count=3,
         evidence_completeness=0.67,

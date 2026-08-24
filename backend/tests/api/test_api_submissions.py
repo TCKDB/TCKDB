@@ -908,10 +908,13 @@ class TestAIReviewSummary:
             "summary": None,
         }
         evidence = trust["evidence"]
-        assert "passed_checks" in evidence
-        assert "missing_checks" in evidence
-        assert "warning_checks" in evidence
-        assert "not_applicable_checks" in evidence
+        assert evidence["checks"], "the rubric ran, so checks cannot be empty"
+        assert set(evidence["checks"].values()) <= {
+            "passed",
+            "missing",
+            "warning",
+            "not_applicable",
+        }
 
 
 # ---------------------------------------------------------------------------

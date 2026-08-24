@@ -245,8 +245,8 @@ def test_include_trust_returns_fragment(client, db_session):
     assert evidence["record_type"] == "thermo"
     assert evidence["rubric"] == "computed_thermo_v1"
     assert evidence["rubric_version"] == 1
-    assert "scalar_thermo_present" in evidence["passed_checks"]
-    assert "source_calculations_present" in evidence["missing_checks"]
+    assert evidence["checks"]["scalar_thermo_present"] == "passed"
+    assert evidence["checks"]["source_calculations_present"] == "missing"
     assert "record_id" not in evidence
 
 
@@ -286,8 +286,8 @@ def test_include_trust_nasa_representation_passes(client, db_session):
     ).json()
 
     evidence = body["records"][0]["trust"]["evidence"]
-    assert "nasa_coefficients_present" in evidence["passed_checks"]
-    assert "at_least_one_thermo_representation_present" in evidence["passed_checks"]
+    assert evidence["checks"]["nasa_coefficients_present"] == "passed"
+    assert evidence["checks"]["at_least_one_thermo_representation_present"] == "passed"
 
 
 def test_include_trust_nasa9_only_not_penalized(client, db_session):
@@ -310,13 +310,13 @@ def test_include_trust_nasa9_only_not_penalized(client, db_session):
     evidence = body["records"][0]["trust"]["evidence"]
     assert evidence["label"] != "hard_failed"
     assert evidence["hard_fail_reason"] is None
-    assert "thermo_model_present" in evidence["passed_checks"]
-    assert "at_least_one_thermo_representation_present" in evidence["passed_checks"]
-    assert "temperature_range_present_if_applicable" in evidence["passed_checks"]
+    assert evidence["checks"]["thermo_model_present"] == "passed"
+    assert evidence["checks"]["at_least_one_thermo_representation_present"] == "passed"
+    assert evidence["checks"]["temperature_range_present_if_applicable"] == "passed"
     # Other representation forms are legitimately absent -> N/A, not missing.
-    assert "scalar_thermo_present" in evidence["not_applicable_checks"]
-    assert "nasa_coefficients_present" in evidence["not_applicable_checks"]
-    assert "thermo_points_present" in evidence["not_applicable_checks"]
+    assert evidence["checks"]["scalar_thermo_present"] == "not_applicable"
+    assert evidence["checks"]["nasa_coefficients_present"] == "not_applicable"
+    assert evidence["checks"]["thermo_points_present"] == "not_applicable"
 
 
 def test_include_trust_source_calculation_raises_completeness(client, db_session):

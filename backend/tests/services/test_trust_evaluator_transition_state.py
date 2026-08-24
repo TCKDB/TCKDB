@@ -55,6 +55,7 @@ from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.services.trust import (
     COMPUTED_TRANSITION_STATE_V2,
     EvidenceBadge,
+    EvidenceOutcome,
     HardFailReason,
     evaluate_computed_transition_state_entry,
     evaluate_loaded_transition_state_entry,
@@ -450,7 +451,7 @@ def test_rejected_status_hard_fails(db_session: Session):
     assert result.label is EvidenceBadge.hard_failed
     assert result.hard_fail_reason is HardFailReason.ts_entry_status_rejected
     # The ts_status_not_rejected check still ran and reports the contradiction.
-    assert "ts_status_not_rejected" in result.missing_checks
+    assert result.checks["ts_status_not_rejected"] is EvidenceOutcome.missing
 
 
 def test_invalid_multiplicity_hard_fails(db_session: Session):
@@ -487,8 +488,8 @@ def test_sparse_entry_low_completeness_no_hard_fail(db_session: Session):
     assert result.hard_fail_reason is None
     assert result.label is not EvidenceBadge.hard_failed
     # Identity facts pass; supporting calculations missing → low ratio.
-    assert "transition_state_parent_present" in result.passed_checks
-    assert "supporting_calculations_present" in result.missing_checks
+    assert result.checks["transition_state_parent_present"] is EvidenceOutcome.passed
+    assert result.checks["supporting_calculations_present"] is EvidenceOutcome.missing
     assert result.label in {
         EvidenceBadge.unsupported,
         EvidenceBadge.sparse,
@@ -507,7 +508,7 @@ def test_guess_with_n_imag_zero_warns_not_hard_fail(db_session: Session):
     # No imaginary mode means no reaction coordinate, so the designation
     # check is missing — but the rubric does not collapse to hard_failed
     # for guess-stage entries.
-    assert "reaction_coordinate_designated_for_ts" in result.missing_checks
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.missing
 
 
 def test_guess_with_n_imag_two_warns_not_hard_fail(db_session: Session):
@@ -536,9 +537,9 @@ def test_validated_with_n_imag_one_passes_freq_check(
     assert result.hard_fail_reason is None
     # One imaginary mode needs no designation: there is nothing to
     # disambiguate, so the contract is satisfied trivially.
-    assert "reaction_coordinate_designated_for_ts" in result.passed_checks
-    assert "imaginary_frequency_count_recorded" in result.passed_checks
-    assert "imaginary_frequency_value_present" in result.passed_checks
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.passed
+    assert result.checks["imaginary_frequency_count_recorded"] is EvidenceOutcome.passed
+    assert result.checks["imaginary_frequency_value_present"] is EvidenceOutcome.passed
 
 
 def test_validated_with_n_imag_zero_hard_fails(db_session: Session):
@@ -616,11 +617,11 @@ def test_the_motivating_record_is_not_hard_failed_at_read_time(
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.hard_fail_reason is None
     assert result.label is not EvidenceBadge.hard_failed
-    assert "reaction_coordinate_designated_for_ts" in result.passed_checks
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.passed
     # The record was judged and not flagged, so the advisory check is
     # silent rather than absent.
-    assert "extra_imaginary_modes_not_flagged" not in result.warning_checks
-    assert "extra_imaginary_modes_not_flagged" not in result.not_applicable_checks
+    assert result.checks.get("extra_imaginary_modes_not_flagged") is not EvidenceOutcome.warning
+    assert result.checks.get("extra_imaginary_modes_not_flagged") is not EvidenceOutcome.not_applicable
 
 
 def test_a_recorded_structural_flag_warns_without_hard_failing(
@@ -644,7 +645,7 @@ def test_a_recorded_structural_flag_warns_without_hard_failing(
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.hard_fail_reason is None
-    assert "extra_imaginary_modes_not_flagged" in result.warning_checks
+    assert result.checks["extra_imaginary_modes_not_flagged"] is EvidenceOutcome.warning
 
 
 def test_missing_freq_is_missing_not_hard_fail(db_session: Session):
@@ -656,9 +657,9 @@ def test_missing_freq_is_missing_not_hard_fail(db_session: Session):
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.hard_fail_reason is None
-    assert "ts_frequency_present" in result.missing_checks
+    assert result.checks["ts_frequency_present"] is EvidenceOutcome.missing
     # n_imag checks become not_applicable when no freq result is in the set.
-    assert "reaction_coordinate_designated_for_ts" in result.not_applicable_checks
+    assert result.checks["reaction_coordinate_designated_for_ts"] is EvidenceOutcome.not_applicable
 
 
 def test_irc_raises_completeness(db_session: Session):
@@ -678,7 +679,7 @@ def test_irc_raises_completeness(db_session: Session):
     with_irc = evaluate_loaded_transition_state_entry(ts_entry_irc)
 
     assert with_irc.evidence_completeness > baseline.evidence_completeness
-    assert "irc_evidence_present" in with_irc.passed_checks
+    assert with_irc.checks["irc_evidence_present"] is EvidenceOutcome.passed
 
 
 def test_path_search_raises_completeness(db_session: Session):
@@ -696,7 +697,7 @@ def test_path_search_raises_completeness(db_session: Session):
     with_ps = evaluate_loaded_transition_state_entry(ts_entry_ps)
 
     assert with_ps.evidence_completeness > baseline.evidence_completeness
-    assert "path_search_evidence_present" in with_ps.passed_checks
+    assert with_ps.checks["path_search_evidence_present"] is EvidenceOutcome.passed
 
 
 def test_no_irc_no_path_search_not_hard_fail(db_session: Session):
@@ -707,8 +708,8 @@ def test_no_irc_no_path_search_not_hard_fail(db_session: Session):
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
     assert result.hard_fail_reason is None
-    assert "irc_evidence_present" in result.missing_checks
-    assert "path_search_evidence_present" in result.missing_checks
+    assert result.checks["irc_evidence_present"] is EvidenceOutcome.missing
+    assert result.checks["path_search_evidence_present"] is EvidenceOutcome.missing
     # At least partial because identity, supporting calcs, lot/software all pass.
     assert result.label in {
         EvidenceBadge.partial,
@@ -725,9 +726,9 @@ def test_source_calc_artifacts_lot_software(db_session: Session):
     db_session.refresh(ts_entry)
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert "source_calculation_lot_present" in result.passed_checks
-    assert "source_calculation_software_present" in result.passed_checks
-    assert "source_calculation_artifacts_present" in result.passed_checks
+    assert result.checks["source_calculation_lot_present"] is EvidenceOutcome.passed
+    assert result.checks["source_calculation_software_present"] is EvidenceOutcome.passed
+    assert result.checks["source_calculation_artifacts_present"] is EvidenceOutcome.passed
 
 
 def test_source_calc_failed_geometry_validation_hard_fails(db_session: Session):
@@ -743,8 +744,8 @@ def test_source_calc_failed_geometry_validation_hard_fails(db_session: Session):
     )
     # The warning check is suppressed to not_applicable when the hard-fail fires.
     assert (
-        "geometry_validation_not_failed_for_source_calculations"
-        in result.not_applicable_checks
+        result.checks["geometry_validation_not_failed_for_source_calculations"]
+        is EvidenceOutcome.not_applicable
     )
 
 
@@ -774,15 +775,14 @@ def test_loaded_matches_session_wrapper(db_session: Session):
     via_wrapper = evaluate_computed_transition_state_entry(db_session, ts_entry.id)
 
     # Compare the public envelope (check_results contain non-comparable runner
-    # references via the spec, but the bucket lists / counts / label are the
-    # public contract).
+    # references via the spec, but the check map / counts / label are the
+    # public contract). Key order is compared too: the map's insertion order is
+    # the rubric's declared check order, and both entrypoints must produce it.
     assert loaded.label is via_wrapper.label
     assert loaded.hard_fail_reason is via_wrapper.hard_fail_reason
     assert loaded.evidence_completeness == via_wrapper.evidence_completeness
-    assert loaded.passed_checks == via_wrapper.passed_checks
-    assert loaded.missing_checks == via_wrapper.missing_checks
-    assert loaded.warning_checks == via_wrapper.warning_checks
-    assert loaded.not_applicable_checks == via_wrapper.not_applicable_checks
+    assert loaded.checks == via_wrapper.checks
+    assert list(loaded.checks) == list(via_wrapper.checks)
 
 
 def test_evaluator_does_not_mutate_records(db_session: Session):
@@ -832,7 +832,7 @@ def test_calculation_dependencies_check_passes_when_freq_linked(db_session: Sess
     db_session.refresh(ts_entry)
 
     result = evaluate_loaded_transition_state_entry(ts_entry)
-    assert "calculation_dependencies_present" in result.passed_checks
+    assert result.checks["calculation_dependencies_present"] is EvidenceOutcome.passed
 
 
 def test_freq_representative_picks_latest_by_id(db_session: Session):

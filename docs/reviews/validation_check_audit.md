@@ -510,8 +510,8 @@ legitimately exceed 10 000 K, and a read-time label was publicly marking correct
 high-temperature science `hard_failed`. The cap was **demoted, not deleted**: it still applies
 in the graded rubrics (`backend/app/services/trust/rubrics.py:378` for kinetics,
 `_MAX_THERMO_TEMPERATURE_K` at `.../trust/rubrics.py:672` for thermo), both
-`EvidenceCheckKind.optional`, so a hot range lowers evidence completeness and appears in
-`missing_checks` but can never force `hard_failed`.
+`EvidenceCheckKind.optional`, so a hot range lowers evidence completeness and is
+reported as a `missing` outcome in `checks`, but can never force `hard_failed`.
 
 #79 then split the definitional predicate itself in two, which the earlier draft did not
 propose:

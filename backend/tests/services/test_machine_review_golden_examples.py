@@ -61,7 +61,11 @@ from app.services.machine_review.schemas import (
 )
 from app.services.submission import create_submission, link_record
 from app.services.trust import build_trust_fragment
-from app.services.trust.models import EvidenceBadge, EvidenceEvaluation
+from app.services.trust.models import (
+    EvidenceBadge,
+    EvidenceEvaluation,
+    EvidenceOutcome,
+)
 
 _FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "machine_review"
 _CASES = (
@@ -452,10 +456,10 @@ def test_kinetics_warning_via_admin_api_and_public_boundary(
         rubric="computed_calculation",
         rubric_version=1,
         label=EvidenceBadge.partial,
-        passed_checks=("opt_converged",),
-        missing_checks=("source_artifact_present",),
-        warning_checks=(),
-        not_applicable_checks=(),
+        checks={
+            "opt_converged": EvidenceOutcome.passed,
+            "source_artifact_present": EvidenceOutcome.missing,
+        },
         passed_count=1,
         possible_count=2,
         evidence_completeness=0.5,

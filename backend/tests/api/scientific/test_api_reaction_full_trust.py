@@ -257,10 +257,7 @@ def test_full_include_trust_matches_standalone_kinetics_trust(client, db_session
         "rubric",
         "rubric_version",
         "label",
-        "passed_checks",
-        "missing_checks",
-        "warning_checks",
-        "not_applicable_checks",
+        "checks",
         "evidence_completeness",
         "hard_fail_reason",
     )
@@ -330,10 +327,7 @@ def test_full_include_trust_calculation_matches_standalone(client, db_session):
         "rubric",
         "rubric_version",
         "label",
-        "passed_checks",
-        "missing_checks",
-        "warning_checks",
-        "not_applicable_checks",
+        "checks",
         "evidence_completeness",
         "hard_fail_reason",
     )
@@ -497,10 +491,14 @@ def test_full_include_trust_attaches_ts_trust(client, db_session):
     assert trust["evidence"]["record_type"] == "transition_state_entry"
     assert trust["evidence"]["rubric"] == "computed_transition_state_v2"
     assert trust["evidence"]["rubric_version"] == 2
-    assert "passed_checks" in trust["evidence"]
-    assert "missing_checks" in trust["evidence"]
-    assert "warning_checks" in trust["evidence"]
-    assert "not_applicable_checks" in trust["evidence"]
+    checks = trust["evidence"]["checks"]
+    assert checks, "the TS rubric ran, so the check map cannot be empty"
+    assert set(checks.values()) <= {
+        "passed",
+        "missing",
+        "warning",
+        "not_applicable",
+    }
 
 
 def test_full_include_trust_ts_llm_precheck_disabled(client, db_session):
@@ -590,10 +588,7 @@ def test_full_include_trust_ts_matches_standalone(client, db_session):
         "rubric",
         "rubric_version",
         "label",
-        "passed_checks",
-        "missing_checks",
-        "warning_checks",
-        "not_applicable_checks",
+        "checks",
         "evidence_completeness",
         "hard_fail_reason",
     )
@@ -622,9 +617,9 @@ def test_full_include_trust_ts_frequency_policy_for_optimized(client, db_session
     ).json()
 
     trust = _ts_trust_in_full(body, tse_ref=tse.public_ref)
-    passed = trust["evidence"]["passed_checks"]
-    assert "imaginary_frequency_count_recorded" in passed
-    assert "reaction_coordinate_designated_for_ts" in passed
+    checks = trust["evidence"]["checks"]
+    assert checks["imaginary_frequency_count_recorded"] == "passed"
+    assert checks["reaction_coordinate_designated_for_ts"] == "passed"
     assert trust["trust_status"] != "hard_failed"
 
 

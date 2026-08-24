@@ -625,7 +625,7 @@ Carries forward the relevant subset of §15 plus trust-era specifics.
 
 1. **`/full` trust propagation shape.** Should embedded kinetics under
    `include=trust` carry the *full* `trust` envelope (with
-   `evidence.passed_checks` arrays) or a compact `trust_summary`
+   `evidence.checks` map) or a compact `trust_summary`
    ({status, label, is_certified, evidence_completeness})? The full
    envelope is simpler (reuses one builder); the compact form keeps
    `/full` payload sizes bounded.

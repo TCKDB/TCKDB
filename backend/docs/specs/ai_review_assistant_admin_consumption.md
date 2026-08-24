@@ -274,10 +274,7 @@ Public scientific trust fragments should remain unchanged for now. In
 particular, AI Review Assistant output must not affect:
 
 - deterministic evidence completeness
-- `passed_checks`
-- `missing_checks`
-- `warning_checks`
-- `not_applicable_checks`
+- `checks` (the check-name → outcome map)
 - `hard_fail_reason`
 - `trust_status`
 - public record visibility

@@ -1763,11 +1763,23 @@ __HERO_SPECTRUM__
 
   /*
    * The named checks behind a verdict. ``ts_single_point_present``
-   * sitting in ``missing_checks`` is the whole point: it turns "why is
-   * this only mostly supported?" from a guess into a list. It ships
+   * carrying the outcome ``missing`` is the whole point: it turns "why
+   * is this only mostly supported?" from a guess into a list. It ships
    * collapsed because a card that opens into thirty check names has
    * traded one wall of text for another.
    */
+  function checksWithOutcome(checks, outcome) {
+    var names = [];
+    if (!checks) { return names; }
+    for (var name in checks) {
+      if (Object.prototype.hasOwnProperty.call(checks, name)
+        && checks[name] === outcome) {
+        names.push(name);
+      }
+    }
+    return names;
+  }
+
   function checkList(title, names) {
     var node = make("div", "trust-checks");
     node.appendChild(make("p", "trust-checks-title", title));
@@ -1805,8 +1817,14 @@ __HERO_SPECTRUM__
       node.appendChild(make("p", "trust-explains",
         "A structural check failed outright: " + evidence.hard_fail_reason));
     }
-    var missing = evidence.missing_checks || [];
-    var passed = evidence.passed_checks || [];
+    /*
+     * ``evidence.checks`` is an ordered {name: outcome} map, so the two
+     * lists are selections from it rather than two fields. Iterating the
+     * object preserves the rubric's declared check order, which is what
+     * keeps two cards comparable line for line.
+     */
+    var missing = checksWithOutcome(evidence.checks, "missing");
+    var passed = checksWithOutcome(evidence.checks, "passed");
     if (missing.length || passed.length) {
       var why = make("details", "trust-why");
       why.appendChild(make("summary", null, "What the rubric checked"));

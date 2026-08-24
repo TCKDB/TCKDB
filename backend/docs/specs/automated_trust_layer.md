@@ -148,8 +148,8 @@ inspection over a record. Each check has:
   `kinetics.model_kind == arrhenius`). When the predicate is false the
   check is `not_applicable` and contributes to **neither** numerator
   nor denominator.
-- `explain`: short human string surfaced under
-  `missing_checks` / `warnings`.
+- `explain`: short human string explaining a `missing` or `warning`
+  outcome.
 
 ### 5.2 `EvidenceRubric`
 
@@ -258,15 +258,13 @@ strong ratio **and** zero failed required-checks.
   "evidence": {
     "rubric": "computed_kinetics_v1",
     "label": "well_supported",
-    "passed_checks": ["reaction_entry_present", "kinetics_model_present", "..."],
-    "missing_checks": [
-      "irc_evidence_present",
-      "uncertainty_present"
-    ],
-    "warning_checks": [
-      "geometry_validation_not_available"
-    ],
-    "not_applicable_checks": [],
+    "checks": {
+      "reaction_entry_present": "passed",
+      "kinetics_model_present": "passed",
+      "irc_evidence_present": "missing",
+      "uncertainty_present": "missing",
+      "geometry_validation_not_available": "warning"
+    },
     "passed_count": 8,
     "possible_count": 11,
     "evidence_completeness": 0.73,
@@ -275,13 +273,46 @@ strong ratio **and** zero failed required-checks.
 }
 ```
 
-As shipped, `passed_checks` / `missing_checks` / `warning_checks` /
-`not_applicable_checks` are the *name lists*, and `passed_count` /
-`possible_count` are their numeric counterparts — this is the same shape
-as the canonical read-fragment example in §10.1 (`EvidenceEvaluation` in
-`app/services/trust/models.py`). An earlier draft of this example
-conflated the two (`passed_checks`/`possible_checks` as bare integers);
-that shape was never implemented.
+As shipped, `checks` is an ordered map from check name to outcome, and
+`passed_count` / `possible_count` are the numeric counterparts — the same
+shape as the canonical read-fragment example in §10.1
+(`EvidenceEvaluation` in `app/services/trust/models.py`). An earlier
+draft of this example conflated the two (`passed_checks`/`possible_checks`
+as bare integers); that shape was never implemented.
+
+**Why a map and not four name lists.** `checks` replaced four parallel
+arrays — `passed_checks`, `missing_checks`, `warning_checks`,
+`not_applicable_checks`. Most check names are assertions ending in
+`_present`, so a name inside a bucket named for its truth value read as a
+double negative: `missing_checks: ["irc_evidence_present"]` meant *there
+is no IRC evidence*, and every reader had to negate the name against the
+bucket. Putting the outcome in the value removes that step
+(`"irc_evidence_present": "missing"`) and makes *"did check X pass?"* one
+lookup rather than a scan of up to four arrays. The migration is
+mechanical: `x in missing_checks` becomes `checks.get(x) == "missing"`,
+and `passed_checks` becomes
+`[k for k, v in checks.items() if v == "passed"]`.
+
+Two properties the map is required to keep:
+
+- **The value is one of four outcomes, never a boolean.** `missing`
+  counts against the record and is inside `possible_count`;
+  `not_applicable` means the check could not be asked and is outside
+  *both* numerator and denominator. Collapsing them to `false` would
+  penalise a record for an unanswerable question — for instance,
+  `geometry_validation_not_failed_for_source_calculations` is
+  `not_applicable` precisely when
+  `geometry_validation_present_for_source_calculations` is `missing`.
+- **Key order is the rubric's declared check order and is stable.** Two
+  evaluations of the same rubric serialise their keys identically, so a
+  diff between two records lines up check for check. Consumers may rely
+  on it.
+
+Membership matches the arrays it replaced exactly: a check appears with
+the outcome whose bucket it used to occupy, and only then. A warning-kind
+check that did not fire is absent, as it was absent from all four arrays
+— it carries zero weight, so counting it as `passed` would make the
+number of `passed` entries disagree with `passed_count`.
 
 The `is_certified` field is **always** the result of curator action,
 never of the automated layer. Automated evaluation can never set it to
@@ -635,14 +666,12 @@ be presented as a quality score.
       "evidence_completeness": 0.73,
       "passed_count": 8,
       "possible_count": 11,
-      "missing_checks": [
-        "irc_evidence",
-        "uncertainty"
-      ],
-      "warning_checks": [
-        "scf_stability_not_checked"
-      ],
-      "not_applicable_checks": []
+      "checks": {
+        "reaction_entry_present": "passed",
+        "irc_evidence": "missing",
+        "uncertainty": "missing",
+        "scf_stability_not_checked": "warning"
+      }
     },
     "llm_precheck": {
       "enabled": false,
@@ -666,10 +695,7 @@ be presented as a quality score.
 | `trust.evidence.evidence_completeness` | `passed_weight / possible_weight`, rounded by the evaluator. | Not exposed as a percentage; reader formats as it likes. |
 | `trust.evidence.passed_count` | Count of `kind in {required, optional}` checks that passed. | |
 | `trust.evidence.possible_count` | Same denominator, excluding `not_applicable`. | |
-| `trust.evidence.passed_checks[]` | Names of checks that passed. | |
-| `trust.evidence.missing_checks[]` | Names of checks that did not pass and are not `not_applicable`. | |
-| `trust.evidence.warning_checks[]` | Names of warning checks that fired. | |
-| `trust.evidence.not_applicable_checks[]` | Names of checks excluded from the numerator and denominator. | |
+| `trust.evidence.checks{}` | Ordered map of check name → outcome (`passed` / `missing` / `warning` / `not_applicable`). | Key order is the rubric's declared check order and is stable. `missing` counts against the record; `not_applicable` is excluded from both numerator and denominator. Replaced the former `passed_checks` / `missing_checks` / `warning_checks` / `not_applicable_checks` arrays — see §6.2. |
 | `trust.llm_precheck.enabled` | Disabled in the current MVP. | Always `false` until an explicit precheck integration lands. |
 | `trust.llm_precheck.label` | Advisory LLM label. | Currently always `not_run`; does not influence `trust_status`. |
 | `trust.llm_precheck.summary` | Advisory LLM summary. | Currently always `null`. |
@@ -758,10 +784,9 @@ trust_evaluation
   rubric_version     INT
   label              EvidenceBadge           -- new enum (computed values only)
   completeness_ratio NUMERIC(5,4)
-  passed_checks      INT
-  possible_checks    INT
-  missing_checks     JSONB                   -- array of strings
-  warnings           JSONB                   -- array of strings
+  passed_count       INT
+  possible_count     INT
+  checks             JSONB                   -- {check name: outcome}
   hard_fail_reason   TEXT NULL
   evaluated_at       TIMESTAMPTZ
   evaluator_version  TEXT                    -- git sha or semver of evaluator
@@ -870,8 +895,8 @@ Required tests (paths illustrative):
 
 | Test | What it proves |
 |---|---|
-| `tests/trust/test_kinetics_complete.py` | Computed kinetics with full provenance → `well_supported`, `passed_checks == possible_checks`, empty `missing_checks`. |
-| `tests/trust/test_kinetics_missing_irc.py` | Same record minus IRC evidence → label drops by at most one step; `missing_checks` contains `irc_evidence_present`; no spurious warnings. |
+| `tests/trust/test_kinetics_complete.py` | Computed kinetics with full provenance → `well_supported`, `passed_count == possible_count`, no `missing` outcome in `checks`. |
+| `tests/trust/test_kinetics_missing_irc.py` | Same record minus IRC evidence → label drops by at most one step; `checks["irc_evidence_present"] == "missing"`; no spurious warnings. |
 | `tests/trust/test_kinetics_no_sources.py` | Kinetics with zero `kinetics_source_calculation` → `source_calculations_present` fails; label `sparse` or below; required-check failure recorded. |
 | `tests/trust/test_thermo_nasa.py` | Thermo with NASA polynomials → all NASA-applicable checks live; scalar-only checks `not_applicable`. |
 | `tests/trust/test_thermo_scalar_only.py` | Thermo with scalar-only data → range checks `not_applicable`; completeness ratio reflects reduced denominator, not failure. |
@@ -881,7 +906,7 @@ Required tests (paths illustrative):
 | `tests/trust/test_fragment_shape.py` | Generated fragment matches the §10.1 schema exactly (no extra keys, no missing required keys). |
 | `tests/trust/test_rubric_version_stability.py` | Re-running `computed_kinetics_v1` on a frozen fixture produces byte-identical output. (Pins the contract.) |
 | `tests/trust/test_geometry_validation_hard_fail.py` | A record whose TS geom has `ValidationStatus.fail` returns `trust_status == hard_failed`, regardless of how many other checks pass. |
-| `tests/trust/test_llm_precheck_advisory.py` | Toggling LLM precheck `passed` ↔ `flagged` on the originating submission **does not** change `trust_status`, `label`, `passed_checks`, or `missing_checks`. |
+| `tests/trust/test_llm_precheck_advisory.py` | Toggling LLM precheck `passed` ↔ `flagged` on the originating submission **does not** change `trust_status`, `label`, or any entry in `checks`. |
 | `tests/trust/test_no_llm_dependency.py` | Evaluator runs and produces a complete trust fragment with the LLM provider disabled / unconfigured. |
 | `tests/trust/test_workflow_tool_agnostic.py` | A record whose `workflow_tool` is unknown (no ARC, no RMG) still evaluates against the rubric without raising. |
 
@@ -948,8 +973,8 @@ These are intentionally left for implementation review.
 
 6. **Calibration loop.** Once real records flow through, we will
    want a diagnostic endpoint (admin-only) that reports, per rubric,
-   the histogram of completeness ratios and the most common
-   `missing_checks`. This is a tool for tuning rubric versions, not
+   the histogram of completeness ratios and the checks most often
+   `missing`. This is a tool for tuning rubric versions, not
    a public-facing thing. Out of scope for v1 of this spec.
 
 ---
