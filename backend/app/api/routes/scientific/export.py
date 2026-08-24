@@ -221,7 +221,11 @@ def export_ml_species(
 
     ``min_review_status`` defaults to ``approved``; on a pre-curation
     corpus (nothing approved yet) that exports zero records — pass
-    ``min_review_status=under_review`` (or lower) to export uncurated data.
+    ``min_review_status=not_reviewed`` (the lowest rank) to export
+    uncurated data. ``under_review`` is *not* low enough: since revision
+    ``c1d8f4a25b30`` a deposited record sits at ``not_reviewed`` until a
+    curator picks it up, so ``under_review`` selects only records someone
+    is genuinely working on.
 
     :raises ValueError: 422 for an empty/unresolvable seed, an unknown
         ``lot_ref``, or an ``all`` request over the export cap.
@@ -275,7 +279,11 @@ def export_ml_reactions(
 
     ``min_review_status`` defaults to ``approved``; on a pre-curation
     corpus (nothing approved yet) that exports zero records — pass
-    ``min_review_status=under_review`` (or lower) to export uncurated data.
+    ``min_review_status=not_reviewed`` (the lowest rank) to export
+    uncurated data. ``under_review`` is *not* low enough: since revision
+    ``c1d8f4a25b30`` a deposited record sits at ``not_reviewed`` until a
+    curator picks it up, so ``under_review`` selects only records someone
+    is genuinely working on.
 
     :raises ValueError: 422 for an empty/unresolvable seed or an ``all``
         request over the export cap.

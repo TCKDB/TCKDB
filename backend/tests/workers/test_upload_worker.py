@@ -724,12 +724,17 @@ def _thermo_job_payload() -> dict:
     }
 
 
-def test_run_one_job_links_records_and_initializes_under_review(
+def test_run_one_job_links_records_and_initializes_not_reviewed(
     db_session,
     _api_test_user,
 ):
-    """A worker success persists records under review, links them to the
+    """A worker success persists records awaiting review, links them to the
     job's submission, and appends an ``ingestion_succeeded`` audit event.
+
+    ``not_reviewed``, not ``under_review``: the async path shares
+    ``review_policy_for_submission`` with the synchronous routes, and a
+    background worker finishing a job is even further from a human having
+    read the result than a foreground upload is.
 
     Exercised through ``run_one_job`` on the per-test transactional session
     so everything rolls back at teardown (no committed pollution).
@@ -775,7 +780,7 @@ def test_run_one_job_links_records_and_initializes_under_review(
     ).all()
     assert links, "worker success should create submission_record_link rows"
 
-    # The thermo product is under review and points at the submission.
+    # The thermo product awaits review and points at the submission.
     review = db_session.scalar(
         select(RecordReview).where(
             RecordReview.record_type == SubmissionRecordType.thermo,
@@ -783,8 +788,10 @@ def test_run_one_job_links_records_and_initializes_under_review(
         )
     )
     assert review is not None
-    assert review.status is RecordReviewStatus.under_review
+    assert review.status is RecordReviewStatus.not_reviewed
     assert review.submission_id == submission.id
+    assert review.reviewed_by is None
+    assert review.reviewed_at is None
 
     # ingestion_succeeded audit event exists; submission stays pending.
     kinds = {

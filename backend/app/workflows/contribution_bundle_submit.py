@@ -329,10 +329,16 @@ def submit_contribution_bundle(
 
     # 3. Run the per-family import through existing workflows. The
     #    review policy carries the moderation context: bundle submissions
-    #    enter `under_review` and link every produced record back to this
+    #    land `not_reviewed` and link every produced record back to this
     #    submission, so on approval we can flip them to approved in bulk.
+    #
+    #    `not_reviewed` is the honest word for a bundle nobody has opened
+    #    yet. `under_review` begins when a curator picks the record up —
+    #    a transition the review service already permits from here — and
+    #    depositing straight into it made the status describe the queue
+    #    rather than anyone's attention.
     review_policy = ReviewPolicy(
-        status=RecordReviewStatus.under_review,
+        status=RecordReviewStatus.not_reviewed,
         submission_id=submission.id,
     )
     if bundle.bundle_kind is BundleKind.thermo:

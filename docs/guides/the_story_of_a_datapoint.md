@@ -114,9 +114,10 @@ open_upload_submission()  →  persist_*_upload()  →  mark_upload_ingested()
 
 A submission is the reviewable unit of contribution: "Dana uploaded
 this batch of records, together, at this time, with this client". It
-starts at `status=pending` with a review policy of `under_review`, and
+starts at `status=pending` with a review policy of `not_reviewed`, and
 that is deliberately *not* a judgment — it is simply the initial state
-of anything a curator has not yet looked at.
+of anything a curator has not yet looked at. It says *not yet looked
+at*, rather than `under_review`, because nobody has.
 
 Two consequences of the submission wrapper are easy to miss and worth
 stating:
@@ -321,7 +322,8 @@ is a number plus the complete, machine-readable argument for it.**
 ## Chapter 8 — Curation: trust as an overlay
 
 Dana's records now exist, linked to her submission, all in state
-`under_review`. Enter the curator.
+`not_reviewed`. Enter the curator — and the moment one picks a record
+up, that record moves to `under_review`.
 
 The curation layer is the fourth bucket, and its design rule is
 absolute: **curation never mutates science.** A review changes how

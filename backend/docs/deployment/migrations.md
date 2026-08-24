@@ -383,6 +383,60 @@ the repair matters to you.
 
 ---
 
+## Deposited records are `not_reviewed` (revision `c1d8f4a25b30`)
+
+A pure **data migration** — no column, table, constraint, index or enum
+changes. It corrects `record_review.status` on rows that were stamped
+`under_review` at deposit and never touched by anyone:
+
+```sql
+UPDATE record_review SET status = 'not_reviewed'
+ WHERE status = 'under_review'
+   AND reviewed_by IS NULL
+   AND reviewed_at IS NULL
+   AND first_approved_at IS NULL;
+```
+
+**Upgrading needs no operator action**, but it changes what one query
+returns, so check the counts before and after:
+
+```sql
+-- Before: expect every under_review row to be untouched (second count 0).
+SELECT count(*) FILTER (WHERE reviewed_by IS NULL AND reviewed_at IS NULL
+                          AND first_approved_at IS NULL) AS untouched,
+       count(*) FILTER (WHERE reviewed_by IS NOT NULL OR reviewed_at IS NOT NULL
+                          OR first_approved_at IS NOT NULL) AS in_progress
+  FROM record_review WHERE status = 'under_review';
+
+-- After: the untouched rows are not_reviewed, and each carries one event.
+SELECT status, count(*) FROM record_review GROUP BY status;
+SELECT count(*) FROM record_review_event
+ WHERE details_json @> '{"migration": "c1d8f4a25b30", "direction": "upgrade"}';
+```
+
+On the hosted database the pre-upgrade counts were 1153 untouched and 0 in
+progress, so 1153 rows move and 1153 events are appended.
+
+**The user-visible effect** is on `min_review_status`. That filter admits
+statuses at or above the given rank (`approved` 0, `under_review` 1,
+`not_reviewed` 2), so a client passing `min_review_status=under_review` saw
+essentially the whole corpus before this revision and sees almost nothing
+after it. Nothing was deleted and nothing became less visible by default —
+default reads have always included `not_reviewed`. The filter simply stopped
+counting "deposited" as "being reviewed". Clients wanting the old breadth
+pass `min_review_status=not_reviewed`; that includes the two ML/NDJSON
+exports, whose floor defaults to `approved`.
+
+**Downgrading restores status but appends rather than erases.** Each moved
+row carries a marker event, so the downgrade puts back exactly the rows this
+revision moved — not every `not_reviewed` row. It deliberately skips a row a
+curator has since moved on from, and it cannot delete the forward event:
+`record_review_event` is append-only and `tckdb_guard_record_review` refuses
+DELETE on `record_review`. A database that has been upgraded and downgraded
+therefore shows two recorded transitions per row, which is what happened.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
