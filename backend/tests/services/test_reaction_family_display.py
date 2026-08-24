@@ -106,8 +106,8 @@ def test_mechanical_layer(identifier, expected):
     [
         # A naive camelCase split would produce "vd W", "Li R", "NH 3".
         ("Surface_Abstraction_vdW", "Surface Abstraction vdW"),
-        ("1,2_Elimination_LiR", "Positions 1,2 Elimination LiR"),
-        ("1,2_NH3_elimination", "Positions 1,2 NH3 elimination"),
+        ("1,2_Elimination_LiR", "1,2 Elimination LiR"),
+        ("1,2_NH3_elimination", "1,2 NH3 elimination"),
         ("Intra_RH_Add_Endocyclic", "Intra RH Add Endocyclic"),
         ("XY_Addition_MultipleBond", "XY Addition Multiple Bond"),
     ],
@@ -134,7 +134,7 @@ def test_camel_split_does_not_mangle_formulas(identifier, expected):
          "Singlet atom with six valence electrons to triplet"),
         ("Intra_2+2_cycloaddition_Cd",
          "Intra 2+2 cycloaddition carbon with one double bond"),
-        ("1,2_Insertion_CO", "Positions 1,2 Insertion CO"),
+        ("1,2_Insertion_CO", "1,2 Insertion CO"),
         # element symbols, settled by their abstraction siblings
         ("F_Abstraction", "Fluorine Abstraction"),
         ("Br_Abstraction", "Bromine Abstraction"),
@@ -160,7 +160,10 @@ def test_dictionary_is_exactly_the_confirmed_ledger():
         "HO2": "hydroperoxyl",
         "Val6": "atom with six valence electrons",
         "Cd": "carbon with one double bond",
-        "1,2": "positions 1,2",
+        # No entry for "1,2". Comma locants render bare -- see the note beside
+        # _LOCANTS. They are still recognised, so they can never be swept into
+        # another rule, but they carry no expansion because the notation needs
+        # no explaining to the audience that reads it.
         "F": "Fluorine",
         "Br": "Bromine",
         "Cl": "Chlorine",
@@ -286,13 +289,25 @@ def test_f_is_scoped_to_the_family_not_to_the_token():
 @pytest.mark.parametrize(
     "identifier, expected",
     [
-        ("1,2_XY_interchange", "Positions 1,2 XY interchange"),
-        ("1,3_NH3_elimination", "Positions 1,3 NH3 elimination"),
-        ("1,4_Linear_birad_scission", "Positions 1,4 Linear birad scission"),
+        ("1,2_XY_interchange", "1,2 XY interchange"),
+        ("1,3_NH3_elimination", "1,3 NH3 elimination"),
+        ("1,4_Linear_birad_scission", "1,4 Linear birad scission"),
     ],
 )
-def test_comma_locants_read_as_positions(identifier, expected):
-    """``1,2`` was confirmed; ``1,3``/``1,4`` are the same reading by rule."""
+def test_comma_locants_survive_bare(identifier, expected):
+    """A comma locant reaches the reader unchanged, and unprefixed.
+
+    It was briefly rendered "Positions 1,2 ...". That is not wrong, it is
+    merely unhelpful: ``1,3_sigmatropic_rearrangement`` is already how a
+    chemist writes a [1,3] shift, so the prefix explains nothing to the
+    audience that reads it and lengthens every such name.
+
+    The locant pattern is still matched rather than ignored. That is what
+    keeps ``1,2`` out of any other rule, and it is the same guard that stops
+    ``2+2`` -- which counts cycloaddition components, not positions -- from
+    ever being read as one. The separator is the discriminator: comma is a
+    locant, plus is a count.
+    """
     assert reaction_family_display_name(identifier) == expected
 
 

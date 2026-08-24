@@ -97,9 +97,15 @@ TOKEN_EXPANSIONS: dict[str, str] = {
     # coherent in family-name scope. The rest of that table is not.
     "Val6": "atom with six valence electrons",
     "Cd": "carbon with one double bond",
-    # Positional locants. Generalised to sibling comma-locant tokens (``1,3``,
-    # ``1,4``) by _LOCANTS above, which is the same reading, not a new claim.
-    "1,2": "positions 1,2",
+    # Comma-separated locants (``1,2``, ``1,3``, ``1,4``) are left BARE, not
+    # prefixed with "positions". The notation is already unambiguous to the
+    # audience -- ``1,3_sigmatropic_rearrangement`` is how a chemist writes a
+    # [1,3] shift -- so a prefix explains something nobody needed explained and
+    # makes every such name longer. _LOCANTS still exists to keep them out of
+    # any other rule, and to hold the line against ``2+2``, which counts
+    # cycloaddition components rather than positions and must never read as
+    # one. The separator is the discriminator: comma is a locant, plus is a
+    # count.
     # Element symbols, settled by their siblings: F/Br/Cl/Li each appear as
     # the abstracted species in an ``<X>_Abstraction`` family sitting directly
     # beside ``H_Abstraction``. NOTE the coupling: ``F`` is only safe here
@@ -168,7 +174,8 @@ def _expand(token: str) -> str:
     if expansion is not None:
         return expansion
     if _LOCANTS.match(token):
-        return f"positions {token}"
+        # Bare, deliberately. See the note beside _LOCANTS.
+        return token
     return token
 
 
