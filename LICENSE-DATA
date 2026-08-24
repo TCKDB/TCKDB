@@ -1,0 +1,134 @@
+TCKDB — Scientific Data License
+===============================
+
+The scientific data TCKDB publishes is licensed under the
+
+    Creative Commons Attribution 4.0 International License (CC BY 4.0)
+
+    Deed (human-readable summary):
+        https://creativecommons.org/licenses/by/4.0/
+    Legal code (the license itself, and the authoritative text):
+        https://creativecommons.org/licenses/by/4.0/legalcode.en
+    SPDX identifier:
+        CC-BY-4.0
+
+The full legal code is deliberately *not* copied into this repository.
+Creative Commons recommends marking a work with a license notice that
+names the license and links to it, rather than reproducing the text; a
+copied text can silently drift from the canonical version, and there is
+exactly one canonical version. This file is that notice, plus a
+statement of what it does and does not cover.
+
+The source code is NOT covered by this license. TCKDB's code is MIT —
+see `LICENSE`. Two licenses for two different things is the normal
+arrangement for a scientific database: the program and the corpus are
+reused by different people for different reasons.
+
+
+What this license covers
+------------------------
+
+Applied by the operator of a TCKDB deployment to the scientific content
+that deployment publishes, and recorded per release in
+`dataset_release.data_license`:
+
+  * **Deposited scientific records** — species, reactions, transition
+    states, geometries, conformers, calculations and their parsed
+    results, and the provenance rows (level of theory, software and
+    workflow-tool releases, literature) that describe how they were
+    produced.
+  * **Derived scientific products** — thermochemistry, statistical
+    mechanics, kinetics, transport, and pressure-dependent network
+    results computed from those records.
+  * **Raw calculation artifacts published in a dataset release** — the
+    ESS output files, logs, and other uploaded evidence served from a
+    release, together with the release's manifest document, its
+    NDJSON artifacts, checksums, and curated selection records.
+
+Attribution is the one obligation. For TCKDB data, attribution means
+citing the specific **dataset release** — its tag and its manifest
+`content_sha256` — not the repository or the software. A dataset
+release is an immutable, checksummed, independently citable artifact
+with its own citation string in `dataset_release.citation_text`; see
+`CITATION.cff` and
+`backend/docs/deployment/cutting_a_dataset_release.md`.
+
+Where material published here is not protected by copyright or by
+database rights in your jurisdiction — bare measured or computed
+numbers often are not — no permission from us is needed and CC BY 4.0
+imposes nothing on you. We ask for the citation regardless, because
+that is how the scientists who produced the numbers are credited.
+
+
+What this license does NOT cover
+--------------------------------
+
+  * **The source code.** Everything in this repository that is code —
+    the backend, the clients, the schemas package, the integrations,
+    scripts, and the deployment tooling — is MIT-licensed. See
+    `LICENSE`. Documentation shipped with the code follows the code.
+
+  * **Third-party test fixtures.** `backend/tests/fixtures/` holds
+    test data, not deposited scientific records. Several fixtures are
+    copied from other projects and remain under *their* licenses, not
+    this one:
+
+        backend/tests/fixtures/molpro/molpro_TS_freq.out
+            from RMG-Py (arkane/data/molpro/molpro_TS.out), MIT
+        backend/tests/fixtures/orca/Orca_TS_test.hess
+            from RMG-Py (arkane/data/orca/Orca_TS_test.hess), MIT
+        backend/tests/fixtures/psi4/opt_freq_singlet.out
+        backend/tests/fixtures/psi4/opt_freq_dft_ts_singlet.out
+        backend/tests/fixtures/psi4/io_error_truncated.out
+            from RMG-Py (arkane/data/psi4/…), MIT
+        backend/tests/fixtures/psi4/sp_mrcc_triplet.dat
+            from ARC (arc/testing/sp/psi4_mrcc.dat), MIT
+
+    Each carries a provenance header or is listed in its directory's
+    `README.md`; those statements govern. The remaining fixtures come
+    from contributors' own runs — including at least one collaborator's
+    unpublished output (`backend/tests/fixtures/psi4/README.md` records
+    which) — and are here as test inputs, contributed for that purpose.
+    Nothing under `backend/tests/` is a deposit, none of it is served by
+    a dataset release, and this license never sweeps it in.
+
+  * **Data served by a deployment that says otherwise.** TCKDB is one
+    application with many deployments. Each release states its own
+    license in `dataset_release.data_license`; that field, not this
+    file, is what governs the data you actually downloaded. CC BY 4.0
+    is the house default, and an operator may set another value.
+
+
+Who may license what — a constraint, not a footnote
+---------------------------------------------------
+
+**An operator can license their own deposits and nobody else's.**
+
+Applying CC BY 4.0 to a release is a claim about rights the operator
+holds. It is sound while every depositor is the operator, which is the
+situation on the hosted instance today. It stops being sound the moment
+a second party uploads: publishing someone else's data under CC BY 4.0
+without their agreement would be wrong no matter what a configuration
+default says, and a default is not consent.
+
+Therefore:
+
+  * The `CC-BY-4.0` default applies to data the operator is entitled to
+    license.
+  * **Before a deployment accepts deposits from a second contributor,
+    the license must become part of the upload contract** — agreed at
+    deposit time, recorded against the deposit, and honoured when a
+    release is cut. That mechanism is not yet built. It must be
+    designed and landed *before* multi-contributor deposits are
+    accepted, not retrofitted afterwards, because a deposit already
+    taken cannot be retroactively consented to.
+
+The same constraint is recorded, from the ingestion side, in
+`backend/docs/specs/ingestion_submission_model.md`, and from the
+release side in
+`backend/docs/specs/dataset_release_and_profiles.md`.
+
+
+Copyright (c) 2026 Calvin Pieters, Alon Grinberg Dana, and
+Technion — Israel Institute of Technology, and the contributors who
+deposited the records a given release contains.

@@ -528,6 +528,83 @@ def test_a_non_selectable_record_ref_is_refused(
 
 
 # ---------------------------------------------------------------------------
+# Licensing: what a release carries when the curator did not say
+# ---------------------------------------------------------------------------
+#
+# ``data_license`` is required and non-blank at the column, so a caller has
+# always had to send *something*; what it should be was never decided, because
+# no release had been cut. It is now CC BY 4.0 for the corpus and MIT for the
+# code (``LICENSE-DATA`` and ``LICENSE``), and both are request-body defaults.
+# The tests below hold the two halves that have to be true at once: omitting
+# the field yields the house license, and supplying one yields *that* license.
+
+
+def test_a_release_created_without_a_license_is_cc_by_4_0(
+    client, login_as, _api_curator_user
+):
+    """The whole point of the default: a curator does not have to know it."""
+    _as_curator(client, login_as, _api_curator_user)
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+
+    body = {k: v for k, v in RELEASE.items() if not k.endswith("_license")}
+    assert "data_license" not in body and "code_license" not in body
+    created = client.post("/api/v1/releases", json=body)
+    assert created.status_code == 201, created.text
+
+    assert created.json()["data_license"] == "CC-BY-4.0"
+    assert created.json()["code_license"] == "MIT"
+
+    # And it is what a reader resolving the tag is told, not just what the
+    # create response echoed back.
+    detail = client.get(f"/api/v1/scientific/releases/{RELEASE['tag']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["record"]["data_license"] == "CC-BY-4.0"
+
+
+def test_an_explicitly_supplied_license_is_not_overridden_by_the_default(
+    client, login_as, _api_curator_user
+):
+    """An operator's own terms survive the house default.
+
+    TCKDB is one application with many deployments. An operator publishing a
+    corpus under different terms says so in the body, and the release must
+    carry what they said -- a default that quietly replaced it would publish
+    their data under a license they did not choose.
+    """
+    _as_curator(client, login_as, _api_curator_user)
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+
+    body = dict(RELEASE, data_license="CC0-1.0", code_license="Apache-2.0")
+    created = client.post("/api/v1/releases", json=body)
+    assert created.status_code == 201, created.text
+
+    record = created.json()
+    assert record["data_license"] == "CC0-1.0"
+    assert record["code_license"] == "Apache-2.0"
+
+    detail = client.get(f"/api/v1/scientific/releases/{RELEASE['tag']}")
+    assert detail.json()["record"]["data_license"] == "CC0-1.0"
+
+
+def test_a_blank_license_is_refused_rather_than_defaulted(
+    client, login_as, _api_curator_user
+):
+    """Saying nothing and saying "no license" are different claims.
+
+    Only the first is a default's business. An empty string is a caller
+    asserting the corpus is unlicensed, and it is refused as a malformed body
+    -- the ``data_license_nonblank`` check constraint says the same thing one
+    layer down.
+    """
+    _as_curator(client, login_as, _api_curator_user)
+    assert client.post("/api/v1/releases/policies", json=POLICY).status_code == 201
+
+    refused = client.post("/api/v1/releases", json=dict(RELEASE, data_license=""))
+    assert refused.status_code == 422, refused.text
+    assert client.get(f"/api/v1/scientific/releases/{RELEASE['tag']}").status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # The two refusals that arrive at 409, and why the status is the assertion
 # ---------------------------------------------------------------------------
 #

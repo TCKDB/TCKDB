@@ -20,8 +20,15 @@ You need:
 
 - a curator or admin API key;
 - agreement on the **data license** (the scientific corpus) — this is normally
-  *not* the code license. TCKDB's code is MIT; a curated corpus is usually
-  published under `CC-BY-4.0`. Decide deliberately;
+  *not* the code license. TCKDB's code is MIT; the corpus is published under
+  `CC-BY-4.0`, which is now the house default: omit `data_license` and
+  `code_license` from the create call and you get `CC-BY-4.0` + `MIT`. Send
+  them only if this deployment publishes under different terms, and see
+  [`LICENSE-DATA`](../../../LICENSE-DATA) for what the data license covers.
+  **The default expresses what the operator is entitled to license.** On a
+  deployment with more than one depositor, do not cut a release until the
+  license has been agreed with each depositor at deposit time — a
+  configuration default is not their consent;
 - a citation string;
 - a maintainer contact address that will still work in five years;
 - records actually in `approved` review state. This is **enforced**: a
@@ -80,8 +87,6 @@ curl -sX POST https://<host>/api/v1/releases \
     "title": "TCKDB curated thermochemistry and kinetics, July 2026",
     "curation_policy_name": "tckdb-benchmark",
     "curation_policy_version": "1.0",
-    "data_license": "CC-BY-4.0",
-    "code_license": "MIT",
     "citation_text": "TCKDB curated dataset release 2026.07.0. Pieters, C.; Grinberg Dana, A. Technion - Israel Institute of Technology, 2026.",
     "contact": "tckdb-maintainers@example.org",
     "changelog_entry": "First curated release: N species entries, M reaction entries."
@@ -90,6 +95,12 @@ curl -sX POST https://<host>/api/v1/releases \
 
 Tags are immutable and unique. Use a date-ordered scheme (`YYYY.MM.PATCH`) so
 releases sort.
+
+`data_license` and `code_license` are omitted above on purpose: the release
+comes out as `CC-BY-4.0` + `MIT` without them. Pass either one to publish
+under different terms — what you pass is stored verbatim and is what the
+manifest and every reader are told. An empty string is refused, because "I did
+not say" and "there is no license" are different claims.
 
 There is no `doi` field here. See step 6.
 

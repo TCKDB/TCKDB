@@ -84,6 +84,26 @@ def _naive_utcnow() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+#: House default for the **data** license of a release: the scientific corpus
+#: is published under CC BY 4.0, which permits any reuse and obliges the reuser
+#: to attribute. Attribution is the whole point — a dataset release is the
+#: depositor's citable credential, and a license that did not require the
+#: citation would quietly discard it. See ``LICENSE-DATA`` at the repository
+#: root for what this covers and, importantly, what it does not.
+#:
+#: The default expresses what the *operator is entitled to license*. It is not
+#: consent on a third party's behalf: before a deployment takes deposits from
+#: a second contributor, the license has to be agreed at deposit time. See the
+#: "Who may license what" section of ``LICENSE-DATA``.
+DEFAULT_DATA_LICENSE = "CC-BY-4.0"
+
+#: House default for the **code** license: MIT, matching ``LICENSE``. Kept
+#: beside the data default because the pair is the point — the program and the
+#: corpus are separate works, reused by different people for different reasons,
+#: and conflating them is how attribution gets lost.
+DEFAULT_CODE_LICENSE = "MIT"
+
+
 # ---------------------------------------------------------------------------
 # Curation policy
 # ---------------------------------------------------------------------------
@@ -148,8 +168,8 @@ def create_release(
     tag: str,
     title: str,
     curation_policy: CurationPolicy,
-    data_license: str,
-    code_license: str,
+    data_license: str = DEFAULT_DATA_LICENSE,
+    code_license: str = DEFAULT_CODE_LICENSE,
     citation_text: str,
     contact: str,
     description: str | None = None,
@@ -158,10 +178,27 @@ def create_release(
 ) -> DatasetRelease:
     """Open a new draft release.
 
+    ``data_license`` and ``code_license`` default to the house pair
+    (:data:`DEFAULT_DATA_LICENSE`, :data:`DEFAULT_CODE_LICENSE`) so that a
+    caller who does not think about licensing still cuts a release the
+    community may legally reuse and is obliged to cite. An explicit value
+    always wins: an operator publishing under different terms passes them and
+    they are stored verbatim.
+
     Deliberately has no ``doi`` parameter. A DOI is minted by depositing the
     published artifacts somewhere durable, is not retractable, and therefore
     must not be assertable at draft time; see :func:`record_doi` and
     ``backend/docs/deployment/cutting_a_dataset_release.md``.
+
+    A blank license is still refused, and deliberately not by this function:
+    the route's request model rejects an empty string, and the column's
+    ``data_license_nonblank`` / ``code_license_nonblank`` check constraints
+    reject a space-only one (only spaces — PostgreSQL's one-argument
+    ``btrim`` does not strip tabs or newlines; see
+    ``tests/services/release/test_release_licensing.py`` for that measured
+    boundary). The default answers "the caller said nothing"; it must never
+    paper over "the caller said *no license*", which is a different and much
+    louder claim.
 
     :raises ReleaseCurationError: ``tag`` is already taken.
     """

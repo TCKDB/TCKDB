@@ -535,6 +535,59 @@ roled deployment they also stop the runtime account outright; they do not stop
 a deliberate operator holding owner rights. Verify the posture with the
 `db-roles check` subcommand rather than assuming it.
 
+## 7b. Licensing: the corpus is not the code
+
+`dataset_release.data_license` and `code_license` are both required and
+non-blank, so every release has always had to name a license. What it should
+be was open until 2026-08 only because no release had been cut. It is now
+decided, and the pair is a **default in the create path**, not a value a
+curator retypes:
+
+| | Value | Where |
+|---|---|---|
+| Data — the scientific corpus | `CC-BY-4.0` | `LICENSE-DATA` at the repository root |
+| Code — the program | `MIT` | `LICENSE` at the repository root |
+
+`DEFAULT_DATA_LICENSE` / `DEFAULT_CODE_LICENSE` in
+`app/services/release/curation.py` carry the values; `create_release` and the
+`POST /api/v1/releases` request model both default to them. An explicitly
+supplied license always wins and is stored verbatim — a default that overrode
+an operator's stated terms would publish their corpus under terms they did not
+choose, which is the failure mode that looks like success. A blank is still
+refused (request model, plus the `data_license_nonblank` /
+`code_license_nonblank` check constraints), because omitting the field and
+declaring there is no license are different claims. Those constraints are
+`length(btrim(...)) > 0`, and PostgreSQL's one-argument `btrim` strips spaces
+only — a tab-only license is stored. Measured, pinned by
+`tests/services/release/test_release_licensing.py`, and not fixed here:
+every `*_nonblank` constraint in the schema shares the wording, so tightening
+it is a migration across deployed tables and its own change.
+
+CC BY 4.0 is chosen because it obliges reuse to attribute, and for TCKDB
+attribution *is* the citation of a specific dataset release — the depositor's
+citable credential. The license is snapshotted into the manifest (§5.2), so a
+reader who resolves a citation is told the terms the data was published under
+rather than the terms in force today.
+
+### The constraint the default does not satisfy
+
+**An operator may license their own deposits and nobody else's.** Applying
+`CC-BY-4.0` to a release asserts rights over everything it ships. That is
+sound while every depositor is the operator — the situation on the hosted
+instance today — and it stops being sound the moment a second party uploads.
+
+Therefore: **the license must become part of the upload contract before a
+deployment accepts deposits from a second contributor** — agreed at deposit
+time, recorded against the deposit, honoured when a release is cut. That
+mechanism is not built, and this section is not a plan for it; it is the
+statement that a release created after multi-contributor deposits, with
+nothing but a configuration default behind its `data_license`, would be making
+a claim nobody made. The same constraint is recorded from the ingestion side
+in [`ingestion_submission_model.md`](ingestion_submission_model.md) and in
+`LICENSE-DATA`.
+
+---
+
 ## 8. What is deliberately not built
 
 - **Release-scoped filtering of general product reads.** Not implemented, and

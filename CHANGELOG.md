@@ -159,6 +159,38 @@ wrapper over a contract that is itself still moving.
 
 ### Added
 
+- **The scientific data has a license: CC BY 4.0.** The code was MIT and said
+  so; nothing anywhere said what a reader may do with the *numbers*. Since
+  `dataset_release.data_license` is a required, non-blank column, that
+  unanswered question was the hard blocker on publishing anything — every
+  release must name a license, and no release had ever been cut.
+
+  `LICENSE-DATA` at the repository root is the notice: CC BY 4.0 (attribution
+  required, reuse otherwise unrestricted, and the attribution is a citation of
+  the dataset release), stated by reference to the canonical deed and legal
+  code rather than by vendoring a copy that would drift. It says what it
+  covers — deposited records, derived products, raw calculation artifacts
+  published in a release — and what it does not: the source code (MIT, see
+  `LICENSE`) and the third-party test fixtures carried in from RMG-Py and ARC,
+  which are code-adjacent test inputs under their own licenses and are
+  excluded by name.
+
+  `CC-BY-4.0` and `MIT` are now the defaults in both release-creation paths
+  (`create_release`, `POST /api/v1/releases`), so a curator cutting an
+  ordinary release does not restate the project's licensing on every request.
+  An explicitly supplied license still wins and is stored verbatim; an empty
+  string is still refused. No schema change: the column and its
+  `data_license_nonblank` constraint are unchanged.
+
+  Recorded alongside it, because it stops being moot the moment a second
+  person uploads: **an operator may license their own deposits and nobody
+  else's.** The license must become part of the upload contract *before* a
+  deployment accepts deposits from a second contributor — not retrofitted
+  afterwards. That constraint is written into `LICENSE-DATA`,
+  `backend/docs/specs/ingestion_submission_model.md`, and
+  `backend/docs/specs/dataset_release_and_profiles.md` §7b. The mechanism is
+  deliberately not built here.
+
 - **Every token TCKDB puts on the wire now has a published definition.**
   `matched_direction: "reverse"`, `under_review` beside `not_reviewed`,
   `"ts_graph_or_smiles_present": "missing"`, `spc_` beside `spe_` — each is
