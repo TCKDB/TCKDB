@@ -132,6 +132,81 @@ def test_search_by_formula_matches_charged_ion_suffix(db_session):
 
 
 # ---------------------------------------------------------------------------
+# Formula on the served record. The filter and the field are one SQL
+# expression, so a record found by formula must carry that same formula;
+# a record served with `formula: null` after being *found by* that formula
+# is the defect these cover.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("smiles", "charge", "multiplicity", "formula", "tag"),
+    [
+        ("O", 0, 1, "H2O", "SERVEH2O"),
+        ("[CH3]", 0, 2, "CH3", "SERVECH3"),
+        ("[OH-]", -1, 1, "HO-", "SERVEOHM"),
+        ("[NH4+]", 1, 1, "H4N+", "SERVENH4P"),
+    ],
+)
+def test_formula_searched_is_the_formula_served(
+    db_session, smiles, charge, multiplicity, formula, tag
+):
+    """The string a caller filtered on comes back on the record they matched."""
+    species = make_species(
+        db_session,
+        smiles=smiles,
+        charge=charge,
+        multiplicity=multiplicity,
+        inchi_key=next_inchi_key(tag),
+    )
+    make_species_entry(db_session, species)
+
+    response = search_species(db_session, SpeciesSearchRequest(formula=formula))
+
+    served = {rec.species_id: rec.formula for rec in response.records}
+    assert species.id in served, "the formula filter did not match its own species"
+    assert served[species.id] == formula
+
+
+def test_formula_is_served_when_the_search_was_not_by_formula(db_session):
+    """It is a derived field of the record, not an echo of the filter.
+
+    Searching by SMILES exercises a code path where nothing in the request
+    mentions a formula, so a record that still carries one can only have
+    got it from the species row.
+    """
+    benzene = make_species(
+        db_session, smiles="c1ccccc1", inchi_key=next_inchi_key("SERVEBENZ")
+    )
+    make_species_entry(db_session, benzene)
+
+    response = search_species(db_session, SpeciesSearchRequest(smiles="c1ccccc1"))
+
+    served = {rec.species_id: rec.formula for rec in response.records}
+    assert served[benzene.id] == "C6H6"
+
+
+def test_formula_is_null_only_when_the_smiles_will_not_parse(db_session):
+    """The one honest null: no molecule, so no formula — and no 500 either.
+
+    ``mol_from_smiles()`` returns SQL NULL rather than raising, which is why
+    the field stays ``str | None``. Reached by ``species_ref`` because the
+    formula filter itself would exclude such a row.
+    """
+    broken = make_species(
+        db_session, smiles="not-a-smiles", inchi_key=next_inchi_key("SERVEBROKEN")
+    )
+    make_species_entry(db_session, broken)
+
+    response = search_species(
+        db_session, SpeciesSearchRequest(species_ref=broken.public_ref)
+    )
+
+    served = {rec.species_id: rec.formula for rec in response.records}
+    assert served[broken.id] is None
+
+
+# ---------------------------------------------------------------------------
 # InChI filter — no stored/derivable column, so every supplied InChI must
 # fail closed rather than being ignored, including alongside supported filters.
 # ---------------------------------------------------------------------------

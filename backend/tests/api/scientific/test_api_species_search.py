@@ -175,3 +175,27 @@ def test_get_offset_beyond_the_shipped_deep_paging_cap_is_rejected(
     resp = client.get(f"{base}{settings.public_max_offset + 1}")
     assert resp.status_code == 422, resp.text
     assert resp.json()["code"] == "offset_too_large"
+
+
+def test_get_by_formula_serves_that_formula_on_the_wire(client, db_session):
+    """The defect this closes was visible only on the wire.
+
+    A record found by ``formula=CH3`` serialized as ``"formula": null`` —
+    the field was declared on the response model and never assigned.
+    """
+    methyl = make_species(
+        db_session,
+        smiles="[CH3]",
+        multiplicity=2,
+        inchi_key=next_inchi_key("APIFORMCH3"),
+    )
+    make_species_entry(db_session, methyl)
+
+    resp = client.get("/api/v1/scientific/species/search?formula=CH3")
+
+    assert resp.status_code == 200, resp.text
+    matching = [
+        r for r in resp.json()["records"] if r["species_ref"] == methyl.public_ref
+    ]
+    assert len(matching) == 1, resp.text
+    assert matching[0]["formula"] == "CH3"
