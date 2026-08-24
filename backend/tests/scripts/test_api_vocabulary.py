@@ -245,6 +245,29 @@ def test_the_owner_confusions_are_answered() -> None:
     )
 
 
+def test_the_reaction_family_gap_note_states_facts() -> None:
+    """The one place the document names data it does not document.
+
+    The gap note says families are RMG identifiers, gives three of them
+    as examples, and states how many are seeded. Each of those is a
+    claim about the seed list, and a note whose examples had been
+    renamed — or whose count was out by fifty — would be the confident
+    wrong answer the whole document exists to avoid. So the count is
+    interpolated by the generator and the names are checked here.
+    """
+    from app.schemas.reaction_family import CANONICAL_REACTION_FAMILIES
+
+    body = DOCUMENT.read_text()
+    for name in ("H_Abstraction", "Disproportionation", "intra_H_migration"):
+        assert name in body, f"{name} is no longer named in the gap note."
+        assert name in CANONICAL_REACTION_FAMILIES, (
+            f"The gap note names {name}, which is not a seeded reaction family."
+        )
+    assert f"There are {len(CANONICAL_REACTION_FAMILIES)} of them seeded" in body, (
+        "The seeded-family count in the gap note does not match the seed list."
+    )
+
+
 def test_client_facing_codes_are_all_listed() -> None:
     """Every code a caller can receive must appear, or the table misleads.
 

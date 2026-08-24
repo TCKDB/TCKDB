@@ -44,11 +44,11 @@ Three things are deliberately absent:
   second copy to keep in step.
 - **Reaction family names.** A reaction's `family` is an RMG identifier —
   `H_Abstraction`, `Disproportionation`, `intra_H_migration` — carried
-  verbatim. There are 125 of them seeded and the `reaction_family` table holds
-  only an id, that name and a timestamp: **no display name and no description
-  column exist**, so "Hydrogen Abstraction" is not a fact this database holds
-  and inventing 125 of them here would be fiction with a generator's
-  credibility. Recorded as a gap; giving families human-readable names is a
+  verbatim. There are 125 of them seeded and the `reaction_family`
+  table holds only an id, that name and a timestamp: **no display name and no
+  description column exist**, so "Hydrogen Abstraction" is not a fact this
+  database holds and inventing 125 of them here would be fiction
+  with a generator's credibility. Recorded as a gap; giving families human-readable names is a
   schema decision, not a documentation one.
 - **A definition per refusal code.** The code catalogue deliberately carries no
   prose — the refusal already has a sentence, the one you receive in `detail`,
