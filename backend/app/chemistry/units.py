@@ -1,7 +1,7 @@
 """Unit conversion utilities for scientific quantities."""
 
 from app.api.error_contract import CodedValueError
-from app.db.models.common import ActivationEnergyUnits, ArrheniusAUnits
+from app.db.models.common import ActivationEnergyUnits, ArrheniusAUnits, EnergyUnit
 from app.scientific_checks import (
     CheckTier,
     CodeChannel,
@@ -38,6 +38,58 @@ def convert_ea_to_kj_mol(
     :returns: Activation energy in kJ/mol.
     """
     return value * _EA_TO_KJ_MOL[units]
+
+
+# ---------------------------------------------------------------------------
+# Molar energy ↔ hartree
+# ---------------------------------------------------------------------------
+
+#: Hartree → kJ/mol. Same constant as
+#: ``app/importers/cccbdb/normalizers/units.py`` and
+#: ``app/services/scientific_read/ml_dataset.py``; kept numerically
+#: identical to those on purpose, so a value converted on one surface and
+#: read back on another does not disagree in the eleventh digit.
+HARTREE_TO_KJ_MOL = 2625.4996394798254
+
+#: kJ/mol per unit of each :class:`~app.db.models.common.EnergyUnit`.
+#: Written out member by member rather than derived, so adding a member to
+#: the enum without deciding its factor produces a ``None`` conversion (see
+#: :func:`convert_energy_to_hartree`) instead of a wrong number.
+_ENERGY_TO_KJ_MOL: dict[EnergyUnit, float] = {
+    EnergyUnit.hartree: HARTREE_TO_KJ_MOL,
+    EnergyUnit.kj_mol: 1.0,
+    EnergyUnit.kcal_mol: _CAL_TO_J,
+}
+
+
+def convert_energy_to_hartree(
+    value: float,
+    units: EnergyUnit,
+) -> float | None:
+    """Convert a molar energy to hartree.
+
+    Used by the read layer to put an applied energy correction into the
+    same unit as the ``electronic_energy_hartree`` it is an addend to, so
+    a consumer never has to carry a conversion factor of its own to add
+    the two. The verbatim stored value and its stored unit travel beside
+    the converted one on the wire; nothing is converted in place and
+    nothing is converted silently.
+
+    ``EnergyUnit.hartree`` round-trips through the kJ/mol pivot rather
+    than short-circuiting, so every unit is converted by exactly one code
+    path. The pivot is exact for hartree by construction (``x * k / k``),
+    which the unit test pins.
+
+    :param value: The energy in *units*.
+    :param units: The unit *value* is expressed in.
+    :returns: The energy in hartree, or ``None`` when *units* is a member
+        this module has no factor for — an unconvertible unit is reported
+        as "not converted", never as zero.
+    """
+    factor = _ENERGY_TO_KJ_MOL.get(units)
+    if factor is None:
+        return None
+    return value * factor / HARTREE_TO_KJ_MOL
 
 
 # ---------------------------------------------------------------------------

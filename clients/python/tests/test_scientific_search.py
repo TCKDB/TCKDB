@@ -40,6 +40,7 @@ def test_calculation_detail_and_search_expose_execution_environment_section():
         "has_scf_stability": False, "has_wavefunction_diagnostic": False,
         "has_spin_diagnostic": False, "has_freq_modes": False, "has_scan": False,
         "has_irc": False, "has_path_search": False, "has_execution_environment": True,
+        "has_energy_corrections": False,
     }
     environment = {
         "schema_version": "tckdb.execution-environment.v1", "software_release": {"name": "Gaussian", "version": "16"},

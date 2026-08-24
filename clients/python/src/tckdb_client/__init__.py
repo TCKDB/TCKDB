@@ -40,6 +40,8 @@ from tckdb_client.retry import (
     RetryPolicy,
 )
 from tckdb_client.scientific_types import (
+    AppliedEnergyCorrection,
+    AppliedEnergyCorrectionComponent,
     ArtifactRecord,
     ArtifactSearchResponse,
     CalculationAvailableSections,
@@ -126,6 +128,8 @@ __all__ = [
     "DEFAULT_NON_RETRYABLE_CODES",
     "DEFAULT_RETRY_STATUS_CODES",
     "RetryPolicy",
+    "AppliedEnergyCorrection",
+    "AppliedEnergyCorrectionComponent",
     "ArtifactRecord",
     "ArtifactSearchResponse",
     "CalculationAvailableSections",

@@ -742,6 +742,39 @@
         "title": "AppliedEnergyCorrectionComponentRead",
         "type": "object"
       },
+      "AppliedEnergyCorrectionComponentSummary": {
+        "description": "One term of an applied correction's breakdown.\n\nReads ``applied_energy_correction_component`` verbatim. It answers\n*why* the total is what it is: ``\"6 x C-H at -0.2347 contributes\n-1.408\"`` is one of these rows.\n\n``parameter_value`` is the scheme parameter that was looked up and\n``contribution_value`` is what that lookup contributed to the total,\nboth in the parent correction's ``applied_value_unit``. They are\n**not** required to satisfy ``contribution = multiplicity x\nparameter``: for an atom-energy scheme the depositor's contribution\nalso carries the atom's enthalpy-of-formation reference, so the two\nnumbers legitimately differ by that reference. Both are served as\nstored and neither is recomputed from the other.",
+        "properties": {
+          "component_kind": {
+            "$ref": "#/components/schemas/AppliedCorrectionComponentKind-Output"
+          },
+          "contribution_value": {
+            "title": "Contribution Value",
+            "type": "number"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "multiplicity": {
+            "title": "Multiplicity",
+            "type": "integer"
+          },
+          "parameter_value": {
+            "title": "Parameter Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "component_kind",
+          "key",
+          "multiplicity",
+          "parameter_value",
+          "contribution_value"
+        ],
+        "title": "AppliedEnergyCorrectionComponentSummary",
+        "type": "object"
+      },
       "AppliedEnergyCorrectionInBundle": {
         "additionalProperties": false,
         "description": "Same shape as the primitive applied-correction payload but with\nbundle-level local-key references.\n\nThe base class's ``source_calculation_key`` already points at a local\nstring key; in the bundle context, that key resolves against the\nbundle's global calc-key namespace, not against an inline calcs list\nin the same upload.",
@@ -974,6 +1007,177 @@
           "value_unit"
         ],
         "title": "AppliedEnergyCorrectionRead",
+        "type": "object"
+      },
+      "AppliedEnergyCorrectionSummary": {
+        "description": "One ``applied_energy_correction`` row, projected for a calculation.\n\n**The energy this sits beside is the uncorrected one.** Every energy\nthe calculation surface serves —\n:attr:`CalculationSPResultSummary.electronic_energy_hartree`,\n:attr:`CalculationOptResultSummary.final_energy_hartree`, the scan and\nIRC point energies — is the value the electronic-structure program\nprinted, stored verbatim on deposit (``services/sp_energy_extraction.py``\nonly ever *fills* a missing one from the log; nothing adds a correction\nto it). A correction is therefore an **addend a consumer applies**, not\nan adjustment already folded in. Whether to apply it is the consumer's\ncall and this projection does not make it: it reports what was applied\nto the record, in what role, and by which scheme.\n\n**Units.** ``applied_value`` and ``applied_value_unit`` are the stored\npair, reproduced exactly. The unit genuinely varies by scheme in\ndeposited data — a Petersson BAC total arrives in kcal/mol and an\natom-energy total in hartree, in the same database — so a single\nfixed-unit column would have to convert one of them on the way in, and\na bare ``applied_value`` with no unit beside it would be the trap the\nunit policy names. :attr:`applied_value_hartree` is the derived\nconvenience: the same quantity in the unit of the energy on this very\nrecord, so ``electronic_energy_hartree + applied_value_hartree`` is a\nsum a consumer can take without carrying a conversion factor. It is\nderived, not stored, and it is ``None`` — never ``0.0`` — for a unit\nthis build has no factor for.",
+        "properties": {
+          "application_role": {
+            "$ref": "#/components/schemas/EnergyCorrectionApplicationRole-Output"
+          },
+          "applied_energy_correction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Energy Correction Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "applied_value": {
+            "title": "Applied Value",
+            "type": "number"
+          },
+          "applied_value_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Value Hartree"
+          },
+          "applied_value_unit": {
+            "$ref": "#/components/schemas/EnergyUnit"
+          },
+          "component_count": {
+            "title": "Component Count",
+            "type": "integer"
+          },
+          "components": {
+            "items": {
+              "$ref": "#/components/schemas/AppliedEnergyCorrectionComponentSummary"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "components_truncated": {
+            "default": false,
+            "title": "Components Truncated",
+            "type": "boolean"
+          },
+          "energy_correction_scheme_kind": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EnergyCorrectionSchemeKind"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "energy_correction_scheme_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Correction Scheme Name"
+          },
+          "energy_correction_scheme_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Correction Scheme Ref"
+          },
+          "frequency_scale_factor_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frequency Scale Factor Ref"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "target_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Endpoint"
+          },
+          "target_record_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Record Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "target_record_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Record Ref"
+          },
+          "target_record_type": {
+            "enum": [
+              "species_entry",
+              "reaction_entry",
+              "transition_state_entry"
+            ],
+            "title": "Target Record Type",
+            "type": "string"
+          },
+          "temperature_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature K"
+          }
+        },
+        "required": [
+          "application_role",
+          "applied_value",
+          "applied_value_unit",
+          "target_record_type",
+          "component_count"
+        ],
+        "title": "AppliedEnergyCorrectionSummary",
         "type": "object"
       },
       "AppliedEnergyCorrectionUploadPayload": {
@@ -1635,6 +1839,10 @@
             "title": "Has Dependencies",
             "type": "boolean"
           },
+          "has_energy_corrections": {
+            "title": "Has Energy Corrections",
+            "type": "boolean"
+          },
           "has_execution_environment": {
             "title": "Has Execution Environment",
             "type": "boolean"
@@ -1709,7 +1917,8 @@
           "has_scan",
           "has_irc",
           "has_path_search",
-          "has_execution_environment"
+          "has_execution_environment",
+          "has_energy_corrections"
         ],
         "title": "AvailableCalculationSections",
         "type": "object"
@@ -14199,8 +14408,56 @@
         "type": "object"
       },
       "EnergyCorrectionSchemeUsageSummary": {
-        "description": "One inverse-link to a record that uses this scheme.\n\nCurrently sourced from ``applied_energy_correction`` rows whose\n``scheme_id`` matches the scheme. The pointer resolves to a\nspecies/reaction/transition-state-entry scientific record endpoint.",
+        "description": "One application of this scheme, and what it came to.\n\nSourced from ``applied_energy_correction`` rows whose ``scheme_id``\nmatches the scheme. ``record_*`` / ``endpoint`` point at the\nspecies/reaction/transition-state entry the correction was applied to.\n\n**The magnitude travels with the pointer.** A scheme's parameters are\nthe recipe; ``applied_value`` is what that recipe evaluated to for this\nrecord. Serving the first without the second leaves a reader able to\nsee a 45-entry bond-additivity table and see that it was used, and\nnever able to see the number it produced.\n\n``applied_value`` and ``applied_value_unit`` are the stored pair,\nreproduced exactly — the unit varies by scheme in real data\n(a Petersson BAC total in kcal/mol, an atom-energy total in hartree),\nso it is carried explicitly rather than assumed from\n``EnergyCorrectionSchemeCoreBlock.units``. ``applied_value_hartree`` is\nthe same quantity converted once, named for its unit, and ``None``\nrather than ``0.0`` for a unit this build cannot convert.\n\n``source_calculation_ref`` is **which energy** the correction was\ncomputed against. Without it the applied value is a number attached to\na species with no statement of what it is an addend to; with it, the\nreader can fetch that calculation and find the uncorrected energy\nbeside it.",
         "properties": {
+          "application_role": {
+            "$ref": "#/components/schemas/EnergyCorrectionApplicationRole-Output"
+          },
+          "applied_energy_correction_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Energy Correction Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "applied_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Note"
+          },
+          "applied_value": {
+            "title": "Applied Value",
+            "type": "number"
+          },
+          "applied_value_hartree": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Value Hartree"
+          },
+          "applied_value_unit": {
+            "$ref": "#/components/schemas/EnergyUnit"
+          },
+          "component_count": {
+            "title": "Component Count",
+            "type": "integer"
+          },
           "endpoint": {
             "title": "Endpoint",
             "type": "string"
@@ -14224,12 +14481,49 @@
           "record_type": {
             "title": "Record Type",
             "type": "string"
+          },
+          "source_calculation_endpoint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Endpoint"
+          },
+          "source_calculation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Calculation Ref"
+          },
+          "temperature_k": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temperature K"
           }
         },
         "required": [
           "record_type",
           "record_ref",
-          "endpoint"
+          "endpoint",
+          "application_role",
+          "applied_value",
+          "applied_value_unit",
+          "component_count"
         ],
         "title": "EnergyCorrectionSchemeUsageSummary",
         "type": "object"
@@ -31792,6 +32086,21 @@
             ],
             "title": "Dependencies",
             "x-tckdb-include-gated": "dependencies"
+          },
+          "energy_corrections": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/AppliedEnergyCorrectionSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Energy Corrections",
+            "x-tckdb-include-gated": "energy_corrections"
           },
           "execution_environment": {
             "anyOf": [

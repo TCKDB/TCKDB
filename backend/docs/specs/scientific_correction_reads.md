@@ -153,6 +153,12 @@ ScientificEnergyCorrectionSchemeRecord
   available_sections          (has_corrections, has_used_by, has_literature)
   corrections                 (only with include=corrections)
   used_by                     (only with include=used_by)
+    record_type / record_ref / endpoint
+    application_role
+    applied_value / applied_value_unit / applied_value_hartree
+    temperature_k / applied_note
+    source_calculation_ref / source_calculation_endpoint
+    component_count
 ```
 
 ### Include behavior (ECS)
@@ -160,10 +166,40 @@ ScientificEnergyCorrectionSchemeRecord
 | Token | Default | Effect |
 |-------|---------|--------|
 | `corrections` | – | Unifies the three child tables into a flat list of `EnergyCorrectionTermSummary` rows. `correction_kind ∈ {atom, bond, component}`; for `component`, `component_kind` carries the Melius sub-type. |
-| `used_by` | – | Bounded inverse-link list (capped 50): `applied_energy_correction` rows with `scheme_id = self`, resolved to their target species/reaction/transition-state-entry public ref. |
+| `used_by` | – | Bounded inverse-link list (capped 50): `applied_energy_correction` rows with `scheme_id = self`, resolved to their target species/reaction/transition-state-entry public ref, **and carrying the applied magnitude** — see below. |
 | `literature` | always populated when available | No-op affordance for explicit callers. |
 | `internal_ids` | – | Restores integer IDs subject to `settings.allow_public_internal_ids`. |
 | `all` | – | Expands to `corrections, used_by, literature`; **excludes** `internal_ids`. |
+
+### `used_by` carries the result, not only the pointer
+
+A scheme's `corrections` are the *recipe* — a Petersson BAC's 45 per-bond
+parameters, an atom-energy scheme's per-element values. `used_by` is where
+the recipe meets a record, and each entry carries what the recipe
+evaluated to:
+
+| Field | Meaning |
+|---|---|
+| `record_type` / `record_ref` / `endpoint` | The species / reaction / transition-state entry the correction was applied to. |
+| `application_role` | Which term of the energy expression this is (`bac_total`, `aec_total`, `zpe`, …). Reported, not interpreted. |
+| `applied_value` + `applied_value_unit` | The stored magnitude and its stored unit, verbatim. |
+| `applied_value_hartree` | The same quantity in hartree. Derived, named for its unit, `null` (never `0.0`) for a unit the server cannot convert. |
+| `temperature_k` | Set on temperature-dependent corrections; `null` otherwise. |
+| `applied_note` | The depositor's note on the application (distinct from the scheme's own `note`). |
+| `source_calculation_ref` / `source_calculation_endpoint` | **Which energy** the correction was computed against. `null` where the depositor recorded none. |
+| `component_count` | How many breakdown rows the application has. The breakdown itself is served on the calculation surface, reached via `source_calculation_ref`. |
+
+**The unit is carried per row and never assumed from
+`energy_correction_scheme.units`.** Real deposits mix them: a Petersson
+BAC total arrives in kcal/mol and an atom-energy total in hartree, against
+the same single-point energy. Nothing is converted in place.
+
+**The breakdown is deliberately not here.** `used_by` is an index of up to
+50 applications; a per-bond table on each entry would turn an index into a
+payload. `component_count` says how many rows exist and
+`source_calculation_ref` is the route to them —
+`/scientific/calculations/{ref}?include=energy_corrections` serves the
+totals *and* their components for one calculation.
 
 ### Search filters (ECS)
 

@@ -29,6 +29,7 @@ from app.db.models.calculation import (
     CalculationSPResult,
 )
 from app.db.models.common import (
+    AppliedCorrectionComponentKind,
     AppUserRole,
     ArrheniusAUnits,
     ArtifactKind,
@@ -65,6 +66,7 @@ from app.db.models.common import (
 )
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
+    AppliedEnergyCorrectionComponent,
     EnergyCorrectionScheme,
     EnergyCorrectionSchemeAtomParam,
     EnergyCorrectionSchemeBondParam,
@@ -1959,11 +1961,19 @@ def make_applied_energy_correction(
     source_calculation=None,
     source_conformer_observation=None,
     temperature_k: float | None = None,
+    note: str | None = None,
+    components: (
+        list[tuple[AppliedCorrectionComponentKind, str, int, float, float]] | None
+    ) = None,
 ) -> AppliedEnergyCorrection:
     """Create an AppliedEnergyCorrection row with the requested provenance.
 
     Exactly one of ``target_*_entry`` and exactly one of ``scheme`` /
     ``frequency_scale_factor`` must be supplied (db CHECK enforces this).
+
+    ``components`` takes ``(component_kind, key, multiplicity,
+    parameter_value, contribution_value)`` tuples and attaches one
+    ``applied_energy_correction_component`` row per tuple.
     """
     row = AppliedEnergyCorrection(
         target_species_entry_id=(
@@ -1995,7 +2005,23 @@ def make_applied_energy_correction(
             else None
         ),
         temperature_k=temperature_k,
+        note=note,
     )
     session.add(row)
     session.flush()
+    for kind, key, multiplicity, parameter_value, contribution_value in (
+        components or []
+    ):
+        session.add(
+            AppliedEnergyCorrectionComponent(
+                applied_correction_id=row.id,
+                component_kind=kind,
+                key=key,
+                multiplicity=multiplicity,
+                parameter_value=parameter_value,
+                contribution_value=contribution_value,
+            )
+        )
+    if components:
+        session.flush()
     return row

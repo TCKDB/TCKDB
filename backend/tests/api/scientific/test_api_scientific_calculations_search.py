@@ -2665,6 +2665,7 @@ def test_search_include_path_search_does_not_expose_point_arrays(
 
 _ALL_EXPANSION_TOKENS = {
     "results",
+    "energy_corrections",
     "dependencies",
     "artifacts",
     "input_geometries",

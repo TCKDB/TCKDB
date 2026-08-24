@@ -287,6 +287,11 @@ class CalculationAvailableSections(TypedDict):
     has_irc: bool
     has_path_search: bool
     has_execution_environment: bool
+    #: Whether an applied energy correction cites this calculation as the
+    #: source of the energy it corrects. The energies the record serves are
+    #: uncorrected, so this is how a caller learns an addend exists without
+    #: asking for ``include=energy_corrections``.
+    has_energy_corrections: bool
 
 
 class ExecutionEnvironmentContentReference(TypedDict):
@@ -372,6 +377,51 @@ class ExecutionEnvironmentManifestRecord(TypedDict):
     environment_ref: Required[str]
 
 
+class AppliedEnergyCorrectionComponent(TypedDict):
+    """One term of an applied energy correction's breakdown."""
+
+    component_kind: str
+    key: str
+    multiplicity: int
+    parameter_value: float
+    contribution_value: float
+
+
+class AppliedEnergyCorrection(TypedDict, total=False):
+    """One applied energy correction, as served beside a calculation.
+
+    The energy the calculation record serves is the **uncorrected** one,
+    so ``applied_value`` is an addend the consumer applies, not an
+    adjustment already folded in.
+
+    ``applied_value`` / ``applied_value_unit`` are the stored pair — the
+    unit genuinely varies by scheme (kcal/mol for a Petersson BAC,
+    hartree for an atom-energy total), so it is never assumed.
+    ``applied_value_hartree`` is the same quantity in the unit of
+    ``electronic_energy_hartree``, so the two can be summed directly; it
+    is ``None``, never ``0.0``, when the server could not convert.
+    """
+
+    applied_energy_correction_id: NotRequired[int | None]
+    application_role: Required[str]
+    applied_value: Required[float]
+    applied_value_unit: Required[str]
+    applied_value_hartree: float | None
+    temperature_k: float | None
+    note: str | None
+    target_record_type: Required[str]
+    target_record_ref: str | None
+    target_record_id: NotRequired[int | None]
+    target_endpoint: str | None
+    energy_correction_scheme_ref: str | None
+    energy_correction_scheme_name: str | None
+    energy_correction_scheme_kind: str | None
+    frequency_scale_factor_ref: str | None
+    component_count: Required[int]
+    components_truncated: bool
+    components: list[AppliedEnergyCorrectionComponent]
+
+
 class CalculationRecord(TypedDict, total=False):
     """Scientific calculation detail/search record."""
 
@@ -380,6 +430,9 @@ class CalculationRecord(TypedDict, total=False):
     provenance: Required[JSONDict]
     available_sections: Required[CalculationAvailableSections]
     execution_environment: ExecutionEnvironmentManifestRecord | None
+    #: ``include=energy_corrections``. Absent when the caller did not ask;
+    #: an empty list when they did and the calculation has none.
+    energy_corrections: list[AppliedEnergyCorrection] | None
 
 
 class CalculationDetailResponse(TypedDict):
@@ -917,6 +970,8 @@ __all__ = [
     "AnalyticsRecord",
     "AnalyticsRequestEcho",
     "AnalyticsResponse",
+    "AppliedEnergyCorrection",
+    "AppliedEnergyCorrectionComponent",
     "ArtifactRecord",
     "ArtifactSearchResponse",
     "CalculationAnalyticsRecord",

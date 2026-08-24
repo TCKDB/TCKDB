@@ -19,7 +19,11 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-from app.db.models.common import EnergyCorrectionSchemeKind, EnergyUnit
+from app.db.models.common import (
+    EnergyCorrectionApplicationRole,
+    EnergyCorrectionSchemeKind,
+    EnergyUnit,
+)
 from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     LiteratureSummary,
@@ -84,17 +88,64 @@ class EnergyCorrectionTermSummary(BaseModel):
 
 
 class EnergyCorrectionSchemeUsageSummary(BaseModel):
-    """One inverse-link to a record that uses this scheme.
+    """One application of this scheme, and what it came to.
 
-    Currently sourced from ``applied_energy_correction`` rows whose
-    ``scheme_id`` matches the scheme. The pointer resolves to a
-    species/reaction/transition-state-entry scientific record endpoint.
+    Sourced from ``applied_energy_correction`` rows whose ``scheme_id``
+    matches the scheme. ``record_*`` / ``endpoint`` point at the
+    species/reaction/transition-state entry the correction was applied to.
+
+    **The magnitude travels with the pointer.** A scheme's parameters are
+    the recipe; ``applied_value`` is what that recipe evaluated to for this
+    record. Serving the first without the second leaves a reader able to
+    see a 45-entry bond-additivity table and see that it was used, and
+    never able to see the number it produced.
+
+    ``applied_value`` and ``applied_value_unit`` are the stored pair,
+    reproduced exactly — the unit varies by scheme in real data
+    (a Petersson BAC total in kcal/mol, an atom-energy total in hartree),
+    so it is carried explicitly rather than assumed from
+    ``EnergyCorrectionSchemeCoreBlock.units``. ``applied_value_hartree`` is
+    the same quantity converted once, named for its unit, and ``None``
+    rather than ``0.0`` for a unit this build cannot convert.
+
+    ``source_calculation_ref`` is **which energy** the correction was
+    computed against. Without it the applied value is a number attached to
+    a species with no statement of what it is an addend to; with it, the
+    reader can fetch that calculation and find the uncorrected energy
+    beside it.
     """
 
     record_type: str
     record_ref: str
     record_id: int | None = None
     endpoint: str
+
+    #: Stripped unless ``include=internal_ids`` and the deployment allows it.
+    applied_energy_correction_id: int | None = None
+
+    #: Which term of the energy expression this correction is. Reported,
+    #: not interpreted.
+    application_role: EnergyCorrectionApplicationRole
+
+    applied_value: float
+    applied_value_unit: EnergyUnit
+    applied_value_hartree: float | None = None
+
+    temperature_k: float | None = None
+    applied_note: str | None = None
+
+    #: The calculation whose energy this correction applies to, when the
+    #: depositor recorded one. ``None`` where they did not.
+    source_calculation_ref: str | None = None
+    source_calculation_endpoint: str | None = None
+
+    #: How many breakdown rows this application has. The breakdown itself
+    #: is served on the calculation surface
+    #: (``/scientific/calculations/{ref}?include=energy_corrections``),
+    #: reached via ``source_calculation_ref``: ``used_by`` is a usage index
+    #: of up to 50 entries and a per-bond table on each would make an index
+    #: into a payload.
+    component_count: int
 
 
 class EnergyCorrectionSchemeEvidenceSummary(BaseModel):

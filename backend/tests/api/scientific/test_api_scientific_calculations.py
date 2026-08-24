@@ -854,6 +854,7 @@ def test_available_sections_all_false_for_bare_calculation(
         "has_irc": False,
         "has_path_search": False,
         "has_execution_environment": False,
+        "has_energy_corrections": False,
     }
 
 
@@ -4292,6 +4293,7 @@ def test_detail_include_scan_irc_path_search_combined(client, db_session):
 # without updating this list.
 _ALL_EXPANSION_TOKENS = {
     "results",
+    "energy_corrections",
     "dependencies",
     "artifacts",
     "input_geometries",

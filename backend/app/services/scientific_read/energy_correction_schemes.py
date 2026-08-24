@@ -14,12 +14,15 @@ See ``backend/docs/specs/scientific_correction_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import not_found
+from app.chemistry.units import convert_energy_to_hartree
+from app.db.models.calculation import Calculation
 from app.db.models.energy_correction import (
     AppliedEnergyCorrection,
+    AppliedEnergyCorrectionComponent,
     EnergyCorrectionScheme,
     EnergyCorrectionSchemeAtomParam,
     EnergyCorrectionSchemeBondParam,
@@ -285,20 +288,55 @@ def _build_corrections(
 def _build_used_by(
     session: Session, ecs_id: int
 ) -> list[EnergyCorrectionSchemeUsageSummary]:
+    """Project this scheme's applications — pointer *and* applied value.
+
+    The value is read off the same ``applied_energy_correction`` row the
+    pointer comes from, so no extra query buys it. It is served as stored;
+    the one derived field is the hartree projection, named for its unit.
+    """
     rows = session.execute(
         select(
             AppliedEnergyCorrection.id,
             AppliedEnergyCorrection.target_species_entry_id,
             AppliedEnergyCorrection.target_reaction_entry_id,
             AppliedEnergyCorrection.target_transition_state_entry_id,
+            AppliedEnergyCorrection.application_role,
+            AppliedEnergyCorrection.value,
+            AppliedEnergyCorrection.value_unit,
+            AppliedEnergyCorrection.temperature_k,
+            AppliedEnergyCorrection.note,
+            Calculation.public_ref.label("source_calculation_ref"),
+        )
+        .select_from(AppliedEnergyCorrection)
+        .outerjoin(
+            Calculation,
+            Calculation.id == AppliedEnergyCorrection.source_calculation_id,
         )
         .where(AppliedEnergyCorrection.scheme_id == ecs_id)
         .order_by(AppliedEnergyCorrection.id.asc())
         .limit(_USAGE_LIMIT)
     ).all()
+    if not rows:
+        return []
+
     from app.db.models.reaction import ReactionEntry
     from app.db.models.species import SpeciesEntry
     from app.db.models.transition_state import TransitionStateEntry
+
+    component_counts = dict(
+        session.execute(
+            select(
+                AppliedEnergyCorrectionComponent.applied_correction_id,
+                func.count(),
+            )
+            .where(
+                AppliedEnergyCorrectionComponent.applied_correction_id.in_(
+                    [row.id for row in rows]
+                )
+            )
+            .group_by(AppliedEnergyCorrectionComponent.applied_correction_id)
+        ).all()
+    )
 
     mapping = {
         "species_entry": (SpeciesEntry, "species-entries"),
@@ -327,12 +365,29 @@ def _build_used_by(
         )
         if ref is None:
             continue
+        calc_ref = row.source_calculation_ref
         out.append(
             EnergyCorrectionSchemeUsageSummary(
                 record_type=kind,
                 record_ref=ref,
                 record_id=target_id,
                 endpoint=f"/api/v1/scientific/{segment}/{ref}",
+                applied_energy_correction_id=row.id,
+                application_role=row.application_role,
+                applied_value=row.value,
+                applied_value_unit=row.value_unit,
+                applied_value_hartree=convert_energy_to_hartree(
+                    row.value, row.value_unit
+                ),
+                temperature_k=row.temperature_k,
+                applied_note=row.note,
+                source_calculation_ref=calc_ref,
+                source_calculation_endpoint=(
+                    f"/api/v1/scientific/calculations/{calc_ref}"
+                    if calc_ref is not None
+                    else None
+                ),
+                component_count=int(component_counts.get(row.id, 0)),
             )
         )
     return out

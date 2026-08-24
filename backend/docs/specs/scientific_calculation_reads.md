@@ -48,6 +48,7 @@ Heavy include tokens land one at a time. Current state:
 | Include token | Status | Notes |
 |---|---|---|
 | `results` | implemented | Primary result summary only (per-type SP/Opt/Freq/Scan/IRC/PathSearch sub-blocks; no point or mode arrays). |
+| `energy_corrections` | implemented | Every `applied_energy_correction` row citing this calculation as `source_calculation_id`, with the applied magnitude, its stored unit, a hartree projection, the scheme / frequency-scale-factor provenance pointer, the target entry, and the per-component breakdown. See §4.5.2. |
 | `dependencies` | implemented | Direct parent/child edges with `direction` tag relative to the requested calc. |
 | `artifacts` | implemented | Metadata only (`kind`, `uri`, `filename`, `sha256`, `bytes`, `created_at`); no body bytes; no presigned URL. `artifact_ref` is `null` until `calculation_artifact` grows a `public_ref` column. |
 | `input_geometries` | implemented | Links only (`geometry_ref`, `input_order`, `natoms`, `geom_hash`); no XYZ inline — fetch via `/scientific/geometries/{geometry_ref}`. |
@@ -306,6 +307,7 @@ Centralized in `app/services/scientific_read/calculations.py`:
 ```python
 _LEGAL_INCLUDE_TOKENS = {
     "results",
+    "energy_corrections",
     "dependencies",
     "parameters",
     "constraints",
@@ -337,6 +339,7 @@ page a caller reached with `include=all`. Unknown tokens → 422
 | Include | Adds field(s) | Backed by |
 |---|---|---|
 | `results` | `results: CalculationResultSummary` (one of `sp\|opt\|freq\|scan\|irc\|path_search`). The `freq` block carries ADR 0012's judgement alongside `n_imag`, not behind an opt-in: `imaginary_mode_tau_cm1`, `imaginary_mode_tau_basis`, `reaction_coordinate_mode_index`, `imaginary_mode_structural_flag` and the derived `n_imag_at_or_above_tau`. See §4.5.1. | `calc_*_result` tables |
+| `energy_corrections` | `energy_corrections: list[AppliedEnergyCorrectionSummary]`. See §4.5.2. | `applied_energy_correction`, `applied_energy_correction_component` |
 | `dependencies` | `dependencies: list[CalculationDependencySummary]` (parent + child links with role + ref) | `calculation_dependency` |
 | `parameters` | `parameters: list[CalculationParameterSummary]` (raw + canonical) | `calculation_parameter` |
 | `constraints` | `constraints: list[CalculationConstraintSummary]` | `calculation_constraint` |
@@ -398,6 +401,77 @@ aggregate on the same `SELECT` rather than a second round trip — this
 builder runs once per record, so a second round trip here is multiplied by
 the page size. Pinned by
 `tests/services/scientific_read/test_record_builder_statement_cost.py::test_the_adr_0012_fields_cost_no_extra_statement_per_record`.
+
+#### 4.5.2 `energy_corrections` — the addend beside the energy it applies to
+
+**The energies this surface serves are uncorrected.**
+`results.sp.electronic_energy_hartree`,
+`results.opt.final_energy_hartree` and the scan / IRC point energies are
+what the electronic-structure program printed, stored verbatim on deposit;
+`services/sp_energy_extraction.py` only ever *fills* a missing one from the
+log, and nothing anywhere adds a correction to it. An applied energy
+correction is therefore an **addend a consumer applies**, never an
+adjustment already folded in. This projection reports what was applied and
+does not decide whether to apply it.
+
+Each entry carries:
+
+| Field | Meaning |
+|---|---|
+| `application_role` | Which term of the energy expression this is (`bac_total`, `aec_total`, `zpe`, `thermal_correction_enthalpy`, …). Reported, not interpreted. |
+| `applied_value` + `applied_value_unit` | The stored magnitude and its stored unit, verbatim. |
+| `applied_value_hartree` | The same quantity in hartree — the unit of the energy on this very record, so the two can be summed directly. Derived, named for its unit, and `null` (never `0.0`) for a unit this build cannot convert. |
+| `temperature_k` | Set on temperature-dependent corrections; `null` otherwise. |
+| `note` | The depositor's note on the application. |
+| `target_record_type` / `target_record_ref` / `target_record_id` / `target_endpoint` | What the correction was applied *to*. Not always this calculation's own owner. |
+| `energy_correction_scheme_ref` / `_name` / `_kind`, `frequency_scale_factor_ref` | The provenance pointer. Exactly one branch is populated, per the row's `exactly_one_provenance_source` CHECK. |
+| `component_count`, `components_truncated`, `components[]` | The per-term breakdown: `component_kind`, `key`, `multiplicity`, `parameter_value`, `contribution_value`. |
+
+**The join is `source_calculation_id`, and only that.** The correction's
+`target_*_entry_id` points at a species or transition-state entry, not at a
+calculation, so an index keyed on the target alone cannot say which of an
+entry's calculations the number belongs to. A correction computed against a
+sibling calculation of the same entry does not appear here.
+
+**Units are per row and are not converted in place.** Real deposits mix
+them — a Petersson BAC total in kcal/mol and an atom-energy total in
+hartree, against the same single-point energy — so a single fixed-unit
+field would have to rewrite one of them on the way in.
+`applied_value_hartree` is the one derived quantity and is named for its
+unit, per the unit policy.
+
+**`parameter_value` and `contribution_value` are both stored, and neither
+is recomputed from the other.** They are not required to satisfy
+`contribution = multiplicity x parameter`: an atom-energy scheme's
+contribution also carries the atom's enthalpy-of-formation reference, so
+the two legitimately differ by that reference.
+
+**Components travel inside this one token rather than behind a second.**
+Measured on the hosted instance: 354 component rows across the 145
+corrections that have any, at most 6 on one.
+
+**The served components are the same numbers as the served total, and sum
+to it — over a complete set.** Both come off the same stored rows and
+neither is recomputed; measured on all 164 applied corrections on the
+hosted instance, `sum(contribution_value) == value` exactly. The breakdown
+is capped at 200 rows per correction, and `components_truncated` is the
+field that says whether the identity applies:
+
+| `components_truncated` | What the served rows are | What to do |
+|---|---|---|
+| `false` | The complete breakdown | Their sum equals `applied_value`. Safe to re-aggregate, or to use for a reconciliation check. |
+| `true` | A prefix of the breakdown | Their sum is **meaningless** — it is a partial sum presented in full-precision numbers, which is the shape a reader is most likely to mistake for a total. `applied_value` remains the whole correction. Use the rows for inspection only. |
+
+`component_count` reports the full count either way, so a truncated
+breakdown is visibly partial and not merely short. It is necessary but not
+sufficient on its own: a reader who notices `component_count > len(components)`
+still has to be told that summing the remainder is wrong, which is what
+`components_truncated` and this table are for.
+
+`available_sections.has_energy_corrections` is on the **default** shape,
+not behind the token. That is deliberate and is the more important half of
+this section: a reader shown an uncorrected energy with no indication a
+correction exists cannot know to ask for one.
 
 ### 4.6 Review/trust behavior
 
