@@ -102,16 +102,35 @@ from app.api.landing import (
     SEED_REACTANTS,
     SEED_VALUE,
     SPECIES_SEARCH_PATH,
+    VOCABULARY_DIRECTION_FRAGMENT,
+    VOCABULARY_PATH,
+    VOCABULARY_TRUST_FRAGMENT,
+    VOCABULARY_URL,
     hero_atom_lines,
+    reaction_family_display_names,
     reaction_query,
     render_landing_page,
     trust_check_label,
     trust_check_names,
 )
 from app.api.startup_checks import validate_deployment_safety
+from app.chemistry.reaction_family_display import (
+    is_unresolved_reaction_family,
+    reaction_family_display_name,
+)
 from app.db.models.common import ArrheniusAUnits, CalculationType, KineticsModelKind
+from app.schemas.reaction_family import CANONICAL_REACTION_FAMILIES
+from app.schemas.reads.scientific_conformer import (
+    ConformerEvidenceCoverage,
+    ConformerGroupEvidenceSummary,
+)
+from app.schemas.reads.scientific_statmech import StatmechEvidenceSummary
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery, ThermoRecord
 from app.schemas.reads.scientific_thermo_search import ThermoSearchRecord
+from app.schemas.reads.scientific_transition_state import (
+    TransitionStateEntryEvidenceSummary,
+)
+from app.schemas.reads.scientific_transport import TransportEvidenceSummary
 from app.services.frequency_geometry_linearity import (
     evaluate_frequency_list_linearity,
 )
@@ -220,6 +239,17 @@ def _js_function(script: str, signature: str) -> str:
     )
     assert body is not None, signature
     return body.group(1)
+
+
+def _js_code(body: str) -> str:
+    """One function body with its block comments removed.
+
+    The script is heavily commented and several comments name the very
+    fields the code beside them must not touch. A ban asserted over the
+    raw text would therefore be a ban on explaining the rule, so the
+    bans below are asserted over the code.
+    """
+    return re.sub(r"/\*.*?\*/", "", body, flags=re.DOTALL)
 
 
 def _js_map(script: str, name: str) -> dict[str, str]:
@@ -2022,3 +2052,419 @@ class TestLandingPageChangesNoExistingRoute:
         with client_factory() as c:
             schema = c.get("/openapi.json").json()
         assert "/" not in schema["paths"]
+
+
+class TestLevelOfTheoryIsShownWhereTheApiSendsIt:
+    """At what level a record was computed, on the surfaces that answer it.
+
+    ``evidence_summary`` said how *much* evidence a record carried and
+    nothing said at what level, so the level of theory behind a
+    conformer group or a transition state was two requests away behind
+    ``include=calculations``. ``levels_of_theory`` closed that on four
+    surfaces and this page had zero occurrences of the field.
+
+    Three properties are load-bearing, and each is a way the block can
+    go quietly wrong:
+
+    * **Every level, not the first.** The value is a list at every
+      length. A record whose optimisation is cheap and whose single
+      point is expensive carries two, which is the standard composite
+      workflow rather than a fault -- 12 of the 34 transition-state
+      entries on the deployment do it -- and a renderer that indexes
+      ``[0]`` drops exactly the expensive half a reader came for.
+    * **Absence is a fact, and it is the API's fact.** A calculation
+      type with no key had no calculation of that type; the missing
+      single point behind a transition state is the gap the project
+      owner spotted by eye. The rows are driven by the record's own
+      coverage block so that an absence can be *shown* -- and only by
+      it, so that nothing is invented to show.
+    * **No section where there is no field.** Statmech, transport and
+      network do not carry ``levels_of_theory``; the deferral is
+      deliberate and their sources are keyed by role rather than by
+      calculation type. A blank "at what level" on a statmech card
+      would report a gap in data that is not missing.
+
+    And one non-property, stated because it would be easy to add: the
+    block **reports and never judges**. Nothing here warns about a
+    record with two levels, and nothing styles the second one
+    differently from the first.
+    """
+
+    #: The views that set ``levels``, and the ones that must not. Every
+    #: view on the page is in exactly one, so a view added later is not
+    #: silently outside both while these assertions keep passing.
+    WITH_LEVELS = ("conformerView(record)", "transitionStateView(record)")
+    WITHOUT_LEVELS = (
+        "thermoView(record)",
+        "statmechView(record)",
+        "transportView(record)",
+        "calculationView(record)",
+        "kineticsView(record)",
+    )
+
+    #: The four functions that decide and draw the block.
+    LEVEL_FUNCTIONS = (
+        "coverageOf(evidence)",
+        "levelRow(type, found, covered)",
+        "levelRows(evidence)",
+        "levelsBlock(rows)",
+    )
+
+    def test_the_two_surfaces_that_carry_the_field_are_the_two_that_render_it(self, script):
+        """Asserted against the schemas, not against a list of names.
+
+        The views that read an ``evidence_summary`` do not all get the
+        same block, because the API does not send it to all of them.
+        Which ones do is read off the read models themselves, so that a
+        surface gaining the field later fails here rather than
+        rendering nothing forever.
+        """
+        assert "levels_of_theory" in ConformerGroupEvidenceSummary.model_fields
+        assert "levels_of_theory" in TransitionStateEntryEvidenceSummary.model_fields
+        assert "levels_of_theory" not in StatmechEvidenceSummary.model_fields
+        assert "levels_of_theory" not in TransportEvidenceSummary.model_fields
+
+        for signature in self.WITH_LEVELS:
+            assert "levels: levelRows(evidence)" in _js_function(script, signature), signature
+        for signature in self.WITHOUT_LEVELS:
+            assert "levels:" not in _js_function(script, signature), signature
+        views = set(re.findall(r"function (\w+View\(record\)) \{", script))
+        assert views == set(self.WITH_LEVELS) | set(self.WITHOUT_LEVELS), views
+
+    def test_a_surface_that_does_not_carry_the_field_renders_no_empty_section(self, script):
+        """No heading, no blank list, no hint that something is missing.
+
+        Two guards, and both are needed. ``levelRows`` answers null the
+        moment the field is absent -- before it reads a coverage block,
+        which several of those surfaces *do* carry and which would
+        otherwise produce a column of "no calculation of this type"
+        about a record whose surface was never asked the question. And
+        the card renderer requires rows to exist before it writes the
+        heading, so a view that sets nothing draws nothing.
+        """
+        rows = _js_function(script, "levelRows(evidence)")
+        assert "var levels = evidence.levels_of_theory;" in rows
+        absent = re.search(r"if \(!levels\) \{[^}]*return null;[^}]*\}", rows)
+        assert absent is not None, rows
+        assert rows.index("if (!levels)") < rows.index("coverageOf(evidence)")
+
+        detail = _js_function(script, "detailBody(section, ref, payload)")
+        guard = re.search(
+            r"if \(view\.levels && view\.levels\.length\) \{(.*?)\n      \}", detail, re.DOTALL
+        )
+        assert guard is not None, detail
+        assert 'groupLabel("at what level")' in guard.group(1)
+        assert "levelsBlock(view.levels)" in guard.group(1)
+        # The heading is written in exactly one place, so it cannot
+        # appear without the rows that justify it.
+        assert script.count('groupLabel("at what level")') == 1
+
+    def test_a_record_with_nothing_at_any_level_gets_no_block_either(self, script):
+        """A column of "none" says only what the count above it said."""
+        rows = _js_function(script, "levelRows(evidence)")
+        assert "return carried ? rows : null;" in rows
+        # Set in both loops -- the known calculation types and the
+        # unknown ones -- so neither can be the only path that counts.
+        assert len(re.findall(r"if \(row\.displays\.length\) \{ carried = true; \}", rows)) == 2
+
+    def test_every_level_in_a_list_is_rendered_and_never_only_the_first(self, script):
+        """The second entry is the expensive single point.
+
+        Two loops have to hold for that to be true -- one collecting
+        the levels off the payload, one drawing them -- and neither may
+        be replaced by a subscript. The subscript ban is checked over
+        every function in the block rather than over the two that could
+        be wrong today, because ``[0]`` is the shape of this mistake
+        wherever it appears.
+        """
+        row = _js_function(script, "levelRow(type, found, covered)")
+        collect = re.search(
+            r"for \(var i = 0; i < found\.length; i \+= 1\) \{(.*?)\n    \}", row, re.DOTALL
+        )
+        assert collect is not None, row
+        assert "row.displays.push(found[i].display);" in collect.group(1)
+
+        block = _js_function(script, "levelsBlock(rows)")
+        draw = re.search(
+            r"for \(var j = 0; j < displays\.length; j \+= 1\) \{(.*?)\n        \}",
+            block,
+            re.DOTALL,
+        )
+        assert draw is not None, block
+        assert 'make("span", "level", displays[j])' in draw.group(1)
+
+        for signature in self.LEVEL_FUNCTIONS:
+            body = _js_function(script, signature)
+            assert "[0]" not in body, signature
+
+    def test_the_display_string_is_used_as_the_api_computed_it(self, script):
+        """``method/basis`` is one string on the wire and one on screen.
+
+        Reassembling it here would give the same level two spellings,
+        and the second one drifts the first time a level carries a
+        dispersion correction or a solvent.
+        """
+        code = _js_code(_js_function(script, "levelRow(type, found, covered)"))
+        assert "found[i].display" in code
+        for part in ("method", "basis", "dispersion", "solvent"):
+            assert part not in code, part
+
+    def test_a_calculation_type_the_record_lacks_is_shown_rather_than_omitted(self, script):
+        """The gap is the finding; a renderer drawing only what it is sent hides it.
+
+        Three states, three renderings, and the two absences do not
+        share a sentence: a type with no calculation at all is a
+        different fact from a type whose calculation names no level,
+        and the API distinguishes them by key-absent versus
+        empty-list.
+        """
+        assert 'var LEVEL_NONE = "no calculation of this type";' in script
+        assert 'var LEVEL_UNRECORDED = "no level of theory recorded";' in script
+        row = _js_function(script, "levelRow(type, found, covered)")
+        assert "row.note = covered ? LEVEL_UNRECORDED : LEVEL_NONE;" in row
+        rows = _js_function(script, "levelRows(evidence)")
+        # A type nobody said anything about gets no row at all: the
+        # coverage block is the only licence to draw an absence.
+        assert (
+            "if (!found && !Object.prototype.hasOwnProperty.call(coverage, type)) { continue; }"
+            in rows
+        )
+        block = _js_function(script, "levelsBlock(rows)")
+        assert 'cell.className = "absent";' in block
+        assert "rows[i].note" in block
+
+    def test_both_coverage_shapes_are_read_and_neither_is_assumed(self, script):
+        """A TS entry answers in booleans, a conformer group in counts.
+
+        The asymmetry is deliberate on both sides -- a boolean is
+        unambiguous for one provenance row and misleading pooled over
+        six -- so the page reads both rather than picking one and
+        quietly rendering nothing on the other surface.
+        """
+        assert "evidence_coverage" in ConformerGroupEvidenceSummary.model_fields
+        assert {"has_opt", "has_sp"} <= set(TransitionStateEntryEvidenceSummary.model_fields)
+        coverage = _js_function(script, "coverageOf(evidence)")
+        assert "var coverage = evidence.evidence_coverage;" in coverage
+        assert 'name.indexOf("has_") === 0' in coverage
+        assert "seen[name.slice(4)] = !!evidence[name];" in coverage
+
+    def test_only_a_calculation_type_can_get_a_level_row(self, script):
+        """``geometry_validation`` is an evidence facet, not a job.
+
+        It sits in the conformer coverage block beside ``opt`` and
+        ``freq`` and can never appear in ``levels_of_theory``, so a row
+        saying it has no level would report an absence that was never a
+        possibility. The row set is therefore driven by the calculation
+        types the page has words for -- checked here against the enum
+        -- and not by whatever keys the coverage block happens to
+        carry.
+        """
+        facets = set(ConformerEvidenceCoverage.model_fields) - {
+            member.value for member in CalculationType
+        }
+        assert facets == {"geometry_validation", "scf_stability"}, facets
+        rows = _js_function(script, "levelRows(evidence)")
+        assert "for (type in CALCULATION_WORDS) {" in rows
+        assert "for (type in coverage)" not in rows
+        # A type the enum has grown and this build has no word for still
+        # gets its levels printed, after the ones it does.
+        unknown = re.search(r"for \(type in levels\) \{(.*?)\n    \}", rows, re.DOTALL)
+        assert unknown is not None, rows
+        assert "!Object.prototype.hasOwnProperty.call(CALCULATION_WORDS, type)" in unknown.group(1)
+
+    def test_two_levels_on_one_record_are_reported_and_never_judged(self, script, page):
+        """12 of 34 deployed transition-state entries carry two.
+
+        Marking them would mark a third of correct records as suspect.
+        So there is no warning, no flag, and no second style: every
+        entry is drawn in the same element, with the same class, as the
+        first, and the block's own rule carries no colour at all.
+        """
+        block = _js_function(script, "levelsBlock(rows)")
+        # One element type, one class name, for every entry in the list.
+        assert set(re.findall(r'make\("span", "([^"]+)"', block)) == {"level"}
+        for word in ("inconsistent", "mismatch", "conflict", "suspect"):
+            assert word not in script.lower(), word
+        css = _stylesheet(page)
+        rule = re.search(r"\.levels \.level \{([^}]*)\}", css)
+        assert rule is not None
+        assert "color" not in rule.group(1)
+
+
+class TestReactionFamilyReadsAsAName:
+    """``H_Abstraction`` is a machine identifier. "Hydrogen Abstraction" is a name.
+
+    The page printed the stored identifier, which reads to a chemist as
+    something the renderer failed to render. The readable name is
+    derived on the server by
+    :mod:`app.chemistry.reaction_family_display`, so the browser makes
+    no chemistry decision at all -- it transcribes a map, the same
+    arrangement the trust check labels use.
+
+    The interesting half is the refusal. Six families carry a token
+    nobody could decode (``COm``, ``CSm``, ``2F``, ``ExoTetCyclic``) and
+    are returned verbatim rather than half-translated, because
+    "Surface Carbonate 2F Decomposition" looks like a human name while
+    silently carrying an untranslated chemistry token. Those must be
+    *drawn* as identifiers too, or a raw string sitting in a list of
+    readable names reads as a bug.
+    """
+
+    @staticmethod
+    def _family_words(script: str) -> dict[str, str]:
+        block = re.search(r"var FAMILY_WORDS = (\{.*?\});", script, flags=re.DOTALL)
+        assert block is not None, "the page carries no family name map"
+        return json.loads(block.group(1))
+
+    def test_the_map_is_the_servers_derivation_and_not_a_copy_of_it(self, script):
+        """Every entry, checked against the function that produces it.
+
+        A hand-maintained copy drifts the moment a token expansion
+        lands. This is derived at render time from the canonical set,
+        by the same function ``/meta/reaction-families`` answers with.
+        """
+        words = self._family_words(script)
+        assert words == reaction_family_display_names()
+        for name, display in words.items():
+            assert display == reaction_family_display_name(name), name
+        assert words["H_Abstraction"] == "Hydrogen Abstraction"
+        assert words["1,3_sigmatropic_rearrangement"] == "1,3 sigmatropic rearrangement"
+
+    def test_the_deliberately_unresolved_families_are_absent_from_it(self, script):
+        """Absence is the instruction, and it is the refusal's own list.
+
+        Six of the 125 are refused by
+        :func:`is_unresolved_reaction_family`. None of them may appear
+        here mapping to itself: a family with no entry and a family
+        refused a translation are the same fact to a reader, and giving
+        the refusals a key would leave an unknown family as the only
+        case with no branch -- which is the case most likely to arrive.
+        """
+        words = self._family_words(script)
+        refused = {
+            name for name in CANONICAL_REACTION_FAMILIES if is_unresolved_reaction_family(name)
+        }
+        assert len(refused) == 6, sorted(refused)
+        assert "Surface_Carbonate_2F_Decomposition" in refused
+        assert refused & set(words) == set()
+        assert set(words) == set(CANONICAL_REACTION_FAMILIES) - refused
+
+    def test_a_named_family_is_prose_and_an_unnamed_one_is_an_identifier(self, script, page):
+        """The two must not look alike, which is the whole point.
+
+        A name goes in the body face. Anything else keeps
+        ``code.ident-value`` -- the monospace every public ref on this
+        page is drawn in -- so a reader can see at a glance which of
+        the two they are looking at.
+        """
+        body = _js_function(script, "familyNode(name)")
+        assert 'make("code", "ident-value", identifier)' in body
+        assert 'make("span", "family-name", FAMILY_WORDS[identifier])' in body
+        assert "Object.prototype.hasOwnProperty.call(FAMILY_WORDS, identifier)" in body
+        css = _stylesheet(page)
+        assert _css_declaration(css, ".family-name", "font-family") == "var(--sans)"
+        assert _css_declaration(css, ".ident-value,\n.formula", "font-family") == "var(--mono)"
+
+    def test_the_stored_identifier_stays_recoverable(self, script):
+        """It is the token a client hands back as ``?family=``.
+
+        Kept in ``title`` on the named branch, and printed outright on
+        the other, so no rendering of a family loses the string a
+        reader needs to quote or to query with.
+        """
+        body = _js_function(script, "familyNode(name)")
+        assert 'named.setAttribute("title", identifier);' in body
+
+    def test_the_reaction_record_renders_the_family_through_it(self, script):
+        """And no longer hands the raw string to the identifier list."""
+        renderer = _js_function(script, "rxnRecordNode(record)")
+        assert '["Reaction family", familyNode(record.family), false]' in renderer
+        assert '["Reaction family", record.family' not in renderer
+
+    def test_a_record_with_no_family_still_says_so(self, script):
+        """Null is a rendering here as it is everywhere else on this page."""
+        body = _js_function(script, "familyNode(name)")
+        assert 'if (name === null || name === undefined || name === "") { return null; }' in body
+        idents = _js_function(script, "identList(rows)")
+        assert 'cell.className = "absent";' in idents
+
+
+class TestTheVocabularyIsLinkedWhereTheTokensAre:
+    """438 generated tokens, and until now nothing pointed at them.
+
+    ``docs/guides/api_vocabulary.md`` defines every status, prefix,
+    check name and refusal code the API answers with, generated from
+    the same declarations. The confusions it answers are *in situ* --
+    ``matched_direction: reverse`` inside a result, ``not_applicable``
+    inside a trust panel -- so the links are at those two places and in
+    the search panel, and nowhere else. Not one link per token.
+    """
+
+    def test_the_published_page_is_addressed_by_its_nav_path(self):
+        """Built from the documentation root, not written out whole.
+
+        A deployment pointing at its own documentation build gets the
+        glossary from that build, and no version of this page can link
+        to a vocabulary belonging to a different version of the API.
+        """
+        assert VOCABULARY_URL == DOCS_URL + VOCABULARY_PATH
+        assert VOCABULARY_URL.startswith(DOCS_URL)
+        assert VOCABULARY_PATH == "guides/api_vocabulary/"
+        assert VOCABULARY_TRUST_FRAGMENT.startswith("#")
+        assert VOCABULARY_DIRECTION_FRAGMENT.startswith("#")
+
+    def test_the_page_carries_the_link_in_static_markup(self, document, page):
+        """So the scripting-off reader gets it too.
+
+        It is also the only copy of the URL on the page: the script
+        reads this anchor's ``href`` rather than carrying one of its
+        own, which is what keeps the inline script free of absolute
+        URLs.
+        """
+        found = document.find("a", id="vocabulary-link")
+        assert len(found) == 1, found
+        attrs, ancestors = found[0]
+        assert attrs["href"] == VOCABULARY_URL
+        assert "script" not in ancestors
+        assert page.count(VOCABULARY_URL) == 1
+
+    def test_the_inline_script_reads_the_href_rather_than_holding_a_url(self, script):
+        """An absolute URL in the script would break the self-containment rule.
+
+        :class:`TestLandingPageIsSelfContained` asserts no string
+        literal in the script contains ``://``. A link is a
+        destination, not a subresource, so the anchor is fine -- but
+        the script may not spell it, and does not need to.
+        """
+        assert 'doc.getElementById("vocabulary-link")' in script
+        assert f'var VOCABULARY_TRUST = "{VOCABULARY_TRUST_FRAGMENT}";' in script
+        assert f'var VOCABULARY_DIRECTION = "{VOCABULARY_DIRECTION_FRAGMENT}";' in script
+        for literal in re.findall(r"\"([^\"]*)\"", script):
+            assert "://" not in literal, literal
+
+    def test_the_two_in_situ_links_are_at_the_two_confusions(self, script):
+        """The trust disclosure, and the direction chip. Exactly those.
+
+        A link per token would be forty links on a card. These two are
+        where a reader is already stuck on a word: ``not_applicable``
+        beside a check name, and "matched in reverse" beside an
+        equation whose reactants are the ones they asked for.
+        """
+        assert script.count("addVocabLink(") == 3  # one definition, two calls
+        trust = _js_function(script, "trustNode(trust)")
+        assert "addVocabLink(explains, VOCABULARY_TRUST," in trust
+        reaction = _js_function(script, "rxnRecordNode(record)")
+        assert "addVocabLink(matched, VOCABULARY_DIRECTION," in reaction
+        assert "DIRECTION_WORDS[record.matched_direction]" in reaction
+
+    def test_a_missing_anchor_costs_the_link_and_not_the_card(self, script):
+        """The renderer must not throw over a hyperlink."""
+        helper = _js_function(script, "addVocabLink(node, fragment, text)")
+        assert "if (!VOCABULARY) { return; }" in helper
+        assert 'anchor(VOCABULARY + fragment, "vocab-link", text)' in helper
+
+    def test_no_route_but_the_landing_page_learned_about_the_glossary(self, client_factory):
+        """It is a link on a page: no endpoint serves or proxies it."""
+        with client_factory() as c:
+            assert VOCABULARY_URL in c.get("/").text
+            assert c.get("/guides/api_vocabulary/").status_code == 404
