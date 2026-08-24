@@ -192,8 +192,14 @@ SMARTS pattern is by definition not a literal identity.
       "inchi_key": "LFQSCWFLJHTTHZ-UHFFFAOYSA-N",
       "charge": 0,
       "multiplicity": 1,
+      "stereo_kind": "achiral",
       "species_entry_kind": "minimum",
       "electronic_state_kind": "ground",
+      "stereo_label": null,
+      "electronic_state_label": null,
+      "term_symbol": null,
+      "isotope_key": null,
+      "species_entry_label": null,
       "match": {
         "mode": "similarity",
         "similarity_score": 0.83,
@@ -211,6 +217,38 @@ SMARTS pattern is by definition not a literal identity.
 `endpoint` is a convenience deep-link to the matching species entry's
 canonical detail URL — useful for UI consumers building structure-search
 result lists.
+
+### Identity fields
+
+`smiles`, `inchi_key`, `charge`, `multiplicity` and `stereo_kind` belong to
+the **parent species**. Two entries of one species produce two rows that
+agree on every one of them, so none of them can be used to tell those rows
+apart.
+
+`stereo_label`, `electronic_state_kind`, `electronic_state_label`,
+`term_symbol` and `isotope_key` are the entry's own — they are exactly the
+columns of `uq_species_entry_species_id` other than the species itself, so
+two entries of one species differ in at least one of them by construction.
+`species_entry_label` is those five rendered as one short string (`"E"`,
+`"excited T1"`), derived by
+`app.services.scientific_read.species_identity.species_entry_label`, the same
+function the pressure-dependent network surface uses for state labels.
+
+All five are in the **default** projection rather than behind an `include=`
+token. Their absence is not a missing convenience: without them,
+cis-diazene and trans-diazene — two `N=N` entries with different
+thermochemistry — come back as two byte-identical rows differing only in an
+opaque ref, and a reader picking one has even odds of citing the other
+molecule. A reader who does not know to ask for an include token is exactly
+the reader that harms.
+
+Each is `null` when the column is `NULL`, never `""`. Most entries carry no
+stereo label at all, and "no label" must read as no label rather than as a
+label that happens to be blank.
+
+`isotopologue_label` is deliberately not served: it is deprecated, is no
+longer part of the entry's unique identity, and is never written by the
+application, so it cannot discriminate between two entries.
 
 ---
 

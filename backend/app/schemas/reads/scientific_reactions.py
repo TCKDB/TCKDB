@@ -153,10 +153,27 @@ class ReactionParticipantSummary(BaseModel):
 
     Phase B: ``species_entry_ref`` is the public stable handle for the
     participant species entry.
+
+    ``smiles`` is the *species'* graph identity, shared by every entry
+    under it, so two participants that are different stereoisomers of
+    one species render identically from it alone -- the hydrazine
+    network's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an
+    isomerisation between them reads as running from a species to
+    itself. ``species_entry_label`` is what tells them apart: ``"E"``,
+    ``"Z"``, ``"excited T1"``, or ``None`` for the plain ground-state,
+    stereo-unlabelled entry. Derived by
+    :func:`app.services.scientific_read.species_identity.species_entry_label`.
+
+    Note that the record's ``equation`` string is still rendered from
+    ``smiles`` alone and therefore still collapses two such
+    participants. Changing it would change a served value that
+    consumers parse, so it is left alone here; render from
+    ``species_entry_label`` if you need the equation to be unambiguous.
     """
 
     species_entry_id: int
     species_entry_ref: str
+    species_entry_label: str | None = None
     smiles: str
     participant_index: int
 

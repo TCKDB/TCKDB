@@ -92,10 +92,13 @@ What you get back:
 - `records[*].species_ref` — public handle for the chemical species (one per identity).
 - `records[*].entries[*].species_entry_ref` — handle for one physical *species entry* (a specific charge / multiplicity / electronic state realization). This is the handle every other species-side endpoint takes.
 - `records[*].entries[*].availability` — boolean flags + counts so the caller can see at a glance whether thermo / statmech / conformers / calculations exist.
+- `records[*].entries[*].species_entry_label` — the short discriminator that says *which* entry this is: `"E"`, `"Z"`, `"excited T1"`, or `null` for the plain ground-state, stereo-unlabelled entry. Built from `stereo_label`, `electronic_state_kind`, `electronic_state_label`, `term_symbol` and `isotope_key`, which are also served individually if you need them machine-readable.
+- `records[*].stereo_kind` — the *species'* own: `achiral` means a `null` stereo label has nothing to label; `ez_isomer` or `enantiomer` means stereoisomers exist and this entry simply is not labelled.
 
 Common gotchas:
 
 - Multiple `entries` per species is the normal case (e.g. ground-state vs excited-state variants of the same molecule).
+- **`canonical_smiles` does not identify an entry.** It is the *species'* graph identity and is shared by every entry beneath it — the deployed `N=N` carries a `Z` entry (cis-diazene) and an `E` entry (trans-diazene) with different thermochemistry, and both read `N=N`. Pick an entry by `species_entry_label` (or the identity fields), never by position in `entries` and never by the species-level fields.
 - `inchi` currently has no enforced search path, so supplying it returns 422 `unsupported_filter`; use `smiles`, `inchi_key`, `formula` (derived through RDKit), or a public ref.
 
 ---
@@ -114,6 +117,10 @@ thermo = client.search_thermo(
 )
 
 rec = thermo["records"][0]
+# species_entry_label says which entry of the species this number is for --
+# two stereoisomers share canonical_smiles, so it is the only thing in the
+# species block that tells them apart in prose.
+print(rec["species"]["species_entry_ref"], rec["species"]["species_entry_label"])
 print(rec["species"]["species_entry_ref"], rec["thermo"]["thermo_ref"])
 print("H298 =", rec["thermo"]["h298_kj_mol"], "kJ/mol")
 print("S298 =", rec["thermo"]["s298_j_mol_k"], "J/mol/K")

@@ -86,6 +86,9 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 
 # ---------------------------------------------------------------------------
 # Include policy
@@ -543,6 +546,15 @@ def _build_species_context(
             Species.inchi_key.label("inchi_key"),
             Species.charge.label("charge"),
             Species.multiplicity.label("multiplicity"),
+            # The entry's identity columns, so the context can say which
+            # entry of the species this record belongs to. Selected here
+            # under their own names because species_entry_label_for()
+            # reads them by attribute.
+            SpeciesEntry.stereo_label,
+            SpeciesEntry.electronic_state_kind,
+            SpeciesEntry.electronic_state_label,
+            SpeciesEntry.term_symbol,
+            SpeciesEntry.isotope_key,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -557,6 +569,7 @@ def _build_species_context(
         species_ref=row.species_ref,
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
+        species_entry_label=species_entry_label_for(row),
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,

@@ -69,6 +69,9 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 from app.services.scientific_read.sql_review import (
     join_review,
     review_rank_expr,
@@ -547,6 +550,7 @@ def _build_page_records(
                 formula=None,  # not stored on Species; future addition
                 charge=species.charge,
                 multiplicity=species.multiplicity,
+                stereo_kind=species.stereo_kind,
                 entries=[
                     _build_entry_record(
                         entry,
@@ -696,6 +700,15 @@ def _build_entry_record(
         species_entry_ref=entry.public_ref,
         species_entry_kind=entry.kind,
         electronic_state_kind=entry.electronic_state_kind,
+        # The identity columns are read straight off the already-loaded
+        # entity: no extra query, and no substitution for a NULL. See
+        # SpeciesEntryScientificRecord for why they are in the default
+        # projection rather than behind an include token.
+        stereo_label=entry.stereo_label,
+        electronic_state_label=entry.electronic_state_label,
+        term_symbol=entry.term_symbol,
+        isotope_key=entry.isotope_key,
+        species_entry_label=species_entry_label_for(entry),
         review=badge,
         availability=availability,
         thermo_summary=section_ids.get("thermo"),

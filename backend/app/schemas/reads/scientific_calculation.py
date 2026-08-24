@@ -120,12 +120,19 @@ class SpeciesEntryOwnerSummary(BaseModel):
     fields the calculation-detail endpoint reliably has on hand without
     additional heavy joins. ``species_id`` / ``species_entry_id`` are
     stripped by the Phase D internal-ids policy when not allowed.
+
+    ``species_entry_label`` says *which* entry of that species owns
+    the calculation. ``canonical_smiles`` is the species' and is
+    shared by every entry under it, so without the label two
+    calculations on two stereoisomers report the same owner.
+    ``None`` for the plain ground-state, stereo-unlabelled entry.
     """
 
     species_id: int
     species_ref: str
     species_entry_id: int
     species_entry_ref: str
+    species_entry_label: str | None = None
     canonical_smiles: str
     inchi_key: str
     charge: int

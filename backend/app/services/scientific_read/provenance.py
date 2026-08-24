@@ -95,6 +95,9 @@ from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
 from app.services.scientific_read.kinetics import get_reaction_kinetics
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 from app.services.scientific_read.transition_states import (
     _TRUST_EAGER_LOADS as _TS_ENTRY_TRUST_EAGER_LOADS,
 )
@@ -562,6 +565,11 @@ def _build_species_section(
             ReactionEntryStructureParticipant.role,
             ReactionEntryStructureParticipant.participant_index,
             Species.smiles,
+            SpeciesEntry.stereo_label,
+            SpeciesEntry.electronic_state_kind,
+            SpeciesEntry.electronic_state_label,
+            SpeciesEntry.term_symbol,
+            SpeciesEntry.isotope_key,
         )
         .join(
             SpeciesEntry,
@@ -581,15 +589,18 @@ def _build_species_section(
 
     reactants: list[ReactionFullSpeciesParticipant] = []
     products: list[ReactionFullSpeciesParticipant] = []
-    for species_entry_id, species_entry_ref, role, participant_index, smiles in rows:
+    for row in rows:
+        species_entry_id = row.species_entry_id
+        role = row.role
         badge = badge_by_entry[species_entry_id]
         if badge.status not in visible_review_statuses:
             continue
         participant = ReactionFullSpeciesParticipant(
             species_entry_id=species_entry_id,
-            species_entry_ref=species_entry_ref,
-            smiles=smiles,
-            participant_index=participant_index,
+            species_entry_ref=row.public_ref,
+            species_entry_label=species_entry_label_for(row),
+            smiles=row.smiles,
+            participant_index=row.participant_index,
             review=badge,
         )
         if role == ReactionRole.reactant:

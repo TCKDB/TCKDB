@@ -115,6 +115,9 @@ from app.services.scientific_read.imaginary_mode_projection import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.species_identity import (
+    species_entry_label,
+)
 from app.services.trust import (
     TrustFragment,
     build_trust_fragment,
@@ -532,6 +535,10 @@ def _build_species_owner(
             Species.inchi_key.label("inchi_key"),
             Species.charge.label("charge"),
             Species.multiplicity.label("multiplicity"),
+            SpeciesEntry.stereo_label,
+            SpeciesEntry.electronic_state_label,
+            SpeciesEntry.term_symbol,
+            SpeciesEntry.isotope_key,
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -541,6 +548,13 @@ def _build_species_owner(
         species_ref=row.species_ref,
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
+        species_entry_label=species_entry_label(
+            stereo_label=row.stereo_label,
+            electronic_state_kind=row.electronic_state_kind,
+            electronic_state_label=row.electronic_state_label,
+            term_symbol=row.term_symbol,
+            isotope_key=row.isotope_key,
+        ),
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,

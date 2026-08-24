@@ -55,6 +55,9 @@ from app.services.scientific_read.handles import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "kinetics",
@@ -253,6 +256,9 @@ def search_reactions(
     refs_by_entry_species = _resolve_participant_refs(
         session, all_participant_species_entry_ids
     )
+    labels_by_entry_species = _resolve_participant_labels(
+        session, all_participant_species_entry_ids
+    )
     availability_by_entry = _compute_availability(session, [e.id for e in entries])
 
     # Determine matched_direction for each entry.
@@ -288,6 +294,7 @@ def search_reactions(
             ReactionParticipantSummary(
                 species_entry_id=se,
                 species_entry_ref=refs_by_entry_species.get(se, ""),
+                species_entry_label=labels_by_entry_species.get(se),
                 smiles=smiles_by_entry_species.get(se, ""),
                 participant_index=idx,
             )
@@ -298,6 +305,7 @@ def search_reactions(
             ReactionParticipantSummary(
                 species_entry_id=se,
                 species_entry_ref=refs_by_entry_species.get(se, ""),
+                species_entry_label=labels_by_entry_species.get(se),
                 smiles=smiles_by_entry_species.get(se, ""),
                 participant_index=idx,
             )
@@ -557,6 +565,30 @@ def _resolve_participant_refs(
         )
     ).all()
     return dict(rows)
+
+
+def _resolve_participant_labels(
+    session: Session, species_entry_ids: set[int]
+) -> dict[int, str | None]:
+    """Map species_entry_id → the entry discriminator, or ``None``.
+
+    A participant's ``smiles`` is the parent *species*' and is shared by
+    every entry under it, so two participants that are different
+    stereoisomers of one species are indistinguishable without this.
+    """
+    if not species_entry_ids:
+        return {}
+    rows = session.execute(
+        select(
+            SpeciesEntry.id,
+            SpeciesEntry.stereo_label,
+            SpeciesEntry.electronic_state_kind,
+            SpeciesEntry.electronic_state_label,
+            SpeciesEntry.term_symbol,
+            SpeciesEntry.isotope_key,
+        ).where(SpeciesEntry.id.in_(species_entry_ids))
+    ).all()
+    return {row.id: species_entry_label_for(row) for row in rows}
 
 
 def _compute_availability(
