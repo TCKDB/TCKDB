@@ -60,6 +60,7 @@ from app.schemas.reads.scientific_transition_state_search import (
     ScientificTransitionStatesSearchResponse,
     TransitionStatesSearchRequest,
 )
+from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -545,6 +546,15 @@ def _materialize_records(
     # the participants when several TS entries share a parent.
     reaction_cache: dict[int | None, Any] = {}
 
+    # Levels of theory for the whole page in one grouped statement. Left to
+    # the per-record builder this is a statement per record -- the exact
+    # slope ``test_record_builder_statement_cost.py`` exists to catch, and
+    # the reason the block is worth resolving here rather than gating it
+    # behind an include token nobody would send.
+    levels_index = levels_of_theory.for_transition_state_entries(
+        session, page_ids
+    )
+
     # ``include=entries`` gives every record its parent's entry list. Built
     # once per distinct parent on the page and shared, because search pages
     # cluster: several entries of one transition state routinely match the
@@ -589,6 +599,7 @@ def _materialize_records(
                 entry_badge=badges[cid],
                 includes=includes,
                 entries_block=entries_block,
+                levels_index=levels_index,
             )
         )
     return records

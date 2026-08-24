@@ -62,6 +62,7 @@ from app.schemas.reads.scientific_conformer_search import (
     RequestEcho,
     ScientificConformersSearchResponse,
 )
+from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -605,6 +606,12 @@ def _materialize_records(
         select(ConformerGroup).where(ConformerGroup.id.in_(page_ids))
     ).all()
     by_id = {g.id: g for g in groups}
+    # Levels of theory for every group on the page in one grouped
+    # statement, joined through ``conformer_observation``. Resolved here
+    # rather than inside ``build_group_record`` because the builder holds
+    # one group and would therefore issue one statement per record --
+    # exactly the slope ``test_record_builder_statement_cost.py`` fails on.
+    levels_index = levels_of_theory.for_conformer_groups(session, page_ids)
     records: list[ScientificConformerGroupRecord] = []
     for cid in page_ids:
         cg = by_id.get(cid)
@@ -616,6 +623,7 @@ def _materialize_records(
                 cg=cg,
                 cg_badge=badges[cid],
                 includes=includes,
+                levels_map=levels_index.for_owner(cid),
             )
         )
     return records
