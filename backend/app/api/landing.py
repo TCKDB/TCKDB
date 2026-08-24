@@ -1761,13 +1761,6 @@ __HERO_SPECTRUM__
     return list;
   }
 
-  /*
-   * The named checks behind a verdict. ``ts_single_point_present``
-   * carrying the outcome ``missing`` is the whole point: it turns "why
-   * is this only mostly supported?" from a guess into a list. It ships
-   * collapsed because a card that opens into thirty check names has
-   * traded one wall of text for another.
-   */
   function checksWithOutcome(checks, outcome) {
     var names = [];
     if (!checks) { return names; }
@@ -1780,6 +1773,13 @@ __HERO_SPECTRUM__
     return names;
   }
 
+  /*
+   * The named checks behind a verdict. ``ts_single_point_present``
+   * carrying the outcome ``missing`` is the whole point: it turns "why
+   * is this only mostly supported?" from a guess into a list. It ships
+   * collapsed because a card that opens into thirty check names has
+   * traded one wall of text for another.
+   */
   function checkList(title, names) {
     var node = make("div", "trust-checks");
     node.appendChild(make("p", "trust-checks-title", title));
