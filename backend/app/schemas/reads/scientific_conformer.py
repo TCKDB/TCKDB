@@ -197,10 +197,17 @@ class ConformerEvidenceCoverage(BaseModel):
     calculation. It does **not** say those calculations are
     *comparable*: the five may sit at five different levels of theory,
     from five different codes, at five different geometries. A count is
-    honest about coverage, not about consistency. A caller who needs
-    consistency must inspect the per-calculation level-of-theory /
-    software provenance under ``include=calculations``; no number in
-    this block can stand in for that.
+    honest about coverage, not about consistency, and no number in this
+    block can stand in for that.
+
+    Half of that gap is now answerable without a second request.
+    ``ConformerGroupEvidenceSummary.levels_of_theory``, beside this
+    block, lists the levels used per calculation type — so
+    ``freq == observation_count`` with two entries under ``freq`` is
+    visibly a fully covered basin whose frequencies come from two
+    levels. It still does not *assert* comparability; it just stops
+    charging a round trip to find out. The code and geometry halves are
+    still only under ``include=calculations``.
 
     ``0`` is exactly as strong as the old ``has_x is False`` was:
     nothing in scope carries that evidence.
@@ -250,6 +257,15 @@ class ConformerGroupEvidenceSummary(BaseModel):
     calculation_count: int
     evidence_coverage: ConformerEvidenceCoverage
     geometry_count: int
+    #: Levels of theory used in this basin, per calculation type, pooled
+    #: across every observation. This is the block
+    #: :class:`ConformerEvidenceCoverage`'s docstring names and then says no
+    #: number in it can stand in for: ``freq == observation_count`` with two
+    #: entries under ``freq`` here is a completely covered basin whose
+    #: frequencies come from two different levels. It states that; it does
+    #: not rule on whether they are comparable. See
+    #: ``app/services/scientific_read/levels_of_theory.py``.
+    levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 
 
 class ConformerObservationEvidenceSummary(BaseModel):
@@ -280,6 +296,10 @@ class ConformerObservationEvidenceSummary(BaseModel):
     has_geometry_validation: bool
     has_scf_stability: bool
     geometry_count: int
+    #: Levels of theory used on this observation, per calculation type.
+    #: Keys mirror the ``has_*`` booleans above. See
+    #: ``app/services/scientific_read/levels_of_theory.py``.
+    levels_of_theory: dict[str, list[LevelOfTheorySummary]]
 
 
 # ---------------------------------------------------------------------------

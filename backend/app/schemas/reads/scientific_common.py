@@ -13,7 +13,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.db.models.common import ProfileRecommendation, ReadProfile, RecordReviewStatus
 
@@ -235,6 +235,29 @@ class LevelOfTheorySummary(BaseModel):
     dispersion: str | None = None
     solvent: str | None = None
     label: str | None = None
+
+    @computed_field  # type: ignore[prop-decorator]
+    @property
+    def display(self) -> str:
+        """``method/basis`` — the way a chemist writes a level of theory.
+
+        Derived, never stored and never accepted on input: it is exactly
+        ``method`` and ``basis`` rendered the conventional way, and
+        ``method`` alone when there is no basis (a semi-empirical or
+        composite method has none, and ``"AM1/"`` would be a worse answer
+        than ``"AM1"``).
+
+        It exists because the fields it is built from are already here and
+        a human reading the JSON should not have to assemble them. It is
+        deliberately *not* an identity: two different
+        ``level_of_theory`` rows can render the same string when they
+        differ only in dispersion, solvent or spin treatment.
+        ``level_of_theory_ref`` is the handle to compare on; ``display``
+        is for reading. Nothing should key, group or deduplicate on it.
+        """
+        if self.basis:
+            return f"{self.method}/{self.basis}"
+        return self.method
 
 
 class SoftwareReleaseSummary(BaseModel):

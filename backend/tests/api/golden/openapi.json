@@ -10735,7 +10735,7 @@
         "type": "object"
       },
       "ConformerEvidenceCoverage": {
-        "description": "How many observations in scope carry each kind of evidence.\n\nEvery value counts **observations**, never calculations. An\nobservation with three ``freq`` calculations contributes ``1`` to\n``freq``, not ``3``. The shared denominator is\n``ConformerGroupEvidenceSummary.observation_count``, so a caller\nreads each field as \"*n* of *observation_count*\".\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == observation_count`` says the coverage is **complete** —\nevery observation in the basin has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the five may sit at five different levels of theory,\nfrom five different codes, at five different geometries. A count is\nhonest about coverage, not about consistency. A caller who needs\nconsistency must inspect the per-calculation level-of-theory /\nsoftware provenance under ``include=calculations``; no number in\nthis block can stand in for that.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",
+        "description": "How many observations in scope carry each kind of evidence.\n\nEvery value counts **observations**, never calculations. An\nobservation with three ``freq`` calculations contributes ``1`` to\n``freq``, not ``3``. The shared denominator is\n``ConformerGroupEvidenceSummary.observation_count``, so a caller\nreads each field as \"*n* of *observation_count*\".\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == observation_count`` says the coverage is **complete** —\nevery observation in the basin has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the five may sit at five different levels of theory,\nfrom five different codes, at five different geometries. A count is\nhonest about coverage, not about consistency, and no number in this\nblock can stand in for that.\n\nHalf of that gap is now answerable without a second request.\n``ConformerGroupEvidenceSummary.levels_of_theory``, beside this\nblock, lists the levels used per calculation type — so\n``freq == observation_count`` with two entries under ``freq`` is\nvisibly a fully covered basin whose frequencies come from two\nlevels. It still does not *assert* comparability; it just stops\ncharging a round trip to find out. The code and geometry halves are\nstill only under ``include=calculations``.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",
         "properties": {
           "freq": {
             "title": "Freq",
@@ -10981,6 +10981,16 @@
             "title": "Geometry Count",
             "type": "integer"
           },
+          "levels_of_theory": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              "type": "array"
+            },
+            "title": "Levels Of Theory",
+            "type": "object"
+          },
           "observation_count": {
             "anyOf": [
               {
@@ -10996,7 +11006,8 @@
         "required": [
           "calculation_count",
           "evidence_coverage",
-          "geometry_count"
+          "geometry_count",
+          "levels_of_theory"
         ],
         "title": "ConformerGroupEvidenceSummary",
         "type": "object"
@@ -11328,6 +11339,16 @@
             "title": "Has Sp",
             "type": "boolean"
           },
+          "levels_of_theory": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              "type": "array"
+            },
+            "title": "Levels Of Theory",
+            "type": "object"
+          },
           "observation_count": {
             "anyOf": [
               {
@@ -11347,7 +11368,8 @@
           "has_sp",
           "has_geometry_validation",
           "has_scf_stability",
-          "geometry_count"
+          "geometry_count",
+          "levels_of_theory"
         ],
         "title": "ConformerObservationEvidenceSummary",
         "type": "object"
@@ -19870,6 +19892,12 @@
             ],
             "title": "Dispersion"
           },
+          "display": {
+            "description": "``method/basis`` — the way a chemist writes a level of theory.\n\nDerived, never stored and never accepted on input: it is exactly\n``method`` and ``basis`` rendered the conventional way, and\n``method`` alone when there is no basis (a semi-empirical or\ncomposite method has none, and ``\"AM1/\"`` would be a worse answer\nthan ``\"AM1\"``).\n\nIt exists because the fields it is built from are already here and\na human reading the JSON should not have to assemble them. It is\ndeliberately *not* an identity: two different\n``level_of_theory`` rows can render the same string when they\ndiffer only in dispersion, solvent or spin treatment.\n``level_of_theory_ref`` is the handle to compare on; ``display``\nis for reading. Nothing should key, group or deduplicate on it.",
+            "readOnly": true,
+            "title": "Display",
+            "type": "string"
+          },
           "label": {
             "anyOf": [
               {
@@ -19908,7 +19936,8 @@
         },
         "required": [
           "level_of_theory_ref",
-          "method"
+          "method",
+          "display"
         ],
         "title": "LevelOfTheorySummary",
         "type": "object"
@@ -43295,6 +43324,16 @@
           "has_sp": {
             "title": "Has Sp",
             "type": "boolean"
+          },
+          "levels_of_theory": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              "type": "array"
+            },
+            "title": "Levels Of Theory",
+            "type": "object"
           }
         },
         "required": [
@@ -43305,7 +43344,8 @@
           "has_irc",
           "has_path_search",
           "has_geometry_validation",
-          "has_scf_stability"
+          "has_scf_stability",
+          "levels_of_theory"
         ],
         "title": "TransitionStateEntryEvidenceSummary",
         "type": "object"
@@ -43482,7 +43522,7 @@
         "type": "object"
       },
       "TransitionStateEvidenceCoverage": {
-        "description": "How many TS entries in scope carry each kind of evidence.\n\nEvery value counts **entries**, never calculations. An entry with\nthree ``freq`` calculations contributes ``1`` to ``freq``, not\n``3``. The shared denominator is\n``TransitionStateEvidenceSummary.entry_count``, so a caller reads\neach field as \"*n* of *entry_count*\"; a value can never exceed that\ndenominator, and one that did would mean the query had started\ncounting calculations again.\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == entry_count`` says the coverage is **complete** — every\ncandidate saddle point under this TS has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the entries may sit at different levels of theory,\ncome from different codes, and describe different geometries. A\ncount is honest about coverage, not about consistency. A caller who\nneeds consistency must inspect the per-calculation level-of-theory /\nsoftware provenance under ``include=calculations``; no number in\nthis block can stand in for that.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",
+        "description": "How many TS entries in scope carry each kind of evidence.\n\nEvery value counts **entries**, never calculations. An entry with\nthree ``freq`` calculations contributes ``1`` to ``freq``, not\n``3``. The shared denominator is\n``TransitionStateEvidenceSummary.entry_count``, so a caller reads\neach field as \"*n* of *entry_count*\"; a value can never exceed that\ndenominator, and one that did would mean the query had started\ncounting calculations again.\n\nWhat a full count does and does not say\n---------------------------------------\n``freq == entry_count`` says the coverage is **complete** — every\ncandidate saddle point under this TS has at least one frequency\ncalculation. It does **not** say those calculations are\n*comparable*: the entries may sit at different levels of theory,\ncome from different codes, and describe different geometries. A\ncount is honest about coverage, not about consistency, and no number\nin this block can stand in for that.\n\nHalf of that gap is now answerable without a second request.\n``TransitionStateEvidenceSummary.levels_of_theory``, beside this\nblock, lists the levels used per calculation type — so\n``freq == entry_count`` with two entries under ``freq`` is visibly a\nfully covered TS whose frequencies come from two levels. It still\ndoes not *assert* comparability; it just stops charging a round trip\nto find out. The software and geometry halves are still only under\n``include=calculations``.\n\n``0`` is exactly as strong as the old ``has_x is False`` was:\nnothing in scope carries that evidence.",
         "properties": {
           "freq": {
             "title": "Freq",
@@ -43538,12 +43578,23 @@
           },
           "evidence_coverage": {
             "$ref": "#/components/schemas/TransitionStateEvidenceCoverage"
+          },
+          "levels_of_theory": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              "type": "array"
+            },
+            "title": "Levels Of Theory",
+            "type": "object"
           }
         },
         "required": [
           "entry_count",
           "calculation_count",
-          "evidence_coverage"
+          "evidence_coverage",
+          "levels_of_theory"
         ],
         "title": "TransitionStateEvidenceSummary",
         "type": "object"

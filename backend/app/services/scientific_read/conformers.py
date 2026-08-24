@@ -73,6 +73,7 @@ from app.schemas.reads.scientific_conformer import (
     ScientificConformerObservationDetailResponse,
     ScientificConformerObservationRecord,
 )
+from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
@@ -169,6 +170,7 @@ def build_group_record(
     cg: ConformerGroup,
     cg_badge: RecordReviewBadge,
     includes: set[str],
+    levels_map: levels_of_theory.LevelsOfTheoryMap | None = None,
 ) -> ScientificConformerGroupRecord:
     """Project one conformer group into the public scientific record shape.
 
@@ -178,7 +180,12 @@ def build_group_record(
 
     The caller is responsible for handing in the resolved include set
     (post-`validate_includes`, post-Phase-D) and the group's review
-    badge. The default block (`species` / `observations_summary` /
+    badge. A caller building a whole page may also hand in the group's
+    ``levels_map``, resolved for every group on the page in one statement;
+    a caller that does not gets it resolved here, which is the right
+    answer for one detail read and the wrong one inside a loop.
+
+    The default block (`species` / `observations_summary` /
     `selection_summary` / `evidence_summary` / `available_sections`)
     is always populated; heavy include blocks are populated only when
     their tokens are present in *includes*.
@@ -193,7 +200,9 @@ def build_group_record(
     obs_ids = [o.id for o in obs_rows]
 
     observations_summary = _build_observations_summary(obs_rows)
-    evidence_summary = _build_group_evidence_summary(session, obs_ids)
+    evidence_summary = _build_group_evidence_summary(
+        session, obs_ids, levels_map=levels_map
+    )
     selection_rows = _load_selection_rows(session, cg.id)
     selection_summary = _build_selection_summary_list(session, selection_rows)
     available = _build_available_sections(
@@ -219,6 +228,10 @@ def build_group_record(
         # Without ``observations`` in the nested set, every embedded
         # observation would resolve the same sibling list this block is.
         nested_includes = includes - {"observations"}
+        # One statement for the block, not one per observation.
+        obs_levels = levels_of_theory.for_conformer_observations(
+            session, obs_ids
+        )
         observations_block = [
             _build_observation_record(
                 session,
@@ -230,6 +243,7 @@ def build_group_record(
                     RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
                 ),
                 includes=nested_includes,
+                levels_index=obs_levels,
             )
             for o in obs_rows
         ]
@@ -348,6 +362,7 @@ def _build_observation_record(
     species_context: ConformerSpeciesContext,
     observation_badge: RecordReviewBadge,
     includes: set[str],
+    levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
 ) -> ScientificConformerObservationRecord:
     """Project one conformer observation into the public detail shape.
 
@@ -363,7 +378,9 @@ def _build_observation_record(
     no other way to report.
     """
     obs_ids = [observation.id]
-    evidence = _build_observation_evidence_summary(session, observation.id)
+    evidence = _build_observation_evidence_summary(
+        session, observation.id, levels_index=levels_index
+    )
     available = _build_available_sections(
         session,
         obs_ids=obs_ids,
@@ -475,6 +492,9 @@ def _build_sibling_observation_records(
         else {}
     )
     nested_includes = includes - {"observations"}
+    sibling_levels = levels_of_theory.for_conformer_observations(
+        session, sibling_ids
+    )
     return [
         _build_observation_record(
             session,
@@ -486,6 +506,7 @@ def _build_sibling_observation_records(
                 RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
             ),
             includes=nested_includes,
+            levels_index=sibling_levels,
         )
         for sibling in siblings
     ]
@@ -565,7 +586,10 @@ def _build_observations_summary(
 
 
 def _build_group_evidence_summary(
-    session: Session, observation_ids: list[int]
+    session: Session,
+    observation_ids: list[int],
+    *,
+    levels_map: levels_of_theory.LevelsOfTheoryMap | None = None,
 ) -> ConformerGroupEvidenceSummary:
     """Compute the group-scope calculation-evidence summary.
 
@@ -588,6 +612,21 @@ def _build_group_evidence_summary(
     calculation under the group together; see
     :class:`ConformerGroupEvidenceSummary` for why. ``count > 0``
     reproduces the retired boolean exactly.
+
+    ``levels_of_theory`` is the **union** over the observations: at basin
+    grain the honest statement is "these are the levels used somewhere in
+    this basin". It is what turns a complete ``freq`` coverage count into
+    an answerable question about comparability instead of an unanswerable
+    one -- which is precisely the limitation
+    :class:`ConformerEvidenceCoverage`'s docstring wrote down.
+
+    ``levels_map`` is the batched form. The search surface resolves the
+    whole page in one statement keyed by *group* -- one join through the
+    observation table, rather than a statement per record -- and hands in
+    the finished map. It is passed already-merged rather than as an index
+    because a page-scoped index is keyed by group id while this function
+    only holds observation ids, and an index whose key means something
+    different depending on who built it is a bug waiting to be written.
     """
     if not observation_ids:
         # No observations: every coverage value is 0 out of 0. Nothing is
@@ -604,6 +643,9 @@ def _build_group_evidence_summary(
                 scf_stability=0,
             ),
             geometry_count=0,
+            # No observations, so no calculations, so no observed types.
+            # ``{}`` matches the zeroed counts beside it.
+            levels_of_theory={},
         )
 
     # One pass gives both the calculation total (COUNT(id)) and the
@@ -641,6 +683,12 @@ def _build_group_evidence_summary(
     )
     geometry_count = _distinct_geometry_count(session, observation_ids)
 
+    pooled_levels = levels_map
+    if pooled_levels is None:
+        pooled_levels = levels_of_theory.for_conformer_observations(
+            session, observation_ids
+        ).merged(observation_ids)
+
     return ConformerGroupEvidenceSummary(
         observation_count=len(observation_ids),
         calculation_count=total,
@@ -652,6 +700,7 @@ def _build_group_evidence_summary(
             scf_stability=scf_stability_coverage,
         ),
         geometry_count=geometry_count,
+        levels_of_theory=pooled_levels,
     )
 
 
@@ -704,7 +753,10 @@ def _distinct_geometry_count(
 
 
 def _build_observation_evidence_summary(
-    session: Session, observation_id: int
+    session: Session,
+    observation_id: int,
+    *,
+    levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
 ) -> ConformerObservationEvidenceSummary:
     """Compute the observation-scope calculation-evidence summary.
 
@@ -753,6 +805,11 @@ def _build_observation_evidence_summary(
         )
     )
 
+    if levels_index is None:
+        levels_index = levels_of_theory.for_conformer_observations(
+            session, observation_ids
+        )
+
     return ConformerObservationEvidenceSummary(
         observation_count=len(observation_ids),
         calculation_count=sum(type_counts.values()),
@@ -762,6 +819,7 @@ def _build_observation_evidence_summary(
         has_geometry_validation=has_geom_val,
         has_scf_stability=has_scf,
         geometry_count=_distinct_geometry_count(session, observation_ids),
+        levels_of_theory=levels_index.for_owner(observation_id),
     )
 
 

@@ -75,6 +75,7 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
+from app.services.scientific_read import levels_of_theory
 from app.services.scientific_read.common import (
     fetch_review_badges,
     review_summary,
@@ -298,7 +299,15 @@ def get_transition_state(
     entry_ids = [e.id for e in entries]
 
     entries_summary = _build_entries_summary(entries)
-    evidence_summary = _build_concept_evidence_summary(session, entry_ids)
+    # One statement for the whole concept, shared by the pooled summary and
+    # by every embedded entry record under ``include=entries``. Built here
+    # rather than inside each builder so a 20-entry TS pays it once.
+    levels_index = levels_of_theory.for_transition_state_entries(
+        session, entry_ids
+    )
+    evidence_summary = _build_concept_evidence_summary(
+        session, entry_ids, levels_index=levels_index
+    )
     available = _build_available_sections(session, entries, entry_ids)
 
     entry_badges = (
@@ -328,6 +337,7 @@ def get_transition_state(
                     RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
                 ),
                 includes=nested_includes,
+                levels_index=levels_index,
             )
             for e in entries
         ]
@@ -477,6 +487,7 @@ def build_entry_record(
     entry_badge: RecordReviewBadge,
     includes: set[str],
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
+    levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
 ) -> ScientificTransitionStateEntryRecord:
     """Public alias for :func:`_build_entry_record`.
 
@@ -491,6 +502,7 @@ def build_entry_record(
         entry_badge=entry_badge,
         includes=includes,
         entries_block=entries_block,
+        levels_index=levels_index,
     )
 
 
@@ -503,6 +515,7 @@ def _build_entry_record(
     entry_badge: RecordReviewBadge,
     includes: set[str],
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
+    levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
 ) -> ScientificTransitionStateEntryRecord:
     """Project one TS entry into the shared record shape.
 
@@ -512,8 +525,16 @@ def _build_entry_record(
     nothing and asks for ``include=entries`` gets the siblings resolved
     here — the parent always has at least this entry under it, so ``None``
     unambiguously means "not supplied" and never "supplied and empty".
+
+    ``levels_index`` is the same bargain for ``levels_of_theory``, and it is
+    the reason that block costs a search page one statement rather than
+    ``limit`` of them. ``None`` means "resolve it for this entry alone",
+    which is the right answer on a detail read and the wrong one inside a
+    loop — every loop in this module hands one in.
     """
-    evidence = _build_entry_evidence_summary(session, entry.id)
+    evidence = _build_entry_evidence_summary(
+        session, entry.id, levels_index=levels_index
+    )
     available = _build_available_sections(session, [entry], [entry.id])
 
     calcs_block: list[TransitionStateCalculationSummary] | None = None
@@ -654,6 +675,11 @@ def _build_sibling_entry_records(
         else {}
     )
     nested_includes = includes - {"entries"}
+    # Grouped over the sibling set, never per sibling — same reason as the
+    # trust eager loads above.
+    levels_index = levels_of_theory.for_transition_state_entries(
+        session, sibling_ids
+    )
     return [
         _build_entry_record(
             session,
@@ -665,6 +691,7 @@ def _build_sibling_entry_records(
                 RecordReviewBadge(status=RecordReviewStatus.not_reviewed),
             ),
             includes=nested_includes,
+            levels_index=levels_index,
         )
         for sibling in siblings
     ]
@@ -826,7 +853,10 @@ def _build_entries_summary(
 
 
 def _build_concept_evidence_summary(
-    session: Session, entry_ids: list[int]
+    session: Session,
+    entry_ids: list[int],
+    *,
+    levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
 ) -> TransitionStateEvidenceSummary:
     """Compute the TS-concept-scope calculation-evidence summary.
 
@@ -847,6 +877,11 @@ def _build_concept_evidence_summary(
     calculation under the TS together; see
     :class:`TransitionStateEvidenceSummary` for why. ``count > 0``
     reproduces the retired boolean exactly.
+
+    ``levels_of_theory`` is the **union** over the entries, not a count:
+    at concept grain the honest statement is "these are the levels used
+    somewhere under this TS", and a reader who needs to know which entry
+    used which reads the entry records under ``include=entries``.
     """
     if not entry_ids:
         # No entries: every coverage value is 0 out of 0. Nothing is
@@ -865,6 +900,9 @@ def _build_concept_evidence_summary(
                 geometry_validation=0,
                 scf_stability=0,
             ),
+            # No entries, so no calculations, so no observed types. ``{}``
+            # matches the zeroed counts beside it: nothing is attached.
+            levels_of_theory={},
         )
 
     # One pass gives both the calculation total (COUNT(id)) and the
@@ -882,6 +920,11 @@ def _build_concept_evidence_summary(
     entry_coverage: dict[CalculationType, int] = {
         row[0]: row[2] for row in type_rows
     }
+
+    if levels_index is None:
+        levels_index = levels_of_theory.for_transition_state_entries(
+            session, entry_ids
+        )
 
     return TransitionStateEvidenceSummary(
         entry_count=len(entry_ids),
@@ -909,6 +952,7 @@ def _build_concept_evidence_summary(
                 == Calculation.id,
             ),
         ),
+        levels_of_theory=levels_index.merged(entry_ids),
     )
 
 
@@ -940,7 +984,10 @@ def _entry_coverage_via_join(
 
 
 def _build_entry_evidence_summary(
-    session: Session, entry_id: int
+    session: Session,
+    entry_id: int,
+    *,
+    levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
 ) -> TransitionStateEntryEvidenceSummary:
     """Compute the TS-entry-scope calculation-evidence summary.
 
@@ -986,6 +1033,11 @@ def _build_entry_evidence_summary(
         )
     )
 
+    if levels_index is None:
+        levels_index = levels_of_theory.for_transition_state_entries(
+            session, [entry_id]
+        )
+
     return TransitionStateEntryEvidenceSummary(
         calculation_count=total,
         has_opt=type_counts.get(CalculationType.opt, 0) > 0,
@@ -995,6 +1047,7 @@ def _build_entry_evidence_summary(
         has_path_search=type_counts.get(CalculationType.path_search, 0) > 0,
         has_geometry_validation=has_geom_val,
         has_scf_stability=has_scf,
+        levels_of_theory=levels_index.for_owner(entry_id),
     )
 
 
