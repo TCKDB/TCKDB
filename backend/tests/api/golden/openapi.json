@@ -35765,7 +35765,7 @@
         "type": "object"
       },
       "SpeciesCalculationsSearchRecord": {
-        "description": "One result row: species + calculation + energy + conformer/geometry/validation.",
+        "description": "One result row: species + calculation + energy/frequency + conformer/geometry/validation.\n\n``energy`` and ``frequency`` are the two per-result blocks, and they\nfollow one rule between them: **the key is on the wire whenever this\nkind of record can carry that result, and ``null`` when it cannot.**\nAn ``sp`` record carries ``energy`` (with ``energy_hartree: null`` if\nthe number was never parsed) and ``frequency: null``; a ``freq``\nrecord carries the mirror. So ``null`` says \"no such result belongs\nhere\", a populated block with null fields says \"one belongs here and\nis missing\", and the two are never confused.\n\nBefore ``frequency`` existed, a ``freq`` record carried neither — the\nonly result key on it was ``energy: null``, which a renderer read as\n\"frequencies: electronic energy not recorded\". The data was stored\nthe whole time on ``calc_freq_result`` / ``calc_freq_mode``; nothing\non this surface projected it.",
         "properties": {
           "calculation": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_species_calculations__CalculationCoreBlock"
@@ -35784,6 +35784,31 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/CalculationEnergyBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "freq_modes": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CalculationFreqModeSummary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Freq Modes",
+            "x-tckdb-include-gated": "freq_modes"
+          },
+          "frequency": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalculationFreqResultSummary"
               },
               {
                 "type": "null"
@@ -70763,7 +70788,7 @@
     },
     "/api/v1/scientific/species-calculations/search": {
       "get": {
-        "description": "Chemistry-first species calculation/conformer search.\n\nCalculation-centered records that include resolved species identity,\nenergy (when applicable), level of theory, software, conformer\ncontext (when present), geometry IDs, validation, review state, and\nprovenance. See ``docs/specs/species_calculation_search_api.md``.",
+        "description": "Chemistry-first species calculation/conformer search.\n\nCalculation-centered records that include resolved species identity,\nenergy or frequency results (whichever the calculation type\nproduces), level of theory, software, conformer context (when\npresent), geometry IDs, validation, review state, and provenance.\n``include=freq_modes`` adds the per-mode harmonic frequency array.\nSee ``docs/specs/species_calculation_search_api.md``.",
         "operationId": "species_calculations_search_get_api_v1_scientific_species_calculations_search_get",
         "parameters": [
           {

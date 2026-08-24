@@ -216,6 +216,18 @@ SPECIES_SEARCH_SECTIONS = IncludeGatedSections(
     },
 )
 
+# ``/species-calculations/search``, GET and POST. One token. The record's
+# ``frequency`` summary is deliberately **not** here: like ``energy``
+# beside it, it is an ungated scientific fact whose ``null`` says "this
+# kind of calculation produces no such result", and a strip that removed
+# it would take that statement off the wire. Only the per-mode array is a
+# section — the one block on this surface whose size grows with the
+# molecule and again with the page.
+SPECIES_CALCULATIONS_SEARCH_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/species-calculations/search",
+    sections={"freq_modes": ("freq_modes",)},
+)
+
 # ``GET /reaction-entries/{id}/kinetics``. One token, two fields — the
 # reason the table maps to a *tuple* rather than a name. A live probe sees
 # only ``interpretation_assignments`` move, because the record measured
@@ -433,6 +445,9 @@ INCLUDE_GATED_COMPONENTS: Mapping[str, Mapping[str, str]] = MappingProxyType(
         ),
         "SpeciesEntryScientificRecord": MappingProxyType(
             SPECIES_SEARCH_SECTIONS.fields_by_token()
+        ),
+        "SpeciesCalculationsSearchRecord": MappingProxyType(
+            SPECIES_CALCULATIONS_SEARCH_SECTIONS.fields_by_token()
         ),
         "KineticsRecord": MappingProxyType(TRUST_SECTION.fields_by_token()),
         "ThermoRecord": MappingProxyType(
@@ -696,6 +711,9 @@ ALL_INCLUDE_GATED_TABLES: Mapping[str, IncludeGatedSections] = MappingProxyType(
         "NETWORK_RECORD_SECTIONS": NETWORK_RECORD_SECTIONS,
         "NETWORK_SOLVE_RECORD_SECTIONS": NETWORK_SOLVE_RECORD_SECTIONS,
         "REACTION_FULL_SECTIONS": REACTION_FULL_SECTIONS,
+        "SPECIES_CALCULATIONS_SEARCH_SECTIONS": (
+            SPECIES_CALCULATIONS_SEARCH_SECTIONS
+        ),
         "SPECIES_SEARCH_SECTIONS": SPECIES_SEARCH_SECTIONS,
         "STATMECH_RECORD_SECTIONS": STATMECH_RECORD_SECTIONS,
         "TRANSITION_STATE_RECORD_SECTIONS": TRANSITION_STATE_RECORD_SECTIONS,
@@ -725,6 +743,7 @@ __all__ = [
     "NETWORK_SOLVE_RECORD_SECTIONS",
     "REACTION_FULL_SECTIONS",
     "SEARCH_SCOPE",
+    "SPECIES_CALCULATIONS_SEARCH_SECTIONS",
     "SPECIES_SEARCH_SECTIONS",
     "STATMECH_RECORD_SECTIONS",
     "TRANSITION_STATE_RECORD_SECTIONS",

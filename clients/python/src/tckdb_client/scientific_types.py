@@ -261,7 +261,16 @@ class SpeciesCalculationRecord(TypedDict, total=False):
     geometry: Required[JSONDict]
     validation: Required[JSONDict]
     provenance: Required[JSONDict]
+    #: The two per-result blocks. Each is ``null`` when this kind of
+    #: calculation produces no such result -- ``energy`` on a ``freq``
+    #: record, ``frequency`` on an ``sp`` or ``opt`` one -- and a present
+    #: object with ``null`` fields when the result belongs there and was
+    #: never parsed. Facts about the calculation, not about the request.
     energy: JSONDict | None
+    frequency: JSONDict | None
+    #: Include-gated by ``include=freq_modes``: absent unless asked for,
+    #: ``[]`` when asked for and this calculation has no parsed modes.
+    freq_modes: list[JSONDict] | None
     level_of_theory: JSONDict | None
     software_release: JSONDict | None
     workflow_tool_release: JSONDict | None

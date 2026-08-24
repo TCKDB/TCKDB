@@ -14,9 +14,11 @@ Composition strategy (additive on top of Phase 6):
 2. Pull calculations for the resolved species_entries with the requested
    calculation/LoT/software/quality/review filters applied at the SQL
    level so the candidate set stays tight.
-3. Bulk-load the supporting blocks (energies, geometries, conformer
-   context, validation/SCF, artifacts presence, dependencies) keyed by
-   the candidate calculation IDs.
+3. Bulk-load the supporting blocks (energies, frequency results,
+   geometries, conformer context, validation/SCF, artifacts presence,
+   dependencies) keyed by the candidate calculation IDs. Every one of
+   them is one statement for the whole page: this is a paginated search,
+   so anything issued per record is multiplied by ``limit``.
 4. Apply ranking (default vs latest/earliest/lowest_energy), then
    collapse and pagination per Phase 2.1 rules.
 
@@ -32,7 +34,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
@@ -41,6 +43,8 @@ from app.db.models.calculation import (
     Calculation,
     CalculationArtifact,
     CalculationDependency,
+    CalculationFreqMode,
+    CalculationFreqResult,
     CalculationGeometryValidation,
     CalculationInputGeometry,
     CalculationOptResult,
@@ -66,6 +70,10 @@ from app.db.models.species import (
     SpeciesEntry,
 )
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.schemas.reads.scientific_calculation import (
+    CalculationFreqModeSummary,
+    CalculationFreqResultSummary,
+)
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CollapseMode,
@@ -92,6 +100,9 @@ from app.schemas.reads.scientific_species_calculations import (
     SpeciesCalculationsSpeciesContext,
     SupportingCalculationRef,
     ValidationBlock,
+)
+from app.services.scientific_read.calculations import (
+    _count_at_or_above_tau,
 )
 from app.services.scientific_read.common import (
     build_pagination,
@@ -127,6 +138,10 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
     "geometry",
     "validation",
     "scf_stability",
+    # The per-mode harmonic frequency array. Public (so ``include=all``
+    # expands to it) but opt-in, because it is the only block on this
+    # surface whose size grows with the molecule *and* with the page.
+    "freq_modes",
     "internal_ids",
     "all",
 }
@@ -300,6 +315,13 @@ def search_species_calculations(
     conformer_by_obs = _load_conformer_contexts(
         session, [r.conformer_observation_id for r in rows if r.conformer_observation_id]
     )
+    freq_by_calc = _load_freq_summaries(session, calc_ids)
+    # One statement for the page, and only when asked. ``None`` here is
+    # "the caller did not request the modes"; the empty list a record
+    # gets below is "requested, and this calculation has none".
+    modes_by_calc = (
+        _load_freq_modes(session, calc_ids) if "freq_modes" in includes else None
+    )
 
     # Build response records.
     records: list[SpeciesCalculationsSearchRecord] = []
@@ -317,6 +339,12 @@ def search_species_calculations(
                     review=badges[r.calc_id],
                 ),
                 energy=_build_energy_block(r),
+                frequency=_build_frequency_block(r, freq_by_calc.get(r.calc_id)),
+                freq_modes=(
+                    None
+                    if modes_by_calc is None
+                    else modes_by_calc.get(r.calc_id, [])
+                ),
                 level_of_theory=_lot_summary_from_row(r),
                 software_release=_software_summary_from_row(r),
                 workflow_tool_release=_workflow_tool_summary_from_row(r),
@@ -850,6 +878,119 @@ def _load_dependencies(
     return out
 
 
+def _load_freq_summaries(
+    session: Session, calc_ids: list[int]
+) -> dict[int, CalculationFreqResultSummary]:
+    """Bulk-project ``calc_freq_result`` for a whole page, in one statement.
+
+    The two mode counts ADR 0012 needs ride along as correlated
+    aggregates on the same ``SELECT`` — the identical construction
+    :func:`app.services.scientific_read.calculations._build_freq_summary`
+    uses for a single record, widened from ``= :id`` to ``IN (:ids)``.
+    That is the whole reason this is a bulk loader and not a call to that
+    builder in a loop: a builder run per record is multiplied by the page
+    size, and every other supporting block on this surface
+    (``_load_geometries``, ``_load_validation_summaries``, …) is loaded
+    the same way for the same reason. Pinned by
+    ``tests/services/scientific_read/test_record_builder_statement_cost.py
+    ::test_a_species_calculations_page_costs_one_freq_statement``.
+
+    Keyed by ``calculation_id``; a calculation with no row is simply
+    absent from the mapping, and the caller decides what absence means.
+    """
+    if not calc_ids:
+        return {}
+
+    imaginary = (
+        CalculationFreqMode.calculation_id == CalculationFreqResult.calculation_id,
+        CalculationFreqMode.is_imaginary.is_(True),
+    )
+    stored_imaginary_modes = (
+        select(func.count())
+        .select_from(CalculationFreqMode)
+        .where(*imaginary)
+        .correlate(CalculationFreqResult)
+        .scalar_subquery()
+    )
+    at_or_above_tau = (
+        select(func.count())
+        .select_from(CalculationFreqMode)
+        .where(
+            *imaginary,
+            func.abs(CalculationFreqMode.frequency_cm1)
+            >= CalculationFreqResult.imaginary_mode_tau_cm1,
+        )
+        .correlate(CalculationFreqResult)
+        .scalar_subquery()
+    )
+
+    out: dict[int, CalculationFreqResultSummary] = {}
+    for row, stored_imaginary, above_tau in session.execute(
+        select(
+            CalculationFreqResult, stored_imaginary_modes, at_or_above_tau
+        ).where(CalculationFreqResult.calculation_id.in_(calc_ids))
+    ).all():
+        out[row.calculation_id] = CalculationFreqResultSummary(
+            n_imag=row.n_imag,
+            imag_freq_cm1=row.imag_freq_cm1,
+            zpe_hartree=row.zpe_hartree,
+            zpe_uncertainty_hartree=row.zpe_uncertainty_hartree,
+            reaction_coordinate_mode_index=row.reaction_coordinate_mode_index,
+            imaginary_mode_tau_cm1=row.imaginary_mode_tau_cm1,
+            imaginary_mode_tau_basis=row.imaginary_mode_tau_basis,
+            imaginary_mode_structural_flag=row.imaginary_mode_structural_flag,
+            # ADR 0012's rule for when this count cannot honestly be
+            # taken has exactly one implementation, and it is the one the
+            # calculation detail surface uses. Re-deriving it here would
+            # make two surfaces able to disagree about the same stored
+            # row, which is the failure that decision exists to prevent.
+            n_imag_at_or_above_tau=_count_at_or_above_tau(
+                tau_cm1=row.imaginary_mode_tau_cm1,
+                n_imag=row.n_imag,
+                stored_imaginary_modes=stored_imaginary,
+                at_or_above_tau=above_tau,
+            ),
+        )
+    return out
+
+
+def _load_freq_modes(
+    session: Session, calc_ids: list[int]
+) -> dict[int, list[CalculationFreqModeSummary]]:
+    """Bulk-project ``calc_freq_mode`` for a whole page, in one statement.
+
+    Ordered by ``(calculation_id, mode_index)`` so each list comes back
+    in the row's natural scientific order without a per-record sort.
+
+    Only called when the caller asked for ``include=freq_modes``; the
+    ``[]`` a calculation with no parsed modes gets is supplied by the
+    record builder, not by this mapping, so "no rows" and "did not load"
+    stay distinguishable here.
+    """
+    if not calc_ids:
+        return {}
+    out: dict[int, list[CalculationFreqModeSummary]] = defaultdict(list)
+    for row in session.scalars(
+        select(CalculationFreqMode)
+        .where(CalculationFreqMode.calculation_id.in_(calc_ids))
+        .order_by(
+            CalculationFreqMode.calculation_id.asc(),
+            CalculationFreqMode.mode_index.asc(),
+        )
+    ).all():
+        out[row.calculation_id].append(
+            CalculationFreqModeSummary(
+                mode_index=row.mode_index,
+                frequency_cm1=row.frequency_cm1,
+                is_imaginary=row.is_imaginary,
+                reduced_mass_amu=row.reduced_mass_amu,
+                force_constant_mdyne_angstrom=row.force_constant_mdyne_angstrom,
+                imaginary_disposition=row.imaginary_disposition,
+            )
+        )
+    return dict(out)
+
+
 def _load_conformer_contexts(
     session: Session, observation_ids: list[int]
 ) -> dict[int, ConformerContextBlock]:
@@ -933,6 +1074,34 @@ def _build_energy_block(row: _CalcRow) -> CalculationEnergyBlock | None:
     return CalculationEnergyBlock(
         energy_hartree=row.energy_hartree, energy_kind=row.energy_kind
     )
+
+
+def _build_frequency_block(
+    row: _CalcRow, stored: CalculationFreqResultSummary | None
+) -> CalculationFreqResultSummary | None:
+    """``energy``'s mirror: which kind of result belongs on this record.
+
+    Three outcomes, and they are the same three
+    :func:`_build_energy_block` produces with the calculation types
+    swapped:
+
+    - a stored ``calc_freq_result`` row -> that row, projected;
+    - no row but ``type == freq`` -> an all-``null`` block, meaning "a
+      frequency result belongs here and none was parsed";
+    - no row and some other type -> ``None``, meaning "this kind of
+      record has no frequency result".
+
+    The first branch is checked before the type rather than after it on
+    purpose. A composite job deposited as ``opt`` that also carried a
+    Hessian has a real ``calc_freq_result`` row, and keying the block off
+    the type alone would store that row and never serve it. Presence of
+    the row is the stronger fact and wins.
+    """
+    if stored is not None:
+        return stored
+    if row.calc_type == CalculationType.freq:
+        return CalculationFreqResultSummary()
+    return None
 
 
 def _lot_summary_from_row(row: _CalcRow) -> LevelOfTheorySummary | None:

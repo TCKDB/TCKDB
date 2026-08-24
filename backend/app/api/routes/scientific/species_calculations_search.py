@@ -8,6 +8,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.routes.scientific._response import (
+    SEARCH_SCOPE,
+    SPECIES_CALCULATIONS_SEARCH_SECTIONS,
+    omit_unrequested_sections,
+)
 from app.db.models.common import (
     CalculationQuality,
     CalculationType,
@@ -78,9 +83,11 @@ def species_calculations_search_get(
     """Chemistry-first species calculation/conformer search.
 
     Calculation-centered records that include resolved species identity,
-    energy (when applicable), level of theory, software, conformer
-    context (when present), geometry IDs, validation, review state, and
-    provenance. See ``docs/specs/species_calculation_search_api.md``.
+    energy or frequency results (whichever the calculation type
+    produces), level of theory, software, conformer context (when
+    present), geometry IDs, validation, review state, and provenance.
+    ``include=freq_modes`` adds the per-mode harmonic frequency array.
+    See ``docs/specs/species_calculation_search_api.md``.
     """
     request = SpeciesCalculationsSearchRequest(
         smiles=smiles,
@@ -115,8 +122,12 @@ def species_calculations_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_species_calculations(session, request)
+    payload = search_species_calculations(session, request)
+    return omit_unrequested_sections(
+        apply_internal_ids_visibility(payload),
+        payload,
+        table=SPECIES_CALCULATIONS_SEARCH_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -145,6 +156,10 @@ def species_calculations_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(
-        search_species_calculations(session, body)
+    payload = search_species_calculations(session, body)
+    return omit_unrequested_sections(
+        apply_internal_ids_visibility(payload),
+        payload,
+        table=SPECIES_CALCULATIONS_SEARCH_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
