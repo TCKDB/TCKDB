@@ -41,6 +41,11 @@ The tests are grouped as:
   drop the reader into a nested JSON document without warning. Each
   product is a disclosure that opens on the page, and every route to
   the raw document says that is what it is.
+* :class:`TestResultsReadAsAPageNotAPayload` -- a result card must
+  read as a rendered record rather than as the payload behind it:
+  human labels, units rendered as units, numbers rounded to what the
+  quantity supports, absent values that say they are absent, and a
+  size hierarchy that puts the molecule first and the public ref last.
 * :class:`TestHeroExampleIsReal` -- the worked example in the hero is
   re-run through the real checker on every test run. If the page and
   ``app.services.frequency_geometry_linearity`` ever disagree, this
@@ -95,6 +100,9 @@ from app.api.landing import (
     render_landing_page,
 )
 from app.api.startup_checks import validate_deployment_safety
+from app.db.models.common import ArrheniusAUnits, CalculationType, KineticsModelKind
+from app.schemas.reads.scientific_thermo import ThermoModelKindQuery, ThermoRecord
+from app.schemas.reads.scientific_thermo_search import ThermoSearchRecord
 from app.services.frequency_geometry_linearity import (
     evaluate_frequency_list_linearity,
 )
@@ -173,6 +181,51 @@ def _noscript_forms(document: "_Document", action: str) -> list[dict[str, str | 
         for attrs, ancestors in document.find("form")
         if "noscript" in ancestors and attrs["action"] == action
     ]
+
+
+def _stylesheet(page: str) -> str:
+    """The embedded stylesheet's source, on its own."""
+    match = re.search(r"<style>(.*?)</style>", page, flags=re.DOTALL | re.IGNORECASE)
+    assert match is not None, "the page carries no stylesheet"
+    return match.group(1)
+
+
+def _css_declaration(css: str, selector: str, prop: str) -> str:
+    """One declaration out of one rule, as it will render.
+
+    Reading a size out of the stylesheet is how an assertion about
+    *hierarchy* stays an assertion about what a reader sees. Comparing
+    two class names would say nothing about which is bigger.
+    """
+    block = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", css)
+    assert block is not None, selector
+    declaration = re.search(re.escape(prop) + r"\s*:\s*([^;]+);", block.group(1))
+    assert declaration is not None, (selector, prop)
+    return declaration.group(1).strip()
+
+
+def _js_function(script: str, signature: str) -> str:
+    """One top-level function body out of the inline script."""
+    body = re.search(
+        r"function " + re.escape(signature) + r" \{(.*?)\n  \}", script, flags=re.DOTALL
+    )
+    assert body is not None, signature
+    return body.group(1)
+
+
+def _js_map(script: str, name: str) -> dict[str, str]:
+    """One ``var NAME = {...};`` object literal, as a dict.
+
+    Parsed rather than substring-matched, so that a test comparing a
+    map against the enum it mirrors fails when an entry is removed,
+    renamed or given the wrong word -- not only when the whole block
+    disappears.
+    """
+    block = re.search(r"var " + re.escape(name) + r" = \{(.*?)\n  \};", script, flags=re.DOTALL)
+    assert block is not None, name
+    pairs = re.findall(r'([A-Za-z0-9_]+|"[^"]+")\s*:\s*"([^"]*)"', block.group(1))
+    assert pairs, name
+    return {key.strip('"'): value for key, value in pairs}
 
 
 @pytest.fixture(scope="module")
@@ -693,11 +746,19 @@ class TestReactionSearchTakesASetPerSide:
         drawn with the same neutral badge as everything else -- the
         assertion for that is on the stylesheet, in
         :meth:`TestReviewStateIsInformation.test_only_deprecated_and_rejected_use_the_negative_phase`.
+
+        The equation element is now filled through ``equationText``,
+        which typesets the API's ``<=>`` as an arrow and touches
+        nothing else. What is pinned here is unchanged: the element
+        exists, and the only record field it is built from is
+        ``record.equation``. ``equationText`` itself is checked in
+        :class:`TestResultsReadAsAPageNotAPayload`.
         """
         renderer = re.search(r"function rxnRecordNode\(record\) \{.*?\n  \}", script, re.DOTALL)
         assert renderer is not None
         source = renderer.group(0)
-        assert 'make("span", "equation", record.equation' in source
+        assert 'make("span", "equation",' in source
+        assert "equationText(record.equation)" in source
         assert "reviewBadge(record.review" in source
 
     def test_a_result_says_which_way_round_the_query_matched(self, script):
@@ -992,6 +1053,297 @@ class TestResultsExpandInPlace:
         assert len(_noscript_forms(document, SPECIES_SEARCH_PATH)) == len(SEARCH_FIELDS) - 1
         assert document.find("input", id="search-input")
         assert document.find("a", **{"class": "chip"})
+
+
+class TestResultsReadAsAPageNotAPayload:
+    """A result card must read as a rendered record, not as a payload.
+
+    The search worked and the data was real long before this class
+    existed; what the cards still looked like was a JSON viewer with
+    nicer fonts. Four things did that, and each has a test here.
+
+    * **Column names as labels.** ``inchi_key``, ``h298_kj_mol`` and
+      ``multiplicity`` are what the database calls its columns. A
+      reader wants "InChIKey" and "ΔH°(298 K)".
+    * **Units missing, or spelled into the label.** A fixed-unit
+      column carries its unit in its *name* -- that is the point of
+      ``docs/unit_policy.md`` -- so that the reader can be shown the
+      unit properly. Printing the column name shows them neither the
+      quantity nor the unit.
+    * **Nulls that vanish.** A skipped row is indistinguishable from a
+      row nobody thought to render, so the reader cannot tell "this
+      record carries no uncertainty" from "this page forgot to show
+      one".
+    * **No hierarchy.** Molecule, charge, provenance and public ref set
+      at one size leaves the reader to work out the reading order
+      themselves, which is exactly the work a JSON document leaves
+      them to do.
+
+    Two chemistry renderings are pinned as well, both of which are
+    arithmetic on a value the record states and neither of which
+    infers anything past it: multiplicity gains its spin word beside
+    the number, and charge gains a sign.
+    """
+
+    #: The value renderers, and the record-level renderers around them.
+    VIEWS = (
+        "thermoView(record)",
+        "statmechView(record)",
+        "transportView(record)",
+        "conformerView(record)",
+        "calculationView(record)",
+        "kineticsView(record)",
+        "transitionStateView(record)",
+    )
+
+    #: Units this page is allowed to print, and the only ones it does.
+    #: A unit that is not on this list is either a typo or a quantity
+    #: nobody checked, and both should fail loudly rather than reach a
+    #: public page.
+    UNITS = frozenset({"kJ/mol", "J/mol·K", "K", "Å", "D", "hartree"})
+
+    @staticmethod
+    def _labels(body: str) -> list[str]:
+        """Every field label a view puts on screen.
+
+        Labels are the first element of each ``["...", value]`` pair in
+        a view's ``headline`` / ``facts`` / ``provenance`` arrays.
+        """
+        return re.findall(r'\[\s*"([^"]+)",', body)
+
+    def test_no_label_a_reader_sees_is_a_database_column_name(self, script):
+        """``h298_kj_mol`` is a column. "ΔH°(298 K)" is what it means.
+
+        Checked over every label every view emits rather than over a
+        list of the ones that used to be wrong, so a view added later
+        with a raw key in it fails here.
+        """
+        seen = 0
+        for signature in self.VIEWS:
+            body = _js_function(script, signature)
+            labels = self._labels(body)
+            assert labels, signature
+            for label in labels:
+                seen += 1
+                assert "_" not in label, (signature, label)
+                assert label[0].isupper() or not label[0].isascii(), (signature, label)
+        assert seen >= 25, seen
+        # The record renderers label two more things: the identifier
+        # rows and the state chips beside the molecule.
+        renderers = ("recordNode(record)", "entryNode(entry)", "rxnRecordNode(record)")
+        for signature in renderers:
+            body = _js_function(script, signature)
+            for label in self._labels(body) + re.findall(r'stateCell\(\s*"([^"]+)"', body):
+                seen += 1
+                assert "_" not in label, (signature, label)
+        for label in ("Formula", "InChIKey", "Species ref", "Entry ref"):
+            assert f'"{label}"' in script, label
+        # The column names those rows replaced. They are still legal
+        # elsewhere in the script -- ``inchi_key`` is a real query
+        # parameter and the identifier picker sends it -- so this is
+        # scoped to the renderers rather than to the whole page.
+        rendered = "".join(_js_function(script, s) for s in self.VIEWS + renderers)
+        for column in ("inchi_key", "species_entry_ref", "h298_kj_mol", "s298_j_mol_k"):
+            assert f'"{column}"' not in rendered, column
+
+    def test_a_quantity_is_a_number_and_a_unit_in_its_own_element(self, script, page):
+        """The unit is rendered, and rendered as a unit.
+
+        Two halves. Every unit the views pass is one of the units this
+        page knows how to print -- so a column name cannot be smuggled
+        in as a unit string -- and the renderer puts it in its own
+        element with its own style, rather than gluing it onto the
+        number as text.
+        """
+        units = set()
+        for signature in self.VIEWS:
+            body = _js_function(script, signature)
+            for unit in re.findall(r'(?:fixed|scientific)\([^()]*,\s*\d+,\s*"([^"]+)"\)', body):
+                units.add(unit)
+            # A span built as an object literal rather than through a
+            # formatter still names a unit, and is checked the same way.
+            for unit in re.findall(r'unit:\s*"([^"]+)"', body):
+                units.add(unit)
+        assert units, "no view passes a unit at all"
+        assert units <= self.UNITS, units - self.UNITS
+        assert {"kJ/mol", "J/mol·K"} <= units
+        filler = _js_function(script, "fillValue(node, value)")
+        assert 'make("span", "unit", value.unit)' in filler
+        css = _stylesheet(page)
+        assert re.search(r"\.unit\s*\{[^}]*color:\s*var\(--muted\)", css) is not None
+
+    def test_an_arrhenius_prefactor_carries_the_units_the_enum_names(self, script):
+        """``cm3_mol_s`` is an enum token; cm³ mol⁻¹ s⁻¹ is the unit.
+
+        Asserted against the enum itself, so a member added to
+        :class:`ArrheniusAUnits` without a typeset form fails here
+        rather than reaching the page as an underscored token.
+        """
+        typeset = _js_map(script, "A_UNITS")
+        assert set(typeset) == {member.value for member in ArrheniusAUnits}
+        for token, unit in typeset.items():
+            assert "_" not in unit, (token, unit)
+        assert typeset["per_s"].startswith("s")
+        assert typeset["cm3_mol_s"].startswith("cm³")
+
+    def test_a_value_the_record_does_not_carry_says_so(self, script):
+        """A null renders "not recorded"; it does not disappear.
+
+        The renderer used to ``continue`` past a null pair. That is the
+        one behaviour this test exists to keep out: it makes an absent
+        value and an unrendered one look identical on screen.
+        """
+        assert 'var ABSENT = "not recorded";' in script
+        filler = _js_function(script, "fillValue(node, value)")
+        assert "value === null || value === undefined" in filler
+        assert "ABSENT" in filler
+        fields = _js_function(script, "fieldList(pairs, cls)")
+        assert "continue" not in fields
+        assert "fillValue(" in fields
+        quantities = _js_function(script, "quantityBlock(pairs)")
+        assert "continue" not in quantities
+        assert "fillValue(" in quantities
+
+    def test_multiplicity_is_shown_as_a_spin_state_and_as_the_number(self, script):
+        """2 is a doublet, and both readings stay on the card.
+
+        Multiplicity is 2S+1: the word is what a chemist reads and
+        carries "one unpaired electron" with it; the number is what the
+        API holds and what goes back into a query. Replacing either
+        with the other costs a different reader, so the card shows the
+        word with the number beside it.
+        """
+        spins = _js_map(script, "SPIN_WORDS")
+        assert spins["1"] == "singlet"
+        assert spins["2"] == "doublet"
+        assert spins["3"] == "triplet"
+        assert spins["4"] == "quartet"
+        # 2S+1 has no zero and no fractions: the keys are the integers.
+        assert set(spins) == {str(n) for n in range(1, len(spins) + 1)}
+        strip = _js_function(script, "stateStrip(charge, multiplicity)")
+        assert 'stateCell("spin state", spin,' in strip
+        assert "String(multiplicity)" in strip
+        cell = _js_function(script, "stateCell(label, value, aside)")
+        assert 'make("span", "state-aside", "(" + aside + ")")' in cell
+        # The same pairing inside a transition-state card.
+        ts = _js_function(script, "transitionStateView(record)")
+        assert 'spin + " (" + multiplicity + ")"' in ts
+
+    def test_charge_is_rendered_as_a_sign_with_a_real_minus(self, script):
+        """``-1`` is a hyphen and an integer. −1 is a charge.
+
+        The minus is U+2212, not the ASCII hyphen a column of integers
+        would leave behind, and the assertion checks the codepoint
+        rather than the glyph so the two cannot be confused here
+        either.
+        """
+        assert 'var MINUS = "' + chr(0x2212) + '";' in script
+        charge = _js_function(script, "chargeText(charge)")
+        assert 'return "+" + number;' in charge
+        assert "return MINUS + Math.abs(number);" in charge
+        assert 'return "0";' in charge
+        assert "-" not in charge, "an ASCII hyphen is building a charge somewhere"
+        strip = _js_function(script, "stateStrip(charge, multiplicity)")
+        assert 'stateCell("charge", chargeText(charge)' in strip
+
+    def test_a_formula_is_subscripted_only_when_it_round_trips(self, script):
+        """A wrong formula is far worse than an unsubscripted one.
+
+        The parts are reassembled and compared against the string that
+        arrived; anything that does not match exactly is printed as it
+        arrived. Without the comparison this would silently reshape a
+        formula it had misread.
+        """
+        body = _js_function(script, "formulaNode(formula)")
+        assert 'parts.join("") !== text' in body
+        assert "node.textContent = text;" in body
+        assert 'make("sub", split[2])' in body or 'make("sub", null, split[2])' in body
+
+    def test_a_public_ref_is_present_copyable_and_not_the_headline(self, script, page):
+        """It is what a citation needs and not what a reader reads.
+
+        Three properties, and the third is the one that was wrong: the
+        ref is on the card, it can be lifted out in one click, and it
+        is set smaller than the molecule rather than beside it at the
+        same weight. The size comparison is read out of the stylesheet
+        so that it is a fact about what renders.
+        """
+        assert 'var REF_WORD = "Public ref";' in script
+        idents = _js_function(script, "identList(rows)")
+        assert 'make("code", "ident-value", value)' in idents
+        assert "copyButton(value, label, code)" in idents
+        css = _stylesheet(page)
+        molecule = _css_declaration(css, ".smiles,\n.equation", "font-size")
+        ident = _css_declaration(css, ".ident-value,\n.formula", "font-size")
+        assert molecule == "1.25rem", molecule
+        assert ident == "var(--fs-data)", ident
+        data = float(_css_declaration(css, ":root", "--fs-data").removesuffix("rem"))
+        assert data < float(molecule.removesuffix("rem"))
+
+    def test_the_thermo_card_reads_provenance_from_the_shape_the_api_sends(self, script):
+        """The level of theory used to be read off the wrong object.
+
+        A thermo search row is ``{species, thermo}`` and the provenance
+        block hangs off the ``thermo`` half. Read off the row it is
+        always ``undefined``, so the level of theory was null on every
+        card and the row was then silently dropped -- a field that
+        looked absent because the page was looking in the wrong place.
+        Both halves of that are asserted: the schema shape, from the
+        models themselves, and the path the script takes.
+        """
+        assert "provenance" not in ThermoSearchRecord.model_fields
+        assert "provenance" in ThermoRecord.model_fields
+        body = _js_function(script, "thermoView(record)")
+        assert "var provenance = thermo.provenance || {};" in body
+        assert "record.provenance" not in body
+        assert "primary.level_of_theory" in body
+
+    @pytest.mark.parametrize(
+        ("name", "enum"),
+        (
+            ("CALCULATION_WORDS", CalculationType),
+            ("THERMO_MODEL_WORDS", ThermoModelKindQuery),
+            ("KINETICS_MODEL_WORDS", KineticsModelKind),
+        ),
+    )
+    def test_every_enum_token_the_page_prints_has_a_word(self, script, name, enum):
+        """A token added to one of these enums cannot reach the page bare.
+
+        These three are the enums whose tokens the page turns into
+        prose. Every member has an entry, checked against the enum
+        rather than against a copy of it, so the map cannot drift out
+        of date while every other assertion here keeps passing.
+        """
+        mapping = _js_map(script, name)
+        assert set(mapping) == {member.value for member in enum}
+        for token, word in mapping.items():
+            assert word and "_" not in word, (token, word)
+
+    def test_the_equation_arrow_is_replaced_only_where_it_stands_alone(self, script):
+        """``<=>`` between spaces is an arrow; anywhere else it is data.
+
+        SMILES are full of ``=`` and brackets, so the substitution is
+        anchored on the surrounding spaces. Splitting on the spaced
+        token is what makes that true, and a version that replaced the
+        bare token would corrupt a structure rather than typeset an
+        equation.
+        """
+        body = _js_function(script, "equationText(equation)")
+        assert '.split(" <=> ").join(" ⇌ ")' in body
+        assert '.split(" => ").join(" → ")' in body
+        assert '"<=>"' not in body
+
+    def test_the_scripting_off_reader_loses_none_of_this(self, document, page):
+        """Every rendering above is script-built, by construction.
+
+        These cards render search results, which do not exist until a
+        fetch has run. What must survive is what worked before one did,
+        and none of it is touched by any of the above.
+        """
+        assert len(_noscript_forms(document, SPECIES_SEARCH_PATH)) == len(SEARCH_FIELDS) - 1
+        assert len(_noscript_forms(document, REACTION_SEARCH_PATH)) >= 1
+        assert document.find("input", id="search-input")
+        assert re.findall(r"<script\b([^>]*)>", page, re.IGNORECASE) == [""]
 
 
 class TestTrustVerdictIsShown:

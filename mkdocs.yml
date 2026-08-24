@@ -66,6 +66,7 @@ nav:
   - Concepts:
       - Core Concepts: guides/core_concepts.md
       - Scientific Check Register: guides/scientific_check_register.md
+      - API Vocabulary: guides/api_vocabulary.md
       - Public Identifiers: specs/public_identifier_policy.md
       - Internal ID Visibility: specs/internal_ids_visibility_policy.md
   - Guides:
