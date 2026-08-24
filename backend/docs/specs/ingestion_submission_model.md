@@ -207,6 +207,37 @@ returns the stored response — including the original `submission_id` — and
 creates no second submission, duplicate record links, or duplicate artifact
 links. Failed attempts do not store an idempotency record, so a retry re-attempts.
 
+## Licensing is not yet part of the upload contract — and must become one
+
+A submission records **who** deposited **what**, **when**, and **how it was
+produced**. It does not record **under what terms it may be republished**, and
+nothing in an upload payload says.
+
+That gap is invisible today and only today. The scientific corpus is published
+under CC BY 4.0 (`LICENSE-DATA`; `dataset_release.data_license` defaults to
+`CC-BY-4.0`), and every depositor on the hosted instance is the operator, who
+may license his own deposits. The moment a second contributor uploads, a
+release cut with that default would republish their records under a license
+they never agreed to. A configuration default is not consent, and a deposit
+already accepted cannot be retroactively consented to.
+
+**The constraint, stated so a future implementer meets it before the second
+contributor does:** the data license must become part of the upload contract —
+declared or agreed at deposit time, recorded against the submission, and
+honoured when a release selects the records — **before** a deployment accepts
+deposits from anyone but its operator. Until then, the `CC-BY-4.0` default
+means only "the terms the operator applies to data the operator is entitled to
+license".
+
+Deliberately not designed here. It touches the upload payloads, the submission
+tables, the bundle format, and the release manifest at once, and it deserves
+its own decision record rather than a field bolted onto a schema. What this
+paragraph fixes is that the requirement is written down where ingestion is
+specified, instead of living in the head of the person who noticed it. The
+same constraint is recorded from the release side in
+[`dataset_release_and_profiles.md`](dataset_release_and_profiles.md) §7b and
+in `LICENSE-DATA`.
+
 ## What is unchanged
 
 - Scientific products (`thermo`, `statmech`, `transport`, `kinetics`) remain

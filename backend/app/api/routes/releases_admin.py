@@ -36,6 +36,8 @@ from app.schemas.reads.scientific_release import (
     ReleaseSelectionRecord,
 )
 from app.services.release.curation import (
+    DEFAULT_CODE_LICENSE,
+    DEFAULT_DATA_LICENSE,
     ReleaseCurationError,
     ReleaseRecordNotFound,
     ReleaseStateConflict,
@@ -109,14 +111,26 @@ class CreateReleaseRequest(BaseModel):
 
     No ``doi`` field: a DOI is recorded after a deposit, never asserted up
     front.
+
+    ``data_license`` and ``code_license`` are optional and default to the
+    house pair — ``CC-BY-4.0`` for the corpus, ``MIT`` for the code. A curator
+    cutting an ordinary release does not have to restate the licensing of the
+    project on every request, and one who is publishing under different terms
+    passes them explicitly and gets exactly what they passed. An empty string
+    is still refused: not naming a license and declaring there is none are
+    different claims.
     """
 
     tag: str = Field(min_length=1, max_length=64)
     title: str = Field(min_length=1)
     curation_policy_name: str = Field(min_length=1)
     curation_policy_version: str = Field(min_length=1)
-    data_license: str = Field(min_length=1, max_length=64)
-    code_license: str = Field(min_length=1, max_length=64)
+    data_license: str = Field(
+        default=DEFAULT_DATA_LICENSE, min_length=1, max_length=64
+    )
+    code_license: str = Field(
+        default=DEFAULT_CODE_LICENSE, min_length=1, max_length=64
+    )
     citation_text: str = Field(min_length=1)
     contact: str = Field(min_length=1)
     description: str | None = None

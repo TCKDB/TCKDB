@@ -12,12 +12,30 @@
 # DOI is not retractable, and the corpus is not yet published. The procedure
 # for minting one when a paper tag is cut is documented in
 # backend/docs/deployment/cutting_a_dataset_release.md.
+#
+# The same split runs through licensing, and CFF 1.2.0 has nowhere to put the
+# second half of it. `license:` below is MIT: it describes *this software*.
+# The scientific data is licensed separately under CC BY 4.0 — see
+# `LICENSE-DATA` at the repository root for what that covers and what it does
+# not, and `dataset_release.data_license` for the license a specific release
+# was actually published under.
+#
+# `license:` accepts a list, so `[MIT, CC-BY-4.0]` would validate. It is not
+# used, because it would be false: it says one work is available under either
+# license, and TCKDB is two works under one each. `license-url:` is defined
+# only for licenses absent from the SPDX list, and CC-BY-4.0 is on it. So the
+# data license lives in prose here and in `LICENSE-DATA` in full — a reader
+# who needs to cite the numbers reaches the dataset release anyway, which
+# names its own license in the manifest it is cited by.
 cff-version: 1.2.0
 title: "TCKDB — Thermochemical and Kinetics Database"
 message: >-
   If you use this software, please cite it using the metadata in this file.
   If you use data obtained from a TCKDB instance, please additionally cite
   the specific dataset release (tag and manifest checksum) you queried.
+  The software is MIT-licensed (see LICENSE); the scientific data is
+  licensed separately under CC BY 4.0 (see LICENSE-DATA), which makes that
+  citation an obligation of reuse, not only a courtesy.
 type: software
 authors:
   - family-names: Pieters

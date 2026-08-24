@@ -603,6 +603,16 @@ stable public service yet.
 
 ## License
 
-TCKDB is released under the [MIT License](LICENSE). Copyright (c) 2026
-Calvin Pieters, Alon Grinberg Dana, and Technion -- Israel Institute of
-Technology.
+TCKDB's **code** is released under the [MIT License](LICENSE). TCKDB's
+**scientific data** — the deposited records, the products derived from
+them, and the raw calculation artifacts published in a dataset release —
+is licensed separately under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/): use it for
+anything, including commercially, provided you cite the dataset release
+you used (its tag and manifest checksum). See
+[`LICENSE-DATA`](LICENSE-DATA) for the exact scope, and
+`dataset_release.data_license` for the license a particular release was
+published under.
+
+Copyright (c) 2026 Calvin Pieters, Alon Grinberg Dana, and Technion --
+Israel Institute of Technology.
