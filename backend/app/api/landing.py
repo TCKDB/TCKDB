@@ -39,6 +39,38 @@ clicked a link on a landing page. The raw document is still one click
 away from inside each panel, under a label that says it is raw JSON.
 Nothing on this page takes a reader somewhere they did not expect.
 
+A result is rendered as a page, not as a payload with better fonts.
+That distinction is the difference between a landing page and a JSON
+viewer, and it comes down to four things the earlier version of these
+cards got wrong. Field names were column names: ``inchi_key``,
+``h298_kj_mol``, ``multiplicity``. Units were either absent or spelled
+into the label, which is what a fixed-unit column name is *for* --
+``h298_kj_mol`` carries kJ/mol in its spelling precisely so the reader
+can be shown the unit properly, and printing the column name shows
+them neither. Values were printed at whatever precision a double
+happened to hold. And everything -- molecule, charge, provenance,
+public ref -- was set at one size, which leaves the reader to supply
+the hierarchy themselves.
+
+So: the molecule or the equation is the only thing on a card set
+larger than body text; charge and spin state qualify it and sit with
+it; the quantities a panel was opened for are drawn with their units
+beside them; provenance is quieter and comes after; and the public
+ref is last, smallest, monospace and click-to-copy -- present because
+it is what a citation needs, demoted because it is not what a reader
+reads. A value the record does not carry says so rather than
+vanishing, since a skipped row is indistinguishable from a row nobody
+thought to show.
+
+The chemistry the page renders it renders properly and stops there.
+Multiplicity gains its spin word (2S+1, so 2 is a doublet) *beside*
+the number rather than instead of it; charge gains a sign and a real
+U+2212; a formula gains subscripts only when it round-trips through
+the reconstruction, and is printed exactly as it arrived when it does
+not. Nothing is inferred past that: no record is called a radical, a
+transition state or anything else the record does not itself say, and
+no quantity is derived from another.
+
 An expanded panel also says **how far its evidence has been checked**,
 which is the claim that distinguishes this database from a folder of
 output files. Each card carries the deterministic rubric's verdict --
@@ -614,12 +646,6 @@ noscript { display: block; margin-top: 1rem; }
   color: var(--phase-pos);
 }
 .search .rxn-add:hover { border-color: var(--phase-pos); }
-.equation {
-  font-family: var(--mono);
-  font-size: 1.0625rem;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
 
 /* ---- results ---- */
 .results { margin-top: 1.25rem; }
@@ -647,31 +673,138 @@ noscript { display: block; margin-top: 1rem; }
   padding: 0.9rem 1rem 1rem;
   margin-top: 0.6rem;
 }
+/*
+ * ---- the reading order of a result ----
+ *
+ * Four levels, and the sizes are the whole argument. The molecule or
+ * the equation is what the reader came for and is the only thing on a
+ * card set larger than body text. The state it is in -- charge, spin
+ * -- qualifies the structure and sits with it. Provenance is quieter
+ * and comes after. Identifiers are last and smallest: an InChIKey and
+ * a public ref are what a machine and a citation need, they must be
+ * on the card, and they must never be the first thing the eye lands
+ * on. Given equal weight, as they had, a reader has to supply the
+ * hierarchy themselves -- which is the work a JSON viewer leaves them
+ * to do, and the reason a page full of real data still read as one.
+ */
 .record-head {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 0.5rem 0.75rem;
+  gap: 0.4rem 1.25rem;
 }
-.smiles {
+.molecule {
+  margin: 0;
+  max-width: none;
+  flex: 1 1 12rem;
+  min-width: 0;
+}
+.smiles,
+.equation {
   font-family: var(--mono);
-  font-size: 1.0625rem;
+  font-size: 1.25rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+.state {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.2rem 1.25rem;
+}
+.state-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.state-label,
+.quantity-label,
+.group-label,
+.idents dt {
+  font-family: var(--mono);
+  font-size: var(--fs-label);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.state-value {
+  font-size: var(--fs-data);
   font-weight: 700;
   overflow-wrap: anywhere;
 }
-.record-meta {
+.state-aside {
+  font-family: var(--mono);
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 0.3rem;
+}
+/*
+ * A value the record does not carry is drawn, not skipped. It is set
+ * in the body face rather than the data face precisely so that it
+ * cannot be misread as a value: "not recorded" is a sentence about
+ * the record, not a reading from it.
+ */
+.absent {
+  font-family: var(--sans);
+  font-style: italic;
+  font-weight: 400;
+  color: var(--muted);
+}
+.state-value.absent,
+.quantity-value.absent { font-size: var(--fs-data); }
+/*
+ * Identifiers: present, monospace, small, copyable, secondary.
+ */
+.idents {
+  display: grid;
+  grid-template-columns: minmax(0, auto) minmax(0, 1fr);
+  gap: 0.1rem 0.75rem;
+  margin: 0.7rem 0 0;
+  align-items: baseline;
+}
+.idents dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: var(--fs-label);
+}
+/*
+ * A ref is twenty-eight characters of base32 and a label column takes
+ * a third of a 360px screen away from it, breaking every ref across
+ * two lines. Below that width the label goes above its value instead.
+ */
+@media (max-width: 29rem) {
+  .idents { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  .idents dt { margin-top: 0.4rem; }
+}
+.ident-value,
+.formula {
   font-family: var(--mono);
   font-size: var(--fs-data);
   color: var(--muted);
   overflow-wrap: anywhere;
 }
-.record-refs {
-  margin: 0.5rem 0 0;
+.formula { color: var(--ink); }
+.copy {
   font-family: var(--mono);
-  font-size: var(--fs-data);
-  color: var(--muted);
-  overflow-wrap: anywhere;
+  font-size: var(--fs-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--phase-pos);
+  background: transparent;
+  border: 1px solid var(--rule);
+  padding: 0.05rem 0.35rem;
+  line-height: 1.6;
+  cursor: pointer;
+}
+.copy:hover { border-color: var(--phase-pos); }
+.record-raw {
+  margin: 0.85rem 0 0;
   max-width: none;
+  font-size: var(--fs-data);
 }
 .entry {
   margin-top: 0.8rem;
@@ -685,9 +818,8 @@ noscript { display: block; margin-top: 1rem; }
   gap: 0.5rem 0.75rem;
 }
 .entry-kind {
-  font-family: var(--mono);
   font-size: var(--fs-data);
-  color: var(--muted);
+  font-weight: 700;
 }
 .entry-links {
   display: flex;
@@ -796,23 +928,50 @@ button.pill {
   gap: 0.4rem 0.6rem;
 }
 .detail-title {
+  font-size: var(--fs-body);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow-wrap: anywhere;
+}
+/*
+ * The quantities a reader opened the panel for. The label sits above
+ * its value rather than beside it, so a row of them reads as
+ * measurements rather than as a table of keys, and the unit is its own
+ * element at its own weight -- never spelled into the label, which is
+ * what a column name like ``h298_kj_mol`` does and why it reads as
+ * machine output.
+ */
+.quantities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.75rem;
+  margin-top: 0.6rem;
+}
+.quantity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.quantity-value {
   font-family: var(--mono);
-  font-size: var(--fs-data);
+  font-size: 1.0625rem;
   font-weight: 700;
   overflow-wrap: anywhere;
 }
-.detail-ref {
-  font-family: var(--mono);
-  font-size: var(--fs-data);
+.quantity-value .unit { font-size: var(--fs-data); font-weight: 400; }
+.unit {
   color: var(--muted);
-  overflow-wrap: anywhere;
+  margin-left: 0.35rem;
 }
+sub, sup { line-height: 0; font-size: 0.75em; }
+.group-label { margin: 0.8rem 0 0; max-width: none; }
 .fields {
   display: grid;
   grid-template-columns: minmax(0, auto) minmax(0, 1fr);
   gap: 0.15rem 0.8rem;
   margin: 0.5rem 0 0;
   font-size: var(--fs-data);
+  align-items: baseline;
 }
 .fields dt { color: var(--muted); }
 .fields dd {
@@ -820,6 +979,9 @@ button.pill {
   font-family: var(--mono);
   overflow-wrap: anywhere;
 }
+.fields-quiet { margin-top: 0.25rem; }
+.fields-quiet dd { color: var(--muted); }
+.detail-card .idents { margin-top: 0.8rem; }
 /*
  * ---- how far the evidence behind a record has been checked ----
  *
@@ -1477,6 +1639,111 @@ __HERO_SPECTRUM__
     return n + " " + (n === 1 ? one : many);
   }
 
+  /*
+   * ---- the public ref ----------------------------------------------
+   *
+   * ``spc_atp56uqux2ajao7hvckx7gx7ca`` is what a paper cites and what
+   * a query takes, and it is not something anyone reads. It belongs on
+   * the card -- leaving it off would make the record uncitable -- but
+   * small, monospace and below the thing it identifies, never
+   * competing with the molecule for the eye.
+   *
+   * It is also the one string on a card a reader actually wants to
+   * lift out, and selecting thirty characters of base32 by hand is
+   * where that goes wrong. Hence the button. Everything here is
+   * script-built, like the rest of the results, so there is nothing
+   * for a scripting-off reader to find broken.
+   */
+  function selectContents(node) {
+    var selection = window.getSelection ? window.getSelection() : null;
+    if (!selection || !doc.createRange) { return false; }
+    var range = doc.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
+  function copyButton(text, what, target) {
+    var button = make("button", "copy", "copy");
+    button.type = "button";
+    button.setAttribute("aria-label", "Copy the " + what);
+    var settle = function (word) {
+      button.textContent = word;
+      window.setTimeout(function () { button.textContent = "copy"; }, 1500);
+    };
+    button.addEventListener("click", function () {
+      /*
+       * The clipboard API is unavailable outside a secure context, so
+       * the fallback selects the ref instead and says it did. A button
+       * that quietly does nothing would be worse than no button.
+       */
+      if (window.navigator && navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          settle("copied");
+        }, function () {
+          settle(selectContents(target) ? "selected" : "select it");
+        });
+        return;
+      }
+      settle(selectContents(target) ? "selected" : "select it");
+    });
+    return button;
+  }
+
+  /*
+   * ``[["InChIKey", value, copyable], ...]``. A missing identifier
+   * says it is missing: a card that shows an InChIKey for one record
+   * and nothing at all for the next leaves the reader unable to tell
+   * "this record has none" from "this page forgot".
+   */
+  function identList(rows) {
+    var list = make("dl", "idents");
+    for (var i = 0; i < rows.length; i += 1) {
+      var label = rows[i][0];
+      var value = rows[i][1];
+      var cell = make("dd", null);
+      if (value === null || value === undefined || value === "") {
+        cell.className = "absent";
+        cell.appendChild(doc.createTextNode(ABSENT));
+      } else if (typeof value === "object") {
+        cell.appendChild(value);
+      } else {
+        var code = make("code", "ident-value", value);
+        cell.appendChild(code);
+        if (rows[i][2]) { cell.appendChild(copyButton(value, label, code)); }
+      }
+      list.appendChild(make("dt", null, label));
+      list.appendChild(cell);
+    }
+    return list;
+  }
+
+  /*
+   * A molecular formula, with the counts as subscripts -- but only
+   * when the string is unambiguously a sequence of element symbols and
+   * counts. The reconstruction is compared against the original and
+   * anything that does not round-trip is printed exactly as it
+   * arrived. A formula rendered wrongly is far worse than a formula
+   * rendered plainly, and this page does not guess at chemistry.
+   */
+  function formulaNode(formula) {
+    if (!formula) { return null; }
+    var text = String(formula);
+    var node = make("span", "formula");
+    var parts = text.match(/[A-Z][a-z]?[0-9]*/g);
+    if (!parts || parts.join("") !== text) {
+      node.textContent = text;
+      return node;
+    }
+    for (var i = 0; i < parts.length; i += 1) {
+      var split = /^([A-Z][a-z]?)([0-9]*)$/.exec(parts[i]);
+      node.appendChild(doc.createTextNode(split[1]));
+      if (split[2]) { node.appendChild(make("sub", null, split[2])); }
+    }
+    return node;
+  }
+
   function searchUrl(field, value) {
     if (!value) { return SEARCH; }
     return SEARCH + "?" + encodeURIComponent(field) + "=" + encodeURIComponent(value);
@@ -1530,10 +1797,175 @@ __HERO_SPECTRUM__
    * replaced by counts; until they are, this page shows none of them.
    */
 
+  /*
+   * ---- a value a person reads, not a value a parser reads ----------
+   *
+   * Three rules separate a rendered page from a JSON viewer with nicer
+   * fonts, and all three are about the same thing: a field name is the
+   * API's business, not the reader's.
+   *
+   * A quantity is a *number and a unit*, and the unit belongs on
+   * screen in its own element rather than spelled into the label.
+   * ``h298_kj_mol`` is a column name that carries its unit in its
+   * spelling precisely so that a reader can be shown the unit
+   * properly; printing the column name shows them neither the
+   * quantity nor the unit.
+   *
+   * A number is rounded to what the quantity supports. The API answers
+   * 143.8942674605864 kJ/mol because that is what a double holds; past
+   * the second decimal it is float noise, and printing it is the
+   * clearest possible signal that nobody looked at the output.
+   *
+   * A value that is not there says so. Skipping a null row silently
+   * makes "this record does not carry an uncertainty" look identical
+   * to "this page never thought to show one", and the reader cannot
+   * tell which they are looking at.
+   */
+  var ABSENT = "not recorded";
+  var MINUS = "\u2212";
+  /* What the API calls a ``*_ref``, in the words the docs use. */
+  var REF_WORD = "Public ref";
+
   function fixed(value, digits, unit) {
     if (value === null || value === undefined) { return null; }
-    var text = Number(value).toFixed(digits);
-    return unit ? text + " " + unit : text;
+    return { value: Number(value).toFixed(digits), unit: unit || null };
+  }
+
+  /*
+   * A pre-exponential factor is 1.2e+13 in the payload and reads as
+   * one there. On a page it is 1.2 x 10^13, which is how it is written
+   * everywhere else in the field. The mantissa/exponent split is taken
+   * from ``toExponential`` rather than from string surgery on the
+   * original, so there is no arithmetic here to get wrong; a value
+   * that does not match the expected shape falls through to plain
+   * digits rather than being reshaped on a guess.
+   */
+  function scientific(value, digits, unit) {
+    if (value === null || value === undefined) { return null; }
+    var number = Number(value);
+    if (!isFinite(number)) { return null; }
+    if (number === 0) { return { value: "0", unit: unit || null }; }
+    var magnitude = Math.abs(number);
+    if (magnitude >= 1e4 || magnitude < 1e-2) {
+      var parts = /^(-?[0-9](?:\\.[0-9]+)?)e([+-][0-9]+)$/.exec(
+        number.toExponential(digits - 1));
+      if (parts) {
+        return {
+          value: parts[1],
+          exponent: parts[2].charAt(0) === "-" ? MINUS + parts[2].slice(1) : parts[2].slice(1),
+          unit: unit || null
+        };
+      }
+    }
+    return { value: String(Number(number.toPrecision(digits))), unit: unit || null };
+  }
+
+  /*
+   * Multiplicity is 2S+1, and the word is what a chemist reads first:
+   * "doublet" says one unpaired electron in a way that "2" does not.
+   * The number stays next to the word rather than being replaced by
+   * it -- the number is what the API carries and what a reader types
+   * back into a query -- so this adds a reading instead of removing
+   * one. Nothing beyond the arithmetic is claimed here: the page does
+   * not go on to call a doublet a radical, because the record does not
+   * say that and this page does not infer chemistry.
+   */
+  var SPIN_WORDS = {
+    "1": "singlet",
+    "2": "doublet",
+    "3": "triplet",
+    "4": "quartet",
+    "5": "quintet",
+    "6": "sextet",
+    "7": "septet",
+    "8": "octet"
+  };
+
+  function spinWord(multiplicity) {
+    if (multiplicity === null || multiplicity === undefined) { return null; }
+    return SPIN_WORDS[String(multiplicity)] || null;
+  }
+
+  /*
+   * A charge is a signed quantity and is written as one. The neutral
+   * case stays a bare zero; a negative one gets U+2212, not the hyphen
+   * that a column of integers would leave there.
+   */
+  function chargeText(charge) {
+    if (charge === null || charge === undefined) { return null; }
+    var number = Number(charge);
+    if (number > 0) { return "+" + number; }
+    if (number < 0) { return MINUS + Math.abs(number); }
+    return "0";
+  }
+
+  /*
+   * ``opt`` and ``freq`` are the API's tokens for jobs that have
+   * names. Every member of the calculation-type enum is here and the
+   * test suite fails if one is added without a word, because a card
+   * titled with a three-letter token is the JSON view again.
+   */
+  var CALCULATION_WORDS = {
+    opt: "geometry optimisation",
+    freq: "frequencies",
+    sp: "single-point energy",
+    irc: "intrinsic reaction coordinate",
+    scan: "coordinate scan",
+    path_search: "reaction path search",
+    conf: "conformer search"
+  };
+
+  /*
+   * Model names, capitalised as their own literature capitalises them.
+   * Every member of the two model enums the read API publishes is
+   * here, and the suite fails if one is added without a name, because
+   * "nasa" and "sri" are the API's spelling of NASA and SRI and
+   * printing them lower case is printing the payload.
+   */
+  var THERMO_MODEL_WORDS = {
+    nasa: "NASA-7 polynomial",
+    nasa9: "NASA-9 polynomial",
+    wilhoit: "Wilhoit",
+    points: "tabulated points",
+    scalar: "scalar values only"
+  };
+  var KINETICS_MODEL_WORDS = {
+    arrhenius: "Arrhenius",
+    modified_arrhenius: "modified Arrhenius",
+    multi_arrhenius: "multiple Arrhenius",
+    lindemann: "Lindemann",
+    troe: "Troe",
+    sri: "SRI",
+    plog: "PLOG",
+    chebyshev: "Chebyshev"
+  };
+
+  /*
+   * Arrhenius A units, typeset. Each is a direct transcription of the
+   * enum token it is keyed by -- ``cm3_mol_s`` is cubic centimetres
+   * per mole per second and nothing else -- so no judgement is being
+   * exercised, and the suite checks the enum against this map so a new
+   * member cannot arrive without one.
+   */
+  var A_UNITS = {
+    per_s: "s⁻¹",
+    cm3_mol_s: "cm³ mol⁻¹ s⁻¹",
+    cm3_molecule_s: "cm³ molecule⁻¹ s⁻¹",
+    m3_mol_s: "m³ mol⁻¹ s⁻¹",
+    cm6_mol2_s: "cm⁶ mol⁻² s⁻¹",
+    cm6_molecule2_s: "cm⁶ molecule⁻² s⁻¹",
+    m6_mol2_s: "m⁶ mol⁻² s⁻¹"
+  };
+
+  /*
+   * Anything else the API spells with underscores. This is a
+   * transcription, never a translation: ``asymmetric_top`` becomes
+   * "asymmetric top" and stops there. Inventing an expansion for a
+   * token this page has never seen would be inventing chemistry.
+   */
+  function words(token) {
+    if (token === null || token === undefined || token === "") { return null; }
+    return String(token).replace(/_/g, " ");
   }
 
   /*
@@ -1552,6 +1984,16 @@ __HERO_SPECTRUM__
     return version.indexOf(name) === 0 ? version : name + " " + version;
   }
 
+  /*
+   * A workflow tool release is the same {name, version} pair under two
+   * different key names, so it borrows the label rule above rather
+   * than repeating it and drifting from it.
+   */
+  function toolRelease(release) {
+    if (!release) { return null; }
+    return { software: release.workflow_tool, version: release.version };
+  }
+
   function levelLabel(level) {
     if (!level) { return null; }
     if (level.label) { return level.label; }
@@ -1559,24 +2001,64 @@ __HERO_SPECTRUM__
     return level.method + (level.basis ? "/" + level.basis : "");
   }
 
+  /*
+   * ---- what a card is, once it stops being a field list ------------
+   *
+   * A thermo record is not fifteen equal fields. It is one or two
+   * quantities a reader came for, a model that says over what range
+   * they are valid, and a provenance trail that says where they came
+   * from -- three different kinds of thing, which a flat key/value
+   * list flattens into one. Each view therefore returns:
+   *
+   *   headline    the quantities, rendered large with their units
+   *   facts       what shape the record is and over what range
+   *   provenance  what produced it, rendered quiet and last
+   *
+   * The three groups are what gives a card a reading order. Without
+   * them every line is the same size and the reader has to supply the
+   * hierarchy themselves, which is exactly the work a JSON viewer
+   * leaves them to do.
+   */
   function thermoView(record) {
     var thermo = record.thermo || {};
     var coverage = thermo.temperature_coverage || {};
-    var primary = (record.provenance || {}).primary_calculation || {};
+    /*
+     * ``provenance`` sits on the thermo half of the row, not on the
+     * row: ``ThermoSearchRecord`` is ``{species, thermo}`` and the
+     * block is ``ThermoRecord.provenance``. Read off the row it is
+     * always undefined, so the level of theory silently never
+     * appeared -- the failure mode this page now refuses to have.
+     */
+    var provenance = thermo.provenance || {};
+    var primary = provenance.primary_calculation || {};
     var span = null;
-    if (coverage.record_min_k !== null && coverage.record_min_k !== undefined) {
-      span = fixed(coverage.record_min_k, 0) + "\u2013" + fixed(coverage.record_max_k, 0, "K");
+    if (coverage.record_min_k !== null && coverage.record_min_k !== undefined
+      && coverage.record_max_k !== null && coverage.record_max_k !== undefined) {
+      span = {
+        value: Number(coverage.record_min_k).toFixed(0) + "\u2013"
+          + Number(coverage.record_max_k).toFixed(0),
+        unit: "K"
+      };
     }
     return {
-      title: (thermo.model_kind || "thermo") + " fit",
+      title: "Thermodynamic properties",
       ref: thermo.thermo_ref,
       status: thermo.review ? thermo.review.status : null,
-      fields: [
-        ["enthalpy at 298 K", fixed(thermo.h298_kj_mol, 2, "kJ/mol")],
-        ["entropy at 298 K", fixed(thermo.s298_j_mol_k, 2, "J/mol/K")],
-        ["fitted over", span],
-        ["level of theory", levelLabel(primary.level_of_theory)],
-        ["origin", thermo.scientific_origin]
+      headline: [
+        ["ΔH°(298 K)", fixed(thermo.h298_kj_mol, 2, "kJ/mol")],
+        ["S°(298 K)", fixed(thermo.s298_j_mol_k, 2, "J/mol·K")]
+      ],
+      facts: [
+        ["Model", THERMO_MODEL_WORDS[thermo.model_kind] || words(thermo.model_kind)],
+        ["Valid over", span],
+        ["Uncertainty in ΔH°", fixed(thermo.h298_uncertainty_kj_mol, 2, "kJ/mol")],
+        ["Uncertainty in S°", fixed(thermo.s298_uncertainty_j_mol_k, 2, "J/mol·K")]
+      ],
+      provenance: [
+        ["Level of theory",
+          levelLabel(primary.level_of_theory || provenance.level_of_theory)],
+        ["Software", softwareLabel(primary.software || provenance.software)],
+        ["Origin", words(thermo.scientific_origin)]
       ]
     };
   }
@@ -1584,18 +2066,25 @@ __HERO_SPECTRUM__
   function statmechView(record) {
     var statmech = record.statmech || {};
     var linear = statmech.is_linear;
+    var release = record.software_release || {};
     return {
-      title: (statmech.statmech_treatment || "statmech") +
-        (statmech.rigid_rotor_kind ? " / " + statmech.rigid_rotor_kind + " rotor" : ""),
+      title: "Statistical-mechanics treatment",
       ref: statmech.statmech_ref,
       status: statmech.review ? statmech.review.status : null,
-      fields: [
-        ["point group", statmech.point_group],
-        ["symmetry number", statmech.external_symmetry],
-        ["optical isomers", statmech.optical_isomers],
-        ["linear", linear === null || linear === undefined ? null : (linear ? "yes" : "no")],
-        ["frequency scale factor", fixed(statmech.frequency_scale_factor_value, 4)],
-        ["origin", statmech.scientific_origin]
+      headline: [
+        ["Point group", statmech.point_group],
+        ["Symmetry number", statmech.external_symmetry]
+      ],
+      facts: [
+        ["Treatment", words(statmech.statmech_treatment)],
+        ["Rotor", words(statmech.rigid_rotor_kind)],
+        ["Linear", linear === null || linear === undefined ? null : (linear ? "yes" : "no")],
+        ["Optical isomers", statmech.optical_isomers],
+        ["Frequency scale factor", fixed(statmech.frequency_scale_factor_value, 4)]
+      ],
+      provenance: [
+        ["Software", softwareLabel(release)],
+        ["Origin", words(statmech.scientific_origin)]
       ]
     };
   }
@@ -1604,15 +2093,19 @@ __HERO_SPECTRUM__
     var transport = record.transport || {};
     var evidence = record.evidence_summary || {};
     return {
-      title: "Lennard-Jones parameters",
+      title: "Transport properties",
       ref: transport.transport_ref,
       status: transport.review ? transport.review.status : null,
-      fields: [
-        ["collision diameter", fixed(transport.sigma_angstrom, 3, "\u00C5")],
-        ["well depth", fixed(transport.epsilon_over_k_k, 1, "K")],
-        ["dipole moment", fixed(transport.dipole_debye, 3, "D")],
-        ["source calculations", evidence.source_calculation_count],
-        ["origin", transport.scientific_origin]
+      headline: [
+        ["Collision diameter \u03C3", fixed(transport.sigma_angstrom, 3, "Å")],
+        ["Well depth ε/k", fixed(transport.epsilon_over_k_k, 1, "K")]
+      ],
+      facts: [
+        ["Dipole moment", fixed(transport.dipole_debye, 3, "D")],
+        ["Calculations behind it", evidence.source_calculation_count]
+      ],
+      provenance: [
+        ["Origin", words(transport.scientific_origin)]
       ]
     };
   }
@@ -1627,12 +2120,14 @@ __HERO_SPECTRUM__
       title: group.label || "conformer group",
       ref: group.conformer_group_ref,
       status: group.review ? group.review.status : null,
-      fields: [
-        ["deposited as", seen === null || seen === undefined
+      headline: [
+        ["Deposited as", seen === null || seen === undefined
           ? null
-          : plural(seen, "observation", "observations") + " of this one group"],
-        ["calculations behind it", evidence.calculation_count],
-        ["distinct geometries", evidence.geometry_count]
+          : plural(seen, "observation", "observations") + " of this one group"]
+      ],
+      facts: [
+        ["Calculations behind it", evidence.calculation_count],
+        ["Distinct geometries", evidence.geometry_count]
       ]
     };
   }
@@ -1640,19 +2135,21 @@ __HERO_SPECTRUM__
   function calculationView(record) {
     var calculation = record.calculation || {};
     var energy = record.energy || {};
-    var software = record.software_release || {};
-    var hartree = energy.energy_hartree;
+    var type = calculation.calculation_type;
     return {
-      title: calculation.calculation_type || "calculation",
+      title: CALCULATION_WORDS[type] || words(type) || "calculation",
       ref: calculation.calculation_ref,
       status: calculation.review ? calculation.review.status : null,
-      fields: [
-        ["level of theory", levelLabel(record.level_of_theory)],
-        ["software", softwareLabel(software)],
-        ["energy", hartree === null || hartree === undefined
-          ? null
-          : fixed(hartree, 6, "hartree")],
-        ["quality", calculation.calculation_quality]
+      headline: [
+        ["Electronic energy", fixed(energy.energy_hartree, 6, "hartree")]
+      ],
+      facts: [
+        ["Quality", words(calculation.calculation_quality)]
+      ],
+      provenance: [
+        ["Level of theory", levelLabel(record.level_of_theory)],
+        ["Software", softwareLabel(record.software_release)],
+        ["Workflow tool", softwareLabel(toolRelease(record.workflow_tool_release))]
       ]
     };
   }
@@ -1750,15 +2247,64 @@ __HERO_SPECTRUM__
     return node;
   }
 
-  function detailFields(view) {
-    var list = make("dl", "fields");
-    for (var i = 0; i < view.fields.length; i += 1) {
-      var pair = view.fields[i];
-      if (pair[1] === null || pair[1] === undefined || pair[1] === "") { continue; }
-      list.appendChild(make("dt", null, pair[0]));
-      list.appendChild(make("dd", null, pair[1]));
+  /*
+   * One place decides what a value looks like, so a quantity cannot be
+   * formatted one way in a headline and another in a list. A value is
+   * either a plain string, a ``{value, unit, exponent}`` quantity, or
+   * absent -- and absent is a rendering, never a skipped row.
+   */
+  function fillValue(node, value) {
+    if (value === null || value === undefined || value === "") {
+      node.className = node.className ? node.className + " absent" : "absent";
+      node.appendChild(doc.createTextNode(ABSENT));
+      return node;
+    }
+    if (typeof value === "object") {
+      node.appendChild(doc.createTextNode(value.value));
+      if (value.exponent) {
+        node.appendChild(doc.createTextNode(" \u00D7 10"));
+        node.appendChild(make("sup", null, value.exponent));
+      }
+      if (value.unit) { node.appendChild(make("span", "unit", value.unit)); }
+      return node;
+    }
+    node.appendChild(doc.createTextNode(String(value)));
+    return node;
+  }
+
+  /*
+   * A real ``<dl>``, because these really are term/description pairs
+   * and a grid of ``<span>``s would say so to nobody using a screen
+   * reader.
+   */
+  function fieldList(pairs, cls) {
+    var list = make("dl", cls || "fields");
+    for (var i = 0; i < pairs.length; i += 1) {
+      list.appendChild(make("dt", null, pairs[i][0]));
+      list.appendChild(fillValue(make("dd", null), pairs[i][1]));
     }
     return list;
+  }
+
+  /*
+   * The quantities a reader opened the card for, drawn at a size that
+   * says so. The label sits above its own value rather than beside it,
+   * so a column of them reads as measurements and not as a table of
+   * keys.
+   */
+  function quantityBlock(pairs) {
+    var node = make("div", "quantities");
+    for (var i = 0; i < pairs.length; i += 1) {
+      var cell = make("div", "quantity");
+      cell.appendChild(make("span", "quantity-label", pairs[i][0]));
+      cell.appendChild(fillValue(make("span", "quantity-value"), pairs[i][1]));
+      node.appendChild(cell);
+    }
+    return node;
+  }
+
+  function groupLabel(text) {
+    return make("p", "group-label", text);
   }
 
   function checksWithOutcome(checks, outcome) {
@@ -1861,10 +2407,19 @@ __HERO_SPECTRUM__
        */
       var reviewed = view.status || (trust ? trust.review_status : null);
       if (reviewed) { head.appendChild(reviewBadge(reviewed)); }
-      if (view.ref) { head.appendChild(make("span", "detail-ref", view.ref)); }
       card.appendChild(head);
-      card.appendChild(detailFields(view));
+      if (view.headline && view.headline.length) {
+        card.appendChild(quantityBlock(view.headline));
+      }
+      if (view.facts && view.facts.length) { card.appendChild(fieldList(view.facts)); }
+      if (view.provenance && view.provenance.length) {
+        card.appendChild(groupLabel("how it was produced"));
+        card.appendChild(fieldList(view.provenance, "fields fields-quiet"));
+      }
       if (section.trust) { card.appendChild(trustNode(trust)); }
+      if (view.ref) {
+        card.appendChild(identList([[REF_WORD, view.ref, true]]));
+      }
       fragment.appendChild(card);
     }
     if (total > shown) {
@@ -1924,17 +2479,35 @@ __HERO_SPECTRUM__
     return { button: button, panel: panel };
   }
 
+  /*
+   * ``minimum`` / ``ground`` are the API's tokens for two facts about
+   * a stationary point. Spelled out they are a sentence a reader
+   * understands without knowing the enum; unrecognised tokens fall
+   * through to their own spelling rather than being mapped onto the
+   * nearest known one.
+   */
+  var ENTRY_KIND_WORDS = {
+    minimum: "energy minimum",
+    vdw_complex: "van der Waals complex"
+  };
+  var STATE_KIND_WORDS = {
+    ground: "ground electronic state",
+    excited: "excited electronic state"
+  };
+
   function entryNode(entry) {
     var ref = entry.species_entry_ref || "";
     var availability = entry.availability || {};
+    var kind = entry.species_entry_kind;
+    var state = entry.electronic_state_kind;
     var node = make("div", "entry");
     var head = make("div", "entry-head");
-    head.appendChild(reviewBadge(entry.review ? entry.review.status : null));
     head.appendChild(make("span", "entry-kind",
-      (entry.species_entry_kind || "entry") + " / " +
-      (entry.electronic_state_kind || "state")));
-    head.appendChild(make("span", "entry-kind", ref));
+      (ENTRY_KIND_WORDS[kind] || words(kind) || "entry") + ", " +
+      (STATE_KIND_WORDS[state] || words(state) || "electronic state")));
+    head.appendChild(reviewBadge(entry.review ? entry.review.status : null));
     node.appendChild(head);
+    node.appendChild(identList([["Entry ref", ref, true]]));
 
     var links = make("div", "entry-links");
     var panels = make("div", "entry-details");
@@ -1952,22 +2525,55 @@ __HERO_SPECTRUM__
     return node;
   }
 
+  /*
+   * The state a molecule is in, as a qualifier on the molecule rather
+   * than as two more rows of a key/value list. Charge and spin are
+   * what distinguish one entry of a species from another, so they sit
+   * with the structure and above everything else.
+   */
+  function stateStrip(charge, multiplicity) {
+    var node = make("div", "state");
+    var spin = spinWord(multiplicity);
+    node.appendChild(stateCell("charge", chargeText(charge), null));
+    node.appendChild(stateCell("spin state", spin,
+      multiplicity === null || multiplicity === undefined ? null : String(multiplicity)));
+    return node;
+  }
+
+  function stateCell(label, value, aside) {
+    var cell = make("div", "state-cell");
+    cell.appendChild(make("span", "state-label", label));
+    var box = make("span", "state-value");
+    if (value === null || value === undefined) {
+      box.className = "state-value absent";
+      box.appendChild(doc.createTextNode(aside === null || aside === undefined ? ABSENT : aside));
+    } else {
+      box.appendChild(doc.createTextNode(value));
+      /*
+       * The number stays beside the word. "doublet" is what a chemist
+       * reads; 2 is what the API carries and what goes back into a
+       * query, and dropping either one costs a different reader.
+       */
+      if (aside) { box.appendChild(make("span", "state-aside", "(" + aside + ")")); }
+    }
+    cell.appendChild(box);
+    return cell;
+  }
+
   function recordNode(record) {
     var node = make("article", "record");
     var head = make("div", "record-head");
-    head.appendChild(make("span", "smiles", record.canonical_smiles || "(no SMILES)"));
-    head.appendChild(make("span", "record-meta",
-      "charge " + record.charge + ", multiplicity " + record.multiplicity));
+    var molecule = make("p", "molecule");
+    molecule.appendChild(make("span", "smiles", record.canonical_smiles || "(no SMILES)"));
+    head.appendChild(molecule);
+    head.appendChild(stateStrip(record.charge, record.multiplicity));
     node.appendChild(head);
 
-    var refs = make("p", "record-refs");
-    refs.appendChild(make("span", null, record.inchi_key || ""));
-    refs.appendChild(doc.createTextNode(" \\u00B7 "));
-    refs.appendChild(make("span", null, record.species_ref || ""));
-    refs.appendChild(doc.createTextNode(" \u00B7 "));
-    refs.appendChild(anchor(searchUrl("species_ref", record.species_ref), "raw-link",
-      "this record as raw JSON"));
-    node.appendChild(refs);
+    node.appendChild(identList([
+      ["Formula", formulaNode(record.formula), false],
+      ["InChIKey", record.inchi_key, true],
+      ["Species ref", record.species_ref, true]
+    ]));
 
     var entries = record.entries || [];
     for (var i = 0; i < entries.length; i += 1) {
@@ -1978,6 +2584,16 @@ __HERO_SPECTRUM__
       none.appendChild(make("span", "entry-kind", "no entries yet"));
       node.appendChild(none);
     }
+    /*
+     * The machine view, demoted rather than deleted. Someone who wants
+     * the real payload must always be able to get to it from the
+     * record they are looking at, and must always know that is where
+     * the link goes.
+     */
+    var raw = make("p", "record-raw");
+    raw.appendChild(anchor(searchUrl("species_ref", record.species_ref), "raw-link",
+      "this record as raw JSON"));
+    node.appendChild(raw);
     return node;
   }
 
@@ -2216,24 +2832,38 @@ __HERO_SPECTRUM__
     var params = record.parameters || {};
     var coverage = record.temperature_coverage || {};
     var span = null;
-    if (coverage.record_min_k !== null && coverage.record_min_k !== undefined) {
-      span = fixed(coverage.record_min_k, 0) + "\\u2013" + fixed(coverage.record_max_k, 0, "K");
+    if (coverage.record_min_k !== null && coverage.record_min_k !== undefined
+      && coverage.record_max_k !== null && coverage.record_max_k !== undefined) {
+      span = {
+        value: Number(coverage.record_min_k).toFixed(0) + "\u2013"
+          + Number(coverage.record_max_k).toFixed(0),
+        unit: "K"
+      };
     }
-    var prefactor = null;
-    if (params.A !== null && params.A !== undefined) {
-      prefactor = params.A_units ? params.A + " " + params.A_units : String(params.A);
-    }
+    /*
+     * The A units are an enum token in the payload and a typeset unit
+     * on screen. An unrecognised token is printed as it arrived rather
+     * than dropped: a rate constant whose units are not shown is worse
+     * than one whose units are shown in the API's own spelling.
+     */
+    var prefactor = scientific(params.A, 3,
+      params.A_units ? (A_UNITS[params.A_units] || words(params.A_units)) : null);
     return {
-      title: (record.model_kind || "kinetics") + " rate",
+      title: "Rate coefficient",
       ref: record.kinetics_ref,
       status: record.review ? record.review.status : null,
-      fields: [
-        ["pre-exponential A", prefactor],
-        ["temperature exponent n", params.n],
-        ["activation energy", fixed(params.Ea_kj_mol, 2, "kJ/mol")],
-        ["fitted over", span],
-        ["direction", record.direction],
-        ["origin", record.scientific_origin]
+      headline: [
+        ["Pre-exponential A", prefactor],
+        ["Activation energy Ea", fixed(params.Ea_kj_mol, 2, "kJ/mol")]
+      ],
+      facts: [
+        ["Temperature exponent n", scientific(params.n, 4)],
+        ["Model", KINETICS_MODEL_WORDS[record.model_kind] || words(record.model_kind)],
+        ["Valid over", span],
+        ["Direction", words(record.direction)]
+      ],
+      provenance: [
+        ["Origin", words(record.scientific_origin)]
       ]
     };
   }
@@ -2242,15 +2872,22 @@ __HERO_SPECTRUM__
     var entry = record.transition_state_entry || {};
     var state = record.transition_state || {};
     var evidence = record.evidence_summary || {};
+    var spin = spinWord(entry.multiplicity);
+    var multiplicity = entry.multiplicity;
+    if (multiplicity !== null && multiplicity !== undefined) {
+      multiplicity = spin ? spin + " (" + multiplicity + ")" : String(multiplicity);
+    }
     return {
       title: state.label || "transition state",
       ref: entry.transition_state_entry_ref,
       status: entry.review ? entry.review.status : null,
-      fields: [
-        ["saddle point", entry.status],
-        ["charge", entry.charge],
-        ["multiplicity", entry.multiplicity],
-        ["calculations behind it", evidence.calculation_count]
+      headline: [
+        ["Charge", chargeText(entry.charge)],
+        ["Spin state", multiplicity]
+      ],
+      facts: [
+        ["Saddle point", words(entry.status)],
+        ["Calculations behind it", evidence.calculation_count]
       ]
     };
   }
@@ -2284,28 +2921,42 @@ __HERO_SPECTRUM__
     }
   ];
 
+  /*
+   * The equation as chemistry rather than as ASCII. ``<=>`` and ``=>``
+   * are the API's spellings of the two arrows and are replaced only
+   * where they stand alone between spaces, so nothing inside a SMILES
+   * can be touched; anything else is left exactly as it arrived.
+   */
+  function equationText(equation) {
+    if (!equation) { return null; }
+    return String(equation).split(" <=> ").join(" ⇌ ").split(" => ").join(" → ");
+  }
+
   function rxnRecordNode(record) {
     var ref = record.reaction_entry_ref || "";
     var availability = record.availability || {};
     var node = make("article", "record");
 
     var head = make("div", "record-head");
-    head.appendChild(make("span", "equation", record.equation || "(no equation)"));
+    var equation = make("p", "molecule");
+    equation.appendChild(make("span", "equation",
+      equationText(record.equation) || "(no equation)"));
+    head.appendChild(equation);
+    var state = make("div", "state");
+    state.appendChild(stateCell("query",
+      DIRECTION_WORDS[record.matched_direction] || words(record.matched_direction), null));
+    state.appendChild(stateCell("reversible",
+      record.reversible === null || record.reversible === undefined
+        ? null
+        : (record.reversible ? "yes" : "no"), null));
+    head.appendChild(state);
     head.appendChild(reviewBadge(record.review ? record.review.status : null));
     node.appendChild(head);
 
-    var meta = make("p", "record-refs");
-    meta.appendChild(make("span", null,
-      DIRECTION_WORDS[record.matched_direction] || String(record.matched_direction)));
-    if (record.family) {
-      meta.appendChild(doc.createTextNode(" · "));
-      meta.appendChild(make("span", null, record.family));
-    }
-    meta.appendChild(doc.createTextNode(" · "));
-    meta.appendChild(make("span", null, ref));
-    meta.appendChild(doc.createTextNode(" · "));
-    meta.appendChild(anchor(rxnEntryUrl(ref), "raw-link", "this record as raw JSON"));
-    node.appendChild(meta);
+    node.appendChild(identList([
+      ["Reaction family", record.family, false],
+      ["Entry ref", ref, true]
+    ]));
 
     var links = make("div", "entry-links");
     var panels = make("div", "entry-details");
@@ -2320,6 +2971,9 @@ __HERO_SPECTRUM__
     }
     node.appendChild(links);
     node.appendChild(panels);
+    var raw = make("p", "record-raw");
+    raw.appendChild(anchor(rxnEntryUrl(ref), "raw-link", "this record as raw JSON"));
+    node.appendChild(raw);
     return node;
   }
 
