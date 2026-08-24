@@ -13249,7 +13249,7 @@
         "type": "string"
       },
       "CreateReleaseRequest": {
-        "description": "Open a draft release.\n\nNo ``doi`` field: a DOI is recorded after a deposit, never asserted up\nfront.",
+        "description": "Open a draft release.\n\nNo ``doi`` field: a DOI is recorded after a deposit, never asserted up\nfront.\n\n``data_license`` and ``code_license`` are optional and default to the\nhouse pair — ``CC-BY-4.0`` for the corpus, ``MIT`` for the code. A curator\ncutting an ordinary release does not have to restate the licensing of the\nproject on every request, and one who is publishing under different terms\npasses them explicitly and gets exactly what they passed. An empty string\nis still refused: not naming a license and declaring there is none are\ndifferent claims.",
         "properties": {
           "changelog_entry": {
             "anyOf": [
@@ -13268,6 +13268,7 @@
             "type": "string"
           },
           "code_license": {
+            "default": "MIT",
             "maxLength": 64,
             "minLength": 1,
             "title": "Code License",
@@ -13289,6 +13290,7 @@
             "type": "string"
           },
           "data_license": {
+            "default": "CC-BY-4.0",
             "maxLength": 64,
             "minLength": 1,
             "title": "Data License",
@@ -13322,8 +13324,6 @@
           "title",
           "curation_policy_name",
           "curation_policy_version",
-          "data_license",
-          "code_license",
           "citation_text",
           "contact"
         ],
