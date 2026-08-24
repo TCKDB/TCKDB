@@ -124,6 +124,11 @@ from app.schemas.reads.scientific_conformer import (
     ConformerEvidenceCoverage,
     ConformerGroupEvidenceSummary,
 )
+from app.schemas.reads.scientific_species_calculations import (
+    CalculationEnergyBlock,
+    ConformerContextBlock,
+    SpeciesCalculationsSearchRecord,
+)
 from app.schemas.reads.scientific_statmech import StatmechEvidenceSummary
 from app.schemas.reads.scientific_thermo import ThermoModelKindQuery, ThermoRecord
 from app.schemas.reads.scientific_thermo_search import ThermoSearchRecord
@@ -2504,6 +2509,16 @@ class TestACalculationCardStatesOnlyWhatTheRecordStates:
         already knows, and a lookup table here would be this page
         inventing an expectation it is not entitled to hold.
         """
+        # Read off the schema rather than off the one payload this was
+        # found on: the block is optional on the record and the reading
+        # is optional inside it, which is exactly the pair the card has
+        # to keep apart. A schema that stopped drawing that line would
+        # fail here rather than quietly making the guard meaningless.
+        record = SpeciesCalculationsSearchRecord.model_fields["energy"]
+        assert not record.is_required()
+        assert str(record.annotation).endswith("CalculationEnergyBlock | None")
+        assert not CalculationEnergyBlock.model_fields["energy_hartree"].is_required()
+
         body = _js_function(script, "calculationView(record)")
         code = _js_code(body)
         assert "var energy = record.energy;" in code
@@ -2559,6 +2574,12 @@ class TestACalculationCardStatesOnlyWhatTheRecordStates:
         about, not a fact about the machinery that produced it, and the
         provenance group is for the second kind.
         """
+        # The two field names the card reads are the schema's, checked
+        # against it so a rename breaks the test rather than the page.
+        assert not SpeciesCalculationsSearchRecord.model_fields["conformer"].is_required()
+        for field in ("conformer_group_label", "conformer_group_ref"):
+            assert field in ConformerContextBlock.model_fields, field
+
         body = _js_code(_js_function(script, "calculationView(record)"))
         assert '["Conformer", conformerText(record.conformer)]' in body
         facts = body.split("facts:")[1].split("provenance:")[0]
