@@ -312,7 +312,7 @@ def test_detail_include_trust_sparse_transport_reports_missing_checks(
     body = client.get(_detail_url(tr.public_ref, include="trust")).json()
     evidence = body["record"]["trust"]["evidence"]
     assert evidence["label"] in {"sparse", "partial"}
-    assert "source_calculations_present" in evidence["missing_checks"]
+    assert evidence["checks"]["source_calculations_present"] == "missing"
 
 
 def test_detail_include_trust_source_calculation_scores_higher(
@@ -338,12 +338,13 @@ def test_detail_include_trust_source_calculation_scores_higher(
 def test_detail_include_trust_lj_pair_checks_pass(client, db_session):
     _, _, tr = _make_transport(db_session)
     body = client.get(_detail_url(tr.public_ref, include="trust")).json()
-    passed = set(body["record"]["trust"]["evidence"]["passed_checks"])
-    assert {
+    checks = body["record"]["trust"]["evidence"]["checks"]
+    for name in (
         "lj_pair_present_if_applicable",
         "sigma_present",
         "epsilon_present",
-    } <= passed
+    ):
+        assert checks[name] == "passed", name
 
 
 def test_detail_include_trust_property_source_checks_pass(client, db_session):
@@ -366,11 +367,14 @@ def test_detail_include_trust_property_source_checks_pass(client, db_session):
     )
 
     body = client.get(_detail_url(tr.public_ref, include="trust")).json()
-    passed = set(body["record"]["trust"]["evidence"]["passed_checks"])
-    assert "dipole_present" in passed
-    assert "polarizability_present" in passed
-    assert "dipole_source_present_if_dipole_present" in passed
-    assert "polarizability_source_present_if_polarizability_present" in passed
+    checks = body["record"]["trust"]["evidence"]["checks"]
+    assert checks["dipole_present"] == "passed"
+    assert checks["polarizability_present"] == "passed"
+    assert checks["dipole_source_present_if_dipole_present"] == "passed"
+    assert (
+        checks["polarizability_source_present_if_polarizability_present"]
+        == "passed"
+    )
 
 
 def test_detail_include_trust_no_property_hard_fail(client, db_session):

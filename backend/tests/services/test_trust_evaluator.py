@@ -18,6 +18,7 @@ Each test focuses on one promise from the spec
 from __future__ import annotations
 
 import hashlib
+import json
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -95,6 +96,7 @@ from app.services.trust import (
     COMPUTED_TRANSPORT_V1,
     EvidenceBadge,
     EvidenceEvaluation,
+    EvidenceOutcome,
     HardFailReason,
     build_trust_fragment,
     evaluate_computed_calculation,
@@ -803,10 +805,12 @@ def test_trust_fragment_normalizes_public_shape():
         rubric="computed_calculation",
         rubric_version=1,
         label=EvidenceBadge.hard_failed,
-        passed_checks=("owner_present",),
-        missing_checks=("result_block_present",),
-        warning_checks=("geometry_validation_passed_or_warning",),
-        not_applicable_checks=("output_geometry_present",),
+        checks={
+            "owner_present": EvidenceOutcome.passed,
+            "result_block_present": EvidenceOutcome.missing,
+            "geometry_validation_passed_or_warning": EvidenceOutcome.warning,
+            "output_geometry_present": EvidenceOutcome.not_applicable,
+        },
         passed_count=1,
         possible_count=2,
         evidence_completeness=0.5,
@@ -832,10 +836,12 @@ def test_trust_fragment_normalizes_public_shape():
         "rubric": "computed_calculation_v1",
         "rubric_version": 1,
         "label": "hard_failed",
-        "passed_checks": ["owner_present"],
-        "missing_checks": ["result_block_present"],
-        "warning_checks": ["geometry_validation_passed_or_warning"],
-        "not_applicable_checks": ["output_geometry_present"],
+        "checks": {
+            "owner_present": "passed",
+            "result_block_present": "missing",
+            "geometry_validation_passed_or_warning": "warning",
+            "output_geometry_present": "not_applicable",
+        },
         "passed_count": 1,
         "possible_count": 2,
         "evidence_completeness": 0.5,
@@ -889,8 +895,8 @@ class TestEvidenceCompletenessOrdering:
     def test_calculation_with_no_artifact_reports_missing(self, db_session):
         calc = _make_minimal_opt_calc(db_session, artifact=False)
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "artifacts_present" in result.missing_checks
-        assert "artifacts_present" not in result.passed_checks
+        assert result.checks["artifacts_present"] is EvidenceOutcome.missing
+        assert result.checks.get("artifacts_present") is not EvidenceOutcome.passed
 
 
 # ---------------------------------------------------------------------------
@@ -906,8 +912,8 @@ class TestGeometryValidation:
             db_session, geom_validation=ValidationStatus.passed
         )
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "geometry_validation_present" in result.passed_checks
-        assert "geometry_validation_passed_or_warning" not in result.warning_checks
+        assert result.checks["geometry_validation_present"] is EvidenceOutcome.passed
+        assert result.checks.get("geometry_validation_passed_or_warning") is not EvidenceOutcome.warning
         assert result.hard_fail_reason is None
 
     def test_warning_status_is_advisory_not_hard_fail(self, db_session):
@@ -915,7 +921,7 @@ class TestGeometryValidation:
             db_session, geom_validation=ValidationStatus.warning
         )
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "geometry_validation_passed_or_warning" in result.warning_checks
+        assert result.checks["geometry_validation_passed_or_warning"] is EvidenceOutcome.warning
         assert result.label is not EvidenceBadge.hard_failed
 
     def test_fail_status_is_hard_failed(self, db_session):
@@ -953,7 +959,7 @@ class TestArtifactIntegrityIsACustodyJudgement:
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
         assert result.hard_fail_reason is None
-        assert "artifacts_present" in result.passed_checks
+        assert result.checks["artifacts_present"] is EvidenceOutcome.passed
 
     def test_recorded_break_hard_fails_the_owning_calculation(self, db_session):
         calc = _make_minimal_opt_calc(db_session)
@@ -983,8 +989,8 @@ class TestArtifactIntegrityIsACustodyJudgement:
         self._break(db_session, artifact)
 
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "artifacts_present" in result.passed_checks
-        assert "artifacts_present" not in result.missing_checks
+        assert result.checks["artifacts_present"] is EvidenceOutcome.passed
+        assert result.checks.get("artifacts_present") is not EvidenceOutcome.missing
 
     def test_break_on_a_shared_object_reaches_a_calculation_that_never_saw_it(
         self, db_session
@@ -1142,15 +1148,15 @@ class TestResultBlockDetection:
         db_session.refresh(calc)
 
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "result_block_present" in result.passed_checks
+        assert result.checks["result_block_present"] is EvidenceOutcome.passed
         # SP should not require an output geometry.
-        assert "output_geometry_present" in result.not_applicable_checks
+        assert result.checks["output_geometry_present"] is EvidenceOutcome.not_applicable
 
     def test_opt_with_result_passes(self, db_session):
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "result_block_present" in result.passed_checks
-        assert "output_geometry_present" in result.passed_checks
+        assert result.checks["result_block_present"] is EvidenceOutcome.passed
+        assert result.checks["output_geometry_present"] is EvidenceOutcome.passed
 
     def test_freq_with_result_passes(self, db_session):
         species = _make_species(db_session)
@@ -1181,14 +1187,14 @@ class TestResultBlockDetection:
         db_session.refresh(calc)
 
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "result_block_present" in result.passed_checks
+        assert result.checks["result_block_present"] is EvidenceOutcome.passed
         # Freq does not produce a separate output geometry; check is N/A.
-        assert "output_geometry_present" in result.not_applicable_checks
+        assert result.checks["output_geometry_present"] is EvidenceOutcome.not_applicable
 
     def test_opt_without_result_block_is_missing(self, db_session):
         calc = _make_minimal_opt_calc(db_session, opt_result=False)
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert "result_block_present" in result.missing_checks
+        assert result.checks["result_block_present"] is EvidenceOutcome.missing
 
 
 # ---------------------------------------------------------------------------
@@ -1242,20 +1248,24 @@ class TestEvaluatorPurity:
 
 
 class TestAggregationInvariants:
-    """Numerator/denominator counts and bucket sets must be internally consistent."""
+    """Numerator/denominator counts and the check map must stay consistent."""
 
     def test_passed_plus_missing_equals_possible_count(self, db_session):
         calc = _make_minimal_opt_calc(db_session, artifact=False, parameters=False)
         result = evaluate_computed_calculation(db_session, calc.id)
+        outcomes = list(result.checks.values())
         assert (
-            len(result.passed_checks) + len(result.missing_checks)
+            outcomes.count(EvidenceOutcome.passed)
+            + outcomes.count(EvidenceOutcome.missing)
             == result.possible_count
         )
 
-    def test_passed_count_matches_passed_checks(self, db_session):
+    def test_passed_count_matches_passed_entries_in_the_map(self, db_session):
         calc = _make_minimal_opt_calc(db_session)
         result = evaluate_computed_calculation(db_session, calc.id)
-        assert result.passed_count == len(result.passed_checks)
+        assert result.passed_count == list(result.checks.values()).count(
+            EvidenceOutcome.passed
+        )
 
     def test_completeness_in_unit_interval(self, db_session):
         calc = _make_minimal_opt_calc(db_session)
@@ -1294,24 +1304,24 @@ class TestComputedKineticsEvaluator:
         kinetics = _make_kinetics(db_session, arrhenius=False, temperature_range=False)
         result = evaluate_computed_kinetics(db_session, kinetics.id)
         assert result.label in {EvidenceBadge.sparse, EvidenceBadge.unsupported}
-        assert "source_calculations_present" in result.missing_checks
-        assert "arrhenius_parameters_complete" in result.missing_checks
+        assert result.checks["source_calculations_present"] is EvidenceOutcome.missing
+        assert result.checks["arrhenius_parameters_complete"] is EvidenceOutcome.missing
 
     def test_core_arrhenius_and_temperature_checks_pass(self, db_session):
         kinetics = _make_kinetics(db_session)
         result = evaluate_computed_kinetics(db_session, kinetics.id)
-        assert "reaction_entry_present" in result.passed_checks
-        assert "kinetics_model_present" in result.passed_checks
-        assert "arrhenius_parameters_complete" in result.passed_checks
-        assert "arrhenius_units_present" in result.passed_checks
-        assert "temperature_range_present" in result.passed_checks
-        assert "temperature_range_valid" in result.passed_checks
+        assert result.checks["reaction_entry_present"] is EvidenceOutcome.passed
+        assert result.checks["kinetics_model_present"] is EvidenceOutcome.passed
+        assert result.checks["arrhenius_parameters_complete"] is EvidenceOutcome.passed
+        assert result.checks["arrhenius_units_present"] is EvidenceOutcome.passed
+        assert result.checks["temperature_range_present"] is EvidenceOutcome.passed
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.passed
 
     def test_missing_temperature_range_reports_missing(self, db_session):
         kinetics = _make_kinetics(db_session, temperature_range=False)
         result = evaluate_computed_kinetics(db_session, kinetics.id)
-        assert "temperature_range_present" in result.missing_checks
-        assert "temperature_range_valid" in result.not_applicable_checks
+        assert result.checks["temperature_range_present"] is EvidenceOutcome.missing
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.not_applicable
         assert result.hard_fail_reason is None
 
     def test_single_temperature_range_is_not_hard_failed(self, db_session):
@@ -1342,7 +1352,7 @@ class TestComputedKineticsEvaluator:
         assert result.hard_fail_reason is None
         assert result.label is not EvidenceBadge.hard_failed
         # The expectation still fires, at the graded tier only.
-        assert "temperature_range_valid" in result.missing_checks
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.missing
 
     def test_source_calculations_raise_evidence_completeness(self, db_session):
         sparse = _make_kinetics(db_session)
@@ -1362,8 +1372,8 @@ class TestComputedKineticsEvaluator:
         rich_result = evaluate_computed_kinetics(db_session, rich.id)
 
         assert rich_result.evidence_completeness > sparse_result.evidence_completeness
-        assert "source_calculations_present" in rich_result.passed_checks
-        assert "source_calculation_lot_present" in rich_result.passed_checks
+        assert rich_result.checks["source_calculations_present"] is EvidenceOutcome.passed
+        assert rich_result.checks["source_calculation_lot_present"] is EvidenceOutcome.passed
 
     def test_ts_and_frequency_roles_pass_corresponding_checks(self, db_session):
         kinetics = _make_kinetics(db_session)
@@ -1383,13 +1393,13 @@ class TestComputedKineticsEvaluator:
         )
 
         result = evaluate_computed_kinetics(db_session, kinetics.id)
-        assert "ts_energy_source_present" in result.passed_checks
-        assert "frequency_source_present" in result.passed_checks
+        assert result.checks["ts_energy_source_present"] is EvidenceOutcome.passed
+        assert result.checks["frequency_source_present"] is EvidenceOutcome.passed
 
     def test_missing_uncertainty_is_not_hard_fail(self, db_session):
         kinetics = _make_kinetics(db_session, uncertainty=False)
         result = evaluate_computed_kinetics(db_session, kinetics.id)
-        assert "uncertainty_present" in result.missing_checks
+        assert result.checks["uncertainty_present"] is EvidenceOutcome.missing
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
 
@@ -1428,8 +1438,8 @@ class TestComputedKineticsEvaluator:
 
         result = evaluate_computed_kinetics(db_session, kinetics.id)
         assert (
-            "geometry_validation_not_failed_for_source_calculations"
-            in result.warning_checks
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
         )
         assert result.label is not EvidenceBadge.hard_failed
 
@@ -1506,27 +1516,27 @@ class TestComputedThermoEvaluator:
         thermo = _make_thermo(db_session, scalar=True, temperature_range=False)
         result = evaluate_computed_thermo(db_session, thermo.id)
         assert result.label in {EvidenceBadge.sparse, EvidenceBadge.unsupported}
-        assert "source_calculations_present" in result.missing_checks
-        assert "source_calculation_lot_present" in result.missing_checks
+        assert result.checks["source_calculations_present"] is EvidenceOutcome.missing
+        assert result.checks["source_calculation_lot_present"] is EvidenceOutcome.missing
 
     def test_species_and_scalar_representation_checks_pass(self, db_session):
         thermo = _make_thermo(db_session, scalar=True, temperature_range=False)
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "species_entry_present" in result.passed_checks
-        assert "thermo_origin_is_computed" in result.passed_checks
-        assert "thermo_model_present" in result.passed_checks
-        assert "scalar_thermo_present" in result.passed_checks
-        assert "at_least_one_thermo_representation_present" in result.passed_checks
-        assert "nasa_coefficients_present" in result.not_applicable_checks
-        assert "thermo_points_present" in result.not_applicable_checks
+        assert result.checks["species_entry_present"] is EvidenceOutcome.passed
+        assert result.checks["thermo_origin_is_computed"] is EvidenceOutcome.passed
+        assert result.checks["thermo_model_present"] is EvidenceOutcome.passed
+        assert result.checks["scalar_thermo_present"] is EvidenceOutcome.passed
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.passed
+        assert result.checks["nasa_coefficients_present"] is EvidenceOutcome.not_applicable
+        assert result.checks["thermo_points_present"] is EvidenceOutcome.not_applicable
 
     def test_nasa_representation_checks_pass(self, db_session):
         thermo = _make_thermo(db_session, scalar=False, nasa=True)
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "nasa_coefficients_present" in result.passed_checks
-        assert "at_least_one_thermo_representation_present" in result.passed_checks
-        assert "temperature_range_present_if_applicable" in result.passed_checks
-        assert "temperature_range_valid" in result.passed_checks
+        assert result.checks["nasa_coefficients_present"] is EvidenceOutcome.passed
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.passed
+        assert result.checks["temperature_range_present_if_applicable"] is EvidenceOutcome.passed
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.passed
 
     def test_points_representation_checks_pass(self, db_session):
         thermo = _make_thermo(
@@ -1536,9 +1546,9 @@ class TestComputedThermoEvaluator:
             temperature_range=False,
         )
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "thermo_points_present" in result.passed_checks
-        assert "at_least_one_thermo_representation_present" in result.passed_checks
-        assert "scalar_thermo_present" in result.not_applicable_checks
+        assert result.checks["thermo_points_present"] is EvidenceOutcome.passed
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.passed
+        assert result.checks["scalar_thermo_present"] is EvidenceOutcome.not_applicable
 
     def test_nasa9_only_representation_checks_pass(self, db_session):
         thermo = _make_thermo(
@@ -1551,15 +1561,15 @@ class TestComputedThermoEvaluator:
         )
         result = evaluate_computed_thermo(db_session, thermo.id)
         # A NASA-9-only record has a valid model and representation.
-        assert "thermo_model_present" in result.passed_checks
-        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert result.checks["thermo_model_present"] is EvidenceOutcome.passed
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.passed
         # Its intrinsic interval bounds count as a present, valid range.
-        assert "temperature_range_present_if_applicable" in result.passed_checks
-        assert "temperature_range_valid" in result.passed_checks
+        assert result.checks["temperature_range_present_if_applicable"] is EvidenceOutcome.passed
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.passed
         # The other representation forms are legitimately absent -> N/A, not missing.
-        assert "scalar_thermo_present" in result.not_applicable_checks
-        assert "nasa_coefficients_present" in result.not_applicable_checks
-        assert "thermo_points_present" in result.not_applicable_checks
+        assert result.checks["scalar_thermo_present"] is EvidenceOutcome.not_applicable
+        assert result.checks["nasa_coefficients_present"] is EvidenceOutcome.not_applicable
+        assert result.checks["thermo_points_present"] is EvidenceOutcome.not_applicable
         assert result.hard_fail_reason is None
 
     def test_nasa9_glenn_high_temperature_interval_not_hard_failed(self, db_session):
@@ -1577,7 +1587,7 @@ class TestComputedThermoEvaluator:
         )
         result = evaluate_computed_thermo(db_session, thermo.id)
         assert result.hard_fail_reason is None
-        assert "temperature_range_valid" in result.passed_checks
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.passed
 
     def test_wilhoit_only_representation_checks_pass(self, db_session):
         # Wilhoit has no intrinsic piecewise range; drive range via top-level bounds.
@@ -1590,14 +1600,14 @@ class TestComputedThermoEvaluator:
             temperature_range=True,
         )
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "thermo_model_present" in result.passed_checks
-        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert result.checks["thermo_model_present"] is EvidenceOutcome.passed
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.passed
         # Range comes from the top-level tmin_k/tmax_k, not from wilhoit itself.
-        assert "temperature_range_present_if_applicable" in result.passed_checks
-        assert "temperature_range_valid" in result.passed_checks
-        assert "scalar_thermo_present" in result.not_applicable_checks
-        assert "nasa_coefficients_present" in result.not_applicable_checks
-        assert "thermo_points_present" in result.not_applicable_checks
+        assert result.checks["temperature_range_present_if_applicable"] is EvidenceOutcome.passed
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.passed
+        assert result.checks["scalar_thermo_present"] is EvidenceOutcome.not_applicable
+        assert result.checks["nasa_coefficients_present"] is EvidenceOutcome.not_applicable
+        assert result.checks["thermo_points_present"] is EvidenceOutcome.not_applicable
         assert result.hard_fail_reason is None
 
     def test_wilhoit_only_without_top_level_range_is_not_applicable(self, db_session):
@@ -1611,12 +1621,12 @@ class TestComputedThermoEvaluator:
             temperature_range=False,
         )
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "at_least_one_thermo_representation_present" in result.passed_checks
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.passed
         assert (
-            "temperature_range_present_if_applicable"
-            in result.not_applicable_checks
+            result.checks["temperature_range_present_if_applicable"]
+            is EvidenceOutcome.not_applicable
         )
-        assert "temperature_range_valid" in result.not_applicable_checks
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.not_applicable
         assert result.hard_fail_reason is None
 
     def test_missing_all_representations_hard_fails(self, db_session):
@@ -1632,15 +1642,15 @@ class TestComputedThermoEvaluator:
         assert (
             result.hard_fail_reason is HardFailReason.no_thermo_representation_present
         )
-        assert "at_least_one_thermo_representation_present" in result.missing_checks
+        assert result.checks["at_least_one_thermo_representation_present"] is EvidenceOutcome.missing
 
     def test_missing_temperature_range_reports_not_applicable_for_scalar(
         self, db_session
     ):
         thermo = _make_thermo(db_session, scalar=True, temperature_range=False)
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "temperature_range_present_if_applicable" in result.not_applicable_checks
-        assert "temperature_range_valid" in result.not_applicable_checks
+        assert result.checks["temperature_range_present_if_applicable"] is EvidenceOutcome.not_applicable
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.not_applicable
         assert result.hard_fail_reason is None
 
     def test_single_temperature_range_is_not_hard_failed(self, db_session):
@@ -1670,7 +1680,7 @@ class TestComputedThermoEvaluator:
         assert result.hard_fail_reason is None
         assert result.label is not EvidenceBadge.hard_failed
         # The expectation still fires, at the graded tier only.
-        assert "temperature_range_valid" in result.missing_checks
+        assert result.checks["temperature_range_valid"] is EvidenceOutcome.missing
 
     def test_source_calculations_raise_evidence_completeness(self, db_session):
         sparse = _make_thermo(db_session, scalar=True)
@@ -1690,8 +1700,8 @@ class TestComputedThermoEvaluator:
         rich_result = evaluate_computed_thermo(db_session, rich.id)
 
         assert rich_result.evidence_completeness > sparse_result.evidence_completeness
-        assert "source_calculations_present" in rich_result.passed_checks
-        assert "source_calculation_lot_present" in rich_result.passed_checks
+        assert rich_result.checks["source_calculations_present"] is EvidenceOutcome.passed
+        assert rich_result.checks["source_calculation_lot_present"] is EvidenceOutcome.passed
 
     def test_opt_freq_and_sp_roles_pass_corresponding_checks(self, db_session):
         thermo = _make_thermo(db_session, scalar=True)
@@ -1718,14 +1728,14 @@ class TestComputedThermoEvaluator:
         )
 
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "opt_source_present" in result.passed_checks
-        assert "freq_source_present" in result.passed_checks
-        assert "sp_or_composite_source_present_if_applicable" in result.passed_checks
+        assert result.checks["opt_source_present"] is EvidenceOutcome.passed
+        assert result.checks["freq_source_present"] is EvidenceOutcome.passed
+        assert result.checks["sp_or_composite_source_present_if_applicable"] is EvidenceOutcome.passed
 
     def test_missing_uncertainty_is_not_hard_fail(self, db_session):
         thermo = _make_thermo(db_session, scalar=True, uncertainty=False)
         result = evaluate_computed_thermo(db_session, thermo.id)
-        assert "uncertainty_present" in result.missing_checks
+        assert result.checks["uncertainty_present"] is EvidenceOutcome.missing
         assert result.label is not EvidenceBadge.hard_failed
         assert result.hard_fail_reason is None
 
@@ -1749,7 +1759,8 @@ class TestComputedThermoEvaluator:
             is HardFailReason.source_calculation_hard_failed_for_required_role
         )
         assert (
-            "source_calculation_has_non_hard_failed_evidence" in result.missing_checks
+            result.checks["source_calculation_has_non_hard_failed_evidence"]
+            is EvidenceOutcome.missing
         )
 
     def test_source_geometry_warning_is_advisory(self, db_session):
@@ -1767,8 +1778,8 @@ class TestComputedThermoEvaluator:
 
         result = evaluate_computed_thermo(db_session, thermo.id)
         assert (
-            "geometry_validation_not_failed_for_source_calculations"
-            in result.warning_checks
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
         )
         assert result.label is not EvidenceBadge.hard_failed
 
@@ -1845,21 +1856,21 @@ class TestComputedStatmechEvaluator:
         statmech = _make_statmech(db_session, metadata=False)
         result = evaluate_computed_statmech(db_session, statmech.id)
         assert result.label in {EvidenceBadge.sparse, EvidenceBadge.unsupported}
-        assert "source_calculations_present" in result.missing_checks
-        assert "statmech_treatment_present" in result.missing_checks
-        assert "rigid_rotor_kind_present" in result.missing_checks
+        assert result.checks["source_calculations_present"] is EvidenceOutcome.missing
+        assert result.checks["statmech_treatment_present"] is EvidenceOutcome.missing
+        assert result.checks["rigid_rotor_kind_present"] is EvidenceOutcome.missing
 
     def test_species_treatment_and_rotor_metadata_checks_pass(self, db_session):
         statmech = _make_statmech(db_session)
         result = evaluate_computed_statmech(db_session, statmech.id)
-        assert "species_entry_present" in result.passed_checks
-        assert "statmech_origin_is_computed" in result.passed_checks
-        assert "statmech_treatment_present" in result.passed_checks
-        assert "rigid_rotor_kind_present" in result.passed_checks
-        assert "external_symmetry_present" in result.passed_checks
-        assert "point_group_present" in result.passed_checks
-        assert "is_linear_present" in result.passed_checks
-        assert "uses_projected_frequencies_recorded" in result.passed_checks
+        assert result.checks["species_entry_present"] is EvidenceOutcome.passed
+        assert result.checks["statmech_origin_is_computed"] is EvidenceOutcome.passed
+        assert result.checks["statmech_treatment_present"] is EvidenceOutcome.passed
+        assert result.checks["rigid_rotor_kind_present"] is EvidenceOutcome.passed
+        assert result.checks["external_symmetry_present"] is EvidenceOutcome.passed
+        assert result.checks["point_group_present"] is EvidenceOutcome.passed
+        assert result.checks["is_linear_present"] is EvidenceOutcome.passed
+        assert result.checks["uses_projected_frequencies_recorded"] is EvidenceOutcome.passed
 
     def test_frequency_scale_factor_passes_when_frequency_source_exists(
         self, db_session
@@ -1874,7 +1885,7 @@ class TestComputedStatmechEvaluator:
         )
 
         result = evaluate_computed_statmech(db_session, statmech.id)
-        assert "frequency_scale_factor_present_if_applicable" in result.passed_checks
+        assert result.checks["frequency_scale_factor_present_if_applicable"] is EvidenceOutcome.passed
 
     def test_source_calculations_raise_evidence_completeness(self, db_session):
         sparse = _make_statmech(db_session)
@@ -1894,8 +1905,8 @@ class TestComputedStatmechEvaluator:
         rich_result = evaluate_computed_statmech(db_session, rich.id)
 
         assert rich_result.evidence_completeness > sparse_result.evidence_completeness
-        assert "source_calculations_present" in rich_result.passed_checks
-        assert "source_calculation_lot_present" in rich_result.passed_checks
+        assert rich_result.checks["source_calculations_present"] is EvidenceOutcome.passed
+        assert rich_result.checks["source_calculation_lot_present"] is EvidenceOutcome.passed
 
     def test_opt_freq_and_sp_roles_pass_corresponding_checks(self, db_session):
         statmech = _make_statmech(db_session, frequency_scale_factor=True)
@@ -1922,17 +1933,17 @@ class TestComputedStatmechEvaluator:
         )
 
         result = evaluate_computed_statmech(db_session, statmech.id)
-        assert "opt_source_present" in result.passed_checks
-        assert "freq_source_present" in result.passed_checks
-        assert "sp_or_composite_source_present" in result.passed_checks
+        assert result.checks["opt_source_present"] is EvidenceOutcome.passed
+        assert result.checks["freq_source_present"] is EvidenceOutcome.passed
+        assert result.checks["sp_or_composite_source_present"] is EvidenceOutcome.passed
 
     def test_missing_frequency_source_reports_missing_not_hard_fail(self, db_session):
         statmech = _make_statmech(db_session)
         result = evaluate_computed_statmech(db_session, statmech.id)
-        assert "freq_source_present" in result.missing_checks
+        assert result.checks["freq_source_present"] is EvidenceOutcome.missing
         assert (
-            "frequency_scale_factor_present_if_applicable"
-            in result.not_applicable_checks
+            result.checks["frequency_scale_factor_present_if_applicable"]
+            is EvidenceOutcome.not_applicable
         )
         assert result.hard_fail_reason is None
 
@@ -1940,12 +1951,12 @@ class TestComputedStatmechEvaluator:
         statmech = _make_statmech(db_session, treatment=StatmechTreatmentKind.rrho)
         result = evaluate_computed_statmech(db_session, statmech.id)
         assert (
-            "torsions_recorded_if_hindered_rotor_treatment"
-            in result.not_applicable_checks
+            result.checks["torsions_recorded_if_hindered_rotor_treatment"]
+            is EvidenceOutcome.not_applicable
         )
-        assert "torsion_definitions_present" in result.not_applicable_checks
-        assert "torsion_symmetry_recorded" in result.not_applicable_checks
-        assert "scan_source_present_if_torsions_present" in result.not_applicable_checks
+        assert result.checks["torsion_definitions_present"] is EvidenceOutcome.not_applicable
+        assert result.checks["torsion_symmetry_recorded"] is EvidenceOutcome.not_applicable
+        assert result.checks["scan_source_present_if_torsions_present"] is EvidenceOutcome.not_applicable
 
     def test_torsion_rows_and_definitions_pass_when_present(self, db_session):
         statmech = _make_statmech(
@@ -1962,10 +1973,10 @@ class TestComputedStatmechEvaluator:
         _add_statmech_torsion(db_session, statmech=statmech, source_scan=scan_calc)
 
         result = evaluate_computed_statmech(db_session, statmech.id)
-        assert "torsions_recorded_if_hindered_rotor_treatment" in result.passed_checks
-        assert "torsion_definitions_present" in result.passed_checks
-        assert "torsion_symmetry_recorded" in result.passed_checks
-        assert "scan_source_present_if_torsions_present" in result.passed_checks
+        assert result.checks["torsions_recorded_if_hindered_rotor_treatment"] is EvidenceOutcome.passed
+        assert result.checks["torsion_definitions_present"] is EvidenceOutcome.passed
+        assert result.checks["torsion_symmetry_recorded"] is EvidenceOutcome.passed
+        assert result.checks["scan_source_present_if_torsions_present"] is EvidenceOutcome.passed
 
     def test_source_geometry_failure_hard_fails_required_role(self, db_session):
         statmech = _make_statmech(db_session)
@@ -1987,7 +1998,8 @@ class TestComputedStatmechEvaluator:
             is HardFailReason.source_calculation_hard_failed_for_required_role
         )
         assert (
-            "source_calculation_has_non_hard_failed_evidence" in result.missing_checks
+            result.checks["source_calculation_has_non_hard_failed_evidence"]
+            is EvidenceOutcome.missing
         )
 
     def test_source_geometry_warning_is_advisory(self, db_session):
@@ -2005,8 +2017,8 @@ class TestComputedStatmechEvaluator:
 
         result = evaluate_computed_statmech(db_session, statmech.id)
         assert (
-            "geometry_validation_not_failed_for_source_calculations"
-            in result.warning_checks
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
         )
         assert result.label is not EvidenceBadge.hard_failed
 
@@ -2083,20 +2095,20 @@ class TestComputedTransportEvaluator:
         transport = _make_transport(db_session, lj=True)
         result = evaluate_computed_transport(db_session, transport.id)
         assert result.label in {EvidenceBadge.sparse, EvidenceBadge.partial}
-        assert "source_calculations_present" in result.missing_checks
-        assert "source_calculation_lot_present" in result.missing_checks
+        assert result.checks["source_calculations_present"] is EvidenceOutcome.missing
+        assert result.checks["source_calculation_lot_present"] is EvidenceOutcome.missing
 
     def test_species_and_lj_pair_checks_pass(self, db_session):
         transport = _make_transport(db_session, lj=True)
         result = evaluate_computed_transport(db_session, transport.id)
-        assert "species_entry_present" in result.passed_checks
-        assert "transport_origin_is_computed" in result.passed_checks
-        assert "transport_model_present" in result.passed_checks
-        assert "transport_property_present" in result.passed_checks
-        assert "lj_pair_present_if_applicable" in result.passed_checks
-        assert "sigma_present" in result.passed_checks
-        assert "epsilon_present" in result.passed_checks
-        assert "sigma_epsilon_pair_consistent" in result.passed_checks
+        assert result.checks["species_entry_present"] is EvidenceOutcome.passed
+        assert result.checks["transport_origin_is_computed"] is EvidenceOutcome.passed
+        assert result.checks["transport_model_present"] is EvidenceOutcome.passed
+        assert result.checks["transport_property_present"] is EvidenceOutcome.passed
+        assert result.checks["lj_pair_present_if_applicable"] is EvidenceOutcome.passed
+        assert result.checks["sigma_present"] is EvidenceOutcome.passed
+        assert result.checks["epsilon_present"] is EvidenceOutcome.passed
+        assert result.checks["sigma_epsilon_pair_consistent"] is EvidenceOutcome.passed
 
     def test_dipole_and_polarizability_property_checks_pass(self, db_session):
         transport = _make_transport(
@@ -2107,10 +2119,10 @@ class TestComputedTransportEvaluator:
             rotational_relaxation=True,
         )
         result = evaluate_computed_transport(db_session, transport.id)
-        assert "dipole_present" in result.passed_checks
-        assert "polarizability_present" in result.passed_checks
-        assert "rotational_relaxation_present" in result.passed_checks
-        assert "lj_pair_present_if_applicable" in result.not_applicable_checks
+        assert result.checks["dipole_present"] is EvidenceOutcome.passed
+        assert result.checks["polarizability_present"] is EvidenceOutcome.passed
+        assert result.checks["rotational_relaxation_present"] is EvidenceOutcome.passed
+        assert result.checks["lj_pair_present_if_applicable"] is EvidenceOutcome.not_applicable
 
     def test_missing_all_transport_properties_hard_fails(self, db_session):
         transport = _make_transport(
@@ -2123,7 +2135,7 @@ class TestComputedTransportEvaluator:
         result = evaluate_computed_transport(db_session, transport.id)
         assert result.label is EvidenceBadge.hard_failed
         assert result.hard_fail_reason is HardFailReason.no_transport_property_present
-        assert "transport_property_present" in result.missing_checks
+        assert result.checks["transport_property_present"] is EvidenceOutcome.missing
 
     def test_invalid_lj_pair_hard_fails_loaded_object(self, db_session):
         entry = _make_species_entry(db_session, _make_species(db_session))
@@ -2137,7 +2149,7 @@ class TestComputedTransportEvaluator:
         result = evaluate_loaded_transport(transport)
         assert result.label is EvidenceBadge.hard_failed
         assert result.hard_fail_reason is HardFailReason.invalid_lj_pair
-        assert "sigma_epsilon_pair_consistent" in result.missing_checks
+        assert result.checks["sigma_epsilon_pair_consistent"] is EvidenceOutcome.missing
 
     def test_source_calculations_raise_evidence_completeness(self, db_session):
         sparse = _make_transport(db_session, lj=True)
@@ -2154,8 +2166,8 @@ class TestComputedTransportEvaluator:
         rich_result = evaluate_computed_transport(db_session, rich.id)
 
         assert rich_result.evidence_completeness > sparse_result.evidence_completeness
-        assert "source_calculations_present" in rich_result.passed_checks
-        assert "source_calculation_lot_present" in rich_result.passed_checks
+        assert rich_result.checks["source_calculations_present"] is EvidenceOutcome.passed
+        assert rich_result.checks["source_calculation_lot_present"] is EvidenceOutcome.passed
 
     def test_transport_source_roles_pass_corresponding_checks(self, db_session):
         transport = _make_transport(
@@ -2194,22 +2206,22 @@ class TestComputedTransportEvaluator:
         )
 
         result = evaluate_computed_transport(db_session, transport.id)
-        assert "full_transport_source_present" in result.passed_checks
-        assert "dipole_source_present_if_dipole_present" in result.passed_checks
+        assert result.checks["full_transport_source_present"] is EvidenceOutcome.passed
+        assert result.checks["dipole_source_present_if_dipole_present"] is EvidenceOutcome.passed
         assert (
-            "polarizability_source_present_if_polarizability_present"
-            in result.passed_checks
+            result.checks["polarizability_source_present_if_polarizability_present"]
+            is EvidenceOutcome.passed
         )
-        assert "supporting_geometry_source_present" in result.passed_checks
+        assert result.checks["supporting_geometry_source_present"] is EvidenceOutcome.passed
 
     def test_missing_optional_source_roles_not_hard_fail(self, db_session):
         transport = _make_transport(db_session, lj=True, dipole=True)
         result = evaluate_computed_transport(db_session, transport.id)
-        assert "full_transport_source_present" in result.missing_checks
-        assert "dipole_source_present_if_dipole_present" in result.missing_checks
+        assert result.checks["full_transport_source_present"] is EvidenceOutcome.missing
+        assert result.checks["dipole_source_present_if_dipole_present"] is EvidenceOutcome.missing
         assert (
-            "polarizability_source_present_if_polarizability_present"
-            in result.not_applicable_checks
+            result.checks["polarizability_source_present_if_polarizability_present"]
+            is EvidenceOutcome.not_applicable
         )
         assert result.hard_fail_reason is None
 
@@ -2233,7 +2245,8 @@ class TestComputedTransportEvaluator:
             is HardFailReason.source_calculation_hard_failed_for_required_role
         )
         assert (
-            "source_calculation_has_non_hard_failed_evidence" in result.missing_checks
+            result.checks["source_calculation_has_non_hard_failed_evidence"]
+            is EvidenceOutcome.missing
         )
 
     def test_source_calculation_rejected_quality_affects_transport(self, db_session):
@@ -2271,8 +2284,8 @@ class TestComputedTransportEvaluator:
 
         result = evaluate_computed_transport(db_session, transport.id)
         assert (
-            "geometry_validation_not_failed_for_source_calculations"
-            in result.warning_checks
+            result.checks["geometry_validation_not_failed_for_source_calculations"]
+            is EvidenceOutcome.warning
         )
         assert result.label is not EvidenceBadge.hard_failed
 
@@ -2388,3 +2401,113 @@ class TestTemperatureRangeDefinitionalPredicate:
         """
         assert validity_range_is_definitionally_invalid(tmin_k, tmax_k) is False
         assert fitting_interval_is_definitionally_invalid(tmin_k, tmax_k) is False
+
+
+# ---------------------------------------------------------------------------
+# 9. The check map's own contract
+# ---------------------------------------------------------------------------
+
+
+class TestCheckMapShape:
+    """``EvidenceEvaluation.checks`` replaced four parallel name lists.
+
+    The arrays put the truth value in the container name, so a reader had to
+    negate a name against its bucket — ``missing_checks:
+    ["irc_evidence_present"]`` means *there is no IRC evidence*. The map puts
+    the outcome in the value instead. These tests pin what that shape
+    promises, over and above the outcomes the rest of this file already
+    checks.
+    """
+
+    def test_key_order_is_the_rubrics_declared_check_order(self, db_session):
+        """Not arbitrary: two records of one rubric line up check for check.
+
+        The map is built by walking ``rubric.checks`` in order, so a diff
+        between two evaluations reads down the page instead of requiring a
+        sort. Consumers are told they may rely on this, so it needs a test.
+        """
+        calc = _make_minimal_opt_calc(db_session)
+        result = evaluate_computed_calculation(db_session, calc.id)
+
+        declared = [spec.name for spec in COMPUTED_CALCULATION_V1.checks]
+        position = {name: index for index, name in enumerate(declared)}
+        keys = list(result.checks)
+        assert keys == sorted(keys, key=position.__getitem__)
+
+    def test_two_evaluations_of_one_record_serialise_identically(
+        self, db_session
+    ):
+        """Same record, same bytes — including the order of the keys.
+
+        Dict equality would pass even if the order flipped between calls, so
+        this compares the serialised JSON, which is what a caller diffs.
+        """
+        calc = _make_minimal_opt_calc(db_session)
+        first = evaluate_computed_calculation(db_session, calc.id)
+        second = evaluate_computed_calculation(db_session, calc.id)
+
+        assert json.dumps(
+            build_trust_fragment(first).evidence["checks"]
+        ) == json.dumps(build_trust_fragment(second).evidence["checks"])
+
+    def test_every_name_appears_once_with_a_legal_outcome(self, db_session):
+        """No check is duplicated, invented, or given a fifth state.
+
+        A dict cannot hold a duplicate key, so the real content here is that
+        every key is a check the rubric declares and every value is one of
+        the four ``EvidenceOutcome`` members.
+        """
+        calc = _make_minimal_opt_calc(db_session)
+        result = evaluate_computed_calculation(db_session, calc.id)
+
+        declared = {spec.name for spec in COMPUTED_CALCULATION_V1.checks}
+        assert set(result.checks) <= declared
+        assert set(result.checks.values()) <= set(EvidenceOutcome)
+
+    def test_not_applicable_is_named_and_still_outside_the_denominator(
+        self, db_session
+    ):
+        """The four states are not a boolean, and the count proves it.
+
+        A scalar-only thermo record carries no NASA polynomial, so
+        ``nasa_coefficients_present`` cannot be asked. The check must be
+        *named* as ``not_applicable`` — a reader can see it exists — while
+        staying outside ``possible_count``, which is what stops an
+        unanswerable question from scoring as a failure. Asserting only the
+        label would pass even if the check had been folded into the
+        denominator, so the counts are asserted too.
+        """
+        thermo = _make_thermo(db_session, scalar=True, nasa=False, points=False)
+        result = evaluate_computed_thermo(db_session, thermo.id)
+
+        assert (
+            result.checks["nasa_coefficients_present"]
+            is EvidenceOutcome.not_applicable
+        )
+        outcomes = list(result.checks.values())
+        n_na = outcomes.count(EvidenceOutcome.not_applicable)
+        assert n_na > 0
+        assert result.possible_count == (
+            outcomes.count(EvidenceOutcome.passed)
+            + outcomes.count(EvidenceOutcome.missing)
+        )
+        # …and the not-applicable checks are genuinely outside it.
+        assert (
+            result.possible_count
+            + n_na
+            + outcomes.count(EvidenceOutcome.warning)
+            == len(result.checks)
+        )
+
+    def test_the_map_survives_json_serialisation_in_order(self, db_session):
+        """What the reader receives is the map, in rubric order, as strings."""
+        calc = _make_minimal_opt_calc(db_session)
+        result = evaluate_computed_calculation(db_session, calc.id)
+
+        serialised = json.loads(
+            json.dumps(build_trust_fragment(result).evidence)
+        )["checks"]
+        assert list(serialised) == list(result.checks)
+        assert serialised == {
+            name: outcome.value for name, outcome in result.checks.items()
+        }

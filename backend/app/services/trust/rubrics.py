@@ -391,9 +391,9 @@ def _check_temperature_range_valid(kinetics: Kinetics) -> EvidenceOutcome:
     temperature bound. Per ADR 0008 the cap is an expectation, not a
     definition: shock-tube, detonation, plasma, and re-entry chemistry
     legitimately exceed it, so exceeding it lowers evidence completeness and is
-    explained in ``missing_checks`` — it never hard-fails the record. The
-    evaluator's ``invalid_temperature_range`` hard fail asserts only the
-    definitional ``0 < tmin_k < tmax_k``.
+    reported as a ``missing`` outcome in ``checks`` — it never hard-fails the
+    record. The evaluator's ``invalid_temperature_range`` hard fail asserts
+    only the definitional ``0 < tmin_k < tmax_k``.
     """
     if kinetics.tmin_k is None or kinetics.tmax_k is None:
         return EvidenceOutcome.not_applicable

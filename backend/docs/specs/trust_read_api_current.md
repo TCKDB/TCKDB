@@ -214,10 +214,7 @@ surfaces. Values vary by record and rubric, but the shape is:
       "rubric": "computed_kinetics_v1",
       "rubric_version": 1,
       "label": "well_supported",
-      "passed_checks": [],
-      "missing_checks": [],
-      "warning_checks": [],
-      "not_applicable_checks": [],
+      "checks": {},
       "passed_count": 0,
       "possible_count": 0,
       "evidence_completeness": 0.0,
@@ -286,8 +283,7 @@ AI review audit events:
 - do not mutate submission status
 - do not mutate scientific records
 - do not alter deterministic evidence completeness
-- do not alter `passed_checks`, `missing_checks`, `warning_checks`, or
-  `not_applicable_checks`
+- do not alter `checks` (the check-name → outcome map)
 - do not alter `hard_fail_reason`, `trust_status`, or public record visibility
 - are not mapped into public scientific `trust.llm_precheck` fragments
 

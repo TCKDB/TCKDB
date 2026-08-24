@@ -1206,14 +1206,20 @@ class TestTrustVerdictIsShown:
     def test_the_named_missing_checks_are_shown_and_ship_collapsed(self, script):
         """"Why only mostly supported?" has a published answer -- show it.
 
-        ``ts_single_point_present`` in ``missing_checks`` is the gap a
-        reader can otherwise only guess at. It ships inside a closed
-        ``<details>`` because a card that opens into thirty check names
-        is the wall of text the expansion exists to avoid.
+        ``ts_single_point_present`` carrying the outcome ``missing`` is
+        the gap a reader can otherwise only guess at. It ships inside a
+        closed ``<details>`` because a card that opens into thirty check
+        names is the wall of text the expansion exists to avoid.
+
+        The two lists are now selected out of the ordered
+        ``evidence.checks`` map rather than read from two sibling arrays,
+        so the page must go through ``checksWithOutcome`` for both.
         """
         body = self._function(script, "trustNode(trust)")
-        assert "evidence.missing_checks" in body
-        assert "evidence.passed_checks" in body
+        assert 'checksWithOutcome(evidence.checks, "missing")' in body
+        assert 'checksWithOutcome(evidence.checks, "passed")' in body
+        selector = self._function(script, "checksWithOutcome(checks, outcome)")
+        assert "checks[name] === outcome" in selector
         assert 'make("details", "trust-why")' in body
         assert 'make("summary", null, "What the rubric checked")' in body
         assert "open" not in re.sub(r"[^\w]", " ", body).split(), "the detail must ship collapsed"

@@ -43,17 +43,24 @@ from app.services.machine_review.read_model import RecordMachineReview
 from app.services.trust.models import TrustFragment
 
 
-def _as_str_tuple(value: object) -> tuple[str, ...]:
-    """Coerce an evidence check list (JSON list / tuple / None) to a str tuple.
+def _checks_with_outcome(value: object, outcome: str) -> tuple[str, ...]:
+    """Select the check names whose outcome is ``outcome`` from the check map.
 
-    The fragment's ``evidence`` dict is a JSON dump, so check sets arrive as
-    lists; ``None`` or a missing key becomes an empty tuple. Order is preserved
-    here — the hash builder canonicalises (sorts) set-like inputs, so order does
-    not affect the digest.
+    The fragment's ``evidence`` dict is a JSON dump, so ``evidence["checks"]``
+    arrives as a plain ``{name: outcome}`` object; ``None`` or a missing key
+    becomes an empty tuple. Order is preserved here — the hash builder
+    canonicalises (sorts) set-like inputs, so order does not affect the digest.
+
+    The hashed context still carries the four check *sets*
+    (:class:`MachineReviewEvidenceContext`), and deliberately so: it is a
+    versioned digest contract, not a human-facing readout, and reshaping it
+    would invalidate every stored review's currency for no reader's benefit.
+    The map is the exact inverse of those sets, so selecting by outcome
+    reproduces them value-for-value and the digest is unchanged.
     """
     if not value:
         return ()
-    return tuple(str(item) for item in value)
+    return tuple(str(name) for name, item in dict(value).items() if item == outcome)
 
 
 def build_machine_review_evidence_context_from_trust(
@@ -71,7 +78,9 @@ def build_machine_review_evidence_context_from_trust(
     :class:`~app.services.trust.models.TrustFragment` carries and projects it,
     **value-for-value**, onto the included-inputs contract
     :class:`MachineReviewEvidenceContext` (policy §3.2). It preserves the
-    evidence exactly — the rubric name + version, the four check sets,
+    evidence exactly — the rubric name + version, the check outcomes (read from
+    the fragment's ``checks`` map and split back into the four sets the digest
+    contract carries, see :func:`_checks_with_outcome`),
     ``hard_fail_reason`` — and folds in ``review_status`` and ``is_certified``
     as read-only context inputs (never machine-owned outputs). Optional
     ``source_calculations`` / ``geometry_validations`` / ``artifact_kinds`` the
@@ -105,10 +114,12 @@ def build_machine_review_evidence_context_from_trust(
         # both preserved so a rubric version bump changes the digest (policy §3.2).
         rubric_name=evidence.get("rubric"),
         rubric_version=evidence.get("rubric_version"),
-        passed_checks=_as_str_tuple(evidence.get("passed_checks")),
-        missing_checks=_as_str_tuple(evidence.get("missing_checks")),
-        warning_checks=_as_str_tuple(evidence.get("warning_checks")),
-        not_applicable_checks=_as_str_tuple(evidence.get("not_applicable_checks")),
+        passed_checks=_checks_with_outcome(evidence.get("checks"), "passed"),
+        missing_checks=_checks_with_outcome(evidence.get("checks"), "missing"),
+        warning_checks=_checks_with_outcome(evidence.get("checks"), "warning"),
+        not_applicable_checks=_checks_with_outcome(
+            evidence.get("checks"), "not_applicable"
+        ),
         hard_fail_reason=evidence.get("hard_fail_reason"),
         # Read-only human-review context inputs (policy §6) — observed, not owned.
         review_status=trust_fragment.review_status,

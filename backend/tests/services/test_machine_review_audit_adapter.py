@@ -552,10 +552,7 @@ def test_projection_shape_carries_no_forbidden_state():
         "benchmark_reference",
         "is_certified",
         "evidence_completeness",
-        "passed_checks",
-        "missing_checks",
-        "warning_checks",
-        "not_applicable_checks",
+        "checks",
         "hard_fail_reason",
         "trust_status",
         "status",  # submission.status specifically — guarded below by context

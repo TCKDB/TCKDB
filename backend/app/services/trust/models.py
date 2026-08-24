@@ -55,7 +55,7 @@ class EvidenceOutcome(str, Enum):
 
     * ``passed`` — the check's condition held; positive evidence.
     * ``missing`` — the check applies and did not pass; the explanation
-      is surfaced in ``missing_checks``.
+      is surfaced as ``checks[<name>] == "missing"``.
     * ``warning`` — the check applies, the underlying signal is tri-state
       (typically a :class:`ValidationStatus.warning`), and the result
       is informational only. Warnings never reduce the completeness
@@ -221,7 +221,7 @@ class EvidenceCheckSpec(BaseModel):
     )
     explain: str = Field(
         default="",
-        description="Short human string surfaced under missing_checks / warnings.",
+        description="Short human string explaining a missing or warning outcome.",
     )
     runner: Callable[..., EvidenceOutcome] = Field(
         ...,
@@ -233,8 +233,8 @@ class EvidenceCheckResult(BaseModel):
     """Runtime outcome of evaluating one :class:`EvidenceCheckSpec`.
 
     Carries both the outcome and the originating spec metadata so the
-    aggregator can build the deterministic passed / missing / warning
-    sets without re-deriving anything.
+    aggregator can build the deterministic check map and the weighted
+    counts without re-deriving anything.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -289,12 +289,9 @@ class EvidenceEvaluation(BaseModel):
 
     Field semantics:
 
-    * ``passed_checks`` / ``missing_checks`` / ``warning_checks`` /
-      ``not_applicable_checks`` — names of checks bucketed by their
-      runtime outcome. ``passed`` and ``missing`` include only
-      required/optional checks; ``warning`` is the bucket for fired
-      warning-kind checks; ``not_applicable`` lists every skipped
-      check regardless of kind.
+    * ``checks`` — an ordered map from check name to the outcome that
+      check produced. See the note below on why this is a map and not
+      four name lists.
     * ``passed_count`` / ``possible_count`` — the numerator and
       denominator of :attr:`evidence_completeness`. ``possible_count``
       excludes ``not_applicable`` and warning-kind checks.
@@ -305,6 +302,56 @@ class EvidenceEvaluation(BaseModel):
       Reserved for curator action (§6.2).
     * ``hard_fail_reason`` — populated only when a structural hard-fail
       signal forces ``label = hard_failed``.
+
+    **Why ``checks`` is a map, not four name lists.** Until this shape
+    landed, the outcomes were four parallel tuples —
+    ``passed_checks`` / ``missing_checks`` / ``warning_checks`` /
+    ``not_applicable_checks`` — and a reader had to combine the bucket
+    name with the check name to get the meaning. Because most check
+    names are assertions ending in ``_present``, the common case read
+    as a double negative: ``missing_checks: ["irc_evidence_present"]``
+    means *there is no IRC evidence*. The name said "present", the
+    bucket said "missing", and the reader had to negate one against the
+    other every single time. This fragment is read by humans at least
+    as often as by machines, so that cost was being paid constantly.
+
+    Moving the bucket name into the value removes the negation:
+    ``"irc_evidence_present": "missing"`` reads as written. It also
+    turns *"did check X pass?"* into one lookup instead of a scan
+    across up to four arrays. Nothing else moved: this is a
+    serialisation shape change, and every check produces exactly the
+    outcome it produced before.
+
+    **Four outcomes, never a boolean.** The value is an
+    :class:`EvidenceOutcome`, and collapsing it to true/false would be
+    a correctness bug, not a simplification. ``missing`` means the
+    check applied and did not pass — it counts against the record and
+    is inside ``possible_count``. ``not_applicable`` means the check's
+    ``applies_when`` predicate was false — the question could not be
+    asked, and the check is excluded from *both* the numerator and the
+    denominator. A live example: when
+    ``geometry_validation_present_for_source_calculations`` is
+    ``missing`` there is no geometry validation to inspect, so
+    ``geometry_validation_not_failed_for_source_calculations`` is
+    ``not_applicable`` — "did it fail?" has no answer. Rendering that
+    as ``false`` would penalise a record for a question nobody could
+    ask.
+
+    **Ordering is the rubric's declared check order, and is stable.**
+    Insertion order follows :attr:`EvidenceRubric.checks`, so two
+    evaluations of the same rubric serialise their keys in the same
+    order and a diff between two records lines up check-for-check. It
+    is not arbitrary and consumers may rely on it.
+
+    **Membership matches the old buckets exactly.** A check appears in
+    the map with the outcome whose bucket it used to occupy, and only
+    then. The one class of check that is absent is a warning-kind check
+    that did not fire, which was equally absent from all four arrays:
+    warning-kind checks carry zero weight, so counting a non-fired one
+    as ``passed`` would make the number of ``passed`` values disagree
+    with :attr:`passed_count`. Consequently
+    ``passed_count == len([n for n, o in checks.items() if o is passed])``
+    still holds, as it did for ``len(passed_checks)``.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -314,10 +361,14 @@ class EvidenceEvaluation(BaseModel):
     rubric: str
     rubric_version: int
     label: EvidenceBadge
-    passed_checks: tuple[str, ...]
-    missing_checks: tuple[str, ...]
-    warning_checks: tuple[str, ...]
-    not_applicable_checks: tuple[str, ...]
+    checks: dict[str, EvidenceOutcome] = Field(
+        ...,
+        description=(
+            "Ordered map of check name -> outcome, in the rubric's declared "
+            "check order. Replaces the former passed/missing/warning/"
+            "not_applicable name lists."
+        ),
+    )
     passed_count: int
     possible_count: int
     evidence_completeness: float

@@ -84,10 +84,7 @@ GET /api/v1/scientific/species-entries/{species_entry_id}/thermo?include=trust
 The deterministic trust evaluator remains the source of:
 
 - `evidence_completeness`
-- `passed_checks`
-- `missing_checks`
-- `warning_checks`
-- `not_applicable_checks`
+- `checks` (the check-name → outcome map)
 - `hard_fail_reason`
 - `trust_status`
 
@@ -805,10 +802,7 @@ The LLM precheck result may be summarized under `trust.llm_precheck`, but
 it must not affect:
 
 - `evidence_completeness`
-- `passed_checks`
-- `missing_checks`
-- `warning_checks`
-- `not_applicable_checks`
+- `checks` (the check-name → outcome map)
 - `hard_fail_reason`
 - `trust_status`
 - record visibility

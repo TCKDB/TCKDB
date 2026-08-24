@@ -593,8 +593,8 @@ def test_detail_include_trust_sparse_statmech_reports_missing_checks(
     evidence = body["record"]["trust"]["evidence"]
 
     assert evidence["rubric"] == "computed_statmech_v1"
-    assert "source_calculations_present" in evidence["missing_checks"]
-    assert "statmech_treatment_present" in evidence["missing_checks"]
+    assert evidence["checks"]["source_calculations_present"] == "missing"
+    assert evidence["checks"]["statmech_treatment_present"] == "missing"
 
 
 def test_detail_include_trust_source_calculations_score_higher(
@@ -626,7 +626,7 @@ def test_detail_include_trust_source_calculations_score_higher(
     ]
     rich_evidence = rich_body["record"]["trust"]["evidence"]
     assert rich_evidence["evidence_completeness"] > sparse_score
-    assert "source_calculations_present" in rich_evidence["passed_checks"]
+    assert rich_evidence["checks"]["source_calculations_present"] == "passed"
 
 
 def test_detail_include_trust_scale_factor_check_passes(
@@ -642,9 +642,10 @@ def test_detail_include_trust_scale_factor_check_passes(
     evidence = body["record"]["trust"]["evidence"]
 
     assert calc.public_ref
-    assert "frequency_scale_factor_present_if_applicable" in evidence[
-        "passed_checks"
-    ]
+    assert (
+        evidence["checks"]["frequency_scale_factor_present_if_applicable"]
+        == "passed"
+    )
 
 
 def test_detail_include_trust_torsion_checks_pass(client, db_session):
@@ -671,11 +672,12 @@ def test_detail_include_trust_torsion_checks_pass(client, db_session):
     body = client.get(_detail_url(sm.public_ref, include="trust")).json()
     evidence = body["record"]["trust"]["evidence"]
 
-    assert "torsions_recorded_if_hindered_rotor_treatment" in evidence[
-        "passed_checks"
-    ]
-    assert "torsion_definitions_present" in evidence["passed_checks"]
-    assert "torsion_symmetry_recorded" in evidence["passed_checks"]
+    assert (
+        evidence["checks"]["torsions_recorded_if_hindered_rotor_treatment"]
+        == "passed"
+    )
+    assert evidence["checks"]["torsion_definitions_present"] == "passed"
+    assert evidence["checks"]["torsion_symmetry_recorded"] == "passed"
 
 
 def test_detail_include_trust_internal_ids_restored_when_allowed(
