@@ -20,6 +20,11 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.routes.scientific._response import (
+    ANYWHERE_SCOPE,
+    CONFORMER_RECORD_SECTIONS,
+    omit_unrequested_sections,
+)
 from app.db.models.common import (
     ConformerSelectionKind,
     RecordReviewStatus,
@@ -133,8 +138,15 @@ def scientific_conformers_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_conformers(session, request_obj)
+    payload = search_conformers(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    # Every gated block is materialised again on each nested
+    # ``observations[*]`` record, so the strip has to reach both depths.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=CONFORMER_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
     )
 
 
@@ -161,7 +173,16 @@ def scientific_conformers_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(search_conformers(session, body))
+    payload = search_conformers(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    # Every gated block is materialised again on each nested
+    # ``observations[*]`` record, so the strip has to reach both depths.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=CONFORMER_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
+    )
 
 
 @cg_router.get(
@@ -179,12 +200,19 @@ def scientific_conformer_group_detail(
     ref of the form ``cg_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_conformer_group(
-            session,
-            conformer_group_handle=conformer_group_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_conformer_group(
+        session,
+        conformer_group_handle=conformer_group_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    # Every gated block is materialised again on each nested
+    # ``observations[*]`` record, so the strip has to reach both depths.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=CONFORMER_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
     )
 
 
@@ -205,10 +233,17 @@ def scientific_conformer_observation_detail(
     public ref of the form ``co_…``. Same 422 / 404 contract as the
     group surface.
     """
-    return apply_internal_ids_visibility(
-        get_conformer_observation(
-            session,
-            conformer_observation_handle=conformer_observation_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_conformer_observation(
+        session,
+        conformer_observation_handle=conformer_observation_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    # Every gated block is materialised again on each nested
+    # ``observations[*]`` record, so the strip has to reach both depths.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=CONFORMER_RECORD_SECTIONS,
+        scope=ANYWHERE_SCOPE,
     )

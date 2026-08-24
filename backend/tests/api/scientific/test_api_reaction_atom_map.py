@@ -163,8 +163,10 @@ def test_a_mapped_reaction_is_distinguishable_without_a_second_request(client):
     result = _upload(client, _map(equivalent_map_count=6))
     body = _full(client, result["reaction_entry_id"])
 
-    # No ``include`` token was passed.
-    assert body["atom_map"] is None
+    # No ``include`` token was passed, so the per-atom section is absent.
+    # The badge below is the point of the test and is unconditional: whether
+    # a reaction is mapped at all must never be behind a second request.
+    assert "atom_map" not in body
     badges = body["reaction_entry"]["atom_maps"]
     assert len(badges) == 1
     assert badges[0]["source"] == "declared"
@@ -412,5 +414,5 @@ def test_the_atom_map_badge_is_not_subject_to_the_pair_cap(client, monkeypatch):
     monkeypatch.setattr(settings, "max_full_atom_map_pairs_public", 1)
 
     body = _full(client, result["reaction_entry_id"])
-    assert body["atom_map"] is None
+    assert "atom_map" not in body
     assert len(body["reaction_entry"]["atom_maps"]) == 1

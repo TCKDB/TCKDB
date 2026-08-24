@@ -18449,7 +18449,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "trust"
           },
           "tunneling_application": {
             "anyOf": [
@@ -20331,7 +20332,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "review"
           },
           "role": {
             "anyOf": [
@@ -31217,7 +31219,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "owner"
           }
         },
         "required": [
@@ -32098,7 +32101,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculations"
+            "title": "Calculations",
+            "x-tckdb-include-gated": "calculations"
           },
           "conformer_group": {
             "$ref": "#/components/schemas/ConformerGroupCoreBlock"
@@ -32118,7 +32122,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometries"
+            "title": "Geometries",
+            "x-tckdb-include-gated": "geometries"
           },
           "observations": {
             "anyOf": [
@@ -32132,7 +32137,8 @@
                 "type": "null"
               }
             ],
-            "title": "Observations"
+            "title": "Observations",
+            "x-tckdb-include-gated": "observations"
           },
           "observations_summary": {
             "$ref": "#/components/schemas/ConformerObservationsSummary"
@@ -32149,7 +32155,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "selection_summary": {
             "items": {
@@ -32170,7 +32177,8 @@
                 "type": "null"
               }
             ],
-            "title": "Selections"
+            "title": "Selections",
+            "x-tckdb-include-gated": "selections"
           },
           "species": {
             "$ref": "#/components/schemas/ConformerSpeciesContext"
@@ -32235,7 +32243,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculations"
+            "title": "Calculations",
+            "x-tckdb-include-gated": "calculations"
           },
           "conformer_group": {
             "$ref": "#/components/schemas/ConformerGroupCoreBlock"
@@ -32258,7 +32267,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometries"
+            "title": "Geometries",
+            "x-tckdb-include-gated": "geometries"
           },
           "observations": {
             "anyOf": [
@@ -32272,7 +32282,8 @@
                 "type": "null"
               }
             ],
-            "title": "Observations"
+            "title": "Observations",
+            "x-tckdb-include-gated": "observations"
           },
           "review_history": {
             "anyOf": [
@@ -32286,7 +32297,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "selections": {
             "anyOf": [
@@ -32300,7 +32312,8 @@
                 "type": "null"
               }
             ],
-            "title": "Selections"
+            "title": "Selections",
+            "x-tckdb-include-gated": "selections"
           },
           "species": {
             "$ref": "#/components/schemas/ConformerSpeciesContext"
@@ -32384,7 +32397,8 @@
                 "type": "null"
               }
             ],
-            "title": "Corrections"
+            "title": "Corrections",
+            "x-tckdb-include-gated": "corrections"
           },
           "energy_correction_scheme": {
             "$ref": "#/components/schemas/EnergyCorrectionSchemeCoreBlock"
@@ -32424,7 +32438,8 @@
                 "type": "null"
               }
             ],
-            "title": "Used By"
+            "title": "Used By",
+            "x-tckdb-include-gated": "used_by"
           }
         },
         "required": [
@@ -32539,7 +32554,8 @@
                 "type": "null"
               }
             ],
-            "title": "Used By"
+            "title": "Used By",
+            "x-tckdb-include-gated": "used_by"
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -32845,7 +32861,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "coefficients"
           },
           "evidence_summary": {
             "$ref": "#/components/schemas/NetworkKineticsEvidenceSummary"
@@ -32874,7 +32891,8 @@
                 "type": "null"
               }
             ],
-            "title": "Plog"
+            "title": "Plog",
+            "x-tckdb-include-gated": "plog"
           },
           "plog_entries_truncated": {
             "anyOf": [
@@ -32885,7 +32903,8 @@
                 "type": "null"
               }
             ],
-            "title": "Plog Entries Truncated"
+            "title": "Plog Entries Truncated",
+            "x-tckdb-include-gated": "plog"
           },
           "plog_entry_count_total": {
             "anyOf": [
@@ -32896,7 +32915,8 @@
                 "type": "null"
               }
             ],
-            "title": "Plog Entry Count Total"
+            "title": "Plog Entry Count Total",
+            "x-tckdb-include-gated": "plog"
           },
           "point_count_total": {
             "anyOf": [
@@ -32907,7 +32927,8 @@
                 "type": "null"
               }
             ],
-            "title": "Point Count Total"
+            "title": "Point Count Total",
+            "x-tckdb-include-gated": "points"
           },
           "points": {
             "anyOf": [
@@ -32921,7 +32942,8 @@
                 "type": "null"
               }
             ],
-            "title": "Points"
+            "title": "Points",
+            "x-tckdb-include-gated": "points"
           },
           "points_truncated": {
             "anyOf": [
@@ -32932,7 +32954,8 @@
                 "type": "null"
               }
             ],
-            "title": "Points Truncated"
+            "title": "Points Truncated",
+            "x-tckdb-include-gated": "points"
           },
           "review_history": {
             "anyOf": [
@@ -32946,7 +32969,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "source_calculations": {
             "anyOf": [
@@ -32960,7 +32984,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculations"
+            "title": "Source Calculations",
+            "x-tckdb-include-gated": "source_calculations"
           }
         },
         "required": [
@@ -33020,7 +33045,8 @@
                 "type": "null"
               }
             ],
-            "title": "Channels"
+            "title": "Channels",
+            "x-tckdb-include-gated": "channels"
           },
           "evidence_summary": {
             "$ref": "#/components/schemas/NetworkEvidenceSummary"
@@ -33037,7 +33063,8 @@
                 "type": "null"
               }
             ],
-            "title": "Kinetics"
+            "title": "Kinetics",
+            "x-tckdb-include-gated": "kinetics"
           },
           "literature": {
             "anyOf": [
@@ -33064,7 +33091,8 @@
                 "type": "null"
               }
             ],
-            "title": "Reactions"
+            "title": "Reactions",
+            "x-tckdb-include-gated": "reactions"
           },
           "review_history": {
             "anyOf": [
@@ -33078,7 +33106,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "software_release": {
             "anyOf": [
@@ -33102,7 +33131,8 @@
                 "type": "null"
               }
             ],
-            "title": "Solves"
+            "title": "Solves",
+            "x-tckdb-include-gated": "solves"
           },
           "source_calculations": {
             "anyOf": [
@@ -33116,7 +33146,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculations"
+            "title": "Source Calculations",
+            "x-tckdb-include-gated": "source_calculations"
           },
           "species": {
             "anyOf": [
@@ -33130,7 +33161,8 @@
                 "type": "null"
               }
             ],
-            "title": "Species"
+            "title": "Species",
+            "x-tckdb-include-gated": "species"
           },
           "states": {
             "anyOf": [
@@ -33144,7 +33176,8 @@
                 "type": "null"
               }
             ],
-            "title": "States"
+            "title": "States",
+            "x-tckdb-include-gated": "states"
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -33232,7 +33265,8 @@
                 "type": "null"
               }
             ],
-            "title": "Bath Gas"
+            "title": "Bath Gas",
+            "x-tckdb-include-gated": "bath_gas"
           },
           "channel_barriers": {
             "anyOf": [
@@ -33246,7 +33280,8 @@
                 "type": "null"
               }
             ],
-            "title": "Channel Barriers"
+            "title": "Channel Barriers",
+            "x-tckdb-include-gated": "channel_barriers"
           },
           "energy_transfer": {
             "anyOf": [
@@ -33260,7 +33295,8 @@
                 "type": "null"
               }
             ],
-            "title": "Energy Transfer"
+            "title": "Energy Transfer",
+            "x-tckdb-include-gated": "energy_transfer"
           },
           "evidence_summary": {
             "$ref": "#/components/schemas/NetworkSolveEvidenceSummary"
@@ -33277,7 +33313,8 @@
                 "type": "null"
               }
             ],
-            "title": "Kinetics"
+            "title": "Kinetics",
+            "x-tckdb-include-gated": "kinetics"
           },
           "literature": {
             "anyOf": [
@@ -33307,7 +33344,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "software_release": {
             "anyOf": [
@@ -33331,7 +33369,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculations"
+            "title": "Source Calculations",
+            "x-tckdb-include-gated": "source_calculations"
           },
           "state_energies": {
             "anyOf": [
@@ -33345,7 +33384,8 @@
                 "type": "null"
               }
             ],
-            "title": "State Energies"
+            "title": "State Energies",
+            "x-tckdb-include-gated": "state_energies"
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -33405,7 +33445,7 @@
         "type": "string"
       },
       "ScientificReactionFullResponse": {
-        "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/full.\n\nSections that are not in the ``include`` set are omitted entirely.\nSections that are in the ``include`` set are always present (collections\nas ``[]``, objects as ``null`` when empty).",
+        "description": "Response envelope for /api/v1/scientific/reaction-entries/{id}/full.\n\nSections that are not in the ``include`` set are omitted entirely.\nSections that are in the ``include`` set are always present (collections\nas ``[]``, objects as ``null`` when empty). This document said so for a\nlong time before it was true; the ten include-gated sections below are\nstripped at the response seam by ``REACTION_FULL_SECTIONS``, which needs\nthe ``document`` scope because they sit at the root rather than under a\n``record`` key.\n\n``include`` **replaces** the defaults rather than extending them: a bare\nrequest resolves to ``species``, ``kinetics`` and ``transition_states``,\nand ``?include=irc`` resolves to ``irc`` alone. Under the old shape that\nsilently nulled three sections a caller was still expecting; now they are\nabsent and ``request.include`` says why.\n\n``review_records`` is the one exception and is deliberately not one of\nthe ten. It is produced by the separate ``include_review`` query\nparameter, not by any include token, so it keeps its ``null`` when the\ncaller asked for ``include_review=summary`` — an include-driven strip has\nnothing true to say about a field a different parameter governs, and\n``request.include_review`` is echoed beside ``request.include`` so a\nreader can tell the two states apart.",
         "properties": {
           "artifacts": {
             "anyOf": [
@@ -33419,7 +33459,8 @@
                 "type": "null"
               }
             ],
-            "title": "Artifacts"
+            "title": "Artifacts",
+            "x-tckdb-include-gated": "artifacts"
           },
           "atom_map": {
             "anyOf": [
@@ -33433,7 +33474,8 @@
                 "type": "null"
               }
             ],
-            "title": "Atom Map"
+            "title": "Atom Map",
+            "x-tckdb-include-gated": "atom_map"
           },
           "calculations": {
             "anyOf": [
@@ -33447,7 +33489,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculations"
+            "title": "Calculations",
+            "x-tckdb-include-gated": "calculations"
           },
           "conformers": {
             "anyOf": [
@@ -33461,7 +33504,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformers"
+            "title": "Conformers",
+            "x-tckdb-include-gated": "conformers"
           },
           "irc": {
             "anyOf": [
@@ -33475,7 +33519,8 @@
                 "type": "null"
               }
             ],
-            "title": "Irc"
+            "title": "Irc",
+            "x-tckdb-include-gated": "irc"
           },
           "kinetics": {
             "anyOf": [
@@ -33489,7 +33534,8 @@
                 "type": "null"
               }
             ],
-            "title": "Kinetics"
+            "title": "Kinetics",
+            "x-tckdb-include-gated": "kinetics"
           },
           "path_search": {
             "anyOf": [
@@ -33503,7 +33549,8 @@
                 "type": "null"
               }
             ],
-            "title": "Path Search"
+            "title": "Path Search",
+            "x-tckdb-include-gated": "path_search"
           },
           "reaction_entry": {
             "$ref": "#/components/schemas/ReactionEntrySummary"
@@ -33540,7 +33587,8 @@
                 "type": "null"
               }
             ],
-            "title": "Scans"
+            "title": "Scans",
+            "x-tckdb-include-gated": "scans"
           },
           "species": {
             "anyOf": [
@@ -33550,7 +33598,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "species"
           },
           "transition_states": {
             "anyOf": [
@@ -33564,7 +33613,8 @@
                 "type": "null"
               }
             ],
-            "title": "Transition States"
+            "title": "Transition States",
+            "x-tckdb-include-gated": "transition_states"
           }
         },
         "required": [
@@ -34256,7 +34306,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "assessments"
           },
           "available_sections": {
             "$ref": "#/components/schemas/AvailableStatmechSections"
@@ -34273,7 +34324,8 @@
                 "type": "null"
               }
             ],
-            "title": "Conformers"
+            "title": "Conformers",
+            "x-tckdb-include-gated": "conformers"
           },
           "electronic_levels": {
             "anyOf": [
@@ -34287,7 +34339,8 @@
                 "type": "null"
               }
             ],
-            "title": "Electronic Levels"
+            "title": "Electronic Levels",
+            "x-tckdb-include-gated": "electronic_levels"
           },
           "evidence_summary": {
             "$ref": "#/components/schemas/StatmechEvidenceSummary"
@@ -34300,7 +34353,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "frequencies"
           },
           "frequency_scale_factor": {
             "anyOf": [
@@ -34334,7 +34388,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "software_release": {
             "anyOf": [
@@ -34358,7 +34413,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculations"
+            "title": "Source Calculations",
+            "x-tckdb-include-gated": "source_calculations"
           },
           "species": {
             "anyOf": [
@@ -34395,7 +34451,8 @@
                 "type": "null"
               }
             ],
-            "title": "Torsions"
+            "title": "Torsions",
+            "x-tckdb-include-gated": "torsions"
           },
           "transition_state": {
             "anyOf": [
@@ -34415,7 +34472,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "trust"
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -34554,7 +34612,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculations"
+            "title": "Calculations",
+            "x-tckdb-include-gated": "calculations"
           },
           "entries": {
             "anyOf": [
@@ -34568,7 +34627,8 @@
                 "type": "null"
               }
             ],
-            "title": "Entries"
+            "title": "Entries",
+            "x-tckdb-include-gated": "entries"
           },
           "evidence_summary": {
             "$ref": "#/components/schemas/TransitionStateEntryEvidenceSummary"
@@ -34585,7 +34645,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometries"
+            "title": "Geometries",
+            "x-tckdb-include-gated": "geometries"
           },
           "reaction": {
             "$ref": "#/components/schemas/TransitionStateReactionContext"
@@ -34602,7 +34663,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "transition_state": {
             "$ref": "#/components/schemas/TransitionStateCoreBlock"
@@ -34618,7 +34680,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "trust"
           },
           "validation": {
             "$ref": "#/components/schemas/TransitionStateValidationDescriptor"
@@ -34635,7 +34698,8 @@
                 "type": "null"
               }
             ],
-            "title": "Validation Evidence"
+            "title": "Validation Evidence",
+            "x-tckdb-include-gated": "validation_evidence"
           }
         },
         "required": [
@@ -34667,7 +34731,8 @@
                 "type": "null"
               }
             ],
-            "title": "Calculations"
+            "title": "Calculations",
+            "x-tckdb-include-gated": "calculations"
           },
           "entries": {
             "anyOf": [
@@ -34681,7 +34746,8 @@
                 "type": "null"
               }
             ],
-            "title": "Entries"
+            "title": "Entries",
+            "x-tckdb-include-gated": "entries"
           },
           "entries_summary": {
             "$ref": "#/components/schemas/TransitionStateEntriesSummary"
@@ -34701,7 +34767,8 @@
                 "type": "null"
               }
             ],
-            "title": "Geometries"
+            "title": "Geometries",
+            "x-tckdb-include-gated": "geometries"
           },
           "reaction": {
             "$ref": "#/components/schemas/TransitionStateReactionContext"
@@ -34718,7 +34785,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "transition_state": {
             "$ref": "#/components/schemas/TransitionStateCoreBlock"
@@ -34735,7 +34803,8 @@
                 "type": "null"
               }
             ],
-            "title": "Validation Evidence"
+            "title": "Validation Evidence",
+            "x-tckdb-include-gated": "validation_evidence"
           }
         },
         "required": [
@@ -34809,7 +34878,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "assessments"
           },
           "available_sections": {
             "$ref": "#/components/schemas/AvailableTransportSections"
@@ -34839,7 +34909,8 @@
                 "type": "null"
               }
             ],
-            "title": "Review History"
+            "title": "Review History",
+            "x-tckdb-include-gated": "review"
           },
           "software_release": {
             "anyOf": [
@@ -34863,7 +34934,8 @@
                 "type": "null"
               }
             ],
-            "title": "Source Calculations"
+            "title": "Source Calculations",
+            "x-tckdb-include-gated": "source_calculations"
           },
           "species": {
             "$ref": "#/components/schemas/TransportSpeciesContext"
@@ -34889,7 +34961,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "trust"
           },
           "workflow_tool_release": {
             "anyOf": [
@@ -36147,7 +36220,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "conformers"
           },
           "electronic_state_kind": {
             "$ref": "#/components/schemas/SpeciesEntryStateKind"
@@ -36175,7 +36249,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "statmech"
           },
           "thermo_summary": {
             "anyOf": [
@@ -36185,7 +36260,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "thermo"
           },
           "transport_summary": {
             "anyOf": [
@@ -36195,7 +36271,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "transport"
           }
         },
         "required": [
@@ -41775,7 +41852,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "assessments"
           },
           "evidence_completeness": {
             "$ref": "#/components/schemas/EvidenceCompletenessBreakdown"
@@ -41921,7 +41999,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-tckdb-include-gated": "trust"
           },
           "wilhoit": {
             "anyOf": [

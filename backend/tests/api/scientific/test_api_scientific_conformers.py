@@ -167,13 +167,14 @@ def test_cg_detail_default_response_shape(client, db_session):
     assert "selection_summary" in record
     assert "evidence_summary" in record
     assert "available_sections" in record
-    # Heavy include blocks omitted by default — Pydantic serializes as null
-    # (the schema fields are ``... | None = None``).
-    assert record["observations"] is None
-    assert record["selections"] is None
-    assert record["calculations"] is None
-    assert record["geometries"] is None
-    assert record["review_history"] is None
+    # Heavy include blocks omitted by default. ``observations_summary``
+    # above still answers "is there any?" without being asked, so nothing
+    # is lost by the key going.
+    assert "observations" not in record
+    assert "selections" not in record
+    assert "calculations" not in record
+    assert "geometries" not in record
+    assert "review_history" not in record
 
 
 def test_cg_detail_review_badge_present(client, db_session):
@@ -764,7 +765,7 @@ def test_co_detail_include_observations_returns_the_basin(client, db_session):
     assert all(o["observations"] is None for o in block)
 
     default = client.get(_co_url(obs[0].public_ref)).json()
-    assert default["record"]["observations"] is None
+    assert "observations" not in default["record"]
 
 
 def test_co_detail_include_selections_surfaces_parent_group_selections(

@@ -13,7 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
-from app.api.routes.scientific._response import omit_trust_unless_requested
+from app.api.routes.scientific._response import (
+    DOCUMENT_SCOPE,
+    FULL_SCOPE,
+    REACTION_FULL_SECTIONS,
+    omit_trust_unless_requested,
+    omit_unrequested_sections,
+)
 from app.db.models.common import RecordReviewStatus
 from app.schemas.reads.scientific_provenance import (
     ReactionFullReadRequest,
@@ -71,4 +77,16 @@ def reaction_full(
         request=request,
     )
     visibility = apply_internal_ids_visibility(payload)
-    return omit_trust_unless_requested(visibility, payload, scope="full")
+    # Two strips, two scopes, on one response, and they are not
+    # interchangeable. ``FULL_SCOPE`` reaches the records embedded inside
+    # the sections and removes their nested ``trust``; this document's own
+    # ten sections sit at the root, which only ``DOCUMENT_SCOPE`` yields.
+    # Using the route-named scope for the second would strip nothing and
+    # report nothing.
+    visibility = omit_trust_unless_requested(visibility, payload, scope=FULL_SCOPE)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=REACTION_FULL_SECTIONS,
+        scope=DOCUMENT_SCOPE,
+    )

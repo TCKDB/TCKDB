@@ -425,7 +425,25 @@ class ScientificReactionFullResponse(BaseModel):
 
     Sections that are not in the ``include`` set are omitted entirely.
     Sections that are in the ``include`` set are always present (collections
-    as ``[]``, objects as ``null`` when empty).
+    as ``[]``, objects as ``null`` when empty). This document said so for a
+    long time before it was true; the ten include-gated sections below are
+    stripped at the response seam by ``REACTION_FULL_SECTIONS``, which needs
+    the ``document`` scope because they sit at the root rather than under a
+    ``record`` key.
+
+    ``include`` **replaces** the defaults rather than extending them: a bare
+    request resolves to ``species``, ``kinetics`` and ``transition_states``,
+    and ``?include=irc`` resolves to ``irc`` alone. Under the old shape that
+    silently nulled three sections a caller was still expecting; now they are
+    absent and ``request.include`` says why.
+
+    ``review_records`` is the one exception and is deliberately not one of
+    the ten. It is produced by the separate ``include_review`` query
+    parameter, not by any include token, so it keeps its ``null`` when the
+    caller asked for ``include_review=summary`` — an include-driven strip has
+    nothing true to say about a field a different parameter governs, and
+    ``request.include_review`` is echoed beside ``request.include`` so a
+    reader can tell the two states apart.
     """
 
     request: RequestEcho

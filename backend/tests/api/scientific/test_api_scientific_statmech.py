@@ -160,13 +160,14 @@ def test_detail_default_response_shape(client, db_session):
         "available_sections",
     ):
         assert key in record
-    # Heavy include blocks omitted by default.
-    assert record["source_calculations"] is None
-    assert record["torsions"] is None
-    assert record["electronic_levels"] is None
-    assert record["frequencies"] is None
-    assert record["conformers"] is None
-    assert record["review_history"] is None
+    # Heavy include blocks omitted by default — the key is gone, like
+    # ``trust`` below, not nulled.
+    assert "source_calculations" not in record
+    assert "torsions" not in record
+    assert "electronic_levels" not in record
+    assert "frequencies" not in record
+    assert "conformers" not in record
+    assert "review_history" not in record
     assert "trust" not in record
 
 
@@ -427,14 +428,26 @@ def test_detail_include_all_surfaces_electronic_levels(client, db_session):
     assert len(levels) == 2
 
 
-def test_detail_electronic_levels_none_when_not_included(client, db_session):
-    """Without the token the block is ``None`` even when levels exist."""
+def test_detail_electronic_levels_absent_when_not_included(client, db_session):
+    """Without the token the block is absent even when levels exist.
+
+    This record has an electronic level. Under the old shape the default
+    response said ``electronic_levels: null``, which is what "this species
+    has no electronic levels" also said — the two facts shared one value
+    and the wrong one is the one a reader reaches for.
+    """
     _, _, sm = _make_statmech(db_session)
     attach_statmech_electronic_level(
         db_session, statmech=sm, level_index=1, energy_cm1=0.0, degeneracy=2
     )
     body = client.get(_detail_url(sm.public_ref)).json()
-    assert body["record"]["electronic_levels"] is None
+    assert "electronic_levels" not in body["record"]
+    assert body["request"]["include"] == []
+
+    included = client.get(
+        _detail_url(sm.public_ref, include="electronic_levels")
+    ).json()
+    assert len(included["record"]["electronic_levels"]) == 1
 
 
 def test_detail_include_electronic_levels_empty_when_none_present(

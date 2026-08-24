@@ -29,10 +29,14 @@ from pydantic import BaseModel
 
 from app.api.public_openapi import project_hosted_openapi
 from app.api.routes.scientific._response import (
+    ALL_INCLUDE_GATED_TABLES,
     ANYWHERE_SCOPE,
     ASSESSMENTS_SECTION,
     CALCULATION_RECORD_SECTIONS,
+    DOCUMENT_SCOPE,
+    FULL_SCOPE,
     INCLUDE_GATED_COMPONENTS,
+    REACTION_FULL_SECTIONS,
     TRUST_SECTION,
     IncludeGatedSections,
     omit_unrequested_calculation_sections,
@@ -259,7 +263,7 @@ def test_fields_to_omit_is_computed_from_the_table_alone():
 def test_the_marker_registry_only_names_declared_sections():
     """Every marked property comes from a declared table, and there is at least one."""
     declared: dict[str, str] = {}
-    for table in (CALCULATION_RECORD_SECTIONS, TRUST_SECTION, ASSESSMENTS_SECTION):
+    for table in ALL_INCLUDE_GATED_TABLES.values():
         declared.update(table.fields_by_token())
 
     assert INCLUDE_GATED_COMPONENTS, "the marker registry enumerates nothing"
@@ -272,7 +276,7 @@ def test_the_marker_registry_only_names_declared_sections():
                 "declared table says so"
             )
             marked += 1
-    assert marked >= 19
+    assert marked == 98, f"the marker registry names {marked} properties"
 
 
 def test_the_hosted_document_marks_the_gated_properties(client):
@@ -290,7 +294,7 @@ def test_the_hosted_document_marks_the_gated_properties(client):
             assert field_name not in required
             checked += 1
 
-    assert checked >= 19
+    assert checked == 98, f"the hosted document carries {checked} markers"
 
 
 def test_the_marker_is_not_stamped_on_ungated_properties():
@@ -322,3 +326,127 @@ def test_the_marker_is_not_stamped_on_ungated_properties():
     assert "x-tckdb-include-gated" not in record["workflow_tool_release"]
     assert "x-tckdb-include-gated" not in record["calculation_ref"]
     assert "x-tckdb-include-gated" not in pagination["next_cursor"]
+
+
+# ---------------------------------------------------------------------------
+# ``document`` and ``full`` name the same route and mean opposite things
+# ---------------------------------------------------------------------------
+
+
+def _full_document() -> dict[str, Any]:
+    """A ``/reaction-entries/{id}/full`` payload in miniature.
+
+    Its own ten sections sit at the root beside ``request`` and
+    ``review_summary``; the records embedded *inside* two of those sections
+    each carry a nested ``trust``. Those are two different jobs on one
+    response and they need two different scopes.
+    """
+    return {
+        "request": {"include": ["kinetics"], "include_review": "summary"},
+        "reaction_entry": {"reaction_entry_ref": "rxe_x"},
+        "review_summary": {"approved": 1},
+        "kinetics": [{"kinetics_ref": "kin_x", "trust": {"grade": "a"}}],
+        "transition_states": [{"transition_state_ref": "ts_x", "trust": None}],
+        "calculations": None,
+        "irc": None,
+        "scans": None,
+        "atom_map": None,
+        "review_records": None,
+    }
+
+
+def test_the_document_scope_reaches_the_root_sections():
+    visibility = JSONResponse(_full_document())
+
+    body = _body(
+        omit_unrequested_sections(
+            visibility,
+            _payload("kinetics"),
+            table=REACTION_FULL_SECTIONS,
+            scope=DOCUMENT_SCOPE,
+        )
+    )
+
+    assert "kinetics" in body
+    for absent in ("calculations", "irc", "scans", "atom_map", "species"):
+        assert absent not in body
+    # Not a section, and not gated by any include token: ``review_records``
+    # is produced by the separate ``include_review`` parameter, so an
+    # include-driven strip has nothing true to say about it.
+    assert "review_records" in body and body["review_records"] is None
+    assert "request" in body and "review_summary" in body
+
+
+def test_the_full_scope_is_not_a_substitute_for_the_document_scope():
+    """The scope whose name matches the route is a silent no-op here.
+
+    ``FULL_SCOPE`` yields the records embedded in the document, so applying
+    the document's own table through it pops nothing and raises nothing --
+    exactly the shape of mistake this pair of scopes exists to make
+    visible.
+    """
+    visibility = JSONResponse(_full_document())
+
+    body = _body(
+        omit_unrequested_sections(
+            visibility,
+            _payload("kinetics"),
+            table=REACTION_FULL_SECTIONS,
+            scope=FULL_SCOPE,
+        )
+    )
+
+    for still_there in ("calculations", "irc", "scans", "atom_map"):
+        assert still_there in body, (
+            "FULL_SCOPE was expected to leave the root sections untouched; "
+            "if it now strips them the two scopes have converged and one of "
+            "them should be deleted rather than quietly kept"
+        )
+    assert body["calculations"] is None
+
+
+def test_the_full_scope_reaches_the_nested_trust_the_document_scope_cannot():
+    """The other half of the pair, asserted so the no-op above means something."""
+    visibility = JSONResponse(_full_document())
+
+    body = _body(
+        omit_unrequested_sections(
+            visibility, _payload("kinetics"), table=TRUST_SECTION, scope=FULL_SCOPE
+        )
+    )
+    assert "trust" not in body["kinetics"][0]
+    assert "trust" not in body["transition_states"][0]
+
+    visibility = JSONResponse(_full_document())
+    body = _body(
+        omit_unrequested_sections(
+            visibility,
+            _payload("kinetics"),
+            table=TRUST_SECTION,
+            scope=DOCUMENT_SCOPE,
+        )
+    )
+    assert "trust" in body["kinetics"][0]
+
+
+def test_the_document_scope_pops_from_the_root_and_nowhere_deeper():
+    """It must not behave like ``anywhere`` by accident."""
+    visibility = JSONResponse(
+        {
+            "request": {"include": []},
+            "irc": None,
+            "kinetics": [{"kinetics_ref": "kin_x", "irc": None}],
+        }
+    )
+
+    body = _body(
+        omit_unrequested_sections(
+            visibility,
+            _payload(),
+            table=REACTION_FULL_SECTIONS,
+            scope=DOCUMENT_SCOPE,
+        )
+    )
+
+    assert "irc" not in body
+    assert "kinetics" not in body

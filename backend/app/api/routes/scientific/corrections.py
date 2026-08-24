@@ -30,6 +30,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
+from app.api.routes.scientific._response import (
+    DETAIL_SCOPE,
+    ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS,
+    FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS,
+    SEARCH_SCOPE,
+    omit_unrequested_sections,
+)
 from app.db.models.common import EnergyCorrectionSchemeKind, FrequencyScaleKind
 from app.schemas.reads.scientific_energy_correction_scheme import (
     ScientificEnergyCorrectionSchemeDetailResponse,
@@ -131,8 +138,13 @@ def scientific_frequency_scale_factor_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_frequency_scale_factors(session, request_obj)
+    payload = search_frequency_scale_factors(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -156,8 +168,13 @@ def scientific_frequency_scale_factor_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(
-        search_frequency_scale_factors(session, body)
+    payload = search_frequency_scale_factors(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -178,12 +195,17 @@ def scientific_frequency_scale_factor_detail(
     public ref of the form ``fsf_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_frequency_scale_factor(
-            session,
-            frequency_scale_factor_handle=frequency_scale_factor_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_frequency_scale_factor(
+        session,
+        frequency_scale_factor_handle=frequency_scale_factor_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=FREQUENCY_SCALE_FACTOR_RECORD_SECTIONS,
+        scope=DETAIL_SCOPE,
     )
 
 
@@ -245,8 +267,13 @@ def scientific_energy_correction_scheme_search_get(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        search_energy_correction_schemes(session, request_obj)
+    payload = search_energy_correction_schemes(session, request_obj)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -270,8 +297,13 @@ def scientific_energy_correction_scheme_search_post(
                 "all search fields in the JSON body."
             ),
         )
-    return apply_internal_ids_visibility(
-        search_energy_correction_schemes(session, body)
+    payload = search_energy_correction_schemes(session, body)
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 
@@ -292,12 +324,17 @@ def scientific_energy_correction_scheme_detail(
     a public ref of the form ``ecs_…``. Wrong-prefix refs return 422
     ``handle_type_mismatch``; unknown refs / ids return 404.
     """
-    return apply_internal_ids_visibility(
-        get_energy_correction_scheme(
-            session,
-            energy_correction_scheme_handle=energy_correction_scheme_ref_or_id,
-            include=parse_include(include),
-        )
+    payload = get_energy_correction_scheme(
+        session,
+        energy_correction_scheme_handle=energy_correction_scheme_ref_or_id,
+        include=parse_include(include),
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=ENERGY_CORRECTION_SCHEME_RECORD_SECTIONS,
+        scope=DETAIL_SCOPE,
     )
 
 

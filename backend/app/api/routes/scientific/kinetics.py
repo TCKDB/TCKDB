@@ -14,7 +14,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._response import (
+    KINETICS_RECORD_SECTIONS,
+    SEARCH_SCOPE,
     omit_trust_unless_requested,
+    omit_unrequested_sections,
     prepare_assessment_response,
 )
 from app.db.models.common import KineticsModelKind, RecordReviewStatus
@@ -110,4 +113,10 @@ def reaction_kinetics(
         payload,
         attach_assessments=attach_kinetics_assessments,
     )
-    return omit_trust_unless_requested(visibility, payload, scope="search")
+    visibility = omit_trust_unless_requested(visibility, payload, scope=SEARCH_SCOPE)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=KINETICS_RECORD_SECTIONS,
+        scope=SEARCH_SCOPE,
+    )

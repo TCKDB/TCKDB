@@ -7,6 +7,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import (
+    ANYWHERE_SCOPE,
+    SPECIES_SEARCH_SECTIONS,
+    omit_unrequested_sections,
+)
 from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
@@ -74,4 +79,13 @@ def species_search(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(search_species(session, request))
+    payload = search_species(session, request)
+    visibility = apply_internal_ids_visibility(payload)
+    # The four summaries sit at ``records[*].entries[*]``, two levels below
+    # the record root, so no record-shaped scope reaches them.
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=SPECIES_SEARCH_SECTIONS,
+        scope=ANYWHERE_SCOPE,
+    )

@@ -292,6 +292,8 @@ def test_detail_default_response_shape(client, db_session):
     record = body["record"]
     for key in ("network", "evidence_summary", "available_sections"):
         assert key in record
+    # All eight are include-gated on this operation, and none was asked
+    # for, so none is on the wire.
     for k in (
         "species",
         "reactions",
@@ -302,7 +304,7 @@ def test_detail_default_response_shape(client, db_session):
         "source_calculations",
         "review_history",
     ):
-        assert record[k] is None
+        assert k not in record
 
 
 def test_detail_review_badge_present(client, db_session):
@@ -1180,7 +1182,7 @@ def test_solve_detail_default_response_shape(client, db_session):
         "kinetics",
         "review_history",
     ):
-        assert record[k] is None
+        assert k not in record
 
 
 def test_solve_detail_parent_network_context_present(client, db_session):
@@ -2394,7 +2396,7 @@ def test_nkin_detail_default_response_shape(client, db_session):
         "available_sections",
     ):
         assert key in record
-    # Heavy includes default to None.
+    # Heavy includes are absent by default.
     for key in (
         "coefficients",
         "plog",
@@ -2402,7 +2404,7 @@ def test_nkin_detail_default_response_shape(client, db_session):
         "source_calculations",
         "review_history",
     ):
-        assert record[key] is None
+        assert key not in record
 
 
 def test_nkin_detail_parent_network_context_present(client, db_session):
@@ -2582,16 +2584,18 @@ def test_nkin_detail_plog_metadata_absent_when_plog_not_requested(
 ):
     """PLOG sibling metadata follows the omittable-field pattern.
 
-    With no ``include=plog`` the bare-list field and both sibling
-    metadata fields stay at their unset (``None``) value, mirroring
-    the points / coefficients defaults.
+    The ``plog`` token governs the bare list *and* both sibling metadata
+    fields — they are built inside the same branch — so all three go
+    together. On a record that really does carry PLOG entries this is the
+    difference that matters: ``plog_entry_count_total: null`` read as
+    "zero entries", and the key's absence cannot.
     """
     fx = _make_kinetics(db_session, NetworkKineticsModelKind.plog)
     body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
     record = body["record"]
-    assert record["plog"] is None
-    assert record["plog_entry_count_total"] is None
-    assert record["plog_entries_truncated"] is None
+    assert "plog" not in record
+    assert "plog_entry_count_total" not in record
+    assert "plog_entries_truncated" not in record
 
 
 def test_nkin_detail_include_points(client, db_session):
@@ -2762,7 +2766,7 @@ def test_nkin_detail_include_all_does_not_include_points(client, db_session):
         _nkin_detail_url(fx["kinetics"].public_ref, include="all")
     ).json()
     # ``points`` must require explicit opt-in even with ``all``.
-    assert body["record"]["points"] is None
+    assert "points" not in body["record"]
 
 
 def test_nkin_detail_internal_ids_restored_when_policy_allows(
@@ -2968,7 +2972,7 @@ def test_nkin_detail_payload_keys_only_appear_when_requested(
     body = client.get(_nkin_detail_url(fx["kinetics"].public_ref)).json()
     rec = body["record"]
     for key in ("coefficients", "plog", "points"):
-        assert rec[key] is None
+        assert key not in rec
 
 
 # ---------------------------------------------------------------------------
@@ -3605,7 +3609,7 @@ def test_nkin_search_include_all_does_not_include_points(client, db_session):
             network_kinetics_ref=fx["kinetics"].public_ref, include="all"
         )
     ).json()
-    assert body["records"][0]["points"] is None
+    assert "points" not in body["records"][0]
 
 
 def test_nkin_search_include_all_does_not_restore_internal_ids(
@@ -3769,10 +3773,11 @@ def test_nkin_detail_include_all_includes_capped_coefficients_and_plog(
     assert len(rec["plog"]) == 1
     assert rec["plog_entries_truncated"] is False
     assert rec["plog_entry_count_total"] == 1
-    # Points excluded from ``include=all``; require explicit opt-in.
-    assert rec["points"] is None
-    assert rec["points_truncated"] is None
-    assert rec["point_count_total"] is None
+    # Points excluded from ``include=all``; require explicit opt-in, so
+    # the key and both its companions are absent.
+    assert "points" not in rec
+    assert "points_truncated" not in rec
+    assert "point_count_total" not in rec
 
 
 def test_nkin_search_record_matches_detail_for_same_kinetics(
@@ -3864,7 +3869,7 @@ def test_nkin_search_default_does_not_inline_payloads(client, db_session):
     ).json()
     rec = body["records"][0]
     for key in ("coefficients", "plog", "points"):
-        assert rec[key] is None
+        assert key not in rec
 
 
 # ===========================================================================

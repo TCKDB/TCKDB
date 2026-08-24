@@ -155,7 +155,7 @@ def test_entries_is_absent_on_ts_search_when_not_requested(client, db_session):
     ).json()
 
     assert body["request"]["include"] == []
-    assert all(record["entries"] is None for record in body["records"])
+    assert all("entries" not in record for record in body["records"])
 
 
 def test_include_all_on_ts_search_does_not_expand_to_entries(
@@ -181,7 +181,7 @@ def test_include_all_on_ts_search_does_not_expand_to_entries(
     ).json()
 
     assert "entries" not in body["request"]["include"]
-    assert all(record["entries"] is None for record in body["records"])
+    assert all("entries" not in record for record in body["records"])
 
 
 def test_entries_on_ts_search_shares_one_list_per_parent(client, db_session):
@@ -283,7 +283,7 @@ def test_validation_evidence_is_absent_on_ts_concept_when_not_requested(
         f"/api/v1/scientific/transition-states/{ts.public_ref}"
     ).json()
 
-    assert body["record"]["validation_evidence"] is None
+    assert "validation_evidence" not in body["record"]
 
 
 # ---------------------------------------------------------------------------
@@ -343,7 +343,7 @@ def test_observations_is_absent_on_an_observation_when_not_requested(
         f"/api/v1/scientific/conformer-observations/{observations[0].public_ref}"
     ).json()
 
-    assert body["record"]["observations"] is None
+    assert "observations" not in body["record"]
 
 
 def test_the_group_surface_still_returns_its_observations_without_nesting(

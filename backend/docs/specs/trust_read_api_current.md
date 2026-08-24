@@ -68,6 +68,15 @@ graph **once per page** rather than once per record, and `include=all` still
 does not expand to `trust` — the graph runs from 9 chain entries on transport
 to 23 on transition-states, and a caller has to ask for that by name.
 
+One surface publishes entry records without publishing their rubric.
+`GET /scientific/transition-states/{ref}?include=entries` returns
+`ScientificTransitionStateEntryRecord`s, which declare `trust`, on an operation
+whose vocabulary has no `trust` token — the concept has no aggregation rubric.
+Those nested `trust` keys used to serialize as `null`, which read as "the entry
+has no verdict" rather than "this operation cannot produce one". They are now
+**absent**; the verdict is one request away on
+`/scientific/transition-state-entries/{ref}?include=trust`.
+
 Internal database ids remain hidden by default. In trust evidence payloads,
 `record_id` is hidden unless `include=internal_ids` is explicitly requested and
 the deployment/user policy allows internal-id exposure.

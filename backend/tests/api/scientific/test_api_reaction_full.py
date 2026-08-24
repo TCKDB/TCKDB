@@ -76,9 +76,16 @@ def test_default_omits_non_default_sections(client, db_session):
     resp = client.get(f"/api/v1/scientific/reaction-entries/{entry.id}/full")
     body = resp.json()
     # Default include set: species, kinetics, transition_states only.
-    assert body["calculations"] is None
-    assert body["path_search"] is None
-    assert body["artifacts"] is None
+    # The other seven are include-gated on this operation, so an absent key
+    # is the whole answer: the caller did not ask.
+    assert "calculations" not in body
+    assert "path_search" not in body
+    assert "artifacts" not in body
+    assert body["request"]["include"] == [
+        "kinetics",
+        "species",
+        "transition_states",
+    ]
 
 
 def test_non_ts_backed_kinetics_no_fabricated_ts_links(client, db_session):
@@ -1257,9 +1264,14 @@ def test_full_conformers_section_no_forbidden_payload_keys(
 
 
 def test_full_conformers_section_omitted_by_default(client, db_session):
-    """Without ``include=conformers``, the section is null/absent."""
+    """Without ``include=conformers``, the section key is absent.
+
+    It used to be ``null``, which on a reaction whose reactant *does* have
+    a conformer group read as "there are none" — the exact misreading the
+    omission rule exists to prevent.
+    """
     entry, _, _, _, _ = _entry_with_reactant_conformer(db_session)
     body = client.get(
         f"/api/v1/scientific/reaction-entries/{entry.id}/full"
     ).json()
-    assert body["conformers"] is None
+    assert "conformers" not in body

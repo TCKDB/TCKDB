@@ -248,12 +248,13 @@ def test_ts_detail_default_response_shape(client, db_session):
     assert "entries_summary" in record
     assert "evidence_summary" in record
     assert "available_sections" in record
-    # Heavy includes omitted by default — Pydantic emits these as null
-    # rather than absent (the schema uses ``... | None = None``).
-    assert record["entries"] is None
-    assert record["calculations"] is None
-    assert record["geometries"] is None
-    assert record["review_history"] is None
+    # Heavy includes omitted by default. ``entries_summary`` above still
+    # says how many entries there are, so absence costs the reader nothing
+    # and tells them the truth about their own request.
+    assert "entries" not in record
+    assert "calculations" not in record
+    assert "geometries" not in record
+    assert "review_history" not in record
 
 
 def test_ts_detail_review_badge_present(client, db_session):

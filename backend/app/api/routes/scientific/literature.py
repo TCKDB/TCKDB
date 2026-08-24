@@ -19,6 +19,11 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
 from app.api.routes.scientific._common import parse_include
+from app.api.routes.scientific._response import (
+    LITERATURE_RECORDS_SECTIONS,
+    SEARCH_SCOPE,
+    omit_unrequested_sections,
+)
 from app.schemas.reads.scientific_literature import (
     ScientificLiteratureDetailResponse,
 )
@@ -68,12 +73,17 @@ def scientific_literature_records(
         offset=offset,
         limit=limit,
     )
-    return apply_internal_ids_visibility(
-        get_literature_records(
-            session,
-            request_obj,
-            literature_handle=literature_ref_or_id,
-        )
+    payload = get_literature_records(
+        session,
+        request_obj,
+        literature_handle=literature_ref_or_id,
+    )
+    visibility = apply_internal_ids_visibility(payload)
+    return omit_unrequested_sections(
+        visibility,
+        payload,
+        table=LITERATURE_RECORDS_SECTIONS,
+        scope=SEARCH_SCOPE,
     )
 
 

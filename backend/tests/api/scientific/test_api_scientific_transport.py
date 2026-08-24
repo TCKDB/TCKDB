@@ -162,8 +162,8 @@ def test_detail_default_response_shape(client, db_session):
         "available_sections",
     ):
         assert key in record
-    assert record["source_calculations"] is None
-    assert record["review_history"] is None
+    assert "source_calculations" not in record
+    assert "review_history" not in record
 
 
 def test_detail_review_badge_present(client, db_session):
