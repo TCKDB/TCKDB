@@ -596,16 +596,31 @@ def test_an_approved_row_is_repaired_and_recorded_once(harness) -> None:
     with harness.engine.begin() as conn:
         ids = _seed(conn)
         # Approve the calculation the backfill is about to repair.
+        #
+        # ``ck_record_review_record_review_terminal_requires_reviewer``
+        # requires a terminal status to name both a reviewer and a review
+        # time. An earlier draft of this fixture set only ``reviewed_at``
+        # and was refused -- correctly, and usefully: an approval with
+        # nobody attached is the same species of untrue row that
+        # ``c1d8f4a25b30`` existed to clean up, so the schema is right to
+        # refuse to let a test invent one.
+        curator_id = conn.scalar(
+            text(
+                "INSERT INTO app_user (username, role, is_active) "
+                "VALUES (:username, 'curator', true) RETURNING id"
+            ),
+            {"username": "anchor-backfill-approver"},
+        )
         conn.execute(
             text(
                 "INSERT INTO record_review "
-                "(record_type, record_id, status, reviewed_at, "
+                "(record_type, record_id, status, reviewed_by, reviewed_at, "
                 " first_approved_at) "
                 "VALUES (CAST('calculation' AS submission_record_type), :id, "
-                "        CAST('approved' AS record_review_status), now(), "
-                "        now())"
+                "        CAST('approved' AS record_review_status), :curator, "
+                "        now(), now())"
             ),
-            {"id": ids["coarse_a"]},
+            {"id": ids["coarse_a"], "curator": curator_id},
         )
 
     completed = harness.run("upgrade", _MIGRATION.revision, check=False)

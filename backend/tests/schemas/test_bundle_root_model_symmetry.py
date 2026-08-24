@@ -205,6 +205,29 @@ ALLOWED_ASYMMETRIES: dict[tuple[str, str], str] = {
         "species by key; the species bundle has one species and attaches "
         "geometries to conformers directly."
     ),
+    (
+        "calculation",
+        "conformer_key",
+    ): (
+        "Reaction-root only, for the same structural reason as geometry_key "
+        "directly above, and verified rather than assumed. conformer_key "
+        "names the conformer observation a calculation is evidence for. The "
+        "species bundle has no key to name: its calculations exist only as "
+        "ConformerInBundle.primary_calculation and .additional_calculations, "
+        "lexically nested inside the conformer they belong to, and "
+        "app/workflows/computed_species.py sets conformer_observation_id "
+        "from the enclosing observation at both of its two persist sites, "
+        "with no condition on any field. There is no third path. A "
+        "calculation deposited through the species root "
+        "therefore cannot be unanchored, which is exactly the failure "
+        "conformer_key exists to prevent on the reaction root, where "
+        "calculations sit in a flat per-species list and the link has to be "
+        "stated. Adding the field here would create one that can only ever "
+        "be ignored -- or, worse, disagree with the nesting that already "
+        "decides the answer -- which is the same 'a field that looks like "
+        "it does something and does not' defect this asymmetry's own PR was "
+        "written to remove."
+    ),
     # ``literature`` / ``literature_id`` were both listed here until the
     # reaction root's raw FK was replaced by the same inline fragment the
     # species root always took. Both roots now spell the citation
