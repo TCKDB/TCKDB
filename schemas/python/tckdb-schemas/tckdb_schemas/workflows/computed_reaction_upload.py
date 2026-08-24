@@ -67,6 +67,7 @@ from tckdb_schemas.literature import LiteratureUploadRequest
 from tckdb_schemas.local_key_codes import (
     W_APPLIED_CORRECTION_SOURCE_KEY_UNDECLARED,
     W_CALCULATION_KEY_UNDECLARED,
+    W_CONFORMER_KEY_UNDECLARED,
     W_GEOMETRY_KEY_UNRESOLVED,
     W_SPECIES_KEY_UNDECLARED,
     undeclared_key_error,
@@ -597,9 +598,25 @@ class BundleSpeciesIn(SchemaBase):
     :param conformers: Conformer observations (geometry + opt calculation). Each
         list item creates a distinct observation row, even when multiple items
         land in the same conformer group.
-    :param calculations: Additional calculations (freq, sp at higher LOT). Their
-        ``geometry_key`` must reference one of this species's conformer
-        geometries so the backend can anchor them to the correct observation.
+    :param calculations: Additional calculations (freq, sp at higher LOT).
+        Their ``geometry_key``, when given, must reference one of this
+        species's conformer geometries -- it names the geometry the
+        calculation ran on.
+
+        Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This
+        docstring used to say the opposite ("so the backend can anchor them
+        to the correct observation"), and that sentence was the seam the
+        anchoring defect lived in: it made one field responsible for two
+        questions that come apart whenever a calculation's geometry is not a
+        declared conformer geometry. A coarse pre-optimisation is exactly
+        that case -- ``validate_calc_geometry_keys`` below excuses ``opt``
+        from supplying ``geometry_key`` for precisely this reason -- and the
+        result was a calculation that named no geometry, was excused from
+        naming one, and silently got no anchor either.
+
+        ``geometry_key`` is still honoured as the anchor when
+        ``conformer_key`` is absent, so payloads predating this field are
+        unaffected.
     :param thermo: Optional thermochemistry data.
     """
 
@@ -689,6 +706,38 @@ class BundleSpeciesIn(SchemaBase):
                 raise ValueError(
                     f"Species '{self.key}' calculation '{calc.key}' "
                     f"(type={calc.type.value}) requires geometry_key."
+                )
+        return self
+
+    @model_validator(mode="after")
+    def validate_calc_conformer_keys(self) -> Self:
+        """Require a calculation's ``conformer_key`` to name one of this species's conformers.
+
+        Refused here as well as at the workflow seam, and with the same code
+        and the same ``context`` (ADR 0017), so a client cannot tell which
+        layer caught it. This layer refuses earlier and refuses inside
+        ``tckdb-client`` with no server in reach; the seam is the backstop
+        for the reach this validator does not have.
+
+        The namespace is this species's own ``conformers[*].key`` and
+        nothing else. A sibling species's conformer is not in scope, which
+        makes the anchor owner-correct by construction rather than by a
+        separate ownership check -- the same property
+        ``source_conformer_key`` already relies on.
+        """
+        conformer_keys = {conf.key for conf in self.conformers}
+        for calc in self.calculations:
+            if calc.conformer_key is None:
+                continue
+            if calc.conformer_key not in conformer_keys:
+                raise undeclared_key_error(
+                    W_CONFORMER_KEY_UNDECLARED,
+                    f"Species '{self.key}' calculation '{calc.key}' "
+                    f"conformer_key must reference one of that species's "
+                    f"own conformers.",
+                    field=f"calculations['{calc.key}'].conformer_key",
+                    key=calc.conformer_key,
+                    declared=conformer_keys,
                 )
         return self
 

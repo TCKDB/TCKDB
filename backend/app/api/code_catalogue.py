@@ -909,6 +909,15 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/calculations_search.py"),
     ApiCode("client_sort_not_supported", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
+    ApiCode("conformer_key_undeclared", 422, Surface.coded_exception,
+            "schemas/python/tckdb-schemas/tckdb_schemas/local_key_codes.py",
+            note=(
+                "A calculation's 'conformer_key' -- the field that says which "
+                "basin the calculation is evidence for. Distinct from "
+                "'applied_energy_correction_source_key_undeclared', which also "
+                "spans conformer names but answers a different question (where "
+                "a correction came from) and is pinned on /uploads/conformers."
+            )),
     ApiCode("composed_search_candidate_limit_exceeded", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship,

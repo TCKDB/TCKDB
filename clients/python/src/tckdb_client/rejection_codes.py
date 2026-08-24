@@ -105,6 +105,7 @@ class RejectionCode(str, Enum):
     COMPOSED_SEARCH_INVALID_PAGE = "composed_search_invalid_page"
     COMPOSED_SEARCH_PAGINATION_CHANGED = "composed_search_pagination_changed"
     COMPOSED_SEARCH_PAGINATION_STALLED = "composed_search_pagination_stalled"
+    CONFORMER_KEY_UNDECLARED = "conformer_key_undeclared"
     CURATION_POLICY_VERSION_CONFLICT = "curation_policy_version_conflict"
     CURATOR_TASK_NOT_FOUND = "curator_task_not_found"
     CURSOR_OFFSET_CONFLICT = "cursor_offset_conflict"
@@ -264,6 +265,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.COMPOSED_SEARCH_INVALID_PAGE,
         RejectionCode.COMPOSED_SEARCH_PAGINATION_CHANGED,
         RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED,
+        RejectionCode.CONFORMER_KEY_UNDECLARED,
         RejectionCode.CURSOR_OFFSET_CONFLICT,
         RejectionCode.CURSOR_QUERY_MISMATCH,
         RejectionCode.EXPORT_ALL_CAP_EXCEEDED,
@@ -421,6 +423,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.COMPOSED_SEARCH_INVALID_PAGE: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_PAGINATION_CHANGED: frozenset({422}),
     RejectionCode.COMPOSED_SEARCH_PAGINATION_STALLED: frozenset({422}),
+    RejectionCode.CONFORMER_KEY_UNDECLARED: frozenset({422}),
     RejectionCode.CURATION_POLICY_VERSION_CONFLICT: frozenset({409}),
     RejectionCode.CURATOR_TASK_NOT_FOUND: frozenset({404}),
     RejectionCode.CURSOR_OFFSET_CONFLICT: frozenset({422}),

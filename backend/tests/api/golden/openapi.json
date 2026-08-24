@@ -2810,7 +2810,7 @@
       },
       "BundleSpeciesIn": {
         "additionalProperties": false,
-        "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT). Their\n    ``geometry_key`` must reference one of this species's conformer\n    geometries so the backend can anchor them to the correct observation.\n:param thermo: Optional thermochemistry data.",
+        "description": "A species defined within this kinetics bundle.\n\n:param key: Local key for referencing this species in the reaction.\n:param species_entry: Species identity (SMILES, charge, multiplicity).\n:param conformers: Conformer observations (geometry + opt calculation). Each\n    list item creates a distinct observation row, even when multiple items\n    land in the same conformer group.\n:param calculations: Additional calculations (freq, sp at higher LOT).\n    Their ``geometry_key``, when given, must reference one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job, not ``geometry_key``'s. This\n    docstring used to say the opposite (\"so the backend can anchor them\n    to the correct observation\"), and that sentence was the seam the\n    anchoring defect lived in: it made one field responsible for two\n    questions that come apart whenever a calculation's geometry is not a\n    declared conformer geometry. A coarse pre-optimisation is exactly\n    that case -- ``validate_calc_geometry_keys`` below excuses ``opt``\n    from supplying ``geometry_key`` for precisely this reason -- and the\n    result was a calculation that named no geometry, was excused from\n    naming one, and silently got no anchor either.\n\n    ``geometry_key`` is still honoured as the anchor when\n    ``conformer_key`` is absent, so payloads predating this field are\n    unaffected.\n:param thermo: Optional thermochemistry data.",
         "properties": {
           "applied_energy_corrections": {
             "description": "Applied energy corrections targeting this species's resolved species_entry. Use for scheme-backed corrections such as AEC totals (application_role=aec_total) and BAC totals (application_role=bac_total). ``source_calculation_key`` resolves against the bundle's global calculation namespace; the workflow rejects 422 when the referenced calc is not owned by this species. ``source_conformer_key`` resolves against this species's own ``conformers[*].key`` — a sibling species's conformer is not in scope and is refused.",
@@ -5409,7 +5409,7 @@
       },
       "CalculationIn": {
         "additionalProperties": false,
-        "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature: Optional inline literature provenance, resolved (or\n    created) by the workflow. Replaces the former ``literature_id``,\n    which was a database primary key on an upload surface — usable only\n    by a client that had already queried this database, which a\n    depositor has not. Matches ``CalculationInBundle.literature`` on the\n    species bundle, which took the inline fragment from the start.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param wavefunction_diagnostic: Optional inline T1/D1 wavefunction\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param spin_diagnostic: Optional inline spin-contamination ``<S^2>``\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
+        "description": "A calculation defined within this upload.\n\n:param key: Globally unique local key for this calculation.\n:param type: Calculation type (opt, freq, sp, irc, scan).\n:param quality: Curation quality flag.\n:param geometry_key: Local key referencing a geometry defined elsewhere\n    in the payload. For species calculations, typically points to a\n    conformer's geometry. For TS calculations, defaults to the TS geometry.\n\n    This names **this calculation's geometry** and nothing else. It used\n    to carry a second job -- deciding which conformer observation a\n    species calculation is anchored to -- and the two questions come\n    apart for any calculation whose geometry is not a declared conformer\n    geometry. A coarse pre-optimisation is the worked example: its output\n    geometry is genuinely not the basin's geometry, so a producer\n    correctly omits ``geometry_key``, and until ``conformer_key`` existed\n    that silently cost the calculation its anchor. Use ``conformer_key``\n    to say which basin a calculation belongs to.\n:param conformer_key: Local key of the conformer, declared by this\n    calculation's own species, whose observation this calculation is\n    evidence for. This is the anchor, and it is the only field that means\n    it. A sibling species's conformer is not in scope.\n\n    Optional, and resolved server-side against the request's own\n    conformer namespace -- never a database id. When it is absent the\n    workflow still falls back to ``geometry_key``, so payloads written\n    before this field existed keep anchoring exactly as they did. When\n    neither field resolves, the calculation is stored unanchored and the\n    upload reports a warning rather than dropping the anchor silently.\n:param software_release: Required software provenance reference.\n:param level_of_theory: Required level-of-theory reference.\n:param workflow_tool_release: Optional workflow-tool provenance reference.\n:param literature: Optional inline literature provenance, resolved (or\n    created) by the workflow. Replaces the former ``literature_id``,\n    which was a database primary key on an upload surface — usable only\n    by a client that had already queried this database, which a\n    depositor has not. Matches ``CalculationInBundle.literature`` on the\n    species bundle, which took the inline fragment from the start.\n:param sp_electronic_energy_hartree: SP result (if type=sp).\n:param opt_converged: Opt result (if type=opt).\n:param opt_n_steps: Opt result (if type=opt).\n:param opt_final_energy_hartree: Opt result (if type=opt).\n:param freq_n_imag: Freq result (if type=freq).\n:param freq_imag_freq_cm1: Freq result (if type=freq).\n:param freq_zpe_hartree: Freq result (if type=freq).\n:param parameters: Optional parsed execution-control parameter observations,\n    routed through the shared calculation persistence seam.\n:param parameters_json: Optional JSON snapshot from the parser.\n:param parameters_parser_version: Optional parser version tag.\n:param parameters_extracted_at: Optional extraction timestamp.\n:param wavefunction_diagnostic: Optional inline T1/D1 wavefunction\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param spin_diagnostic: Optional inline spin-contamination ``<S^2>``\n    diagnostic, forwarded to the shared calculation persistence seam.\n:param artifacts: Optional list of file artifacts (logs, inputs, etc.).",
         "properties": {
           "artifacts": {
             "items": {
@@ -5417,6 +5417,18 @@
             },
             "title": "Artifacts",
             "type": "array"
+          },
+          "conformer_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Key"
           },
           "execution_environment": {
             "anyOf": [
@@ -9739,6 +9751,18 @@
             },
             "title": "Artifacts",
             "type": "array"
+          },
+          "conformer_key": {
+            "anyOf": [
+              {
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Key"
           },
           "constraints": {
             "description": "Coordinate constraints held fixed during this calculation. Generic across opt, freq, sp, irc, path_search, scan — input/provenance metadata that does not require a result block. For scan calcs, frozen coordinates may be declared here while the stepped coordinate is declared on scan_result.coordinates. The two lists must not duplicate the same constraint_index.",
@@ -26439,7 +26463,7 @@
       },
       "NetworkSpeciesIn": {
         "additionalProperties": false,
-        "description": "A species defined within this network upload.\n\n:param key: Local key used to reference this species elsewhere in the payload.\n:param species_entry: Species-entry identity payload to resolve or create.\n:param label: Optional human-readable display label.\n:param conformers: Optional conformer uploads (geometry + opt calculation).\n:param calculations: Additional calculations on this species (sp, freq, etc.).\n    Their ``geometry_key`` must point to one of this species's conformer\n    geometries so the backend can anchor each calculation to the correct\n    conformer observation.\n:param statmech: Optional statistical-mechanics interpretation for this\n    species (external symmetry, optical isomers, hindered rotors, etc.).\n    Reuses the bundle's statmech payload; ``source_calculations`` reference\n    calculation keys defined anywhere in this request.",
+        "description": "A species defined within this network upload.\n\n:param key: Local key used to reference this species elsewhere in the payload.\n:param species_entry: Species-entry identity payload to resolve or create.\n:param label: Optional human-readable display label.\n:param conformers: Optional conformer uploads (geometry + opt calculation).\n:param calculations: Additional calculations on this species (sp, freq, etc.).\n    Their ``geometry_key``, when given, must point to one of this\n    species's conformer geometries -- it names the geometry the\n    calculation ran on.\n\n    Anchoring is ``conformer_key``'s job. This docstring used to\n    attribute it to ``geometry_key``, matching a helper in\n    ``app.workflows.network_pdep`` that dropped the anchor without a word\n    whenever ``geometry_key`` was absent. Both said the same wrong thing,\n    so neither contradicted the other. See\n    ``app.services.conformer_anchoring``.\n:param statmech: Optional statistical-mechanics interpretation for this\n    species (external symmetry, optical isomers, hindered rotors, etc.).\n    Reuses the bundle's statmech payload; ``source_calculations`` reference\n    calculation keys defined anywhere in this request.",
         "properties": {
           "calculations": {
             "items": {

@@ -44,6 +44,7 @@ from app.db.models.transition_state import (
     TransitionStateValidationEvidence,
 )
 from app.schemas.workflows.network_pdep_upload import NetworkPDepUploadRequest
+from app.services.conformer_anchoring import W_CALCULATION_ANCHOR_UNRESOLVED
 from app.services.provenance_warnings import (
     W_NETWORK_WIDE_ENERGY_TRANSFER,
     W_REPORTED_NETWORK_SOLVE,
@@ -3317,3 +3318,124 @@ def test_computed_solve_carries_no_reported_warning(db_conn) -> None:
             session, network_solve_handle=solve.public_ref, include=[]
         )
         assert solve_read.record.network_solve.kind is NetworkSolveKind.computed
+
+
+# ---------------------------------------------------------------------------
+# Conformer anchoring on the network-PDep route
+# ---------------------------------------------------------------------------
+#
+# This workflow carried a byte-identical copy of the computed-reaction
+# bundle's ``_anchor_species_calculation_to_observation``, with the same
+# defect: an absent ``geometry_key`` meant a silent ``return`` and a
+# calculation persisted with no anchor. No species ``opt`` had reached the
+# database through this route yet, so it had produced no orphaned rows -- but
+# it would have, and a fix applied to one copy would not have reached the
+# other.
+#
+# Both routes call ``app.services.conformer_anchoring`` now. These tests are
+# the reason that matters: they assert the *behaviour*, on this route, rather
+# than trusting that the two files still agree.
+
+
+def _network_payload_with_coarse_stage(
+    *, conformer_key: str | None
+) -> dict:
+    """The full PDep payload, plus a coarse pre-optimisation on ``ethyl``."""
+    payload = _full_payload()
+    coarse: dict = {
+        "key": "ethyl_coarse",
+        "type": "opt",
+        "software_release": _SOFTWARE,
+        "level_of_theory": _LOT_DFT,
+        "opt_converged": True,
+        "parameters_json": {"final_settings": {"optimization_stage": "coarse"}},
+    }
+    if conformer_key is not None:
+        coarse["conformer_key"] = conformer_key
+    ethyl = next(s for s in payload["species"] if s["key"] == "ethyl")
+    ethyl["calculations"].append(coarse)
+    return payload
+
+
+def _coarse_calculation(session) -> Calculation | None:
+    return session.scalar(
+        select(Calculation).where(
+            Calculation.parameters_json
+            == {"final_settings": {"optimization_stage": "coarse"}}
+        )
+    )
+
+
+def test_network_species_calculation_anchors_to_its_conformer_key(
+    db_conn,
+) -> None:
+    """The PDep route honours ``conformer_key`` too.
+
+    Before this change the field did not exist on this route and the
+    calculation below -- an ``opt`` with no ``geometry_key``, which the schema
+    permits -- would have been persisted anchored to nothing.
+    """
+    with Session(db_conn) as session, session.begin():
+        actor = AppUser(username="pdep_anchor_tester_1")
+        session.add(actor)
+        session.flush()
+
+        request = NetworkPDepUploadRequest(
+            **_network_payload_with_coarse_stage(conformer_key="ethyl_conf1")
+        )
+        persist_network_pdep_upload(session, request, created_by=actor.id)
+
+        coarse = _coarse_calculation(session)
+        assert coarse is not None, "the coarse pre-optimisation was not persisted"
+        assert coarse.conformer_observation_id is not None, (
+            "the network-PDep route dropped the anchor -- this is the "
+            "duplicated helper's defect, and it is meant to be gone"
+        )
+
+        # The observation belongs to a group owned by this calculation's own
+        # species entry, not a sibling well's.
+        group_owner = session.scalar(
+            select(ConformerGroup.species_entry_id)
+            .join(
+                ConformerObservation,
+                ConformerObservation.conformer_group_id == ConformerGroup.id,
+            )
+            .where(ConformerObservation.id == coarse.conformer_observation_id)
+        )
+        assert group_owner == coarse.species_entry_id
+
+
+def test_network_species_calculation_without_any_key_is_reported(
+    db_conn,
+) -> None:
+    """And the unresolvable case is audible on this route as well.
+
+    The warning goes into the same sink this workflow already uses for its
+    energy-transfer and solve-kind warnings, so a depositor reads it in the
+    same place as everything else the upload wants to tell them.
+    """
+    warnings: list = []
+    with Session(db_conn) as session, session.begin():
+        actor = AppUser(username="pdep_anchor_tester_2")
+        session.add(actor)
+        session.flush()
+
+        request = NetworkPDepUploadRequest(
+            **_network_payload_with_coarse_stage(conformer_key=None)
+        )
+        persist_network_pdep_upload(
+            session, request, created_by=actor.id, warnings=warnings
+        )
+
+        coarse = _coarse_calculation(session)
+        assert coarse is not None, "the deposit was refused; it should be accepted"
+        assert coarse.conformer_observation_id is None
+
+        reported = [
+            w for w in warnings if w.code == W_CALCULATION_ANCHOR_UNRESOLVED
+        ]
+        assert len(reported) == 1, (
+            "the network-PDep route dropped an anchor silently -- the exact "
+            "behaviour the shared seam exists to make impossible"
+        )
+        assert reported[0].field == "species['ethyl'].calculations['ethyl_coarse']"
