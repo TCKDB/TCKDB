@@ -75,6 +75,9 @@ from app.services.scientific_read.common import (
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
 )
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
@@ -747,8 +750,18 @@ def _build_record(
         inchi_key=species.inchi_key,
         charge=species.charge,
         multiplicity=species.multiplicity,
+        stereo_kind=species.stereo_kind,
         species_entry_kind=entry.kind,
         electronic_state_kind=entry.electronic_state_kind,
+        # Read off the already-loaded entity; a NULL column stays None
+        # rather than becoming "". Without these, two entries of one
+        # species come back as two byte-identical rows differing only in
+        # an opaque ref.
+        stereo_label=entry.stereo_label,
+        electronic_state_label=entry.electronic_state_label,
+        term_symbol=entry.term_symbol,
+        isotope_key=entry.isotope_key,
+        species_entry_label=species_entry_label_for(entry),
         match=StructureMatchSummary(
             mode=mode,
             similarity_score=similarity_score,

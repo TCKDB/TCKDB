@@ -32,6 +32,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoKind,
 )
 from app.schemas.reads.scientific_common import (
     Pagination,
@@ -113,6 +114,21 @@ class ScientificSpeciesStructureSearchRecord(BaseModel):
     The ``endpoint`` field gives the canonical detail URL fragment for
     this entry, so a UI consumer can build a deep link without knowing
     the routing convention.
+
+    Because the rows are flat, two entries of one species arrive as two
+    sibling records rather than as two items under a shared parent, which
+    makes serving the entry's discriminating columns *more* load-bearing
+    here, not less: ``smiles`` and ``inchi_key`` are the parent species'
+    and are equal on both. ``stereo_label``, ``electronic_state_label``,
+    ``term_symbol`` and ``isotope_key`` complete the identity tuple
+    (``electronic_state_kind`` is the fifth), and ``species_entry_label``
+    renders them as one short string via the shared derivation in
+    :mod:`app.services.scientific_read.species_identity`. ``stereo_kind``
+    is the parent species' own, and says whether a null ``stereo_label``
+    means "nothing to label" or "not labelled yet".
+
+    Each is ``None`` when the underlying column is ``NULL``; none of them
+    is ever an empty string standing in for an absent label.
     """
 
     species_ref: str
@@ -124,8 +140,14 @@ class ScientificSpeciesStructureSearchRecord(BaseModel):
     inchi_key: str
     charge: int
     multiplicity: int
+    stereo_kind: StereoKind
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
+    stereo_label: str | None = None
+    electronic_state_label: str | None = None
+    term_symbol: str | None = None
+    isotope_key: str | None = None
+    species_entry_label: str | None = None
 
     match: StructureMatchSummary
     review: RecordReviewBadge
