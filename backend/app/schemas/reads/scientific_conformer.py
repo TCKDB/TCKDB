@@ -268,8 +268,29 @@ class ConformerGroupEvidenceSummary(BaseModel):
     """
 
     observation_count: int | None = None
+    #: Every calculation row anchored to this basin's observations, the
+    #: coarse stage of a two-stage optimisation included. Deliberately a
+    #: **row** count and not an evidence count: it is the length of the
+    #: list ``include=calculations`` returns, and a count that disagreed
+    #: with the list it counts would be a worse defect than the one
+    #: ``optimization_chain_count`` exists to fix. Read it as inventory —
+    #: "how many jobs are on file" — never as "how much independent
+    #: evidence".
     calculation_count: int
     evidence_coverage: ConformerEvidenceCoverage
+    #: Optimisations behind this basin, counted as **chains** rather than
+    #: rows: a coarse pre-optimisation joined to its refinement by
+    #: ``calculation_dependency.dependency_role = 'optimized_from'``
+    #: contributes ``1``, not ``2``. This is the block's answer to "how
+    #: many independent geometry optimisations back this basin", which
+    #: neither ``calculation_count`` (inventory, counts both stages) nor
+    #: ``evidence_coverage.opt`` (observations covered, so a basin with
+    #: nine optimisations on one observation still reads ``1``) can give.
+    #:
+    #: Only ``optimized_from`` collapses. A frequency job on an optimised
+    #: geometry, or a single point at it, is *different* evidence from the
+    #: optimisation and is never folded into it.
+    optimization_chain_count: int
     geometry_count: int
     #: Levels of theory used in this basin, per calculation type, pooled
     #: across every observation. This is the block
