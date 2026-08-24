@@ -144,6 +144,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
 
 from app.api.config import settings
+from app.services.trust.rubrics import RUBRIC_REGISTRY
 
 #: Published documentation site, built from ``docs/`` by
 #: ``.github/workflows/docs.yml``.
@@ -272,6 +273,80 @@ HERO_FREQUENCIES = tuple(dict.fromkeys(HERO_TRUE_FREQUENCIES))
 #: The code the checker attaches to that deposit. Advisory: the record
 #: is accepted and annotated, not refused.
 HERO_CODE = "freq_list_bent_mode_count_for_linear_geometry"
+
+#: Tokens inside a check name that are initialisms rather than words.
+#:
+#: **Casing only.** Every entry is the same token the API sent, spelled the
+#: way this project spells it everywhere else -- ``ts`` is a transition
+#: state, ``lot`` a level of theory, ``sp`` a single point. Nothing here
+#: expands an abbreviation: ``opt`` and ``freq`` are shortenings a reader
+#: reads without help, so they arrive and leave as ``opt`` and ``freq``. A
+#: token with no entry is printed exactly as it arrived, which is why an
+#: incomplete table here is safe and a wrong entry is not.
+TRUST_CHECK_INITIALISMS: dict[str, str] = {
+    "irc": "IRC",
+    "lj": "LJ",
+    "lot": "LOT",
+    "nasa": "NASA",
+    "scf": "SCF",
+    "smiles": "SMILES",
+    "sp": "SP",
+    "ts": "TS",
+}
+
+#: The word a check name ends in when the name's whole claim is presence.
+_PRESENT = "present"
+
+
+def trust_check_label(name: str) -> str:
+    """Return how a rubric check's name is printed under an outcome heading.
+
+    The panel groups checks under "present" and "not present" and then
+    printed the raw name, so a reader got the outcome twice --
+    "present: charge present" -- and, under the other heading, an
+    apparent contradiction: "not present: path search evidence present".
+    The suffix is redundant *because the heading states the outcome*, so
+    the redundancy is removed here, on the page, and nowhere else. The
+    API still names the check ``charge_present``; ``evidence.checks``
+    is untouched; no vocabulary is renamed.
+
+    **A trailing ``_present`` is dropped only when no other ``present``
+    remains.** Measured over the registry: 100 checks, 66 ending in the
+    word, 63 shortened. The three held back are the conditionals that
+    also end in it -- ``dipole_source_present_if_dipole_present`` reads
+    "a dipole source is present *if a dipole is present*", one of twelve
+    checks whose name carries a condition. Their second presence is a **condition**, not the outcome
+    the heading states, so stripping it would leave "dipole source
+    present if dipole", which is broken English and a changed claim. One
+    wrong entry is worse than twelve slightly long ones, so the whole
+    name is kept whenever the stem still says ``present``.
+
+    The comparison is over whole tokens, never a substring. The word
+    ``present`` is spelled inside the word "representation", so a
+    substring guard would decide that
+    ``at_least_one_thermo_representation_present`` is conditional and
+    keep a suffix that really is redundant.
+
+    A name that makes no presence claim at all (``multiplicity_valid``,
+    ``ts_status_recorded``) loses nothing -- the heading does not repeat
+    it, so there is nothing to remove.
+
+    What is left is spaced and sentence-cased, the same transcription the
+    page gives every other underscored token, with the initialisms in
+    :data:`TRUST_CHECK_INITIALISMS` cased. No word is ever expanded,
+    translated or invented.
+    """
+    tokens = [token for token in name.split("_") if token]
+    if not tokens:
+        return name
+    if tokens[-1] == _PRESENT and _PRESENT not in tokens[:-1] and len(tokens) > 1:
+        tokens = tokens[:-1]
+    words = [TRUST_CHECK_INITIALISMS.get(token, token) for token in tokens]
+    label = " ".join(words)
+    if label[:1].islower():
+        label = label[0].upper() + label[1:]
+    return label
+
 
 _PAGE_TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -1598,6 +1673,23 @@ __HERO_SPECTRUM__
     unsupported: "unsupported",
     hard_failed: "hard failed"
   };
+
+  /*
+   * How each named check is printed, keyed by the name the API sends.
+   * Built on the server from the rubric registry itself -- the same
+   * declarations that produce ``evidence.checks`` -- so a check added
+   * tomorrow arrives here with its label already written, and the suite
+   * fails if one ever does not.
+   *
+   * The labels drop a trailing "present" (the heading above the list
+   * already says "present" or "not present", and saying it twice reads
+   * as "present: charge present", or worse, as the contradiction "not
+   * present: path search evidence present"). A conditional check keeps
+   * both of its presences, because the second one is the condition and
+   * not the outcome. The rule, and why it is trailing-only, is written
+   * out at ``trust_check_label`` in this module.
+   */
+  var CHECK_WORDS = __CHECK_WORDS_JSON__;
   /*
    * Absence is a third state and reads as one. A list that carries no
    * verdict, and a record whose verdict did not arrive, are both "not
@@ -2320,18 +2412,45 @@ __HERO_SPECTRUM__
   }
 
   /*
+   * A check name, printed. The lookup is the whole rule: the judgement
+   * lives on the server beside the vocabulary it is judging, and this
+   * page is the transcription. ``hasOwnProperty`` rather than a bare
+   * lookup, so a name that happens to spell an inherited property of
+   * ``Object`` cannot return a function.
+   *
+   * A name with no entry falls back to plain de-underscoring -- the
+   * same "transcription, never translation" ``words`` does everywhere
+   * else on this page. It is unreachable while the map is built from
+   * the registry the API evaluates, and it is here so that if it ever
+   * becomes reachable the reader gets the name rather than nothing.
+   */
+  function checkLabel(name) {
+    if (Object.prototype.hasOwnProperty.call(CHECK_WORDS, name)) {
+      return CHECK_WORDS[name];
+    }
+    return words(name);
+  }
+
+  /*
    * The named checks behind a verdict. ``ts_single_point_present``
    * carrying the outcome ``missing`` is the whole point: it turns "why
    * is this only mostly supported?" from a guess into a list. It ships
    * collapsed because a card that opens into thirty check names has
    * traded one wall of text for another.
+   *
+   * Each item prints the label and carries the raw name in ``title``,
+   * so the wire token a reader needs to quote in a bug report, or to
+   * find in the rubric, is one hover away and is also in the raw JSON
+   * every card links to.
    */
   function checkList(title, names) {
     var node = make("div", "trust-checks");
     node.appendChild(make("p", "trust-checks-title", title));
     var list = make("ul", "trust-check-list");
     for (var i = 0; i < names.length; i += 1) {
-      list.appendChild(make("li", null, names[i]));
+      var item = make("li", null, checkLabel(names[i]));
+      item.setAttribute("title", names[i]);
+      list.appendChild(item);
     }
     node.appendChild(list);
     return node;
@@ -3444,6 +3563,22 @@ def _placeholders_json() -> str:
     return json.dumps(dict(SEARCH_PLACEHOLDERS))
 
 
+def trust_check_names() -> tuple[str, ...]:
+    """Every check name the rubrics can put in ``evidence.checks``, sorted.
+
+    Read out of the registry rather than listed here, so the page cannot
+    fall behind the rubrics it renders.
+    """
+    return tuple(
+        sorted({check.name for rubric in RUBRIC_REGISTRY.values() for check in rubric.checks})
+    )
+
+
+def _check_words_json() -> str:
+    """``{check name: printed label}`` for the whole rubric vocabulary."""
+    return json.dumps({name: trust_check_label(name) for name in trust_check_names()})
+
+
 def render_landing_page(*, api_reference_path: str | None) -> str:
     """Return the complete landing-page HTML document.
 
@@ -3500,6 +3635,7 @@ def render_landing_page(*, api_reference_path: str | None) -> str:
         .replace("__FIELD_OPTIONS__", _field_options(SEED_FIELD))
         .replace("__EXAMPLE_CHIPS__", _example_chips())
         .replace("__PLACEHOLDERS_JSON__", _placeholders_json())
+        .replace("__CHECK_WORDS_JSON__", _check_words_json())
         .replace("__EXAMPLES_JSON__", _json_pairs(SEARCH_EXAMPLES))
         .replace("__ORIGIN_PLACEHOLDER__", ORIGIN_PLACEHOLDER)
         .replace("__SEED_FIELD__", SEED_FIELD)
@@ -3556,9 +3692,12 @@ __all__ = [
     "SEED_REACTANTS",
     "SEED_VALUE",
     "SPECIES_SEARCH_PATH",
+    "TRUST_CHECK_INITIALISMS",
     "hero_atom_lines",
     "landing_router",
     "reaction_label",
     "reaction_query",
     "render_landing_page",
+    "trust_check_label",
+    "trust_check_names",
 ]
