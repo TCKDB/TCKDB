@@ -109,6 +109,9 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.network_channel_chemistry import (
     build_network_state_composition,
 )
+from app.services.scientific_read.species_identity import (
+    species_entry_label_for,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "species",
@@ -468,6 +471,11 @@ def _build_species(
             Species.smiles,
             Species.inchi_key,
             NetworkSpecies.role,
+            SpeciesEntry.stereo_label,
+            SpeciesEntry.electronic_state_kind,
+            SpeciesEntry.electronic_state_label,
+            SpeciesEntry.term_symbol,
+            SpeciesEntry.isotope_key,
         )
         .join(
             SpeciesEntry,
@@ -481,6 +489,7 @@ def _build_species(
         NetworkSpeciesSummary(
             species_entry_id=r.species_entry_id,
             species_entry_ref=r.entry_ref,
+            species_entry_label=species_entry_label_for(r),
             species_ref=r.species_ref,
             role=r.role,
             canonical_smiles=r.smiles,

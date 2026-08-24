@@ -462,6 +462,7 @@ Standard scientific envelope:
   "species": {
     "species_id": 12,
     "species_entry_id": 31,
+    "species_entry_label": null,
     "canonical_smiles": "CCO",
     "inchi_key": "...",
     "charge": 0,

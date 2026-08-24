@@ -11,6 +11,7 @@ from app.db.models.common import (
     RecordReviewStatus,
     SpeciesEntryStateKind,
     StationaryPointKind,
+    StereoKind,
 )
 from app.schemas.reads._field_bounds import (
     MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
@@ -113,12 +114,54 @@ class SpeciesEntryScientificRecord(BaseModel):
 
     Phase B: ``species_entry_ref`` is the public stable handle alongside
     the integer ``species_entry_id``.
+
+    Identity fields
+    ---------------
+    ``stereo_label``, ``electronic_state_label``, ``term_symbol`` and
+    ``isotope_key`` are the columns of ``uq_species_entry_species_id``
+    other than ``electronic_state_kind`` (already served above) and the
+    species itself. Together those five are what makes one entry a
+    different row from another under the same ``species``.
+
+    They are in the **default** projection, not behind an ``include=``
+    token, because their absence is not a missing convenience — it is a
+    wrong answer. Two entries of one species that agree on every served
+    field are indistinguishable on the wire, and a reader picking a ref
+    from a list of two identical records has a 50% chance of citing the
+    other molecule. The live database has exactly that shape: ``N=N``
+    carries a ``Z`` entry (cis-diazene) and an ``E`` entry
+    (trans-diazene), with different thermochemistry. A reader who does
+    not know to ask for an include token is precisely the reader who gets
+    the wrong molecule, so asking cannot be the price of correctness.
+
+    ``species_entry_label`` is those five columns rendered as one short
+    string — ``"E"``, ``"excited T1"`` — derived by
+    :func:`app.services.scientific_read.species_identity.species_entry_label`,
+    the same function the pressure-dependent network surface uses. One
+    definition, so a species entry reads the same way in a species search,
+    a structure search, and a network state label.
+
+    Every one of these is ``None`` when the column is ``NULL``, never
+    ``""``. 51 of the 60 entries on the deployed database have no stereo
+    label at all, and "no label" must render as no label rather than as a
+    label that happens to be blank.
+
+    ``isotopologue_label`` is deliberately **not** served. It is a
+    deprecated free-text column, is no longer part of the entry's unique
+    identity, is never written by the application, and therefore cannot
+    discriminate between two entries; serving it would advertise an
+    identity component that is not one.
     """
 
     species_entry_id: int
     species_entry_ref: str
     species_entry_kind: StationaryPointKind
     electronic_state_kind: SpeciesEntryStateKind
+    stereo_label: str | None = None
+    electronic_state_label: str | None = None
+    term_symbol: str | None = None
+    isotope_key: str | None = None
+    species_entry_label: str | None = None
     review: RecordReviewBadge
     availability: SpeciesEntryAvailability
 
@@ -134,6 +177,14 @@ class SpeciesScientificRecord(BaseModel):
 
     Phase B: ``species_ref`` is the public stable handle alongside
     the integer ``species_id``.
+
+    ``stereo_kind`` is a property of the *species* graph, not of any one
+    entry, and it is what makes a null ``stereo_label`` on an entry
+    readable. ``achiral`` says the null means there is no stereochemistry
+    to label; ``ez_isomer`` or ``enantiomer`` says stereoisomers exist and
+    this entry simply has not been labelled — a materially different
+    thing to know before citing it. Non-nullable in the schema, so it is
+    populated on every species row.
     """
 
     species_id: int
@@ -143,6 +194,7 @@ class SpeciesScientificRecord(BaseModel):
     formula: str | None = None
     charge: int
     multiplicity: int
+    stereo_kind: StereoKind
     entries: list[SpeciesEntryScientificRecord] = Field(default_factory=list)
 
 

@@ -109,6 +109,7 @@ from app.db.models.thermo import (
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.transport import Transport, TransportSourceCalculation
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
+from app.services.species_resolution import null_safe_equals
 
 _INCHI_COUNTER = 0
 
@@ -146,6 +147,7 @@ def make_species(
     charge: int = 0,
     multiplicity: int = 1,
     kind: MoleculeKind = MoleculeKind.molecule,
+    stereo_kind: StereoKind = StereoKind.achiral,
 ) -> Species:
     """Resolve a test Species by its production graph-identity key.
 
@@ -172,7 +174,7 @@ def make_species(
         inchi_key=inchi_key or next_inchi_key(),
         charge=charge,
         multiplicity=multiplicity,
-        stereo_kind=StereoKind.achiral,
+        stereo_kind=stereo_kind,
     )
     session.add(species)
     session.flush()
@@ -185,6 +187,10 @@ def make_species_entry(
     *,
     kind: StationaryPointKind = StationaryPointKind.minimum,
     electronic_state_kind: SpeciesEntryStateKind = SpeciesEntryStateKind.ground,
+    stereo_label: str | None = None,
+    electronic_state_label: str | None = None,
+    term_symbol: str | None = None,
+    isotope_key: str | None = None,
 ) -> SpeciesEntry:
     """Resolve a SpeciesEntry attached to a Species, creating it if absent.
 
@@ -193,11 +199,15 @@ def make_species_entry(
     another suite has already committed, a blind ``INSERT`` here violates
     ``uq_species_entry_species_id`` — which is unique on
     ``(species_id, stereo_label, electronic_state_kind, electronic_state_label,
-    term_symbol, isotope_key)`` with ``NULLS NOT DISTINCT``. This factory
-    leaves every discriminator but ``electronic_state_kind`` NULL, so the two
-    parameters below are the whole of the identity it can vary. ``kind`` is
-    deliberately not part of the lookup: it is not part of the constraint, so
-    treating it as identity here would ask for a row the database cannot hold.
+    term_symbol, isotope_key)`` with ``NULLS NOT DISTINCT``. Every one of
+    those discriminators is a parameter here and every one participates in the
+    get-or-create lookup, so two calls that differ in any of them produce two
+    rows and two calls that agree produce one -- which is exactly the
+    constraint, and is what lets a test build the pair of entries that differ
+    only by ``stereo_label`` (cis- and trans-diazene under one ``N=N``).
+    ``kind`` is deliberately not part of the lookup: it is not part of the
+    constraint, so treating it as identity here would ask for a row the
+    database cannot hold.
 
     Populates the RDKit cartridge ``mol`` column from the parent
     species's SMILES so structure-search tests exercise the same
@@ -214,11 +224,13 @@ def make_species_entry(
     existing = session.scalar(
         select(SpeciesEntry).where(
             SpeciesEntry.species_id == species.id,
-            SpeciesEntry.stereo_label.is_(None),
+            null_safe_equals(SpeciesEntry.stereo_label, stereo_label),
             SpeciesEntry.electronic_state_kind == electronic_state_kind,
-            SpeciesEntry.electronic_state_label.is_(None),
-            SpeciesEntry.term_symbol.is_(None),
-            SpeciesEntry.isotope_key.is_(None),
+            null_safe_equals(
+                SpeciesEntry.electronic_state_label, electronic_state_label
+            ),
+            null_safe_equals(SpeciesEntry.term_symbol, term_symbol),
+            null_safe_equals(SpeciesEntry.isotope_key, isotope_key),
         )
     )
     if existing is not None:
@@ -234,6 +246,10 @@ def make_species_entry(
         species_id=species.id,
         kind=kind,
         electronic_state_kind=electronic_state_kind,
+        stereo_label=stereo_label,
+        electronic_state_label=electronic_state_label,
+        term_symbol=term_symbol,
+        isotope_key=isotope_key,
         mol=mol_value,
     )
     session.add(entry)

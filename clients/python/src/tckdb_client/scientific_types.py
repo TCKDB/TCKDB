@@ -83,11 +83,30 @@ class ScientificDetailResponse(TypedDict, Generic[RecordT]):
 
 
 class SpeciesRecord(TypedDict, total=False):
+    """One species, with its resolved entries nested under ``entries``.
+
+    ``canonical_smiles``, ``inchi_key``, ``charge`` and ``multiplicity`` are
+    the *graph* identity and are shared by every entry beneath it. What
+    separates one entry from another lives on the entry: ``stereo_label``,
+    ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
+    and ``isotope_key``, plus the one-string ``species_entry_label`` derived
+    from them. Never pick an entry by position or by the species-level
+    fields -- ``N=N`` carries a ``Z`` entry (cis-diazene) and an ``E`` entry
+    (trans-diazene) with different thermochemistry, and they agree on every
+    species-level field there is.
+
+    ``stereo_kind`` is the species' own: ``achiral`` means a null
+    ``stereo_label`` on an entry has nothing to label, while ``ez_isomer``
+    or ``enantiomer`` means stereoisomers exist and this entry has simply
+    not been labelled.
+    """
+
     species_ref: Required[str]
     canonical_smiles: Required[str]
     inchi_key: Required[str]
     charge: Required[int]
     multiplicity: Required[int]
+    stereo_kind: Required[str]
     formula: str | None
     entries: list[JSONDict]
     species_id: int
@@ -553,6 +572,15 @@ class SpeciesStructureRecord(TypedDict, total=False):
     Unlike the identity searches this row carries ``match``: which query
     matched and, for similarity mode, how well. Without it a ranked result
     set is indistinguishable from an unranked one.
+
+    ``smiles``, ``inchi_key``, ``charge``, ``multiplicity`` and
+    ``stereo_kind`` describe the *parent species*, so two rows for two
+    entries of one species agree on all of them. ``stereo_label``,
+    ``electronic_state_kind``, ``electronic_state_label``, ``term_symbol``
+    and ``isotope_key`` are the entry's own and are what tell those rows
+    apart; ``species_entry_label`` is the same five rendered as one short
+    string. Each is ``None`` when the entry carries no such label -- never
+    an empty string.
     """
 
     species_ref: Required[str]
@@ -561,8 +589,14 @@ class SpeciesStructureRecord(TypedDict, total=False):
     inchi_key: Required[str]
     charge: Required[int]
     multiplicity: Required[int]
+    stereo_kind: Required[str]
     species_entry_kind: Required[str]
     electronic_state_kind: Required[str]
+    stereo_label: str | None
+    electronic_state_label: str | None
+    term_symbol: str | None
+    isotope_key: str | None
+    species_entry_label: str | None
     match: Required[JSONDict]
     review: Required[JSONDict]
     endpoint: Required[str]

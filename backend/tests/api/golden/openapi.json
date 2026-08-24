@@ -11941,7 +11941,7 @@
         "type": "object"
       },
       "ConformerSpeciesContext": {
-        "description": "Lightweight species/species-entry pointer for a conformer record.\n\nMirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by\nthe calculation surface so a generic client can reuse one parser\nfor both surfaces. Integer ids are Phase D policy-gated.",
+        "description": "Lightweight species/species-entry pointer for a conformer record.\n\nMirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by\nthe calculation surface so a generic client can reuse one parser\nfor both surfaces. Integer ids are Phase D policy-gated.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.",
         "properties": {
           "canonical_smiles": {
             "anyOf": [
@@ -11998,6 +11998,17 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -26569,6 +26580,17 @@
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
           },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
+          },
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
@@ -29460,7 +29482,7 @@
         "type": "object"
       },
       "ReactionFullSpeciesParticipant": {
-        "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.",
+        "description": "Reactant or product side participant in /full.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.",
         "properties": {
           "participant_index": {
             "title": "Participant Index",
@@ -29477,6 +29499,17 @@
             "title": "Species Entry Id",
             "type": "integer",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -29502,7 +29535,7 @@
         "type": "string"
       },
       "ReactionParticipantSummary": {
-        "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.",
+        "description": "Reactant or product participant within a reaction-entry record.\n\nPhase B: ``species_entry_ref`` is the public stable handle for the\nparticipant species entry.\n\n``smiles`` is the *species'* graph identity, shared by every entry\nunder it, so two participants that are different stereoisomers of\none species render identically from it alone -- the hydrazine\nnetwork's ``N=N`` carries a ``Z`` entry and an ``E`` entry, and an\nisomerisation between them reads as running from a species to\nitself. ``species_entry_label`` is what tells them apart: ``\"E\"``,\n``\"Z\"``, ``\"excited T1\"``, or ``None`` for the plain ground-state,\nstereo-unlabelled entry. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`.\n\nNote that the record's ``equation`` string is still rendered from\n``smiles`` alone and therefore still collapses two such\nparticipants. Changing it would change a served value that\nconsumers parse, so it is left alone here; render from\n``species_entry_label`` if you need the equation to be unambiguous.",
         "properties": {
           "participant_index": {
             "title": "Participant Index",
@@ -29516,6 +29549,17 @@
             "title": "Species Entry Id",
             "type": "integer",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -34338,7 +34382,7 @@
         "type": "object"
       },
       "ScientificSpeciesStructureSearchRecord": {
-        "description": "One species-entry-grain structure-search hit.\n\nCarries the parent species' graph identity (``smiles``, ``inchi_key``,\n``charge``, ``multiplicity``) and the entry's identity fields. No\nheavy scientific payloads (thermo / kinetics / statmech / transport\n/ conformer summaries) are inlined; callers chain to existing\nper-entry detail endpoints via ``species_entry_ref``.\n\nThe ``endpoint`` field gives the canonical detail URL fragment for\nthis entry, so a UI consumer can build a deep link without knowing\nthe routing convention.",
+        "description": "One species-entry-grain structure-search hit.\n\nCarries the parent species' graph identity (``smiles``, ``inchi_key``,\n``charge``, ``multiplicity``) and the entry's identity fields. No\nheavy scientific payloads (thermo / kinetics / statmech / transport\n/ conformer summaries) are inlined; callers chain to existing\nper-entry detail endpoints via ``species_entry_ref``.\n\nThe ``endpoint`` field gives the canonical detail URL fragment for\nthis entry, so a UI consumer can build a deep link without knowing\nthe routing convention.\n\nBecause the rows are flat, two entries of one species arrive as two\nsibling records rather than as two items under a shared parent, which\nmakes serving the entry's discriminating columns *more* load-bearing\nhere, not less: ``smiles`` and ``inchi_key`` are the parent species'\nand are equal on both. ``stereo_label``, ``electronic_state_label``,\n``term_symbol`` and ``isotope_key`` complete the identity tuple\n(``electronic_state_kind`` is the fifth), and ``species_entry_label``\nrenders them as one short string via the shared derivation in\n:mod:`app.services.scientific_read.species_identity`. ``stereo_kind``\nis the parent species' own, and says whether a null ``stereo_label``\nmeans \"nothing to label\" or \"not labelled yet\".\n\nEach is ``None`` when the underlying column is ``NULL``; none of them\nis ever an empty string standing in for an absent label.",
         "properties": {
           "charge": {
             "title": "Charge",
@@ -34347,6 +34391,17 @@
           "electronic_state_kind": {
             "$ref": "#/components/schemas/SpeciesEntryStateKind"
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
           "endpoint": {
             "title": "Endpoint",
             "type": "string"
@@ -34354,6 +34409,17 @@
           "inchi_key": {
             "title": "Inchi Key",
             "type": "string"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
           },
           "match": {
             "$ref": "#/components/schemas/StructureMatchSummary"
@@ -34384,6 +34450,17 @@
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
           },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
+          },
           "species_entry_ref": {
             "title": "Species Entry Ref",
             "type": "string"
@@ -34403,6 +34480,31 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_kind": {
+            "$ref": "#/components/schemas/StereoKind"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           }
         },
         "required": [
@@ -34412,6 +34514,7 @@
           "inchi_key",
           "charge",
           "multiplicity",
+          "stereo_kind",
           "species_entry_kind",
           "electronic_state_kind",
           "match",
@@ -36041,7 +36144,7 @@
         "type": "object"
       },
       "SpeciesCalculationsSpeciesContext": {
-        "description": "Resolved species/species-entry identity context for a calculation.\n\nPhase B: ``species_ref`` and ``species_entry_ref`` are the public stable\nhandles alongside the integer IDs.",
+        "description": "Resolved species/species-entry identity context for a calculation.\n\nPhase B: ``species_ref`` and ``species_entry_ref`` are the public stable\nhandles alongside the integer IDs.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",
@@ -36069,6 +36172,17 @@
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -36284,7 +36398,7 @@
         "type": "object"
       },
       "SpeciesEntryOwnerSummary": {
-        "description": "Compact species/species-entry owner shape for a calculation.\n\nMirrors ``SpeciesCalculationsSpeciesContext`` but only carries the\nfields the calculation-detail endpoint reliably has on hand without\nadditional heavy joins. ``species_id`` / ``species_entry_id`` are\nstripped by the Phase D internal-ids policy when not allowed.",
+        "description": "Compact species/species-entry owner shape for a calculation.\n\nMirrors ``SpeciesCalculationsSpeciesContext`` but only carries the\nfields the calculation-detail endpoint reliably has on hand without\nadditional heavy joins. ``species_id`` / ``species_entry_id`` are\nstripped by the Phase D internal-ids policy when not allowed.\n\n``species_entry_label`` says *which* entry of that species owns\nthe calculation. ``canonical_smiles`` is the species' and is\nshared by every entry under it, so without the label two\ncalculations on two stereoisomers report the same owner.\n``None`` for the plain ground-state, stereo-unlabelled entry.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",
@@ -36312,6 +36426,17 @@
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -36545,7 +36670,7 @@
         "type": "string"
       },
       "SpeciesEntryScientificRecord": {
-        "description": "Per-entry block embedded in a SpeciesScientificRecord.\n\nPhase B: ``species_entry_ref`` is the public stable handle alongside\nthe integer ``species_entry_id``.",
+        "description": "Per-entry block embedded in a SpeciesScientificRecord.\n\nPhase B: ``species_entry_ref`` is the public stable handle alongside\nthe integer ``species_entry_id``.\n\nIdentity fields\n---------------\n``stereo_label``, ``electronic_state_label``, ``term_symbol`` and\n``isotope_key`` are the columns of ``uq_species_entry_species_id``\nother than ``electronic_state_kind`` (already served above) and the\nspecies itself. Together those five are what makes one entry a\ndifferent row from another under the same ``species``.\n\nThey are in the **default** projection, not behind an ``include=``\ntoken, because their absence is not a missing convenience — it is a\nwrong answer. Two entries of one species that agree on every served\nfield are indistinguishable on the wire, and a reader picking a ref\nfrom a list of two identical records has a 50% chance of citing the\nother molecule. The live database has exactly that shape: ``N=N``\ncarries a ``Z`` entry (cis-diazene) and an ``E`` entry\n(trans-diazene), with different thermochemistry. A reader who does\nnot know to ask for an include token is precisely the reader who gets\nthe wrong molecule, so asking cannot be the price of correctness.\n\n``species_entry_label`` is those five columns rendered as one short\nstring — ``\"E\"``, ``\"excited T1\"`` — derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe same function the pressure-dependent network surface uses. One\ndefinition, so a species entry reads the same way in a species search,\na structure search, and a network state label.\n\nEvery one of these is ``None`` when the column is ``NULL``, never\n``\"\"``. 51 of the 60 entries on the deployed database have no stereo\nlabel at all, and \"no label\" must render as no label rather than as a\nlabel that happens to be blank.\n\n``isotopologue_label`` is deliberately **not** served. It is a\ndeprecated free-text column, is no longer part of the entry's unique\nidentity, is never written by the application, and therefore cannot\ndiscriminate between two entries; serving it would advertise an\nidentity component that is not one.",
         "properties": {
           "availability": {
             "$ref": "#/components/schemas/SpeciesEntryAvailability"
@@ -36564,6 +36689,28 @@
           "electronic_state_kind": {
             "$ref": "#/components/schemas/SpeciesEntryStateKind"
           },
+          "electronic_state_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Electronic State Label"
+          },
+          "isotope_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Isotope Key"
+          },
           "review": {
             "$ref": "#/components/schemas/RecordReviewBadge"
           },
@@ -36574,6 +36721,17 @@
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -36589,6 +36747,28 @@
               }
             ],
             "x-tckdb-include-gated": "statmech"
+          },
+          "stereo_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stereo Label"
+          },
+          "term_symbol": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Term Symbol"
           },
           "thermo_summary": {
             "anyOf": [
@@ -36700,7 +36880,7 @@
         "type": "object"
       },
       "SpeciesScientificRecord": {
-        "description": "One species row returned from /scientific/species/search.\n\nPhase B: ``species_ref`` is the public stable handle alongside\nthe integer ``species_id``.",
+        "description": "One species row returned from /scientific/species/search.\n\nPhase B: ``species_ref`` is the public stable handle alongside\nthe integer ``species_id``.\n\n``stereo_kind`` is a property of the *species* graph, not of any one\nentry, and it is what makes a null ``stereo_label`` on an entry\nreadable. ``achiral`` says the null means there is no stereochemistry\nto label; ``ez_isomer`` or ``enantiomer`` says stereoisomers exist and\nthis entry simply has not been labelled — a materially different\nthing to know before citing it. Non-nullable in the schema, so it is\npopulated on every species row.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",
@@ -36744,6 +36924,9 @@
           "species_ref": {
             "title": "Species Ref",
             "type": "string"
+          },
+          "stereo_kind": {
+            "$ref": "#/components/schemas/StereoKind"
           }
         },
         "required": [
@@ -36751,7 +36934,8 @@
           "canonical_smiles",
           "inchi_key",
           "charge",
-          "multiplicity"
+          "multiplicity",
+          "stereo_kind"
         ],
         "title": "SpeciesScientificRecord",
         "type": "object"
@@ -38423,7 +38607,7 @@
         "type": "object"
       },
       "StatmechSpeciesContext": {
-        "description": "Lightweight species/species-entry pointer for a statmech record.\n\nMirrors the species context shape used by the conformer and\ntransition-state surfaces. Integer ids are Phase D policy-gated.",
+        "description": "Lightweight species/species-entry pointer for a statmech record.\n\nMirrors the species context shape used by the conformer and\ntransition-state surfaces. Integer ids are Phase D policy-gated.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.",
         "properties": {
           "canonical_smiles": {
             "anyOf": [
@@ -38480,6 +38664,17 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -42620,7 +42815,7 @@
         "type": "object"
       },
       "ThermoSearchSpeciesContext": {
-        "description": "Resolved species/species-entry identity context for a thermo record.\n\nPhase B: ``species_ref`` and ``species_entry_ref`` are the public\nstable handles alongside the integer IDs.",
+        "description": "Resolved species/species-entry identity context for a thermo record.\n\nPhase B: ``species_ref`` and ``species_entry_ref`` are the public\nstable handles alongside the integer IDs.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",
@@ -42648,6 +42843,17 @@
           },
           "species_entry_kind": {
             "$ref": "#/components/schemas/StationaryPointKind"
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
@@ -45599,7 +45805,7 @@
         "type": "object"
       },
       "TransportSpeciesContext": {
-        "description": "Lightweight species/species-entry pointer for a transport record.\n\nMirrors the statmech / conformer / TS species context shape.\nInteger ids are Phase D policy-gated.",
+        "description": "Lightweight species/species-entry pointer for a transport record.\n\nMirrors the statmech / conformer / TS species context shape.\nInteger ids are Phase D policy-gated.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.",
         "properties": {
           "canonical_smiles": {
             "anyOf": [
@@ -45656,6 +45862,17 @@
             ],
             "title": "Species Entry Id",
             "x-tckdb-policy-hidden": true
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
           },
           "species_entry_ref": {
             "title": "Species Entry Ref",
