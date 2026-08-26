@@ -2551,7 +2551,7 @@ __HERO_SPECTRUM__
       ],
       facts: [
         ["Calculations behind it", evidence.calculation_count],
-        ["Distinct geometries", evidence.geometry_count]
+        ["Stored output geometries", evidence.geometry_count]
       ],
       levels: levelRows(evidence)
     };
@@ -2671,7 +2671,8 @@ __HERO_SPECTRUM__
         "five conformers. Calculations behind it counts the calculations " +
         "assigned to this one group, not every calculation on the entry: a " +
         "calculation deposited without a conformer belongs to no group and is " +
-        "counted by none of them.",
+        "counted by none of them. Stored output geometries are the distinct " +
+        "calculation-output geometries within that basin, not additional conformers.",
       shown: function (a) { return !!a.has_conformers; },
       url: function (ref) { return CONFORMERS + "?species_entry_ref=" + encodeURIComponent(ref); },
       view: conformerView
