@@ -1087,6 +1087,29 @@ class TestResultsExpandInPlace:
         assert '"observation", "observations"' in view.group(1)
         assert "of this one group" in view.group(1)
 
+    def test_a_geometry_count_is_never_called_a_conformer_count(self, script):
+        """Stored calculation outputs do not imply additional basins.
+
+        One conformer can have several stored geometries from calculations
+        performed within its torsional basin. The card names the inventory
+        and the panel note states the distinction explicitly.
+        """
+        conformers = re.search(
+            r'\{\s*key: "conformers",(.*?)\n    \}', script, flags=re.DOTALL
+        )
+        assert conformers is not None
+        block = conformers.group(1)
+        assert "Stored output geometries are the distinct" in block
+        assert "calculation-output geometries within that basin" in block
+        assert "not additional conformers" in block
+
+        view = re.search(
+            r"function conformerView\(record\) \{(.*?)\n  \}", script, flags=re.DOTALL
+        )
+        assert view is not None
+        assert '["Stored output geometries", evidence.geometry_count]' in view.group(1)
+        assert '["Distinct geometries", evidence.geometry_count]' not in view.group(1)
+
     def test_the_no_script_fallback_is_untouched_by_the_expansion(self, document):
         """None of the above may cost the scripting-off reader anything.
 
