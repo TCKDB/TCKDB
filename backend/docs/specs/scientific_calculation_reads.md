@@ -71,7 +71,7 @@ Heavy include tokens land one at a time. Current state:
 Search filters supported today:
 
 - **Owner**: `species_entry_ref`, `transition_state_entry_ref`, `species_ref`, `transition_state_ref`, `owner_kind`
-- **Calc**: `calculation_type`, `quality`, `has_result`, `has_artifacts`, `has_input_geometry`, `has_output_geometry`, `created_before`, `created_after`
+- **Calc**: `calculation_type`, `quality`, `has_result`, `has_artifacts`, `has_input_geometry`, `has_output_geometry`, `conformer_observation_ref`, `created_before`, `created_after`
 - **LoT**: `method`, `basis`, `lot_ref`, `lot_hash`
 - **Software/workflow**: `software`, `software_version`, `workflow_tool`, `workflow_tool_version`
 - **Validation**: `geometry_validation_status`, `scf_stability_status`
@@ -623,6 +623,7 @@ adding them later is not a breaking change.
 |---|---|---|
 | `geometry_validation_status` | `Literal["passed","warning","fail","not_present"]` | from `calc_geometry_validation`; `not_present` means no row exists |
 | `scf_stability_status` | `Literal["stable","unstable","stabilized","inconclusive","not_present"]` | from `calc_scf_stability`; `not_present` means no row |
+| `conformer_observation_ref` | str (max 64) | resolves a `co_…` public ref; restricts to calculations attached to that one deposited conformer observation |
 | `dependency_role` | `CalculationDependencyRole` | EXISTS on `calculation_dependency` with the given role |
 | `parent_calculation_ref` | str (max 64) | restricts to calcs whose dependency points to this parent |
 | `child_calculation_ref` | str (max 64) | restricts to calcs whose dependency points to this child |
@@ -958,6 +959,7 @@ class CalculationsSearchRequest(BaseModel):
     has_constraints: bool | None = None
     has_input_geometry: bool | None = None
     has_output_geometry: bool | None = None
+    conformer_observation_ref: str | None = None
     created_before: datetime | None = None
     created_after: datetime | None = None
 

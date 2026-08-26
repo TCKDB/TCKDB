@@ -30,6 +30,7 @@ from app.db.models.common import (
     CalculationType,
     RecordReviewStatus,
 )
+from app.schemas.reads._field_bounds import MAX_PUBLIC_REF_LENGTH
 from app.schemas.reads.scientific_calculation import (
     CalculationDetailRequest,
     ScientificCalculationDetailResponse,
@@ -77,6 +78,9 @@ def scientific_calculations_search_get(
     has_artifacts: bool | None = Query(None),
     has_input_geometry: bool | None = Query(None),
     has_output_geometry: bool | None = Query(None),
+    conformer_observation_ref: str | None = Query(
+        None, max_length=MAX_PUBLIC_REF_LENGTH
+    ),
     artifact_kind: ArtifactKind | None = Query(None),
     created_before: datetime | None = Query(None),
     created_after: datetime | None = Query(None),
@@ -125,6 +129,7 @@ def scientific_calculations_search_get(
         has_artifacts=has_artifacts,
         has_input_geometry=has_input_geometry,
         has_output_geometry=has_output_geometry,
+        conformer_observation_ref=conformer_observation_ref,
         artifact_kind=artifact_kind,
         created_before=created_before,
         created_after=created_after,

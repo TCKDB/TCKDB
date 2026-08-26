@@ -9002,6 +9002,18 @@
             ],
             "title": "Child Calculation Ref"
           },
+          "conformer_observation_ref": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Observation Ref"
+          },
           "created_after": {
             "anyOf": [
               {
@@ -62820,6 +62832,23 @@
                 }
               ],
               "title": "Has Output Geometry"
+            }
+          },
+          {
+            "in": "query",
+            "name": "conformer_observation_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Conformer Observation Ref"
             }
           },
           {
