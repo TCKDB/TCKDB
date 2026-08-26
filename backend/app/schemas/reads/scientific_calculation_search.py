@@ -95,6 +95,9 @@ class CalculationsSearchRequest(BaseModel):
     has_artifacts: bool | None = None
     has_input_geometry: bool | None = None
     has_output_geometry: bool | None = None
+    conformer_observation_ref: str | None = Field(
+        default=None, max_length=_MAX_PUBLIC_REF_LENGTH
+    )
     # ``artifact_kind=X`` matches calcs that have at least one
     # ``calculation_artifact`` row of that kind (stricter than
     # ``has_artifacts=true`` and AND-combines with it). The ``include=artifacts``

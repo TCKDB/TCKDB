@@ -46,6 +46,9 @@ from tests.services.scientific_read._factories import (
     attach_scf_stability,
     attach_sp_result,
     make_calculation,
+    make_calculation_with_conformer,
+    make_conformer_group,
+    make_conformer_observation,
     make_geometry,
     make_lot,
     make_species,
@@ -277,6 +280,100 @@ def test_get_search_unknown_species_entry_ref_returns_empty(
     ).json()
     assert body["records"] == []
     assert body["pagination"]["total"] == 0
+
+
+def test_search_by_conformer_observation_ref_get_post_and_echo(
+    client, db_session
+):
+    """A conformer-observation filter is meaningful, scoped, and parity-safe."""
+    _, entry, _ = _make_species_owned_calc(db_session)
+    group = make_conformer_group(db_session, entry)
+    observation = make_conformer_observation(
+        db_session, conformer_group=group
+    )
+    matching = [
+        make_calculation_with_conformer(
+            db_session,
+            species_entry=entry,
+            conformer_observation=observation,
+            type=CalculationType.sp,
+        )
+        for _ in range(3)
+    ]
+    rejected = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=observation,
+        type=CalculationType.sp,
+    )
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=rejected.id,
+        status=RecordReviewStatus.rejected,
+    )
+    other = make_calculation(
+        db_session, type=CalculationType.sp, species_entry_id=entry.id
+    )
+
+    params = (
+        f"?conformer_observation_ref={observation.public_ref}"
+        "&calculation_type=sp&limit=2"
+    )
+    body_get = client.get(SEARCH_URL + params).json()
+    body_post = client.post(
+        SEARCH_URL,
+        json={
+            "conformer_observation_ref": observation.public_ref,
+            "calculation_type": "sp",
+            "limit": 2,
+        },
+    ).json()
+
+    assert body_get["records"] == body_post["records"]
+    assert body_get["pagination"] == body_post["pagination"]
+    assert body_get["request"]["filter"]["conformer_observation_ref"] == observation.public_ref
+    assert body_get["pagination"]["total"] == len(matching)
+    assert body_get["pagination"]["returned"] == 2
+    assert rejected.public_ref not in _refs(body_get["records"])
+    assert other.public_ref not in _refs(body_get["records"])
+
+    second_page = client.get(SEARCH_URL + params + "&offset=2").json()
+    assert _refs(body_get["records"]).isdisjoint(_refs(second_page["records"]))
+    assert second_page["pagination"]["total"] == len(matching)
+
+
+def test_search_conformer_observation_ref_unknown_and_wrong_prefix(client):
+    unknown = client.get(
+        SEARCH_URL + "?conformer_observation_ref=co_doesnotexist"
+    )
+    assert unknown.status_code == 200
+    assert unknown.json()["records"] == []
+    assert unknown.json()["pagination"]["total"] == 0
+
+    wrong_prefix = client.post(
+        SEARCH_URL,
+        json={"conformer_observation_ref": "spe_abcdef0123456789"},
+    )
+    assert wrong_prefix.status_code == 422
+    assert "handle_type_mismatch" in wrong_prefix.text
+
+
+def test_search_conformer_observation_ref_overlength_returns_422(client):
+    overlong_ref = "co_" + "x" * 62
+
+    get_response = client.get(
+        SEARCH_URL + f"?conformer_observation_ref={overlong_ref}"
+    )
+    assert get_response.status_code == 422
+    assert get_response.json()["detail"][0]["type"] == "string_too_long"
+
+    post_response = client.post(
+        SEARCH_URL,
+        json={"conformer_observation_ref": overlong_ref},
+    )
+    assert post_response.status_code == 422
+    assert post_response.json()["detail"][0]["type"] == "string_too_long"
 
 
 # ---------------------------------------------------------------------------

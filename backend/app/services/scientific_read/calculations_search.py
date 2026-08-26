@@ -68,7 +68,7 @@ from app.db.models.common import (
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
-from app.db.models.species import SpeciesEntry
+from app.db.models.species import ConformerObservation, SpeciesEntry
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_calculation import (
@@ -124,6 +124,7 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "has_artifacts",
     "has_input_geometry",
     "has_output_geometry",
+    "conformer_observation_ref",
     "artifact_kind",
     "created_before",
     "created_after",
@@ -224,6 +225,15 @@ def search_calculations(
     if short_circuit:
         return _empty_response(request, includes, offset, limit)
 
+    conformer_observation_id, short_circuit = _resolve_filter_ref(
+        session,
+        ConformerObservation,
+        request.conformer_observation_ref,
+        "conformer_observation",
+    )
+    if short_circuit:
+        return _empty_response(request, includes, offset, limit)
+
     ts_entry_id, short_circuit = _resolve_filter_ref(
         session,
         TransitionStateEntry,
@@ -285,7 +295,11 @@ def search_calculations(
         ts_id=ts_id,
         owner_kind=request.owner_kind,
     )
-    stmt = _apply_calc_filters(stmt, request)
+    stmt = _apply_calc_filters(
+        stmt,
+        request,
+        conformer_observation_id=conformer_observation_id,
+    )
     stmt = _apply_lot_filters(stmt, request)
     stmt = _apply_software_filters(stmt, request)
     stmt = _apply_workflow_filters(stmt, request)
@@ -519,7 +533,16 @@ def _apply_owner_filters(
     return stmt
 
 
-def _apply_calc_filters(stmt, request: CalculationsSearchRequest):
+def _apply_calc_filters(
+    stmt,
+    request: CalculationsSearchRequest,
+    *,
+    conformer_observation_id: int | None,
+):
+    if conformer_observation_id is not None:
+        stmt = stmt.where(
+            Calculation.conformer_observation_id == conformer_observation_id
+        )
     if request.calculation_type is not None:
         stmt = stmt.where(Calculation.type == request.calculation_type)
     if request.quality is not None:
