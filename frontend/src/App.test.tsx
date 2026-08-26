@@ -98,6 +98,63 @@ describe("public archive shell", () => {
         expect(await screen.findByRole("link", { name: speciesRefTwo })).toBeVisible()
         cleanup(); await delay(60); expect(window.location.pathname).toBe("/")
     })
+
+    it("renders empty, malformed-success, and HTTP-error states with idle busy state", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
+            const formula = new URL(request.url).searchParams.get("formula")
+            if (formula === "H2O") return HttpResponse.json({ records: [] })
+            if (formula === "Ca") return HttpResponse.json({ records: [{ species_ref: speciesRef }] })
+            return HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
+        }))
+        const user = userEvent.setup(); render(<App />)
+        const input = await screen.findByLabelText("Exact species identifier")
+        const button = screen.getByRole("button", { name: "Search" })
+        await user.type(input, "H2O"); await user.click(button)
+        expect(await screen.findByRole("status")).toHaveTextContent("No exact formula record")
+        expect(button).toHaveAttribute("aria-busy", "false")
+        await user.clear(input); await user.type(input, "Ca"); await user.click(button)
+        expect(await screen.findByRole("status")).toHaveTextContent("could not complete")
+        expect(button).toHaveAttribute("aria-busy", "false")
+        await user.clear(input); await user.type(input, "H2"); await user.click(button)
+        expect(await screen.findByRole("status")).toHaveTextContent("could not complete")
+        expect(button).toHaveAttribute("aria-busy", "false")
+    })
+
+    it("clears a slow valid request synchronously for invalid and ambiguous submits", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", async () => {
+            await delay(50)
+            return HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })
+        }))
+        const user = userEvent.setup(); render(<App />)
+        const input = await screen.findByLabelText("Exact species identifier")
+        const button = screen.getByRole("button", { name: "Search" })
+        await user.type(input, "H2O"); await user.click(button)
+        await user.clear(input); await user.type(input, "spc_BAD"); await user.click(button)
+        expect(await screen.findByRole("status")).toHaveTextContent("26 lowercase base32")
+        expect(button).toHaveAttribute("aria-busy", "false")
+        await user.clear(input); await user.type(input, "H2O"); await user.click(button)
+        await user.clear(input); await user.type(input, "Cl"); await user.click(button)
+        expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
+        expect(button).toHaveAttribute("aria-busy", "false")
+        await delay(60); expect(screen.queryByRole("link", { name: speciesRef })).not.toBeInTheDocument()
+    })
+
+    it("does not allow an ambiguity chooser to search stale textbox content", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
+            expect(new URL(request.url).searchParams.get("formula")).toBe("Br")
+            return HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })
+        }))
+        const user = userEvent.setup(); render(<App />)
+        const input = await screen.findByLabelText("Exact species identifier")
+        await user.type(input, "Cl"); await user.click(screen.getByRole("button", { name: "Search" }))
+        expect(await screen.findByRole("button", { name: "Formula" })).toBeVisible()
+        await user.clear(input); await user.type(input, "Br")
+        expect(screen.queryByRole("button", { name: "Formula" })).not.toBeInTheDocument()
+        await user.click(screen.getByRole("button", { name: "Search" }))
+        expect(await screen.findByRole("group", { name: /Search “Br” as/ })).toBeVisible()
+        await user.click(screen.getByRole("button", { name: "Formula" }))
+        expect(await screen.findByRole("link", { name: speciesRef })).toBeVisible()
+    })
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [

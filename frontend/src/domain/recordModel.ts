@@ -60,7 +60,9 @@ export function classifyIdentifier(input: string): IdentifierClassification {
             ? { valid: true, identifier: { kind: "species-entry-ref", value }, label: "species-entry reference" }
             : { valid: true, identifier: { kind: "species-ref", value }, label: "species reference" }
     }
-    if (publicRefStartPattern.test(value)) return { valid: false, message: "Public references use spc_ or spe_ followed by 26 letters or digits." }
+    if (publicRefStartPattern.test(value)) {
+        return { valid: false, message: "Public references use spc_ or spe_ followed by 26 lowercase base32 characters (a-z, 2-7)." }
+    }
     if (isFormula(value)) {
         if (isPlausiblyBareSmiles(value)) {
             return { valid: false, message: `“${value}” could be a formula or SMILES. Choose how to search it.`, ambiguousValue: value }

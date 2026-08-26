@@ -20,8 +20,12 @@ describe("classifyIdentifier", () => {
         expect(classifyIdentifier("Xx2").valid).toBe(false)
         expect(classifyIdentifier("H02").valid).toBe(false)
         expect(classifyIdentifier("spc_not-a-ref").valid).toBe(false)
-        expect(classifyIdentifier("spc_ABCde234567abcde234567abcd").valid).toBe(false)
-        expect(classifyIdentifier("spe_abcde034567abcde234567abcd").valid).toBe(false)
+        const uppercase = classifyIdentifier("spc_ABCde234567abcde234567abcd")
+        const zero = classifyIdentifier("spe_abcde034567abcde234567abcd")
+        expect(uppercase.valid).toBe(false)
+        expect(zero.valid).toBe(false)
+        if (!uppercase.valid) expect(uppercase.message).toContain("26 lowercase base32 characters (a-z, 2-7)")
+        if (!zero.valid) expect(zero.message).toContain("26 lowercase base32 characters (a-z, 2-7)")
     })
 
     it("requires a deterministic prefix for formula/SMILES ambiguity", () => {

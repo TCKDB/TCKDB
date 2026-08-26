@@ -12,10 +12,16 @@ export function IdentifierSearch() {
     const [isSearching, setIsSearching] = useState(false)
     const activeRequest = useRef<AbortController | null>(null)
 
-    useEffect(() => () => activeRequest.current?.abort(), [])
+    useEffect(() => () => { activeRequest.current?.abort(); activeRequest.current = null }, [])
+
+    function abortActiveRequest() {
+        activeRequest.current?.abort()
+        activeRequest.current = null
+        setIsSearching(false)
+    }
 
     async function runSearch(classified: Extract<IdentifierClassification, { valid: true }>) {
-        activeRequest.current?.abort()
+        abortActiveRequest()
         const controller = new AbortController()
         activeRequest.current = controller
         setMatches([]); setMessage(null); setAmbiguousInput(null); setIsSearching(true)
@@ -35,7 +41,7 @@ export function IdentifierSearch() {
     function submit(event: FormEvent<HTMLFormElement>) {
         event.preventDefault()
         const classified = classifyIdentifier(query)
-        activeRequest.current?.abort()
+        abortActiveRequest()
         if (!classified.valid) {
             setMatches([]); setMessage(classified.message); setAmbiguousInput(classified.ambiguousValue ?? null)
             return
@@ -44,8 +50,9 @@ export function IdentifierSearch() {
     }
 
     function chooseAmbiguous(kind: "formula" | "smiles") {
-        if (!ambiguousInput) return
-        const choice = classifyIdentifier(`${kind}:${ambiguousInput}`)
+        const value = query.trim()
+        if (!ambiguousInput || value !== ambiguousInput) return
+        const choice = classifyIdentifier(`${kind}:${value}`)
         if (choice.valid) void runSearch(choice)
     }
 
@@ -53,7 +60,9 @@ export function IdentifierSearch() {
         <label htmlFor="identifier">Exact species identifier</label>
         <div className="search-row">
             <span aria-hidden="true">⌕</span>
-            <input id="identifier" value={query} onChange={(event) => setQuery(event.target.value)}
+            <input id="identifier" value={query} onChange={(event) => {
+                setQuery(event.target.value); setMessage(null); setAmbiguousInput(null)
+            }}
                 placeholder="Formula, spc_/spe_ ref, SMILES, InChI, or InChIKey" autoComplete="off" />
             <button type="submit" aria-busy={isSearching}>Search</button>
         </div>
