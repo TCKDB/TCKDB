@@ -18,11 +18,11 @@ const entrySchema = z.object({
 
 const speciesRecordSchema = z.object({
     species_ref: z.string(),
-    entries: z.array(entrySchema).default([]),
+    entries: z.array(entrySchema),
 }).passthrough()
 
 const speciesSearchSchema = z.object({
-    records: z.array(speciesRecordSchema).default([]),
+    records: z.array(speciesRecordSchema),
 }).passthrough()
 
 const structureRecordSchema = z.object({
@@ -31,13 +31,14 @@ const structureRecordSchema = z.object({
 }).passthrough()
 
 const structureSearchSchema = z.object({
-    records: z.array(structureRecordSchema).default([]),
+    records: z.array(structureRecordSchema),
 }).passthrough()
 
-export type SearchMatch = { speciesRef: string; entryRef: string }
+export type SearchMatch = { speciesRef: string; entryRef?: string }
 export type IdentifierSearch =
     | { kind: "formula"; value: string }
-    | { kind: "public-ref"; value: string }
+    | { kind: "species-ref"; value: string }
+    | { kind: "species-entry-ref"; value: string }
     | { kind: "smiles"; value: string }
     | { kind: "inchi"; value: string }
     | { kind: "inchi-key"; value: string }
@@ -60,29 +61,39 @@ async function requestJson(path: string, signal?: AbortSignal): Promise<unknown>
     return response.json()
 }
 
+function parseScientificResponse<T>(schema: z.ZodType<T>, payload: unknown): T {
+    const result = schema.safeParse(payload)
+    if (!result.success) throw new ScientificApiError(200, "Archive returned malformed scientific search data.")
+    return result.data
+}
+
 export async function searchSpeciesExact(
     identifier: IdentifierSearch,
     signal?: AbortSignal,
 ): Promise<SearchMatch[]> {
     const query = new URLSearchParams({ limit: "50" })
     if (identifier.kind === "formula") query.set("formula", identifier.value)
-    if (identifier.kind === "public-ref") {
-        if (identifier.value.startsWith("se_")) query.set("species_entry_ref", identifier.value)
-        else query.set("species_ref", identifier.value)
-    }
-    if (identifier.kind === "formula" || identifier.kind === "public-ref") {
-        const parsed = speciesSearchSchema.parse(await requestJson(`/api/v1/scientific/species/search?${query}`, signal))
-        return parsed.records.flatMap((record) => record.entries.map((entry) => ({
+    if (identifier.kind === "species-ref") query.set("species_ref", identifier.value)
+    if (identifier.kind === "species-entry-ref") query.set("species_entry_ref", identifier.value)
+    if (identifier.kind === "formula" || identifier.kind === "species-ref" || identifier.kind === "species-entry-ref") {
+        const parsed = parseScientificResponse(
+            speciesSearchSchema, await requestJson(`/api/v1/scientific/species/search?${query}`, signal),
+        )
+        const entryMatches: SearchMatch[] = parsed.records.flatMap((record) => record.entries.map((entry) => ({
             speciesRef: record.species_ref,
             entryRef: entry.species_entry_ref,
         })))
+        const speciesMatches: SearchMatch[] = parsed.records
+            .filter((record) => record.entries.length === 0)
+            .map((record) => ({ speciesRef: record.species_ref }))
+        return entryMatches.concat(speciesMatches)
     }
 
     const field = identifier.kind === "smiles" ? "query_smiles"
         : identifier.kind === "inchi" ? "query_inchi" : "query_inchi_key"
     query.set(field, identifier.value)
     query.set("mode", "exact")
-    const parsed = structureSearchSchema.parse(
+    const parsed = parseScientificResponse(structureSearchSchema,
         await requestJson(`/api/v1/scientific/species/structure-search?${query}`, signal),
     )
     return parsed.records.map((record) => ({ speciesRef: record.species_ref, entryRef: record.species_entry_ref }))

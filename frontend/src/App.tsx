@@ -15,15 +15,15 @@ function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<ArchiveHomePage />} />
             <Route path="/species" element={<RecordPlaceholderPage kind="Species" />} />
-            <Route path="/species/:speciesRef" element={<RecordPlaceholderPage kind="Species" />} />
-            <Route path="/species-entries/:entryRef" element={<RecordPlaceholderPage kind="Species entry" />} />
-            <Route path="/species-entries/:entryRef/:section" element={<RecordPlaceholderPage kind="Species entry section" />} />
-            <Route path="/conformer-groups/:groupRef" element={<RecordPlaceholderPage kind="Conformer group" />} />
-            <Route path="/conformer-observations/:observationRef" element={<RecordPlaceholderPage kind="Conformer observation" />} />
-            <Route path="/calculations/:calculationRef" element={<RecordPlaceholderPage kind="Calculation" />} />
-            <Route path="/geometries/:geometryRef" element={<RecordPlaceholderPage kind="Geometry" />} />
+            <Route path="/species/:speciesRef" element={<RecordPlaceholderPage kind="Species" refParam="speciesRef" />} />
+            <Route path="/species-entries/:entryRef" element={<RecordPlaceholderPage kind="Species entry" refParam="entryRef" />} />
+            <Route path="/species-entries/:entryRef/:section" element={<RecordPlaceholderPage kind="Species entry section" refParam="entryRef" />} />
+            <Route path="/conformer-groups/:groupRef" element={<RecordPlaceholderPage kind="Conformer group" refParam="groupRef" />} />
+            <Route path="/conformer-observations/:observationRef" element={<RecordPlaceholderPage kind="Conformer observation" refParam="observationRef" />} />
+            <Route path="/calculations/:calculationRef" element={<RecordPlaceholderPage kind="Calculation" refParam="calculationRef" />} />
+            <Route path="/geometries/:geometryRef" element={<RecordPlaceholderPage kind="Geometry" refParam="geometryRef" />} />
             <Route path="/reactions" element={<RecordPlaceholderPage kind="Reactions" />} />
-            <Route path="/reactions/:reactionRef" element={<RecordPlaceholderPage kind="Reaction" />} />
+            <Route path="/reactions/:reactionRef" element={<RecordPlaceholderPage kind="Reaction" refParam="reactionRef" />} />
             <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />
           </Route>
           <Route
