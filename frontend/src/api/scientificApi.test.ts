@@ -12,9 +12,9 @@ describe("searchSpeciesExact", () => {
     it("uses the scientific species endpoint for formula", async () => {
         server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
             expect(new URL(request.url).searchParams.get("formula")).toBe("H2O")
-            return HttpResponse.json({ records: [{ species_ref: "spc_5bxnghp44yj0hf2vp9k1a6tk20", entries: [{ species_entry_ref: "spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0" }] }] })
+            return HttpResponse.json({ records: [{ species_ref: "spc_abcde234567abcde234567abcd", entries: [{ species_entry_ref: "spe_bcdef234567bcdef234567abcd" }] }] })
         }))
-        await expect(searchSpeciesExact({ kind: "formula", value: "H2O" })).resolves.toEqual([{ speciesRef: "spc_5bxnghp44yj0hf2vp9k1a6tk20", entryRef: "spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0" }])
+        await expect(searchSpeciesExact({ kind: "formula", value: "H2O" })).resolves.toEqual([{ speciesRef: "spc_abcde234567abcde234567abcd" }])
     })
 
     it("uses exact structure search for InChIKey", async () => {
@@ -22,7 +22,7 @@ describe("searchSpeciesExact", () => {
             const query = new URL(request.url).searchParams
             expect(query.get("query_inchi_key")).toBe("XLYOFNOQVPJJNP-UHFFFAOYSA-N")
             expect(query.get("mode")).toBe("exact")
-            return HttpResponse.json({ records: [{ species_ref: "spc_5bxnghp44yj0hf2vp9k1a6tk20", species_entry_ref: "spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0" }] })
+            return HttpResponse.json({ records: [{ species_ref: "spc_abcde234567abcde234567abcd", species_entry_ref: "spe_bcdef234567bcdef234567abcd" }] })
         }))
         await expect(searchSpeciesExact({ kind: "inchi-key", value: "XLYOFNOQVPJJNP-UHFFFAOYSA-N" })).resolves.toHaveLength(1)
     })
@@ -34,14 +34,14 @@ describe("searchSpeciesExact", () => {
 
     it("uses the precise public-ref query parameter", async () => {
         server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
-            expect(new URL(request.url).searchParams.get("species_entry_ref")).toBe("spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0")
-            return HttpResponse.json({ records: [{ species_ref: "spc_5bxnghp44yj0hf2vp9k1a6tk20", entries: [{ species_entry_ref: "spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0" }] }] })
+            expect(new URL(request.url).searchParams.get("species_entry_ref")).toBe("spe_bcdef234567bcdef234567abcd")
+            return HttpResponse.json({ records: [{ species_ref: "spc_abcde234567abcde234567abcd", entries: [{ species_entry_ref: "spe_bcdef234567bcdef234567abcd" }] }] })
         }))
-        await expect(searchSpeciesExact({ kind: "species-entry-ref", value: "spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0" })).resolves.toHaveLength(1)
+        await expect(searchSpeciesExact({ kind: "species-entry-ref", value: "spe_bcdef234567bcdef234567abcd" })).resolves.toHaveLength(1)
     })
 
     it("rejects malformed successful payloads instead of treating them as empty", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{ species_ref: "spc_5bxnghp44yj0hf2vp9k1a6tk20" }] })))
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{ species_ref: "spc_abcde234567abcde234567abcd" }] })))
         await expect(searchSpeciesExact({ kind: "formula", value: "H2O" })).rejects.toEqual(
             expect.objectContaining<Partial<ScientificApiError>>({ status: 200, message: "Archive returned malformed scientific search data." }),
         )

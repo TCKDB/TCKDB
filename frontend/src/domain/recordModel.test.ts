@@ -4,7 +4,7 @@ import { classifyIdentifier, resultPath } from "./recordModel"
 describe("classifyIdentifier", () => {
     it.each([
         ["H2O", "formula"], ["Cl2", "formula"], ["Ca", "formula"], ["Cr", "formula"],
-        ["spc_5bxnghp44yj0hf2vp9k1a6tk20", "species-ref"], ["spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0", "species-entry-ref"],
+        ["spc_abcde234567abcde234567abcd", "species-ref"], ["spe_bcdef234567bcdef234567abcd", "species-entry-ref"],
         ["InChI=1S/H2O/h1H2", "inchi"], ["XLYOFNOQVPJJNP-UHFFFAOYSA-N", "inchi-key"],
     ])("classifies %s", (value, kind) => {
         const result = classifyIdentifier(value)
@@ -20,6 +20,8 @@ describe("classifyIdentifier", () => {
         expect(classifyIdentifier("Xx2").valid).toBe(false)
         expect(classifyIdentifier("H02").valid).toBe(false)
         expect(classifyIdentifier("spc_not-a-ref").valid).toBe(false)
+        expect(classifyIdentifier("spc_ABCde234567abcde234567abcd").valid).toBe(false)
+        expect(classifyIdentifier("spe_abcde034567abcde234567abcd").valid).toBe(false)
     })
 
     it("requires a deterministic prefix for formula/SMILES ambiguity", () => {
@@ -30,8 +32,8 @@ describe("classifyIdentifier", () => {
     })
 
     it("routes a match to its stable species-entry record", () => {
-        expect(resultPath({ speciesRef: "spc_5bxnghp44yj0hf2vp9k1a6tk20", entryRef: "spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0" }))
-            .toBe("/species-entries/spe_01J9X8K3Y2RM4F0X8K3Y2RM4F0")
-        expect(resultPath({ speciesRef: "spc_5bxnghp44yj0hf2vp9k1a6tk20" })).toBe("/species/spc_5bxnghp44yj0hf2vp9k1a6tk20")
+        expect(resultPath({ speciesRef: "spc_abcde234567abcde234567abcd", entryRef: "spe_bcdef234567bcdef234567abcd" }))
+            .toBe("/species-entries/spe_bcdef234567bcdef234567abcd")
+        expect(resultPath({ speciesRef: "spc_abcde234567abcde234567abcd" })).toBe("/species/spc_abcde234567abcde234567abcd")
     })
 })

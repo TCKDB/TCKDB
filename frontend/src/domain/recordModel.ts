@@ -2,7 +2,7 @@ import type { IdentifierSearch, SearchMatch } from "../api/scientificApi"
 
 export type IdentifierClassification =
     | { valid: true; identifier: IdentifierSearch; label: string }
-    | { valid: false; message: string }
+    | { valid: false; message: string; ambiguousValue?: string }
 
 const inchiKeyPattern = /^[A-Z]{14}-[A-Z]{10}-[A-Z]$/
 const elementSymbols = new Set([
@@ -14,7 +14,7 @@ const elementSymbols = new Set([
     "Th", "Pa", "U", "Np", "Pu", "Am", "Cm", "Bk", "Cf", "Es", "Fm", "Md", "No", "Lr", "Rf", "Db", "Sg", "Bh",
     "Hs", "Mt", "Ds", "Rg", "Cn", "Nh", "Fl", "Mc", "Lv", "Ts", "Og",
 ])
-const publicRefPattern = /^(spc|spe)_[0-9a-z]{26}$/i
+const publicRefPattern = /^(spc|spe)_[a-z2-7]{26}$/
 const publicRefStartPattern = /^(spc|spe)_/i
 
 function isFormula(value: string): boolean {
@@ -62,7 +62,9 @@ export function classifyIdentifier(input: string): IdentifierClassification {
     }
     if (publicRefStartPattern.test(value)) return { valid: false, message: "Public references use spc_ or spe_ followed by 26 letters or digits." }
     if (isFormula(value)) {
-        if (isPlausiblyBareSmiles(value)) return { valid: false, message: `“${value}” could be a formula or SMILES. Prefix it with formula: or smiles:.` }
+        if (isPlausiblyBareSmiles(value)) {
+            return { valid: false, message: `“${value}” could be a formula or SMILES. Choose how to search it.`, ambiguousValue: value }
+        }
         return { valid: true, identifier: { kind: "formula", value }, label: "formula" }
     }
     if (/^[A-Z][A-Za-z]*(?:\d+)?(?:[+-]\d*|\d+[+-])?$/.test(value)) {

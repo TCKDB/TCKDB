@@ -79,14 +79,13 @@ export async function searchSpeciesExact(
         const parsed = parseScientificResponse(
             speciesSearchSchema, await requestJson(`/api/v1/scientific/species/search?${query}`, signal),
         )
-        const entryMatches: SearchMatch[] = parsed.records.flatMap((record) => record.entries.map((entry) => ({
-            speciesRef: record.species_ref,
-            entryRef: entry.species_entry_ref,
-        })))
-        const speciesMatches: SearchMatch[] = parsed.records
-            .filter((record) => record.entries.length === 0)
-            .map((record) => ({ speciesRef: record.species_ref }))
-        return entryMatches.concat(speciesMatches)
+        if (identifier.kind === "species-entry-ref") {
+            return parsed.records.flatMap((record) => record.entries.map((entry) => ({
+                speciesRef: record.species_ref,
+                entryRef: entry.species_entry_ref,
+            })))
+        }
+        return parsed.records.map((record) => ({ speciesRef: record.species_ref }))
     }
 
     const field = identifier.kind === "smiles" ? "query_smiles"
