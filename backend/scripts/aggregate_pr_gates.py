@@ -128,6 +128,7 @@ REPO_ROOT = BACKEND_ROOT.parent
 #: waits for.
 AGGREGATED_WORKFLOWS = (
     ".github/workflows/backend-ci.yml",
+    ".github/workflows/frontend-ci.yml",
     ".github/workflows/python-client-ci.yml",
 )
 

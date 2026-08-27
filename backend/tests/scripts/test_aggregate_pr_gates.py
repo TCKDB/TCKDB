@@ -65,6 +65,7 @@ gates = _load_module("aggregate_pr_gates", BACKEND_ROOT / "scripts" / "aggregate
 
 BACKEND_CI = ".github/workflows/backend-ci.yml"
 CLIENT_CI = ".github/workflows/python-client-ci.yml"
+FRONTEND_CI = ".github/workflows/frontend-ci.yml"
 
 OWN_RUN_ID = 999
 
@@ -246,24 +247,40 @@ def test_a_paper_only_change_expects_no_gate():
 def test_a_markdown_only_change_outside_docs_expects_no_gate():
     assert not gates.workflow_is_expected(_real(BACKEND_CI), ["README.md"])
     assert not gates.workflow_is_expected(_real(CLIENT_CI), ["README.md"])
+    assert not gates.workflow_is_expected(_real(FRONTEND_CI), ["README.md"])
 
 
 def test_a_backend_change_expects_the_backend_gate_and_not_the_client_gate():
     changed = ["backend/app/api/routes/health.py"]
     assert gates.workflow_is_expected(_real(BACKEND_CI), changed)
     assert not gates.workflow_is_expected(_real(CLIENT_CI), changed)
+    assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed)
 
 
 def test_a_client_change_expects_the_client_gate():
     changed = ["clients/python/src/tckdb_client/client.py"]
     assert gates.workflow_is_expected(_real(CLIENT_CI), changed)
     assert not gates.workflow_is_expected(_real(BACKEND_CI), changed)
+    assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed)
 
 
-def test_a_shared_schemas_change_expects_both():
+def test_a_frontend_change_expects_only_the_frontend_gate():
+    changed = ["frontend/src/App.tsx"]
+    assert gates.workflow_is_expected(_real(FRONTEND_CI), changed)
+    assert not gates.workflow_is_expected(_real(BACKEND_CI), changed)
+    assert not gates.workflow_is_expected(_real(CLIENT_CI), changed)
+
+
+def test_the_frontend_workflow_can_trigger_its_own_gate():
+    changed = [FRONTEND_CI]
+    assert gates.workflow_is_expected(_real(FRONTEND_CI), changed)
+
+
+def test_a_shared_schemas_change_expects_backend_and_client_gates():
     changed = ["schemas/python/tckdb-schemas/tckdb_schemas/enums.py"]
-    for rel in gates.AGGREGATED_WORKFLOWS:
-        assert gates.workflow_is_expected(_real(rel), changed), rel
+    assert gates.workflow_is_expected(_real(BACKEND_CI), changed)
+    assert gates.workflow_is_expected(_real(CLIENT_CI), changed)
+    assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed)
 
 
 def test_a_rename_counts_both_of_its_paths():

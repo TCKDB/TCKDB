@@ -101,7 +101,7 @@ gates = _load_module("aggregate_pr_gates", BACKEND_ROOT / "scripts" / "aggregate
 #: files exist, which jobs run them, which paths reach those jobs) is
 #: derived rather than listed.
 #:
-#: Two of these three are required *indirectly*. Both are path-filtered,
+#: Three of these four are required *indirectly*. Those three are path-filtered,
 #: and a path-filtered check cannot be listed in branch protection: it
 #: never reports on a pull request outside its paths and GitHub waits for
 #: it forever, so listing ``Backend CI`` would make every ``paper/`` typo
@@ -112,6 +112,7 @@ gates = _load_module("aggregate_pr_gates", BACKEND_ROOT / "scripts" / "aggregate
 REQUIRED_WORKFLOWS = (
     ".github/workflows/repo-gate.yml",
     ".github/workflows/backend-ci.yml",
+    ".github/workflows/frontend-ci.yml",
     ".github/workflows/python-client-ci.yml",
 )
 
@@ -579,7 +580,7 @@ def test_repo_gate_is_not_path_filtered() -> None:
 # The bridge from "required" (a GitHub setting) to "runs" (this tree)
 #
 # REQUIRED_WORKFLOWS above is an include-list because GitHub keeps
-# "required" in branch settings. Two of its three entries are path-filtered
+# "required" in branch settings. Three of its four entries are path-filtered
 # and therefore cannot be listed there at all; they gate a merge only
 # because the "Required gates" job in repo-gate.yml waits for them. These
 # checks are what stop that sentence from quietly becoming false.
@@ -657,6 +658,56 @@ def test_required_gates_job_can_read_what_it_reports_on() -> None:
         "without pull-requests: read it cannot see the changed files, which is "
         "what decides whether an absent run is legitimate"
     )
+
+
+def test_frontend_gate_runs_the_locked_quality_contract() -> None:
+    """The frontend workflow must execute every command proved locally.
+
+    Registering a workflow with the aggregate only proves that GitHub waited
+    for it. Pinning the steps here proves the awaited job actually installs
+    the lockfile, lints, runs the tests, and produces a release build.
+    """
+    workflow = _workflow(".github/workflows/frontend-ci.yml")
+    jobs = list(workflow["jobs"].values())
+    assert len(jobs) == 1, "the frontend gate should have one all-or-nothing job"
+    job = jobs[0]
+    assert "if" not in job, "a conditional frontend job can skip the required quality contract"
+    assert not job.get("continue-on-error", False), "frontend failures must fail the required job"
+    assert job.get("defaults", {}).get("run", {}).get("working-directory") == "frontend"
+
+    command_steps = [step for step in job.get("steps", []) if step.get("run")]
+    commands = [step["run"] for step in command_steps]
+    assert commands == ["npm ci", "npm run lint", "npm test", "npm run build"]
+    for step in command_steps:
+        assert "if" not in step, f"{step['run']!r} must run unconditionally"
+        assert not step.get("continue-on-error", False), f"{step['run']!r} must block on failure"
+        assert step.get("working-directory", "frontend") == "frontend"
+
+    setup_node = [
+        step
+        for step in job.get("steps", [])
+        if str(step.get("uses", "")).startswith("actions/setup-node@")
+    ]
+    assert len(setup_node) == 1
+    with_config = setup_node[0].get("with", {})
+    assert str(with_config.get("node-version")) == "22"
+    assert with_config.get("cache") == "npm"
+    assert with_config.get("cache-dependency-path") == "frontend/package-lock.json"
+
+
+def test_frontend_gate_runs_for_frontend_prs_and_main_pushes() -> None:
+    """The merge gate and post-merge run must share the same narrow paths."""
+    triggers = _triggers(_workflow(".github/workflows/frontend-ci.yml"))
+    pull_request = triggers.get("pull_request")
+    push = triggers.get("push")
+    assert isinstance(pull_request, dict)
+    assert isinstance(push, dict)
+    assert push.get("branches") == ["main"]
+    assert push.get("paths") == pull_request.get("paths") == [
+        ".github/workflows/frontend-ci.yml",
+        "frontend/**",
+    ]
+    assert "workflow_dispatch" in triggers
 
 
 def test_the_aggregate_and_its_tests_both_run_in_the_unfiltered_workflow() -> None:
