@@ -55,11 +55,36 @@ describe("public archive shell", () => {
     })
 
     it("routes spe references to the precise entry", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [{ species_entry_ref: entryRef }] }] })))
+        const entry = {
+            species_entry_ref: entryRef,
+            species_entry_kind: "minimum",
+            electronic_state_kind: "ground",
+            review: { status: "not_reviewed" },
+            availability: {
+                has_thermo: false,
+                has_statmech: false,
+                has_transport: false,
+                has_conformers: false,
+                calculation_count: 0,
+            },
+        }
+        const species = {
+            species_ref: speciesRef,
+            canonical_smiles: "O",
+            inchi_key: "X",
+            formula: "O",
+            charge: 0,
+            multiplicity: 1,
+            entries: [entry],
+        }
+        server.use(
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [species] })),
+            http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: [] })),
+        )
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), entryRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
-        expect(await screen.findByRole("heading", { name: "Species entry" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
         expect(screen.getByText(entryRef)).toBeVisible()
     })
 
@@ -159,10 +184,8 @@ describe("public archive shell", () => {
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/species", "Species", undefined], ["/species/spc_abcde234567abcde234567abcd", "Species", speciesRef],
-    ["/species-entries/spe_cdefg234567cdefg234567abcd", "Species entry", entryRef],
-    ...["conformers", "thermo", "statmech", "transport", "calculations"].map((section): [string, string, string] => [`/species-entries/${entryRef}/${section}`, "Species entry section", entryRef]),
     ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"], ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Calculation", "calc_abc"], ["/geometries/geo_abc", "Geometry", "geo_abc"],
+    ["/calculations/calc_abc", "Calculation", "calc_abc"], ["/geometries/geom_abc", "Geometry", "geom_abc"],
     ["/reactions", "Reactions", undefined], ["/reactions/rxn_abc", "Reaction", "rxn_abc"], ["/methods", "Methods", undefined],
 ]
 
