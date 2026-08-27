@@ -1,32 +1,38 @@
-import { BrowserRouter, Routes, Route, Link } from "react-router-dom"
-import SpeciesPage from "./pages/SpeciesPage"
-import SpeciesDetailPage from "./pages/SpeciesDetailPage"
+import { lazy, Suspense } from "react"
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom"
 import MachineReviewInspectionPage from "./pages/MachineReviewInspectionPage"
+import { AppShell } from "./components/AppShell"
+import { LoadingPage } from "./components/LoadingPage"
 
-function Home() {
-  return <h2>Home</h2>
-}
+const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
+const RecordPlaceholderPage = lazy(() => import("./pages/RecordPlaceholderPage"))
 
 function App() {
   return (
     <BrowserRouter>
-      <div>
-        <nav>
-          <Link to="/">Home</Link> | <Link to="/species">Species</Link> |{" "}
-          <Link to="/admin/machine-review-inspection">Machine-Review Inspection (admin)</Link>
-        </nav>
-
+      <Suspense fallback={<LoadingPage />}>
         <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/species" element={<SpeciesPage />} />
-          <Route path="/species/:id" element={<SpeciesDetailPage />} />
-          {/* Admin-only diagnostic view; backend enforces require_admin. */}
+          <Route element={<AppShell />}>
+            <Route path="/" element={<ArchiveHomePage />} />
+            <Route path="/species" element={<RecordPlaceholderPage kind="Species" />} />
+            <Route path="/species/:speciesRef" element={<RecordPlaceholderPage kind="Species" refParam="speciesRef" />} />
+            <Route path="/species-entries/:entryRef" element={<RecordPlaceholderPage kind="Species entry" refParam="entryRef" />} />
+            <Route path="/species-entries/:entryRef/:section" element={<RecordPlaceholderPage kind="Species entry section" refParam="entryRef" />} />
+            <Route path="/conformer-groups/:groupRef" element={<RecordPlaceholderPage kind="Conformer group" refParam="groupRef" />} />
+            <Route path="/conformer-observations/:observationRef" element={<RecordPlaceholderPage kind="Conformer observation" refParam="observationRef" />} />
+            <Route path="/calculations/:calculationRef" element={<RecordPlaceholderPage kind="Calculation" refParam="calculationRef" />} />
+            <Route path="/geometries/:geometryRef" element={<RecordPlaceholderPage kind="Geometry" refParam="geometryRef" />} />
+            <Route path="/reactions" element={<RecordPlaceholderPage kind="Reactions" />} />
+            <Route path="/reactions/:reactionRef" element={<RecordPlaceholderPage kind="Reaction" refParam="reactionRef" />} />
+            <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />
+          </Route>
           <Route
             path="/admin/machine-review-inspection"
             element={<MachineReviewInspectionPage />}
           />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
-      </div>
+      </Suspense>
     </BrowserRouter>
   )
 }
