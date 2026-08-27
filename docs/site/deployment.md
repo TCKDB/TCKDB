@@ -27,6 +27,7 @@ private services.
 - [Deployment modes](../deployment/deployment_modes.md)
 - [Local development](../deployment/local-v0.md)
 - [Self-hosted single node](../deployment/self_hosted_single_node.md)
+- [Raspberry Pi frontend deployment](../deployment/frontend-pi.md)
 - [Shared private deployment](../deployment/shared-private-deployment.md)
 - [HPC client access](../deployment/client-access-from-hpc.md)
 - [Troubleshooting](../deployment/troubleshooting.md)

@@ -75,6 +75,19 @@ jobs:
       - name: Every test file is run by a required job
         run: python -m pytest --noconftest -q backend/tests/scripts/test_gate_coverage.py
 
+      # The frontend image is published only after merge, so its own workflow
+      # cannot protect a pull request. Run this wiring guard in the unfiltered
+      # repository gate instead: it pins the path filter, architecture list,
+      # and smoke-before-push ordering that make a main commit deployable.
+      - name: Frontend image publication wiring is safe
+        run: >-
+          python -m pytest --noconftest -q
+          backend/tests/scripts/test_gate_coverage.py
+          -k frontend_image_publish_workflow
+
+      - name: Frontend deploy rollback is safe
+        run: python -m pytest --noconftest -q backend/tests/scripts/test_frontend_deploy_script.py
+
       # WHY THE VERSION GUARD IS HERE AND NOT IN python-client-ci.yml
       #   Two agents branched from tckdb-client 0.46.0 on 2026-08-16, both
       #   correctly bumped to 0.47.0, and git merged the byte-identical
