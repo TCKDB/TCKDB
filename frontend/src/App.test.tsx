@@ -183,10 +183,15 @@ describe("public archive shell", () => {
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
-    ["/species", "Species", undefined], ["/species/spc_abcde234567abcde234567abcd", "Species", speciesRef],
-    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"], ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Calculation", "calc_abc"], ["/geometries/geom_abc", "Geometry", "geom_abc"],
-    ["/reactions", "Reactions", undefined], ["/reactions/rxn_abc", "Reaction", "rxn_abc"], ["/methods", "Methods", undefined],
+    ["/species", "Species", undefined],
+    ["/species/spc_abcde234567abcde234567abcd", "Species", speciesRef],
+    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
+    ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
+    ["/calculations/calc_abc", "Calculation", "calc_abc"],
+    ["/geometries/geom_abc", "Geometry", "geom_abc"],
+    ["/reactions", "Reactions", undefined],
+    ["/reactions/rxn_abc", "Reaction", "rxn_abc"],
+    ["/methods", "Methods", undefined],
 ]
 
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {

@@ -4,7 +4,9 @@
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
 
-.basin-header { max-width: 63rem; }
+.basin-header {
+    max-width: 63rem;
+}
 
 .basin-title {
     display: flex;
@@ -19,7 +21,11 @@
     letter-spacing: -.04em;
 }
 
-.basin-title h1 { font-size: clamp(3rem, 8vw, 5.5rem); }
+.basin-title h1 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: clamp(3rem, 8vw, 5.5rem);
+}
 
 .basin-intro {
     max-width: 44rem;
@@ -28,8 +34,10 @@
 }
 
 .review-badge {
+    flex: 0 1 auto;
     display: inline-block;
     padding: .25rem .45rem;
+    overflow-wrap: anywhere;
     background: #eaf1f8;
     color: #173f6e;
     font: .64rem var(--mono);
@@ -263,7 +271,17 @@
         width: 100%;
     }
 
-    .stage-table thead { display: none; }
+    .stage-table thead {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        padding: 0;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+    }
 
     .stage-table td {
         padding: .35rem 0;
