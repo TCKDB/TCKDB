@@ -52,6 +52,14 @@ function excitedEntry() {
     }
 }
 
+function secondGroundEntry() {
+    return {
+        ...groundEntry(),
+        species_entry_ref: "spe_secondgroundentryrecordabcdefgh",
+        availability: { ...groundEntry().availability, calculation_count: 7 },
+    }
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
 afterAll(() => server.close())
@@ -71,12 +79,31 @@ describe("species overview", () => {
         expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible()
         expect(screen.getByRole("heading", { name: "Electronic-state entries" })).toBeVisible()
         expect(screen.getByText("2 entries")).toBeVisible()
+        expect(screen.getByRole("heading", { name: /ground electronic state.*1 entry/i })).toBeVisible()
+        expect(screen.getByRole("heading", { name: /excited electronic state.*1 entry/i })).toBeVisible()
         expect(screen.getByRole("link", { name: "ground electronic state" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(screen.getByRole("link", { name: "excited T1" }))
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
         expect(screen.getByText("14")).toBeVisible()
         expect(screen.getByText("3")).toBeVisible()
+    })
+
+    it("groups repeated ground-state entries without merging their stable records", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => (
+            HttpResponse.json(speciesPayload([groundEntry(), secondGroundEntry(), excitedEntry()]))
+        )))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+
+        expect(await screen.findByRole("heading", { name: /ground electronic state.*2 entries/i })).toBeVisible()
+        const groundLinks = screen.getAllByRole("link", { name: "ground electronic state" })
+        expect(groundLinks).toHaveLength(2)
+        expect(groundLinks[0]).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(groundLinks[1]).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
+        expect(screen.getByText("spe_secondgroundentryrecordabcdefgh")).toBeVisible()
+        expect(screen.getByText("7")).toBeVisible()
+        expect(screen.getAllByText(/Each row is a separate record/)).toHaveLength(2)
     })
 
     it("explains when no state-specific entries are projected", async () => {

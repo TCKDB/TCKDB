@@ -8,6 +8,22 @@ function token(value: string) {
     return value.replaceAll("_", " ")
 }
 
+function stateLabel(state: string) {
+    return `${token(state)} electronic state`
+}
+
+function groupEntriesByState(entries: ScientificSpeciesEntrySummary[]) {
+    return entries.reduce<Map<string, ScientificSpeciesEntrySummary[]>>((groups, entry) => {
+        const grouped = groups.get(entry.electronic_state_kind)
+        if (grouped) {
+            grouped.push(entry)
+        } else {
+            groups.set(entry.electronic_state_kind, [entry])
+        }
+        return groups
+    }, new Map())
+}
+
 function multiplicityLabel(value: number) {
     const labels: Record<number, string> = { 1: "singlet", 2: "doublet", 3: "triplet" }
     return labels[value] ? `${labels[value]} (${value})` : String(value)
@@ -51,6 +67,7 @@ function State({ title, ref, busy, alert }: {
 
 function SpeciesDocument({ species }: { species: SpeciesOverview }) {
     const title = species.formula ?? species.canonical_smiles
+    const entryGroups = groupEntriesByState(species.entries)
     return (
         <section className="species-overview">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">
@@ -84,12 +101,14 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     <p>{species.entries.length} {species.entries.length === 1 ? "entry" : "entries"}</p>
                 </div>
                 <p className="entry-index-intro">
-                    Entries are distinct scientific records for this chemical identity. Their state, stereochemistry,
-                    review, and available evidence can differ.
+                    Entries are separate deposited records. They are grouped by electronic state so that repeated
+                    ground-state records stay distinct without reading as interchangeable duplicates.
                 </p>
                 {species.entries.length ? (
-                    <ul className="entry-cards">
-                        {species.entries.map((entry) => <EntryCard entry={entry} key={entry.species_entry_ref} />)}
+                    <ul className="entry-state-groups">
+                        {[...entryGroups].map(([state, entries]) => (
+                            <EntryStateGroup entries={entries} key={state} state={state} />
+                        ))}
                     </ul>
                 ) : (
                     <p className="empty-projection">
@@ -98,6 +117,37 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                 )}
             </section>
         </section>
+    )
+}
+
+function EntryStateGroup({
+    entries,
+    state,
+}: {
+    entries: ScientificSpeciesEntrySummary[]
+    state: string
+}) {
+    const groupId = `entry-state-${state}`
+    const count = entries.length
+    return (
+        <li className="entry-state-group">
+            <h3 id={groupId}>
+                {stateLabel(state)}
+                <span>{count} {count === 1 ? "entry" : "entries"}</span>
+            </h3>
+            <details className="entry-state-disclosure" open>
+                <summary aria-describedby={groupId}>
+                    {count === 1 ? "Show deposited record" : "Show separate deposited records"}
+                </summary>
+                <p>
+                    Each row is a separate record. Review status, evidence coverage, and its stable entry reference
+                    help distinguish records with the same state classification.
+                </p>
+                <ul className="entry-rows">
+                    {entries.map((entry) => <EntryCard entry={entry} key={entry.species_entry_ref} />)}
+                </ul>
+            </details>
+        </li>
     )
 }
 
@@ -122,7 +172,7 @@ function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
                 <div className="entry-card-heading">
                     <div>
                         <p className="entry-card-type">{token(entry.species_entry_kind)}</p>
-                        <h3><Link to={`/species-entries/${entry.species_entry_ref}`}>{label}</Link></h3>
+                        <h4><Link to={`/species-entries/${entry.species_entry_ref}`}>{label}</Link></h4>
                     </div>
                     <span className="entry-review">{token(entry.review.status)}</span>
                 </div>
@@ -132,8 +182,8 @@ function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
                     {entry.term_symbol && <div><dt>Term symbol</dt><dd>{entry.term_symbol}</dd></div>}
                     <div><dt>Calculations</dt><dd>{entry.availability.calculation_count}</dd></div>
                     <div>
-                        <dt>Available data</dt>
-                        <dd>{available.length ? available.join(" · ") : "No projected sections"}</dd>
+                        <dt>Evidence coverage</dt>
+                        <dd>{available.length ? available.join(" · ") : "None projected"}</dd>
                     </div>
                 </dl>
                 <Link className="entry-card-action" to={`/species-entries/${entry.species_entry_ref}`}>
