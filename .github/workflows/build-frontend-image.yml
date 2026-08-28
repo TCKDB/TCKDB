@@ -63,10 +63,19 @@ jobs:
             sleep 1
           done
           curl -fsS http://127.0.0.1:18080/species/CH3 | grep -q '<div id="root">'
-          curl -fsS -H 'X-Real-IP: 203.0.113.9' -H 'X-Forwarded-Proto: https' \
-            http://127.0.0.1:18080/api/v1/status \
-            | jq -e '(.response == "api-old") and (.headers.x_real_ip == "203.0.113.9") \
-                and (.headers.x_forwarded_proto == "https")'
+          api_old_status() {
+            curl -fsS -H 'X-Real-IP: 203.0.113.9' -H 'X-Forwarded-Proto: https' \
+              http://127.0.0.1:18080/api/v1/status \
+              | jq -e \
+                '(.response == "api-old") and
+                 (.headers.x_real_ip == "203.0.113.9") and
+                 (.headers.x_forwarded_proto == "https")'
+          }
+          for _ in $(seq 1 20); do
+            api_old_status && break
+            sleep 1
+          done
+          api_old_status
 
           # Docker gives the replacement API a different IP. The frontend is
           # intentionally left running: this proves nginx re-resolves Docker
