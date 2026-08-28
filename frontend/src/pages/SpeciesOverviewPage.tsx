@@ -18,7 +18,7 @@ export default function SpeciesOverviewPage() {
     const state = useSpeciesOverview(speciesRef)
 
     if (state.speciesRef !== speciesRef || state.status === "loading") {
-        return <State title="Loading species record" busy />
+        return <State title="Loading species record…" busy />
     }
     if (state.status === "missing") return <State title="Species not found" ref={speciesRef} />
     if (state.status !== "ready") {

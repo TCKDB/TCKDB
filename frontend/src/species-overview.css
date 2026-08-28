@@ -4,22 +4,6 @@
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
 
-.record-breadcrumbs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem;
-    margin-bottom: 2.2rem;
-    color: #526171;
-    font: .72rem var(--mono);
-}
-
-.record-breadcrumbs a {
-    color: #205493;
-    text-decoration: underline;
-    text-decoration-color: #a8c4dc;
-    text-underline-offset: .16em;
-}
-
 .species-header {
     max-width: 65rem;
     border-left: 4px solid #205493;
@@ -38,6 +22,8 @@
     font-size: clamp(3.5rem, 8vw, 6.4rem);
     letter-spacing: -.055em;
     line-height: .94;
+    overflow-wrap: anywhere;
+    word-break: break-word;
 }
 
 .species-intro {
@@ -115,7 +101,7 @@
 
 .entry-cards {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(18rem, 100%), 1fr));
     gap: 1rem;
     margin: 0;
     padding: 0;
