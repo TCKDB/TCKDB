@@ -145,6 +145,12 @@
     text-underline-offset: .16em;
 }
 
+.entry-card h3 a:hover,
+.entry-card-action:hover {
+    color: #205493;
+    text-decoration-color: currentColor;
+}
+
 .entry-review {
     height: fit-content;
     padding: .25rem .4rem;
