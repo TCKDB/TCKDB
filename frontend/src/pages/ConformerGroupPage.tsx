@@ -14,7 +14,7 @@ export default function ConformerGroupPage() {
     const { groupRef = "" } = useParams<{ groupRef: string }>()
     const state = useConformerGroup(groupRef)
 
-    if (state.status === "loading") return <State title="Loading conformer basin" busy />
+    if (state.status === "loading") return <State title="Loading conformer basin…" busy />
     if (state.status !== "ready") {
         const title = state.status === "missing"
             ? "Conformer basin not found"
