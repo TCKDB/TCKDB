@@ -183,14 +183,36 @@ describe("public archive shell", () => {
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
-    ["/species", "Species", undefined], ["/species/spc_abcde234567abcde234567abcd", "Species", speciesRef],
-    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"], ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Calculation", "calc_abc"], ["/geometries/geom_abc", "Geometry", "geom_abc"],
-    ["/reactions", "Reactions", undefined], ["/reactions/rxn_abc", "Reaction", "rxn_abc"], ["/methods", "Methods", undefined],
+    ["/species", "Species", undefined],
+    ["/species/spc_abcde234567abcde234567abcd", "Species", speciesRef],
+    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
+    ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
+    ["/calculations/calc_abc", "Calculation", "calc_abc"],
+    ["/geometries/geom_abc", "Geometry", "geom_abc"],
+    ["/reactions", "Reactions", undefined],
+    ["/reactions/rxn_abc", "Reaction", "rxn_abc"],
+    ["/methods", "Methods", undefined],
 ]
 
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     it("renders the declared public route deterministically", async () => {
+        if (path.startsWith("/conformer-groups/")) {
+            server.use(http.get("/api/v1/scientific/conformer-groups/:ref", () => HttpResponse.json({
+                record: {
+                    conformer_group: {
+                        conformer_group_ref: "cfg_abc", label: "Conformer group",
+                        review: { status: "not_reviewed" },
+                    },
+                    species: { species_ref: speciesRef, species_entry_ref: entryRef },
+                    observations_summary: { total: 0, by_scientific_origin: {} },
+                    evidence_summary: {
+                        calculation_count: 0, optimization_chain_count: 0, geometry_count: 0,
+                        evidence_coverage: { opt: 0, freq: 0, sp: 0 },
+                    },
+                    observations: [], calculations: [], geometries: [],
+                },
+            })))
+        }
         window.history.replaceState({}, "", path); render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
         if (ref) expect(screen.getByText(ref)).toBeVisible()

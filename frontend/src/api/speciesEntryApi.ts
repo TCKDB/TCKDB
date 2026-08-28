@@ -1,21 +1,11 @@
 import { z } from "zod"
+import { geometrySummarySchema, levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
-const lotSchema = z.object({
-    method: z.string(),
-    basis: z.string().nullable().optional(),
-    display: z.string().optional(),
-}).passthrough()
-const reviewSchema = z.object({ status: z.string() }).passthrough()
-const geometrySchema = z.object({
-    geometry_ref: z.string(),
-    geom_hash: z.string().nullable().optional(),
-    natoms: z.number().nullable().optional(),
-}).passthrough()
 const calculationSchema = z.object({
     calculation_ref: z.string(),
     type: z.string(),
-    level_of_theory: lotSchema.nullable().optional(),
+    level_of_theory: levelOfTheorySchema.nullable().optional(),
 }).passthrough()
 const observationSchema = z.object({
     conformer_observation: z.object({ conformer_observation_ref: z.string() }).passthrough(),
@@ -25,7 +15,7 @@ const entrySchema = z.object({
     species_entry_ref: z.string(),
     species_entry_kind: z.string(),
     electronic_state_kind: z.string(),
-    review: reviewSchema,
+    review: recordReviewSchema,
     availability: z.object({
         has_thermo: z.boolean(),
         has_statmech: z.boolean(),
@@ -61,13 +51,13 @@ const conformerResponseSchema = z.object({
                 freq: z.number(),
                 sp: z.number(),
             }).passthrough(),
-            levels_of_theory: z.record(z.string(), z.array(lotSchema)),
+            levels_of_theory: z.record(z.string(), z.array(levelOfTheorySchema)),
         }).passthrough(),
         observations: z.array(observationSchema).nullable().optional(),
         calculations: z.array(calculationSchema).nullable().optional(),
         geometries: z.array(z.object({
             calculation_ref: z.string(),
-            geometry: geometrySchema,
+            geometry: geometrySummarySchema,
         }).passthrough()).nullable().optional(),
     }).passthrough()),
 }).passthrough()
