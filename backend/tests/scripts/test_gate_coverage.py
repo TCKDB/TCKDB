@@ -55,6 +55,7 @@ exists rather than the next time somebody audits a list.
 from __future__ import annotations
 
 import importlib.util
+import re
 import shlex
 import tomllib
 from pathlib import Path
@@ -764,6 +765,13 @@ def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes()
         ".response == \"api-new\"",
     ):
         assert expected in command, f"frontend smoke must prove {expected!r}"
+
+    jq = re.search(r"jq -e \\\n\s+'(?P<program>[^']+)'", command)
+    assert jq, "the forwarded-header jq program must be a single shell-safe argument"
+    assert re.sub(r"\s+", " ", jq.group("program")).strip() == (
+        '(.response == "api-old") and (.headers.x_real_ip == "203.0.113.9") '
+        'and (.headers.x_forwarded_proto == "https")'
+    )
 
 
 def test_the_aggregate_and_its_tests_both_run_in_the_unfiltered_workflow() -> None:
