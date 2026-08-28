@@ -34,7 +34,7 @@
 }
 
 .record-breadcrumbs a:focus-visible,
-.entry-card h3 a:focus-visible,
+.entry-card h4 a:focus-visible,
 .entry-card-action:focus-visible {
     outline: 3px solid #7ea7cf;
     outline-offset: 3px;
