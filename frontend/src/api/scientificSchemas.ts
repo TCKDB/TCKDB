@@ -20,6 +20,6 @@ export const calculationSummarySchema = z.object({
     quality: z.string().optional(),
     review: recordReviewSchema.optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
-    software_release: z.object({ name: z.string() }).passthrough().nullable().optional(),
-    workflow_tool_release: z.object({ name: z.string() }).passthrough().nullable().optional(),
+    software_release: z.object({ software: z.string() }).passthrough().nullable().optional(),
+    workflow_tool_release: z.object({ workflow_tool: z.string() }).passthrough().nullable().optional(),
 }).passthrough()
