@@ -1,4 +1,4 @@
-import { useParams } from "react-router-dom"
+import { Link, useParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { LevelsOfTheorySection, LineageSection } from "../components/SpeciesEntryEvidence"
@@ -57,6 +57,13 @@ function EntryDocument({ entry, conformers, activeSection }: {
     activeSection: EntrySection
 }) {
     return <section className="entry-page">
+        <nav className="record-breadcrumbs" aria-label="Breadcrumb">
+            <Link to="/">TCKDB</Link>
+            <span aria-hidden="true">/</span>
+            <Link to={`/species/${entry.speciesRef}`}>Species</Link>
+            <span aria-hidden="true">/</span>
+            <span aria-current="page">Species entry</span>
+        </nav>
         <EntryIdentity entry={entry} />
         <EntryNavigation entryRef={entry.species_entry_ref} activeSection={activeSection} />
         {(activeSection === "overview" || activeSection === "conformers" || activeSection === "calculations") && (

@@ -1,5 +1,9 @@
 import { z } from "zod"
-import { geometrySummarySchema, levelOfTheorySchema, recordReviewSchema } from "./scientificSchemas"
+import { geometrySummarySchema, levelOfTheorySchema } from "./scientificSchemas"
+import {
+    scientificSpeciesSearchSchema,
+    speciesEntrySummarySchema,
+} from "./scientificSpeciesSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
 const calculationSchema = z.object({
@@ -11,30 +15,6 @@ const observationSchema = z.object({
     conformer_observation: z.object({ conformer_observation_ref: z.string() }).passthrough(),
 }).passthrough()
 
-const entrySchema = z.object({
-    species_entry_ref: z.string(),
-    species_entry_kind: z.string(),
-    electronic_state_kind: z.string(),
-    review: recordReviewSchema,
-    availability: z.object({
-        has_thermo: z.boolean(),
-        has_statmech: z.boolean(),
-        has_transport: z.boolean(),
-        has_conformers: z.boolean(),
-        calculation_count: z.number(),
-    }).passthrough(),
-}).passthrough()
-const speciesResponseSchema = z.object({
-    records: z.array(z.object({
-        species_ref: z.string(),
-        canonical_smiles: z.string(),
-        inchi_key: z.string(),
-        formula: z.string().nullable(),
-        charge: z.number(),
-        multiplicity: z.number(),
-        entries: z.array(entrySchema),
-    }).passthrough()),
-}).passthrough()
 const conformerResponseSchema = z.object({
     records: z.array(z.object({
         conformer_group: z.object({
@@ -62,7 +42,7 @@ const conformerResponseSchema = z.object({
     }).passthrough()),
 }).passthrough()
 
-export type SpeciesEntryProjection = z.infer<typeof entrySchema> & {
+export type SpeciesEntryProjection = z.infer<typeof speciesEntrySummarySchema> & {
     speciesRef: string
     canonicalSmiles: string
     inchiKey: string
@@ -76,7 +56,7 @@ export async function loadSpeciesEntry(entryRef: string, signal?: AbortSignal): 
     const query = new URLSearchParams({ species_entry_ref: entryRef })
     for (const include of ["thermo", "statmech", "transport", "conformers"]) query.append("include", include)
     const payload = await requestScientificJson(`/api/v1/scientific/species/search?${query}`, signal)
-    const response = parseScientificResponse(speciesResponseSchema, payload, "species entry")
+    const response = parseScientificResponse(scientificSpeciesSearchSchema, payload, "species entry")
     for (const species of response.records) {
         const entry = species.entries.find((candidate) => candidate.species_entry_ref === entryRef)
         if (entry) return {

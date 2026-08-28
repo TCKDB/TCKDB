@@ -8,6 +8,7 @@ const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const RecordPlaceholderPage = lazy(() => import("./pages/RecordPlaceholderPage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
+const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
 
 function App() {
   return (
@@ -17,7 +18,7 @@ function App() {
           <Route element={<AppShell />}>
             <Route path="/" element={<ArchiveHomePage />} />
             <Route path="/species" element={<RecordPlaceholderPage kind="Species" />} />
-            <Route path="/species/:speciesRef" element={<RecordPlaceholderPage kind="Species" refParam="speciesRef" />} />
+            <Route path="/species/:speciesRef" element={<SpeciesOverviewPage />} />
             <Route path="/species-entries/:entryRef" element={<SpeciesEntryPage />} />
             <Route path="/species-entries/:entryRef/:section" element={<SpeciesEntryPage />} />
             <Route path="/conformer-groups/:groupRef" element={<ConformerGroupPage />} />
