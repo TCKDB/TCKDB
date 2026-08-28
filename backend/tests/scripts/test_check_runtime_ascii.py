@@ -542,11 +542,13 @@ REQUIRED_TREES = (
     "clients/python/src/tckdb_client",
     "clients/python/adapters/chemkin/tckdb_chemkin",
     "integrations/mcp/src/tckdb_mcp",
+    "frontend/scripts",
 )
 
 CLIENT_PACKAGE = checker.REPO_ROOT / "clients/python/src/tckdb_client"
 CHEMKIN_ADAPTER = checker.REPO_ROOT / "clients/python/adapters/chemkin/tckdb_chemkin"
 MCP_INTEGRATION = checker.REPO_ROOT / "integrations/mcp/src/tckdb_mcp"
+FRONTEND_SCRIPTS = checker.REPO_ROOT / "frontend/scripts"
 
 
 def test_every_required_tree_is_a_default_target():
@@ -565,6 +567,8 @@ def test_every_required_tree_is_a_default_target():
         CHEMKIN_ADAPTER / "normalizer.py",
         MCP_INTEGRATION / "config.py",
         MCP_INTEGRATION / "tools" / "reaction_kinetics.py",
+        FRONTEND_SCRIPTS / "ops" / "smoke_api.py",
+        FRONTEND_SCRIPTS / "ops" / "tckdb_frontend_deploy.sh",
     ],
 )
 def test_the_new_targets_reach_the_modules_that_emit(module: Path):

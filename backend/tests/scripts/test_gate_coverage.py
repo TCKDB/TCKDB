@@ -710,6 +710,62 @@ def test_frontend_gate_runs_for_frontend_prs_and_main_pushes() -> None:
     assert "workflow_dispatch" in triggers
 
 
+def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes() -> None:
+    """The Pi image workflow must follow every shipping input and smoke first.
+
+    Image publication intentionally happens only after merge, but a changed
+    frontend Dockerfile, deploy script, or workflow must still start it on
+    ``main``. This keeps a UI commit from becoming an undeployable commit
+    merely because CI's path filter did not know its deployment files existed.
+    """
+    workflow = _workflow(".github/workflows/build-frontend-image.yml")
+    triggers = _triggers(workflow)
+    push = triggers.get("push")
+    assert isinstance(push, dict)
+    assert push.get("branches") == ["main"]
+    assert set(push.get("paths", [])) == {
+        "frontend/**",
+        "docs/deployment/frontend-pi.md",
+        ".github/workflows/build-frontend-image.yml",
+    }
+    assert "workflow_dispatch" in triggers
+
+    jobs = workflow["jobs"]
+    assert set(jobs) == {"build-and-push"}
+    job = jobs["build-and-push"]
+    assert job.get("if") == "github.repository == 'TCKDB/TCKDB'"
+    steps = job.get("steps", [])
+    names = [step.get("name") for step in steps]
+    smoke = names.index("Smoke test — SPA fallback and same-origin API proxy")
+    publish = names.index("Build and push multi-arch image")
+    assert smoke < publish, "the image must serve its SPA and proxy before it is published"
+    assert "Build arm64 image before publishing" in names
+    assert names.index("Build arm64 image before publishing") < publish
+
+    publish_step = steps[publish]
+    assert publish_step["with"]["context"] == "frontend"
+    assert publish_step["with"]["file"] == "frontend/Dockerfile"
+    assert publish_step["with"]["platforms"] == "linux/amd64,linux/arm64"
+    assert publish_step["with"]["push"] is True
+
+    metadata = next(step for step in steps if step.get("id") == "meta")
+    assert "type=sha,format=long" in metadata["with"]["tags"]
+    smoke_step = steps[smoke]
+    command = smoke_step["run"]
+    for expected in (
+        "frontend/scripts/ops/smoke_api.py",
+        "X-Real-IP: 203.0.113.9",
+        "X-Forwarded-Proto: https",
+        "docker rm -f tckdb-api",
+        "old_api_ip=",
+        "api-ip-reservation",
+        'test "$old_api_ip" != "$new_api_ip"',
+        "API_RESPONSE=api-new",
+        ".response == \"api-new\"",
+    ):
+        assert expected in command, f"frontend smoke must prove {expected!r}"
+
+
 def test_the_aggregate_and_its_tests_both_run_in_the_unfiltered_workflow() -> None:
     """The aggregate's own tests must not be gated by the aggregate.
 

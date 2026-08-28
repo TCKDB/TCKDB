@@ -138,6 +138,10 @@ CHEMKIN_ADAPTER_TARGET = "../clients/python/adapters/chemkin/tckdb_chemkin"
 #: The MCP integration. Added at zero violations -- coverage, not repair.
 MCP_INTEGRATION_TARGET = "../integrations/mcp/src/tckdb_mcp"
 
+#: Frontend deployment and smoke helpers execute in CI or on the deployment
+# host, so their shell/Python diagnostics are runtime text rather than docs.
+FRONTEND_SCRIPTS_TARGET = "../frontend/scripts"
+
 #: Checked by default, as paths relative to ``BACKEND_ROOT``.
 #:
 #: ``app`` because it is the deployed code. ``scripts`` because several of
@@ -177,6 +181,7 @@ DEFAULT_TARGETS = (
     CLIENT_PACKAGE_TARGET,
     CHEMKIN_ADAPTER_TARGET,
     MCP_INTEGRATION_TARGET,
+    FRONTEND_SCRIPTS_TARGET,
 )
 
 
