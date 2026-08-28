@@ -740,8 +740,7 @@ def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes()
     smoke = names.index("Smoke test — SPA fallback and same-origin API proxy")
     publish = names.index("Build and push multi-arch image")
     assert smoke < publish, "the image must serve its SPA and proxy before it is published"
-    assert "Build arm64 image before publishing" in names
-    assert names.index("Build arm64 image before publishing") < publish
+    assert "Build arm64 image before publishing" not in names
 
     publish_step = steps[publish]
     assert publish_step["with"]["context"] == "frontend"
