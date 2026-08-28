@@ -87,6 +87,8 @@ describe("species overview", () => {
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
         expect(screen.getByText("14")).toBeVisible()
         expect(screen.getByText("3")).toBeVisible()
+        expect(screen.getAllByText("Deposited records")).toHaveLength(2)
+        expect(screen.getAllByText("Available data")).toHaveLength(2)
     })
 
     it("groups repeated ground-state entries without merging their stable records", async () => {

@@ -137,10 +137,10 @@ function EntryStateGroup({
             </h3>
             <details className="entry-state-disclosure" open>
                 <summary aria-describedby={groupId}>
-                    {count === 1 ? "Show deposited record" : "Show separate deposited records"}
+                    Deposited records
                 </summary>
                 <p>
-                    Each row is a separate record. Review status, evidence coverage, and its stable entry reference
+                    Each row is a separate record. Review status, available data, and its stable entry reference
                     help distinguish records with the same state classification.
                 </p>
                 <ul className="entry-rows">
@@ -182,7 +182,7 @@ function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
                     {entry.term_symbol && <div><dt>Term symbol</dt><dd>{entry.term_symbol}</dd></div>}
                     <div><dt>Calculations</dt><dd>{entry.availability.calculation_count}</dd></div>
                     <div>
-                        <dt>Evidence coverage</dt>
+                        <dt>Available data</dt>
                         <dd>{available.length ? available.join(" · ") : "None projected"}</dd>
                     </div>
                 </dl>

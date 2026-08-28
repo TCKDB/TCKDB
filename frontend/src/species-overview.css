@@ -192,7 +192,7 @@
     letter-spacing: -.025em;
 }
 
-.entry-card h3 a,
+.entry-card h4 a,
 .entry-card-action {
     color: #173f6e;
     text-decoration: underline;
@@ -200,7 +200,7 @@
     text-underline-offset: .16em;
 }
 
-.entry-card h3 a:hover,
+.entry-card h4 a:hover,
 .entry-card-action:hover {
     color: #205493;
     text-decoration-color: currentColor;
