@@ -41,7 +41,51 @@ from app.schemas.reads.scientific_common import (
 # ---------------------------------------------------------------------------
 
 
-class SpeciesSearchRequest(BaseModel):
+class SpeciesFilterRequest(BaseModel):
+    """Fields shared by species search and species browse.
+
+    Everything here narrows a candidate set but never *is* one: a species
+    identifier (``smiles`` / ``inchi_key`` / ``species_ref`` /
+    ``species_entry_ref``) is what makes ``/species/search`` a lookup, and
+    those live only on :class:`SpeciesSearchRequest`. ``/species/browse``
+    (:class:`SpeciesBrowseRequest`) has none of them, by construction —
+    not by a runtime check — which is what lets it list the corpus with no
+    identifier at all.
+
+    ``formula`` sits here rather than with the identifiers even though
+    ``search_species`` treats it as one of the "at least one identifier"
+    quartet: on a browse listing, "show me the C6H6 entries" is exactly
+    the kind of narrowing a catalogue reader does *after* opening the
+    page, not a lookup they arrived with. Its matching semantics (exact,
+    case-sensitive, via the RDKit cartridge) are identical on both
+    surfaces — see ``species.py::_formula_expr``.
+    """
+
+    # Matched via the RDKit cartridge's mol_formula(mol_from_smiles(...))
+    # against the species' identity SMILES: Hill notation, e.g. "H2O",
+    # "C3H6", with a trailing charge suffix for ions ("HO-", "H4N+").
+    # Exact, case-sensitive match; isotopes are not distinguished.
+    formula: str | None = Field(default=None, max_length=_MAX_FORMULA_LENGTH)
+
+    charge: int | None = None
+    multiplicity: int | None = None
+    electronic_state_kind: SpeciesEntryStateKind | None = None
+    species_entry_kind: StationaryPointKind | None = None
+
+    min_review_status: RecordReviewStatus | None = None
+    include_rejected: bool = False
+    include_deprecated: bool = False
+
+    # v0 forbids client-supplied sort. The service rejects a non-None value.
+    sort: str | None = None
+
+    collapse: CollapseMode = CollapseMode.all
+    include: list[str] = Field(default_factory=list)
+    offset: int = 0
+    limit: int = 50
+
+
+class SpeciesSearchRequest(SpeciesFilterRequest):
     """Service-layer request model for species search.
 
     At least one of ``smiles``, ``inchi``, ``inchi_key``, ``formula`` must be
@@ -55,33 +99,22 @@ class SpeciesSearchRequest(BaseModel):
     # result set rather than the unfiltered species table.
     inchi: str | None = Field(default=None, max_length=_MAX_INCHI_LENGTH)
     inchi_key: str | None = Field(default=None, max_length=_MAX_INCHI_KEY_LENGTH)
-    # Matched via the RDKit cartridge's mol_formula(mol_from_smiles(...))
-    # against the species' identity SMILES: Hill notation, e.g. "H2O",
-    # "C3H6", with a trailing charge suffix for ions ("HO-", "H4N+").
-    # Exact, case-sensitive match; isotopes are not distinguished.
-    formula: str | None = Field(default=None, max_length=_MAX_FORMULA_LENGTH)
-
-    charge: int | None = None
-    multiplicity: int | None = None
-    electronic_state_kind: SpeciesEntryStateKind | None = None
-    species_entry_kind: StationaryPointKind | None = None
 
     # Phase C: explicit handles (refs); ID siblings keep the existing
     # behavior. If both are supplied they must resolve to the same row.
     species_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
     species_entry_ref: str | None = Field(default=None, max_length=_MAX_PUBLIC_REF_LENGTH)
 
-    min_review_status: RecordReviewStatus | None = None
-    include_rejected: bool = False
-    include_deprecated: bool = False
 
-    # v0 forbids client-supplied sort. The service rejects a non-None value.
-    sort: str | None = None
+class SpeciesBrowseRequest(SpeciesFilterRequest):
+    """Service-layer request model for the identifier-free species catalogue.
 
-    collapse: CollapseMode = CollapseMode.all
-    include: list[str] = Field(default_factory=list)
-    offset: int = 0
-    limit: int = 50
+    See ``/scientific/species/browse``. Deliberately carries no identifier
+    field at all (no ``smiles``, ``inchi``, ``inchi_key``, ``species_ref``,
+    ``species_entry_ref``) — the route that constructs this model does not
+    accept them as query parameters, so "browse with no identifier" is a
+    property of the type, not a value a caller happened not to supply.
+    """
 
 
 # ---------------------------------------------------------------------------
@@ -223,3 +256,15 @@ class ScientificSpeciesSearchResponse(BaseModel):
     review_summary: ReviewStatusSummary
     records: list[SpeciesScientificRecord]
     pagination: Pagination
+
+
+class ScientificSpeciesBrowseResponse(ScientificSpeciesSearchResponse):
+    """Response envelope for /api/v1/scientific/species/browse.
+
+    Field-for-field identical to :class:`ScientificSpeciesSearchResponse`
+    by design (see the endpoint's module docstring for why): a client's
+    parser for one search-response schema works unmodified against a
+    browse response. Declared as its own class, not a bare alias, so the
+    OpenAPI document and generated clients name the two surfaces
+    separately even though nothing about the shape differs.
+    """

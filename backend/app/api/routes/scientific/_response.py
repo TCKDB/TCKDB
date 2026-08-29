@@ -216,6 +216,22 @@ SPECIES_SEARCH_SECTIONS = IncludeGatedSections(
     },
 )
 
+# ``GET /species/browse``. Byte-identical ``sections`` mapping to
+# ``SPECIES_SEARCH_SECTIONS`` above — the two endpoints share the exact
+# same per-entry record shape (``ScientificSpeciesBrowseResponse`` is a
+# field-for-field subclass of ``ScientificSpeciesSearchResponse``) — but
+# kept as its own declared table rather than reused, so ``surface`` names
+# the route that actually served the response an auditor is looking at.
+SPECIES_BROWSE_SECTIONS = IncludeGatedSections(
+    surface="/api/v1/scientific/species/browse",
+    sections={
+        "thermo": ("thermo_summary",),
+        "statmech": ("statmech_summary",),
+        "transport": ("transport_summary",),
+        "conformers": ("conformers_summary",),
+    },
+)
+
 # ``/species-calculations/search``, GET and POST. One token. The record's
 # ``frequency`` summary is deliberately **not** here: like ``energy``
 # beside it, it is an ungated scientific fact whose ``null`` says "this
@@ -714,6 +730,7 @@ ALL_INCLUDE_GATED_TABLES: Mapping[str, IncludeGatedSections] = MappingProxyType(
         "SPECIES_CALCULATIONS_SEARCH_SECTIONS": (
             SPECIES_CALCULATIONS_SEARCH_SECTIONS
         ),
+        "SPECIES_BROWSE_SECTIONS": SPECIES_BROWSE_SECTIONS,
         "SPECIES_SEARCH_SECTIONS": SPECIES_SEARCH_SECTIONS,
         "STATMECH_RECORD_SECTIONS": STATMECH_RECORD_SECTIONS,
         "TRANSITION_STATE_RECORD_SECTIONS": TRANSITION_STATE_RECORD_SECTIONS,
@@ -743,6 +760,7 @@ __all__ = [
     "NETWORK_SOLVE_RECORD_SECTIONS",
     "REACTION_FULL_SECTIONS",
     "SEARCH_SCOPE",
+    "SPECIES_BROWSE_SECTIONS",
     "SPECIES_CALCULATIONS_SEARCH_SECTIONS",
     "SPECIES_SEARCH_SECTIONS",
     "STATMECH_RECORD_SECTIONS",

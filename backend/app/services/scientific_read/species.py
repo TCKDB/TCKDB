@@ -45,10 +45,13 @@ from app.schemas.reads.scientific_common import (
 )
 from app.schemas.reads.scientific_species import (
     RequestEcho,
+    ScientificSpeciesBrowseResponse,
     ScientificSpeciesSearchResponse,
+    SpeciesBrowseRequest,
     SpeciesEntryAvailability,
     SpeciesEntryScientificRecord,
     SpeciesEntrySectionIds,
+    SpeciesFilterRequest,
     SpeciesScientificRecord,
     SpeciesSearchRequest,
 )
@@ -277,6 +280,119 @@ def search_species(
     )
 
 
+def browse_species(
+    session: Session, request: SpeciesBrowseRequest
+) -> ScientificSpeciesBrowseResponse:
+    """List species by secondary filter alone — no identifier required.
+
+    See docs/specs/read_api_mvp.md §Endpoint 1 for the sibling
+    ``/species/search`` contract this deliberately mirrors. The two
+    surfaces exist because ``search_species`` rejects an identifier-free
+    request (``missing_identifier``) by design: a caller who *knows* what
+    they want should get an exact, ref-scoped answer, and relaxing that
+    refusal for an ``?browse=true`` opt-in would make the same route mean
+    two different things depending on a flag. A catalogue read is a
+    different question — "what does this archive hold?" — with a
+    different shape of answer (a bounded, paged listing of the whole
+    corpus, not a lookup), so it gets its own path and its own request
+    model (:class:`SpeciesBrowseRequest`, which structurally cannot carry
+    an identifier).
+
+    Everything downstream of "which candidate species" is shared with
+    ``search_species`` verbatim: the same visibility gate
+    (:func:`app.services.scientific_read.common.visible_statuses`), the
+    same ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``
+    order (:func:`_rank_and_slice_species`, whose ``id DESC`` tiebreak is
+    what keeps pagination stable — see its docstring), the same bounded
+    page size (:func:`app.services.scientific_read.common.validate_pagination`,
+    default 50 / hard cap 200), and the same per-page record builder
+    (:func:`_build_page_records`) — so a browse record and a search record
+    are the same shape, metadata only: identity, refs, per-entry
+    availability *counts* and review badges, never an artifact, geometry
+    or calculation payload.
+
+    Only the candidate set differs: :func:`_browse_candidate_species_stmt`
+    has no identifier predicate at all (there is no identifier field on
+    :class:`SpeciesBrowseRequest` to read one from), so with every
+    optional filter absent it is every species in the corpus.
+
+    :param session: SQLAlchemy session bound to the read DB.
+    :param request: Parsed request model.
+    :returns: ``ScientificSpeciesBrowseResponse`` Pydantic model.
+    :raises ValueError: 422 for sort/pagination/include validation failures.
+    """
+    reject_client_sort(request.sort)
+    offset, limit = validate_pagination(request.offset, request.limit)
+    includes = validate_includes(
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/species/browse",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+    )
+    includes = filter_internal_ids_from_resolved(includes)
+
+    visible = visible_statuses(
+        min_review_status=request.min_review_status,
+        include_rejected=request.include_rejected,
+        include_deprecated=request.include_deprecated,
+    )
+
+    candidates = _browse_candidate_species_stmt(request).subquery("candidate_species")
+
+    pre_collapse_total = (
+        session.scalar(select(func.count()).select_from(candidates)) or 0
+    )
+    if pre_collapse_total == 0:
+        return _empty_browse_response(request, includes, offset, limit)
+
+    summary = summary_from_sql(
+        session,
+        _visible_entry_rows(candidates, request, visible, species_entry_ref_id=None),
+    )
+
+    collapse_first = request.collapse.value == "first"
+    page_species_ids = _rank_and_slice_species(
+        session,
+        candidates,
+        request,
+        visible,
+        species_entry_ref_id=None,
+        offset=0 if collapse_first else offset,
+        limit=1 if collapse_first else limit,
+    )
+    if collapse_first:
+        page_species_ids = page_species_ids[offset : offset + limit]
+
+    returned_records = _build_page_records(
+        session,
+        page_species_ids,
+        request,
+        visible,
+        species_entry_ref_id=None,
+        includes=includes,
+    )
+
+    pagination = build_pagination(
+        offset=offset,
+        limit=limit,
+        returned=len(returned_records),
+        total=pre_collapse_total,
+        collapse_first=collapse_first,
+    )
+
+    return ScientificSpeciesBrowseResponse(
+        request=RequestEcho(
+            filter=_browse_filter_echo(request),
+            sort=_DEFAULT_SORT_ECHO,
+            collapse=request.collapse,
+            include=sorted(includes),
+        ),
+        review_summary=summary,
+        records=returned_records,
+        pagination=pagination,
+    )
+
+
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
@@ -326,8 +442,38 @@ def _candidate_species_stmt(
     return stmt
 
 
+def _browse_candidate_species_stmt(request: SpeciesBrowseRequest):
+    """The browse candidate set as a ``SELECT id, created_at`` over ``species``.
+
+    Same shape and same use (a subquery for the count, the summary and the
+    ranking) as :func:`_candidate_species_stmt`, and deliberately not a
+    call to it with ``None`` identifiers threaded through: that would let
+    a future identifier field added to ``SpeciesSearchRequest`` silently
+    reach browse through the shared function unless every call site were
+    re-audited. Keeping the statement builders separate means the only
+    way ``/species/browse`` gains an identifier predicate is a change
+    written here, on a request type that has no identifier fields to read
+    one from.
+
+    With ``charge``, ``multiplicity`` and ``formula`` all absent (the
+    default, empty browse request) this is every species in the corpus —
+    which is the whole point of the endpoint.
+    """
+    stmt = select(Species.id, Species.created_at)
+    if request.charge is not None:
+        stmt = stmt.where(Species.charge == request.charge)
+    if request.multiplicity is not None:
+        stmt = stmt.where(Species.multiplicity == request.multiplicity)
+    if request.formula is not None:
+        # Same expression, same case-sensitive exact match, same NULL-on-
+        # unparseable behavior as _candidate_species_stmt(); see
+        # _formula_expr() for the full rationale.
+        stmt = stmt.where(_formula_expr() == request.formula.strip())
+    return stmt
+
+
 def _entry_filter_predicates(
-    request: SpeciesSearchRequest, species_entry_ref_id: int | None
+    request: SpeciesFilterRequest, species_entry_ref_id: int | None
 ) -> list:
     """The per-entry ``where`` terms, in one place for all three uses."""
     predicates = []
@@ -345,7 +491,7 @@ def _entry_filter_predicates(
 def _join_entries_and_reviews(
     stmt,
     candidates,
-    request: SpeciesSearchRequest,
+    request: SpeciesFilterRequest,
     *,
     species_entry_ref_id: int | None,
     outer: bool,
@@ -399,7 +545,7 @@ def _join_entries_and_reviews(
 def _rank_and_slice_species(
     session: Session,
     candidates,
-    request: SpeciesSearchRequest,
+    request: SpeciesFilterRequest,
     visible: set,
     *,
     species_entry_ref_id: int | None,
@@ -463,7 +609,7 @@ def _rank_and_slice_species(
 
 def _visible_entry_rows(
     candidates,
-    request: SpeciesSearchRequest,
+    request: SpeciesFilterRequest,
     visible: set,
     *,
     species_entry_ref_id: int | None,
@@ -491,7 +637,7 @@ def _visible_entry_rows(
 def _load_page_entries(
     session: Session,
     page_species_ids: list[int],
-    request: SpeciesSearchRequest,
+    request: SpeciesFilterRequest,
     visible: set,
     *,
     species_entry_ref_id: int | None,
@@ -520,7 +666,7 @@ def _load_page_entries(
 def _build_page_records(
     session: Session,
     page_species_ids: list[int],
-    request: SpeciesSearchRequest,
+    request: SpeciesFilterRequest,
     visible: set,
     *,
     species_entry_ref_id: int | None,
@@ -780,6 +926,57 @@ def _empty_response(
     return ScientificSpeciesSearchResponse(
         request=RequestEcho(
             filter=_filter_echo(request),
+            sort=_DEFAULT_SORT_ECHO,
+            collapse=request.collapse,
+            include=sorted(includes),
+        ),
+        review_summary=review_summary([]),
+        records=[],
+        pagination=build_pagination(
+            offset=offset, limit=limit, returned=0, total=0
+        ),
+    )
+
+
+def _browse_filter_echo(request: SpeciesBrowseRequest) -> dict[str, object]:
+    """:func:`_filter_echo`'s counterpart for browse.
+
+    Not a call to ``_filter_echo`` with the identifier fields absent:
+    :class:`SpeciesBrowseRequest` has no ``smiles`` / ``inchi`` /
+    ``inchi_key`` / ``species_ref`` / ``species_entry_ref`` attributes to
+    read, so ``getattr(request, "smiles")`` would raise rather than
+    quietly return ``None``. Kept as its own small function — duplicating
+    the shared-field half rather than threading a field list through a
+    common helper — so a change to one endpoint's echo can never silently
+    move the other's.
+    """
+    echo: dict[str, object] = {}
+    for field in ("formula", "charge", "multiplicity"):
+        value = getattr(request, field)
+        if value is not None:
+            echo[field] = value
+    if request.electronic_state_kind is not None:
+        echo["electronic_state_kind"] = request.electronic_state_kind.value
+    if request.species_entry_kind is not None:
+        echo["species_entry_kind"] = request.species_entry_kind.value
+    if request.min_review_status is not None:
+        echo["min_review_status"] = request.min_review_status.value
+    if request.include_rejected:
+        echo["include_rejected"] = True
+    if request.include_deprecated:
+        echo["include_deprecated"] = True
+    return echo
+
+
+def _empty_browse_response(
+    request: SpeciesBrowseRequest,
+    includes: set[str],
+    offset: int,
+    limit: int,
+) -> ScientificSpeciesBrowseResponse:
+    return ScientificSpeciesBrowseResponse(
+        request=RequestEcho(
+            filter=_browse_filter_echo(request),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),

@@ -6,6 +6,7 @@ provenance) lives in ``app/services/scientific_read``.
 
 Sub-routers:
     species.router          → /scientific/species/search
+    species_browse.router   → /scientific/species/browse
     reactions.router        → /scientific/reactions/search (GET, POST)
     kinetics.router         → /scientific/reaction-entries/{id}/kinetics
     thermo.router           → /scientific/species-entries/{id}/thermo
@@ -55,6 +56,7 @@ from app.api.routes.scientific import (
     reactions,
     releases,
     species,
+    species_browse,
     species_calculations_search,
     species_subresources,
     statmech,
@@ -77,6 +79,11 @@ scientific_router = APIRouter(dependencies=[Depends(resolve_profile_dependency)]
 # added under the species namespace.
 scientific_router.include_router(structure.router)
 scientific_router.include_router(species.router)
+# Identifier-free catalogue read, registered right after the identity
+# search it deliberately does not modify. Distinct static path
+# (``/species/browse`` vs ``/species/search``); no route-ordering
+# constraint between the two.
+scientific_router.include_router(species_browse.router)
 scientific_router.include_router(reactions.router)
 scientific_router.include_router(kinetics.router)
 scientific_router.include_router(thermo.router)
