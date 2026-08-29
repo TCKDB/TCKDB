@@ -221,7 +221,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/species", "Species", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
-    ["/conformer-observations/cfo_abc", "cfo_abc", "cfo_abc"],
+    ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
     ["/calculations/calc_abc", "Calculation", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     ["/reactions", "Reactions", undefined],
@@ -258,6 +258,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
                 record: {
                     conformer_observation: {
                         conformer_observation_ref: "cfo_abc",
+                        scientific_origin: "computed",
                         review: { status: "not_reviewed" },
                     },
                     conformer_group: {

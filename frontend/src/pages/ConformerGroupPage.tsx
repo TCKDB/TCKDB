@@ -1,6 +1,7 @@
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import type { ConformerGroup } from "../api/conformerGroupApi"
+import { RecordStatus } from "../components/RecordStatus"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
 const lotLabel = (value: { method: string; basis?: string | null; display?: string }) => (
@@ -14,35 +15,14 @@ export default function ConformerGroupPage() {
     const { groupRef = "" } = useParams<{ groupRef: string }>()
     const state = useConformerGroup(groupRef)
 
-    if (state.status === "loading") return <State title="Loading conformer basin…" busy />
-    if (state.status !== "ready") {
-        const title = state.status === "missing"
-            ? "Conformer basin not found"
-            : "Conformer basin unavailable"
-        return <State title={title} ref={groupRef} alert={state.status !== "missing"} />
-    }
-    return <Ledger group={state.group} />
-}
-
-function State({ title, ref, busy, alert }: {
-    title: string
-    ref?: string
-    busy?: boolean
-    alert?: boolean
-}) {
-    const message = busy
-        ? "Retrieving the conformer basin and its deposited evidence."
-        : alert
-            ? "The archive response could not be read. Try again later."
-            : "No conformer group with this stable reference is available in this archive projection."
-
+    if (state.status === "ready") return <Ledger group={state.record} />
     return (
-        <section className="record-placeholder" aria-busy={busy} role={alert ? "alert" : undefined}>
-            <p className="eyebrow">Archive record</p>
-            <h1>{title}</h1>
-            {ref && <code>{ref}</code>}
-            <p>{message}</p>
-        </section>
+        <RecordStatus
+            state={state}
+            ref={groupRef}
+            kind="conformer basin"
+            loadingDetail="Retrieving the conformer basin and its deposited evidence."
+        />
     )
 }
 
