@@ -55,7 +55,8 @@ provenance and machine detail live on dedicated linked pages.
 
 1. Species overview with grouped electronic-state entries and exact-search
    routing (implemented in PRs #264–#265).
-2. Conformer-basin evidence ledger and observation detail.
+2. Conformer-basin evidence ledger (implemented in PR #263) and observation
+   detail (implemented in PR #270).
 3. Calculation detail with opt-in results/dependency projections.
 4. Geometry detail with coordinates, validation, and the 3D viewer.
 5. Complete thermo/statmech/transport detail pages and broader indexes.
