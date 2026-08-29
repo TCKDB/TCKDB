@@ -629,12 +629,24 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
  *
  * This is the first surface in the project where content arrives after a
  * user gesture rather than on page load, so there is no accessible-live-
- * region precedent to inherit here — opening the disclosure moves focus to
- * `<summary>` and then swaps its content out from under the user with no
- * signal a screen reader can pick up on its own. All four states
- * (idle/loading/error/ready) render inside one persistent
- * `role="status" aria-live="polite"` node so the DOM node announcing
- * changes never itself gets removed and replaced — only its content does.
+ * region precedent to inherit here. The live region is a short status
+ * *sentence*, not a wrapper around the fetched payload:
+ * `role="status"` carries an implicit `aria-atomic="true"`, so a live
+ * region that contained the payload itself would have an assistive
+ * technology re-speak the *entire* region on every change — for
+ * `freq_modes` on a large molecule, that is dozens of rows of numbers
+ * read aloud unprompted the moment a fetch resolves. Announcing "<heading>
+ * loaded." and rendering the actual table/list as an ordinary sibling
+ * (outside the live region) gives the same "something happened" signal
+ * without forcing a full read-out of a payload the user is about to
+ * navigate as a table on their own terms.
+ *
+ * The error state also uses `role="status"` (polite), not `role="alert"`
+ * (assertive) nested inside it: nesting a live region inside another is
+ * discouraged — announcement behaviour is implementation-defined across
+ * assistive technologies and double-announcement is a common outcome —
+ * and an assertive interrupt is not warranted here anyway, since the user
+ * just requested this section and is already attending to it.
  */
 function LazySection<T>({
     heading, available, notAvailableText, state, onOpen, children,
@@ -663,18 +675,13 @@ function LazySection<T>({
             }}
         >
             <summary><h2 id={headingId}>{heading}</h2></summary>
-            <div role="status" aria-live="polite">
-                {state.status === "idle" && (
-                    <p className="section-note">Expand to load this section from the archive.</p>
-                )}
-                {state.status === "loading" && (
-                    <p className="section-note" aria-busy="true">Loading</p>
-                )}
-                {state.status === "error" && (
-                    <p className="section-note" role="alert">{state.message}</p>
-                )}
-                {state.status === "ready" && children(state.data)}
-            </div>
+            <p className="section-note" role="status">
+                {state.status === "idle" && "Expand to load this section from the archive."}
+                {state.status === "loading" && "Loading…"}
+                {state.status === "error" && state.message}
+                {state.status === "ready" && `${heading} loaded.`}
+            </p>
+            {state.status === "ready" && children(state.data)}
         </details>
     )
 }
@@ -769,12 +776,16 @@ function GeometryValidationSection({ calculationRef, available }: { calculationR
                 return (
                     <>
                         <p className="section-note">
-                            <code>formula_matches</code> compares molecular formula only, not full structural
-                            isomorphism — it can read true for a rearranged or dissociated structure.
+                            <code>is_isomorphic</code> and <code>formula_matches</code> below are the same
+                            stored verdict under two names — despite the name, neither claims full
+                            structural isomorphism, only that per-element atom counts match the declared
+                            formula. It can read true for a rearranged or dissociated structure; prefer
+                            reading it as <code>formula_matches</code>.
                         </p>
                         <KVList pairs={[
                             ["Status", statusLabel(row.validation_status)],
                             ["Formula matches", boolLabel(row.formula_matches)],
+                            ["is_isomorphic (legacy name, same value)", boolLabel(row.is_isomorphic ?? row.formula_matches)],
                             ["RMSD", row.rmsd ?? "Not recorded"],
                             ["Reason", row.validation_reason ?? "Not recorded"],
                             [

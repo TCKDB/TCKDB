@@ -275,6 +275,12 @@ const geometryValidationSchema = z.object({
     output_geometry_ref: z.string().nullable().optional(),
     species_smiles: z.string(),
     formula_matches: z.boolean(),
+    // The same boolean under the stored column's original name — see
+    // `CalculationGeometryValidationSummary` on the backend. Kept alongside
+    // `formula_matches` (not replaced by it) because a reader who has only
+    // seen `is_isomorphic` needs to see both to learn they are one value
+    // under two names, one of them a name the check does not live up to.
+    is_isomorphic: z.boolean().optional(),
     rmsd: z.number().nullable().optional(),
     n_mappings: z.number().nullable().optional(),
     validation_status: z.string(),

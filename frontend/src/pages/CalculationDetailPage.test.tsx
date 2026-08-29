@@ -144,6 +144,7 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
             output_geometry_ref: "geom_output_one",
             species_smiles: "[CH3]",
             formula_matches: true,
+            is_isomorphic: true,
             rmsd: 0.01,
             n_mappings: 1,
             validation_status: "passed",
@@ -330,12 +331,20 @@ describe("CalculationDetailPage", () => {
     it("binds each dependency row's relationship, role and related ref together — not from the first row, and not inferred from direction alone", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
+                // Deliberately NOT in role-alphabetical order (the live
+                // archive happens to pre-sort its own edges by role, so a
+                // fixture that mirrored that order verbatim would make a
+                // client-side "sort by role" mutation unobservable — see
+                // the ordering assertion below). Order here is the one
+                // thing under test alongside per-row binding: two edges
+                // share the "parent" direction but have different roles,
+                // so no function of direction alone can produce the right
+                // role for both.
                 dependencies: [
-                    // Matches the live edges measured on
-                    // calc_afsfe4g5xtgiq2yjnutaham5iy (2026-08-29): two
-                    // edges share the "parent" direction but have
-                    // different roles, so no function of direction alone
-                    // can produce the right role for both.
+                    {
+                        role: "single_point_on", direction: "parent",
+                        parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_osrf4pnfcesq6s6somn7nr5hly",
+                    },
                     {
                         role: "freq_on", direction: "parent",
                         parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_rypxkxvsku5x2nk6sqbhhmfcla",
@@ -343,10 +352,6 @@ describe("CalculationDetailPage", () => {
                     {
                         role: "optimized_from", direction: "child",
                         parent_calculation_ref: "calc_htgb7s5nakuw52eqhcxpvilpoq", child_calculation_ref: "calc_freq_one",
-                    },
-                    {
-                        role: "single_point_on", direction: "parent",
-                        parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_osrf4pnfcesq6s6somn7nr5hly",
                     },
                 ],
             }),
@@ -373,6 +378,18 @@ describe("CalculationDetailPage", () => {
         // direction) but must not share a role: this is what a
         // direction-only inference of role cannot produce.
         expect(within(spRow).queryByText("frequency on")).not.toBeInTheDocument()
+
+        // Row order is read verbatim from the payload, not re-derived by
+        // sorting on role (or on anything else) — the slice rule again:
+        // no relationship, including ordering, may be fabricated
+        // client-side. Header row excluded via slice(1).
+        const rows = within(depSection).getAllByRole("row").slice(1)
+        const relatedRefs = rows.map((row) => within(row).getByRole("link").textContent)
+        expect(relatedRefs).toEqual([
+            "calc_osrf4pnfcesq6s6somn7nr5hly", // single_point_on, first in the payload
+            "calc_rypxkxvsku5x2nk6sqbhhmfcla", // freq_on, second in the payload
+            "calc_htgb7s5nakuw52eqhcxpvilpoq", // optimized_from, third in the payload
+        ])
     })
 
     it("reports a check as recorded/not recorded, never as a pass/fail verdict, on the summary card", async () => {
@@ -446,14 +463,20 @@ describe("CalculationDetailPage", () => {
         page()
         await screen.findByRole("heading", { name: "Frequency calculation" })
         fireEvent.click(screen.getByRole("heading", { name: "Geometry validation" }))
-        // The caveat sentence's text is split across a <code> boundary
-        // ("formula_matches" is a <code> child of the <p>), so this matches
-        // on the paragraph's combined textContent rather than a substring
-        // that would need to fall entirely within one text node.
-        expect(await screen.findByText(
+        // The caveat sentence's text is split across several <code>
+        // boundaries, so this matches on the paragraph's combined
+        // textContent rather than a substring that would need to fall
+        // entirely within one text node.
+        const caveat = await screen.findByText(
             (_, element) => element?.tagName === "P"
-                && (element.textContent ?? "").includes("formula_matches compares molecular formula only"),
-        )).toBeVisible()
+                && (element.textContent ?? "").includes("is_isomorphic")
+                && (element.textContent ?? "").includes("formula_matches")
+                && (element.textContent ?? "").includes("same stored verdict under two names"),
+        )
+        expect(caveat).toBeVisible()
+        // is_isomorphic is shown, not silently dropped, alongside the
+        // preferred formula_matches name for the same value.
+        expect(screen.getByText("is_isomorphic (legacy name, same value)")).toBeVisible()
 
         expect(requestedIncludeSets).toEqual([
             ["results", "dependencies", "review", "input_geometries", "output_geometries"],
@@ -461,7 +484,7 @@ describe("CalculationDetailPage", () => {
         ])
     })
 
-    it("gives a failed section fetch its own alert, distinct from every empty state", async () => {
+    it("gives a failed section fetch its own status message, distinct from every empty state", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             const includes = new URL(request.url).searchParams.getAll("include")
             if (includes.includes("parameters")) {
@@ -475,14 +498,24 @@ describe("CalculationDetailPage", () => {
         const section = screen.getByRole("heading", { name: "Parsed parameters" }).closest("details") as HTMLElement
         fireEvent.click(screen.getByRole("heading", { name: "Parsed parameters" }))
 
-        const alert = await within(section).findByRole("alert")
-        expect(alert).toBeVisible()
+        // The live region is `role="status"` for every state (idle,
+        // loading, error, ready alike — see LazySection's docstring for
+        // why an assertive `role="alert"` nested in it was dropped), so
+        // that same node exists from the very first render (currently
+        // showing "Loading…") — `findByRole("status")` would resolve
+        // immediately against that, before the fetch settles. Waiting for
+        // the error message's own text is what actually waits for the
+        // fetch to fail.
+        const status = await within(section).findByText("internal error")
+        expect(status.getAttribute("role")).toBe("status")
         // A transient outage must never read the same as "the archive was
         // asked and has nothing to say" — the single worst outcome on this
         // page, since it reads as the calculation carrying no evidence
         // rather than as a request that failed.
         expect(within(section).queryByText(/The archive returned no parameter rows/)).not.toBeInTheDocument()
         expect(within(section).queryByText(/no execution parameters were parsed/i)).not.toBeInTheDocument()
+        // Nor may it read as success.
+        expect(within(section).queryByText("Parsed parameters loaded.")).not.toBeInTheDocument()
     })
 
     it("renders a section available_sections marks empty as a static line, with no disclosure to open", async () => {
