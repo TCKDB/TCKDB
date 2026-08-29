@@ -128,6 +128,20 @@ function codeAfter(container: HTMLElement, precedingText: string): string {
     throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
 }
 
+/**
+ * Reads the text of the `<td data-label="...">` cell within `row` matching
+ * `label` — column-scoped, not row-scoped. `within(row).getByText(value)`
+ * only proves a value is somewhere in the row; it cannot tell a value under
+ * its correct column from the same value under a swapped one (e.g. Top and
+ * Invalidated transposed). See the identical helper in
+ * `EntryThermoSection.test.tsx`.
+ */
+function cellAt(row: HTMLElement, label: string): string {
+    const cell = row.querySelector(`td[data-label="${label}"]`)
+    if (!cell) throw new Error(`No <td data-label="${label}"> found in this row`)
+    return cell.textContent ?? ""
+}
+
 function mockResponse(records = mockRecords()) {
     return {
         review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 2 },
@@ -237,15 +251,21 @@ describe("EntryStatmechSection", () => {
                 return HttpResponse.json(mockResponse([
                     baseRecord({
                         available_sections: { ...baseRecord().available_sections, has_torsions: true },
+                        // Top is DELIBERATELY distinct between the two rows
+                        // (not both "methyl") so a Top<->Invalidated column
+                        // swap is observable by value, not merely by
+                        // presence — a fixture where both rows shared one
+                        // Top value could not tell a swap apart from the
+                        // correct rendering.
                         torsions: [
                             {
                                 torsion_index: 0, treatment_kind: "hindered_rotor", symmetry_number: 3,
-                                dimension: 1, top_description: "methyl", invalidated_reason: null, note: null,
+                                dimension: 1, top_description: "methyl-sound", invalidated_reason: null, note: null,
                                 source_scan_calculation_ref: "calc_scan_sound", coordinates: [],
                             },
                             {
                                 torsion_index: 1, treatment_kind: "hindered_rotor", symmetry_number: 3,
-                                dimension: 1, top_description: "methyl", invalidated_reason: "scan did not close",
+                                dimension: 1, top_description: "methyl-bad", invalidated_reason: "scan did not close",
                                 note: null, source_scan_calculation_ref: "calc_scan_bad", coordinates: [],
                             },
                         ],
@@ -266,12 +286,14 @@ describe("EntryStatmechSection", () => {
         const rows = within(table).getAllByRole("row").slice(1)
         const soundRow = rows.find((row) => within(row).queryByText("calc_scan_sound"))!
         const invalidRow = rows.find((row) => within(row).queryByText("calc_scan_bad"))!
-        expect(within(soundRow).getByText("Not invalidated")).toBeVisible()
-        expect(within(invalidRow).getByText("scan did not close")).toBeVisible()
-        // Everything else about the two rows reads identically (same
-        // treatment, dimension, symmetry number) — the invalidated column
-        // is the ONLY place a reader can tell them apart.
-        expect(within(invalidRow).queryByText("Not invalidated")).not.toBeInTheDocument()
+        // Column-scoped, not row-scoped: binds each value to its OWN
+        // column via `data-label`, so a Top<->Invalidated column swap
+        // (values transposed, headers untouched) is caught, not just a
+        // "does this text appear somewhere in the row" check.
+        expect(cellAt(soundRow, "Top")).toBe("methyl-sound")
+        expect(cellAt(soundRow, "Invalidated")).toBe("Not invalidated")
+        expect(cellAt(invalidRow, "Top")).toBe("methyl-bad")
+        expect(cellAt(invalidRow, "Invalidated")).toBe("scan did not close")
     })
 
     it("renders a heavy section as a static, request-free line when no record on the entry has it", async () => {
@@ -289,9 +311,20 @@ describe("EntryStatmechSection", () => {
         expect(requestCount).toBe(1)
     })
 
-    it("states honestly when no statmech records are deposited for this entry", async () => {
+    it("states honestly when no statmech records are deposited for this entry, without noise from six separate empty lazy sections", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([]))))
         page()
         expect(await screen.findByText("No statistical-mechanics records are deposited for this entry.")).toBeVisible()
+        // Pins `StatmechLazySection`'s `if (records.length === 0) return
+        // null` guard: without it, an entry with zero statmech records
+        // would ALSO show six redundant "No X are recorded for any
+        // statmech record on this entry" sections beneath the one honest
+        // empty line above — this asserts that noise is absent.
+        expect(screen.queryByRole("heading", { name: "Source calculations" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Torsions" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Electronic levels" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Frequencies" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Conformer context" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Review history" })).not.toBeInTheDocument()
     })
 })

@@ -12,8 +12,11 @@ import {
 } from "../api/statmechApi"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
+import { LazyRowBody } from "./LazyRowBody"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
+import { SourceCalculationsTable } from "./SourceCalculationsTable"
+import { TorsionsTable } from "./StatmechTorsionsTable"
 import { SupersessionNotice } from "./SupersessionNotice"
 
 // ---------------------------------------------------------------------------
@@ -141,32 +144,7 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
                 onOpen={openSourceCalcs}
                 rowState={(record, data) => arrayRowState(record.available_sections.has_source_calculations, data)}
             >
-                {(_record, rows) => (rows && rows.length > 0 ? (
-                    <div className="table-scroll">
-                        <table className="stage-table" aria-label="Source calculations">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Role</th>
-                                    <th scope="col">Calculation</th>
-                                    <th scope="col">Type</th>
-                                    <th scope="col">Level of theory</th>
-                                    <th scope="col">Review</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((row, index) => (
-                                    <tr key={`source-${row.calculation_ref}-${index}`}>
-                                        <td data-label="Role">{statusLabel(row.role)}</td>
-                                        <td data-label="Calculation"><Link to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
-                                        <td data-label="Type">{statusLabel(row.calculation_type)}</td>
-                                        <td data-label="Level of theory">{row.level_of_theory ? lotLabel(row.level_of_theory) : "Not recorded"}</td>
-                                        <td data-label="Review">{statusLabel(row.review.status)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : <p className="empty-projection">The archive returned no source-calculation rows.</p>)}
+                {(_record, rows) => <SourceCalculationsTable rows={rows} />}
             </StatmechLazySection>
 
             <StatmechLazySection
@@ -178,48 +156,7 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
                 onOpen={openTorsions}
                 rowState={(record, data) => arrayRowState(record.available_sections.has_torsions, data)}
             >
-                {(_record, rows) => (rows && rows.length > 0 ? (
-                    <div className="table-scroll">
-                        {/* `invalidated_reason` is its own column, not folded into "Treatment"
-                            or dropped — a torsion the archive has marked invalid (a scan that
-                            did not close, e.g.) must never look identical to a sound one. A
-                            reader who only sees "hindered rotor / dimension 1 / symmetry 3"
-                            would reasonably conclude the treatment rests on a valid scan; this
-                            column is the one place that assumption gets checked. Same for
-                            `top_description` — both are parsed by `api/statmechApi.ts` and were
-                            previously silently dropped from this table. */}
-                        <table className="stage-table" aria-label="Torsions">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Index</th>
-                                    <th scope="col">Treatment</th>
-                                    <th scope="col">Top</th>
-                                    <th scope="col">Dimension</th>
-                                    <th scope="col">Symmetry number</th>
-                                    <th scope="col">Source scan</th>
-                                    <th scope="col">Invalidated</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((row) => (
-                                    <tr key={`torsion-${row.torsion_index}`}>
-                                        <td data-label="Index">{row.torsion_index}</td>
-                                        <td data-label="Treatment">{row.treatment_kind ? statusLabel(row.treatment_kind) : "Not recorded"}</td>
-                                        <td data-label="Top">{row.top_description ?? "Not recorded"}</td>
-                                        <td data-label="Dimension">{row.dimension}</td>
-                                        <td data-label="Symmetry number">{row.symmetry_number ?? "Not recorded"}</td>
-                                        <td data-label="Source scan">
-                                            {row.source_scan_calculation_ref
-                                                ? <Link to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
-                                                : "Not recorded"}
-                                        </td>
-                                        <td data-label="Invalidated">{row.invalidated_reason ?? "Not invalidated"}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : <p className="empty-projection">The archive returned no torsion rows.</p>)}
+                {(_record, rows) => <TorsionsTable rows={rows} />}
             </StatmechLazySection>
 
             <StatmechLazySection
@@ -416,31 +353,6 @@ function scalarRowState<T>(hasFlag: boolean, data: T | null | undefined): "not-p
     if (!hasFlag) return "not-present"
     if (data === null || data === undefined) return "empty"
     return "populated"
-}
-
-/**
- * Defers a `children(record, data)` render-prop call into a real React
- * component's own render, rather than evaluating it inline as a plain JS
- * function call. This is NOT cosmetic: `<SectionErrorBoundary>{children(record,
- * data)}</SectionErrorBoundary>` calls `children(...)` synchronously while
- * `StatmechLazySection` itself is still constructing its own JSX tree — a
- * throw there propagates out of `StatmechLazySection`'s own render function
- * before `SectionErrorBoundary` is ever mounted, so it is not caught by a
- * boundary that only wraps the *result* of the call. Confirmed with a
- * throwaway sandbox test against this exact pattern before writing this
- * component: `{throwing()}` inside `<SectionErrorBoundary>` is NOT caught;
- * `<Wrapper />` where `Wrapper` calls `throwing()` from inside its own
- * render body IS caught. `LazyRowBody` is that wrapper — a genuine
- * descendant component, so `children`'s call happens during React's render
- * phase, inside the boundary's subtree, where the boundary can actually see
- * it throw.
- */
-export function LazyRowBody<T>({ record, data, render }: {
-    record: StatmechRecord
-    data: T
-    render: (record: StatmechRecord, data: T) => ReactNode
-}) {
-    return <>{render(record, data)}</>
 }
 
 function StatmechLazySection<T>({

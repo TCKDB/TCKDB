@@ -2,7 +2,6 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
-import { lotLabel } from "../api/scientificSchemas"
 import {
     loadEntryTransportSection,
     readTransportSectionField,
@@ -12,8 +11,10 @@ import {
 } from "../api/transportApi"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryTransport } from "../hooks/useEntryTransport"
+import { LazyRowBody } from "./LazyRowBody"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
+import { SourceCalculationsTable } from "./SourceCalculationsTable"
 import { SupersessionNotice } from "./SupersessionNotice"
 
 // ---------------------------------------------------------------------------
@@ -139,32 +140,7 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
                 onOpen={openSourceCalcs}
                 rowState={(record, data) => arrayRowState(record.available_sections.has_source_calculations, data)}
             >
-                {(_record, rows) => (rows && rows.length > 0 ? (
-                    <div className="table-scroll">
-                        <table className="stage-table" aria-label="Source calculations">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Role</th>
-                                    <th scope="col">Calculation</th>
-                                    <th scope="col">Type</th>
-                                    <th scope="col">Level of theory</th>
-                                    <th scope="col">Review</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {rows.map((row, index) => (
-                                    <tr key={`source-${row.calculation_ref}-${index}`}>
-                                        <td data-label="Role">{statusLabel(row.role)}</td>
-                                        <td data-label="Calculation"><Link to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
-                                        <td data-label="Type">{statusLabel(row.calculation_type)}</td>
-                                        <td data-label="Level of theory">{row.level_of_theory ? lotLabel(row.level_of_theory) : "Not recorded"}</td>
-                                        <td data-label="Review">{statusLabel(row.review.status)}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : <p className="empty-projection">The archive returned no source-calculation rows.</p>)}
+                {(_record, rows) => <SourceCalculationsTable rows={rows} />}
             </TransportLazySection>
 
             <TransportLazySection
@@ -250,22 +226,6 @@ function arrayRowState<T>(hasFlag: boolean, data: T[] | null | undefined): "not-
     if (!hasFlag) return "not-present"
     if (!data || data.length === 0) return "empty"
     return "populated"
-}
-
-/**
- * Defers a `children(record, data)` render-prop call into a real React
- * component's own render — see the identical `LazyRowBody` in
- * `EntryStatmechSection.tsx` for why this is necessary and not cosmetic:
- * calling `children(...)` inline inside `<SectionErrorBoundary>{...}</SectionErrorBoundary>`
- * throws before the boundary is ever mounted, so a plain inline call is not
- * actually caught.
- */
-export function LazyRowBody<T>({ record, data, render }: {
-    record: TransportRecord
-    data: T
-    render: (record: TransportRecord, data: T) => ReactNode
-}) {
-    return <>{render(record, data)}</>
 }
 
 function TransportLazySection<T>({

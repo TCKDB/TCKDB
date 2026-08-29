@@ -183,6 +183,22 @@ function codeAfter(container: HTMLElement, precedingText: string): string {
     throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
 }
 
+/**
+ * Reads the text of the `<td data-label="...">` cell within `row` matching
+ * `label` — column-scoped, not row-scoped. `within(row).getByText(value)`
+ * only proves a value is SOMEWHERE in the row; it cannot tell a value
+ * sitting under its correct column from the same value sitting under a
+ * swapped one (a1/a2 transposed, T min/T max inverted, a Top/Invalidated
+ * column swap). Every table this file renders tags each `<td>` with its own
+ * `data-label`, so this binds a value to the specific column it claims to
+ * be in.
+ */
+function cellAt(row: HTMLElement, label: string): string {
+    const cell = row.querySelector(`td[data-label="${label}"]`)
+    if (!cell) throw new Error(`No <td data-label="${label}"> found in this row`)
+    return cell.textContent ?? ""
+}
+
 describe("EntryThermoSection", () => {
     it("renders every deposited record independently — never merges, never picks one", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
@@ -225,6 +241,43 @@ describe("EntryThermoSection", () => {
         const highCells = within(highRow).getAllByRole("cell").slice(1).map((cell) => cell.textContent)
         expect(lowCells).toEqual(["1", "2", "3", "4", "5", "6", "7"])
         expect(highCells).toEqual(["8", "9", "10", "11", "12", "13", "14"])
+    })
+
+    it("binds NASA-7's T-low and T-high scalars to their own labelled row — never swapped", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        // thm_alpha's fixture: t_low: 100, t_mid: 1000, t_high: 3000 — three
+        // distinct values, so a T-low/T-high swap is observable.
+        expect(ddFor(alphaCard, "T low (K)")).toBe("100")
+        expect(ddFor(alphaCard, "T mid (K)")).toBe("1000")
+        expect(ddFor(alphaCard, "T high (K)")).toBe("3000")
+    })
+
+    it("binds Wilhoit's Cp0 and Cp-infinity to their own labelled row — never swapped", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        const gammaCard = (await screen.findByText("thm_gamma")).closest("article") as HTMLElement
+        // thm_gamma's fixture: cp0_j_mol_k: 33.3, cp_inf_j_mol_k: 99.9.
+        expect(ddFor(gammaCard, "Cp0 (J/mol/K)")).toBe("33.3")
+        expect(ddFor(gammaCard, "Cp∞ (J/mol/K)")).toBe("99.9")
+    })
+
+    it("renders each NASA-9 interval's own row exactly, with a1..a9 in their own columns — never transposed, never with T min/T max inverted", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        const betaCard = (await screen.findByText("thm_beta")).closest("article") as HTMLElement
+        const table = within(betaCard).getByRole("table", { name: /NASA-9 intervals/ })
+        const row = within(table).getAllByRole("row")[1] // header row, then one interval row
+        // thm_beta's fixture: interval_index 0, t_min_k 100, t_max_k 1000,
+        // a1..a9 = 1..9 — twelve distinct values, so any column transposition
+        // (a1<->a2, T min<->T max, or any other pair) is observable.
+        expect(cellAt(row, "Interval")).toBe("0")
+        expect(cellAt(row, "T min (K)")).toBe("100")
+        expect(cellAt(row, "T max (K)")).toBe("1000")
+        for (let index = 1; index <= 9; index += 1) {
+            expect(cellAt(row, `a${index}`)).toBe(String(index))
+        }
     })
 
     it("distinguishes a null nasa9 (no NASA-9 polynomial recorded) from a populated one — never renders it as 'not requested'", async () => {

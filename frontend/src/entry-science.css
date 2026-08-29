@@ -4,24 +4,26 @@
  * record standing in for the entry). Imported alongside `conformer-group.css`
  * for the shared "scientific record ledger" vocabulary (`.ledger-section`,
  * `.ledger-heading`, `.basin-context`, `.stage-table`, `.empty-projection`,
- * `.review-badge`, `.coverage-card`). `.table-scroll` / `.section-note` are
- * byte-identical to the definitions in `geometry-detail.css` /
- * `calculation-detail.css` and are intentionally redefined here rather than
- * imported from those files — this project's stated convention (see the
- * comment above `.section-note` in `geometry-detail.css`) is that a page's
- * own styling should not depend on another page's stylesheet having loaded
- * first.
+ * `.review-badge`, `.coverage-card`). The bare `.table-scroll { overflow-x:
+ * auto }` rule and `.section-note` are byte-identical to the definitions in
+ * `geometry-detail.css` / `calculation-detail.css` and are intentionally
+ * redefined here rather than imported from those files — this project's
+ * stated convention (see the comment above `.section-note` in
+ * `geometry-detail.css`) is that a page's own styling should not depend on
+ * another page's stylesheet having loaded first.
  *
- * `.kv-list` is NOT byte-identical to `calculation-detail.css`'s definition
- * (different margin) and Vite never unloads a route chunk's CSS once
- * injected — so redefining the bare `.kv-list` selector here with a
- * different value would make whichever page loaded last win the cascade for
- * BOTH routes, on every route after the first cross-visit (caught in review
- * before this shipped: it would have regressed the already-merged, live
- * `CalculationDetailPage`). Scoped under `.science-record` instead, which
- * every `.kv-list` on these three tabs is nested inside — see the "why is
- * `.kv-list` scoped and `.table-scroll` isn't" note above `.science-record
- * .kv-list` below.
+ * `.kv-list` — and the later `.table-scroll .stage-table { min-width }`
+ * addition below it — are NOT byte-identical to their counterparts in
+ * `calculation-detail.css` / `geometry-detail.css`, and Vite never unloads
+ * a route chunk's CSS once injected — so redefining either bare selector
+ * here with a different value would make whichever page loaded last win
+ * the cascade for BOTH routes, on every route after the first cross-visit.
+ * (`.kv-list` was caught in review before it shipped; the `min-width` rule
+ * shipped once already scoped to `.table-scroll .stage-table` — still bare
+ * enough to reach `GeometryDetailPage.tsx`'s own `.stage-table`s, live on
+ * the Pi — and was caught in the round after.) Both are scoped under
+ * `.science-record` instead, which every `.kv-list` and `.table-scroll` on
+ * these three tabs is nested inside.
  */
 
 .records-note {
@@ -128,9 +130,41 @@
    to fit its container instead of overflowing it, and numbers like
    `-1.0308e-08` wrap mid-token rather than the container scrolling. A
    minimum width forces the table back past its container so `.table-scroll`
-   has something real to scroll. */
-.table-scroll .stage-table {
+   has something real to scroll.
+   * SCOPED under `.science-record` — `GeometryDetailPage.tsx` wraps its own
+     `.stage-table`s in `.table-scroll` too (`geometry-detail.css`), and
+     that page is live on the Pi. A bare `.table-scroll .stage-table`
+     selector here would reach it the moment a reader visits any
+     species-entry record tab (Vite injects this chunk's CSS and never
+     removes it) — the exact `.kv-list` mistake this file's header already
+     warns about, just 30 lines further down. Every `.table-scroll` this
+     file renders is nested inside a `.science-record` card or lazy-section
+     row (verified: NASA-7/NASA-9/Wilhoit-points/group-additivity/source-
+     calculations/torsions tables all sit inside one), so scoping changes
+     nothing about which elements are styled here.
+   * RESET to `0` under 680px — `conformer-group.css` stacks `.stage-table`
+     into `display: block` label/value rows below that breakpoint precisely
+     so a phone doesn't need horizontal scroll at all; `min-width` still
+     applies to a block box, so leaving 48rem in place there would force
+     every stacked table (these three tabs' AND geometry's) to a phone-
+     unfriendly 768px inside its scroll container, defeating that stacking. */
+.science-record .table-scroll .stage-table {
     min-width: 48rem;
+}
+
+/* Narrower minimum for the tables that only ever have five columns
+   (evaluated points, group-additivity components, source calculations) —
+   48rem is sized for the wide NASA grids and is more than these need even
+   on a narrow desktop window. */
+.science-record .table-scroll--compact .stage-table {
+    min-width: 30rem;
+}
+
+@media (max-width: 680px) {
+    .science-record .table-scroll .stage-table,
+    .science-record .table-scroll--compact .stage-table {
+        min-width: 0;
+    }
 }
 
 .model-block-heading {

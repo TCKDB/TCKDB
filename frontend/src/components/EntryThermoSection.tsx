@@ -280,7 +280,7 @@ function PointsBlock({ points, thermoRef }: { points: ThermoRecord["points"] | n
             {points && points.length > 0 ? (
                 <details>
                     <summary>{points.length} temperature point{points.length === 1 ? "" : "s"}</summary>
-                    <div className="table-scroll">
+                    <div className="table-scroll table-scroll--compact">
                         <table className="stage-table" aria-label={`Evaluated thermo points for ${thermoRef}`}>
                             <thead>
                                 <tr>
@@ -437,7 +437,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
                 <div><dt>Code commit</dt><dd>{groupAdditivity.code_commit ?? "Not recorded"}</dd></div>
             </dl>
             {groupAdditivity.components && groupAdditivity.components.length > 0 && (
-                <div className="table-scroll">
+                <div className="table-scroll table-scroll--compact">
                     <table className="stage-table" aria-label="Group-additivity components">
                         <thead>
                             <tr>
