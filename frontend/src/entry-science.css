@@ -1,0 +1,127 @@
+/*
+ * Shared by EntryThermoSection / EntryStatmechSection / EntryTransportSection
+ * — the three species-entry tabs that render a LIST of records (never one
+ * record standing in for the entry). Imported alongside `conformer-group.css`
+ * for the shared "scientific record ledger" vocabulary (`.ledger-section`,
+ * `.ledger-heading`, `.basin-context`, `.stage-table`, `.empty-projection`,
+ * `.review-badge`, `.coverage-card`). `.kv-list` / `.table-scroll` /
+ * `.section-note` are intentionally redefined here rather than imported from
+ * `calculation-detail.css` / `geometry-detail.css` — this project's stated
+ * convention (see the comment above `.section-note` in `geometry-detail.css`)
+ * is that a page's own styling should not depend on another page's stylesheet
+ * having loaded first.
+ */
+
+.records-note {
+    max-width: 44rem;
+    margin: .6rem 0 2rem;
+    color: #536578;
+    font: .8rem/1.55 var(--mono);
+}
+
+/* One deposited record within a list. Bordered and spaced apart from its
+   siblings so three thermo records read as three separate cards, never one
+   merged answer — the acceptance rule this whole slice is graded on. */
+.science-record {
+    margin-top: 1.75rem;
+    padding: 1.5rem;
+    border: 1px solid #dbe2ea;
+    background: #fff;
+}
+
+.science-record + .science-record {
+    margin-top: 1.75rem;
+}
+
+.science-record-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .75rem;
+    margin: 0 0 1rem;
+}
+
+.science-record-heading h3 {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font: 600 1.35rem var(--serif);
+    letter-spacing: -.03em;
+}
+
+.science-record-heading code {
+    color: #536578;
+    font: .72rem var(--mono);
+}
+
+/* A correction notice — present only on a superseded record. Never a
+   reason to hide the record; styled to stand out, not to alarm. */
+.supersession-notice {
+    margin: 0 0 1.25rem;
+    padding: .85rem 1rem;
+    border: 1px solid #c9a227;
+    background: #fdf6e3;
+    color: #6b5209;
+    font: .8rem/1.55 var(--mono);
+}
+
+.supersession-notice strong {
+    display: block;
+    margin-bottom: .3rem;
+    font: 600 .72rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.section-note {
+    margin: .5rem 0 0;
+    color: #536578;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.section-note[aria-busy="true"]::after { content: "…"; }
+
+.kv-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: .7rem 1.5rem;
+    margin: 1rem 0 0;
+}
+
+.kv-list dt {
+    color: #536578;
+    font: .64rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.kv-list dd {
+    margin: .3rem 0 0;
+    overflow-wrap: anywhere;
+    font: .78rem var(--mono);
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+.model-block-heading {
+    margin: 1.5rem 0 .5rem;
+    font: 600 .8rem var(--mono);
+    letter-spacing: .03em;
+}
+
+.checklist {
+    margin: .75rem 0 0;
+    padding-left: 1.1rem;
+    color: #3c4856;
+    font: .78rem/1.7 var(--mono);
+}
+
+.checklist li::marker {
+    color: #536578;
+}
+
+@media (max-width: 680px) {
+    .kv-list { grid-template-columns: 1fr; }
+}
