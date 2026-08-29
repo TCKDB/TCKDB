@@ -426,19 +426,26 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         // electronic-energy precision the ported digits table actually
         // specifies. `unitOverride: null` because the label already says
         // "(hartree)". `Uncertainty` has no matching entry in that table,
-        // so it stays a raw pass-through rather than a guessed precision.
+        // so it stays a raw pass-through rather than a guessed precision --
+        // same reason `zpe_hartree` below stays raw: it is a different
+        // quantity than `energy_hartree`/`final_energy_hartree` and
+        // `landing.py` never gives it a precision to port.
         pairs.push(["Electronic energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.sp.electronic_energy_hartree, null)} />])
         pairs.push(["Uncertainty (hartree)", results.sp.electronic_energy_uncertainty_hartree ?? "not recorded"])
     } else if (results.kind === "opt" && results.opt) {
         pairs.push(["Converged", boolLabel(results.opt.converged)])
         pairs.push(["Steps", results.opt.n_steps ?? "not recorded"])
-        pairs.push(["Final energy (hartree)", results.opt.final_energy_hartree ?? "not recorded"])
+        // Same physical quantity, same unit, as the sp branch's "Electronic
+        // energy" above -- an `opt` calculation's final energy is still an
+        // electronic energy in hartree, so it gets the same 6dp spec rather
+        // than a raw double under an identically-styled heading.
+        pairs.push(["Final energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.opt.final_energy_hartree, null)} />])
     } else if (results.kind === "freq" && results.freq) {
         pairs.push(["Imaginary modes (n_imag)", results.freq.n_imag ?? "not recorded"])
         pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
         pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "not recorded"])
-        pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "Not designated"])
-        pairs.push(["n_imag at or above tau", results.freq.n_imag_at_or_above_tau ?? "Not determinable"])
+        pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "not designated"])
+        pairs.push(["n_imag at or above tau", results.freq.n_imag_at_or_above_tau ?? "not determinable"])
     } else if (results.kind === "scan" && results.scan) {
         pairs.push(["Dimension", results.scan.dimension ?? "not recorded"])
         pairs.push(["Relaxed scan", boolLabel(results.scan.is_relaxed)])
@@ -1032,7 +1039,7 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable }: {
                                             <td data-label="Mode">{mode.mode_index}</td>
                                             <td data-label="Frequency (cm-1)">{mode.frequency_cm1}</td>
                                             <td data-label="Declared">{mode.declared_disposition ? statusLabel(mode.declared_disposition) : "not recorded"}</td>
-                                            <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "Not determined"}</td>
+                                            <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "not determined"}</td>
                                             <td data-label="Agreement">{statusLabel(mode.agreement)}</td>
                                         </tr>
                                     ))}

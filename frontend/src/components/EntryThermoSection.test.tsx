@@ -266,8 +266,8 @@ describe("EntryThermoSection", () => {
         page()
         const gammaCard = (await screen.findByText("thm_gamma")).closest("article") as HTMLElement
         // thm_gamma's fixture: cp0_j_mol_k: 33.3, cp_inf_j_mol_k: 99.9.
-        expect(ddFor(gammaCard, "Cp0 (J/mol/K)")).toBe("33.3")
-        expect(ddFor(gammaCard, "Cp∞ (J/mol/K)")).toBe("99.9")
+        expect(ddFor(gammaCard, "Cp0 (J/mol·K)")).toBe("33.3")
+        expect(ddFor(gammaCard, "Cp∞ (J/mol·K)")).toBe("99.9")
     })
 
     it("renders each NASA-9 interval's own row exactly, with a1..a9 in their own columns — never transposed, never with T min/T max inverted", async () => {

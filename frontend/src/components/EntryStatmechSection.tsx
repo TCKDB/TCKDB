@@ -313,8 +313,13 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
             {record.frequency_scale_factor && (
                 <p className="section-note">
                     Frequency scale factor <code>{record.frequency_scale_factor.frequency_scale_factor_ref}</code>:
-                    {` ${formatQuantity("statmech_frequency_scale_factor", record.frequency_scale_factor.value)?.value
-                        ?? record.frequency_scale_factor.value} (${statusLabel(record.frequency_scale_factor.scale_kind)})`}
+                    {/* `record.frequency_scale_factor.value` is a non-nullable `z.number()`
+                        (`api/statmechApi.ts:120`), so `formatQuantity` can never return `null`
+                        here -- a `?? record.frequency_scale_factor.value` fallback would be
+                        dead code that, if it ever DID fire, would silently reprint the exact
+                        unrounded-double defect this file exists to fix. The `!` documents the
+                        invariant instead of hiding a false safety net behind it. */}
+                    {` ${formatQuantity("statmech_frequency_scale_factor", record.frequency_scale_factor.value)!.value} (${statusLabel(record.frequency_scale_factor.scale_kind)})`}
                     {record.frequency_scale_factor.level_of_theory ? ` · ${lotLabel(record.frequency_scale_factor.level_of_theory)}` : ""}
                 </p>
             )}

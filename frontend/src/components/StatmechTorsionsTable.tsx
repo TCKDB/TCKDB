@@ -49,7 +49,7 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                                     ? <Link to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
                                     : "not recorded"}
                             </td>
-                            <td data-label="Invalidated">{row.invalidated_reason ?? "Not invalidated"}</td>
+                            <td data-label="Invalidated">{row.invalidated_reason ?? "not invalidated"}</td>
                         </tr>
                     ))}
                 </tbody>

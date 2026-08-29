@@ -105,6 +105,34 @@ describe("formatQuantity / QUANTITY_SPECS", () => {
         expect(formatQuantity("thermo_h298_kj_mol", 143.8942674605864)).toEqual({ value: "143.89", unit: "kJ/mol" })
     })
 
+    it("formats thermo H298 uncertainty at 2dp with kJ/mol, distinct from a 5dp reading", () => {
+        // A digit-count regression (2dp -> 5dp, the review's named mutation)
+        // would render "1.50000" here instead of "1.50" -- this fixture
+        // value has no trailing precision beyond 2dp, so the two shapes are
+        // never accidentally equal.
+        expect(formatQuantity("thermo_h298_uncertainty_kj_mol", 1.5)).toEqual({ value: "1.50", unit: "kJ/mol" })
+    })
+
+    it("formats thermo S298 uncertainty at 2dp with J/mol·K, not kJ/mol", () => {
+        // A unit-swap regression (J/mol·K -> kJ/mol, the review's named
+        // mutation) changes the `unit` field but leaves `value` alone, so
+        // this asserts the full object rather than only the numeric string.
+        expect(formatQuantity("thermo_s298_uncertainty_j_mol_k", 2.5)).toEqual({ value: "2.50", unit: "J/mol·K" })
+    })
+
+    it("formats transport dipole at 3dp with D, not Å", () => {
+        // A unit-swap regression (D -> Å, the review's named mutation) --
+        // sigma also happens to be 3dp, so only the `unit` field would
+        // expose a spec-table row swap here; asserted explicitly.
+        expect(formatQuantity("transport_dipole_debye", 1.85)).toEqual({ value: "1.850", unit: "D" })
+    })
+
+    it("formats kinetics Ea at 2dp with kJ/mol, distinct from a 7dp reading", () => {
+        // A digit-count regression (2dp -> 7dp, the review's named
+        // mutation) would render "100.0000000" here instead of "100.00".
+        expect(formatQuantity("kinetics_ea_kj_mol", 100)).toEqual({ value: "100.00", unit: "kJ/mol" })
+    })
+
     it("formats the frequency scale factor at 4dp with no unit", () => {
         expect(formatQuantity("statmech_frequency_scale_factor", 0.9887)).toEqual({ value: "0.9887", unit: null })
     })

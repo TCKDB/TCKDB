@@ -187,6 +187,41 @@ describe("EntryStatmechSection", () => {
         expect(ddFor(card, "Optical isomers")).toBe("1")
     })
 
+    it("formats the frequency scale factor at its own 4dp spec, not the 6dp electronic-energy spec", async () => {
+        // 0.98765 rounds to "0.9877" at 4dp but "0.987650" at 6dp -- a
+        // table-row swap (using `calculation_electronic_energy_hartree`
+        // here instead of `statmech_frequency_scale_factor`) produces a
+        // visibly different string, not just a different length.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ statmech: { ...baseRecord().statmech, frequency_scale_factor_value: 0.98765 } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        expect(ddFor(card, "Frequency scale factor")).toBe("0.9877")
+    })
+
+    it("renders Software and Workflow through their own label rules, not stuttered and not swapped", async () => {
+        // software_release's version already opens with its name (the
+        // "Gaussian Gaussian 16" shape); workflow_tool_release's does not.
+        // If the two `<code>Software:</code>`/`<code>Workflow:</code>`
+        // fields were ever swapped to call the wrong helper on the wrong
+        // shaped object (`toolReleaseLabel` reads `.workflow_tool`, which
+        // `software_release` doesn't have), the swapped field would read
+        // "not recorded" instead of the value asserted below.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({
+                software_release: { software_release_ref: "srel_1", software: "Gaussian", version: "Gaussian 16, Revision C.02" },
+                workflow_tool_release: { workflow_tool_release_ref: "wfr_1", workflow_tool: "ARC", version: "2.1.0" },
+            }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        const softwareLine = within(card).getByText(/^Software:/).closest("p") as HTMLElement
+        expect(softwareLine.textContent).toContain("Gaussian 16, Revision C.02")
+        expect(softwareLine.textContent).not.toMatch(/Gaussian Gaussian/)
+        expect(softwareLine.textContent).toContain("ARC 2.1.0")
+    })
+
     it("renders an available on-demand section as idle until opened, and fetches exactly its own token once", async () => {
         const requestedIncludeSets: string[][] = []
         server.use(http.get(ENDPOINT, ({ request }) => {
@@ -291,7 +326,7 @@ describe("EntryStatmechSection", () => {
         // (values transposed, headers untouched) is caught, not just a
         // "does this text appear somewhere in the row" check.
         expect(cellAt(soundRow, "Top")).toBe("methyl-sound")
-        expect(cellAt(soundRow, "Invalidated")).toBe("Not invalidated")
+        expect(cellAt(soundRow, "Invalidated")).toBe("not invalidated")
         expect(cellAt(invalidRow, "Top")).toBe("methyl-bad")
         expect(cellAt(invalidRow, "Invalidated")).toBe("scan did not close")
     })

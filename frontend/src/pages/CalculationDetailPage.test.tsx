@@ -26,6 +26,16 @@ function page() {
 }
 
 /**
+ * Binds a `<dt>` label to its own `<dd>` value by DOM adjacency — see the
+ * identical helper's docstring in `EntryThermoSection.test.tsx`.
+ */
+function ddFor(container: HTMLElement, term: string): string {
+    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
+    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
+    return dt.nextElementSibling?.textContent ?? ""
+}
+
+/**
  * A fully-populated calculation record: a `freq` calculation with a real
  * dependency edge to its parent `opt` (modelled on the live
  * calc_afsfe4g5xtgiq2yjnutaham5iy -> calc_rypxkxvsku5x2nk6sqbhhmfcla
@@ -619,6 +629,65 @@ describe("CalculationDetailPage", () => {
         const notice = within(resultsSection).getByRole("alert")
         expect(notice).toHaveTextContent(/not recognised/)
         expect(resultsSection.querySelector(".kv-list")).toBeNull()
+    })
+
+    it("formats an sp result's electronic energy at its own 6dp spec, not the 4dp frequency-scale-factor spec", async () => {
+        // -76.1234567 rounds to "-76.123457" at 6dp but "-76.1235" at 4dp --
+        // a table-row swap (using `statmech_frequency_scale_factor` here
+        // instead of `calculation_electronic_energy_hartree`) produces a
+        // visibly different string.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                results: {
+                    kind: "sp",
+                    sp: { electronic_energy_hartree: -76.1234567, electronic_energy_uncertainty_hartree: null },
+                    opt: null, freq: null, scan: null, irc: null, path_search: null,
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(ddFor(resultsSection, "Electronic energy (hartree)")).toBe("-76.123457")
+    })
+
+    it("formats an opt result's final energy at the same 6dp spec as an sp result's electronic energy", async () => {
+        // Regression test for the brief's defect #1 surviving in the file
+        // that fixed it: the opt branch used to pass `final_energy_hartree`
+        // through raw.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                results: {
+                    kind: "opt",
+                    opt: { converged: true, n_steps: 12, final_energy_hartree: -76.1234567 },
+                    sp: null, freq: null, scan: null, irc: null, path_search: null,
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(ddFor(resultsSection, "Final energy (hartree)")).toBe("-76.123457")
+    })
+
+    it("binds a scan's min and max electronic energy to their own labelled row — never swapped", async () => {
+        // Distinct 6dp-rounded values in each direction, so a min/max swap
+        // (or a spec-table row swap) is observable from either row alone.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                available_sections: { ...mockRecord().available_sections, has_scan: true },
+                scan: {
+                    dimension: 1, is_relaxed: true, coordinate_count: 1, point_count: 5,
+                    min_electronic_energy_hartree: -76.123456, max_electronic_energy_hartree: -75.987654,
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        fireEvent.click(screen.getByRole("heading", { name: "Scan trajectory" }))
+        const section = (await screen.findByText("Points")).closest(".ledger-section, details") as HTMLElement
+        expect(ddFor(section, "Min electronic energy (hartree)")).toBe("-76.123456")
+        expect(ddFor(section, "Max electronic energy (hartree)")).toBe("-75.987654")
     })
 
     it("renders review history eagerly, without a disclosure", async () => {

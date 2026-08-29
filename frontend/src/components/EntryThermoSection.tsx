@@ -265,12 +265,12 @@ function WilhoitBlock({ wilhoit, thermoRef }: { wilhoit: ThermoRecord["wilhoit"]
             <h4 className="model-block-heading" id={`wilhoit-${thermoRef}`}>Wilhoit form</h4>
             {wilhoit ? (
                 <dl className="kv-list">
-                    <div><dt>Cp0 (J/mol/K)</dt><dd>{wilhoit.cp0_j_mol_k}</dd></div>
-                    <div><dt>Cp∞ (J/mol/K)</dt><dd>{wilhoit.cp_inf_j_mol_k}</dd></div>
+                    <div><dt>Cp0 (J/mol·K)</dt><dd>{wilhoit.cp0_j_mol_k}</dd></div>
+                    <div><dt>Cp∞ (J/mol·K)</dt><dd>{wilhoit.cp_inf_j_mol_k}</dd></div>
                     <div><dt>B (K)</dt><dd>{wilhoit.b_k}</dd></div>
                     <div><dt>a0 / a1 / a2 / a3</dt><dd>{wilhoit.a0}, {wilhoit.a1}, {wilhoit.a2}, {wilhoit.a3}</dd></div>
                     <div><dt>H0 (kJ/mol)</dt><dd>{wilhoit.h0_kj_mol ?? "not recorded"}</dd></div>
-                    <div><dt>S0 (J/mol/K)</dt><dd>{wilhoit.s0_j_mol_k ?? "not recorded"}</dd></div>
+                    <div><dt>S0 (J/mol·K)</dt><dd>{wilhoit.s0_j_mol_k ?? "not recorded"}</dd></div>
                 </dl>
             ) : <p className="empty-projection">No Wilhoit fit recorded for this record.</p>}
         </section>
@@ -289,9 +289,9 @@ function PointsBlock({ points, thermoRef }: { points: ThermoRecord["points"] | n
                             <thead>
                                 <tr>
                                     <th scope="col">T (K)</th>
-                                    <th scope="col">Cp (J/mol/K)</th>
+                                    <th scope="col">Cp (J/mol·K)</th>
                                     <th scope="col">H (kJ/mol)</th>
-                                    <th scope="col">S (J/mol/K)</th>
+                                    <th scope="col">S (J/mol·K)</th>
                                     <th scope="col">G (kJ/mol)</th>
                                 </tr>
                             </thead>
@@ -299,9 +299,9 @@ function PointsBlock({ points, thermoRef }: { points: ThermoRecord["points"] | n
                                 {points.map((point, index) => (
                                     <tr key={`${thermoRef}-point-${index}`}>
                                         <td data-label="T (K)">{point.temperature_k}</td>
-                                        <td data-label="Cp (J/mol/K)">{point.cp_j_mol_k ?? "not recorded"}</td>
+                                        <td data-label="Cp (J/mol·K)">{point.cp_j_mol_k ?? "not recorded"}</td>
                                         <td data-label="H (kJ/mol)">{point.h_kj_mol ?? "not recorded"}</td>
-                                        <td data-label="S (J/mol/K)">{point.s_j_mol_k ?? "not recorded"}</td>
+                                        <td data-label="S (J/mol·K)">{point.s_j_mol_k ?? "not recorded"}</td>
                                         <td data-label="G (kJ/mol)">{point.g_kj_mol ?? "not recorded"}</td>
                                     </tr>
                                 ))}
@@ -445,7 +445,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
                                 <th scope="col">Kind</th>
                                 <th scope="col">Count</th>
                                 <th scope="col">H298 contribution (kJ/mol)</th>
-                                <th scope="col">S298 contribution (J/mol/K)</th>
+                                <th scope="col">S298 contribution (J/mol·K)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -455,7 +455,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
                                     <td data-label="Kind">{component.component_kind}</td>
                                     <td data-label="Count">{component.count}</td>
                                     <td data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "not recorded"}</td>
-                                    <td data-label="S298 contribution (J/mol/K)">{component.s298_contribution_j_mol_k ?? "not recorded"}</td>
+                                    <td data-label="S298 contribution (J/mol·K)">{component.s298_contribution_j_mol_k ?? "not recorded"}</td>
                                 </tr>
                             ))}
                         </tbody>

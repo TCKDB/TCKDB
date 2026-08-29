@@ -122,7 +122,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         </dd>
                     </div>
                     <div><dt>Species ref</dt><dd>{species.species_ref}</dd></div>
-                    <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "Not projected"}</dd></div>
+                    <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
                 </dl>
                 {core.note && <p className="observation-note">{core.note}</p>}
             </header>

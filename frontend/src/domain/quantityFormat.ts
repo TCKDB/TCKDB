@@ -59,6 +59,12 @@ export type FillableValue = string | number | Quantity | NamedAbsence | null | u
  * `null`/`undefined` in, `null` out: an absent value is never coerced into
  * `"0.00"`. Digits and unit are the caller's judgement about what this
  * particular quantity supports (see `QUANTITY_SPECS` below).
+ *
+ * Unlike `scientific` below, this does not guard non-finite input — a NaN
+ * renders the literal string `"NaN"`. That is faithful to `landing.py`'s own
+ * `fixed`, which has no such guard either (only its `scientific` does); the
+ * asymmetry is inherited, not introduced here, and is called out rather than
+ * silently "fixed" to avoid diverging from the Python mid-salvage.
  */
 export function fixed(value: number | null | undefined, digits: number, unit?: string | null): Quantity | null {
     if (value === null || value === undefined) return null
@@ -100,7 +106,7 @@ export function scientific(value: number | null | undefined, digits: number, uni
 
 /**
  * What `fillValue` decided to render, for a caller (typically a small React
- * component — see `components/Quantity.tsx`) to turn into markup. This is
+ * component — see `components/QuantityValue.tsx`) to turn into markup. This is
  * the pure half of `landing.py:2725-2760`'s `fillValue`; that function
  * mutated a DOM node directly, which has no equivalent in a React tree, so
  * the dispatch decision is split out here and stays independently testable

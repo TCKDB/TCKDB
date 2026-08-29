@@ -56,7 +56,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             </Link>
                         </dd>
                     </div>
-                    <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "Not projected"}</dd></div>
+                    <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
                 </dl>
             </header>
             <section className="ledger-summary" aria-label="Basin evidence summary">
