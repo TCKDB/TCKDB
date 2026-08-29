@@ -59,7 +59,10 @@ provenance and machine detail live on dedicated linked pages.
    detail (implemented in PR #270).
 3. Calculation detail with opt-in results/dependency projections
    (implemented in PR #271).
-4. Geometry detail with coordinates, validation, and the 3D viewer.
+4. Geometry detail with coordinates, producer/consumer provenance, and an
+   SVG structure projection (implemented in PR #273). Validation is not
+   served by the geometry endpoint; the page points at the producing and
+   consuming calculations that hold it.
 5. Complete thermo/statmech/transport detail pages and broader indexes.
 
 Each slice must use the existing public API where possible, add only bounded
