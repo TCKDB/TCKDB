@@ -57,7 +57,8 @@ provenance and machine detail live on dedicated linked pages.
    routing (implemented in PRs #264–#265).
 2. Conformer-basin evidence ledger (implemented in PR #263) and observation
    detail (implemented in PR #270).
-3. Calculation detail with opt-in results/dependency projections.
+3. Calculation detail with opt-in results/dependency projections
+   (implemented in PR #271).
 4. Geometry detail with coordinates, validation, and the 3D viewer.
 5. Complete thermo/statmech/transport detail pages and broader indexes.
 

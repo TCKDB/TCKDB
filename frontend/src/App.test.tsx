@@ -222,7 +222,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
     ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Calculation", "calc_abc"],
+    ["/calculations/calc_abc", "Single-point calculation", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     ["/reactions", "Reactions", undefined],
     ["/reactions/rxn_abc", "Reaction", "rxn_abc"],
@@ -277,6 +277,43 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
                         has_geometries: false, has_review: false,
                     },
                     observations: [], selections: [], calculations: [], geometries: [], review_history: [],
+                },
+            })))
+        }
+        if (path.startsWith("/calculations/")) {
+            server.use(http.get("/api/v1/scientific/calculations/:ref", () => HttpResponse.json({
+                record: {
+                    calculation: {
+                        calculation_ref: "calc_abc", type: "sp", quality: "raw",
+                        created_at: "2026-07-21T12:06:50.748258",
+                        review: { status: "not_reviewed" },
+                    },
+                    owner: {
+                        kind: "species_entry",
+                        species_entry: {
+                            species_ref: speciesRef, species_entry_ref: entryRef,
+                            canonical_smiles: "[OH2]", inchi_key: "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+                            charge: 0, multiplicity: 1,
+                            species_entry_kind: "minimum", electronic_state_kind: "ground",
+                        },
+                        transition_state_entry: null,
+                    },
+                    level_of_theory: null, software_release: null, workflow_tool_release: null, literature: null,
+                    provenance: {
+                        has_result: false, converged: null,
+                        geometry_validation_status: "not_present", scf_stability_status: "not_present",
+                        submission_ref: null,
+                    },
+                    available_sections: {
+                        has_results: false, has_dependencies: false, has_parameters: false,
+                        has_constraints: false, has_artifacts: false, has_input_geometries: false,
+                        has_output_geometries: false, has_geometry_validation: false, has_scf_stability: false,
+                        has_wavefunction_diagnostic: false, has_spin_diagnostic: false, has_freq_modes: false,
+                        has_hessian: false, has_scan: false, has_irc: false, has_path_search: false,
+                        has_execution_environment: false, has_energy_corrections: false,
+                    },
+                    results: null, dependencies: [], review_history: [],
+                    input_geometries: [], output_geometries: [],
                 },
             })))
         }

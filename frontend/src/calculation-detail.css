@@ -1,0 +1,138 @@
+/*
+ * CalculationDetailPage. Imported alongside `conformer-group.css`, which
+ * already supplies the shared "scientific record ledger" vocabulary this
+ * page reuses verbatim: `.review-badge`, `.ledger-section`,
+ * `.ledger-heading`, `.ledger-summary`, `.metric`, `.coverage-card`,
+ * `.stage-table`, `.empty-projection`, `.geometry-links` / `.geometry-link`.
+ * Only the page-root layout and a few calculation-specific patterns
+ * (the owner card, the on-demand section affordances) live here.
+ */
+
+.calc-page {
+    max-width: 76rem;
+    margin: 0 auto;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+}
+
+.record-header { max-width: 63rem; }
+
+.record-title {
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+}
+
+.record-title h1,
+.owner-card h2,
+.ledger-section h2 {
+    margin: 0;
+    font-family: var(--serif);
+    letter-spacing: -.04em;
+}
+
+.record-title h1 {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: clamp(3rem, 8vw, 5.5rem);
+}
+
+.record-intro {
+    max-width: 44rem;
+    color: #3c4856;
+    font: 1.15rem/1.55 var(--serif);
+}
+
+.record-context {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin: 2rem 0 0;
+    padding: 1rem 0;
+    border-block: 1px solid #dbe2ea;
+}
+
+.record-context dt {
+    color: #536578;
+    font: .64rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.record-context dd {
+    margin: .35rem 0 0;
+    overflow-wrap: anywhere;
+    font: .75rem var(--mono);
+}
+
+.record-context a { color: #205493; text-decoration: underline; text-underline-offset: .16em; }
+
+.owner-card {
+    margin-top: 3.5rem;
+    padding: 1.4rem;
+    border-left: 3px solid #205493;
+    background: #fff;
+}
+
+.owner-card dl {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: .85rem 1.5rem;
+    margin: 1rem 0 0;
+}
+
+.owner-card dt {
+    color: #536578;
+    font: .64rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.owner-card dd {
+    margin: .3rem 0 0;
+    overflow-wrap: anywhere;
+    font: .8rem var(--mono);
+}
+
+.owner-card a { color: #205493; text-decoration: underline; text-underline-offset: .16em; }
+
+/* On-demand ("behind a disclosure") sections. A section
+   `available_sections` already reports empty renders as a plain
+   `.ledger-section` with `.empty-projection` text and no `<details>` at
+   all — there is nothing to expand into, so nothing invites a click. A
+   section that may have data is a real `<details>`; the summary always
+   wraps a real `<h2>` (see `conformer-group.css`'s note on that) so
+   heading-navigation still finds it. */
+.section-note {
+    margin: .5rem 0 0;
+    color: #536578;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.section-note[aria-busy="true"]::after { content: "…"; }
+
+.kv-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: .7rem 1.5rem;
+    margin: 1rem 1.1rem 1.1rem;
+}
+
+.kv-list dt {
+    color: #536578;
+    font: .64rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.kv-list dd {
+    margin: .3rem 0 0;
+    overflow-wrap: anywhere;
+    font: .78rem var(--mono);
+}
+
+@media (max-width: 680px) {
+    .record-context,
+    .owner-card dl,
+    .kv-list { grid-template-columns: 1fr; }
+}

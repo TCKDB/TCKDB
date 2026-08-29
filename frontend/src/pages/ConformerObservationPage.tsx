@@ -1,12 +1,10 @@
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import type { ConformerObservation } from "../api/conformerObservationApi"
+import { lotLabel } from "../api/scientificSchemas"
 import { RecordStatus } from "../components/RecordStatus"
 import { useConformerObservation } from "../hooks/useConformerObservation"
 
-const lotLabel = (value: { method: string; basis?: string | null; display?: string }) => (
-    value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
-)
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
 const originTitle = (origin?: string | null) => (
