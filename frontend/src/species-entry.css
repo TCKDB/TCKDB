@@ -1,197 +1,390 @@
+/*
+ * SpeciesEntryPage — design pass (design/species-entry-proposal).
+ *
+ * Exclusively this page's stylesheet (only `SpeciesEntryPage.tsx` imports
+ * it) so it is free to define its own token system without risk to any
+ * other route. Every rule that touches a class name ALSO defined in
+ * `conformer-group.css` (`.ledger-section`, `.review-badge`,
+ * `.stage-table`, `.empty-projection` — restyled in `entry-science.css`)
+ * is scoped under `.entry-page`, this page's unique wrapper, so it can
+ * never win the cascade on another route even after a client-side
+ * navigation leaves this chunk's CSS injected (Vite never unloads a
+ * route chunk's CSS — see the header comment in `entry-science.css` for
+ * the collision this already bit the project once).
+ *
+ * Token system:
+ *   --evidence   (#205493) — the basin → observation → calculation → geometry
+ *                 lineage: how a result was produced. Same blue the rest of
+ *                 the archive already uses for "theoretical/computed".
+ *   --product    (#8a4a1f) — thermo / statmech / transport: what the entry
+ *                 asserts as a result. New for this page — gives "computed
+ *                 products" a visual identity distinct from "evidence chain"
+ *                 wherever the two appear side by side (chapter nav, ledger
+ *                 headings, record cards).
+ *   --ink/--ink-2/--muted/--faint — text hierarchy (unchanged from the
+ *                 house palette already live on the front door).
+ *   --line/--line-2 — hairlines.
+ * Type: IBM Plex Serif for anything that is a title or a scientific
+ * headline number: IBM Plex Sans for UI chrome and prose; IBM Plex Mono
+ * for every reference, unit, and coefficient — already the house pairing,
+ * reused deliberately rather than reinvented.
+ */
+
 .entry-page {
-    max-width: 76rem;
+    --ink: #16202c;
+    --ink-2: #3c4856;
+    --muted: #6b7888;
+    --faint: #9aa6b3;
+    --line: #dbe2ea;
+    --line-2: #eaeef3;
+    --surface: #ffffff;
+
+    --evidence: #205493;
+    --evidence-700: #173f6e;
+    --evidence-50: #eaf1f8;
+
+    --product: #8a4a1f;
+    --product-700: #6b3416;
+    --product-50: #f7ede1;
+    --product-100: #ecd9c3;
+
+    max-width: 74rem;
     margin: 0 auto;
-    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
 }
 
-.entry-header {
-    max-width: 62rem;
-}
+/* ---------------------------------------------------------------------
+   Hero: chemistry leads. The formula is the largest thing on the page;
+   stable refs are demoted to a quiet strip beneath the facts, present and
+   copyable but never competing with the science for attention.
+   --------------------------------------------------------------------- */
 
-.entry-title {
+.entry-hero { max-width: 56rem; }
+
+.entry-formula-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 1rem;
+    margin-top: .6rem;
 }
 
-.entry-title h1,
-.entry-page h2 {
-    font-family: var(--serif);
-}
-
-.entry-title h1 {
+.entry-formula-row h1 {
     margin: 0;
-    font-size: clamp(3.4rem, 8vw, 6rem);
-    letter-spacing: -.05em;
-}
-
-.state-mark {
-    padding: .25rem .45rem;
-    background: #eaf1f8;
-    color: #173f6e;
-    font: .7rem var(--mono);
-    text-transform: uppercase;
-}
-
-.identity-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    margin: 1.7rem 0 0;
-    border-top: 1px solid #dbe2ea;
-    border-bottom: 1px solid #dbe2ea;
-}
-
-.identity-grid div {
     min-width: 0;
-    padding: .85rem .8rem .85rem 0;
-}
-
-.identity-grid dt,
-.rail-node > span {
-    color: #6b7888;
-    font: .64rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.identity-grid dd {
     overflow-wrap: anywhere;
-    margin: .35rem 0 0;
-    font: .75rem/1.4 var(--mono);
+    font: 600 clamp(3rem, 7.5vw, 5.5rem)/.95 var(--serif);
+    letter-spacing: -.045em;
+    color: var(--ink);
 }
 
-.identity-grid a,
-.rail-links a {
-    color: #205493;
-    text-decoration: underline;
-    text-decoration-color: #b8cce0;
-    text-underline-offset: .16em;
-}
-
-.entry-tabs {
-    display: flex;
-    overflow-x: auto;
-    gap: 1.1rem;
-    margin: 2.3rem 0;
-    padding-bottom: .65rem;
-    border-bottom: 1px solid #dbe2ea;
-}
-
-.entry-tabs a {
-    padding: .25rem 0;
-    color: #3c4856;
-    font-size: .82rem;
+.state-chip {
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink-2);
+    font: .68rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
     white-space: nowrap;
 }
 
-.entry-tabs a[aria-current="page"] {
-    box-shadow: inset 0 -2px #205493;
-    color: #173f6e;
+.entry-smiles { margin: 1.1rem 0 0; }
+
+.entry-smiles code {
+    overflow-wrap: anywhere;
+    padding: .3rem .6rem;
+    border-radius: .35rem;
+    background: var(--evidence-50);
+    color: var(--evidence-700);
+    font: 1.05rem var(--mono);
+}
+
+.entry-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.8rem;
+    margin: 1.6rem 0 0;
+    padding: 1.1rem 0 0;
+    border-top: 1px solid var(--line);
+    list-style: none;
+}
+
+.entry-facts li {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    min-width: 8.5rem;
+}
+
+.entry-facts span {
+    color: var(--muted);
+    font: .64rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.entry-facts strong {
+    overflow-wrap: anywhere;
+    color: var(--ink-2);
+    font: 600 .85rem var(--sans);
+}
+
+.ref-strip {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1.4rem;
+    margin-top: 1.75rem;
+    padding: .8rem 1rem;
+    border: 1px solid var(--line-2);
+    border-radius: .5rem;
+    background: #fbfcfe;
+}
+
+.ref-item {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: .5rem;
+}
+
+.ref-item-label {
+    flex: none;
+    color: var(--faint);
+    font: .6rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+}
+
+.ref-item a,
+.ref-item-value {
+    overflow-wrap: anywhere;
+    font: .72rem var(--mono);
+}
+
+.ref-item-value { color: var(--muted); }
+
+.ref-item a {
+    color: var(--evidence);
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: .16em;
+}
+
+.ref-item a:hover { text-decoration-color: currentColor; }
+
+.copy-button {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: .3rem;
+    background: #fff;
+    color: var(--muted);
+    font: .58rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: .15rem .4rem;
+    cursor: pointer;
+}
+
+.copy-button:hover { border-color: var(--evidence); color: var(--evidence); }
+.copy-button[data-copied="true"] { border-color: var(--evidence); color: var(--evidence-700); }
+
+/* ---------------------------------------------------------------------
+   Chapter navigation. Three named groups instead of a flat tab row: the
+   grouping is the record's real shape (one identity, an evidence chain
+   that explains how, three product ledgers that state what) — not
+   decoration. The active-link accent switches from --evidence to
+   --product when the open chapter is a computed product, so the same
+   color language that separates evidence from product everywhere else on
+   the page also marks which kind of chapter is open.
+   --------------------------------------------------------------------- */
+
+.entry-chapters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2.2rem 2.6rem;
+    margin: 3rem 0;
+    padding-bottom: 1.15rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.chapter-group { min-width: 0; }
+
+.chapter-group-label {
+    margin: 0 0 .55rem;
+    color: var(--faint);
+    font: .6rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .1em;
+}
+
+.chapter-group-links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.15rem;
+}
+
+.entry-chapters a {
+    padding: .2rem 0;
+    color: var(--ink-2);
+    font: 500 .86rem var(--sans);
+    white-space: nowrap;
+}
+
+.entry-chapters a:hover { color: var(--evidence-700); }
+
+.entry-chapters a[aria-current="page"] {
+    box-shadow: inset 0 -2px var(--evidence);
+    color: var(--evidence-700);
     font-weight: 600;
 }
 
-.section-heading {
-    max-width: 43rem;
+.chapter-group:last-child a[aria-current="page"] {
+    box-shadow: inset 0 -2px var(--product);
+    color: var(--product-700);
 }
 
+/* ---------------------------------------------------------------------
+   Section heading rhythm, shared by the overview panels.
+   --------------------------------------------------------------------- */
+
+.section-heading { max-width: 44rem; }
+
 .section-heading h2,
-.entry-panel h2 {
+.methods-panel h2,
+.product-manifest h2 {
     margin: 0;
-    font-size: 2rem;
+    font: 600 1.9rem var(--serif);
     letter-spacing: -.025em;
+    color: var(--ink);
 }
 
 .section-heading > p:last-child,
-.entry-panel > p:not(.eyebrow) {
-    color: #3c4856;
+.methods-panel > p:not(.eyebrow),
+.product-manifest > p:not(.eyebrow) {
+    max-width: 42rem;
+    color: var(--ink-2);
     line-height: 1.6;
 }
 
-.lineage-rail {
+/* ---------------------------------------------------------------------
+   The lineage trail — this page's signature element. A basin produces
+   observations; observations produce calculation stages; stages produce
+   stored geometries. That is a genuine, ordered process (not a decorative
+   sequence), so it earns numbered steps. Every node keeps its own count —
+   deposited observations, calculation rows, and stored geometries are
+   never added together into one figure.
+   --------------------------------------------------------------------- */
+
+.trail {
     display: grid;
-    grid-template-columns: 1.1fr 2rem 1fr 2rem 1.5fr 2rem 1fr;
-    align-items: stretch;
-    gap: .55rem;
-    margin-top: 1.35rem;
-    padding: 1.2rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.85rem;
+    margin: 1.85rem 0 0;
+    padding: 0;
+    list-style: none;
 }
 
-.rail-node {
+.trail-step {
+    position: relative;
+    padding-top: 1.5rem;
+}
+
+.trail-index {
+    position: absolute;
+    top: 0;
+    left: 0;
+    color: var(--faint);
+    font: .68rem var(--mono);
+    letter-spacing: .05em;
+}
+
+.trail-node {
+    position: relative;
     display: flex;
+    height: 100%;
     min-width: 0;
     flex-direction: column;
-    gap: .4rem;
+    gap: .45rem;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: var(--surface);
 }
 
-.rail-node strong {
-    color: #173f6e;
-    font: 600 .9rem var(--sans);
+.trail-step:not(:first-child) .trail-node::before {
+    content: "→";
+    position: absolute;
+    top: 50%;
+    left: -1.5rem;
+    color: var(--faint);
+    font: 1rem var(--mono);
+    transform: translateY(-50%);
 }
 
-.rail-node > a {
-    color: #173f6e;
-    font: 600 1rem var(--serif);
+.trail-node.basin { background: linear-gradient(180deg, #fff 0%, var(--evidence-50) 140%); }
+.trail-node.geometry-node { background: linear-gradient(135deg, #fff 0%, var(--product-50) 150%); }
+
+.trail-label {
+    color: var(--muted);
+    font: .64rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
 
-.rail-node small {
+.trail-node strong {
     overflow-wrap: anywhere;
-    color: #6b7888;
+    color: var(--evidence-700);
+    font: 600 1.65rem var(--serif);
+}
+
+.trail-node > a {
+    overflow-wrap: anywhere;
+    color: var(--evidence-700);
+    font: 600 1.05rem var(--serif);
+}
+
+.trail-node small {
+    overflow-wrap: anywhere;
+    color: var(--muted);
     font: .6rem var(--mono);
 }
 
-.rail-node p,
+.trail-node p,
 .coverage {
     margin: 0;
-    color: #3c4856;
+    color: var(--ink-2);
     font: .68rem/1.45 var(--mono);
 }
 
-.rail-links {
+.trail-links {
     display: grid;
     gap: .28rem;
-    margin-top: .25rem;
+    max-height: 6.5rem;
+    margin-top: .2rem;
+    overflow-y: auto;
 }
 
-.rail-links a {
+.trail-links a {
     overflow-wrap: anywhere;
-    font: .64rem/1.35 var(--mono);
+    color: var(--evidence);
+    font: .62rem/1.35 var(--mono);
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: .14em;
 }
 
-.rail-arrow {
-    position: relative;
-    align-self: center;
-    height: 1px;
-    background: #7ea7cf;
-}
+/* ---------------------------------------------------------------------
+   Methods panel (levels of theory) — evidence-accented, so it reads as
+   part of "how", not "what".
+   --------------------------------------------------------------------- */
 
-.rail-arrow::after {
-    position: absolute;
-    top: -3px;
-    right: 0;
-    border: 3px solid transparent;
-    border-left-color: #7ea7cf;
-    content: "";
-}
-
-.geometry-node {
-    padding: .55rem;
-    background: linear-gradient(135deg, #fff 0%, #eaf1f8 100%);
-}
-
-.empty-projection {
-    margin: 1.35rem 0 0;
-    padding: 1.1rem;
-    border: 1px dashed #b8cce0;
-    background: #fff;
-    color: #6b7888;
-}
-
-.entry-panel {
-    margin-top: 2.5rem;
-    padding: 1.4rem;
-    border-left: 3px solid #205493;
+.methods-panel {
+    margin-top: 3rem;
+    padding: 1.5rem 1.75rem;
+    border-left: 3px solid var(--evidence);
+    border-radius: 0 .4rem .4rem 0;
     background: #fff;
 }
 
@@ -199,82 +392,106 @@
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
     gap: 1rem;
-    margin-top: 1rem;
+    margin-top: 1.1rem;
 }
 
-.lot-grid strong {
-    color: #173f6e;
-    font: .7rem var(--mono);
+.lot-card {
+    padding: .85rem .9rem;
+    border: 1px solid var(--line-2);
+    border-radius: .4rem;
+}
+
+.lot-card strong {
+    color: var(--evidence-700);
+    font: .68rem var(--mono);
     text-transform: uppercase;
+    letter-spacing: .04em;
 }
 
-.lot-grid ul {
-    margin: .45rem 0 0;
+.lot-card ul {
+    margin: .5rem 0 0;
     padding: 0;
     list-style: none;
 }
 
-.lot-grid li {
-    margin-top: .25rem;
+.lot-card li {
+    margin-top: .3rem;
+    overflow-wrap: anywhere;
+    color: var(--ink-2);
     font: .76rem var(--mono);
 }
 
-.availability-grid {
+/* ---------------------------------------------------------------------
+   Product manifest (overview-only availability cards). Product-accented —
+   the empty-transport case is designed for directly: a dashed card with
+   the same weight as the two populated ones, not an error state.
+   --------------------------------------------------------------------- */
+
+.product-manifest {
+    margin-top: 3.5rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+}
+
+.manifest-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 1rem;
-    margin-top: 2.5rem;
+    margin-top: 1.3rem;
 }
 
-.availability {
-    min-height: 8rem;
-    padding: 1.15rem;
-    border: 1px solid #dbe2ea;
+.manifest-card {
+    display: flex;
+    min-height: 8.5rem;
+    flex-direction: column;
+    gap: .65rem;
+    padding: 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
     background: #fff;
 }
 
-.availability strong {
-    display: block;
-    color: #173f6e;
+.manifest-card.is-available { box-shadow: inset 3px 0 0 var(--product); }
+
+.manifest-card.is-empty {
+    border-style: dashed;
+    border-color: var(--line);
+    background: #fbfbfa;
 }
 
-.availability a,
-.availability p:last-child {
-    display: block;
-    margin-top: .8rem;
-    color: #205493;
-    font-size: .8rem;
+.manifest-card strong { color: var(--ink); font: 600 .95rem var(--sans); }
+
+.manifest-card a {
+    margin-top: auto;
+    color: var(--product);
+    font: 600 .78rem var(--mono);
 }
 
-.availability p:last-child {
-    color: #6b7888;
-    line-height: 1.45;
+.manifest-card p:last-child {
+    margin: 0;
+    color: var(--muted);
+    font-size: .82rem;
+    line-height: 1.5;
+}
+
+@media (max-width: 900px) {
+    .trail { grid-template-columns: repeat(2, 1fr); gap: 1.75rem 1.5rem; }
+    .trail-step:nth-child(3) .trail-node::before,
+    .trail-step:nth-child(1) .trail-node::before { display: none; }
+    .manifest-grid { grid-template-columns: 1fr 1fr; }
 }
 
 @media (max-width: 680px) {
-    .availability-grid,
-    .lineage-rail {
-        grid-template-columns: 1fr;
+    .trail { grid-template-columns: 1fr; }
+
+    .trail-step:not(:first-child) .trail-node::before {
+        top: -1.35rem;
+        left: 50%;
+        content: "↓";
+        transform: translateX(-50%);
     }
 
-    .identity-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .rail-arrow {
-        width: 1px;
-        height: 1.3rem;
-        justify-self: center;
-    }
-
-    .rail-arrow::after {
-        top: auto;
-        right: -3px;
-        bottom: 0;
-        border-color: #7ea7cf transparent transparent;
-    }
-
-    .entry-tabs {
-        gap: .8rem;
-    }
+    .entry-facts { gap: .85rem 1.2rem; }
+    .manifest-grid { grid-template-columns: 1fr; }
+    .entry-chapters { gap: 1.5rem 2rem; }
 }
