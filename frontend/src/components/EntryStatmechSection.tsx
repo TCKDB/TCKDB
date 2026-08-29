@@ -180,14 +180,24 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
             >
                 {(_record, rows) => (rows && rows.length > 0 ? (
                     <div className="table-scroll">
+                        {/* `invalidated_reason` is its own column, not folded into "Treatment"
+                            or dropped — a torsion the archive has marked invalid (a scan that
+                            did not close, e.g.) must never look identical to a sound one. A
+                            reader who only sees "hindered rotor / dimension 1 / symmetry 3"
+                            would reasonably conclude the treatment rests on a valid scan; this
+                            column is the one place that assumption gets checked. Same for
+                            `top_description` — both are parsed by `api/statmechApi.ts` and were
+                            previously silently dropped from this table. */}
                         <table className="stage-table" aria-label="Torsions">
                             <thead>
                                 <tr>
                                     <th scope="col">Index</th>
                                     <th scope="col">Treatment</th>
+                                    <th scope="col">Top</th>
                                     <th scope="col">Dimension</th>
                                     <th scope="col">Symmetry number</th>
                                     <th scope="col">Source scan</th>
+                                    <th scope="col">Invalidated</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -195,6 +205,7 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
                                     <tr key={`torsion-${row.torsion_index}`}>
                                         <td data-label="Index">{row.torsion_index}</td>
                                         <td data-label="Treatment">{row.treatment_kind ? statusLabel(row.treatment_kind) : "Not recorded"}</td>
+                                        <td data-label="Top">{row.top_description ?? "Not recorded"}</td>
                                         <td data-label="Dimension">{row.dimension}</td>
                                         <td data-label="Symmetry number">{row.symmetry_number ?? "Not recorded"}</td>
                                         <td data-label="Source scan">
@@ -202,6 +213,7 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
                                                 ? <Link to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
                                                 : "Not recorded"}
                                         </td>
+                                        <td data-label="Invalidated">{row.invalidated_reason ?? "Not invalidated"}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -406,6 +418,31 @@ function scalarRowState<T>(hasFlag: boolean, data: T | null | undefined): "not-p
     return "populated"
 }
 
+/**
+ * Defers a `children(record, data)` render-prop call into a real React
+ * component's own render, rather than evaluating it inline as a plain JS
+ * function call. This is NOT cosmetic: `<SectionErrorBoundary>{children(record,
+ * data)}</SectionErrorBoundary>` calls `children(...)` synchronously while
+ * `StatmechLazySection` itself is still constructing its own JSX tree — a
+ * throw there propagates out of `StatmechLazySection`'s own render function
+ * before `SectionErrorBoundary` is ever mounted, so it is not caught by a
+ * boundary that only wraps the *result* of the call. Confirmed with a
+ * throwaway sandbox test against this exact pattern before writing this
+ * component: `{throwing()}` inside `<SectionErrorBoundary>` is NOT caught;
+ * `<Wrapper />` where `Wrapper` calls `throwing()` from inside its own
+ * render body IS caught. `LazyRowBody` is that wrapper — a genuine
+ * descendant component, so `children`'s call happens during React's render
+ * phase, inside the boundary's subtree, where the boundary can actually see
+ * it throw.
+ */
+export function LazyRowBody<T>({ record, data, render }: {
+    record: StatmechRecord
+    data: T
+    render: (record: StatmechRecord, data: T) => ReactNode
+}) {
+    return <>{render(record, data)}</>
+}
+
 function StatmechLazySection<T>({
     heading, records, available, notAvailableText, state, onOpen, rowState, children,
 }: {
@@ -419,6 +456,10 @@ function StatmechLazySection<T>({
     children: (record: StatmechRecord, data: T) => ReactNode
 }) {
     const headingId = `section-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
+    // An entry with no statmech records at all has nothing for six separate
+    // "No X are recorded…" sections to say beyond what the eager empty
+    // message above already said once. Mirrors `TransportLazySection`.
+    if (records.length === 0) return null
     if (!available) {
         return (
             <section className="ledger-section" aria-labelledby={headingId}>
@@ -449,7 +490,18 @@ function StatmechLazySection<T>({
                             <h3>{ref}</h3>
                         </div>
                         {status === "populated" && data !== undefined
-                            ? children(record, data)
+                            ? (
+                                <SectionErrorBoundary
+                                    fallback={(
+                                        <p className="empty-projection" role="alert">
+                                            This row could not be displayed. Other records and sections on
+                                            this page are unaffected.
+                                        </p>
+                                    )}
+                                >
+                                    <LazyRowBody record={record} data={data} render={children} />
+                                </SectionErrorBoundary>
+                            )
                             : (
                                 <p className="empty-projection">
                                     {status === "not-present"

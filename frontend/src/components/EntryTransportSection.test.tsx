@@ -64,6 +64,29 @@ function mockResponse(records: unknown[] = [mockRecord()]) {
     }
 }
 
+/**
+ * Binds a `<dt>` label to its own `<dd>` value by DOM adjacency — see the
+ * identical helper's docstring in `EntryThermoSection.test.tsx`.
+ */
+function ddFor(container: HTMLElement, term: string): string {
+    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
+    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
+    return dt.nextElementSibling?.textContent ?? ""
+}
+
+/**
+ * Finds the `<code>` element whose immediately preceding text node
+ * contains `precedingText` — see `EntryThermoSection.test.tsx`'s identical
+ * helper for why this is necessary to detect a superseded_by/current swap.
+ */
+function codeAfter(container: HTMLElement, precedingText: string): string {
+    const codes = Array.from(container.querySelectorAll("code"))
+    for (const code of codes) {
+        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
+    }
+    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
+}
+
 describe("EntryTransportSection", () => {
     it("the live zero-transport case: a 200 with an empty list is a real answer, not a load failure", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([]))))
@@ -86,20 +109,36 @@ describe("EntryTransportSection", () => {
         expect(screen.queryByText("No transport records are deposited for this entry.")).not.toBeInTheDocument()
     })
 
-    it("renders a deposited transport record and never hides a superseded one", async () => {
+    it("renders a deposited transport record and never hides or reverses a superseded one", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
             mockRecord({
+                // Distinct refs, chain_length > 1: see the identical note on
+                // EntryStatmechSection.test.tsx's fixture — identical refs
+                // or chain_length: 1 cannot detect a direction reversal or
+                // exercise the "current" sentence at all.
                 supersession: {
-                    superseded_by: "trn_one_v2", current: "trn_one_v2", reason: "corrected sigma",
-                    superseded_at: "2026-08-10T00:00:00", chain_length: 1,
+                    superseded_by: "trn_one_v2", current: "trn_one_v3", reason: "corrected sigma",
+                    superseded_at: "2026-08-10T00:00:00", chain_length: 2,
                 },
             }),
         ]))))
         page()
         await screen.findByText("trn_one")
-        expect(screen.getByText("Superseded")).toBeVisible()
-        expect(screen.getByText(/trn_one_v2/)).toBeVisible()
-        expect(screen.getByText("3.8")).toBeVisible()
+        const card = screen.getByText("trn_one").closest("article") as HTMLElement
+        expect(within(card).getByText("Superseded")).toBeVisible()
+        expect(codeAfter(card, "replaced by")).toBe("trn_one_v2")
+        expect(codeAfter(card, "current record in this chain is")).toBe("trn_one_v3")
+        expect(within(card).getByText("3.8")).toBeVisible()
+    })
+
+    it("binds sigma and epsilon/k to their own labelled row — never swapped", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            mockRecord({ transport: { ...mockRecord().transport, sigma_angstrom: 3.8, epsilon_over_k_k: 250.1 } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
+        expect(ddFor(card, "Sigma (Å)")).toBe("3.8")
+        expect(ddFor(card, "Epsilon / k (K)")).toBe("250.1")
     })
 
     it("fetches an opened on-demand section's own token only, once", async () => {

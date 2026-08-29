@@ -244,6 +244,15 @@ describe.each([
         render(<App />)
         expect(await screen.findByText(content)).toBeVisible()
         expect(screen.getByRole("link", { name: navLabel })).toHaveAttribute("aria-current", "page")
+        // Regression guard: the boolean "View record section" availability
+        // card belongs to the overview tab ONLY. Re-adding
+        // <AvailabilitySection> above a record tab's real component would
+        // restore exactly the placeholder-vs-real-content duplication this
+        // slice removed, and would otherwise ship green — nothing else in
+        // this file checks its absence on a record tab.
+        if (path === "thermo" || path === "statmech" || path === "transport") {
+            expect(screen.queryByRole("link", { name: "View record section" })).not.toBeInTheDocument()
+        }
     })
 })
 

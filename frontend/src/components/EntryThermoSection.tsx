@@ -314,7 +314,21 @@ function EvidenceCompletenessBlock({ completeness, thermoRef }: {
     completeness: ThermoRecord["evidence_completeness"] | null
     thermoRef: string
 }) {
-    if (!completeness) return null
+    // Consistent with `NasaBlock`/`Nasa9Block`/`WilhoitBlock`/`PointsBlock`:
+    // an absent block renders its own heading and an explicit "not
+    // recorded" line, never a silently missing section. In practice this
+    // field is always present on the wire (`evidence_completeness:
+    // EvidenceCompletenessBreakdown`, not `| None`, per
+    // `scientific_thermo.py`) — this branch is defensive, not a real
+    // absence this client expects to see.
+    if (!completeness) {
+        return (
+            <section aria-labelledby={`completeness-${thermoRef}`}>
+                <h4 className="model-block-heading" id={`completeness-${thermoRef}`}>Evidence completeness</h4>
+                <p className="empty-projection">No evidence-completeness breakdown recorded for this record.</p>
+            </section>
+        )
+    }
     return (
         <section aria-labelledby={`completeness-${thermoRef}`}>
             <h4 className="model-block-heading" id={`completeness-${thermoRef}`}>
@@ -333,7 +347,17 @@ function ProvenanceBlock({ provenance, thermoRef }: {
     provenance: ThermoRecord["provenance"] | null
     thermoRef: string
 }) {
-    if (!provenance) return null
+    // Same consistency rule as `EvidenceCompletenessBlock` above — always
+    // present on the wire per `ThermoProvenance` (not `| None`), so this
+    // branch is defensive.
+    if (!provenance) {
+        return (
+            <section aria-labelledby={`provenance-${thermoRef}`}>
+                <h4 className="model-block-heading" id={`provenance-${thermoRef}`}>Provenance</h4>
+                <p className="empty-projection">No provenance block recorded for this record.</p>
+            </section>
+        )
+    }
     return (
         <section aria-labelledby={`provenance-${thermoRef}`}>
             <h4 className="model-block-heading" id={`provenance-${thermoRef}`}>Provenance</h4>
@@ -387,7 +411,20 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
     groupAdditivity: ThermoRecord["group_additivity"] | null
     thermoRef: string
 }) {
-    if (!groupAdditivity) return null
+    // `group_additivity` genuinely is `null` on the wire for any record
+    // that isn't an estimated thermo with an attached GA breakdown (unlike
+    // the two blocks above) — it is named in `_response.py`'s "absent
+    // scientific fact" list alongside nasa/nasa9/wilhoit/points. Consistent
+    // with those siblings: render the heading and an explicit "not
+    // recorded" line rather than omitting the section entirely.
+    if (!groupAdditivity) {
+        return (
+            <section aria-labelledby={`ga-${thermoRef}`}>
+                <h4 className="model-block-heading" id={`ga-${thermoRef}`}>Group-additivity estimation</h4>
+                <p className="empty-projection">No group-additivity estimation recorded for this record.</p>
+            </section>
+        )
+    }
     return (
         <section aria-labelledby={`ga-${thermoRef}`}>
             <h4 className="model-block-heading" id={`ga-${thermoRef}`}>Group-additivity estimation</h4>

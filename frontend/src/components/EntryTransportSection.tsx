@@ -252,6 +252,22 @@ function arrayRowState<T>(hasFlag: boolean, data: T[] | null | undefined): "not-
     return "populated"
 }
 
+/**
+ * Defers a `children(record, data)` render-prop call into a real React
+ * component's own render — see the identical `LazyRowBody` in
+ * `EntryStatmechSection.tsx` for why this is necessary and not cosmetic:
+ * calling `children(...)` inline inside `<SectionErrorBoundary>{...}</SectionErrorBoundary>`
+ * throws before the boundary is ever mounted, so a plain inline call is not
+ * actually caught.
+ */
+export function LazyRowBody<T>({ record, data, render }: {
+    record: TransportRecord
+    data: T
+    render: (record: TransportRecord, data: T) => ReactNode
+}) {
+    return <>{render(record, data)}</>
+}
+
 function TransportLazySection<T>({
     heading, records, available, notAvailableText, state, onOpen, rowState, children,
 }: {
@@ -296,7 +312,18 @@ function TransportLazySection<T>({
                             <h3>{ref}</h3>
                         </div>
                         {status === "populated" && data !== undefined
-                            ? children(record, data)
+                            ? (
+                                <SectionErrorBoundary
+                                    fallback={(
+                                        <p className="empty-projection" role="alert">
+                                            This row could not be displayed. Other records and sections on
+                                            this page are unaffected.
+                                        </p>
+                                    )}
+                                >
+                                    <LazyRowBody record={record} data={data} render={children} />
+                                </SectionErrorBoundary>
+                            )
                             : (
                                 <p className="empty-projection">
                                     {status === "not-present"

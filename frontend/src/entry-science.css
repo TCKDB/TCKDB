@@ -4,12 +4,24 @@
  * record standing in for the entry). Imported alongside `conformer-group.css`
  * for the shared "scientific record ledger" vocabulary (`.ledger-section`,
  * `.ledger-heading`, `.basin-context`, `.stage-table`, `.empty-projection`,
- * `.review-badge`, `.coverage-card`). `.kv-list` / `.table-scroll` /
- * `.section-note` are intentionally redefined here rather than imported from
- * `calculation-detail.css` / `geometry-detail.css` — this project's stated
- * convention (see the comment above `.section-note` in `geometry-detail.css`)
- * is that a page's own styling should not depend on another page's stylesheet
- * having loaded first.
+ * `.review-badge`, `.coverage-card`). `.table-scroll` / `.section-note` are
+ * byte-identical to the definitions in `geometry-detail.css` /
+ * `calculation-detail.css` and are intentionally redefined here rather than
+ * imported from those files — this project's stated convention (see the
+ * comment above `.section-note` in `geometry-detail.css`) is that a page's
+ * own styling should not depend on another page's stylesheet having loaded
+ * first.
+ *
+ * `.kv-list` is NOT byte-identical to `calculation-detail.css`'s definition
+ * (different margin) and Vite never unloads a route chunk's CSS once
+ * injected — so redefining the bare `.kv-list` selector here with a
+ * different value would make whichever page loaded last win the cascade for
+ * BOTH routes, on every route after the first cross-visit (caught in review
+ * before this shipped: it would have regressed the already-merged, live
+ * `CalculationDetailPage`). Scoped under `.science-record` instead, which
+ * every `.kv-list` on these three tabs is nested inside — see the "why is
+ * `.kv-list` scoped and `.table-scroll` isn't" note above `.science-record
+ * .kv-list` below.
  */
 
 .records-note {
@@ -81,21 +93,25 @@
 
 .section-note[aria-busy="true"]::after { content: "…"; }
 
-.kv-list {
+/* Scoped under `.science-record` — see the file header for why the bare
+   `.kv-list` selector is not redefined here. Every `<dl className="kv-list">`
+   on these three tabs is nested inside a `.science-record` card or row, so
+   this scoping changes nothing about which elements are styled. */
+.science-record .kv-list {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
     gap: .7rem 1.5rem;
     margin: 1rem 0 0;
 }
 
-.kv-list dt {
+.science-record .kv-list dt {
     color: #536578;
     font: .64rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
 }
 
-.kv-list dd {
+.science-record .kv-list dd {
     margin: .3rem 0 0;
     overflow-wrap: anywhere;
     font: .78rem var(--mono);
@@ -103,6 +119,18 @@
 
 .table-scroll {
     overflow-x: auto;
+}
+
+/* `.stage-table` (`conformer-group.css`) sets `width: calc(100% - 2.2rem)`
+   with `overflow-wrap: anywhere` on every cell — under auto table layout
+   that lets min-content collapse to about one character per cell, so a
+   wide table (the 12-column NASA-9 grid, the 8-column NASA-7 grid) shrinks
+   to fit its container instead of overflowing it, and numbers like
+   `-1.0308e-08` wrap mid-token rather than the container scrolling. A
+   minimum width forces the table back past its container so `.table-scroll`
+   has something real to scroll. */
+.table-scroll .stage-table {
+    min-width: 48rem;
 }
 
 .model-block-heading {
@@ -123,5 +151,5 @@
 }
 
 @media (max-width: 680px) {
-    .kv-list { grid-template-columns: 1fr; }
+    .science-record .kv-list { grid-template-columns: 1fr; }
 }

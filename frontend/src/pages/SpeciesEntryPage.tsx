@@ -75,7 +75,7 @@ function EntryDocument({ entry, conformers, activeSection }: {
         {(activeSection === "overview" || activeSection === "calculations") && (
             <LevelsOfTheorySection conformers={conformers} />
         )}
-        {activeSection === "overview" && <AvailabilitySection entry={entry} activeSection={activeSection} />}
+        {activeSection === "overview" && <AvailabilitySection entry={entry} />}
         {activeSection === "thermo" && <EntryThermoSection entryRef={entry.species_entry_ref} />}
         {activeSection === "statmech" && <EntryStatmechSection entryRef={entry.species_entry_ref} />}
         {activeSection === "transport" && <EntryTransportSection entryRef={entry.species_entry_ref} />}

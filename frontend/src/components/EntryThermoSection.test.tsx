@@ -133,14 +133,54 @@ function mockRecords() {
     ]
 }
 
-function mockResponse(overrides: { records?: unknown[] } = {}) {
+function mockResponse(overrides: { records?: unknown[]; pagination?: Record<string, number> } = {}) {
     const records = overrides.records ?? mockRecords()
     return {
         species_entry_ref: entryRef,
         review_summary: { approved: 1, under_review: 0, not_reviewed: 2, deprecated: 0, rejected: 0, total: 3 },
         records,
-        pagination: { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
+        pagination: overrides.pagination
+            ?? { offset: 0, limit: 50, returned: records.length, total: records.length, post_collapse_total: records.length },
     }
+}
+
+/**
+ * Binds a `<dt>` label to its own `<dd>` value by DOM adjacency, not by
+ * "is this text present anywhere on the card" — a query that only checks
+ * presence cannot tell a correctly-labelled row from a swapped one (both
+ * put the same two strings somewhere in the same card). Direct DOM
+ * traversal rather than `getByRole("term", ...)`: `<dt>`/`<dd>` do carry
+ * the implicit `term`/`definition` roles here (verified against this
+ * project's aria-query version), but the accessible-name computation for
+ * those roles does not pick up plain text-node content, so a role query
+ * with `{ name }` finds the elements with an empty computed name and never
+ * matches — confirmed with a throwaway sandbox test before writing this.
+ */
+function ddFor(container: HTMLElement, term: string): string {
+    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
+    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
+    return dt.nextElementSibling?.textContent ?? ""
+}
+
+/**
+ * Finds the `<code>` element whose immediately preceding text node
+ * contains `precedingText`, and returns its own text. Used to bind a
+ * supersession pointer to ITS OWN sentence rather than merely asserting
+ * both refs appear somewhere in the notice — `getByText(/thm_beta_v2/)`
+ * matches identically whether `superseded_by`/`current` are rendered in
+ * the correct order or swapped, since both refs are present either way.
+ * A plain-string/regex `getByText` also cannot span the `<p>`/`<code>`
+ * boundary at all here (testing-library's default text matcher reads only
+ * an element's own direct text-node children, not descendant elements —
+ * see the `CalculationDetailPage.test.tsx` caveat-sentence comment for the
+ * same limitation), so this reads the DOM directly instead.
+ */
+function codeAfter(container: HTMLElement, precedingText: string): string {
+    const codes = Array.from(container.querySelectorAll("code"))
+    for (const code of codes) {
+        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
+    }
+    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
 }
 
 describe("EntryThermoSection", () => {
@@ -154,24 +194,37 @@ describe("EntryThermoSection", () => {
         expect(screen.getByText("3 records · review: 1 approved · 2 not reviewed")).toBeVisible()
     })
 
-    it("scopes each record's own H298/S298 to its own card — never shows one record's value on another's row", async () => {
+    it("binds each record's own H298 and S298 to their own labelled row — never a swapped label, never another record's value", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
 
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        expect(within(alphaCard).getByText("111.1 kJ/mol")).toBeVisible()
-        expect(within(alphaCard).queryByText("333.3 kJ/mol")).not.toBeInTheDocument()
-        expect(within(alphaCard).queryByText("555.5 kJ/mol")).not.toBeInTheDocument()
+        expect(ddFor(alphaCard, "H298")).toBe("111.1 kJ/mol")
+        expect(ddFor(alphaCard, "S298")).toBe("222.2 J/mol/K")
 
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
-        expect(within(betaCard).getByText("333.3 kJ/mol")).toBeVisible()
-        expect(within(betaCard).queryByText("111.1 kJ/mol")).not.toBeInTheDocument()
+        expect(ddFor(betaCard, "H298")).toBe("333.3 kJ/mol")
+        expect(ddFor(betaCard, "S298")).toBe("444.4 J/mol/K")
 
         const gammaCard = screen.getByText("thm_gamma").closest("article") as HTMLElement
-        expect(within(gammaCard).getByText("555.5 kJ/mol")).toBeVisible()
-        expect(within(gammaCard).queryByText("111.1 kJ/mol")).not.toBeInTheDocument()
-        expect(within(gammaCard).queryByText("333.3 kJ/mol")).not.toBeInTheDocument()
+        expect(ddFor(gammaCard, "H298")).toBe("555.5 kJ/mol")
+        expect(ddFor(gammaCard, "S298")).toBe("666.6 J/mol/K")
+    })
+
+    it("renders the NASA-7 low- and high-temperature coefficient rows in their own row, unswapped", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
+        const table = within(alphaCard).getByRole("table", { name: /NASA-7 coefficients/ })
+        const rows = within(table).getAllByRole("row").slice(1) // drop header row
+        const lowRow = rows.find((row) => within(row).queryByText("Low"))!
+        const highRow = rows.find((row) => within(row).queryByText("High"))!
+        const lowCells = within(lowRow).getAllByRole("cell").slice(1).map((cell) => cell.textContent)
+        const highCells = within(highRow).getAllByRole("cell").slice(1).map((cell) => cell.textContent)
+        expect(lowCells).toEqual(["1", "2", "3", "4", "5", "6", "7"])
+        expect(highCells).toEqual(["8", "9", "10", "11", "12", "13", "14"])
     })
 
     it("distinguishes a null nasa9 (no NASA-9 polynomial recorded) from a populated one — never renders it as 'not requested'", async () => {
@@ -205,8 +258,14 @@ describe("EntryThermoSection", () => {
 
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
         expect(within(betaCard).getByText("Superseded")).toBeVisible()
-        expect(within(betaCard).getByText(/thm_beta_v2/)).toBeVisible()
-        expect(within(betaCard).getByText(/thm_beta_v3/)).toBeVisible()
+        // Position-bound, not "both refs appear somewhere": superseded_by
+        // must be the ref in the "replaced by" sentence and current must be
+        // the ref in the "current record in this chain is" sentence — a
+        // direction swap (superseded_by <-> current) renders identically
+        // under a presence-only check, since both refs are on the card
+        // either way. See `codeAfter`'s docstring.
+        expect(codeAfter(betaCard, "replaced by")).toBe("thm_beta_v2")
+        expect(codeAfter(betaCard, "current record in this chain is")).toBe("thm_beta_v3")
         expect(within(betaCard).getByText(/corrected transcription error/)).toBeVisible()
         // The record's own data is still fully present, not replaced by the notice.
         expect(within(betaCard).getByText("333.3 kJ/mol")).toBeVisible()
@@ -216,7 +275,7 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Superseded")).not.toBeInTheDocument()
     })
 
-    it("renders group-additivity provenance only for the record that has it", async () => {
+    it("renders group-additivity provenance data only for the record that has it, but the section itself (with an explicit absence line) on every record", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_beta")
@@ -224,8 +283,13 @@ describe("EntryThermoSection", () => {
         expect(within(betaCard).getByText("Benson v2 (2.0)")).toBeVisible()
         expect(within(betaCard).getByText("C/H3")).toBeVisible()
 
+        // thm_alpha has group_additivity: null — an absent scientific fact,
+        // consistent with nasa/nasa9/wilhoit/points: the section heading
+        // still renders, with an explicit "not recorded" line rather than
+        // being silently omitted.
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        expect(within(alphaCard).queryByText(/Group-additivity estimation/)).not.toBeInTheDocument()
+        expect(within(alphaCard).getByText("Group-additivity estimation")).toBeVisible()
+        expect(within(alphaCard).getByText("No group-additivity estimation recorded for this record.")).toBeVisible()
     })
 
     it("links calculation provenance refs to their calculation detail pages, and leaves the un-paged statmech ref as text", async () => {
@@ -255,5 +319,18 @@ describe("EntryThermoSection", () => {
         page()
         expect(screen.getByRole("heading", { name: "Loading thermochemistry…" })).toBeVisible()
         expect(await screen.findByRole("heading", { name: "Thermochemistry not found" })).toBeVisible()
+    })
+
+    it("shows the '(showing M)' honesty note only when returned is short of total, with the real deposit total as the headline count", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({
+            records: mockRecords().slice(0, 2),
+            pagination: { offset: 0, limit: 2, returned: 2, total: 5, post_collapse_total: 5 },
+        }))))
+        page()
+        // "5 records" is the deposit total (`pagination.total`), never
+        // `pagination.returned` (2) printed in its place — that swap would
+        // silently delete this note's entire reason for existing.
+        expect(await screen.findByText("5 records (showing 2) · review: 1 approved · 2 not reviewed")).toBeVisible()
+        expect(screen.queryByText(/^2 records/)).not.toBeInTheDocument()
     })
 })

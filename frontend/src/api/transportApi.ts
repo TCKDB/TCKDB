@@ -169,9 +169,11 @@ export type TransportAvailableSections = z.infer<typeof availableSectionsSchema>
 export type TransportListResponse = z.infer<typeof transportListResponseSchema>
 
 function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
+    const base = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/transport`
+    if (tokens.length === 0) return base
     const query = new URLSearchParams()
     for (const token of tokens) query.append("include", token)
-    return `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/transport?${query}`
+    return `${base}?${query}`
 }
 
 /**

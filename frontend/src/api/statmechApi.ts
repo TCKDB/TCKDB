@@ -276,9 +276,11 @@ export type StatmechAvailableSections = z.infer<typeof availableSectionsSchema>
 export type StatmechListResponse = z.infer<typeof statmechListResponseSchema>
 
 function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
+    const base = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/statmech`
+    if (tokens.length === 0) return base
     const query = new URLSearchParams()
     for (const token of tokens) query.append("include", token)
-    return `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/statmech?${query}`
+    return `${base}?${query}`
 }
 
 /**

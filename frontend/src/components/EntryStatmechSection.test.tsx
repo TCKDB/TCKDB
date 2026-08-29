@@ -84,9 +84,16 @@ function mockRecords() {
                 statmech_ref: "sm_two",
                 scientific_origin: "estimated",
             },
+            // Distinct superseded_by/current refs and chain_length > 1: a
+            // fixture where both pointers are the SAME string cannot detect
+            // a direction reversal even in principle (both mutation
+            // outcomes read identically), and chain_length: 1 would never
+            // render the "current" sentence at all (SupersessionNotice only
+            // renders it when chain_length > 1) — see EntryThermoSection's
+            // thm_beta fixture, which this now matches.
             supersession: {
-                superseded_by: "sm_two_v2", current: "sm_two_v2", reason: "refit with new frequencies",
-                superseded_at: "2026-08-10T00:00:00", chain_length: 1,
+                superseded_by: "sm_two_v2", current: "sm_two_v3", reason: "refit with new frequencies",
+                superseded_at: "2026-08-10T00:00:00", chain_length: 2,
             },
             available_sections: {
                 has_source_calculations: true, has_torsions: true, has_electronic_levels: false,
@@ -94,6 +101,31 @@ function mockRecords() {
             },
         }),
     ]
+}
+
+/**
+ * Binds a `<dt>` label to its own `<dd>` value by DOM adjacency — see the
+ * identical helper's docstring in `EntryThermoSection.test.tsx` for why a
+ * presence-only text query cannot tell a correctly-labelled row from a
+ * swapped one, and why `getByRole("term", ...)` does not work here either.
+ */
+function ddFor(container: HTMLElement, term: string): string {
+    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
+    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
+    return dt.nextElementSibling?.textContent ?? ""
+}
+
+/**
+ * Finds the `<code>` element whose immediately preceding text node
+ * contains `precedingText` — see `EntryThermoSection.test.tsx`'s identical
+ * helper for why this is necessary to detect a superseded_by/current swap.
+ */
+function codeAfter(container: HTMLElement, precedingText: string): string {
+    const codes = Array.from(container.querySelectorAll("code"))
+    for (const code of codes) {
+        if ((code.previousSibling?.textContent ?? "").includes(precedingText)) return code.textContent ?? ""
+    }
+    throw new Error(`No <code> immediately preceded by text containing "${precedingText}" found`)
 }
 
 function mockResponse(records = mockRecords()) {
@@ -113,16 +145,32 @@ describe("EntryStatmechSection", () => {
         expect(screen.getByText("sm_two")).toBeVisible()
     })
 
-    it("never hides a superseded record", async () => {
+    it("never hides a superseded record, and never swaps the direction of the correction pointer", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_two")
         const twoCard = screen.getByText("sm_two").closest("article") as HTMLElement
         expect(within(twoCard).getByText("Superseded")).toBeVisible()
-        expect(within(twoCard).getByText(/sm_two_v2/)).toBeVisible()
+        // Position-bound: superseded_by must be the ref in the "replaced
+        // by" sentence, current must be the ref in the "current record in
+        // this chain is" sentence — a direction swap is invisible to a
+        // presence-only "does sm_two_v2 appear somewhere" check, since both
+        // refs are present on the card either way.
+        expect(codeAfter(twoCard, "replaced by")).toBe("sm_two_v2")
+        expect(codeAfter(twoCard, "current record in this chain is")).toBe("sm_two_v3")
 
         const oneCard = screen.getByText("sm_one").closest("article") as HTMLElement
         expect(within(oneCard).queryByText("Superseded")).not.toBeInTheDocument()
+    })
+
+    it("binds each record's external symmetry and optical isomer count to their own labelled row — never swapped", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ statmech: { ...baseRecord().statmech, external_symmetry: 6, optical_isomers: 1 } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        expect(ddFor(card, "External symmetry")).toBe("6")
+        expect(ddFor(card, "Optical isomers")).toBe("1")
     })
 
     it("renders an available on-demand section as idle until opened, and fetches exactly its own token once", async () => {
@@ -180,6 +228,50 @@ describe("EntryStatmechSection", () => {
         const twoRow = within(section).getByText("sm_two").closest("div.science-record") as HTMLElement
         expect(within(twoRow).getByText("hindered rotor")).toBeVisible()
         expect(within(twoRow).getByText("calc_scan_1")).toBeVisible()
+    })
+
+    it("renders invalidated_reason as its own column, never silently dropped — a torsion the archive marked invalid must not look identical to a sound one", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            if (includes.includes("torsions")) {
+                return HttpResponse.json(mockResponse([
+                    baseRecord({
+                        available_sections: { ...baseRecord().available_sections, has_torsions: true },
+                        torsions: [
+                            {
+                                torsion_index: 0, treatment_kind: "hindered_rotor", symmetry_number: 3,
+                                dimension: 1, top_description: "methyl", invalidated_reason: null, note: null,
+                                source_scan_calculation_ref: "calc_scan_sound", coordinates: [],
+                            },
+                            {
+                                torsion_index: 1, treatment_kind: "hindered_rotor", symmetry_number: 3,
+                                dimension: 1, top_description: "methyl", invalidated_reason: "scan did not close",
+                                note: null, source_scan_calculation_ref: "calc_scan_bad", coordinates: [],
+                            },
+                        ],
+                    }),
+                ]))
+            }
+            return HttpResponse.json(mockResponse([baseRecord({
+                available_sections: { ...baseRecord().available_sections, has_torsions: true },
+            })]))
+        }))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
+        const section = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLDetailsElement
+        await within(section).findByText("Torsions loaded.")
+
+        const table = within(section).getByRole("table", { name: "Torsions" })
+        const rows = within(table).getAllByRole("row").slice(1)
+        const soundRow = rows.find((row) => within(row).queryByText("calc_scan_sound"))!
+        const invalidRow = rows.find((row) => within(row).queryByText("calc_scan_bad"))!
+        expect(within(soundRow).getByText("Not invalidated")).toBeVisible()
+        expect(within(invalidRow).getByText("scan did not close")).toBeVisible()
+        // Everything else about the two rows reads identically (same
+        // treatment, dimension, symmetry number) — the invalidated column
+        // is the ONLY place a reader can tell them apart.
+        expect(within(invalidRow).queryByText("Not invalidated")).not.toBeInTheDocument()
     })
 
     it("renders a heavy section as a static, request-free line when no record on the entry has it", async () => {

@@ -63,21 +63,26 @@ export function EntryNavigation({ entryRef, activeSection }: { entryRef: string;
     </nav>
 }
 
-export function AvailabilitySection({ entry, activeSection }: {
-    entry: SpeciesEntryProjection
-    activeSection: EntrySection
-}) {
-    const sections = activeSection === "overview"
-        ? (["thermo", "statmech", "transport"] as const)
-        : [activeSection as "thermo" | "statmech" | "transport"]
+/**
+ * The overview tab's boolean summary card for thermo/statmech/transport —
+ * ONLY ever rendered on the overview tab (`SpeciesEntryPage.tsx` calls this
+ * exclusively when `activeSection === "overview"`; the record tabs render
+ * `EntryThermoSection`/`EntryStatmechSection`/`EntryTransportSection`
+ * instead). Previously took an `activeSection` prop and rendered a narrower
+ * per-tab summary on the record tabs themselves, with a "Detailed records
+ * will be added in a later vertical slice" placeholder for an available-but-
+ * unbuilt section — that promise is false as of this slice (the three
+ * record tabs are built), so the branch and the prop that reached it were
+ * both dropped rather than left as unreachable dead code.
+ */
+export function AvailabilitySection({ entry }: { entry: SpeciesEntryProjection }) {
     return <section className="availability-grid">
-        {sections.map((path) => <Availability
+        {(["thermo", "statmech", "transport"] as const).map((path) => <Availability
             key={path}
             label={sectionLabels[path]}
             available={availabilityFor(entry, path)}
             path={path}
             entryRef={entry.species_entry_ref}
-            summary={activeSection === "overview"}
         />)}
     </section>
 }
@@ -88,20 +93,17 @@ function availabilityFor(entry: SpeciesEntryProjection, path: "thermo" | "statme
     return entry.availability.has_transport
 }
 
-function Availability({ label, available, path, entryRef, summary }: {
+function Availability({ label, available, path, entryRef }: {
     label: string
     available: boolean
     path: "thermo" | "statmech" | "transport"
     entryRef: string
-    summary: boolean
 }) {
     return <section className="availability">
         <p className="eyebrow">{label}</p>
         <strong>{available ? "Available in this entry" : "Unavailable in this entry"}</strong>
-        {available && summary
+        {available
             ? <Link to={`/species-entries/${entryRef}/${path}`}>View record section</Link>
-            : available
-                ? <p>Detailed {label.toLowerCase()} records will be added in a later vertical slice.</p>
-                : <p>No {label.toLowerCase()} record is projected for this entry.</p>}
+            : <p>No {label.toLowerCase()} record is projected for this entry.</p>}
     </section>
 }
