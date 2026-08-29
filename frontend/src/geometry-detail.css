@@ -9,6 +9,20 @@
 
 .geometry-page { max-width: 76rem; }
 
+/* `.section-note` is otherwise defined only in `calculation-detail.css`,
+   which this page does not import — `GeometryViewer` used the class
+   without it, so the bond-inference disclaimer (the one sentence on this
+   page disclaiming fabricated-for-display data) rendered unstyled on a
+   cold load, and inconsistently styled if a reader had `calculation-
+   detail.css` cached from a prior page. Defined here so this page's
+   styling does not depend on load order or navigation history. */
+.section-note {
+    margin: .5rem 0 0;
+    color: #536578;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
 /* Wide numeric tables scroll inside their own container rather than
    forcing the page body to scroll horizontally — the coordinate table's
    own `.stage-table` mobile rule additionally stacks it into label/value

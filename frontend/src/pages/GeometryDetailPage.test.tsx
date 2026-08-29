@@ -29,21 +29,25 @@ function page() {
  * A 5-atom CH4 geometry (modelled on the shape of the live
  * geom_qcnisbgb4abax5oxym3dtjxu34 / geom_or52ifyemdi3eewsjym2fuvo3a
  * fixtures measured against https://tckdb.homecalvin.com). Provenance is
- * deliberately built with THREE producers and THREE consumers, in an
- * order that is not alphabetical by ref and not identical between the
- * two lists — a single-edge fixture cannot distinguish "read this row's
- * own fields" from "always show the first row", and a fixture whose two
+ * deliberately built with TWO producers and THREE consumers, in an order
+ * that is not alphabetical by ref and not identical between the two
+ * lists — a single-edge fixture cannot distinguish "read this row's own
+ * fields" from "always show the first row", and a fixture whose two
  * lists happen to share an order cannot catch a client-side re-sort. One
  * calculation (`calc_opt_two`) is deliberately present in BOTH lists —
  * measured live behaviour (calc_htgb7s5nakuw52eqhcxpvilpoq on
  * geom_or52ifyemdi3eewsjym2fuvo3a), not a hypothetical — so a mutation
  * that merges, sums, or conflates the two lists is observable.
+ *
+ * `geom_hash` is a full 64-character hex string, not a short placeholder
+ * — a fixture short enough to coincidentally survive a `.slice(0, 8)`
+ * truncation mutation cannot prove the page renders the hash in full.
  */
 function mockRecord(overrides: Record<string, unknown> = {}) {
     return {
         geometry_ref: "geom_ch4_one",
         natoms: 5,
-        geom_hash: "hash_ch4",
+        geom_hash: "ab12cd34".repeat(8),
         format: "cartesian",
         coordinate_units: "angstrom",
         symbols: ["C", "H", "H", "H", "H"],
@@ -98,7 +102,11 @@ describe("GeometryDetailPage", () => {
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const context = screen.getByText("Geometry ref").closest(".basin-context") as HTMLElement
         expect(within(context).getByText("geom_ch4_one")).toBeVisible()
-        expect(within(context).getByText("hash_ch4")).toBeVisible()
+        // Full 64-char hash, not a truncated prefix — a mutation that
+        // rendered `geom_hash.slice(0, 8)` would still pass a shorter
+        // fixture by coincidence, so this fixture's hash is realistically
+        // long and this assertion checks the whole string.
+        expect(within(context).getByText("ab12cd34".repeat(8))).toBeVisible()
         expect(within(context).getByText("cartesian")).toBeVisible()
         expect(within(context).getByText("angstrom")).toBeVisible()
     })
@@ -120,9 +128,24 @@ describe("GeometryDetailPage", () => {
         const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
         const rows = within(table).getAllByRole("row").slice(1)
         expect(rows).toHaveLength(5)
-        const firstDataRow = rows[0]
-        expect(within(firstDataRow).getByText("1")).toBeVisible()
-        expect(within(firstDataRow).getByText("C")).toBeVisible()
+
+        // Every row's own Atom-index and Element cell, scoped by
+        // data-label so this cannot be satisfied by "always show row 0's
+        // element" (rows 2-5 are all H, distinct from row 1's C) or by an
+        // off-by-one atom_index (each row's own index, not a shared or
+        // shifted one).
+        const expectedAtoms = [
+            { index: "1", element: "C" },
+            { index: "2", element: "H" },
+            { index: "3", element: "H" },
+            { index: "4", element: "H" },
+            { index: "5", element: "H" },
+        ]
+        expectedAtoms.forEach(({ index, element }, i) => {
+            expect(within(rows[i]).getByText(index, { selector: "[data-label='Atom']" })).toBeVisible()
+            expect(within(rows[i]).getByText(element, { selector: "[data-label='Element']" })).toBeVisible()
+        })
+
         // Distinct x/y/z values per column, scoped to their own cell — a
         // mutation that swapped which coordinate lands in which column
         // (or read one atom's coordinate for another's row) is observable
@@ -131,6 +154,26 @@ describe("GeometryDetailPage", () => {
         expect(within(secondDataRow).getByText("0.11", { selector: "[data-label='x']" })).toBeVisible()
         expect(within(secondDataRow).getByText("0.22", { selector: "[data-label='y']" })).toBeVisible()
         expect(within(secondDataRow).getByText("0.33", { selector: "[data-label='z']" })).toBeVisible()
+    })
+
+    it("flags a mismatch between the declared atom count and the returned coordinate rows", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ natoms: 99 }))))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        const section = screen.getByRole("heading", { name: "Coordinate table" }).closest("section") as HTMLElement
+        expect(within(section).getByRole("alert")).toHaveTextContent(
+            /declared atom count \(99\).*does not match.*coordinate rows returned\s*\(5\)/,
+        )
+        // The table itself still renders the rows the archive actually sent.
+        expect(within(section).getAllByRole("row")).toHaveLength(6)
+    })
+
+    it("says nothing about a count mismatch when natoms and the returned rows agree", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        const section = screen.getByRole("heading", { name: "Coordinate table" }).closest("section") as HTMLElement
+        expect(within(section).queryByRole("alert")).not.toBeInTheDocument()
     })
 
     it("renders the raw XYZ text verbatim in a selectable block", async () => {
@@ -150,6 +193,14 @@ describe("GeometryDetailPage", () => {
         expect(svg).not.toBeNull()
         expect(svg.querySelectorAll("circle")).toHaveLength(5)
         expect(within(viewerSection).getByText(/not an interactive 3D molecular viewer/)).toBeVisible()
+        // A distinct sentence from the one above — the two live in the same
+        // paragraph, and a mutation that deletes only the bond-inference
+        // disclaimer must not be able to hide behind an assertion that
+        // only matches the "not a 3D viewer" sentence next to it. See also
+        // the isolated component-level test in `GeometryViewer.test.tsx`.
+        expect(within(viewerSection).getByText(
+            /Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record\./,
+        )).toBeVisible()
     })
 
     it("keeps the projection's atom count stable across rotation", async () => {
@@ -208,6 +259,20 @@ describe("GeometryDetailPage", () => {
         expect(within(producedSection).queryByRole("link", { name: "calc_freq_one" })).not.toBeInTheDocument()
         expect(within(producedSection).queryByRole("link", { name: "calc_sp_one" })).not.toBeInTheDocument()
 
+        // Every provenance link's href, not just its visible text — the
+        // spec line for this route is "producer/consumer links", and a
+        // mutation that pointed these at `/geometries/...` instead of
+        // `/calculations/...` (or any other wrong target) would still
+        // satisfy every name-only assertion above.
+        expect(within(producedSection).getByRole("link", { name: "calc_opt_two" }))
+            .toHaveAttribute("href", "/calculations/calc_opt_two")
+        expect(within(producedSection).getByRole("link", { name: "calc_opt_one" }))
+            .toHaveAttribute("href", "/calculations/calc_opt_one")
+        expect(within(consumedSection).getByRole("link", { name: "calc_freq_one" }))
+            .toHaveAttribute("href", "/calculations/calc_freq_one")
+        expect(within(consumedSection).getByRole("link", { name: "calc_sp_one" }))
+            .toHaveAttribute("href", "/calculations/calc_sp_one")
+
         // No role column at all on the consumer table — CalculationInputGeometry
         // has no role column (it is always null on every input-link row), so
         // this page does not render a Role column here rather than
@@ -215,8 +280,9 @@ describe("GeometryDetailPage", () => {
         expect(within(consumedSection).queryByRole("columnheader", { name: "Role" })).not.toBeInTheDocument()
         expect(within(producedSection).getByRole("columnheader", { name: "Role" })).toBeVisible()
 
-        // The metric counts are independent, not a combined tally: three
-        // producer edges and three consumer edges, never 6, never 5 (deduped).
+        // The metric counts are independent, not a combined tally: two
+        // producer edges and three consumer edges, never summed (5) and
+        // never deduplicated by unique ref (4, since calc_opt_two repeats).
         const summary = screen.getByLabelText("Geometry provenance summary")
         const producingMetric = within(summary).getByText("Producing calculations").closest(".metric") as HTMLElement
         const consumingMetric = within(summary).getByText("Consuming calculations").closest(".metric") as HTMLElement
@@ -224,19 +290,25 @@ describe("GeometryDetailPage", () => {
         expect(within(consumingMetric).getByText("3")).toBeVisible()
     })
 
-    it("distinguishes not-requested from genuinely-empty provenance lists", async () => {
+    it("distinguishes an archive-dropped field from a genuinely empty list", async () => {
+        // This page always sends `include=provenance` and no token gates
+        // any field on this endpoint (see api/geometryApi.ts) — so an
+        // absent key here can only mean the archive itself dropped the
+        // field, never that this client failed to request it. The copy
+        // must say that, not "not requested".
         const withoutKey = mockRecord()
         delete (withoutKey.provenance as Record<string, unknown>).used_as_input_by
         server.use(http.get(ENDPOINT, () => HttpResponse.json(withoutKey)))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const section = screen.getByRole("heading", { name: "Used as input by" }).closest("section") as HTMLElement
-        expect(within(section).getByText("This section was not requested for this view.")).toBeVisible()
+        expect(within(section).getByText("The archive did not return this field for this geometry.")).toBeVisible()
+        expect(within(section).queryByText(/not requested/i)).not.toBeInTheDocument()
         expect(within(section).queryByText(/No calculation is recorded as having consumed/))
             .not.toBeInTheDocument()
     })
 
-    it("renders a genuinely empty producer list distinctly from not-requested", async () => {
+    it("renders a genuinely empty producer list distinctly from an archive-dropped field", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
             provenance: { produced_by: [], used_as_input_by: mockRecord().provenance.used_as_input_by },
         }))))
@@ -287,5 +359,27 @@ describe("GeometryDetailPage", () => {
         page()
         expect(await screen.findByRole("heading", { name: "Geometry unavailable" })).toBeVisible()
         expect(screen.queryByText(/No calculation is recorded/)).not.toBeInTheDocument()
+    })
+
+    it("gives a valid-but-oversized geometry its own state, distinct from an invalid reference", async () => {
+        // Measured: `app/services/scientific_read/geometry.py` raises
+        // `geometry_too_large` (422) when `natoms` exceeds the public cap
+        // (`max_geometry_atoms_public`, default 500) — a real record with a
+        // valid ref that this view declines to serve in full. Reading
+        // every 422 as "not a valid reference" (the old behaviour) would
+        // render a heading that flatly contradicts its own body text.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            code: "geometry_too_large",
+            detail: "geometry has 812 atoms which exceeds the public cap of 500. Contact a curator for bulk access.",
+            context: { max_atoms: 500, atoms: 812 },
+        }, { status: 422 })))
+        page()
+        expect(await screen.findByRole("heading", { name: "Geometry could not be displayed" })).toBeVisible()
+        expect(screen.getByText(/exceeds the public cap of 500/)).toBeVisible()
+        expect(screen.getByRole("alert")).toBeVisible()
+        // Must not read as "wrong reference" — the ref is valid and the
+        // record exists, which is exactly what the body text says.
+        expect(screen.queryByRole("heading", { name: "Not a geometry reference" })).not.toBeInTheDocument()
+        expect(screen.queryByText(/does not identify a geometry/)).not.toBeInTheDocument()
     })
 })

@@ -2,11 +2,14 @@ import type { ScientificRecordState } from "../hooks/useScientificRecord"
 
 /**
  * Shared non-ready rendering for every `/scientific/*` detail page built
- * on {@link useScientificRecord}. Each of the five non-ready states gets
+ * on {@link useScientificRecord}. Each of the six non-ready states gets
  * its own title and message — a permanently-wrong reference (`invalid`,
  * HTTP 422) must never read the same as a possibly-transient outage
- * (`unavailable`), and a schema mismatch on the archive's own response
- * (`malformed`) must never read the same as "not found" (`missing`).
+ * (`unavailable`), a schema mismatch on the archive's own response
+ * (`malformed`) must never read the same as "not found" (`missing`), and
+ * a *valid* reference the archive declined to fully serve
+ * (`unprocessable`, e.g. `geometry_too_large`) must never read the same
+ * as `invalid` — the reference is not the thing that's wrong there.
  *
  * `kind` is the record's plain-English name in sentence case, e.g.
  * "conformer observation" — used to build every title and message so
@@ -39,6 +42,16 @@ export function RecordStatus({ state, ref, kind, loadingDetail }: {
                 ref={ref}
                 alert
                 message={state.detail || `This reference does not identify a ${kind}. Retrying will not change that.`}
+            />
+        )
+    }
+    if (state.status === "unprocessable") {
+        return (
+            <Notice
+                title={`${Kind} could not be displayed`}
+                ref={ref}
+                alert
+                message={state.detail || `The archive recognised this reference but declined to serve the full ${kind}.`}
             />
         )
     }

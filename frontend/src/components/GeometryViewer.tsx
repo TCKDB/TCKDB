@@ -15,9 +15,14 @@ import type { GeometryAtom } from "../api/geometryApi"
  * The SVG itself is `aria-hidden` — it is a supplementary picture, not the
  * accessible representation of the geometry. The coordinate table and raw
  * XYZ block rendered alongside it in `GeometryDetailPage` are the actual
- * accessible/copyable fallback the plan requires, and they render whether
- * or not this component does. This component only ever adds a picture on
- * top of data that is already fully present elsewhere on the page.
+ * accessible/copyable fallback the plan requires. This component only
+ * ever adds a picture on top of data that is already fully present
+ * elsewhere on the page — and if this component's own render throws
+ * (a degenerate geometry, a malformed atom row), `GeometryDetailPage`
+ * wraps it in a `SectionErrorBoundary` so the table/XYZ/provenance
+ * sections stay mounted regardless. That guarantee lives in the parent,
+ * not here — this component makes no promise about what survives its own
+ * crash on its own.
  *
  * Bonds drawn between atoms are inferred client-side from interatomic
  * distance for legibility only — the payload carries no bond list, and
@@ -94,14 +99,27 @@ export function GeometryViewer({ atoms, formula }: { atoms: GeometryAtom[]; form
         }).sort((a, b) => a.depth - b.depth)
     }, [centered, yaw, pitch, scale])
 
+    // O(n²) pair enumeration with an O(1) lookup per pair (a
+    // Map<atom_index, atom> built once outside the loop) — the previous
+    // version resolved each side of every pair via `centered.find(...)`,
+    // an O(n) linear scan *inside* the O(n²) pair loop, i.e. O(n³)
+    // overall. At the public per-geometry atom cap (500,
+    // `max_geometry_atoms_public`) that was ~10^8 operations on every
+    // rotation click.
+    const byAtomIndex = useMemo(() => {
+        const map = new Map<number, (typeof centered)[number]>()
+        for (const atom of centered) map.set(atom.atom_index, atom)
+        return map
+    }, [centered])
+
     const bonds = useMemo(() => {
         const pairs: { key: string; x1: number; y1: number; x2: number; y2: number }[] = []
         for (let i = 0; i < projected.length; i += 1) {
             for (let j = i + 1; j < projected.length; j += 1) {
                 const a = projected[i]
                 const b = projected[j]
-                const atomA = centered.find((c) => c.atom_index === a.atom_index)
-                const atomB = centered.find((c) => c.atom_index === b.atom_index)
+                const atomA = byAtomIndex.get(a.atom_index)
+                const atomB = byAtomIndex.get(b.atom_index)
                 if (!atomA || !atomB) continue
                 const dx = atomA.x - atomB.x
                 const dy = atomA.y - atomB.y
@@ -114,7 +132,7 @@ export function GeometryViewer({ atoms, formula }: { atoms: GeometryAtom[]; form
             }
         }
         return pairs
-    }, [projected, centered])
+    }, [projected, byAtomIndex])
 
     return (
         <div className="geometry-viewer">
@@ -124,7 +142,11 @@ export function GeometryViewer({ atoms, formula }: { atoms: GeometryAtom[]; form
                 for legibility only; they are not part of the deposited record. The coordinate table and raw XYZ
                 block further down are the authoritative, accessible representation of this geometry.
             </p>
-            <div className="viewer-controls" role="group" aria-label="Rotate projection">
+            <div
+                className="viewer-controls"
+                role="group"
+                aria-label={`Rotate the visual-only projection of ${formula || "this geometry"} (does not change the coordinate table)`}
+            >
                 <button type="button" onClick={() => setYaw((v) => v - ROTATE_STEP_DEG)}>Rotate left</button>
                 <button type="button" onClick={() => setYaw((v) => v + ROTATE_STEP_DEG)}>Rotate right</button>
                 <button type="button" onClick={() => setPitch((v) => v - ROTATE_STEP_DEG)}>Rotate up</button>
@@ -134,11 +156,14 @@ export function GeometryViewer({ atoms, formula }: { atoms: GeometryAtom[]; form
             <svg
                 className="viewer-svg"
                 viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}
-                role="img"
                 aria-hidden="true"
                 focusable="false"
             >
-                <title>{`2D projection of ${formula || "this geometry"}`}</title>
+                {/* No `role="img"` and no `<title>`: an `aria-hidden` element
+                    is already removed from the accessibility tree, so an
+                    accessible name on it is dead markup that never reaches
+                    assistive tech — asserting one here would just be a
+                    second, contradictory claim about what this element is. */}
                 <g className="viewer-bonds">
                     {bonds.map((bond) => (
                         <line key={bond.key} x1={bond.x1} y1={bond.y1} x2={bond.x2} y2={bond.y2} />

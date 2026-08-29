@@ -3,24 +3,31 @@ import "../conformer-group.css"
 import "../geometry-detail.css"
 import { GeometryViewer } from "../components/GeometryViewer"
 import { RecordStatus } from "../components/RecordStatus"
+import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
 import { useGeometry } from "../hooks/useGeometry"
 
 // ---------------------------------------------------------------------------
 // This page has no on-demand ("behind a disclosure") sections — see the
 // shape notes atop `api/geometryApi.ts`. Every field on this endpoint is
-// returned unconditionally in one request, so the only availability
-// distinction that can ever fire is the same eager-section triple this
-// project already uses on `CalculationDetailPage` /
-// `ConformerObservationPage`: absence describes the request (a field
-// silently dropped from a future response), null/[] describes genuinely
-// empty data. There is no fourth "idle, not yet requested by the reader"
-// state here, because nothing on this page is reader-gated.
+// returned unconditionally in one request, so the internal three-state
+// shape below is the same eager-section triple `CalculationDetailPage` /
+// `ConformerObservationPage` use, but its *wording* cannot be borrowed
+// from them: on those surfaces a token really does gate the field, so an
+// absent key can honestly be read as "not requested". Here every field is
+// always requested (this page sends `include=provenance` unconditionally,
+// see `api/geometryApi.ts`) and no token gates anything at all — an
+// absent key can *only* mean the archive dropped the field from its own
+// response, never that this client failed to ask for it. Saying "not
+// requested" here would blame the request for something the request
+// provably did not cause, so the copy below says the archive-side thing
+// instead. There is no fourth "idle, not yet requested by the reader"
+// state here either, because nothing on this page is reader-gated.
 // ---------------------------------------------------------------------------
-type SectionAvailability = "not-requested" | "empty" | "populated"
+type SectionAvailability = "absent" | "empty" | "populated"
 
 function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailability {
-    if (value === undefined) return "not-requested"
+    if (value === undefined) return "absent"
     if (value === null || value.length === 0) return "empty"
     return "populated"
 }
@@ -123,8 +130,21 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                     <strong>Not recorded on this endpoint</strong>
                     <p>
                         This geometry record carries no validation field of its own. A geometry-vs-formula check,
-                        where one was recorded, lives on the calculation that produced or consumed it — see
-                        "Geometry validation" on a linked calculation below, not here.
+                        where one was recorded, lives on the calculation that produced or consumed it, not here.
+                        {producedBy.length > 0 && (
+                            <>
+                                {" "}See "Geometry validation" on{" "}
+                                {producedBy.map((link, index) => (
+                                    <span key={link.calculation_ref}>
+                                        {index > 0 && ", "}
+                                        <Link to={`/calculations/${link.calculation_ref}#section-geometry-validation`}>
+                                            {link.calculation_ref}
+                                        </Link>
+                                    </span>
+                                ))}
+                                .
+                            </>
+                        )}
                     </p>
                 </div>
             </section>
@@ -135,6 +155,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 atoms={atoms}
                 atomsAvailability={atomsAvailability}
                 geometryRef={geometry.geometry_ref}
+                natoms={geometry.natoms}
             />
 
             <RawXyzSection xyzText={geometry.xyz_text ?? null} />
@@ -170,8 +191,11 @@ function Metric({ label, value }: { label: string; value: number }) {
 }
 
 function SectionEmptyMessage({ availability, emptyText }: { availability: SectionAvailability; emptyText: string }) {
-    if (availability === "not-requested") {
-        return <p className="empty-projection">This section was not requested for this view.</p>
+    if (availability === "absent") {
+        // Not "not requested" — see the module docstring above. This page
+        // always requests every field, so an absent key can only mean the
+        // archive did not return it, never that this client failed to ask.
+        return <p className="empty-projection">The archive did not return this field for this geometry.</p>
     }
     return <p className="empty-projection">{emptyText}</p>
 }
@@ -189,7 +213,16 @@ function ViewerSection({ atoms, atomsAvailability, formula }: {
                 <h2 id="viewer-heading">Structure projection</h2>
             </div>
             {atomsAvailability === "populated" ? (
-                <GeometryViewer atoms={rows} formula={formula} />
+                <SectionErrorBoundary
+                    fallback={(
+                        <p className="empty-projection" role="alert">
+                            This structure projection could not be drawn. The coordinate table and raw XYZ
+                            block below are unaffected.
+                        </p>
+                    )}
+                >
+                    <GeometryViewer atoms={rows} formula={formula} />
+                </SectionErrorBoundary>
             ) : (
                 <SectionEmptyMessage
                     availability={atomsAvailability}
@@ -200,11 +233,18 @@ function ViewerSection({ atoms, atomsAvailability, formula }: {
     )
 }
 
-function CoordinateTableSection({ atoms, atomsAvailability, geometryRef }: {
+function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms }: {
     atoms: NonNullable<GeometryRecord["atoms"]>
     atomsAvailability: SectionAvailability
     geometryRef: string
+    natoms: number
 }) {
+    // `natoms` and `atoms.length` are two separately-sourced numbers on the
+    // wire (see `app/services/scientific_read/geometry.py` — one is a
+    // stored column, the other is `len(atoms)` freshly queried) and are
+    // never reconciled by this page's rendering. A mismatch is a real
+    // archive-side inconsistency worth surfacing, not a client bug to hide.
+    const countMismatch = atomsAvailability === "populated" && natoms !== atoms.length
     return (
         <section className="ledger-section" aria-labelledby="coordinates-heading">
             <div className="ledger-heading">
@@ -216,6 +256,12 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef }: {
                     projection does.
                 </p>
             </div>
+            {countMismatch && (
+                <p className="empty-projection" role="alert">
+                    The declared atom count ({natoms}) does not match the number of coordinate rows returned
+                    ({atoms.length}). Showing the rows the archive actually returned.
+                </p>
+            )}
             {atomsAvailability === "populated" ? (
                 <div className="table-scroll">
                     <table className="stage-table" aria-label={`Coordinates for ${geometryRef}`}>
@@ -285,26 +331,28 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
                 <p>{description}</p>
             </div>
             {availability === "populated" ? (
-                <table className="stage-table" aria-label={`${title} for this geometry`}>
-                    <thead>
-                        <tr>
-                            <th scope="col">Calculation</th>
-                            <th scope="col">Type</th>
-                            {showRole && <th scope="col">Role</th>}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {links.map((link, index) => (
-                            <tr key={`${title}-${link.calculation_ref}-${index}`}>
-                                <td data-label="Calculation">
-                                    <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
-                                </td>
-                                <td data-label="Type">{typeLabel(link.calculation_type)}</td>
-                                {showRole && <td data-label="Role">{link.role ? statusLabel(link.role) : "Not recorded"}</td>}
+                <div className="table-scroll">
+                    <table className="stage-table" aria-label={`${title} for this geometry`}>
+                        <thead>
+                            <tr>
+                                <th scope="col">Calculation</th>
+                                <th scope="col">Type</th>
+                                {showRole && <th scope="col">Role</th>}
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {links.map((link, index) => (
+                                <tr key={`${title}-${link.calculation_ref}-${index}`}>
+                                    <td data-label="Calculation">
+                                        <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
+                                    </td>
+                                    <td data-label="Type">{typeLabel(link.calculation_type)}</td>
+                                    {showRole && <td data-label="Role">{link.role ? statusLabel(link.role) : "Not recorded"}</td>}
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : (
                 <SectionEmptyMessage availability={availability} emptyText={emptyText} />
             )}
