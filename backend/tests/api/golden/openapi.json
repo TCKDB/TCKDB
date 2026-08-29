@@ -34364,6 +34364,35 @@
         "title": "ScientificSoftwareReleaseIdentity",
         "type": "object"
       },
+      "ScientificSpeciesBrowseResponse": {
+        "description": "Response envelope for /api/v1/scientific/species/browse.\n\nField-for-field identical to :class:`ScientificSpeciesSearchResponse`\nby design (see the endpoint's module docstring for why): a client's\nparser for one search-response schema works unmodified against a\nbrowse response. Declared as its own class, not a bare alias, so the\nOpenAPI document and generated clients name the two surfaces\nseparately even though nothing about the shape differs.",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/SpeciesScientificRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/app__schemas__reads__scientific_species__RequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "ScientificSpeciesBrowseResponse",
+        "type": "object"
+      },
       "ScientificSpeciesCalculationsSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/species-calculations/search.",
         "properties": {
@@ -72082,6 +72111,252 @@
           }
         },
         "summary": "Species Transport",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/species/browse": {
+      "get": {
+        "description": "List species with no identifier required, for a catalogue page.\n\nEvery secondary filter ``/species/search`` accepts alongside an\nidentifier is accepted here too, so a listing can be narrowed after\nit is opened. ``limit`` is capped at 200 (default 50, same as\n``/species/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nOrdering is ``review_rank ASC, has_entries DESC, created_at DESC,\nid DESC`` — the same default as ``/species/search`` — which is what\nkeeps pagination stable across requests. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
+        "operationId": "species_browse_api_v1_scientific_species_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "formula",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Formula"
+            }
+          },
+          {
+            "in": "query",
+            "name": "charge",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Charge"
+            }
+          },
+          {
+            "in": "query",
+            "name": "multiplicity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Multiplicity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "electronic_state_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/SpeciesEntryStateKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Electronic State Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "species_entry_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/StationaryPointKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Species Entry Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "collapse",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/CollapseMode",
+              "default": "all"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificSpeciesBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Species Browse",
         "tags": [
           "scientific"
         ]
