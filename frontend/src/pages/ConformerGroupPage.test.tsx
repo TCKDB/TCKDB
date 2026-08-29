@@ -126,4 +126,22 @@ describe("ConformerGroupPage", () => {
         page()
         expect(await screen.findByRole("heading", { name: "Conformer basin not found" })).toBeVisible()
     })
+
+    it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state", async () => {
+        // This surface previously had no 422 coverage at all. `invalid_handle`
+        // (distinct from `handle_type_mismatch`, the only code every other
+        // page's 422 test exercised) is what live traffic actually returns
+        // for a malformed-but-right-prefix ref — pinning it here guards the
+        // `INVALID_HANDLE_CODES` classification in `useScientificRecord`,
+        // shared machinery this page depends on but does not own.
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json({
+            code: "invalid_handle",
+            detail: "invalid_handle: 'cg_' not a recognised conformer_group handle",
+            context: {},
+        }, { status: 422 })))
+        page()
+        expect(await screen.findByRole("heading", { name: "Not a conformer basin reference" })).toBeVisible()
+        expect(screen.getByText(/not a recognised conformer_group handle/)).toBeVisible()
+        expect(screen.getByRole("alert")).toBeVisible()
+    })
 })

@@ -317,6 +317,21 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
                 },
             })))
         }
+        if (path.startsWith("/geometries/")) {
+            server.use(http.get("/api/v1/scientific/geometries/:ref", () => HttpResponse.json({
+                geometry_ref: "geom_abc",
+                natoms: 0,
+                geom_hash: "hash_abc",
+                format: "cartesian",
+                coordinate_units: "angstrom",
+                symbols: [],
+                coords: [],
+                atoms: [],
+                xyz_text: null,
+                created_at: "2026-07-21T12:06:50.748258",
+                provenance: { produced_by: [], used_as_input_by: [] },
+            })))
+        }
         window.history.replaceState({}, "", path); render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
         if (ref) expect(screen.getByText(ref)).toBeVisible()

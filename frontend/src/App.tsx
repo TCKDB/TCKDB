@@ -8,6 +8,7 @@ const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
 const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage"))
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
+const GeometryDetailPage = lazy(() => import("./pages/GeometryDetailPage"))
 const RecordPlaceholderPage = lazy(() => import("./pages/RecordPlaceholderPage"))
 const SpeciesEntryPage = lazy(() => import("./pages/SpeciesEntryPage"))
 const SpeciesOverviewPage = lazy(() => import("./pages/SpeciesOverviewPage"))
@@ -26,7 +27,7 @@ function App() {
             <Route path="/conformer-groups/:groupRef" element={<ConformerGroupPage />} />
             <Route path="/conformer-observations/:observationRef" element={<ConformerObservationPage />} />
             <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
-            <Route path="/geometries/:geometryRef" element={<RecordPlaceholderPage kind="Geometry" refParam="geometryRef" />} />
+            <Route path="/geometries/:geometryRef" element={<GeometryDetailPage />} />
             <Route path="/reactions" element={<RecordPlaceholderPage kind="Reactions" />} />
             <Route path="/reactions/:reactionRef" element={<RecordPlaceholderPage kind="Reaction" refParam="reactionRef" />} />
             <Route path="/methods" element={<RecordPlaceholderPage kind="Methods" />} />

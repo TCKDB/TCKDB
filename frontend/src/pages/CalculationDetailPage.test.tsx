@@ -639,4 +639,21 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText(/expected a calculation handle/)).toBeVisible()
         expect(screen.getByRole("alert")).toBeVisible()
     })
+
+    it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state, distinct from a wrong-prefix ref", async () => {
+        // `invalid_handle` is what live traffic actually returns for a
+        // malformed-but-right-prefix ref, distinct from the
+        // `handle_type_mismatch` case above. Pins the shared
+        // `INVALID_HANDLE_CODES` classification in `useScientificRecord` on
+        // this page too.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            code: "invalid_handle",
+            detail: "invalid_handle: 'calc_' not a recognised calculation handle",
+            context: {},
+        }, { status: 422 })))
+        page()
+        expect(await screen.findByRole("heading", { name: "Not a calculation reference" })).toBeVisible()
+        expect(screen.getByText(/not a recognised calculation handle/)).toBeVisible()
+        expect(screen.getByRole("alert")).toBeVisible()
+    })
 })

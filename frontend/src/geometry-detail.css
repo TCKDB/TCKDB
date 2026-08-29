@@ -1,0 +1,91 @@
+/*
+ * GeometryDetailPage. Imported alongside `conformer-group.css`, which
+ * supplies the shared "scientific record ledger" vocabulary this page
+ * reuses verbatim: `.basin-header`, `.basin-title`, `.basin-context`,
+ * `.ledger-section`, `.ledger-heading`, `.ledger-summary`, `.metric`,
+ * `.coverage-card`, `.stage-table`, `.empty-projection`,
+ * `.record-breadcrumbs`. Only the viewer and raw-XYZ block are new here.
+ */
+
+.geometry-page { max-width: 76rem; }
+
+/* `.section-note` is otherwise defined only in `calculation-detail.css`,
+   which this page does not import — `GeometryViewer` used the class
+   without it, so the bond-inference disclaimer (the one sentence on this
+   page disclaiming fabricated-for-display data) rendered unstyled on a
+   cold load, and inconsistently styled if a reader had `calculation-
+   detail.css` cached from a prior page. Defined here so this page's
+   styling does not depend on load order or navigation history. */
+.section-note {
+    margin: .5rem 0 0;
+    color: #536578;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+/* Wide numeric tables scroll inside their own container rather than
+   forcing the page body to scroll horizontally — the coordinate table's
+   own `.stage-table` mobile rule additionally stacks it into label/value
+   rows below 680px, so this only matters between that breakpoint and a
+   genuinely narrow desktop window. */
+.table-scroll {
+    overflow-x: auto;
+}
+
+.xyz-block {
+    max-width: 100%;
+    margin: 0;
+    padding: 1rem 1.2rem;
+    overflow-x: auto;
+    border: 1px solid #dbe2ea;
+    background: #f5f7fa;
+    font: .78rem/1.55 var(--mono);
+    white-space: pre;
+}
+
+.geometry-viewer {
+    display: flex;
+    flex-direction: column;
+    gap: .9rem;
+    max-width: 30rem;
+}
+
+.viewer-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.viewer-controls button {
+    padding: .4rem .75rem;
+    border: 1px solid #b8c4d1;
+    background: #fff;
+    color: #205493;
+    font: .72rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+
+.viewer-controls button:hover {
+    border-color: #205493;
+    background: #eaf1f8;
+}
+
+.viewer-svg {
+    width: 100%;
+    max-width: 22rem;
+    height: auto;
+    aspect-ratio: 1 / 1;
+    border: 1px solid #dbe2ea;
+    background: #fff;
+}
+
+.viewer-bonds line {
+    stroke: #8a97a6;
+    stroke-width: 2;
+}
+
+@media (max-width: 680px) {
+    .geometry-viewer { max-width: 100%; }
+}
