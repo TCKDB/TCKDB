@@ -1,12 +1,10 @@
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import type { ConformerGroup } from "../api/conformerGroupApi"
+import { lotLabel } from "../api/scientificSchemas"
 import { RecordStatus } from "../components/RecordStatus"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
-const lotLabel = (value: { method: string; basis?: string | null; display?: string }) => (
-    value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
-)
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 type Observation = NonNullable<ConformerGroup["observations"]>[number]
 type GeometryLink = NonNullable<ConformerGroup["geometries"]>[number]

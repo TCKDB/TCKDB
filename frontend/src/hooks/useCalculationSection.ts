@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
     loadCalculationSection,
     readSectionField,
@@ -32,7 +32,10 @@ export type CalculationSectionState<T> =
  * State is keyed by `(calculationRef, token)` and only ever set from
  * inside `request()` (an event handler, not an effect), so a stale
  * response for a since-changed key is recognised and dropped rather than
- * painted over the current one.
+ * painted over the current one. The in-flight request itself is also
+ * actually aborted (not just ignored) on unmount or on a key change, via
+ * `controllerRef` plus a cleanup-only effect — the effect body sets no
+ * state, so it cannot trip the "no setState in an effect" rule.
  */
 export function useCalculationSection<T>(
     calculationRef: string,
@@ -44,12 +47,23 @@ export function useCalculationSection<T>(
     )
     const visible = entry.key === key ? entry.state : { status: "idle" as const }
     const inFlightKeyRef = useRef<string | null>(null)
+    const controllerRef = useRef<AbortController | null>(null)
+
+    useEffect(() => {
+        // Cleanup only — aborts whatever this (calculationRef, token) pair
+        // has in flight when the key changes or the component unmounts.
+        // No setState here, only in `request()`, an event handler.
+        return () => {
+            controllerRef.current?.abort()
+        }
+    }, [key])
 
     const request = useCallback(() => {
         if (inFlightKeyRef.current === key) return
         inFlightKeyRef.current = key
         setEntry({ key, state: { status: "loading" } })
         const controller = new AbortController()
+        controllerRef.current = controller
         loadCalculationSection(calculationRef, token, controller.signal)
             .then((record: CalculationRecord) => {
                 setEntry({ key, state: { status: "ready", data: readSectionField<T>(record, token) } })

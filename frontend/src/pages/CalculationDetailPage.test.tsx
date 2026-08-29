@@ -60,10 +60,13 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
             },
             transition_state_entry: null,
         },
-        level_of_theory: { level_of_theory_ref: "lot_1", method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" },
+        level_of_theory: {
+            level_of_theory_ref: "lot_1", method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp",
+            dispersion: "D3BJ", solvent: "water(CPCM)",
+        },
         software_release: { software_release_ref: "srel_1", software: "Gaussian", version: "Gaussian 16, Revision C.02" },
         workflow_tool_release: { workflow_tool_release_ref: "wfr_1", workflow_tool: "ARC", version: "1.1.0" },
-        literature: null,
+        literature: { literature_ref: "lit_1", title: "A study of methyl radicals", year: 2019, doi: "10.1000/xyz" },
         provenance: {
             has_result: true,
             converged: null,
@@ -154,7 +157,7 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
             instability_type: null,
             reoptimized_wavefunction: null,
             note: null,
-            source_calculation_ref: null,
+            source_calculation_ref: "calc_stability_source",
         }],
         wavefunction_diagnostic: [{
             t1_diagnostic: 0.01, d1_diagnostic: 0.02, t1_norm: null, largest_t2_amplitude: null, note: null,
@@ -223,6 +226,41 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("calc_freq_one", { selector: "dd" })).toBeVisible()
     })
 
+    it("surfaces level_of_theory_ref, dispersion and solvent — the fields that actually distinguish two rows with the same compact label", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const context = screen.getByText("Calculation ref").closest(".record-context") as HTMLElement
+        expect(within(context).getByText("Level of theory ref").closest("div")).not.toBeNull()
+        const lotRefRow = within(context).getByText("Level of theory ref").closest("div") as HTMLElement
+        expect(within(lotRefRow).getByText("lot_1")).toBeVisible()
+
+        const dispersionRow = within(context).getByText("Dispersion").closest("div") as HTMLElement
+        expect(within(dispersionRow).getByText("D3BJ")).toBeVisible()
+
+        const solventRow = within(context).getByText("Solvent").closest("div") as HTMLElement
+        expect(within(solventRow).getByText("water(CPCM)")).toBeVisible()
+
+        const softwareRefRow = within(context).getByText("Software release ref").closest("div") as HTMLElement
+        expect(within(softwareRefRow).getByText("srel_1")).toBeVisible()
+
+        const workflowRefRow = within(context).getByText("Workflow tool release ref").closest("div") as HTMLElement
+        expect(within(workflowRefRow).getByText("wfr_1")).toBeVisible()
+    })
+
+    it("renders the literature citation and its own stable ref, never dropping it silently", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const context = screen.getByText("Calculation ref").closest(".record-context") as HTMLElement
+        const literatureRow = within(context).getByText("Literature", { selector: "dt" }).closest("div") as HTMLElement
+        expect(within(literatureRow).getByText(/A study of methyl radicals/)).toBeVisible()
+        const literatureRefRow = within(context).getByText("Literature ref").closest("div") as HTMLElement
+        expect(within(literatureRefRow).getByText("lit_1")).toBeVisible()
+    })
+
     it("keeps input-geometry, output-geometry and dependency-edge counts in their own metric", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
@@ -249,13 +287,92 @@ describe("CalculationDetailPage", () => {
     })
 
     it("shows no dependency edge when the archive returns none, even though the calculation is a freq stage", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord({ dependencies: [] }) })))
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                dependencies: [],
+                available_sections: { ...mockRecord().available_sections, has_dependencies: false },
+            }),
+        })))
         page()
         await screen.findByRole("heading", { name: "Frequency calculation" })
 
         const depSection = screen.getByRole("heading", { name: "Dependency graph" }).closest("section") as HTMLElement
         expect(within(depSection).getByText("No dependency edges are recorded for this calculation.")).toBeVisible()
         expect(within(depSection).queryByRole("link")).not.toBeInTheDocument()
+    })
+
+    it("flags a contradiction when the archive marks dependency evidence present but returns none", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord({ dependencies: [] }) })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        expect(await screen.findByText(
+            (_, element) => element?.tagName === "P"
+                && (element.textContent ?? "").includes("The archive marks this calculation as having recorded evidence here"),
+        )).toBeVisible()
+    })
+
+    it("treats an absent dependencies key as 'not requested', distinct from a genuinely empty one", async () => {
+        // This client's eager include set is fixed, so this key should
+        // never actually be absent in practice — but the wire type allows
+        // it, and a future response that dropped the key must not be
+        // reported as "the archive was asked and found nothing".
+        const withoutKey = mockRecord()
+        delete (withoutKey as Record<string, unknown>).dependencies
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: withoutKey })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const depSection = screen.getByRole("heading", { name: "Dependency graph" }).closest("section") as HTMLElement
+        expect(within(depSection).getByText("This section was not requested for this view.")).toBeVisible()
+        expect(within(depSection).queryByText("No dependency edges are recorded for this calculation."))
+            .not.toBeInTheDocument()
+    })
+
+    it("binds each dependency row's relationship, role and related ref together — not from the first row, and not inferred from direction alone", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                dependencies: [
+                    // Matches the live edges measured on
+                    // calc_afsfe4g5xtgiq2yjnutaham5iy (2026-08-29): two
+                    // edges share the "parent" direction but have
+                    // different roles, so no function of direction alone
+                    // can produce the right role for both.
+                    {
+                        role: "freq_on", direction: "parent",
+                        parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_rypxkxvsku5x2nk6sqbhhmfcla",
+                    },
+                    {
+                        role: "optimized_from", direction: "child",
+                        parent_calculation_ref: "calc_htgb7s5nakuw52eqhcxpvilpoq", child_calculation_ref: "calc_freq_one",
+                    },
+                    {
+                        role: "single_point_on", direction: "parent",
+                        parent_calculation_ref: "calc_freq_one", child_calculation_ref: "calc_osrf4pnfcesq6s6somn7nr5hly",
+                    },
+                ],
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const depSection = screen.getByRole("heading", { name: "Dependency graph" }).closest("section") as HTMLElement
+
+        const freqRow = within(depSection).getByRole("link", { name: "calc_rypxkxvsku5x2nk6sqbhhmfcla" }).closest("tr") as HTMLElement
+        expect(within(freqRow).getByText("feeds into")).toBeVisible()
+        expect(within(freqRow).getByText("frequency on")).toBeVisible()
+        expect(within(freqRow).queryByText("single point on")).not.toBeInTheDocument()
+        expect(within(freqRow).queryByText("optimized from")).not.toBeInTheDocument()
+
+        const optimizedFromRow = within(depSection).getByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" }).closest("tr") as HTMLElement
+        expect(within(optimizedFromRow).getByText("depends on")).toBeVisible()
+        expect(within(optimizedFromRow).getByText("optimized from")).toBeVisible()
+        expect(within(optimizedFromRow).queryByText("frequency on")).not.toBeInTheDocument()
+
+        const spRow = within(depSection).getByRole("link", { name: "calc_osrf4pnfcesq6s6somn7nr5hly" }).closest("tr") as HTMLElement
+        expect(within(spRow).getByText("feeds into")).toBeVisible()
+        expect(within(spRow).getByText("single point on")).toBeVisible()
+        // The freq row and the sp row share "feeds into" (both "parent"
+        // direction) but must not share a role: this is what a
+        // direction-only inference of role cannot produce.
+        expect(within(spRow).queryByText("frequency on")).not.toBeInTheDocument()
     })
 
     it("reports a check as recorded/not recorded, never as a pass/fail verdict, on the summary card", async () => {
@@ -303,9 +420,20 @@ describe("CalculationDetailPage", () => {
         expect(await within(section).findByText("scf_convergence")).toBeVisible()
         expect(requestCount).toBe(2)
 
-        // Re-toggling does not re-request.
+        // Re-toggling does not re-request. jsdom queues the native
+        // `toggle` event as a task rather than firing it synchronously
+        // with the click, so an assertion taken immediately after the two
+        // `fireEvent.click` calls below reads the state from *before*
+        // either re-toggle is actually processed — it would pass whether
+        // or not the fetch-once guard in `useCalculationSection` does
+        // anything at all. Flushing past that queued task first (an
+        // explicit `waitFor(() => expect(...).toBe(2))` on `requestCount`
+        // would pass trivially, on the very first poll, since 2 is already
+        // the count from the initial open — it never actually waits for
+        // the re-toggles) makes this assert something real.
         fireEvent.click(screen.getByRole("heading", { name: "Parsed parameters" }))
         fireEvent.click(screen.getByRole("heading", { name: "Parsed parameters" }))
+        await new Promise((resolve) => setTimeout(resolve, 50))
         expect(requestCount).toBe(2)
     })
 
@@ -333,6 +461,30 @@ describe("CalculationDetailPage", () => {
         ])
     })
 
+    it("gives a failed section fetch its own alert, distinct from every empty state", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            if (includes.includes("parameters")) {
+                return HttpResponse.json({ detail: "internal error" }, { status: 500 })
+            }
+            return HttpResponse.json({ record: mockRecord() })
+        }))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const section = screen.getByRole("heading", { name: "Parsed parameters" }).closest("details") as HTMLElement
+        fireEvent.click(screen.getByRole("heading", { name: "Parsed parameters" }))
+
+        const alert = await within(section).findByRole("alert")
+        expect(alert).toBeVisible()
+        // A transient outage must never read the same as "the archive was
+        // asked and has nothing to say" — the single worst outcome on this
+        // page, since it reads as the calculation carrying no evidence
+        // rather than as a request that failed.
+        expect(within(section).queryByText(/The archive returned no parameter rows/)).not.toBeInTheDocument()
+        expect(within(section).queryByText(/no execution parameters were parsed/i)).not.toBeInTheDocument()
+    })
+
     it("renders a section available_sections marks empty as a static line, with no disclosure to open", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
@@ -354,6 +506,52 @@ describe("CalculationDetailPage", () => {
         const heading = screen.getByRole("heading", { name: "Imaginary-mode projections" })
         expect(heading.closest("details")).toBeNull()
         expect(screen.getByText(/Not determinable — no Hessian is stored/)).toBeVisible()
+    })
+
+    it("surfaces the provenance pointers on the on-demand sections, not just their headline fields", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        // SCF stability: it came from a different calculation than this one.
+        fireEvent.click(screen.getByRole("heading", { name: "SCF stability" }))
+        const scfSection = screen.getByRole("heading", { name: "SCF stability" }).closest("details") as HTMLElement
+        expect(await within(scfSection).findByRole("link", { name: "calc_stability_source" }))
+            .toHaveAttribute("href", "/calculations/calc_stability_source")
+
+        // Geometry validation: input/output geometry refs, not just the verdict.
+        fireEvent.click(screen.getByRole("heading", { name: "Geometry validation" }))
+        const gvSection = screen.getByRole("heading", { name: "Geometry validation" }).closest("details") as HTMLElement
+        expect(await within(gvSection).findByRole("link", { name: "geom_input_one" }))
+            .toHaveAttribute("href", "/geometries/geom_input_one")
+        expect(within(gvSection).getByRole("link", { name: "geom_output_one" }))
+            .toHaveAttribute("href", "/geometries/geom_output_one")
+
+        // Artifacts: the sha256 is the artifact's identity.
+        fireEvent.click(screen.getByRole("heading", { name: "Artifacts" }))
+        const artifactSection = screen.getByRole("heading", { name: "Artifacts" }).closest("details") as HTMLElement
+        expect(await within(artifactSection).findByText("a".repeat(64))).toBeVisible()
+
+        // Energy corrections: the scheme ref, not just its human-readable name.
+        fireEvent.click(screen.getByRole("heading", { name: "Energy corrections" }))
+        const ecSection = screen.getByRole("heading", { name: "Energy corrections" }).closest("details") as HTMLElement
+        expect(await within(ecSection).findByText("ecs_1")).toBeVisible()
+    })
+
+    it("marks a result whose shape this view does not recognise, rather than rendering an empty result section", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ results: { kind: "sp", sp: null, opt: null, freq: null, scan: null, irc: null, path_search: null } }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        // `kind: "sp"` with `sp: null` is a shape this page has no branch
+        // for cleanly — the prior behaviour rendered nothing at all here
+        // (a heading and prose over an empty <dl>), which reads as neither
+        // "recorded" nor "not recorded".
+        const notice = within(resultsSection).getByRole("alert")
+        expect(notice).toHaveTextContent(/not recognised/)
+        expect(resultsSection.querySelector(".kv-list")).toBeNull()
     })
 
     it("renders review history eagerly, without a disclosure", async () => {

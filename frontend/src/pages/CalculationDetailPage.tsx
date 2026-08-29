@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../calculation-detail.css"
+import { lotLabel } from "../api/scientificSchemas"
 import {
     type CalculationArtifact,
     type CalculationConstraint,
@@ -96,9 +97,55 @@ const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_
 const roleLabel = (role: string) => DEPENDENCY_ROLE_LABELS[role] ?? role.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
-const lotLabel = (value: { method: string; basis?: string | null; display?: string }) => (
-    value.display ?? (value.basis ? `${value.method}/${value.basis}` : value.method)
-)
+
+// Three states an include-gated eager section can be in, kept distinct per
+// the house rule (see ConformerObservationPage.tsx): absence describes the
+// request, null/[] describes the data. This client's eager include set is
+// fixed (EAGER_SECTION_TOKENS), so "not-requested" should never actually
+// fire for these five fields — but the wire type is `T | null | undefined`,
+// and a field that silently dropped out of a future response must not be
+// reported as "returned and empty".
+type SectionAvailability = "not-requested" | "empty" | "populated"
+
+function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailability {
+    if (value === undefined) return "not-requested"
+    if (value === null || value.length === 0) return "empty"
+    return "populated"
+}
+
+function scalarAvailability<T>(value: T | null | undefined): SectionAvailability {
+    if (value === undefined) return "not-requested"
+    if (value === null) return "empty"
+    return "populated"
+}
+
+/**
+ * Shared empty/absent rendering for an eager section. `contradicted` is
+ * only meaningful where an `available_sections` flag actually exists for
+ * this field (results / dependencies / input_geometries /
+ * output_geometries) — unlike the conformer-observation surface, this
+ * page's `available_sections` is genuinely measured (see the calculation
+ * detail report), so a contradiction here is worth surfacing rather than
+ * silently absorbing. `review_history` has no matching flag and is never
+ * passed one.
+ */
+function SectionEmptyMessage({ availability, emptyText, contradicted }: {
+    availability: SectionAvailability
+    emptyText: string
+    contradicted?: boolean
+}) {
+    if (availability === "not-requested") {
+        return <p className="empty-projection">This section was not requested for this view.</p>
+    }
+    return (
+        <p className="empty-projection">
+            {emptyText}
+            {contradicted
+                ? " The archive marks this calculation as having recorded evidence here; this view did not return it."
+                : ""}
+        </p>
+    )
+}
 
 export default function CalculationDetailPage() {
     const { calculationRef = "" } = useParams<{ calculationRef: string }>()
@@ -128,9 +175,16 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         level_of_theory: lot,
         software_release: software,
         workflow_tool_release: workflow,
+        literature,
         provenance,
         available_sections: available,
     } = calculation
+
+    const resultsAvailability = scalarAvailability(calculation.results)
+    const dependenciesAvailability = sectionAvailability(calculation.dependencies)
+    const inputGeometriesAvailability = sectionAvailability(calculation.input_geometries)
+    const outputGeometriesAvailability = sectionAvailability(calculation.output_geometries)
+    const reviewAvailability = sectionAvailability(calculation.review_history)
 
     const dependencies = calculation.dependencies ?? []
     const inputGeometries = calculation.input_geometries ?? []
@@ -172,15 +226,30 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     <div><dt>Quality</dt><dd>{core.quality}</dd></div>
                     <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                     <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "Not recorded"}</dd></div>
+                    {/* The compact label above can be identical for two different rows —
+                        it omits dispersion, solvent and level_of_theory_ref on purpose (see
+                        the schema comment on `levelOfTheorySchema`). Those are the fields
+                        that actually distinguish them, so they get their own rows rather
+                        than being folded into the label. */}
+                    <div><dt>Level of theory ref</dt><dd>{lot?.level_of_theory_ref ?? "Not recorded"}</dd></div>
+                    <div><dt>Dispersion</dt><dd>{lot?.dispersion ?? "Not recorded"}</dd></div>
+                    <div><dt>Solvent</dt><dd>{lot?.solvent ?? "Not recorded"}</dd></div>
                     <div>
                         <dt>Software</dt>
                         <dd>{software ? `${software.software}${software.version ? ` ${software.version}` : ""}` : "Not recorded"}</dd>
                     </div>
+                    <div><dt>Software release ref</dt><dd>{software?.software_release_ref ?? "Not recorded"}</dd></div>
                     <div>
                         <dt>Workflow tool</dt>
                         <dd>{workflow ? `${workflow.workflow_tool}${workflow.version ? ` ${workflow.version}` : ""}` : "Not recorded"}</dd>
                     </div>
+                    <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "Not recorded"}</dd></div>
                     <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "Not recorded"}</dd></div>
+                    <div>
+                        <dt>Literature</dt>
+                        <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "Not recorded"}</dd>
+                    </div>
+                    <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "Not recorded"}</dd></div>
                 </dl>
             </header>
 
@@ -206,13 +275,34 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 </div>
             </section>
 
-            <ResultsSection results={calculation.results ?? null} type={core.type} />
+            <ResultsSection
+                results={calculation.results ?? null}
+                type={core.type}
+                availability={resultsAvailability}
+                contradicted={resultsAvailability === "empty" && available.has_results}
+            />
 
-            <DependenciesSection dependencies={dependencies} ownRef={core.calculation_ref} />
+            <DependenciesSection
+                dependencies={dependencies}
+                ownRef={core.calculation_ref}
+                availability={dependenciesAvailability}
+                contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
+            />
 
-            <GeometriesSection input={inputGeometries} output={outputGeometries} />
+            <GeometriesSection
+                input={inputGeometries}
+                output={outputGeometries}
+                inputAvailability={inputGeometriesAvailability}
+                inputContradicted={inputGeometriesAvailability === "empty" && available.has_input_geometries}
+                outputAvailability={outputGeometriesAvailability}
+                outputContradicted={outputGeometriesAvailability === "empty" && available.has_output_geometries}
+            />
 
-            <ReviewHistorySection entries={reviewHistory} currentStatus={core.review.status} />
+            <ReviewHistorySection
+                entries={reviewHistory}
+                currentStatus={core.review.status}
+                availability={reviewAvailability}
+            />
 
             <OnDemandSections calculation={calculation} available={available} />
         </section>
@@ -289,16 +379,30 @@ function Metric({ label, value }: { label: string; value: number }) {
 // Eager sections
 // ---------------------------------------------------------------------------
 
-function ResultsSection({ results, type }: { results: CalculationRecord["results"]; type: string }) {
+function ResultsSection({ results, type, availability, contradicted }: {
+    results: CalculationRecord["results"]
+    type: string
+    availability: SectionAvailability
+    contradicted: boolean
+}) {
+    // The heading names the same source ResultBody dispatches on
+    // (`results.kind`) rather than `type`, so the two can never disagree —
+    // falling back to `type` only when there is no result to read a kind
+    // from at all.
+    const kindLabel = results ? typeLabel(results.kind) : typeLabel(type)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>
                 <h2 id="results-heading">Result</h2>
-                <p>The primary scientific result for this {typeLabel(type).toLowerCase()} calculation.</p>
+                <p>The primary scientific result for this {kindLabel.toLowerCase()} calculation.</p>
             </div>
-            {results ? <ResultBody results={results} /> : (
-                <p className="empty-projection">No result row is recorded for this calculation.</p>
+            {availability === "populated" && results ? <ResultBody results={results} /> : (
+                <SectionEmptyMessage
+                    availability={availability}
+                    emptyText="No result row is recorded for this calculation."
+                    contradicted={contradicted}
+                />
             )}
         </section>
     )
@@ -331,6 +435,15 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         pairs.push(["Converged", boolLabel(results.path_search.converged)])
         pairs.push(["Points", results.path_search.n_points ?? "Not recorded"])
     }
+    if (pairs.length === 0) {
+        // `results.kind` names a type this page has no branch for, or the
+        // matching sub-object is missing — a payload shape this build
+        // doesn't recognise, not an honest "nothing recorded". Say so
+        // rather than rendering a heading and prose over an empty list.
+        return <p className="empty-projection" role="alert">
+            This result's shape (kind “{results.kind}”) is not recognised by this view.
+        </p>
+    }
     return <dl className="kv-list">{pairs.map(([label, value]) => (
         <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
     ))}</dl>
@@ -345,9 +458,19 @@ function boolLabel(value: boolean | null | undefined) {
  * Renders exactly, and only, the edges the archive returned under
  * `include=dependencies`. No edge here is inferred from `type`, timestamps,
  * or ref ordering — see the module docstring above; this is the one rule
- * the whole slice is graded on.
+ * the whole slice is graded on. Each row's relationship, role and related
+ * ref all come from that one row's own `dep` — see
+ * `CalculationDetailPage.test.tsx`'s per-row binding test, which exists
+ * specifically because a fixture with only one edge cannot tell a correct
+ * per-row read apart from "always show the first row" or "guess the role
+ * from the direction".
  */
-function DependenciesSection({ dependencies, ownRef }: { dependencies: CalculationDependency[]; ownRef: string }) {
+function DependenciesSection({ dependencies, ownRef, availability, contradicted }: {
+    dependencies: CalculationDependency[]
+    ownRef: string
+    availability: SectionAvailability
+    contradicted: boolean
+}) {
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
             <div className="ledger-heading">
@@ -358,7 +481,7 @@ function DependenciesSection({ dependencies, ownRef }: { dependencies: Calculati
                     inferred from calculation type, timestamps, or reference ordering.
                 </p>
             </div>
-            {dependencies.length ? (
+            {availability === "populated" ? (
                 <table className="stage-table" aria-label={`Dependency edges for ${ownRef}`}>
                     <thead>
                         <tr>
@@ -384,33 +507,54 @@ function DependenciesSection({ dependencies, ownRef }: { dependencies: Calculati
                     </tbody>
                 </table>
             ) : (
-                <p className="empty-projection">No dependency edges are recorded for this calculation.</p>
+                <SectionEmptyMessage
+                    availability={availability}
+                    emptyText="No dependency edges are recorded for this calculation."
+                    contradicted={contradicted}
+                />
             )}
         </section>
     )
 }
 
-function GeometriesSection({ input, output }: { input: CalculationGeometryLink[]; output: CalculationGeometryLink[] }) {
+function GeometriesSection({
+    input, output, inputAvailability, inputContradicted, outputAvailability, outputContradicted,
+}: {
+    input: CalculationGeometryLink[]
+    output: CalculationGeometryLink[]
+    inputAvailability: SectionAvailability
+    inputContradicted: boolean
+    outputAvailability: SectionAvailability
+    outputContradicted: boolean
+}) {
     return (
         <section className="ledger-section geometry-ledger" aria-labelledby="geometries-heading">
             <p className="eyebrow">Stored coordinates</p>
             <h2 id="geometries-heading">Geometries</h2>
             <p>Links to the full coordinate records this calculation consumed and produced.</p>
-            <GeometryLinkList title="Input" links={input} emptyText="No input geometries are recorded." />
-            <GeometryLinkList title="Output" links={output} emptyText="No output geometries are recorded." />
+            <GeometryLinkList
+                title="Input" links={input} emptyText="No input geometries are recorded."
+                availability={inputAvailability} contradicted={inputContradicted}
+            />
+            <GeometryLinkList
+                title="Output" links={output} emptyText="No output geometries are recorded."
+                availability={outputAvailability} contradicted={outputContradicted}
+            />
         </section>
     )
 }
 
-function GeometryLinkList({ title, links, emptyText }: {
+function GeometryLinkList({ title, links, emptyText, availability, contradicted }: {
     title: string
     links: CalculationGeometryLink[]
     emptyText: string
+    availability: SectionAvailability
+    contradicted: boolean
 }) {
     return (
         <div>
             <h3 className="ledger-kicker">{title}</h3>
-            {links.length ? (
+            {availability === "populated" ? (
                 <div className="geometry-links">
                     {links.map((link) => (
                         <div className="geometry-link" key={`${title}-${link.geometry_ref}`}>
@@ -422,14 +566,15 @@ function GeometryLinkList({ title, links, emptyText }: {
                         </div>
                     ))}
                 </div>
-            ) : <p className="empty-projection">{emptyText}</p>}
+            ) : <SectionEmptyMessage availability={availability} emptyText={emptyText} contradicted={contradicted} />}
         </div>
     )
 }
 
-function ReviewHistorySection({ entries, currentStatus }: {
+function ReviewHistorySection({ entries, currentStatus, availability }: {
     entries: CalculationRecord["review_history"]
     currentStatus: string
+    availability: SectionAvailability
 }) {
     const rows = entries ?? []
     return (
@@ -439,7 +584,7 @@ function ReviewHistorySection({ entries, currentStatus }: {
                 <h2 id="review-heading">Review history</h2>
                 <p>The current status is {statusLabel(currentStatus)}. This is the record of how it got there.</p>
             </div>
-            {rows.length ? (
+            {availability === "populated" ? (
                 <table className="stage-table" aria-label="Review history">
                     <thead>
                         <tr>
@@ -458,7 +603,15 @@ function ReviewHistorySection({ entries, currentStatus }: {
                         ))}
                     </tbody>
                 </table>
-            ) : <p className="empty-projection">No review history is recorded for this calculation.</p>}
+            ) : (
+                // No `has_review` flag exists on `available_sections` (unlike
+                // the other four eager sections), so there is nothing to
+                // cross-check a contradiction against here.
+                <SectionEmptyMessage
+                    availability={availability}
+                    emptyText="No review history is recorded for this calculation."
+                />
+            )}
         </section>
     )
 }
@@ -473,6 +626,15 @@ function ReviewHistorySection({ entries, currentStatus }: {
  * docstring). `available === false` renders a static, request-free "not
  * present" line; otherwise renders an expandable `<details>` that fetches
  * its own token, once, the first time it opens.
+ *
+ * This is the first surface in the project where content arrives after a
+ * user gesture rather than on page load, so there is no accessible-live-
+ * region precedent to inherit here — opening the disclosure moves focus to
+ * `<summary>` and then swaps its content out from under the user with no
+ * signal a screen reader can pick up on its own. All four states
+ * (idle/loading/error/ready) render inside one persistent
+ * `role="status" aria-live="polite"` node so the DOM node announcing
+ * changes never itself gets removed and replaced — only its content does.
  */
 function LazySection<T>({
     heading, available, notAvailableText, state, onOpen, children,
@@ -501,16 +663,18 @@ function LazySection<T>({
             }}
         >
             <summary><h2 id={headingId}>{heading}</h2></summary>
-            {state.status === "idle" && (
-                <p className="section-note">Expand to load this section from the archive.</p>
-            )}
-            {state.status === "loading" && (
-                <p className="section-note" aria-busy="true">Loading</p>
-            )}
-            {state.status === "error" && (
-                <p className="section-note" role="alert">{state.message}</p>
-            )}
-            {state.status === "ready" && children(state.data)}
+            <div role="status" aria-live="polite">
+                {state.status === "idle" && (
+                    <p className="section-note">Expand to load this section from the archive.</p>
+                )}
+                {state.status === "loading" && (
+                    <p className="section-note" aria-busy="true">Loading</p>
+                )}
+                {state.status === "error" && (
+                    <p className="section-note" role="alert">{state.message}</p>
+                )}
+                {state.status === "ready" && children(state.data)}
+            </div>
         </details>
     )
 }
@@ -567,6 +731,8 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                             <th scope="col">Applied value</th>
                             <th scope="col">Target</th>
                             <th scope="col">Scheme</th>
+                            <th scope="col">Scheme ref</th>
+                            <th scope="col">Frequency scale factor ref</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -576,6 +742,8 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                                 <td data-label="Applied value">{row.applied_value} {row.applied_value_unit}</td>
                                 <td data-label="Target">{row.target_record_ref ?? "Not recorded"}</td>
                                 <td data-label="Scheme">{row.energy_correction_scheme_name ?? "Not recorded"}</td>
+                                <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "Not recorded"}</td>
+                                <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "Not recorded"}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -609,6 +777,18 @@ function GeometryValidationSection({ calculationRef, available }: { calculationR
                             ["Formula matches", boolLabel(row.formula_matches)],
                             ["RMSD", row.rmsd ?? "Not recorded"],
                             ["Reason", row.validation_reason ?? "Not recorded"],
+                            [
+                                "Input geometry",
+                                row.input_geometry_ref
+                                    ? <Link to={`/geometries/${row.input_geometry_ref}`}>{row.input_geometry_ref}</Link>
+                                    : "Not recorded",
+                            ],
+                            [
+                                "Output geometry",
+                                row.output_geometry_ref
+                                    ? <Link to={`/geometries/${row.output_geometry_ref}`}>{row.output_geometry_ref}</Link>
+                                    : "Not recorded",
+                            ],
                         ]} />
                     </>
                 )
@@ -630,12 +810,28 @@ function SCFStabilitySection({ calculationRef, available }: { calculationRef: st
             {(rows) => {
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no stability row.</p>
-                return <KVList pairs={[
-                    ["Status", statusLabel(row.status)],
-                    ["Lowest eigenvalue", row.lowest_eigenvalue ?? "Not recorded"],
-                    ["Instability count", row.instability_count ?? "Not recorded"],
-                    ["Re-optimized wavefunction", boolLabel(row.reoptimized_wavefunction)],
-                ]} />
+                return (
+                    <>
+                        {row.source_calculation_ref && (
+                            <p className="section-note">
+                                The source calculation below is the analysis's own provenance, and is not
+                                necessarily this calculation.
+                            </p>
+                        )}
+                        <KVList pairs={[
+                            ["Status", statusLabel(row.status)],
+                            ["Lowest eigenvalue", row.lowest_eigenvalue ?? "Not recorded"],
+                            ["Instability count", row.instability_count ?? "Not recorded"],
+                            ["Re-optimized wavefunction", boolLabel(row.reoptimized_wavefunction)],
+                            [
+                                "Source calculation",
+                                row.source_calculation_ref
+                                    ? <Link to={`/calculations/${row.source_calculation_ref}`}>{row.source_calculation_ref}</Link>
+                                    : "Not recorded",
+                            ],
+                        ]} />
+                    </>
+                )
             }}
         </LazySection>
     )
@@ -906,13 +1102,26 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
         >
             {(rows) => (rows?.length ? (
                 <table className="stage-table" aria-label="Calculation artifacts">
-                    <thead><tr><th scope="col">Kind</th><th scope="col">Filename</th><th scope="col">Size</th></tr></thead>
+                    <thead>
+                        <tr>
+                            <th scope="col">Kind</th>
+                            <th scope="col">Filename</th>
+                            <th scope="col">Size</th>
+                            <th scope="col">Artifact ref</th>
+                            <th scope="col">SHA-256</th>
+                        </tr>
+                    </thead>
                     <tbody>
                         {rows.map((row, index) => (
                             <tr key={`artifact-${index}`}>
                                 <td data-label="Kind">{statusLabel(row.kind)}</td>
                                 <td data-label="Filename">{row.filename ?? "Not recorded"}</td>
                                 <td data-label="Size">{row.bytes.toLocaleString()} bytes</td>
+                                <td data-label="Artifact ref">{row.artifact_ref ?? "Not recorded"}</td>
+                                {/* The sha256 is the artifact's identity — the storage URI (row.uri)
+                                    is not a downloadable link, so this is the one stable handle for
+                                    the bytes this row describes. */}
+                                <td data-label="SHA-256"><code>{row.sha256}</code></td>
                             </tr>
                         ))}
                     </tbody>
