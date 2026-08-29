@@ -11,6 +11,32 @@ const speciesRef = "spc_abcde234567abcde234567abcd"
 const speciesRefTwo = "spc_bcdef234567bcdef234567abcde"
 const entryRef = "spe_cdefg234567cdefg234567abcd"
 const server = setupServer()
+
+function overviewSpecies(ref = speciesRef) {
+    return {
+        species_ref: ref,
+        canonical_smiles: "[OH2]",
+        inchi_key: "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
+        formula: "H2O",
+        charge: 0,
+        multiplicity: 1,
+        stereo_kind: "achiral",
+        entries: [{
+            species_entry_ref: entryRef,
+            species_entry_kind: "minimum",
+            electronic_state_kind: "ground",
+            species_entry_label: "ground electronic state",
+            review: { status: "not_reviewed" },
+            availability: {
+                has_thermo: true,
+                has_statmech: true,
+                has_transport: false,
+                has_conformers: true,
+                calculation_count: 14,
+            },
+        }],
+    }
+}
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
 afterAll(() => server.close())
@@ -46,12 +72,16 @@ describe("public archive shell", () => {
     })
 
     it("routes spc references to species even when entries are returned", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [{ species_entry_ref: entryRef }] }] })))
+        server.use(http.get("/api/v1/scientific/species/search", () => (
+            HttpResponse.json({ records: [overviewSpecies()] })
+        )))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), speciesRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
-        expect(await screen.findByRole("heading", { name: "Species" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
+        expect(screen.getByRole("link", { name: "ground electronic state" }))
+            .toHaveAttribute("href", `/species-entries/${entryRef}`)
     })
 
     it("routes spe references to the precise entry", async () => {
@@ -89,9 +119,14 @@ describe("public archive shell", () => {
     })
 
     it("renders formula search results as species-grain Links and follows one", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [
-            { species_ref: speciesRef, entries: [{ species_entry_ref: entryRef }] }, { species_ref: speciesRefTwo, entries: [] },
-        ] })))
+        server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
+            const query = new URL(request.url).searchParams
+            if (query.has("species_ref")) return HttpResponse.json({ records: [overviewSpecies()] })
+            return HttpResponse.json({ records: [
+                { species_ref: speciesRef, entries: [{ species_entry_ref: entryRef }] },
+                { species_ref: speciesRefTwo, entries: [] },
+            ] })
+        }))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
         await user.click(screen.getByRole("button", { name: "Search" }))
@@ -99,7 +134,7 @@ describe("public archive shell", () => {
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
         expect(screen.getByRole("link", { name: speciesRefTwo })).toBeVisible()
         await user.click(result)
-        expect(await screen.findByRole("heading", { name: "Species" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
     })
 
     it("keeps structure search at entry grain", async () => {
@@ -183,14 +218,41 @@ describe("public archive shell", () => {
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
-    ["/species", "Species", undefined], ["/species/spc_abcde234567abcde234567abcd", "Species", speciesRef],
-    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"], ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Calculation", "calc_abc"], ["/geometries/geom_abc", "Geometry", "geom_abc"],
-    ["/reactions", "Reactions", undefined], ["/reactions/rxn_abc", "Reaction", "rxn_abc"], ["/methods", "Methods", undefined],
+    ["/species", "Species", undefined],
+    ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
+    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
+    ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
+    ["/calculations/calc_abc", "Calculation", "calc_abc"],
+    ["/geometries/geom_abc", "Geometry", "geom_abc"],
+    ["/reactions", "Reactions", undefined],
+    ["/reactions/rxn_abc", "Reaction", "rxn_abc"],
+    ["/methods", "Methods", undefined],
 ]
 
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     it("renders the declared public route deterministically", async () => {
+        if (path.startsWith("/species/")) {
+            server.use(http.get("/api/v1/scientific/species/search", () => (
+                HttpResponse.json({ records: [overviewSpecies()] })
+            )))
+        }
+        if (path.startsWith("/conformer-groups/")) {
+            server.use(http.get("/api/v1/scientific/conformer-groups/:ref", () => HttpResponse.json({
+                record: {
+                    conformer_group: {
+                        conformer_group_ref: "cfg_abc", label: "Conformer group",
+                        review: { status: "not_reviewed" },
+                    },
+                    species: { species_ref: speciesRef, species_entry_ref: entryRef },
+                    observations_summary: { total: 0, by_scientific_origin: {} },
+                    evidence_summary: {
+                        calculation_count: 0, optimization_chain_count: 0, geometry_count: 0,
+                        evidence_coverage: { opt: 0, freq: 0, sp: 0 },
+                    },
+                    observations: [], calculations: [], geometries: [],
+                },
+            })))
+        }
         window.history.replaceState({}, "", path); render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
         if (ref) expect(screen.getByText(ref)).toBeVisible()
