@@ -40,14 +40,14 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                     {rows.map((row) => (
                         <tr key={`torsion-${row.torsion_index}`}>
                             <td data-label="Index">{row.torsion_index}</td>
-                            <td data-label="Treatment">{row.treatment_kind ? statusLabel(row.treatment_kind) : "Not recorded"}</td>
-                            <td data-label="Top">{row.top_description ?? "Not recorded"}</td>
+                            <td data-label="Treatment">{row.treatment_kind ? statusLabel(row.treatment_kind) : "not recorded"}</td>
+                            <td data-label="Top">{row.top_description ?? "not recorded"}</td>
                             <td data-label="Dimension">{row.dimension}</td>
-                            <td data-label="Symmetry number">{row.symmetry_number ?? "Not recorded"}</td>
+                            <td data-label="Symmetry number">{row.symmetry_number ?? "not recorded"}</td>
                             <td data-label="Source scan">
                                 {row.source_scan_calculation_ref
                                     ? <Link to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
-                                    : "Not recorded"}
+                                    : "not recorded"}
                             </td>
                             <td data-label="Invalidated">{row.invalidated_reason ?? "Not invalidated"}</td>
                         </tr>

@@ -1,22 +1,25 @@
 import { Link } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
+import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { words } from "../domain/provenanceFormat"
 import { sectionLabels } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
+import { Formula } from "./Formula"
 
-function multiplicityLabel(multiplicity: number) {
-    const names: Record<number, string> = { 1: "singlet", 2: "doublet", 3: "triplet" }
-    return names[multiplicity] ? `${names[multiplicity]} (${multiplicity})` : String(multiplicity)
-}
-
+// `words` returns `null` for a missing/empty token (a case none of the
+// tokens on this component's own wire type can actually hit -- `species_entry_kind`,
+// `electronic_state_kind` and `review.status` are all non-nullable enum
+// strings) but the fallback keeps this call site total rather than
+// asserting a non-null enum shape it doesn't otherwise depend on.
 function displayToken(value: string) {
-    return value.replaceAll("_", " ")
+    return words(value) ?? value
 }
 
 export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
     return <header className="entry-header">
         <p className="eyebrow">Species entry · deposited scientific record</p>
         <div className="entry-title">
-            <h1>{entry.formula ?? entry.canonicalSmiles}</h1>
+            <h1>{entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}</h1>
             <span className="state-mark">{entry.electronic_state_kind}</span>
         </div>
         <dl className="identity-grid">
@@ -31,7 +34,10 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
                 <dt>Entry kind / state</dt>
                 <dd>{displayToken(entry.species_entry_kind)} / {displayToken(entry.electronic_state_kind)}</dd>
             </div>
-            <div><dt>Charge / multiplicity</dt><dd>{entry.charge} / {multiplicityLabel(entry.multiplicity)}</dd></div>
+            <div>
+                <dt>Charge / multiplicity</dt>
+                <dd>{chargeDisplay(entry.charge)} / {spinDisplay(entry.multiplicity)}</dd>
+            </div>
             <div><dt>Review</dt><dd>{displayToken(entry.review.status)}</dd></div>
             <div>
                 <dt>Archive availability</dt>

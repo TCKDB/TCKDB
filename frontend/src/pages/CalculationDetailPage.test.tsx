@@ -250,6 +250,40 @@ describe("CalculationDetailPage", () => {
         expect(within(workflowRefRow).getByText("wfr_1")).toBeVisible()
     })
 
+    it("does not stutter the software/workflow-tool name when the version already opens with it", async () => {
+        // Regression test for the exact live defect the brief names: naive
+        // `${name} ${version}` concatenation on this fixture's
+        // `version: "Gaussian 16, Revision C.02"` (which already opens with
+        // "Gaussian") used to render "Gaussian Gaussian 16, Revision C.02".
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const context = screen.getByText("Calculation ref").closest(".record-context") as HTMLElement
+        const softwareRow = within(context).getByText("Software", { selector: "dt" }).closest("div") as HTMLElement
+        expect(within(softwareRow).getByText("Gaussian 16, Revision C.02")).toBeVisible()
+        expect(within(softwareRow).queryByText(/Gaussian Gaussian/)).not.toBeInTheDocument()
+
+        // workflow_tool_release's version ("1.1.0") does NOT already open
+        // with its name ("ARC"), so this exercises the concatenating branch.
+        const workflowRow = within(context).getByText("Workflow tool", { selector: "dt" }).closest("div") as HTMLElement
+        expect(within(workflowRow).getByText("ARC 1.1.0")).toBeVisible()
+    })
+
+    it("renders the owner species' charge and multiplicity through the shared chemistry-format rules, not raw numbers", async () => {
+        // mockRecord's owner species carries charge: 0, multiplicity: 2 —
+        // a raw render would show "0 / 2"; the shared rules render the
+        // charge as a signed quantity ("0" for neutral) and the
+        // multiplicity paired with its spin word ("doublet (2)").
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const ownerSection = screen.getByRole("heading", { name: "Owner" }).closest("section") as HTMLElement
+        const chargeRow = within(ownerSection).getByText("Charge / multiplicity").closest("div") as HTMLElement
+        expect(within(chargeRow).getByText("0 / doublet (2)")).toBeVisible()
+    })
+
     it("renders the literature citation and its own stable ref, never dropping it silently", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()

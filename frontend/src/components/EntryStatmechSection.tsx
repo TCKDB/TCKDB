@@ -10,9 +10,12 @@ import {
     type StatmechRecord,
     type StatmechSectionToken,
 } from "../api/statmechApi"
+import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
+import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
 import { LazyRowBody } from "./LazyRowBody"
+import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SourceCalculationsTable } from "./SourceCalculationsTable"
@@ -37,8 +40,8 @@ import { SupersessionNotice } from "./SupersessionNotice"
 // ---------------------------------------------------------------------------
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
-const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
-const boolLabel = (value: boolean | null | undefined) => (value === null || value === undefined ? "Not recorded" : value ? "Yes" : "No")
+const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
+const boolLabel = (value: boolean | null | undefined) => (value === null || value === undefined ? "not recorded" : value ? "Yes" : "No")
 
 function reviewSummaryText(summary: StatmechListResponse["review_summary"]) {
     const parts: string[] = []
@@ -170,12 +173,12 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
             >
                 {(_record, rows) => (rows && rows.length > 0 ? (
                     <table className="stage-table" aria-label="Electronic levels">
-                        <thead><tr><th scope="col">Level</th><th scope="col">Energy (cm-1)</th><th scope="col">Degeneracy</th></tr></thead>
+                        <thead><tr><th scope="col">Level</th><th scope="col">Energy (cm⁻¹)</th><th scope="col">Degeneracy</th></tr></thead>
                         <tbody>
                             {rows.map((row) => (
                                 <tr key={`level-${row.level_index}`}>
                                     <td data-label="Level">{row.level_index}</td>
-                                    <td data-label="Energy (cm-1)">{row.energy_cm1}</td>
+                                    <td data-label="Energy (cm⁻¹)">{row.energy_cm1}</td>
                                     <td data-label="Degeneracy">{row.degeneracy}</td>
                                 </tr>
                             ))}
@@ -205,11 +208,14 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
                                             <Link to={`/calculations/${ref}`}>{ref}</Link>
                                         </span>
                                     ))
-                                    : "Not recorded"}
+                                    : "not recorded"}
                             </dd>
                         </div>
-                        <div><dt>Frequency scale factor</dt><dd>{summary.frequency_scale_factor_value ?? "Not recorded"}</dd></div>
-                        <div><dt>Note</dt><dd>{summary.note ?? "Not recorded"}</dd></div>
+                        <div>
+                            <dt>Frequency scale factor</dt>
+                            <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", summary.frequency_scale_factor_value)} /></dd>
+                        </div>
+                        <div><dt>Note</dt><dd>{summary.note ?? "not recorded"}</dd></div>
                     </dl>
                 ) : <p className="empty-projection">The archive returned no frequencies summary.</p>}
             </StatmechLazySection>
@@ -252,7 +258,7 @@ function StatmechList({ entryRef, response }: { entryRef: string; response: Stat
                                 <tr key={`review-${index}`}>
                                     <td data-label="Status">{statusLabel(row.status)}</td>
                                     <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
-                                    <td data-label="Note">{row.note ?? "Not recorded"}</td>
+                                    <td data-label="Note">{row.note ?? "not recorded"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -276,13 +282,16 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
 
             <dl className="kv-list">
-                <div><dt>Statmech treatment</dt><dd>{core.statmech_treatment ? statusLabel(core.statmech_treatment) : "Not recorded"}</dd></div>
-                <div><dt>Rigid-rotor kind</dt><dd>{core.rigid_rotor_kind ? statusLabel(core.rigid_rotor_kind) : "Not recorded"}</dd></div>
-                <div><dt>Point group</dt><dd>{core.point_group ?? "Not recorded"}</dd></div>
-                <div><dt>External symmetry</dt><dd>{core.external_symmetry ?? "Not recorded"}</dd></div>
+                <div><dt>Statmech treatment</dt><dd>{core.statmech_treatment ? statusLabel(core.statmech_treatment) : "not recorded"}</dd></div>
+                <div><dt>Rigid-rotor kind</dt><dd>{core.rigid_rotor_kind ? statusLabel(core.rigid_rotor_kind) : "not recorded"}</dd></div>
+                <div><dt>Point group</dt><dd>{core.point_group ?? "not recorded"}</dd></div>
+                <div><dt>External symmetry</dt><dd>{core.external_symmetry ?? "not recorded"}</dd></div>
                 <div><dt>Linear molecule</dt><dd>{boolLabel(core.is_linear)}</dd></div>
-                <div><dt>Optical isomers</dt><dd>{core.optical_isomers ?? "Not recorded"}</dd></div>
-                <div><dt>Frequency scale factor</dt><dd>{core.frequency_scale_factor_value ?? "Not recorded"}</dd></div>
+                <div><dt>Optical isomers</dt><dd>{core.optical_isomers ?? "not recorded"}</dd></div>
+                <div>
+                    <dt>Frequency scale factor</dt>
+                    <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", core.frequency_scale_factor_value)} /></dd>
+                </div>
                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
             </dl>
 
@@ -304,20 +313,17 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
             {record.frequency_scale_factor && (
                 <p className="section-note">
                     Frequency scale factor <code>{record.frequency_scale_factor.frequency_scale_factor_ref}</code>:
-                    {` ${record.frequency_scale_factor.value} (${statusLabel(record.frequency_scale_factor.scale_kind)})`}
+                    {` ${formatQuantity("statmech_frequency_scale_factor", record.frequency_scale_factor.value)?.value
+                        ?? record.frequency_scale_factor.value} (${statusLabel(record.frequency_scale_factor.scale_kind)})`}
                     {record.frequency_scale_factor.level_of_theory ? ` · ${lotLabel(record.frequency_scale_factor.level_of_theory)}` : ""}
                 </p>
             )}
 
             <p className="section-note">
                 Software:{" "}
-                {record.software_release
-                    ? `${record.software_release.software}${record.software_release.version ? ` ${record.software_release.version}` : ""}`
-                    : "Not recorded"}
+                {softwareLabel(record.software_release) ?? "not recorded"}
                 {" · "}Workflow:{" "}
-                {record.workflow_tool_release
-                    ? `${record.workflow_tool_release.workflow_tool}${record.workflow_tool_release.version ? ` ${record.workflow_tool_release.version}` : ""}`
-                    : "Not recorded"}
+                {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
             </p>
         </article>
     )

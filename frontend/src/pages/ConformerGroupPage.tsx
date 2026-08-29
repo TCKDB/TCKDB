@@ -220,10 +220,10 @@ function CalculationTable({ calculations, observationRef }: {
                         <td data-label="Level of theory">
                             {calculation.level_of_theory
                                 ? lotLabel(calculation.level_of_theory)
-                                : "Not recorded"}
+                                : "not recorded"}
                         </td>
                         <td data-label="Software / workflow">
-                            {calculation.software_release?.software ?? "Not recorded"}
+                            {calculation.software_release?.software ?? "not recorded"}
                             {calculation.workflow_tool_release?.workflow_tool
                                 ? ` · ${calculation.workflow_tool_release.workflow_tool}`
                                 : ""}
@@ -231,7 +231,7 @@ function CalculationTable({ calculations, observationRef }: {
                         <td data-label="Review">
                             {calculation.review
                                 ? statusLabel(calculation.review.status)
-                                : "Not recorded"}
+                                : "not recorded"}
                         </td>
                         <td data-label="Record">
                             <Link to={`/calculations/${calculation.calculation_ref}`}>

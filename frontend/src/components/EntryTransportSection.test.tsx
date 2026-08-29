@@ -128,7 +128,8 @@ describe("EntryTransportSection", () => {
         expect(within(card).getByText("Superseded")).toBeVisible()
         expect(codeAfter(card, "replaced by")).toBe("trn_one_v2")
         expect(codeAfter(card, "current record in this chain is")).toBe("trn_one_v3")
-        expect(within(card).getByText("3.8")).toBeVisible()
+        // Sigma is now formatted at 3dp (`quantityFormat.ts`'s digits table).
+        expect(within(card).getByText("3.800")).toBeVisible()
     })
 
     it("binds sigma and epsilon/k to their own labelled row — never swapped", async () => {
@@ -137,7 +138,9 @@ describe("EntryTransportSection", () => {
         ]))))
         page()
         const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
-        expect(ddFor(card, "Sigma (Å)")).toBe("3.8")
+        // Sigma is now formatted at 3dp (`quantityFormat.ts`'s digits table);
+        // epsilon/k at 1dp already matched its input's own precision.
+        expect(ddFor(card, "Sigma (Å)")).toBe("3.800")
         expect(ddFor(card, "Epsilon / k (K)")).toBe("250.1")
     })
 

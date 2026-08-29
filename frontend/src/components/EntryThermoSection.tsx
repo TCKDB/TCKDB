@@ -1,10 +1,12 @@
-import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
 import { lotLabel } from "../api/scientificSchemas"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
+import { softwareLabel } from "../domain/provenanceFormat"
+import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
+import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
@@ -123,10 +125,16 @@ function ThermoRecordCard({ record }: { record: ThermoRecord }) {
             <dl className="kv-list">
                 <div><dt>Scientific origin</dt><dd>{record.scientific_origin}</dd></div>
                 <div><dt>Model kind</dt><dd>{record.model_kind}</dd></div>
-                <div><dt>H298</dt><dd>{formatQuantity(record.h298_kj_mol, "kJ/mol")}</dd></div>
-                <div><dt>H298 uncertainty</dt><dd>{formatQuantity(record.h298_uncertainty_kj_mol, "kJ/mol")}</dd></div>
-                <div><dt>S298</dt><dd>{formatQuantity(record.s298_j_mol_k, "J/mol/K")}</dd></div>
-                <div><dt>S298 uncertainty</dt><dd>{formatQuantity(record.s298_uncertainty_j_mol_k, "J/mol/K")}</dd></div>
+                <div><dt>H298</dt><dd><QuantityValue value={formatQuantity("thermo_h298_kj_mol", record.h298_kj_mol)} /></dd></div>
+                <div>
+                    <dt>H298 uncertainty</dt>
+                    <dd><QuantityValue value={formatQuantity("thermo_h298_uncertainty_kj_mol", record.h298_uncertainty_kj_mol)} /></dd>
+                </div>
+                <div><dt>S298</dt><dd><QuantityValue value={formatQuantity("thermo_s298_j_mol_k", record.s298_j_mol_k)} /></dd></div>
+                <div>
+                    <dt>S298 uncertainty</dt>
+                    <dd><QuantityValue value={formatQuantity("thermo_s298_uncertainty_j_mol_k", record.s298_uncertainty_j_mol_k)} /></dd>
+                </div>
             </dl>
 
             <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} />
@@ -141,10 +149,6 @@ function ThermoRecordCard({ record }: { record: ThermoRecord }) {
     )
 }
 
-function formatQuantity(value: number | null | undefined, unit: string): ReactNode {
-    return value === null || value === undefined ? "Not recorded" : `${value} ${unit}`
-}
-
 function TemperatureCoverageBlock({ coverage, thermoRef }: {
     coverage: ThermoRecord["temperature_coverage"] | null
     thermoRef: string
@@ -156,7 +160,7 @@ function TemperatureCoverageBlock({ coverage, thermoRef }: {
                 <dl className="kv-list">
                     <div>
                         <dt>Record range (K)</dt>
-                        <dd>{coverage.record_min_k ?? "Not recorded"}–{coverage.record_max_k ?? "Not recorded"}</dd>
+                        <dd>{coverage.record_min_k ?? "not recorded"}–{coverage.record_max_k ?? "not recorded"}</dd>
                     </div>
                     <div>
                         <dt>Requested range (K)</dt>
@@ -181,9 +185,9 @@ function NasaBlock({ nasa, thermoRef }: { nasa: ThermoRecord["nasa"] | null; the
             {nasa ? (
                 <>
                     <dl className="kv-list">
-                        <div><dt>T low (K)</dt><dd>{nasa.t_low ?? "Not recorded"}</dd></div>
-                        <div><dt>T mid (K)</dt><dd>{nasa.t_mid ?? "Not recorded"}</dd></div>
-                        <div><dt>T high (K)</dt><dd>{nasa.t_high ?? "Not recorded"}</dd></div>
+                        <div><dt>T low (K)</dt><dd>{nasa.t_low ?? "not recorded"}</dd></div>
+                        <div><dt>T mid (K)</dt><dd>{nasa.t_mid ?? "not recorded"}</dd></div>
+                        <div><dt>T high (K)</dt><dd>{nasa.t_high ?? "not recorded"}</dd></div>
                     </dl>
                     <div className="table-scroll">
                         <table className="stage-table" aria-label={`NASA-7 coefficients for ${thermoRef}`}>
@@ -197,13 +201,13 @@ function NasaBlock({ nasa, thermoRef }: { nasa: ThermoRecord["nasa"] | null; the
                                 <tr>
                                     <td data-label="Range">Low</td>
                                     {(nasa.low_temperature_coefficients ?? []).map((coefficient, index) => (
-                                        <td data-label={`a${index + 1}`} key={`low-${index}`}>{coefficient ?? "Not recorded"}</td>
+                                        <td data-label={`a${index + 1}`} key={`low-${index}`}>{coefficient ?? "not recorded"}</td>
                                     ))}
                                 </tr>
                                 <tr>
                                     <td data-label="Range">High</td>
                                     {(nasa.high_temperature_coefficients ?? []).map((coefficient, index) => (
-                                        <td data-label={`a${index + 1}`} key={`high-${index}`}>{coefficient ?? "Not recorded"}</td>
+                                        <td data-label={`a${index + 1}`} key={`high-${index}`}>{coefficient ?? "not recorded"}</td>
                                     ))}
                                 </tr>
                             </tbody>
@@ -265,8 +269,8 @@ function WilhoitBlock({ wilhoit, thermoRef }: { wilhoit: ThermoRecord["wilhoit"]
                     <div><dt>Cp∞ (J/mol/K)</dt><dd>{wilhoit.cp_inf_j_mol_k}</dd></div>
                     <div><dt>B (K)</dt><dd>{wilhoit.b_k}</dd></div>
                     <div><dt>a0 / a1 / a2 / a3</dt><dd>{wilhoit.a0}, {wilhoit.a1}, {wilhoit.a2}, {wilhoit.a3}</dd></div>
-                    <div><dt>H0 (kJ/mol)</dt><dd>{wilhoit.h0_kj_mol ?? "Not recorded"}</dd></div>
-                    <div><dt>S0 (J/mol/K)</dt><dd>{wilhoit.s0_j_mol_k ?? "Not recorded"}</dd></div>
+                    <div><dt>H0 (kJ/mol)</dt><dd>{wilhoit.h0_kj_mol ?? "not recorded"}</dd></div>
+                    <div><dt>S0 (J/mol/K)</dt><dd>{wilhoit.s0_j_mol_k ?? "not recorded"}</dd></div>
                 </dl>
             ) : <p className="empty-projection">No Wilhoit fit recorded for this record.</p>}
         </section>
@@ -295,10 +299,10 @@ function PointsBlock({ points, thermoRef }: { points: ThermoRecord["points"] | n
                                 {points.map((point, index) => (
                                     <tr key={`${thermoRef}-point-${index}`}>
                                         <td data-label="T (K)">{point.temperature_k}</td>
-                                        <td data-label="Cp (J/mol/K)">{point.cp_j_mol_k ?? "Not recorded"}</td>
-                                        <td data-label="H (kJ/mol)">{point.h_kj_mol ?? "Not recorded"}</td>
-                                        <td data-label="S (J/mol/K)">{point.s_j_mol_k ?? "Not recorded"}</td>
-                                        <td data-label="G (kJ/mol)">{point.g_kj_mol ?? "Not recorded"}</td>
+                                        <td data-label="Cp (J/mol/K)">{point.cp_j_mol_k ?? "not recorded"}</td>
+                                        <td data-label="H (kJ/mol)">{point.h_kj_mol ?? "not recorded"}</td>
+                                        <td data-label="S (J/mol/K)">{point.s_j_mol_k ?? "not recorded"}</td>
+                                        <td data-label="G (kJ/mol)">{point.g_kj_mol ?? "not recorded"}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -364,23 +368,19 @@ function ProvenanceBlock({ provenance, thermoRef }: {
             <dl className="kv-list">
                 <div>
                     <dt>Level of theory</dt>
-                    <dd>{provenance.level_of_theory ? lotLabel(provenance.level_of_theory) : "Not recorded"}</dd>
+                    <dd>{provenance.level_of_theory ? lotLabel(provenance.level_of_theory) : "not recorded"}</dd>
                 </div>
-                <div><dt>Level of theory ref</dt><dd>{provenance.level_of_theory?.level_of_theory_ref ?? "Not recorded"}</dd></div>
+                <div><dt>Level of theory ref</dt><dd>{provenance.level_of_theory?.level_of_theory_ref ?? "not recorded"}</dd></div>
                 <div>
                     <dt>Software</dt>
-                    <dd>
-                        {provenance.software
-                            ? `${provenance.software.software}${provenance.software.version ? ` ${provenance.software.version}` : ""}`
-                            : "Not recorded"}
-                    </dd>
+                    <dd>{softwareLabel(provenance.software) ?? "not recorded"}</dd>
                 </div>
                 <div>
                     <dt>Primary calculation</dt>
                     <dd>
                         {provenance.primary_calculation?.calculation_ref
                             ? <Link to={`/calculations/${provenance.primary_calculation.calculation_ref}`}>{provenance.primary_calculation.calculation_ref}</Link>
-                            : "Not recorded"}
+                            : "not recorded"}
                     </dd>
                 </div>
                 <div>
@@ -388,7 +388,7 @@ function ProvenanceBlock({ provenance, thermoRef }: {
                     <dd>
                         {provenance.freq_calculation_ref
                             ? <Link to={`/calculations/${provenance.freq_calculation_ref}`}>{provenance.freq_calculation_ref}</Link>
-                            : "Not recorded"}
+                            : "not recorded"}
                     </dd>
                 </div>
                 <div>
@@ -396,12 +396,12 @@ function ProvenanceBlock({ provenance, thermoRef }: {
                     <dd>
                         {provenance.sp_calculation_ref
                             ? <Link to={`/calculations/${provenance.sp_calculation_ref}`}>{provenance.sp_calculation_ref}</Link>
-                            : "Not recorded"}
+                            : "not recorded"}
                     </dd>
                 </div>
                 {/* No dedicated statmech detail page exists in this project (see the
                     module docstring), so this stays plain text rather than a dead link. */}
-                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ?? "Not recorded"}</dd></div>
+                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ?? "not recorded"}</dd></div>
             </dl>
         </section>
     )
@@ -434,7 +434,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
                     <dd>{groupAdditivity.scheme_name}{groupAdditivity.scheme_version ? ` (${groupAdditivity.scheme_version})` : ""}</dd>
                 </div>
                 <div><dt>Scheme ref</dt><dd>{groupAdditivity.scheme_ref}</dd></div>
-                <div><dt>Code commit</dt><dd>{groupAdditivity.code_commit ?? "Not recorded"}</dd></div>
+                <div><dt>Code commit</dt><dd>{groupAdditivity.code_commit ?? "not recorded"}</dd></div>
             </dl>
             {groupAdditivity.components && groupAdditivity.components.length > 0 && (
                 <div className="table-scroll table-scroll--compact">
@@ -454,8 +454,8 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
                                     <td data-label="Group">{component.group_label}</td>
                                     <td data-label="Kind">{component.component_kind}</td>
                                     <td data-label="Count">{component.count}</td>
-                                    <td data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "Not recorded"}</td>
-                                    <td data-label="S298 contribution (J/mol/K)">{component.s298_contribution_j_mol_k ?? "Not recorded"}</td>
+                                    <td data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "not recorded"}</td>
+                                    <td data-label="S298 contribution (J/mol/K)">{component.s298_contribution_j_mol_k ?? "not recorded"}</td>
                                 </tr>
                             ))}
                         </tbody>

@@ -6,7 +6,7 @@ import { RecordStatus } from "../components/RecordStatus"
 import { useConformerObservation } from "../hooks/useConformerObservation"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
-const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
+const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 const originTitle = (origin?: string | null) => (
     origin ? `${origin.charAt(0).toUpperCase()}${origin.slice(1)} observation` : "Conformer observation"
 )
@@ -102,7 +102,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 </p>
                 <dl className="basin-context">
                     <div><dt>Observation ref</dt><dd>{core.conformer_observation_ref}</dd></div>
-                    <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "Not recorded"}</dd></div>
+                    <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
                     <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                     <div>
                         <dt>Conformer basin</dt>
@@ -157,7 +157,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         {stages.map(([stage, levels]) => (
                             <div key={stage}>
                                 <dt>{stage}</dt>
-                                <dd>{levels.map((level) => lotLabel(level)).join(", ") || "Not recorded"}</dd>
+                                <dd>{levels.map((level) => lotLabel(level)).join(", ") || "not recorded"}</dd>
                             </div>
                         ))}
                     </dl>
@@ -256,7 +256,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 <tr key={`review-entry-${index}`}>
                                     <td data-label="Status">{statusLabel(entry.status)}</td>
                                     <td data-label="Reviewed at">{isoDate(entry.reviewed_at)}</td>
-                                    <td data-label="Note">{entry.note ?? "Not recorded"}</td>
+                                    <td data-label="Note">{entry.note ?? "not recorded"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -365,10 +365,10 @@ function CalculationTable({ calculations, observationRef }: {
                         <td data-label="Level of theory">
                             {calculation.level_of_theory
                                 ? lotLabel(calculation.level_of_theory)
-                                : "Not recorded"}
+                                : "not recorded"}
                         </td>
                         <td data-label="Software / workflow">
-                            {calculation.software_release?.software ?? "Not recorded"}
+                            {calculation.software_release?.software ?? "not recorded"}
                             {calculation.workflow_tool_release?.workflow_tool
                                 ? ` · ${calculation.workflow_tool_release.workflow_tool}`
                                 : ""}
@@ -376,7 +376,7 @@ function CalculationTable({ calculations, observationRef }: {
                         <td data-label="Review">
                             {calculation.review
                                 ? statusLabel(calculation.review.status)
-                                : "Not recorded"}
+                                : "not recorded"}
                         </td>
                         <td data-label="Record">
                             <Link to={`/calculations/${calculation.calculation_ref}`}>

@@ -33,7 +33,7 @@ function sectionAvailability<T>(value: T[] | null | undefined): SectionAvailabil
 }
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
-const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
+const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
 const CALC_TYPE_LABELS: Record<string, string> = {
     opt: "Optimisation",
@@ -368,7 +368,7 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
                                         <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
                                     </td>
                                     <td data-label="Type">{typeLabel(link.calculation_type)}</td>
-                                    {showRole && <td data-label="Role">{link.role ? statusLabel(link.role) : "Not recorded"}</td>}
+                                    {showRole && <td data-label="Role">{link.role ? statusLabel(link.role) : "not recorded"}</td>}
                                 </tr>
                             ))}
                         </tbody>

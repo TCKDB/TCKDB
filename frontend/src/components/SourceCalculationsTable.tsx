@@ -52,7 +52,7 @@ export function SourceCalculationsTable({ rows }: { rows: SourceCalculationRow[]
                             <td data-label="Role">{statusLabel(row.role)}</td>
                             <td data-label="Calculation"><Link to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
                             <td data-label="Type">{statusLabel(row.calculation_type)}</td>
-                            <td data-label="Level of theory">{row.level_of_theory ? lotLabel(row.level_of_theory) : "Not recorded"}</td>
+                            <td data-label="Level of theory">{row.level_of_theory ? lotLabel(row.level_of_theory) : "not recorded"}</td>
                             <td data-label="Review">{statusLabel(row.review.status)}</td>
                         </tr>
                     ))}
