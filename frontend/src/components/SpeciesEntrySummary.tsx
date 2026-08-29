@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
@@ -15,81 +16,150 @@ function displayToken(value: string) {
     return words(value) ?? value
 }
 
+function availabilityText(entry: SpeciesEntryProjection) {
+    return `${entry.availability.has_conformers ? "Conformers" : "No conformers"}`
+        + `${entry.availability.has_thermo ? " · thermo" : ""}`
+        + `${entry.availability.has_statmech ? " · statmech" : ""}`
+        + `${entry.availability.has_transport ? " · transport" : ""}`
+}
+
+/**
+ * Chemistry leads, references follow. The formula is the largest thing on
+ * the page; the SMILES string sits directly beneath it as a "chemistry"
+ * fact, not a database field. Stable public refs (`spc_…`, `spe_…`) move
+ * to a quiet strip below the fact row — still visible, still copyable
+ * (`CopyButton`), never competing with the science for the reader's first
+ * look. See the design brief: "it shows the public ref but that's
+ * terrible to show" was about equal billing, not about hiding it.
+ */
 export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
-    return <header className="entry-header">
+    return <header className="entry-hero">
         <p className="eyebrow">Species entry · deposited scientific record</p>
-        <div className="entry-title">
+        <div className="entry-formula-row">
             <h1>{entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}</h1>
-            <span className="state-mark">{entry.electronic_state_kind}</span>
+            <span className="state-chip">{displayToken(entry.electronic_state_kind)}</span>
         </div>
-        <dl className="identity-grid">
-            <div>
-                <dt>Species ref</dt>
-                <dd><Link to={`/species/${entry.speciesRef}`}>{entry.speciesRef}</Link></dd>
-            </div>
-            <div><dt>Entry ref</dt><dd>{entry.species_entry_ref}</dd></div>
-            <div><dt>SMILES</dt><dd>{entry.canonicalSmiles}</dd></div>
-            <div><dt>InChIKey</dt><dd>{entry.inchiKey}</dd></div>
-            <div>
-                <dt>Entry kind / state</dt>
-                <dd>{displayToken(entry.species_entry_kind)} / {displayToken(entry.electronic_state_kind)}</dd>
-            </div>
-            <div>
-                <dt>Charge / multiplicity</dt>
-                <dd>{chargeDisplay(entry.charge)} / {spinDisplay(entry.multiplicity)}</dd>
-            </div>
-            <div><dt>Review</dt><dd>{displayToken(entry.review.status)}</dd></div>
-            <div>
-                <dt>Archive availability</dt>
-                <dd>
-                    {entry.availability.has_conformers ? "Conformers" : "No conformers"}
-                    {entry.availability.has_thermo ? " · thermo" : ""}
-                    {entry.availability.has_statmech ? " · statmech" : ""}
-                    {entry.availability.has_transport ? " · transport" : ""}
-                </dd>
-            </div>
-        </dl>
+        <p className="entry-smiles"><code>{entry.canonicalSmiles}</code></p>
+        <ul className="entry-facts" aria-label="Record facts">
+            <FactItem label="Entry kind / state" value={`${displayToken(entry.species_entry_kind)} / ${displayToken(entry.electronic_state_kind)}`} />
+            <FactItem label="Charge / multiplicity" value={`${chargeDisplay(entry.charge)} / ${spinDisplay(entry.multiplicity)}`} />
+            <FactItem label="Review" value={displayToken(entry.review.status)} />
+            <FactItem label="Archive availability" value={availabilityText(entry)} />
+        </ul>
+        <div className="ref-strip" aria-label="Stable references for this record">
+            <RefItem label="Species" value={entry.speciesRef} to={`/species/${entry.speciesRef}`} />
+            <RefItem label="Entry" value={entry.species_entry_ref} />
+            <RefItem label="InChIKey" value={entry.inchiKey} />
+        </div>
     </header>
 }
 
+function FactItem({ label, value }: { label: string; value: string }) {
+    return <li><span>{label}</span><strong>{value}</strong></li>
+}
+
+function RefItem({ label, value, to }: { label: string; value: string; to?: string }) {
+    return <div className="ref-item">
+        <span className="ref-item-label">{label}</span>
+        {to ? <Link to={to}>{value}</Link> : <span className="ref-item-value">{value}</span>}
+        <CopyButton value={value} label={label} />
+    </div>
+}
+
+function CopyButton({ value, label }: { value: string; label: string }) {
+    const [copied, setCopied] = useState(false)
+    return <button
+        type="button"
+        className="copy-button"
+        data-copied={copied}
+        aria-label={`Copy ${label} reference`}
+        onClick={() => {
+            if (!navigator.clipboard) return
+            navigator.clipboard.writeText(value)
+                .then(() => {
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 1500)
+                })
+                .catch(() => {
+                    // Clipboard access can be denied or unavailable; the ref
+                    // text stays selectable on the page either way.
+                })
+        }}
+    >{copied ? "Copied" : "Copy"}</button>
+}
+
+/**
+ * Three named chapter groups instead of one flat row of tabs: "Record"
+ * (this identity, always the same regardless of chapter), "Evidence
+ * chain" (how the result was produced — conformers, calculation stages),
+ * and "Computed products" (what the entry asserts — thermo, statmech,
+ * transport). The grouping is the record's real shape, not a cosmetic
+ * split; see the design rationale for why this replaced a flat tab bar.
+ */
+const NAV_GROUPS: Array<{ caption: string; items: Array<{ path: string; label: string }> }> = [
+    { caption: "Record", items: [{ path: "", label: "Overview" }] },
+    {
+        caption: "Evidence chain",
+        items: [
+            { path: "conformers", label: sectionLabels.conformers },
+            { path: "calculations", label: sectionLabels.calculations },
+        ],
+    },
+    {
+        caption: "Computed products",
+        items: [
+            { path: "thermo", label: sectionLabels.thermo },
+            { path: "statmech", label: sectionLabels.statmech },
+            { path: "transport", label: sectionLabels.transport },
+        ],
+    },
+]
+
 export function EntryNavigation({ entryRef, activeSection }: { entryRef: string; activeSection: EntrySection }) {
-    return <nav className="entry-tabs" aria-label="Entry sections">
-        <Link aria-current={activeSection === "overview" ? "page" : undefined} to={`/species-entries/${entryRef}`}>
-            Overview
-        </Link>
-        {Object.entries(sectionLabels).map(([path, label]) => (
-            <Link
-                key={path}
-                aria-current={activeSection === path ? "page" : undefined}
-                to={`/species-entries/${entryRef}/${path}`}
-            >
-                {label}
-            </Link>
-        ))}
+    return <nav className="entry-chapters" aria-label="Entry chapters">
+        {NAV_GROUPS.map((group) => <div className="chapter-group" key={group.caption}>
+            <p className="chapter-group-label">{group.caption}</p>
+            <div className="chapter-group-links">
+                {group.items.map(({ path, label }) => {
+                    const isActive = path === "" ? activeSection === "overview" : activeSection === path
+                    return <Link
+                        key={path || "overview"}
+                        aria-current={isActive ? "page" : undefined}
+                        to={path ? `/species-entries/${entryRef}/${path}` : `/species-entries/${entryRef}`}
+                    >
+                        {label}
+                    </Link>
+                })}
+            </div>
+        </div>)}
     </nav>
 }
 
 /**
- * The overview tab's boolean summary card for thermo/statmech/transport —
- * ONLY ever rendered on the overview tab (`SpeciesEntryPage.tsx` calls this
- * exclusively when `activeSection === "overview"`; the record tabs render
- * `EntryThermoSection`/`EntryStatmechSection`/`EntryTransportSection`
- * instead). Previously took an `activeSection` prop and rendered a narrower
- * per-tab summary on the record tabs themselves, with a "Detailed records
- * will be added in a later vertical slice" placeholder for an available-but-
- * unbuilt section — that promise is false as of this slice (the three
- * record tabs are built), so the branch and the prop that reached it were
- * both dropped rather than left as unreachable dead code.
+ * The overview chapter's boolean manifest card for thermo/statmech/
+ * transport — ONLY ever rendered on the overview chapter
+ * (`SpeciesEntryPage.tsx` renders it exclusively for `activeSection ===
+ * "overview"`; the product chapters render `EntryThermoSection`/
+ * `EntryStatmechSection`/`EntryTransportSection` instead, which read the
+ * full deposited records rather than a boolean summary).
  */
 export function AvailabilitySection({ entry }: { entry: SpeciesEntryProjection }) {
-    return <section className="availability-grid">
-        {(["thermo", "statmech", "transport"] as const).map((path) => <Availability
-            key={path}
-            label={sectionLabels[path]}
-            available={availabilityFor(entry, path)}
-            path={path}
-            entryRef={entry.species_entry_ref}
-        />)}
+    return <section className="product-manifest" aria-labelledby="manifest-title">
+        <p className="eyebrow">Computed products</p>
+        <h2 id="manifest-title">What this entry has on record</h2>
+        <p>
+            Deposited, not derived: each card names a scientific product this entry either has, or genuinely
+            does not — an absent product reads as "unavailable", never as a failed lookup.
+        </p>
+        <div className="manifest-grid">
+            {(["thermo", "statmech", "transport"] as const).map((path) => <Availability
+                key={path}
+                label={sectionLabels[path]}
+                available={availabilityFor(entry, path)}
+                path={path}
+                entryRef={entry.species_entry_ref}
+            />)}
+        </div>
     </section>
 }
 
@@ -105,11 +175,11 @@ function Availability({ label, available, path, entryRef }: {
     path: "thermo" | "statmech" | "transport"
     entryRef: string
 }) {
-    return <section className="availability">
+    return <article className={`manifest-card${available ? " is-available" : " is-empty"}`}>
         <p className="eyebrow">{label}</p>
         <strong>{available ? "Available in this entry" : "Unavailable in this entry"}</strong>
         {available
             ? <Link to={`/species-entries/${entryRef}/${path}`}>View record section</Link>
             : <p>No {label.toLowerCase()} record is projected for this entry.</p>}
-    </section>
+    </article>
 }

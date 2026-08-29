@@ -1,3 +1,5 @@
+import type { ReactNode } from "react"
+import { Fragment } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
@@ -54,11 +56,38 @@ function UnavailableEntry() {
     </section>
 }
 
+// ---------------------------------------------------------------------------
+// This entry page is one document in chapters, not a set of app tabs: the
+// identity header above stays fixed across every chapter, and each chapter
+// below is a region of that same document that becomes visible when its
+// section is open — never an independently-mounted view. `CHAPTER_REGIONS`
+// makes that plan literal: which sections a region belongs to, and what it
+// renders, in one place, read top to bottom in on-page order. This replaced
+// a chain of three independent `{condition && <Section/>}` checks whose
+// only connection to each other was that they happened to sit next to each
+// other in the file — the same visible result, but no single place said
+// what a chapter *is*.
+// ---------------------------------------------------------------------------
+type ChapterRegion = { sections: readonly EntrySection[]; render: () => ReactNode }
+
+function buildChapterRegions(entry: SpeciesEntryProjection, conformers: ConformerProjection[]): ChapterRegion[] {
+    const entryRef = entry.species_entry_ref
+    return [
+        { sections: ["overview", "conformers", "calculations"], render: () => <LineageSection conformers={conformers} /> },
+        { sections: ["overview", "calculations"], render: () => <LevelsOfTheorySection conformers={conformers} /> },
+        { sections: ["overview"], render: () => <AvailabilitySection entry={entry} /> },
+        { sections: ["thermo"], render: () => <EntryThermoSection entryRef={entryRef} /> },
+        { sections: ["statmech"], render: () => <EntryStatmechSection entryRef={entryRef} /> },
+        { sections: ["transport"], render: () => <EntryTransportSection entryRef={entryRef} /> },
+    ]
+}
+
 function EntryDocument({ entry, conformers, activeSection }: {
     entry: SpeciesEntryProjection
     conformers: ConformerProjection[]
     activeSection: EntrySection
 }) {
+    const regions = buildChapterRegions(entry, conformers).filter((region) => region.sections.includes(activeSection))
     return <section className="entry-page">
         <nav className="record-breadcrumbs" aria-label="Breadcrumb">
             <Link to="/">TCKDB</Link>
@@ -69,15 +98,6 @@ function EntryDocument({ entry, conformers, activeSection }: {
         </nav>
         <EntryIdentity entry={entry} />
         <EntryNavigation entryRef={entry.species_entry_ref} activeSection={activeSection} />
-        {(activeSection === "overview" || activeSection === "conformers" || activeSection === "calculations") && (
-            <LineageSection conformers={conformers} />
-        )}
-        {(activeSection === "overview" || activeSection === "calculations") && (
-            <LevelsOfTheorySection conformers={conformers} />
-        )}
-        {activeSection === "overview" && <AvailabilitySection entry={entry} />}
-        {activeSection === "thermo" && <EntryThermoSection entryRef={entry.species_entry_ref} />}
-        {activeSection === "statmech" && <EntryStatmechSection entryRef={entry.species_entry_ref} />}
-        {activeSection === "transport" && <EntryTransportSection entryRef={entry.species_entry_ref} />}
+        {regions.map((region, index) => <Fragment key={index}>{region.render()}</Fragment>)}
     </section>
 }
