@@ -1,6 +1,9 @@
 import { Link, useParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
+import { EntryStatmechSection } from "../components/EntryStatmechSection"
+import { EntryThermoSection } from "../components/EntryThermoSection"
+import { EntryTransportSection } from "../components/EntryTransportSection"
 import { LevelsOfTheorySection, LineageSection } from "../components/SpeciesEntryEvidence"
 import {
     AvailabilitySection,
@@ -72,11 +75,9 @@ function EntryDocument({ entry, conformers, activeSection }: {
         {(activeSection === "overview" || activeSection === "calculations") && (
             <LevelsOfTheorySection conformers={conformers} />
         )}
-        {(activeSection === "overview"
-            || activeSection === "thermo"
-            || activeSection === "statmech"
-            || activeSection === "transport") && (
-            <AvailabilitySection entry={entry} activeSection={activeSection} />
-        )}
+        {activeSection === "overview" && <AvailabilitySection entry={entry} />}
+        {activeSection === "thermo" && <EntryThermoSection entryRef={entry.species_entry_ref} />}
+        {activeSection === "statmech" && <EntryStatmechSection entryRef={entry.species_entry_ref} />}
+        {activeSection === "transport" && <EntryTransportSection entryRef={entry.species_entry_ref} />}
     </section>
 }

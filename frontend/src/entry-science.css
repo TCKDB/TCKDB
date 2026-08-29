@@ -1,0 +1,189 @@
+/*
+ * Shared by EntryThermoSection / EntryStatmechSection / EntryTransportSection
+ * — the three species-entry tabs that render a LIST of records (never one
+ * record standing in for the entry). Imported alongside `conformer-group.css`
+ * for the shared "scientific record ledger" vocabulary (`.ledger-section`,
+ * `.ledger-heading`, `.basin-context`, `.stage-table`, `.empty-projection`,
+ * `.review-badge`, `.coverage-card`). The bare `.table-scroll { overflow-x:
+ * auto }` rule and `.section-note` are byte-identical to the definitions in
+ * `geometry-detail.css` / `calculation-detail.css` and are intentionally
+ * redefined here rather than imported from those files — this project's
+ * stated convention (see the comment above `.section-note` in
+ * `geometry-detail.css`) is that a page's own styling should not depend on
+ * another page's stylesheet having loaded first.
+ *
+ * `.kv-list` — and the later `.table-scroll .stage-table { min-width }`
+ * addition below it — are NOT byte-identical to their counterparts in
+ * `calculation-detail.css` / `geometry-detail.css`, and Vite never unloads
+ * a route chunk's CSS once injected — so redefining either bare selector
+ * here with a different value would make whichever page loaded last win
+ * the cascade for BOTH routes, on every route after the first cross-visit.
+ * (`.kv-list` was caught in review before it shipped; the `min-width` rule
+ * shipped once already scoped to `.table-scroll .stage-table` — still bare
+ * enough to reach `GeometryDetailPage.tsx`'s own `.stage-table`s, live on
+ * the Pi — and was caught in the round after.) Both are scoped under
+ * `.science-record` instead, which every `.kv-list` and `.table-scroll` on
+ * these three tabs is nested inside.
+ */
+
+.records-note {
+    max-width: 44rem;
+    margin: .6rem 0 2rem;
+    color: #536578;
+    font: .8rem/1.55 var(--mono);
+}
+
+/* One deposited record within a list. Bordered and spaced apart from its
+   siblings so three thermo records read as three separate cards, never one
+   merged answer — the acceptance rule this whole slice is graded on. */
+.science-record {
+    margin-top: 1.75rem;
+    padding: 1.5rem;
+    border: 1px solid #dbe2ea;
+    background: #fff;
+}
+
+.science-record + .science-record {
+    margin-top: 1.75rem;
+}
+
+.science-record-heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .75rem;
+    margin: 0 0 1rem;
+}
+
+.science-record-heading h3 {
+    margin: 0;
+    overflow-wrap: anywhere;
+    font: 600 1.35rem var(--serif);
+    letter-spacing: -.03em;
+}
+
+.science-record-heading code {
+    color: #536578;
+    font: .72rem var(--mono);
+}
+
+/* A correction notice — present only on a superseded record. Never a
+   reason to hide the record; styled to stand out, not to alarm. */
+.supersession-notice {
+    margin: 0 0 1.25rem;
+    padding: .85rem 1rem;
+    border: 1px solid #c9a227;
+    background: #fdf6e3;
+    color: #6b5209;
+    font: .8rem/1.55 var(--mono);
+}
+
+.supersession-notice strong {
+    display: block;
+    margin-bottom: .3rem;
+    font: 600 .72rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.section-note {
+    margin: .5rem 0 0;
+    color: #536578;
+    font-size: .8rem;
+    line-height: 1.5;
+}
+
+.section-note[aria-busy="true"]::after { content: "…"; }
+
+/* Scoped under `.science-record` — see the file header for why the bare
+   `.kv-list` selector is not redefined here. Every `<dl className="kv-list">`
+   on these three tabs is nested inside a `.science-record` card or row, so
+   this scoping changes nothing about which elements are styled. */
+.science-record .kv-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: .7rem 1.5rem;
+    margin: 1rem 0 0;
+}
+
+.science-record .kv-list dt {
+    color: #536578;
+    font: .64rem var(--mono);
+    letter-spacing: .06em;
+    text-transform: uppercase;
+}
+
+.science-record .kv-list dd {
+    margin: .3rem 0 0;
+    overflow-wrap: anywhere;
+    font: .78rem var(--mono);
+}
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+/* `.stage-table` (`conformer-group.css`) sets `width: calc(100% - 2.2rem)`
+   with `overflow-wrap: anywhere` on every cell — under auto table layout
+   that lets min-content collapse to about one character per cell, so a
+   wide table (the 12-column NASA-9 grid, the 8-column NASA-7 grid) shrinks
+   to fit its container instead of overflowing it, and numbers like
+   `-1.0308e-08` wrap mid-token rather than the container scrolling. A
+   minimum width forces the table back past its container so `.table-scroll`
+   has something real to scroll.
+   * SCOPED under `.science-record` — `GeometryDetailPage.tsx` wraps its own
+     `.stage-table`s in `.table-scroll` too (`geometry-detail.css`), and
+     that page is live on the Pi. A bare `.table-scroll .stage-table`
+     selector here would reach it the moment a reader visits any
+     species-entry record tab (Vite injects this chunk's CSS and never
+     removes it) — the exact `.kv-list` mistake this file's header already
+     warns about, just 30 lines further down. Every `.table-scroll` this
+     file renders is nested inside a `.science-record` card or lazy-section
+     row (verified: NASA-7/NASA-9/Wilhoit-points/group-additivity/source-
+     calculations/torsions tables all sit inside one), so scoping changes
+     nothing about which elements are styled here.
+   * RESET to `0` under 680px — `conformer-group.css` stacks `.stage-table`
+     into `display: block` label/value rows below that breakpoint precisely
+     so a phone doesn't need horizontal scroll at all; `min-width` still
+     applies to a block box, so leaving 48rem in place there would force
+     every stacked table (these three tabs' AND geometry's) to a phone-
+     unfriendly 768px inside its scroll container, defeating that stacking. */
+.science-record .table-scroll .stage-table {
+    min-width: 48rem;
+}
+
+/* Narrower minimum for the tables that only ever have five columns
+   (evaluated points, group-additivity components, source calculations) —
+   48rem is sized for the wide NASA grids and is more than these need even
+   on a narrow desktop window. */
+.science-record .table-scroll--compact .stage-table {
+    min-width: 30rem;
+}
+
+@media (max-width: 680px) {
+    .science-record .table-scroll .stage-table,
+    .science-record .table-scroll--compact .stage-table {
+        min-width: 0;
+    }
+}
+
+.model-block-heading {
+    margin: 1.5rem 0 .5rem;
+    font: 600 .8rem var(--mono);
+    letter-spacing: .03em;
+}
+
+.checklist {
+    margin: .75rem 0 0;
+    padding-left: 1.1rem;
+    color: #3c4856;
+    font: .78rem/1.7 var(--mono);
+}
+
+.checklist li::marker {
+    color: #536578;
+}
+
+@media (max-width: 680px) {
+    .science-record .kv-list { grid-template-columns: 1fr; }
+}

@@ -95,6 +95,73 @@ function handlers(options: HandlerOptions = {}) {
                 geometries: geometryLinks,
             }] })
         }),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => HttpResponse.json({
+            species_entry_ref: entryRef,
+            review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 1 },
+            records: [{
+                thermo_ref: "thm_smoke_one",
+                scientific_origin: "computed",
+                model_kind: "nasa",
+                review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
+                supersession: null,
+                h298_kj_mol: 143.9, s298_j_mol_k: 194.4,
+                h298_uncertainty_kj_mol: null, s298_uncertainty_j_mol_k: null,
+                nasa: {
+                    t_low: 10, t_mid: 673.9, t_high: 3000,
+                    low_temperature_coefficients: [1, 2, 3, 4, 5, 6, 7],
+                    high_temperature_coefficients: [1, 2, 3, 4, 5, 6, 7],
+                },
+                nasa9: null, wilhoit: null, points: null,
+                temperature_coverage: {
+                    requested_min_k: null, requested_max_k: null, record_min_k: 10, record_max_k: 3000,
+                    covers_requested_range: true, overlap_fraction: null, extrapolation_distance_k: 0,
+                },
+                evidence_completeness: { score: 6, max: 8, checklist: { has_source_calculations: true } },
+                provenance: {
+                    primary_calculation: null, level_of_theory: null, software: null,
+                    statmech_ref: null, freq_calculation_ref: null, sp_calculation_ref: null,
+                },
+                group_additivity: null,
+            }],
+            pagination: { offset: 0, limit: 50, returned: 1, total: 1, post_collapse_total: 1 },
+        })),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, () => HttpResponse.json({
+            review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 1 },
+            records: [{
+                statmech: {
+                    statmech_ref: "sm_smoke_one", scientific_origin: "computed", statmech_treatment: "rrho",
+                    rigid_rotor_kind: "asymmetric_top", point_group: "D3h", external_symmetry: 6, is_linear: false,
+                    uses_projected_frequencies: null, optical_isomers: 1, rotational_constant_a_cm1: null,
+                    rotational_constant_b_cm1: null, rotational_constant_c_cm1: null,
+                    frequency_scale_factor_value: 0.999, note: null, created_at: "2026-07-29T08:26:29.315550",
+                    review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
+                },
+                supersession: null,
+                species: {
+                    species_ref: "spc_atp56uqux2ajao7hvckx7gx7ca", species_entry_ref: entryRef,
+                    species_entry_label: null, canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N",
+                    charge: 0, multiplicity: 2,
+                },
+                transition_state: null,
+                frequency_scale_factor: null,
+                software_release: null, workflow_tool_release: null, literature: null,
+                evidence_summary: {
+                    source_calculation_count: 3, has_opt_calculation: true, has_freq_calculation: true,
+                    has_sp_calculation: true, sp_from_optimization: false, has_rotor_scans: false,
+                    torsion_count: 0, has_frequency_scale_factor: true, has_conformer_context: true,
+                },
+                available_sections: {
+                    has_source_calculations: true, has_torsions: false, has_electronic_levels: false,
+                    has_frequencies: true, has_conformers: true, has_review: true,
+                },
+            }],
+            pagination: { offset: 0, limit: 50, returned: 1, total: 1, post_collapse_total: 1 },
+        })),
+        http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, () => HttpResponse.json({
+            review_summary: { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, rejected: 0, total: 0 },
+            records: [],
+            pagination: { offset: 0, limit: 50, returned: 0, total: 0, post_collapse_total: 0 },
+        })),
     ]
 }
 
@@ -166,9 +233,9 @@ describe.each([
     ["", "Overview", "From basin to stored geometry"],
     ["conformers", "Conformers", "From basin to stored geometry"],
     ["calculations", "Calculations", "Levels of theory by calculation type"],
-    ["thermo", "Thermochemistry", "Available in this entry"],
-    ["statmech", "Statistical mechanics", "Available in this entry"],
-    ["transport", "Transport", "Unavailable in this entry"],
+    ["thermo", "Thermochemistry", "thm_smoke_one"],
+    ["statmech", "Statistical mechanics", "sm_smoke_one"],
+    ["transport", "Transport", "No transport records are deposited for this entry. This is the archive's own answer — not a failed request — so nothing further will load if you retry."],
     ["unknown", "Overview", "From basin to stored geometry"],
 ])("entry section %s", (path, navLabel, content) => {
     it("renders the requested section and marks its navigation item current", async () => {
@@ -177,9 +244,25 @@ describe.each([
         render(<App />)
         expect(await screen.findByText(content)).toBeVisible()
         expect(screen.getByRole("link", { name: navLabel })).toHaveAttribute("aria-current", "page")
-        if (path === "thermo" || path === "statmech") {
-            expect(screen.getByText(/detailed .* records will be added in a later vertical slice/i)).toBeVisible()
+        // Regression guard: the boolean "View record section" availability
+        // card belongs to the overview tab ONLY. Re-adding
+        // <AvailabilitySection> above a record tab's real component would
+        // restore exactly the placeholder-vs-real-content duplication this
+        // slice removed, and would otherwise ship green — nothing else in
+        // this file checks its absence on a record tab.
+        if (path === "thermo" || path === "statmech" || path === "transport") {
             expect(screen.queryByRole("link", { name: "View record section" })).not.toBeInTheDocument()
         }
+    })
+})
+
+describe("overview tab still shows the summary availability cards, unchanged", () => {
+    it("links thermo/statmech into their real record sections and states transport plainly unavailable", async () => {
+        server.use(...handlers({ multiLot: true }))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("From basin to stored geometry")
+        expect(screen.getAllByRole("link", { name: "View record section" })).toHaveLength(2)
+        expect(screen.getByText("Unavailable in this entry")).toBeVisible()
     })
 })
