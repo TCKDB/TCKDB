@@ -1584,6 +1584,17 @@ CATALOGUE: tuple[ApiCode, ...] = (
             )),
     ApiCode("unknown_curation_policy", 404, Surface.message_prefix,
             "backend/app/api/routes/releases_admin.py"),
+    ApiCode("unknown_element_symbol", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/species.py",
+            note=(
+                "/species/browse's elements= composition filter. RDKit's "
+                "periodic table is the source of truth for what counts as "
+                "a recognised symbol -- a typo'd 'Xx' (or an isotope token "
+                "like 'D'/'T', which RDKit does not treat as an element) "
+                "422s here rather than silently matching zero species, "
+                "which would read indistinguishably from 'the archive "
+                "holds none of that element'."
+            )),
     ApiCode("unknown_include_token", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/common.py"),
     ApiCode("unknown_network_kinetics_ref", 404, Surface.coded_exception,

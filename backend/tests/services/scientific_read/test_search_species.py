@@ -19,6 +19,7 @@ from tests.services.scientific_read._factories import (
     make_thermo_scalar,
     next_inchi_key,
     set_review,
+    unique_smiles,
 )
 
 # ---------------------------------------------------------------------------
@@ -325,6 +326,43 @@ def test_min_review_status_approved_filters_to_approved(db_session):
     entry_ids = [e.species_entry_id for e in response.records[0].entries]
     assert e_approved.id in entry_ids
     assert e_under.id not in entry_ids
+
+
+def test_min_review_status_excluding_every_entry_still_returns_the_species(db_session):
+    """The search-side contrast with browse's #277 fix.
+
+    Search names the species by identifier, so a species whose entries
+    *all* fail the review filter is still returned -- with ``entries: []``
+    -- rather than being dropped from the result or from
+    ``pagination.total``. "CH3 exists but has no approved entries" is a
+    defensible answer when the caller named CH3 by identifier; the
+    inverse is true on ``/species/browse`` (see
+    ``species.py::_browse_entry_filter_supplied``, which is the *only*
+    caller of the zero-visible-entries drop this pins search never
+    receives).
+    """
+    species = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("MINNONE")
+    )
+    entry = make_species_entry(db_session, species)
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.species_entry,
+        record_id=entry.id,
+        status=RecordReviewStatus.under_review,
+    )
+
+    response = search_species(
+        db_session,
+        SpeciesSearchRequest(
+            smiles=species.smiles, min_review_status=RecordReviewStatus.approved
+        ),
+    )
+
+    assert len(response.records) == 1
+    assert response.records[0].species_id == species.id
+    assert response.records[0].entries == []
+    assert response.pagination.total == 1
 
 
 # ---------------------------------------------------------------------------

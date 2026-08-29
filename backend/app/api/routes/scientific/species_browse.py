@@ -32,6 +32,7 @@ from app.db.models.common import (
 )
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_species import (
+    ElementMatchMode,
     ScientificSpeciesBrowseResponse,
     SpeciesBrowseRequest,
 )
@@ -51,6 +52,16 @@ def species_browse(
     multiplicity: int | None = Query(None),
     electronic_state_kind: SpeciesEntryStateKind | None = Query(None),
     species_entry_kind: StationaryPointKind | None = Query(None),
+    elements: str | None = Query(
+        None,
+        description=(
+            "Comma-separated element symbols, e.g. 'C,N,S'. Browse-only -- "
+            "see SpeciesBrowseRequest for why this is not on /species/search."
+        ),
+    ),
+    elem_mode: ElementMatchMode = Query(ElementMatchMode.all),
+    max_heavy_atoms: int | None = Query(None, ge=0),
+    min_heavy_atoms: int | None = Query(None, ge=0),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -64,7 +75,11 @@ def species_browse(
 
     Every secondary filter ``/species/search`` accepts alongside an
     identifier is accepted here too, so a listing can be narrowed after
-    it is opened. ``limit`` is capped at 200 (default 50, same as
+    it is opened. ``elements`` / ``elem_mode`` / ``max_heavy_atoms`` /
+    ``min_heavy_atoms`` are the exception: composition filters exist only
+    here, not on ``/species/search`` — see
+    :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
+    for why. ``limit`` is capped at 200 (default 50, same as
     ``/species/search``); ``offset`` is capped by the hosted
     ``public_max_offset`` setting via the shared pagination validator.
     Ordering is ``review_rank ASC, has_entries DESC, created_at DESC,
@@ -79,6 +94,10 @@ def species_browse(
         multiplicity=multiplicity,
         electronic_state_kind=electronic_state_kind,
         species_entry_kind=species_entry_kind,
+        elements=elements,
+        elem_mode=elem_mode,
+        max_heavy_atoms=max_heavy_atoms,
+        min_heavy_atoms=min_heavy_atoms,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,

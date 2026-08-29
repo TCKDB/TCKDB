@@ -19,6 +19,12 @@ MAX_INCHI_LENGTH: int = 4096
 MAX_INCHI_KEY_LENGTH: int = 64
 MAX_FORMULA_LENGTH: int = 256
 
+# Comma-separated element-symbol list (browse's `elements=` filter). No
+# real query names more than a handful of elements; this bound exists to
+# reject an oversized query parameter, not to validate chemistry -- the
+# per-symbol RDKit periodic-table check does that.
+MAX_ELEMENTS_LENGTH: int = 256
+
 # Computational provenance free-text.
 MAX_METHOD_LENGTH: int = 256
 MAX_BASIS_LENGTH: int = 256

@@ -149,6 +149,60 @@ def test_get_by_formula_narrows_and_serves_that_formula_on_the_wire(client, db_s
     assert all(r["formula"] == "CH3" for r in body["records"])
 
 
+def test_get_by_elements_narrows_and_elem_mode_all_is_the_default(client, db_session):
+    acetonitrile = make_species(
+        db_session, smiles="CC#N", inchi_key=next_inchi_key("APIBRELACN")
+    )
+    make_species_entry(db_session, acetonitrile)
+    ethane = make_species(db_session, smiles="CC", inchi_key=next_inchi_key("APIBRELETH"))
+    make_species_entry(db_session, ethane)
+
+    resp = client.get("/api/v1/scientific/species/browse?elements=C,N")
+
+    assert resp.status_code == 200, resp.text
+    refs = {r["species_ref"] for r in resp.json()["records"]}
+    assert acetonitrile.public_ref in refs
+    assert ethane.public_ref not in refs
+
+
+def test_get_by_elements_any_mode_widens_the_match(client, db_session):
+    ethane = make_species(
+        db_session, smiles="CC", inchi_key=next_inchi_key("APIBRELANYETH")
+    )
+    make_species_entry(db_session, ethane)
+
+    resp = client.get("/api/v1/scientific/species/browse?elements=C,N&elem_mode=any")
+
+    assert resp.status_code == 200, resp.text
+    refs = {r["species_ref"] for r in resp.json()["records"]}
+    assert ethane.public_ref in refs
+
+
+def test_get_by_max_heavy_atoms_boundary(client, db_session):
+    benzene = make_species(
+        db_session, smiles="c1ccccc1", inchi_key=next_inchi_key("APIBRHA6")
+    )
+    make_species_entry(db_session, benzene)
+    toluene = make_species(
+        db_session, smiles="Cc1ccccc1", inchi_key=next_inchi_key("APIBRHA7")
+    )
+    make_species_entry(db_session, toluene)
+
+    resp = client.get("/api/v1/scientific/species/browse?max_heavy_atoms=6")
+
+    assert resp.status_code == 200, resp.text
+    refs = {r["species_ref"] for r in resp.json()["records"]}
+    assert benzene.public_ref in refs
+    assert toluene.public_ref not in refs
+
+
+def test_get_unknown_element_symbol_is_422_not_an_empty_page(client, db_session):
+    resp = client.get("/api/v1/scientific/species/browse?elements=Xx")
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "unknown_element_symbol"
+
+
 def test_get_pagination_total_reflects_full_corpus_not_the_page(client, db_session):
     ids = set()
     for _ in range(4):

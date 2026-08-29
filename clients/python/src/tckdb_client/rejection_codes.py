@@ -219,6 +219,7 @@ class RejectionCode(str, Enum):
     UNKNOWN_CONFORMER_GROUP_REF = "unknown_conformer_group_ref"
     UNKNOWN_CONFORMER_SELECTION = "unknown_conformer_selection"
     UNKNOWN_CURATION_POLICY = "unknown_curation_policy"
+    UNKNOWN_ELEMENT_SYMBOL = "unknown_element_symbol"
     UNKNOWN_INCLUDE_TOKEN = "unknown_include_token"
     UNKNOWN_NETWORK_KINETICS_REF = "unknown_network_kinetics_ref"
     UNKNOWN_RECORD = "unknown_record"
@@ -346,6 +347,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.TRANSITION_STATE_NO_IMAGINARY_MODE,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_AMBIGUOUS,
         RejectionCode.TRANSITION_STATE_REACTION_COORDINATE_NOT_DESIGNATED,
+        RejectionCode.UNKNOWN_ELEMENT_SYMBOL,
         RejectionCode.UNKNOWN_INCLUDE_TOKEN,
         RejectionCode.UNKNOWN_RECORD_TYPE,
         RejectionCode.UNSAFE_LOWEST_ENERGY_COMPARISON,
@@ -537,6 +539,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.UNKNOWN_CONFORMER_GROUP_REF: frozenset({404}),
     RejectionCode.UNKNOWN_CONFORMER_SELECTION: frozenset({404}),
     RejectionCode.UNKNOWN_CURATION_POLICY: frozenset({404}),
+    RejectionCode.UNKNOWN_ELEMENT_SYMBOL: frozenset({422}),
     RejectionCode.UNKNOWN_INCLUDE_TOKEN: frozenset({422}),
     RejectionCode.UNKNOWN_NETWORK_KINETICS_REF: frozenset({404}),
     RejectionCode.UNKNOWN_RECORD: frozenset({404}),
