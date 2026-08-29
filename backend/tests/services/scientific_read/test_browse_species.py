@@ -309,6 +309,66 @@ def test_pagination_covers_every_row_exactly_once_across_pages(db_session):
     )
 
 
+def test_pagination_is_stable_even_across_different_query_plans(db_session):
+    """The tiebreak's real job: pagination must not depend on the plan.
+
+    Two pages fetched under the *same* plan can look stable by accident --
+    a repeated query against unchanged data tends to walk a hash table or
+    a heap in the same order every time, so a missing tiebreak can pass a
+    naive "fetch twice, compare" check even though nothing in the SQL
+    guarantees it (confirmed empirically while writing this test: the
+    query this exercises used HashAggregate by default, and a plain
+    two-call comparison did not expose the gap).
+
+    What *does* change the order, deterministically and reproducibly, is
+    the aggregate strategy PostgreSQL picks -- ``GROUP BY`` output order
+    is unspecified by the SQL standard, and ``HashAggregate`` vs a forced
+    ``GroupAggregate`` (``enable_hashagg = off``) visit the same tied rows
+    in genuinely different orders. A real deployment can land on either
+    plan for two different requests (autovacuum, a statistics refresh, a
+    replica with different memory settings), so this is not a contrived
+    edge case -- it is the mechanism the ``id DESC`` tiebreak exists to
+    neutralize. This test forces exactly that plan change between two
+    page fetches and asserts they still tile the tied set with no
+    duplicate and no gap.
+    """
+    from sqlalchemy import text
+
+    ids = [
+        make_species(
+            db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRPLAN")
+        ).id
+        for _ in range(20)
+    ]
+
+    def page(offset: int, limit: int, *, force_groupagg: bool) -> list[int]:
+        db_session.execute(
+            text(f"SET LOCAL enable_hashagg = {'off' if force_groupagg else 'on'}")
+        )
+        resp = browse_species(
+            db_session, SpeciesBrowseRequest(limit=limit, offset=offset)
+        )
+        return [r.species_id for r in resp.records if r.species_id in ids]
+
+    # Page A under the default plan (HashAggregate on this data shape);
+    # page B under a forced GroupAggregate -- as if the two requests hit
+    # the database under different conditions, which is the realistic case.
+    page_a = page(0, 10, force_groupagg=False)
+    page_b = page(10, 10, force_groupagg=True)
+
+    duplicated = set(page_a) & set(page_b)
+    combined = set(page_a) | set(page_b)
+    dropped = set(ids) - combined
+
+    assert not duplicated, (
+        f"rows on both pages: {sorted(duplicated)} (page_a={page_a}, page_b={page_b})"
+    )
+    assert not dropped, (
+        f"rows on neither page: {sorted(dropped)} (page_a={page_a}, page_b={page_b})"
+    )
+    assert combined == set(ids)
+
+
 def test_sort_is_deterministic_across_two_calls(db_session):
     make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRSORT"))
 
@@ -449,3 +509,5 @@ def test_record_shape_is_metadata_only(db_session):
     assert (
         set(entry_record.availability.model_dump().keys()) == _AVAILABILITY_FIELDS
     )
+
+
