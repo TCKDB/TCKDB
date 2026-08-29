@@ -355,6 +355,121 @@ def test_isotope_token_is_rejected_as_an_unknown_element_symbol(db_session):
         browse_species(db_session, SpeciesBrowseRequest(elements="D"))
 
 
+def test_two_letter_symbol_is_not_matched_by_its_one_letter_prefix(db_session):
+    """The regex lookahead's whole reason to exist, pinned with a fixture
+    that can actually tell it apart from a naive substring match.
+
+    Every other composition fixture in this file happens to avoid any
+    two-letter element symbol, so ``elements=C`` matching ``Cl`` (or
+    ``elements=N`` matching ``Na``) went untested even though the
+    behaviour is load-bearing (see ``_formula_has_element_expr``).
+    ``ClCl`` (molecular chlorine, formula ``Cl2``) has no carbon at all;
+    ``[Na+]`` (sodium cation, formula ``Na+``) has no nitrogen at all. If
+    the ``(?![a-z])`` lookahead were dropped, ``elements=C`` would match
+    the ``C`` inside ``Cl2`` and ``elements=N`` would match the ``N``
+    inside ``Na+``, and both species would wrongly appear.
+    """
+    chlorine = make_species(
+        db_session, smiles="ClCl", inchi_key=next_inchi_key("BRELCL2")
+    )
+    sodium = make_species(
+        db_session, smiles="[Na+]", charge=1, inchi_key=next_inchi_key("BRELNA")
+    )
+
+    by_carbon = browse_species(db_session, SpeciesBrowseRequest(elements="C"))
+    by_nitrogen = browse_species(db_session, SpeciesBrowseRequest(elements="N"))
+
+    assert chlorine.id not in {r.species_id for r in by_carbon.records}
+    assert sodium.id not in {r.species_id for r in by_nitrogen.records}
+    # And the two-letter symbols themselves still match correctly.
+    by_chlorine = browse_species(db_session, SpeciesBrowseRequest(elements="Cl"))
+    by_sodium = browse_species(db_session, SpeciesBrowseRequest(elements="Na"))
+    assert chlorine.id in {r.species_id for r in by_chlorine.records}
+    assert sodium.id in {r.species_id for r in by_sodium.records}
+
+
+def test_dummy_atom_wildcard_is_rejected_not_silently_empty(db_session):
+    """``elements=*`` must 422, not read as "the archive holds none of it".
+
+    RDKit's periodic table treats ``*`` as a *dummy atom* wildcard:
+    ``GetAtomicNumber("*")`` returns ``0`` instead of raising, so a naive
+    "did the lookup raise" check accepts it, and no Hill-notation formula
+    ever contains a literal ``*`` -- so the (unguarded) filter would
+    silently match nothing. That is exactly the failure this endpoint's
+    unknown-symbol contract exists to prevent, reached through a
+    non-letter token rather than a misspelled one.
+    """
+    make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRELWILD"))
+
+    with pytest.raises(ValueError, match="unknown_element_symbol"):
+        browse_species(db_session, SpeciesBrowseRequest(elements="*"))
+
+
+def test_too_many_element_symbols_is_rejected(db_session):
+    """The symbol-count cap, independent of the string-length cap.
+
+    ``MAX_ELEMENT_SYMBOLS`` bounds how many distinct symbols one request
+    may name -- each one adds another unindexed per-row cartridge regex
+    to a public, unauthenticated query. Eleven real, valid symbols (one
+    more than the cap) must be refused, not merely truncated or slowed.
+    """
+    from app.schemas.reads._field_bounds import MAX_ELEMENT_SYMBOLS
+
+    too_many = ",".join(
+        ["C", "H", "N", "O", "S", "Cl", "Br", "F", "P", "I", "Na"][
+            : MAX_ELEMENT_SYMBOLS + 1
+        ]
+    )
+    with pytest.raises(ValueError, match="too_many_element_symbols"):
+        browse_species(db_session, SpeciesBrowseRequest(elements=too_many))
+
+
+def test_element_symbols_at_the_cap_are_accepted(db_session):
+    """The cap is inclusive: exactly the limit must not be refused."""
+    from app.schemas.reads._field_bounds import MAX_ELEMENT_SYMBOLS
+
+    at_cap = ",".join(
+        ["C", "H", "N", "O", "S", "Cl", "Br", "F", "P", "I", "Na"][:MAX_ELEMENT_SYMBOLS]
+    )
+    # Must not raise.
+    browse_species(db_session, SpeciesBrowseRequest(elements=at_cap))
+
+
+def test_elements_that_parse_to_nothing_are_not_echoed_as_a_filter(db_session):
+    """``elements=" , "`` applies no filter (see ``_parse_elements_filter``)
+    and must not claim one in the request echo either.
+
+    Gating the echo on ``request.elements is not None`` (rather than on
+    the parsed symbol list) would report ``{"elements": " , ", "elem_mode":
+    "all"}`` on a response that filtered nothing -- a caller reading the
+    echo back would believe a filter ran that never touched a single row.
+    """
+    response = browse_species(db_session, SpeciesBrowseRequest(elements=" , "))
+
+    assert "elements" not in response.request.filter
+    assert "elem_mode" not in response.request.filter
+
+
+def test_contradictory_heavy_atom_bounds_return_an_honest_empty_set(db_session):
+    """``min_heavy_atoms > max_heavy_atoms`` names an empty range.
+
+    Chosen deliberately over a 422: ``search_species`` already treats
+    contradictory *identifiers* the same way ("Multiple inconsistent
+    identifiers return an empty result set, not a validation error");
+    an impossible composition range gets the same honest-empty-set
+    answer rather than a special-cased refusal.
+    """
+    make_species(db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRHACONTRA"))
+
+    response = browse_species(
+        db_session, SpeciesBrowseRequest(min_heavy_atoms=5, max_heavy_atoms=2)
+    )
+
+    assert response.records == []
+    assert response.pagination.total == 0
+
+
+
 def test_pagination_total_is_the_filtered_count_not_the_corpus_count(db_session):
     """Composition filters must narrow ``pagination.total``, not just the page.
 
@@ -487,6 +602,27 @@ def test_include_rejected_surfaces_rejected_entries(db_session):
 
 
 def test_include_deprecated_surfaces_deprecated_entries(db_session):
+    """``include_deprecated=True`` widens visibility so a species whose
+    *only* entry is deprecated becomes visible again.
+
+    **Behaviour change, deliberate, made in the #277 follow-up below.**
+    Before that fix, the plain default call returned this species with
+    the deprecated entry merely absent from ``entries`` (``entries: []``
+    on the wire). That is precisely the shape #277 says is wrong: the
+    species has an entry, the entry is just not currently visible, and a
+    catalogue listing that fact as "this species has no entries" is the
+    same lie whether the invisibility comes from an explicit
+    ``min_review_status=``, a ``profile=curated`` floor, or (this case)
+    the endpoint's own default posture, which excludes deprecated/rejected
+    without the caller asking for anything. #277's fix does not
+    distinguish *why* an entry is invisible, so it does not carve out an
+    exception for "invisible because nobody asked to see more" -- doing
+    so would leave a fourth surviving instance of the exact bug class the
+    fix exists to close. The species now vanishes entirely from the
+    default listing (:func:`app.services.scientific_read.species._has_any_entry_expr`
+    is what keeps a species with *zero* entries from suffering the same
+    fate -- that case is still listed, always).
+    """
     species = make_species(
         db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRDINC")
     )
@@ -499,8 +635,7 @@ def test_include_deprecated_surfaces_deprecated_entries(db_session):
     )
 
     hidden = browse_species(db_session, SpeciesBrowseRequest())
-    record_hidden = next(r for r in hidden.records if r.species_id == species.id)
-    assert e_deprecated.id not in [e.species_entry_id for e in record_hidden.entries]
+    assert species.id not in {r.species_id for r in hidden.records}
 
     shown = browse_species(
         db_session, SpeciesBrowseRequest(include_deprecated=True)
@@ -542,9 +677,9 @@ def test_min_review_status_approved_filters_to_approved(db_session):
 
 
 # ---------------------------------------------------------------------------
-# #277: an entry-level filter must drop species it leaves with zero
-# visible entries, not list them with ``entries: []`` and count them
-# toward ``pagination.total`` anyway.
+# #277: a candidate species left with zero *visible* entries must be
+# dropped, not listed with ``entries: []`` and counted toward
+# ``pagination.total`` anyway.
 #
 # Measured on the deployed instance: 59 species / 60 entries, none
 # approved. ``?min_review_status=approved`` reported ``pagination.total:
@@ -558,15 +693,20 @@ def test_min_review_status_approved_filters_to_approved(db_session):
 # can tell "drops the empty ones" apart from "drops everything" or
 # "drops nothing".
 #
-# min_review_status / include_rejected / include_deprecated /
-# electronic_state_kind / species_entry_kind are entry-level (they
-# narrow species_entry rows -- see
-# species.py::_browse_entry_filter_supplied for exactly where each is
-# applied). charge / multiplicity / formula / elements / elem_mode /
-# max_heavy_atoms / min_heavy_atoms are species-level: they narrow which
-# species are candidates before any join to species_entry, so none of
-# them can leave a matched species holding zero entries, and none of
-# them trigger this drop.
+# The first fix gated the drop on whether the caller had typed one of
+# five specific request fields (min_review_status / include_rejected /
+# include_deprecated / electronic_state_kind / species_entry_kind). That
+# missed the read-profile floor (``?profile=curated`` narrows visibility
+# to ``approved`` with no request field set at all -- see
+# test_api_species_browse.py::test_profile_curated_drops_species_with_no_approved_entries)
+# and inverted itself for the two widening flags (see
+# test_widening_flag_does_not_shrink_the_result_set below). The rule is
+# now unconditional: species.py::_rank_and_slice_species always drops a
+# species that has *some* entries but none visible, on every browse call
+# -- and species.py::_has_any_entry_expr is the structural, filter-
+# independent check that keeps a species with *zero* entries at all
+# (never dropped, by any filter) distinguishable from one whose entries
+# were filtered to zero.
 # ---------------------------------------------------------------------------
 
 
@@ -703,6 +843,58 @@ def test_species_level_filter_alone_still_lists_entryless_species(db_session):
     assert len(matching) == 1
     assert matching[0].entries == []
     assert response.pagination.total >= 1
+
+
+def test_widening_flag_does_not_shrink_the_result_set(db_session):
+    """``include_rejected`` / ``include_deprecated`` only ever *widen*
+    visibility, so they must never make a listed species disappear.
+
+    A species with zero ``species_entry`` rows at all is listed by
+    default (nothing to filter). Under the old five-field classification,
+    ``include_rejected`` counted as "an entry-level filter was supplied"
+    and unconditionally required a visible entry -- which dropped this
+    exact species, so asking to see *more* (rejected records too)
+    silently returned *less*. ``_has_any_entry_expr`` fixes this
+    structurally: a species with no entries at all is never dropped, so
+    the two calls below must agree.
+    """
+    lonely = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BR277WIDE")
+    )
+
+    default = browse_species(db_session, SpeciesBrowseRequest())
+    widened = browse_species(db_session, SpeciesBrowseRequest(include_rejected=True))
+
+    default_ids = {r.species_id for r in default.records}
+    widened_ids = {r.species_id for r in widened.records}
+    assert lonely.id in default_ids
+    assert lonely.id in widened_ids
+
+
+def test_profile_curated_is_not_reachable_at_the_service_layer_by_default(db_session):
+    """Documents the boundary of what a service-level test can pin here.
+
+    ``current_read_profile()`` reads a context variable published by an
+    ``async`` FastAPI dependency on ``scientific_router``
+    (``app/api/routes/scientific/_profile.py``); outside a request it
+    falls back to ``exploratory`` unconditionally (see
+    ``app/services/scientific_read/profile.py``). The #277-follow-up
+    regression for ``profile=curated`` therefore has to run through the
+    real HTTP dependency chain to mean anything -- see
+    ``test_api_species_browse.py::test_profile_curated_drops_species_with_no_approved_entries``,
+    which is the test that actually reaches the case the review flagged.
+    This one just pins that a bare service call (no request context) is
+    unaffected, so the two tests are not silently exercising the same
+    path twice.
+    """
+    species = make_species(
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BR277NOCTX")
+    )
+    make_species_entry(db_session, species)  # not_reviewed
+
+    response = browse_species(db_session, SpeciesBrowseRequest())
+
+    assert species.id in {r.species_id for r in response.records}
 
 
 # ---------------------------------------------------------------------------

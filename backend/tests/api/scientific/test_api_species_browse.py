@@ -203,6 +203,66 @@ def test_get_unknown_element_symbol_is_422_not_an_empty_page(client, db_session)
     assert resp.json()["code"] == "unknown_element_symbol"
 
 
+def test_get_dummy_atom_wildcard_is_422_not_an_empty_page(client, db_session):
+    """``*`` is RDKit's dummy-atom wildcard: ``GetAtomicNumber("*")``
+    returns 0 rather than raising, so a naive check would accept it and
+    silently match nothing (no formula ever contains ``*``).
+    """
+    resp = client.get("/api/v1/scientific/species/browse?elements=*")
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "unknown_element_symbol"
+
+
+def test_get_too_many_element_symbols_is_422(client, db_session):
+    resp = client.get(
+        "/api/v1/scientific/species/browse"
+        "?elements=C,H,N,O,S,Cl,Br,F,P,I,Na"
+    )
+
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "too_many_element_symbols"
+
+
+def test_profile_curated_drops_species_with_no_approved_entries(client, db_session):
+    """The #277 follow-up (must-fix from review): ``profile=curated``
+    narrows visibility to ``approved`` with **no request field set at
+    all** -- the field-keyed classification the original #277 fix used
+    could not see this, and reproduced the bug verbatim:
+    ``?profile=curated`` reported the full unfiltered species count as
+    ``pagination.total`` while every record on the page carried
+    ``entries: []``. Three species, every entry ``not_reviewed`` --
+    mirrors the exact shape measured on the deployed archive (59
+    species, zero approved).
+    """
+    refs = set()
+    for i in range(3):
+        species = make_species(
+            db_session,
+            smiles=unique_smiles(),
+            inchi_key=next_inchi_key(f"APIBRPROFCUR{i}"),
+        )
+        make_species_entry(db_session, species)  # not_reviewed; never approved
+        refs.add(species.public_ref)
+
+    curated = client.get(
+        "/api/v1/scientific/species/browse?profile=curated"
+    ).json()
+    by_status = client.get(
+        "/api/v1/scientific/species/browse?min_review_status=approved"
+    ).json()
+
+    curated_refs = {r["species_ref"] for r in curated["records"]}
+    by_status_refs = {r["species_ref"] for r in by_status["records"]}
+
+    # None of the three not_reviewed-only species survive either path --
+    # identical effective visibility must give identical (empty, for
+    # this fixture) answers, not "list all 3" under one spelling and
+    # "list none" under the other.
+    assert refs.isdisjoint(curated_refs)
+    assert refs.isdisjoint(by_status_refs)
+    assert curated["pagination"]["total"] == by_status["pagination"]["total"]
+
 def test_get_pagination_total_reflects_full_corpus_not_the_page(client, db_session):
     ids = set()
     for _ in range(4):

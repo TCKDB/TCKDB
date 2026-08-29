@@ -25,6 +25,16 @@ MAX_FORMULA_LENGTH: int = 256
 # per-symbol RDKit periodic-table check does that.
 MAX_ELEMENTS_LENGTH: int = 256
 
+# Symbol *count* for the same filter, independent of MAX_ELEMENTS_LENGTH:
+# the string bound caps bytes (~85 two-letter symbols fit in 256 chars),
+# but each symbol adds one more unindexed per-row cartridge predicate to
+# an unauthenticated public query (elem_mode=any/all is an OR/AND of N
+# regex matches over mol_formula(mol_from_smiles(...)), evaluated per
+# candidate row). Measured: 10k rows x 5 symbols ~= 490ms. No real
+# composition query names more than a handful of elements -- there are
+# only 118 to choose from and nobody browses for "any of 50 of them".
+MAX_ELEMENT_SYMBOLS: int = 10
+
 # Computational provenance free-text.
 MAX_METHOD_LENGTH: int = 256
 MAX_BASIS_LENGTH: int = 256

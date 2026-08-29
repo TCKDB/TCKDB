@@ -1477,6 +1477,22 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "function, source_calculations name jobs, and a depositor "
                 "repairs them in different places."
             )),
+    ApiCode("too_many_element_symbols", 422, Surface.coded_exception,
+            "backend/app/services/scientific_read/species.py",
+            shape=Shape.relationship,
+            note=(
+                "/species/browse's elements= composition filter. Same cap "
+                "family as limit_too_large / offset_too_large (Calvin's "
+                "2026-08-18 overrule: a cap refusal that does not state "
+                "the limit is un-actionable) -- context carries "
+                "max_elements (the configured cap, a module constant "
+                "here rather than a setting) and elements_count (the "
+                "caller's own comma-separated symbol count). Exists "
+                "because each additional symbol adds one more unindexed "
+                "per-row cartridge regex on a public, unauthenticated "
+                "endpoint; see MAX_ELEMENT_SYMBOLS in "
+                "app/schemas/reads/_field_bounds.py for the measurement."
+            )),
     ApiCode("transition_state_charge_mismatch", 422, Surface.coded_exception,
             "backend/app/services/reaction_resolution.py",
             shape=Shape.relationship),

@@ -206,6 +206,7 @@ class RejectionCode(str, Enum):
     THERMO_SOURCE_CALCULATION_OWNER_MISMATCH = "thermo_source_calculation_owner_mismatch"
     THERMO_SOURCE_ROLE_TYPE_MISMATCH = "thermo_source_role_type_mismatch"
     THERMO_STATMECH_OWNER_MISMATCH = "thermo_statmech_owner_mismatch"
+    TOO_MANY_ELEMENT_SYMBOLS = "too_many_element_symbols"
     TRANSITION_STATE_CHARGE_MISMATCH = "transition_state_charge_mismatch"
     TRANSITION_STATE_COMPOSITION_MISMATCH = "transition_state_composition_mismatch"
     TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH = "transition_state_irc_mapping_element_mismatch"
@@ -340,6 +341,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH,
         RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH,
         RejectionCode.THERMO_STATMECH_OWNER_MISMATCH,
+        RejectionCode.TOO_MANY_ELEMENT_SYMBOLS,
         RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH,
         RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH,
         RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH,
@@ -526,6 +528,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.THERMO_SOURCE_CALCULATION_OWNER_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_SOURCE_ROLE_TYPE_MISMATCH: frozenset({422}),
     RejectionCode.THERMO_STATMECH_OWNER_MISMATCH: frozenset({422}),
+    RejectionCode.TOO_MANY_ELEMENT_SYMBOLS: frozenset({422}),
     RejectionCode.TRANSITION_STATE_CHARGE_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_COMPOSITION_MISMATCH: frozenset({422}),
     RejectionCode.TRANSITION_STATE_IRC_MAPPING_ELEMENT_MISMATCH: frozenset({422}),
