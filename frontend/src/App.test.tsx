@@ -52,22 +52,32 @@ describe("public archive shell", () => {
     })
 
     it("offers a visible accessible Formula/SMILES choice for ambiguous input", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })))
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({
+            records: [{ species_ref: speciesRef, formula: "Cl", canonical_smiles: "[Cl]", charge: 0, multiplicity: 2, entries: [] }],
+        })))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), "Cl")
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
-        expect(await screen.findByRole("link", { name: speciesRef })).toBeVisible()
+        // The result reads as chemistry (formula + SMILES), not as the raw
+        // ref -- the ref stays present, but demoted, alongside it.
+        const result = await screen.findByRole("link", { name: /^Cl \[Cl\]/ })
+        expect(result).toBeVisible()
+        expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
+        expect(screen.getByText(speciesRef)).toBeVisible()
     })
 
     it("completes a StrictMode search and clears its loading state", async () => {
-        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })))
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({
+            records: [{ species_ref: speciesRef, formula: "H2O", canonical_smiles: "O", charge: 0, multiplicity: 1, entries: [] }],
+        })))
         const user = userEvent.setup(); render(<StrictMode><App /></StrictMode>)
         await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
         const button = screen.getByRole("button", { name: "Search" })
         await user.click(button)
-        expect(await screen.findByRole("link", { name: speciesRef })).toBeVisible()
+        expect(await screen.findByRole("link", { name: /^H2O O /})).toBeVisible()
+        expect(screen.getByText(speciesRef)).toBeVisible()
         expect(button).toHaveAttribute("aria-busy", "false")
     })
 
@@ -123,39 +133,67 @@ describe("public archive shell", () => {
             const query = new URL(request.url).searchParams
             if (query.has("species_ref")) return HttpResponse.json({ records: [overviewSpecies()] })
             return HttpResponse.json({ records: [
-                { species_ref: speciesRef, entries: [{ species_entry_ref: entryRef }] },
-                { species_ref: speciesRefTwo, entries: [] },
+                {
+                    species_ref: speciesRef, formula: "H2O", canonical_smiles: "O", charge: 0, multiplicity: 1,
+                    entries: [{ species_entry_ref: entryRef }],
+                },
+                {
+                    species_ref: speciesRefTwo, formula: "H2O2", canonical_smiles: "OO", charge: 0, multiplicity: 1,
+                    entries: [],
+                },
             ] })
         }))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), "H2O")
         await user.click(screen.getByRole("button", { name: "Search" }))
-        const result = await screen.findByRole("link", { name: speciesRef })
+        // Each row reads by its own chemistry, not by an interchangeable ref:
+        // the two matches share the same formula prefix but diverge past it,
+        // and each keeps its own entry count ("1 entry" vs "0 entries").
+        const result = await screen.findByRole("link", { name: /^H2O O charge 0 · spin singlet \(1\) · 1 entry$/ })
         expect(result).toHaveAttribute("href", `/species/${speciesRef}`)
-        expect(screen.getByRole("link", { name: speciesRefTwo })).toBeVisible()
+        const other = screen.getByRole("link", { name: /^H2O2 OO charge 0 · spin singlet \(1\) · 0 entries$/ })
+        expect(other).toBeVisible()
+        expect(other).toHaveAttribute("href", `/species/${speciesRefTwo}`)
+        // The ref stays present and copyable alongside the chemistry, just demoted.
+        expect(screen.getByText(speciesRef)).toBeVisible()
+        expect(screen.getByText(speciesRefTwo)).toBeVisible()
         await user.click(result)
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
     })
 
-    it("keeps structure search at entry grain", async () => {
-        server.use(http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({ records: [{ species_ref: speciesRef, species_entry_ref: entryRef }] })))
+    it("keeps structure search at entry grain and shows SMILES when formula is unavailable", async () => {
+        server.use(http.get("/api/v1/scientific/species/structure-search", () => HttpResponse.json({
+            records: [{ species_ref: speciesRef, species_entry_ref: entryRef, smiles: "CCO", charge: 0, multiplicity: 1 }],
+        })))
         const user = userEvent.setup(); render(<App />)
         await user.type(await screen.findByLabelText("Exact species identifier"), "smiles:CCO")
         await user.click(screen.getByRole("button", { name: "Search" }))
-        expect(await screen.findByRole("link", { name: entryRef })).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        // The structure-search endpoint never returns a formula (#251): the
+        // row leads with SMILES instead and says so honestly, rather than
+        // leaving a blank or falling back to the ref.
+        expect(screen.getByText("formula not available")).toBeVisible()
+        const result = await screen.findByRole("link", { name: /^CCO formula not available/ })
+        expect(result).toHaveAttribute("href", `/species-entries/${entryRef}`)
+        expect(screen.getByText(entryRef)).toBeVisible()
     })
 
     it("keeps only the latest search result and does not navigate after unmount", async () => {
         server.use(http.get("/api/v1/scientific/species/search", async ({ request }) => {
             const formula = new URL(request.url).searchParams.get("formula")
             if (formula === "H2O") await delay(40)
-            return HttpResponse.json({ records: [{ species_ref: formula === "H2O" ? speciesRef : speciesRefTwo, entries: [] }] })
+            const ref = formula === "H2O" ? speciesRef : speciesRefTwo
+            const chemistry = formula === "H2O"
+                ? { formula: "H2O", canonical_smiles: "O" }
+                : { formula: "H2", canonical_smiles: "[H][H]" }
+            return HttpResponse.json({ records: [{ species_ref: ref, ...chemistry, charge: 0, multiplicity: 1, entries: [] }] })
         }))
         const user = userEvent.setup(); render(<App />)
         const input = await screen.findByLabelText("Exact species identifier")
         await user.type(input, "H2O"); await user.click(screen.getByRole("button", { name: "Search" }))
         await user.clear(input); await user.type(input, "H2"); await user.click(screen.getByRole("button", { name: "Search" }))
-        expect(await screen.findByRole("link", { name: speciesRefTwo })).toBeVisible()
+        // The stale, slower "H2O" response must never overwrite the "H2" result.
+        expect(await screen.findByRole("link", { name: /^H2 \[H\]\[H\]/ })).toBeVisible()
+        expect(screen.queryByRole("link", { name: /^H2O O/ })).not.toBeInTheDocument()
         cleanup(); await delay(60); expect(window.location.pathname).toBe("/")
     })
 
@@ -196,13 +234,19 @@ describe("public archive shell", () => {
         await user.clear(input); await user.type(input, "Cl"); await user.click(button)
         expect(await screen.findByRole("group", { name: /Search “Cl” as/ })).toBeVisible()
         expect(button).toHaveAttribute("aria-busy", "false")
-        await delay(60); expect(screen.queryByRole("link", { name: speciesRef })).not.toBeInTheDocument()
+        // The ref is checked directly (not via an exact link name) because
+        // the row's accessible name is now the chemistry, not the ref --
+        // checking for the ref's continued *absence* still needs to survive
+        // that, since it stands in for "did the stale slow response render".
+        await delay(60); expect(screen.queryByText(speciesRef)).not.toBeInTheDocument()
     })
 
     it("does not allow an ambiguity chooser to search stale textbox content", async () => {
         server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
             expect(new URL(request.url).searchParams.get("formula")).toBe("Br")
-            return HttpResponse.json({ records: [{ species_ref: speciesRef, entries: [] }] })
+            return HttpResponse.json({
+                records: [{ species_ref: speciesRef, formula: "Br", canonical_smiles: "[Br]", charge: 0, multiplicity: 2, entries: [] }],
+            })
         }))
         const user = userEvent.setup(); render(<App />)
         const input = await screen.findByLabelText("Exact species identifier")
@@ -213,7 +257,9 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("group", { name: /Search “Br” as/ })).toBeVisible()
         await user.click(screen.getByRole("button", { name: "Formula" }))
-        expect(await screen.findByRole("link", { name: speciesRef })).toBeVisible()
+        const result = await screen.findByRole("link", { name: /^Br \[Br\]/ })
+        expect(result).toBeVisible()
+        expect(screen.getByText(speciesRef)).toBeVisible()
     })
 })
 
