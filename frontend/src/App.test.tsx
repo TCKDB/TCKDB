@@ -221,7 +221,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/species", "Species", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
-    ["/conformer-observations/cfo_abc", "Conformer observation", "cfo_abc"],
+    ["/conformer-observations/cfo_abc", "cfo_abc", "cfo_abc"],
     ["/calculations/calc_abc", "Calculation", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     ["/reactions", "Reactions", undefined],
@@ -250,6 +250,32 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
                         evidence_coverage: { opt: 0, freq: 0, sp: 0 },
                     },
                     observations: [], calculations: [], geometries: [],
+                },
+            })))
+        }
+        if (path.startsWith("/conformer-observations/")) {
+            server.use(http.get("/api/v1/scientific/conformer-observations/:ref", () => HttpResponse.json({
+                record: {
+                    conformer_observation: {
+                        conformer_observation_ref: "cfo_abc",
+                        review: { status: "not_reviewed" },
+                    },
+                    conformer_group: {
+                        conformer_group_ref: "cfg_abc", label: "Conformer group",
+                        review: { status: "not_reviewed" },
+                    },
+                    species: { species_ref: speciesRef, species_entry_ref: entryRef },
+                    assignment_scheme: null,
+                    evidence_summary: {
+                        calculation_count: 0, geometry_count: 0, has_opt: false, has_freq: false,
+                        has_sp: false, has_geometry_validation: false, has_scf_stability: false,
+                        levels_of_theory: {},
+                    },
+                    available_sections: {
+                        has_observations: false, has_selections: false, has_calculations: false,
+                        has_geometries: false, has_review: false,
+                    },
+                    observations: [], selections: [], calculations: [], geometries: [], review_history: [],
                 },
             })))
         }

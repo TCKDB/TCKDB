@@ -1,3 +1,15 @@
+/*
+ * Shared between ConformerGroupPage (the basin evidence ledger) and
+ * ConformerObservationPage (one deposition drilled into from that
+ * ledger). Both render the same review-badge / metric / coverage-card /
+ * stage-table / geometry-link vocabulary, so the observation page reuses
+ * this stylesheet rather than forking a near-duplicate copy that would
+ * drift the moment one of the two pages' visuals changed and the other
+ * didn't. Page-root classes stay named after the group page
+ * (`.conformer-page`, `.basin-header`, ...) for historical reasons; treat
+ * them as the shared "conformer record" layout, not group-only.
+ */
+
 .conformer-page {
     max-width: 76rem;
     margin: 0 auto;
@@ -116,6 +128,24 @@
 }
 
 .ledger-section { margin-top: 3.5rem; }
+
+details.ledger-section summary {
+    cursor: pointer;
+    color: #173f6e;
+    font: 600 .78rem var(--mono);
+}
+
+details.ledger-section summary:focus-visible {
+    outline: 3px solid #7ea7cf;
+    outline-offset: 3px;
+}
+
+details.ledger-section ul {
+    margin: .85rem 0 0;
+    padding-left: 1.2rem;
+    color: #3c4856;
+    font-size: .85rem;
+}
 .ledger-heading { max-width: 43rem; }
 .ledger-section h2 { font-size: 2rem; }
 
@@ -128,7 +158,32 @@
 .observation-list {
     display: grid;
     gap: 1rem;
-    margin-top: 1.3rem;
+    margin: 1.3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* Sibling-observation rows on ConformerObservationPage — a plain <li>,
+   not a full .observation-card, since a sibling link needs only a ref
+   and a status, not its own calculation table. */
+.observation-list > li {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    align-items: baseline;
+    padding: .7rem .9rem;
+    border: 1px solid #dbe2ea;
+    background: #fff;
+    font: .78rem var(--mono);
+}
+
+.observation-list > li a {
+    color: #173f6e;
+    font-weight: 600;
+}
+
+.observation-list > li span {
+    color: #536578;
 }
 
 .observation-card {
