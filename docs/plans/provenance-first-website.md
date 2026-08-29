@@ -63,7 +63,10 @@ provenance and machine detail live on dedicated linked pages.
    SVG structure projection (implemented in PR #273). Validation is not
    served by the geometry endpoint; the page points at the producing and
    consuming calculations that hold it.
-5. Complete thermo/statmech/transport detail pages and broader indexes.
+5. Thermo, statmech and transport record sections on the species-entry
+   page (implemented in PR #274). These three APIs are entry-scoped
+   lists, so the records render as sections of the entry rather than as
+   separately addressable detail routes. Broader indexes remain open.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
