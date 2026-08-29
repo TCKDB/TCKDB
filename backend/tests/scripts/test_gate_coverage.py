@@ -740,7 +740,21 @@ def test_frontend_image_publish_workflow_cannot_silently_skip_shipping_changes()
     smoke = names.index("Smoke test — SPA fallback and same-origin API proxy")
     publish = names.index("Build and push multi-arch image")
     assert smoke < publish, "the image must serve its SPA and proxy before it is published"
-    assert "Build arm64 image before publishing" not in names
+
+    # An arm64-only build before publication duplicates the arm64 half of
+    # the final multi-arch build. Its old name is irrelevant: recognize the
+    # expensive, non-publishing build by its action configuration so a rename
+    # cannot restore it unnoticed. The amd64 image remains a valid smoke-test
+    # input, and the final multi-arch step remains the sole publishing build.
+    for step in steps[:publish]:
+        if not str(step.get("uses", "")).startswith("docker/build-push-action@"):
+            continue
+        build = step.get("with", {})
+        is_arm64_only = str(build.get("platforms", "")).strip() == "linux/arm64"
+        assert not (is_arm64_only and build.get("push") is not True), (
+            "an arm64-only docker/build-push-action step before publication "
+            "must not be a non-publishing build"
+        )
 
     publish_step = steps[publish]
     assert publish_step["with"]["context"] == "frontend"
