@@ -9,22 +9,49 @@ afterEach(() => server.resetHandlers())
 afterAll(() => server.close())
 
 describe("searchSpeciesExact", () => {
-    it("uses the scientific species endpoint for formula", async () => {
+    it("uses the scientific species endpoint for formula and carries chemistry fields through", async () => {
         server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
             expect(new URL(request.url).searchParams.get("formula")).toBe("H2O")
-            return HttpResponse.json({ records: [{ species_ref: "spc_abcde234567abcde234567abcd", entries: [{ species_entry_ref: "spe_bcdef234567bcdef234567abcd" }] }] })
+            return HttpResponse.json({ records: [{
+                species_ref: "spc_abcde234567abcde234567abcd",
+                canonical_smiles: "O",
+                formula: "H2O",
+                charge: 0,
+                multiplicity: 1,
+                entries: [{ species_entry_ref: "spe_bcdef234567bcdef234567abcd" }],
+            }] })
         }))
-        await expect(searchSpeciesExact({ kind: "formula", value: "H2O" })).resolves.toEqual([{ speciesRef: "spc_abcde234567abcde234567abcd" }])
+        await expect(searchSpeciesExact({ kind: "formula", value: "H2O" })).resolves.toEqual([{
+            speciesRef: "spc_abcde234567abcde234567abcd",
+            formula: "H2O",
+            smiles: "O",
+            charge: 0,
+            multiplicity: 1,
+            entryCount: 1,
+        }])
     })
 
-    it("uses exact structure search for InChIKey", async () => {
+    it("uses exact structure search for InChIKey and reports formula as known-absent", async () => {
         server.use(http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
             const query = new URL(request.url).searchParams
             expect(query.get("query_inchi_key")).toBe("XLYOFNOQVPJJNP-UHFFFAOYSA-N")
             expect(query.get("mode")).toBe("exact")
-            return HttpResponse.json({ records: [{ species_ref: "spc_abcde234567abcde234567abcd", species_entry_ref: "spe_bcdef234567bcdef234567abcd" }] })
+            return HttpResponse.json({ records: [{
+                species_ref: "spc_abcde234567abcde234567abcd",
+                species_entry_ref: "spe_bcdef234567bcdef234567abcd",
+                smiles: "O",
+                charge: 0,
+                multiplicity: 1,
+            }] })
         }))
-        await expect(searchSpeciesExact({ kind: "inchi-key", value: "XLYOFNOQVPJJNP-UHFFFAOYSA-N" })).resolves.toHaveLength(1)
+        await expect(searchSpeciesExact({ kind: "inchi-key", value: "XLYOFNOQVPJJNP-UHFFFAOYSA-N" })).resolves.toEqual([{
+            speciesRef: "spc_abcde234567abcde234567abcd",
+            entryRef: "spe_bcdef234567bcdef234567abcd",
+            formula: null,
+            smiles: "O",
+            charge: 0,
+            multiplicity: 1,
+        }])
     })
 
     it("exposes non-success responses as useful API errors", async () => {
