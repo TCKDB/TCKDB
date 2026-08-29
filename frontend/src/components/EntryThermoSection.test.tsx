@@ -215,17 +215,24 @@ describe("EntryThermoSection", () => {
         page()
         await screen.findByText("thm_alpha")
 
+        // Values are formatted through `domain/quantityFormat.ts`'s
+        // `formatQuantity("thermo_h298_kj_mol"/"thermo_s298_j_mol_k", ...)`
+        // now, at the 2dp precision ported from `landing.py`'s digits table
+        // -- not the raw double the old local `formatQuantity` printed. See
+        // `quantityFormat.test.ts` for the rounding rule itself; this test
+        // stays about *binding*, so it only needs values that expose a
+        // swap, which "111.10" vs "222.20" etc. still do.
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        expect(ddFor(alphaCard, "H298")).toBe("111.1 kJ/mol")
-        expect(ddFor(alphaCard, "S298")).toBe("222.2 J/mol/K")
+        expect(ddFor(alphaCard, "H298")).toBe("111.10 kJ/mol")
+        expect(ddFor(alphaCard, "S298")).toBe("222.20 J/mol·K")
 
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
-        expect(ddFor(betaCard, "H298")).toBe("333.3 kJ/mol")
-        expect(ddFor(betaCard, "S298")).toBe("444.4 J/mol/K")
+        expect(ddFor(betaCard, "H298")).toBe("333.30 kJ/mol")
+        expect(ddFor(betaCard, "S298")).toBe("444.40 J/mol·K")
 
         const gammaCard = screen.getByText("thm_gamma").closest("article") as HTMLElement
-        expect(ddFor(gammaCard, "H298")).toBe("555.5 kJ/mol")
-        expect(ddFor(gammaCard, "S298")).toBe("666.6 J/mol/K")
+        expect(ddFor(gammaCard, "H298")).toBe("555.50 kJ/mol")
+        expect(ddFor(gammaCard, "S298")).toBe("666.60 J/mol·K")
     })
 
     it("renders the NASA-7 low- and high-temperature coefficient rows in their own row, unswapped", async () => {
@@ -259,8 +266,8 @@ describe("EntryThermoSection", () => {
         page()
         const gammaCard = (await screen.findByText("thm_gamma")).closest("article") as HTMLElement
         // thm_gamma's fixture: cp0_j_mol_k: 33.3, cp_inf_j_mol_k: 99.9.
-        expect(ddFor(gammaCard, "Cp0 (J/mol/K)")).toBe("33.3")
-        expect(ddFor(gammaCard, "Cp∞ (J/mol/K)")).toBe("99.9")
+        expect(ddFor(gammaCard, "Cp0 (J/mol·K)")).toBe("33.3")
+        expect(ddFor(gammaCard, "Cp∞ (J/mol·K)")).toBe("99.9")
     })
 
     it("renders each NASA-9 interval's own row exactly, with a1..a9 in their own columns — never transposed, never with T min/T max inverted", async () => {
@@ -320,8 +327,15 @@ describe("EntryThermoSection", () => {
         expect(codeAfter(betaCard, "replaced by")).toBe("thm_beta_v2")
         expect(codeAfter(betaCard, "current record in this chain is")).toBe("thm_beta_v3")
         expect(within(betaCard).getByText(/corrected transcription error/)).toBeVisible()
-        // The record's own data is still fully present, not replaced by the notice.
-        expect(within(betaCard).getByText("333.3 kJ/mol")).toBeVisible()
+        // The record's own data is still fully present, not replaced by the
+        // notice. `getByText` only reads an element's own direct text-node
+        // children (see `ddFor`'s docstring above), and the unit now
+        // renders in its own `<span>` (so it can be styled/read
+        // independently, per the digits-table rule that "the unit belongs
+        // on screen in its own element") -- so this reads the H298 row the
+        // same way the binding test above does, rather than a plain
+        // `getByText` that would never match a value split across elements.
+        expect(ddFor(betaCard, "H298")).toBe("333.30 kJ/mol")
 
         // The two non-superseded records carry no notice at all.
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement

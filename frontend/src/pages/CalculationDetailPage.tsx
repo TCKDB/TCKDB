@@ -23,7 +23,11 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { QuantityValue } from "../components/QuantityValue"
 import { RecordStatus } from "../components/RecordStatus"
+import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
+import { formatQuantity } from "../domain/quantityFormat"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 
@@ -96,7 +100,7 @@ const DEPENDENCY_ROLE_LABELS: Record<string, string> = {
 const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_", " ")
 const roleLabel = (role: string) => DEPENDENCY_ROLE_LABELS[role] ?? role.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
-const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
+const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
 // Three states an include-gated eager section can be in, kept distinct per
 // the house rule (see ConformerObservationPage.tsx): absence describes the
@@ -225,31 +229,31 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
                     <div><dt>Quality</dt><dd>{core.quality}</dd></div>
                     <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                    <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "Not recorded"}</dd></div>
+                    <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
                     {/* The compact label above can be identical for two different rows —
                         it omits dispersion, solvent and level_of_theory_ref on purpose (see
                         the schema comment on `levelOfTheorySchema`). Those are the fields
                         that actually distinguish them, so they get their own rows rather
                         than being folded into the label. */}
-                    <div><dt>Level of theory ref</dt><dd>{lot?.level_of_theory_ref ?? "Not recorded"}</dd></div>
-                    <div><dt>Dispersion</dt><dd>{lot?.dispersion ?? "Not recorded"}</dd></div>
-                    <div><dt>Solvent</dt><dd>{lot?.solvent ?? "Not recorded"}</dd></div>
+                    <div><dt>Level of theory ref</dt><dd>{lot?.level_of_theory_ref ?? "not recorded"}</dd></div>
+                    <div><dt>Dispersion</dt><dd>{lot?.dispersion ?? "not recorded"}</dd></div>
+                    <div><dt>Solvent</dt><dd>{lot?.solvent ?? "not recorded"}</dd></div>
                     <div>
                         <dt>Software</dt>
-                        <dd>{software ? `${software.software}${software.version ? ` ${software.version}` : ""}` : "Not recorded"}</dd>
+                        <dd>{softwareLabel(software) ?? "not recorded"}</dd>
                     </div>
-                    <div><dt>Software release ref</dt><dd>{software?.software_release_ref ?? "Not recorded"}</dd></div>
+                    <div><dt>Software release ref</dt><dd>{software?.software_release_ref ?? "not recorded"}</dd></div>
                     <div>
                         <dt>Workflow tool</dt>
-                        <dd>{workflow ? `${workflow.workflow_tool}${workflow.version ? ` ${workflow.version}` : ""}` : "Not recorded"}</dd>
+                        <dd>{toolReleaseLabel(workflow) ?? "not recorded"}</dd>
                     </div>
-                    <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "Not recorded"}</dd></div>
-                    <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "Not recorded"}</dd></div>
+                    <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "not recorded"}</dd></div>
+                    <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "not recorded"}</dd></div>
                     <div>
                         <dt>Literature</dt>
-                        <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "Not recorded"}</dd>
+                        <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "not recorded"}</dd>
                     </div>
-                    <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "Not recorded"}</dd></div>
+                    <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "not recorded"}</dd></div>
                 </dl>
             </header>
 
@@ -338,7 +342,10 @@ function OwnerCard({
                     <div><dt>Species entry ref</dt><dd>{ownerSpecies.species_entry_ref}</dd></div>
                     <div><dt>Structure</dt><dd>{ownerSpecies.canonical_smiles}</dd></div>
                     <div><dt>InChIKey</dt><dd>{ownerSpecies.inchi_key}</dd></div>
-                    <div><dt>Charge / multiplicity</dt><dd>{ownerSpecies.charge} / {ownerSpecies.multiplicity}</dd></div>
+                    <div>
+                        <dt>Charge / multiplicity</dt>
+                        <dd>{chargeDisplay(ownerSpecies.charge)} / {spinDisplay(ownerSpecies.multiplicity)}</dd>
+                    </div>
                     <div><dt>Electronic state</dt><dd>{ownerSpecies.electronic_state_kind}</dd></div>
                 </dl>
             </section>
@@ -356,9 +363,12 @@ function OwnerCard({
                     <div><dt>Transition state</dt><dd>{ownerTS.transition_state_ref}</dd></div>
                     <div><dt>Transition state entry</dt><dd>{ownerTS.label ?? ownerTS.transition_state_entry_ref}</dd></div>
                     <div><dt>Transition state entry ref</dt><dd>{ownerTS.transition_state_entry_ref}</dd></div>
-                    <div><dt>Charge / multiplicity</dt><dd>{ownerTS.charge} / {ownerTS.multiplicity}</dd></div>
+                    <div>
+                        <dt>Charge / multiplicity</dt>
+                        <dd>{chargeDisplay(ownerTS.charge)} / {spinDisplay(ownerTS.multiplicity)}</dd>
+                    </div>
                     <div><dt>Status</dt><dd>{statusLabel(ownerTS.status)}</dd></div>
-                    <div><dt>Reaction entry</dt><dd>{ownerTS.reaction_entry_ref ?? "Not recorded"}</dd></div>
+                    <div><dt>Reaction entry</dt><dd>{ownerTS.reaction_entry_ref ?? "not recorded"}</dd></div>
                 </dl>
             </section>
         )
@@ -411,29 +421,42 @@ function ResultsSection({ results, type, availability, contradicted }: {
 function ResultBody({ results }: { results: NonNullable<CalculationRecord["results"]> }) {
     const pairs: [string, ReactNode][] = []
     if (results.kind === "sp" && results.sp) {
-        pairs.push(["Electronic energy (hartree)", results.sp.electronic_energy_hartree ?? "Not recorded"])
-        pairs.push(["Uncertainty (hartree)", results.sp.electronic_energy_uncertainty_hartree ?? "Not recorded"])
+        // 6dp, matching `landing.py`'s `calculationView` headline
+        // (`fixed(energy.energy_hartree, 6, "hartree")`) -- the one
+        // electronic-energy precision the ported digits table actually
+        // specifies. `unitOverride: null` because the label already says
+        // "(hartree)". `Uncertainty` has no matching entry in that table,
+        // so it stays a raw pass-through rather than a guessed precision --
+        // same reason `zpe_hartree` below stays raw: it is a different
+        // quantity than `energy_hartree`/`final_energy_hartree` and
+        // `landing.py` never gives it a precision to port.
+        pairs.push(["Electronic energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.sp.electronic_energy_hartree, null)} />])
+        pairs.push(["Uncertainty (hartree)", results.sp.electronic_energy_uncertainty_hartree ?? "not recorded"])
     } else if (results.kind === "opt" && results.opt) {
         pairs.push(["Converged", boolLabel(results.opt.converged)])
-        pairs.push(["Steps", results.opt.n_steps ?? "Not recorded"])
-        pairs.push(["Final energy (hartree)", results.opt.final_energy_hartree ?? "Not recorded"])
+        pairs.push(["Steps", results.opt.n_steps ?? "not recorded"])
+        // Same physical quantity, same unit, as the sp branch's "Electronic
+        // energy" above -- an `opt` calculation's final energy is still an
+        // electronic energy in hartree, so it gets the same 6dp spec rather
+        // than a raw double under an identically-styled heading.
+        pairs.push(["Final energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.opt.final_energy_hartree, null)} />])
     } else if (results.kind === "freq" && results.freq) {
-        pairs.push(["Imaginary modes (n_imag)", results.freq.n_imag ?? "Not recorded"])
-        pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "Not recorded"])
-        pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "Not recorded"])
-        pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "Not designated"])
-        pairs.push(["n_imag at or above tau", results.freq.n_imag_at_or_above_tau ?? "Not determinable"])
+        pairs.push(["Imaginary modes (n_imag)", results.freq.n_imag ?? "not recorded"])
+        pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
+        pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "not recorded"])
+        pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "not designated"])
+        pairs.push(["n_imag at or above tau", results.freq.n_imag_at_or_above_tau ?? "not determinable"])
     } else if (results.kind === "scan" && results.scan) {
-        pairs.push(["Dimension", results.scan.dimension ?? "Not recorded"])
+        pairs.push(["Dimension", results.scan.dimension ?? "not recorded"])
         pairs.push(["Relaxed scan", boolLabel(results.scan.is_relaxed)])
     } else if (results.kind === "irc" && results.irc) {
-        pairs.push(["Direction", results.irc.direction ?? "Not recorded"])
+        pairs.push(["Direction", results.irc.direction ?? "not recorded"])
         pairs.push(["Has forward leg", boolLabel(results.irc.has_forward)])
         pairs.push(["Has reverse leg", boolLabel(results.irc.has_reverse)])
     } else if (results.kind === "path_search" && results.path_search) {
-        pairs.push(["Method", results.path_search.method ?? "Not recorded"])
+        pairs.push(["Method", results.path_search.method ?? "not recorded"])
         pairs.push(["Converged", boolLabel(results.path_search.converged)])
-        pairs.push(["Points", results.path_search.n_points ?? "Not recorded"])
+        pairs.push(["Points", results.path_search.n_points ?? "not recorded"])
     }
     if (pairs.length === 0) {
         // `results.kind` names a type this page has no branch for, or the
@@ -450,7 +473,7 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
 }
 
 function boolLabel(value: boolean | null | undefined) {
-    if (value === null || value === undefined) return "Not recorded"
+    if (value === null || value === undefined) return "not recorded"
     return value ? "Yes" : "No"
 }
 
@@ -598,7 +621,7 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
                             <tr key={`review-${index}`}>
                                 <td data-label="Status">{statusLabel(entry.status)}</td>
                                 <td data-label="Reviewed at">{isoDate(entry.reviewed_at)}</td>
-                                <td data-label="Note">{entry.note ?? "Not recorded"}</td>
+                                <td data-label="Note">{entry.note ?? "not recorded"}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -688,7 +711,7 @@ function LazySection<T>({
 
 function KVList({ pairs }: { pairs: [string, ReactNode][] }) {
     return <dl className="kv-list">{pairs.map(([label, value]) => (
-        <div key={label}><dt>{label}</dt><dd>{value ?? "Not recorded"}</dd></div>
+        <div key={label}><dt>{label}</dt><dd>{value ?? "not recorded"}</dd></div>
     ))}</dl>
 }
 
@@ -747,10 +770,10 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
                             <tr key={`ec-${index}`}>
                                 <td data-label="Role">{statusLabel(row.application_role)}</td>
                                 <td data-label="Applied value">{row.applied_value} {row.applied_value_unit}</td>
-                                <td data-label="Target">{row.target_record_ref ?? "Not recorded"}</td>
-                                <td data-label="Scheme">{row.energy_correction_scheme_name ?? "Not recorded"}</td>
-                                <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "Not recorded"}</td>
-                                <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "Not recorded"}</td>
+                                <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
+                                <td data-label="Scheme">{row.energy_correction_scheme_name ?? "not recorded"}</td>
+                                <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "not recorded"}</td>
+                                <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "not recorded"}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -786,19 +809,19 @@ function GeometryValidationSection({ calculationRef, available }: { calculationR
                             ["Status", statusLabel(row.validation_status)],
                             ["Formula matches", boolLabel(row.formula_matches)],
                             ["is_isomorphic (legacy name, same value)", boolLabel(row.is_isomorphic ?? row.formula_matches)],
-                            ["RMSD", row.rmsd ?? "Not recorded"],
-                            ["Reason", row.validation_reason ?? "Not recorded"],
+                            ["RMSD", row.rmsd ?? "not recorded"],
+                            ["Reason", row.validation_reason ?? "not recorded"],
                             [
                                 "Input geometry",
                                 row.input_geometry_ref
                                     ? <Link to={`/geometries/${row.input_geometry_ref}`}>{row.input_geometry_ref}</Link>
-                                    : "Not recorded",
+                                    : "not recorded",
                             ],
                             [
                                 "Output geometry",
                                 row.output_geometry_ref
                                     ? <Link to={`/geometries/${row.output_geometry_ref}`}>{row.output_geometry_ref}</Link>
-                                    : "Not recorded",
+                                    : "not recorded",
                             ],
                         ]} />
                     </>
@@ -831,14 +854,14 @@ function SCFStabilitySection({ calculationRef, available }: { calculationRef: st
                         )}
                         <KVList pairs={[
                             ["Status", statusLabel(row.status)],
-                            ["Lowest eigenvalue", row.lowest_eigenvalue ?? "Not recorded"],
-                            ["Instability count", row.instability_count ?? "Not recorded"],
+                            ["Lowest eigenvalue", row.lowest_eigenvalue ?? "not recorded"],
+                            ["Instability count", row.instability_count ?? "not recorded"],
                             ["Re-optimized wavefunction", boolLabel(row.reoptimized_wavefunction)],
                             [
                                 "Source calculation",
                                 row.source_calculation_ref
                                     ? <Link to={`/calculations/${row.source_calculation_ref}`}>{row.source_calculation_ref}</Link>
-                                    : "Not recorded",
+                                    : "not recorded",
                             ],
                         ]} />
                     </>
@@ -862,10 +885,10 @@ function WavefunctionDiagnosticSection({ calculationRef, available }: { calculat
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no diagnostic row.</p>
                 return <KVList pairs={[
-                    ["T1 diagnostic", row.t1_diagnostic ?? "Not recorded"],
-                    ["D1 diagnostic", row.d1_diagnostic ?? "Not recorded"],
-                    ["T1 norm", row.t1_norm ?? "Not recorded"],
-                    ["Largest T2 amplitude", row.largest_t2_amplitude ?? "Not recorded"],
+                    ["T1 diagnostic", row.t1_diagnostic ?? "not recorded"],
+                    ["D1 diagnostic", row.d1_diagnostic ?? "not recorded"],
+                    ["T1 norm", row.t1_norm ?? "not recorded"],
+                    ["Largest T2 amplitude", row.largest_t2_amplitude ?? "not recorded"],
                 ]} />
             }}
         </LazySection>
@@ -886,9 +909,9 @@ function SpinDiagnosticSection({ calculationRef, available }: { calculationRef: 
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no diagnostic row.</p>
                 return <KVList pairs={[
-                    ["<S^2>", row.s_squared ?? "Not recorded"],
-                    ["Expected <S^2>", row.s_squared_expected ?? "Not recorded"],
-                    ["Annihilated <S^2>", row.s_squared_annihilated ?? "Not recorded"],
+                    ["<S^2>", row.s_squared ?? "not recorded"],
+                    ["Expected <S^2>", row.s_squared_expected ?? "not recorded"],
+                    ["Annihilated <S^2>", row.s_squared_annihilated ?? "not recorded"],
                 ]} />
             }}
         </LazySection>
@@ -913,7 +936,7 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
                             <tr key={`param-${index}`}>
                                 <td data-label="Key">{row.canonical_key ?? row.raw_key}</td>
                                 <td data-label="Value">{row.canonical_value ?? row.raw_value}{row.unit ? ` ${row.unit}` : ""}</td>
-                                <td data-label="Section">{row.section ?? "Not recorded"}</td>
+                                <td data-label="Section">{row.section ?? "not recorded"}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -941,7 +964,7 @@ function ConstraintsSection({ calculationRef, available }: { calculationRef: str
                             <tr key={`constraint-${row.constraint_index}`}>
                                 <td data-label="Kind">{statusLabel(row.constraint_kind)}</td>
                                 <td data-label="Atoms">{row.atom_indices.join(", ")}</td>
-                                <td data-label="Target value">{row.target_value ?? "Not recorded"}</td>
+                                <td data-label="Target value">{row.target_value ?? "not recorded"}</td>
                             </tr>
                         ))}
                     </tbody>
@@ -1015,8 +1038,8 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable }: {
                                         <tr key={`imag-${mode.mode_index}`}>
                                             <td data-label="Mode">{mode.mode_index}</td>
                                             <td data-label="Frequency (cm-1)">{mode.frequency_cm1}</td>
-                                            <td data-label="Declared">{mode.declared_disposition ? statusLabel(mode.declared_disposition) : "Not recorded"}</td>
-                                            <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "Not determined"}</td>
+                                            <td data-label="Declared">{mode.declared_disposition ? statusLabel(mode.declared_disposition) : "not recorded"}</td>
+                                            <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "not determined"}</td>
                                             <td data-label="Agreement">{statusLabel(mode.agreement)}</td>
                                         </tr>
                                     ))}
@@ -1046,8 +1069,8 @@ function ScanSection({ calculationRef, available }: { calculationRef: string; av
                     ["Relaxed", boolLabel(scan.is_relaxed)],
                     ["Coordinates", scan.coordinate_count],
                     ["Points", scan.point_count],
-                    ["Min electronic energy (hartree)", scan.min_electronic_energy_hartree ?? "Not recorded"],
-                    ["Max electronic energy (hartree)", scan.max_electronic_energy_hartree ?? "Not recorded"],
+                    ["Min electronic energy (hartree)", formatQuantity("calculation_electronic_energy_hartree", scan.min_electronic_energy_hartree, null)?.value],
+                    ["Max electronic energy (hartree)", formatQuantity("calculation_electronic_energy_hartree", scan.max_electronic_energy_hartree, null)?.value],
                 ]} />
             ))}
         </LazySection>
@@ -1126,9 +1149,9 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
                         {rows.map((row, index) => (
                             <tr key={`artifact-${index}`}>
                                 <td data-label="Kind">{statusLabel(row.kind)}</td>
-                                <td data-label="Filename">{row.filename ?? "Not recorded"}</td>
+                                <td data-label="Filename">{row.filename ?? "not recorded"}</td>
                                 <td data-label="Size">{row.bytes.toLocaleString()} bytes</td>
-                                <td data-label="Artifact ref">{row.artifact_ref ?? "Not recorded"}</td>
+                                <td data-label="Artifact ref">{row.artifact_ref ?? "not recorded"}</td>
                                 {/* The sha256 is the artifact's identity — the storage URI (row.uri)
                                     is not a downloadable link, so this is the one stable handle for
                                     the bytes this row describes. */}
@@ -1155,8 +1178,8 @@ function ExecutionEnvironmentSection({ calculationRef, available }: { calculatio
             {(env) => (!env ? <p className="empty-projection">The archive returned no manifest.</p> : (
                 <KVList pairs={[
                     ["Environment ref", env.environment_ref],
-                    ["Runtime kind", env.runtime?.runtime_kind ?? "Not recorded"],
-                    ["Executable", env.executable?.locator ?? "Not recorded"],
+                    ["Runtime kind", env.runtime?.runtime_kind ?? "not recorded"],
+                    ["Executable", env.executable?.locator ?? "not recorded"],
                 ]} />
             ))}
         </LazySection>

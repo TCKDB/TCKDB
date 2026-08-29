@@ -104,4 +104,31 @@
     outline: 3px solid #7ea7cf;
     outline-offset: 3px;
 }
+/*
+ * `components/QuantityValue.tsx` renders both the `absent`/`named-absence`
+ * cases of `domain/quantityFormat.ts`'s `fillValue` in a `.absent` span, and
+ * every quantity's unit in a `.unit` span. Global (not scoped to one page's
+ * stylesheet) because `QuantityValue` is shared across
+ * `EntryThermoSection`/`EntryStatmechSection`/`EntryTransportSection`
+ * (`entry-science.css`) and `CalculationDetailPage`
+ * (`calculation-detail.css`) alike -- one rule here beats duplicating it
+ * into every page stylesheet that happens to render a quantity.
+ * `.absent` matches `.empty-projection`'s muted body colour (this is the
+ * same "the record is honestly missing this" register, just inline rather
+ * than a standalone paragraph) plus italics, so a reader scanning a `<dl>`
+ * can tell an absence apart from a real reading without reading the word.
+ */
+.absent {
+    color: #536578;
+    font-style: italic;
+}
+.unit {
+    /* No margin here: `QuantityValue.tsx` already puts a literal space in
+       the text node before the unit (`<span className="unit"> {unit}</span>`)
+       so that plain-text reads (`.textContent`, screen readers, copy/paste)
+       keep a real space -- adding margin on top would double the gap. */
+    color: #6b7888;
+    font-size: .92em;
+}
+
 @media (max-width: 680px) { .utility-bar { height: auto; min-height: 48px; gap: .8rem; padding-block: .65rem; align-items: flex-start; }.utility-bar nav { flex-wrap: wrap; justify-content: flex-end; gap: .35rem .8rem; }.archive-hero { padding-top: 4rem; }.search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.destination-grid { grid-template-columns: 1fr; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

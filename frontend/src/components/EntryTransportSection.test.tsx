@@ -128,7 +128,8 @@ describe("EntryTransportSection", () => {
         expect(within(card).getByText("Superseded")).toBeVisible()
         expect(codeAfter(card, "replaced by")).toBe("trn_one_v2")
         expect(codeAfter(card, "current record in this chain is")).toBe("trn_one_v3")
-        expect(within(card).getByText("3.8")).toBeVisible()
+        // Sigma is now formatted at 3dp (`quantityFormat.ts`'s digits table).
+        expect(within(card).getByText("3.800")).toBeVisible()
     })
 
     it("binds sigma and epsilon/k to their own labelled row — never swapped", async () => {
@@ -137,8 +138,38 @@ describe("EntryTransportSection", () => {
         ]))))
         page()
         const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
-        expect(ddFor(card, "Sigma (Å)")).toBe("3.8")
+        // Sigma is now formatted at 3dp (`quantityFormat.ts`'s digits table);
+        // epsilon/k at 1dp already matched its input's own precision.
+        expect(ddFor(card, "Sigma (Å)")).toBe("3.800")
         expect(ddFor(card, "Epsilon / k (K)")).toBe("250.1")
+    })
+
+    it("formats dipole at its own 3dp spec, not the 1dp epsilon/k spec", async () => {
+        // 1.8523 rounds to "1.852" at 3dp but "1.9" at 1dp -- a table-row
+        // swap (using `transport_epsilon_over_k_k` here instead of
+        // `transport_dipole_debye`) produces a visibly different string.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            mockRecord({ transport: { ...mockRecord().transport, dipole_debye: 1.8523 } }),
+        ]))))
+        page()
+        const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
+        expect(ddFor(card, "Dipole (Debye)")).toBe("1.852")
+    })
+
+    it("renders Software and Workflow through their own label rules, not stuttered and not swapped", async () => {
+        // Same rationale as the identical test in EntryStatmechSection.test.tsx.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            mockRecord({
+                software_release: { software_release_ref: "srel_1", software: "Gaussian", version: "Gaussian 16, Revision C.02" },
+                workflow_tool_release: { workflow_tool_release_ref: "wfr_1", workflow_tool: "ARC", version: "2.1.0" },
+            }),
+        ]))))
+        page()
+        const card = (await screen.findByText("trn_one")).closest("article") as HTMLElement
+        const softwareLine = within(card).getByText(/^Software:/).closest("p") as HTMLElement
+        expect(softwareLine.textContent).toContain("Gaussian 16, Revision C.02")
+        expect(softwareLine.textContent).not.toMatch(/Gaussian Gaussian/)
+        expect(softwareLine.textContent).toContain("ARC 2.1.0")
     })
 
     it("fetches an opened on-demand section's own token only, once", async () => {

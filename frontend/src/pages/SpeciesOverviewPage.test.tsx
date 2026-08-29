@@ -85,8 +85,12 @@ describe("species overview", () => {
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(screen.getByRole("link", { name: "excited T1" }))
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
-        expect(screen.getByText("14")).toBeVisible()
-        expect(screen.getByText("3")).toBeVisible()
+        // Scoped to `dd` -- the formula heading above ("CH3") now renders
+        // through `Formula`, which types the "3" subscript as its own
+        // `<sub>3</sub>` element, so an unscoped `getByText("3")` would
+        // ambiguously match both that subscript and this calculation count.
+        expect(screen.getByText("14", { selector: "dd" })).toBeVisible()
+        expect(screen.getByText("3", { selector: "dd" })).toBeVisible()
         expect(screen.getAllByText("Deposited records")).toHaveLength(2)
         expect(screen.getAllByText("Available data")).toHaveLength(2)
     })

@@ -2,6 +2,8 @@ import { Link, useParams } from "react-router-dom"
 import "../species-overview.css"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
+import { Formula } from "../components/Formula"
+import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 
 function token(value: string) {
@@ -22,11 +24,6 @@ function groupEntriesByState(entries: ScientificSpeciesEntrySummary[]) {
         }
         return groups
     }, new Map())
-}
-
-function multiplicityLabel(value: number) {
-    const labels: Record<number, string> = { 1: "singlet", 2: "doublet", 3: "triplet" }
-    return labels[value] ? `${labels[value]} (${value})` : String(value)
 }
 
 export default function SpeciesOverviewPage() {
@@ -66,7 +63,6 @@ function State({ title, ref, busy, alert }: {
 }
 
 function SpeciesDocument({ species }: { species: SpeciesOverview }) {
-    const title = species.formula ?? species.canonical_smiles
     const entryGroups = groupEntriesByState(species.entries)
     return (
         <section className="species-overview">
@@ -77,7 +73,11 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
             </nav>
             <header className="species-header">
                 <p className="eyebrow">Species record · chemical identity</p>
-                <h1>{title}</h1>
+                {/* `formula` typeset with subscripts when the archive computed
+                    one, matching `IdentifierSearch.tsx`'s headline rule; the
+                    SMILES fallback is not chemistry-formula text, so it is
+                    never run through `Formula`. */}
+                <h1>{species.formula ? <Formula value={species.formula} /> : species.canonical_smiles}</h1>
                 <p className="species-intro">
                     This identity may have more than one electronic-state entry. Select the entry you mean before
                     reading its conformer or calculation evidence.
@@ -88,7 +88,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     <Identity label="InChIKey" value={species.inchi_key} />
                     <Identity
                         label="Charge / multiplicity"
-                        value={`${species.charge} / ${multiplicityLabel(species.multiplicity)}`}
+                        value={`${chargeDisplay(species.charge)} / ${spinDisplay(species.multiplicity)}`}
                     />
                 </dl>
             </header>

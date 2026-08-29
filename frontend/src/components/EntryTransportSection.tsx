@@ -9,9 +9,12 @@ import {
     type TransportRecord,
     type TransportSectionToken,
 } from "../api/transportApi"
+import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
+import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryTransport } from "../hooks/useEntryTransport"
 import { LazyRowBody } from "./LazyRowBody"
+import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SourceCalculationsTable } from "./SourceCalculationsTable"
@@ -34,8 +37,8 @@ import { SupersessionNotice } from "./SupersessionNotice"
 // ---------------------------------------------------------------------------
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
-const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "Not recorded")
-const boolLabel = (value: boolean | null | undefined) => (value === null || value === undefined ? "Not recorded" : value ? "Yes" : "No")
+const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
+const boolLabel = (value: boolean | null | undefined) => (value === null || value === undefined ? "not recorded" : value ? "Yes" : "No")
 
 function reviewSummaryText(summary: TransportListResponse["review_summary"]) {
     const parts: string[] = []
@@ -160,7 +163,7 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
                                 <tr key={`review-${index}`}>
                                     <td data-label="Status">{statusLabel(row.status)}</td>
                                     <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
-                                    <td data-label="Note">{row.note ?? "Not recorded"}</td>
+                                    <td data-label="Note">{row.note ?? "not recorded"}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -188,12 +191,17 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 {record.species.canonical_smiles ? ` (${record.species.canonical_smiles})` : ""}
             </p>
 
+            {/* The label already carries the unit in parens ("Sigma (Å)"), so
+                the value itself is formatted with the unit suppressed
+                (`unitOverride: null`) -- printing "3.800 Å" next to a
+                "Sigma (Å)" label would say the unit twice. Only the
+                precision half of the digits table applies here. */}
             <dl className="kv-list">
-                <div><dt>Sigma (Å)</dt><dd>{core.sigma_angstrom ?? "Not recorded"}</dd></div>
-                <div><dt>Epsilon / k (K)</dt><dd>{core.epsilon_over_k_k ?? "Not recorded"}</dd></div>
-                <div><dt>Dipole (Debye)</dt><dd>{core.dipole_debye ?? "Not recorded"}</dd></div>
-                <div><dt>Polarizability (Å³)</dt><dd>{core.polarizability_angstrom3 ?? "Not recorded"}</dd></div>
-                <div><dt>Rotational relaxation</dt><dd>{core.rotational_relaxation ?? "Not recorded"}</dd></div>
+                <div><dt>Sigma (Å)</dt><dd><QuantityValue value={formatQuantity("transport_sigma_angstrom", core.sigma_angstrom, null)} /></dd></div>
+                <div><dt>Epsilon / k (K)</dt><dd><QuantityValue value={formatQuantity("transport_epsilon_over_k_k", core.epsilon_over_k_k, null)} /></dd></div>
+                <div><dt>Dipole (Debye)</dt><dd><QuantityValue value={formatQuantity("transport_dipole_debye", core.dipole_debye, null)} /></dd></div>
+                <div><dt>Polarizability (Å³)</dt><dd>{core.polarizability_angstrom3 ?? "not recorded"}</dd></div>
+                <div><dt>Rotational relaxation</dt><dd>{core.rotational_relaxation ?? "not recorded"}</dd></div>
                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
             </dl>
 
@@ -208,15 +216,11 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
 
             <p className="section-note">
                 Software:{" "}
-                {record.software_release
-                    ? `${record.software_release.software}${record.software_release.version ? ` ${record.software_release.version}` : ""}`
-                    : "Not recorded"}
+                {softwareLabel(record.software_release) ?? "not recorded"}
                 {" · "}Workflow:{" "}
-                {record.workflow_tool_release
-                    ? `${record.workflow_tool_release.workflow_tool}${record.workflow_tool_release.version ? ` ${record.workflow_tool_release.version}` : ""}`
-                    : "Not recorded"}
+                {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
                 {" · "}Literature:{" "}
-                {record.literature ? (record.literature.title ?? record.literature.literature_ref) : "Not recorded"}
+                {record.literature ? (record.literature.title ?? record.literature.literature_ref) : "not recorded"}
             </p>
         </article>
     )
