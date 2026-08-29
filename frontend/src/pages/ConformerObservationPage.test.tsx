@@ -267,6 +267,23 @@ describe("ConformerObservationPage", () => {
         expect(screen.getByRole("alert")).toBeVisible()
     })
 
+    it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state, distinct from a wrong-prefix ref", async () => {
+        // `invalid_handle` — right prefix, unparseable body — is distinct
+        // from `handle_type_mismatch` above and is what live traffic
+        // actually returns for a malformed ref. This pins the shared
+        // `INVALID_HANDLE_CODES` classification in `useScientificRecord`
+        // on this page too, not just the surface it was changed for.
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => HttpResponse.json({
+            code: "invalid_handle",
+            detail: "invalid_handle: 'co_' not a recognised conformer_observation handle",
+            context: {},
+        }, { status: 422 })))
+        page()
+        expect(await screen.findByRole("heading", { name: "Not a conformer observation reference" })).toBeVisible()
+        expect(screen.getByText(/not a recognised conformer_observation handle/)).toBeVisible()
+        expect(screen.getByRole("alert")).toBeVisible()
+    })
+
     it("treats an absent calculations key as 'not requested', distinct from an empty one", async () => {
         const withoutKey = mockRecord()
         delete (withoutKey as Record<string, unknown>).calculations

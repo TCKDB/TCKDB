@@ -121,6 +121,62 @@ describe("GeometryDetailPage", () => {
         expect(within(summary).queryByText(/failed/i)).not.toBeInTheDocument()
     })
 
+    it("points to validation on BOTH producing and consuming calculations, each labelled by its own relationship", async () => {
+        // A geometry_validation row can carry either an input_geometry_ref
+        // or an output_geometry_ref, so the check can live on a consuming
+        // calculation just as easily as a producing one. Gating this
+        // pointer on producers only (an earlier version of this page) left
+        // consume-only geometries with a sentence and zero links. This
+        // fixture's fixed producer/consumer sets (calc_opt_two appears in
+        // both) mean a swap or a merge of the two lists is observable here,
+        // not just their presence.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        const summary = screen.getByLabelText("Geometry provenance summary")
+
+        const producerPointer = within(summary).getByTestId("validation-producer-pointer")
+        expect(producerPointer).toHaveTextContent(/producing calculations/)
+        expect(within(producerPointer).getByRole("link", { name: "calc_opt_two" }))
+            .toHaveAttribute("href", "/calculations/calc_opt_two")
+        expect(within(producerPointer).getByRole("link", { name: "calc_opt_one" }))
+            .toHaveAttribute("href", "/calculations/calc_opt_one")
+        // calc_freq_one and calc_sp_one never produced this geometry — a
+        // mutation that swapped the two lists would put them here.
+        expect(within(producerPointer).queryByRole("link", { name: "calc_freq_one" })).not.toBeInTheDocument()
+        expect(within(producerPointer).queryByRole("link", { name: "calc_sp_one" })).not.toBeInTheDocument()
+
+        const consumerPointer = within(summary).getByTestId("validation-consumer-pointer")
+        expect(consumerPointer).toHaveTextContent(/consuming calculations/)
+        expect(within(consumerPointer).getByRole("link", { name: "calc_freq_one" }))
+            .toHaveAttribute("href", "/calculations/calc_freq_one")
+        expect(within(consumerPointer).getByRole("link", { name: "calc_opt_two" }))
+            .toHaveAttribute("href", "/calculations/calc_opt_two")
+        expect(within(consumerPointer).getByRole("link", { name: "calc_sp_one" }))
+            .toHaveAttribute("href", "/calculations/calc_sp_one")
+        // calc_opt_one only produced this geometry — a mutation that
+        // merged the two lists into one would put it here too.
+        expect(within(consumerPointer).queryByRole("link", { name: "calc_opt_one" })).not.toBeInTheDocument()
+
+        // No fragment on any link — see the module comment on this block:
+        // this app has no fragment-scroll handling, and the target id
+        // lives inside a closed <details>.
+        for (const link of within(summary).getAllByRole("link")) {
+            expect(link.getAttribute("href")).not.toContain("#")
+        }
+    })
+
+    it("says nothing about validation pointers when a geometry has no producers or consumers at all", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
+            provenance: { produced_by: [], used_as_input_by: [] },
+        }))))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        const summary = screen.getByLabelText("Geometry provenance summary")
+        expect(within(summary).queryByTestId("validation-producer-pointer")).not.toBeInTheDocument()
+        expect(within(summary).queryByTestId("validation-consumer-pointer")).not.toBeInTheDocument()
+    })
+
     it("renders every atom row in the coordinate table, in payload order", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
@@ -352,6 +408,41 @@ describe("GeometryDetailPage", () => {
         expect(await screen.findByRole("heading", { name: "Not a geometry reference" })).toBeVisible()
         expect(screen.getByText(/expected a geometry handle/)).toBeVisible()
         expect(screen.getByRole("alert")).toBeVisible()
+    })
+
+    it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state, distinct from a wrong-prefix ref", async () => {
+        // `invalid_handle` is what live traffic actually returns for a
+        // malformed-but-right-prefix ref, distinct from the
+        // `handle_type_mismatch` case above. Pins the `INVALID_HANDLE_CODES`
+        // classification in `useScientificRecord` — shared machinery this
+        // page depends on, added for the `unprocessable`/`geometry_too_large`
+        // state below.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            code: "invalid_handle",
+            detail: "invalid_handle: 'geom_' not a recognised geometry handle",
+            context: {},
+        }, { status: 422 })))
+        page()
+        expect(await screen.findByRole("heading", { name: "Not a geometry reference" })).toBeVisible()
+        expect(screen.getByText(/not a recognised geometry handle/)).toBeVisible()
+        expect(screen.getByRole("alert")).toBeVisible()
+    })
+
+    it("classifies a 422 carrying no `code` at all as invalid, never as unprocessable", async () => {
+        // The wire type allows a 422 with no `code` field (the archive's
+        // own error envelope always sends one today, but a caller/mock
+        // that omits it must still be handled deterministically).
+        // `useScientificRecord` treats an undefined code the same as a
+        // recognised invalid-handle code — never `unprocessable`, which
+        // would misleadingly read as "a real record exists but was too
+        // large/costly to serve" for a case that carries no evidence of
+        // that at all.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            detail: "geometry not found or malformed",
+        }, { status: 422 })))
+        page()
+        expect(await screen.findByRole("heading", { name: "Not a geometry reference" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Geometry could not be displayed" })).not.toBeInTheDocument()
     })
 
     it("gives a 500 its own unavailable state, never the empty-provenance text", async () => {

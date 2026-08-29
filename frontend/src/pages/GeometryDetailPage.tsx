@@ -131,19 +131,40 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                     <p>
                         This geometry record carries no validation field of its own. A geometry-vs-formula check,
                         where one was recorded, lives on the calculation that produced or consumed it, not here.
+                        {/* No `#section-geometry-validation` fragment: this app has no fragment-scroll
+                            handling (no ScrollRestoration, no hash effect) and a react-router `<Link>`
+                            does a pushState navigation the browser does not scroll for anyway — and the
+                            id sits inside a closed `<details>` whose content never loads until opened.
+                            A fragment that silently does nothing is worse than a plain link to the right
+                            page, so this links to the calculation only. Both producers AND consumers can
+                            carry the validation row (it references either `input_geometry_ref` or
+                            `output_geometry_ref`), so both lists are offered here, each labelled by its
+                            own relationship — never merged into one undifferentiated list. */}
                         {producedBy.length > 0 && (
-                            <>
-                                {" "}See "Geometry validation" on{" "}
+                            <span data-testid="validation-producer-pointer">
+                                {" "}See "Geometry validation" on the producing calculation
+                                {producedBy.length > 1 ? "s" : ""}:{" "}
                                 {producedBy.map((link, index) => (
-                                    <span key={link.calculation_ref}>
+                                    <span key={`validation-produced-${link.calculation_ref}`}>
                                         {index > 0 && ", "}
-                                        <Link to={`/calculations/${link.calculation_ref}#section-geometry-validation`}>
-                                            {link.calculation_ref}
-                                        </Link>
+                                        <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
                                     </span>
                                 ))}
                                 .
-                            </>
+                            </span>
+                        )}
+                        {usedAsInputBy.length > 0 && (
+                            <span data-testid="validation-consumer-pointer">
+                                {" "}See "Geometry validation" on the consuming calculation
+                                {usedAsInputBy.length > 1 ? "s" : ""}:{" "}
+                                {usedAsInputBy.map((link, index) => (
+                                    <span key={`validation-consumed-${link.calculation_ref}`}>
+                                        {index > 0 && ", "}
+                                        <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
+                                    </span>
+                                ))}
+                                .
+                            </span>
                         )}
                     </p>
                 </div>
