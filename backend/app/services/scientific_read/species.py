@@ -94,6 +94,37 @@ _LEGAL_INCLUDE_TOKENS: set[str] = {
 }
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
 
+#: /species/browse's own include vocabulary -- deliberately missing
+#: ``thermo``/``statmech``/``transport``/``conformers``.
+#:
+#: Those four tokens gate a :class:`~app.schemas.reads.scientific_species.
+#: SpeciesEntrySectionIds` block whose payload is a bare integer-id array
+#: (``{"ids": [...]}``). ``is_internal_id_key()`` in
+#: ``app/services/scientific_read/internal_ids.py`` only matches keys
+#: ending in ``_id``/``_ids`` or on its literal deny-list, so a field
+#: named plain ``ids`` sails through the Phase D strip untouched -- on
+#: ``/species/search`` that is a pre-existing, unfixed gap (out of scope
+#: here; a caller must already have an identifier to reach it), but on an
+#: identifier-free, unauthenticated, whole-corpus listing the same gap
+#: turns ``GET /species/browse?include=all&limit=200`` into a way to
+#: harvest every thermo/statmech/transport/conformer-group primary key in
+#: the archive anonymously, in one request. See
+#: ``docs/specs/public_identifier_policy.md`` (sequential PKs rejected
+#: because they "leak the total count of objects ... and roughly the
+#: upload schedule") and ``internal_ids_visibility_policy.md`` (bare
+#: integer-id arrays are meant to be hidden by default).
+#:
+#: Dropping the tokens rather than adding ``"ids"`` to the Phase D
+#: deny-list: the deny-list is global, so widening it is a separate,
+#: wider-blast-radius change this endpoint should not force. Availability
+#: already tells a browse caller whether a section exists
+#: (``SpeciesEntryAvailability.has_thermo`` etc., plus
+#: ``calculation_count``); a caller who wants the actual thermo/statmech/
+#: transport/conformer rows navigates by ``species_entry_ref``, which is
+#: the handle this surface hands out, not by an id an anonymous listing
+#: should never have handed them in the first place.
+_BROWSE_LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
+
 _DEFAULT_SORT_ECHO = "review_rank,has_entries,created_at,id"
 
 #: The rank a species with no *visible* entry sorts at. Deliberately worse
@@ -325,7 +356,7 @@ def browse_species(
     offset, limit = validate_pagination(request.offset, request.limit)
     includes = validate_includes(
         request.include,
-        _LEGAL_INCLUDE_TOKENS,
+        _BROWSE_LEGAL_INCLUDE_TOKENS,
         "/scientific/species/browse",
         internal_tokens=_INTERNAL_INCLUDE_TOKENS,
     )

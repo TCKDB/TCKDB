@@ -16,7 +16,10 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     SubmissionRecordType,
 )
-from app.schemas.reads.scientific_species import SpeciesBrowseRequest
+from app.schemas.reads.scientific_species import (
+    SpeciesBrowseRequest,
+    SpeciesEntrySectionIds,
+)
 from app.services.scientific_read.species import browse_species
 from tests.services.scientific_read._factories import (
     make_species,
@@ -270,47 +273,51 @@ def test_pagination_total_is_the_true_corpus_count_not_the_page_size(db_session)
     assert response.pagination.total != response.pagination.returned
 
 
-def test_pagination_covers_every_row_exactly_once_across_pages(db_session):
-    """Deterministic-order guarantee, checked end to end.
+def test_review_summary_is_computed_before_paging(db_session):
+    """``review_summary`` must describe the whole candidate set, not the page.
 
-    Five species created in the same transaction share one ``created_at``
-    (``server_default=func.now()`` returns the transaction start time),
-    and none has an entry, so every one of them ranks identically on
-    ``review_rank`` and ``has_entries`` too -- the whole default sort key
-    is tied except ``id``. Walking every page at ``limit=2`` must return
-    each id exactly once: a dropped or duplicated tiebreak would either
-    miss one of the five or return one twice across the three pages.
+    Five species, each with one approved entry; a page of two is
+    requested. ``review_summary`` is built from
+    ``_visible_entry_rows(candidates, ...)`` -- the full candidate set,
+    before ``_rank_and_slice_species`` applies offset/limit -- so it must
+    report all five regardless of page size, and it must be identical
+    whether the page is small or large. A summary that were (incorrectly)
+    computed from the returned page instead would report 2, would change
+    between the two calls below, and would silently understate what a
+    whole-archive catalogue holds.
     """
-    ids = [
-        make_species(
-            db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRPG")
-        ).id
-        for _ in range(5)
-    ]
-
-    seen: list[int] = []
-    offset = 0
-    while True:
-        page = browse_species(
-            db_session, SpeciesBrowseRequest(limit=2, offset=offset)
+    for _ in range(5):
+        species = make_species(
+            db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRRSUM")
         )
-        page_ids = [r.species_id for r in page.records if r.species_id in ids]
-        if not page.records:
-            break
-        seen.extend(page_ids)
-        offset += 2
-        if offset > page.pagination.total + 2:
-            break  # safety valve, should never trigger
+        entry = make_species_entry(db_session, species)
+        set_review(
+            db_session,
+            record_type=SubmissionRecordType.species_entry,
+            record_id=entry.id,
+            status=RecordReviewStatus.approved,
+        )
 
-    seen_of_interest = [i for i in seen if i in ids]
-    assert sorted(seen_of_interest) == sorted(ids)
-    assert len(seen_of_interest) == len(ids), (
-        f"expected each of {ids} exactly once, saw {seen_of_interest}"
-    )
+    small_page = browse_species(db_session, SpeciesBrowseRequest(limit=2))
+    large_page = browse_species(db_session, SpeciesBrowseRequest(limit=200))
+
+    assert small_page.review_summary == large_page.review_summary
+    assert small_page.review_summary.approved >= 5
+    assert small_page.review_summary.total >= 5
+    assert small_page.review_summary.total != small_page.pagination.returned
 
 
 def test_pagination_is_stable_even_across_different_query_plans(db_session):
     """The tiebreak's real job: pagination must not depend on the plan.
+
+    (Supersedes an earlier version of this test that only compared two
+    page fetches under whatever single plan Postgres happened to pick --
+    which can look stable by accident, and did: dropping the ``id DESC``
+    tiebreak did not fail that version locally even though the guarantee
+    really was broken. See ``eb724909`` for the failure that motivated
+    the rewrite; keeping the weaker version alongside this one would
+    advertise a guarantee it does not provide, so it was removed rather
+    than kept as a second, redundant case.)
 
     Two pages fetched under the *same* plan can look stable by accident --
     a repeated query against unchanged data tends to walk a hash table or
@@ -423,21 +430,51 @@ def test_availability_reports_thermo_when_attached(db_session):
     assert avail.has_statmech is False
 
 
-def test_include_thermo_populates_thermo_summary_with_ids(db_session):
+@pytest.mark.parametrize(
+    "token", ["thermo", "statmech", "transport", "conformers"]
+)
+def test_section_id_tokens_are_refused_on_browse(db_session, token):
+    """The inverse of search's ``include=thermo``: refused, not served.
+
+    These four tokens gate a section whose payload is a bare integer-id
+    array (``SpeciesEntrySectionIds.ids``) -- reachable with no
+    identifier and no auth on this surface, which is exactly the
+    primary-key-harvest shape ``docs/specs/public_identifier_policy.md``
+    warns about. ``/species/browse`` therefore never accepts them at
+    all: a token that cannot be requested cannot be leaked by a future
+    refactor that forgets to strip it. This replaces the old
+    ``test_include_thermo_populates_thermo_summary_with_ids``, which
+    asserted the behaviour this endpoint now deliberately refuses.
+    """
+    with pytest.raises(ValueError, match="unknown_include_token"):
+        browse_species(db_session, SpeciesBrowseRequest(include=[token]))
+
+
+def test_section_summaries_are_absent_even_when_the_data_exists(db_session):
+    """Not just "absent by default" -- absent unconditionally.
+
+    A species whose entry genuinely has thermo/statmech/transport/
+    conformer data attached still serves no ``*_summary`` block on
+    browse, because there is no include token that could ever ask for
+    one. ``SpeciesEntryAvailability.has_thermo`` etc. is how a browse
+    caller learns the data exists; ``species_entry_ref`` is how they
+    reach it.
+    """
     species = make_species(
-        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRINCT")
+        db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRNOSUM")
     )
     entry = make_species_entry(db_session, species)
-    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    make_thermo_scalar(db_session, species_entry=entry)
 
-    response = browse_species(
-        db_session, SpeciesBrowseRequest(include=["thermo"])
-    )
+    response = browse_species(db_session, SpeciesBrowseRequest())
 
     record = next(r for r in response.records if r.species_id == species.id)
-    summary = record.entries[0].thermo_summary
-    assert summary is not None
-    assert summary.ids == [thermo.id]
+    entry_record = record.entries[0]
+    assert entry_record.availability.has_thermo is True
+    assert entry_record.thermo_summary is None
+    assert entry_record.statmech_summary is None
+    assert entry_record.transport_summary is None
+    assert entry_record.conformers_summary is None
 
 
 # ---------------------------------------------------------------------------
@@ -482,6 +519,16 @@ _AVAILABILITY_FIELDS = {
     "calculation_count",
 }
 
+#: RecordReviewBadge (app/schemas/reads/scientific_common.py) -- the one
+#: nested object that *does* survive on the browse shape (the four
+#: ``*_summary`` blocks never populate at all; see the "refused" tests
+#: above), so it is the one whose exact key set is pinned here too.
+_REVIEW_BADGE_FIELDS = {
+    "status",
+    "reviewed_at",
+    "reviewer_kind",
+}
+
 
 def test_record_shape_is_metadata_only(db_session):
     """Pins the exact field set: identity, refs, counts, review -- nothing else.
@@ -491,16 +538,33 @@ def test_record_shape_is_metadata_only(db_session):
     unexpected key. Every field is asserted by *name*, not merely
     "does not contain a suspicious substring" -- the guard the brief
     warns is vacuous.
+
+    Checked one level deeper than the top-level record and its immediate
+    children: ``availability`` and ``review`` are both nested objects,
+    and a leak added to either would be invisible to an assertion that
+    stopped at the entry record's own key set (a nested dict is just one
+    opaque key at that level). The four ``*_summary`` fields are not
+    checked the same way -- they are always ``None`` on this surface
+    (see ``test_section_summaries_are_absent_even_when_the_data_exists``
+    above), so there is no populated nested object to open. Their type,
+    ``SpeciesEntrySectionIds``, is pinned directly and separately by
+    ``test_species_entry_section_ids_exposes_only_ids`` below, since it
+    is shared with ``/species/search`` and a leak there matters even
+    though browse can never reach it.
     """
     species = make_species(
         db_session, smiles=unique_smiles(), inchi_key=next_inchi_key("BRSHAPE")
     )
     entry = make_species_entry(db_session, species)
     make_thermo_scalar(db_session, species_entry=entry)
-
-    response = browse_species(
-        db_session, SpeciesBrowseRequest(include=["thermo"])
+    set_review(
+        db_session,
+        record_type=SubmissionRecordType.species_entry,
+        record_id=entry.id,
+        status=RecordReviewStatus.approved,
     )
+
+    response = browse_species(db_session, SpeciesBrowseRequest())
     record = next(r for r in response.records if r.species_id == species.id)
 
     assert set(record.model_dump().keys()) == _SPECIES_RECORD_FIELDS
@@ -509,5 +573,21 @@ def test_record_shape_is_metadata_only(db_session):
     assert (
         set(entry_record.availability.model_dump().keys()) == _AVAILABILITY_FIELDS
     )
+    assert set(entry_record.review.model_dump().keys()) == _REVIEW_BADGE_FIELDS
+
+
+def test_species_entry_section_ids_exposes_only_ids(db_session):
+    """Schema-level guard on the shared type, independent of reachability.
+
+    ``SpeciesEntrySectionIds`` backs ``thermo_summary`` et al. on
+    *both* ``/species/search`` (still legal there) and
+    ``/species/browse`` (permanently illegal, per the tests above). A
+    field added to this type would be invisible to a browse-endpoint
+    test forever, since browse can never populate it -- so it is pinned
+    directly on the class rather than through either endpoint. This is
+    the browse branch's defense against a leak on a type it happens to
+    share, not a claim about what search currently does with it.
+    """
+    assert set(SpeciesEntrySectionIds.model_fields.keys()) == {"ids"}
 
 

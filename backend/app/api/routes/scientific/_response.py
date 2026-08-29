@@ -222,6 +222,19 @@ SPECIES_SEARCH_SECTIONS = IncludeGatedSections(
 # field-for-field subclass of ``ScientificSpeciesSearchResponse``) — but
 # kept as its own declared table rather than reused, so ``surface`` names
 # the route that actually served the response an auditor is looking at.
+#
+# Unlike its search sibling, none of these four tokens is ever *legal* on
+# browse (``species.py::_BROWSE_LEGAL_INCLUDE_TOKENS`` omits them: their
+# payload is a bare integer-id array, and on an identifier-free,
+# unauthenticated, whole-corpus listing that is a primary-key harvesting
+# route — see that constant's docstring for the full argument). This
+# table still names them, though, because the strip still has a job:
+# ``includes`` can never contain one of these tokens for a browse
+# request, so ``fields_to_omit()`` always includes their four fields, and
+# that is what keeps ``thermo_summary`` et al. structurally *absent* from
+# every browse response rather than present-and-``null`` forever. It is
+# not a gate that sometimes opens — on this surface it is permanently
+# shut, and this table is what shuts it.
 SPECIES_BROWSE_SECTIONS = IncludeGatedSections(
     surface="/api/v1/scientific/species/browse",
     sections={

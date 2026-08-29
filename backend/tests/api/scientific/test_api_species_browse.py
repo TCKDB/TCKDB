@@ -89,6 +89,20 @@ def test_get_rejects_unknown_include_token(client, db_session):
     assert "unknown_include_token" in resp.text
 
 
+def test_get_rejects_section_id_tokens(client, db_session):
+    """``thermo`` is legal on ``/species/search`` and refused here.
+
+    Its payload is a bare integer-id array; on an identifier-free,
+    unauthenticated, whole-corpus listing that is a primary-key-harvest
+    route, so browse never accepts the token at all rather than serving
+    it and stripping the ids after the fact.
+    """
+    for token in ("thermo", "statmech", "transport", "conformers"):
+        resp = client.get(f"/api/v1/scientific/species/browse?include={token}")
+        assert resp.status_code == 422, (token, resp.text)
+        assert resp.json()["code"] == "unknown_include_token"
+
+
 def test_get_limit_above_the_framework_bound_is_rejected_by_the_framework(
     client, db_session
 ):
@@ -184,12 +198,43 @@ def test_record_envelope_matches_search_shape(client, db_session):
         "stereo_kind",
         "entries",
     }
-    assert "species_id" not in record
+    # Exact, not absence-only: an absence-only check ("species_entry_id
+    # not in entry_record") cannot see a field added anywhere else in the
+    # dict -- only an exact key-set match does. This mirrors the
+    # service-level assertion in
+    # test_browse_species.py::test_record_shape_is_metadata_only, which
+    # is what actually caught the M5 mutation when this API-level version
+    # did not.
     entry_record = record["entries"][0]
-    assert "species_entry_id" not in entry_record
-    # thermo/statmech/transport/conformers summaries are include-gated
-    # sections: absent (not null) because this request did not ask for
-    # them. See SPECIES_BROWSE_SECTIONS in app/api/routes/scientific/_response.py.
+    assert set(entry_record.keys()) == {
+        "species_entry_ref",
+        "species_entry_kind",
+        "electronic_state_kind",
+        "stereo_label",
+        "electronic_state_label",
+        "term_symbol",
+        "isotope_key",
+        "species_entry_label",
+        "review",
+        "availability",
+    }
+    assert set(entry_record["availability"].keys()) == {
+        "has_thermo",
+        "has_statmech",
+        "has_transport",
+        "has_conformers",
+        "calculation_count",
+    }
+    assert set(entry_record["review"].keys()) == {
+        "status",
+        "reviewed_at",
+        "reviewer_kind",
+    }
+    # thermo/statmech/transport/conformers summaries are permanently
+    # illegal on browse (species.py::_BROWSE_LEGAL_INCLUDE_TOKENS), so
+    # they are structurally absent -- already implied by the exact
+    # key-set match above, and asserted again here by name for a reader
+    # who does not want to diff two sets to see it.
     for gated in (
         "thermo_summary",
         "statmech_summary",
