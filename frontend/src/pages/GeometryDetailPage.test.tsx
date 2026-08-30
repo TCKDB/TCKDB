@@ -1,9 +1,10 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
+import { ANGSTROM_TO_BOHR } from "../domain/geometryXyz"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -489,5 +490,135 @@ describe("GeometryDetailPage", () => {
         // record exists, which is exactly what the body text says.
         expect(screen.queryByRole("heading", { name: "Not a geometry reference" })).not.toBeInTheDocument()
         expect(screen.queryByText(/does not identify a geometry/)).not.toBeInTheDocument()
+    })
+
+    describe("coordinate table units toggle (ångström <-> bohr)", () => {
+        it("defaults to ångström — the owner's own instruction was 'starts with angstrom cause that's how it's stored'", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+            expect(within(section).getByRole("button", { name: "Å" })).toHaveAttribute("aria-pressed", "true")
+            expect(within(section).getByRole("button", { name: "bohr" })).toHaveAttribute("aria-pressed", "false")
+            // The raw, unconverted value from the fixture — mutating the
+            // default unit to "bohr" would fail this (it would show the
+            // converted 0.2079... value instead of 0.11).
+            const secondRow = within(table).getAllByRole("row")[2]
+            expect(within(secondRow).getByText("0.11", { selector: "[data-label='x']" })).toBeVisible()
+        })
+
+        it("converts every coordinate with the exact CODATA Å→bohr factor when toggled, and back when toggled again", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+
+            fireEvent.click(within(section).getByRole("button", { name: "bohr" }))
+
+            expect(within(section).getByRole("button", { name: "bohr" })).toHaveAttribute("aria-pressed", "true")
+            expect(within(section).getByRole("button", { name: "Å" })).toHaveAttribute("aria-pressed", "false")
+            const secondRow = within(table).getAllByRole("row")[2]
+            // 0.11 Å and -0.63 Å converted by the exact factor, not a
+            // rounded approximation, not the untouched angstrom value,
+            // and not an inverted (divided) factor.
+            expect(within(secondRow).getByText((0.11 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='x']" })).toBeVisible()
+            expect(within(secondRow).getByText((0.22 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='y']" })).toBeVisible()
+            expect(within(secondRow).getByText((0.33 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='z']" })).toBeVisible()
+            const thirdRow = within(table).getAllByRole("row")[3]
+            expect(within(thirdRow).getByText((-0.63 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='x']" })).toBeVisible()
+
+            fireEvent.click(within(section).getByRole("button", { name: "Å" }))
+            expect(within(secondRow).getByText("0.11", { selector: "[data-label='x']" })).toBeVisible()
+        })
+
+        it("names the exact conversion factor and states the wire truth (stored in ångström), never implying the archive holds a bohr-valued record", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+            expect(within(section).getByText(/Always stored in ångström/)).toBeVisible()
+            expect(within(section).getByText(new RegExp(ANGSTROM_TO_BOHR.toFixed(10).replace(".", "\\.")))).toBeVisible()
+            expect(within(section).queryByText(/\(converted\)/i)).not.toBeInTheDocument()
+        })
+    })
+
+    describe("coordinate table element display toggle (symbol <-> atomic number)", () => {
+        it("defaults to element symbols, and switching to Number shows each row's own atomic number", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+            expect(within(section).getByRole("button", { name: "Symbol" })).toHaveAttribute("aria-pressed", "true")
+
+            fireEvent.click(within(section).getByRole("button", { name: "Number" }))
+
+            const rows = within(table).getAllByRole("row").slice(1)
+            expect(within(rows[0]).getByText("6", { selector: "[data-label='Element']" })).toBeVisible()
+            for (const row of rows.slice(1)) {
+                expect(within(row).getByText("1", { selector: "[data-label='Element']" })).toBeVisible()
+            }
+        })
+
+        it("renders an unrecognised element symbol honestly, never as 0 or blank", async () => {
+            const record = mockRecord({
+                natoms: 1,
+                symbols: ["Xx"],
+                coords: [[0, 0, 0]],
+                atoms: [{ atom_index: 1, element: "Xx", x: 0, y: 0, z: 0 }],
+            })
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
+            page()
+            await screen.findByRole("heading", { name: "Xx geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+
+            fireEvent.click(within(section).getByRole("button", { name: "Number" }))
+
+            const row = within(table).getAllByRole("row")[1]
+            const cell = within(row).getByText(/unknown/, { selector: "[data-label='Element']" })
+            expect(cell).toHaveTextContent("unknown (Xx)")
+            expect(cell).not.toHaveTextContent(/^0$/)
+        })
+    })
+
+    describe("raw XYZ copy button", () => {
+        it("reuses the shared CopyButton next to the raw XYZ block", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
+            expect(within(xyzSection).getByRole("button", { name: "Copy raw XYZ text" })).toBeVisible()
+        })
+
+        it("renders no copy button when there is no raw XYZ text to copy", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ xyz_text: null }))))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
+            expect(within(xyzSection).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
+        })
+    })
+
+    describe("validation card shape", () => {
+        it("shapes producer/consumer pointers as named rows (a definition list), not one run-on sentence", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const summary = screen.getByLabelText("Geometry provenance summary")
+            const producerPointer = within(summary).getByTestId("validation-producer-pointer")
+            const consumerPointer = within(summary).getByTestId("validation-consumer-pointer")
+            // Each relationship is its own labelled row (a <dt>), not text
+            // interleaved into a shared paragraph — a mutation collapsing
+            // this back into prose would still pass every pre-existing
+            // text-content assertion in this file, but not this DOM-shape
+            // one.
+            expect(producerPointer.querySelector("dt")).not.toBeNull()
+            expect(consumerPointer.querySelector("dt")).not.toBeNull()
+            expect(producerPointer.tagName).not.toBe("SPAN")
+        })
     })
 })

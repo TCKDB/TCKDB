@@ -38,24 +38,48 @@ function RefRow({ label, value, to }: RefEntry) {
     </div>
 }
 
-export function CopyButton({ value, label }: { value: string; label: string }) {
-    const [copied, setCopied] = useState(false)
+type CopyState = "idle" | "copied" | "unavailable"
+
+/**
+ * `srLabel` lets a caller describe what's being copied when "reference"
+ * is not honest — a raw XYZ block is a text blob, not a ref — while every
+ * existing call site (which passes only `value`/`label`) keeps its exact
+ * previous aria-label by relying on the default.
+ *
+ * `navigator.clipboard` is undefined outside a secure context (plain
+ * `http://`, not `localhost`) — previously this silently did nothing on
+ * click, which a reader has no way to distinguish from "it worked, I just
+ * didn't notice". Both that case and a rejected `writeText` (permission
+ * denied) now flip to an "unavailable" state the button itself displays,
+ * rather than staying indistinguishable from success.
+ */
+export function CopyButton({ value, label, srLabel = "reference" }: { value: string; label: string; srLabel?: string }) {
+    const [state, setState] = useState<CopyState>("idle")
     return <button
         type="button"
         className="copy-button"
-        data-copied={copied}
-        aria-label={`Copy ${label} reference`}
+        data-copied={state === "copied"}
+        data-copy-unavailable={state === "unavailable"}
+        aria-label={`Copy ${label} ${srLabel}`}
         onClick={() => {
-            if (!navigator.clipboard) return
+            if (!navigator.clipboard) {
+                setState("unavailable")
+                setTimeout(() => setState("idle"), 2000)
+                return
+            }
             navigator.clipboard.writeText(value)
                 .then(() => {
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 1500)
+                    setState("copied")
+                    setTimeout(() => setState("idle"), 1500)
                 })
                 .catch(() => {
-                    // Clipboard access can be denied or unavailable; the ref
-                    // text stays selectable on the page either way.
+                    // Clipboard access can be denied even in a secure
+                    // context; the value stays selectable on the page
+                    // either way, but the button now says so instead of
+                    // quietly doing nothing.
+                    setState("unavailable")
+                    setTimeout(() => setState("idle"), 2000)
                 })
         }}
-    >{copied ? "Copied" : "Copy"}</button>
+    >{state === "copied" ? "Copied" : state === "unavailable" ? "Unavailable" : "Copy"}</button>
 }

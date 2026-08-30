@@ -582,73 +582,84 @@ export function GeometryViewer({
 
     return (
         <div className="geometry-viewer">
-            <p className="section-note">
-                {`An interactive 3D view of the deposited Cartesian coordinates, rendered client-side with WebGL. ${bondsSentence} The coordinate table and raw XYZ block further down are the authoritative, accessible representation of this geometry, and render whether or not this picture does.`}
+            {/* This caption is a sibling of `.viewer-stage` below, not a
+                descendant of it or of `.viewer-canvas` — it used to share
+                `.viewer-canvas`'s own 22rem cap (via a single shared
+                `.geometry-viewer` max-width), which is why three sentences
+                of prose read as "too long for too short a column": the
+                text was squeezed to the same width as a square picture for
+                no reason. It now gets its own, wider measure (see
+                `.viewer-caption` in geometry-detail.css) and the sentences
+                themselves are shorter besides. */}
+            <p className="section-note viewer-caption">
+                {`An interactive 3D view of the deposited coordinates, rendered client-side with WebGL. ${bondsSentence} The table and raw XYZ below are the authoritative record either way.`}
             </p>
-            {status === "ready" && (
-                <>
-                    <div
-                        className="viewer-controls"
-                        role="group"
-                        aria-label={`Rotate the 3D view of ${formula || "this geometry"} (does not change the coordinate table)`}
-                    >
-                        <button type="button" onClick={() => rotateBy(-ROTATE_STEP_DEG, "y")}>Rotate left</button>
-                        <button type="button" onClick={() => rotateBy(ROTATE_STEP_DEG, "y")}>Rotate right</button>
-                        <button type="button" onClick={() => rotateBy(-ROTATE_STEP_DEG, "x")}>Rotate up</button>
-                        <button type="button" onClick={() => rotateBy(ROTATE_STEP_DEG, "x")}>Rotate down</button>
-                        <button type="button" onClick={() => zoomBy(ZOOM_FACTOR)}>Zoom in</button>
-                        <button type="button" onClick={() => zoomBy(1 / ZOOM_FACTOR)}>Zoom out</button>
-                        <button type="button" onClick={resetView}>Reset view</button>
-                    </div>
-                    <div
-                        className="viewer-display-controls"
-                        role="group"
-                        aria-label={`Display options for the 3D view of ${formula || "this geometry"}`}
-                    >
-                        <fieldset className="viewer-style-choice">
-                            <legend>Style</legend>
-                            {(Object.keys(STYLE_LABELS) as StyleMode[]).map((mode) => (
-                                <button
-                                    key={mode}
-                                    type="button"
-                                    aria-pressed={style === mode}
-                                    onClick={() => setStyleMode(mode)}
-                                >
-                                    {STYLE_LABELS[mode]}
-                                </button>
-                            ))}
-                        </fieldset>
-                        <label className="viewer-label-choice">
-                            Atom labels
-                            <select
-                                value={labelMode}
-                                onChange={(event) => setLabelMode(event.target.value as LabelMode)}
-                            >
-                                {LABEL_MODE_OPTIONS.map((option) => (
-                                    <option key={option.value} value={option.value}>{option.text}</option>
+            <div className="viewer-stage">
+                {status === "ready" && (
+                    <>
+                        <div
+                            className="viewer-controls"
+                            role="group"
+                            aria-label={`Rotate the 3D view of ${formula || "this geometry"} (does not change the coordinate table)`}
+                        >
+                            <button type="button" onClick={() => rotateBy(-ROTATE_STEP_DEG, "y")}>Rotate left</button>
+                            <button type="button" onClick={() => rotateBy(ROTATE_STEP_DEG, "y")}>Rotate right</button>
+                            <button type="button" onClick={() => rotateBy(-ROTATE_STEP_DEG, "x")}>Rotate up</button>
+                            <button type="button" onClick={() => rotateBy(ROTATE_STEP_DEG, "x")}>Rotate down</button>
+                            <button type="button" onClick={() => zoomBy(ZOOM_FACTOR)}>Zoom in</button>
+                            <button type="button" onClick={() => zoomBy(1 / ZOOM_FACTOR)}>Zoom out</button>
+                            <button type="button" onClick={resetView}>Reset view</button>
+                        </div>
+                        <div
+                            className="viewer-display-controls"
+                            role="group"
+                            aria-label={`Display options for the 3D view of ${formula || "this geometry"}`}
+                        >
+                            <fieldset className="viewer-style-choice">
+                                <legend>Style</legend>
+                                {(Object.keys(STYLE_LABELS) as StyleMode[]).map((mode) => (
+                                    <button
+                                        key={mode}
+                                        type="button"
+                                        aria-pressed={style === mode}
+                                        onClick={() => setStyleMode(mode)}
+                                    >
+                                        {STYLE_LABELS[mode]}
+                                    </button>
                                 ))}
-                            </select>
-                        </label>
-                    </div>
-                </>
-            )}
-            <div
-                ref={containerRef}
-                className="viewer-canvas"
-                aria-hidden="true"
-                data-viewer-status={status}
-            />
-            {status === "unavailable" && (
-                <p className="empty-projection" role="status">
-                    The 3D view could not be initialised — this browser or environment may not support WebGL.
-                    The coordinate table and raw XYZ block below are unaffected.
-                </p>
-            )}
-            {status === "loading" && (
-                <p className="section-note" role="status">
-                    Loading the 3D view of {formula || "this geometry"}…
-                </p>
-            )}
+                            </fieldset>
+                            <label className="viewer-label-choice">
+                                Atom labels
+                                <select
+                                    value={labelMode}
+                                    onChange={(event) => setLabelMode(event.target.value as LabelMode)}
+                                >
+                                    {LABEL_MODE_OPTIONS.map((option) => (
+                                        <option key={option.value} value={option.value}>{option.text}</option>
+                                    ))}
+                                </select>
+                            </label>
+                        </div>
+                    </>
+                )}
+                <div
+                    ref={containerRef}
+                    className="viewer-canvas"
+                    aria-hidden="true"
+                    data-viewer-status={status}
+                />
+                {status === "unavailable" && (
+                    <p className="empty-projection" role="status">
+                        The 3D view could not be initialised — this browser or environment may not support WebGL.
+                        The coordinate table and raw XYZ block below are unaffected.
+                    </p>
+                )}
+                {status === "loading" && (
+                    <p className="section-note" role="status">
+                        Loading the 3D view of {formula || "this geometry"}…
+                    </p>
+                )}
+            </div>
         </div>
     )
 }
