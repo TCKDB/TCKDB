@@ -4,13 +4,6 @@ import { describe, expect, it } from "vitest"
 // required under this project's `css: true` vitest config, and why
 // `node:fs` is not an option for a file under `src/`.
 import themeCss from "./theme.css?raw"
-import indexCss from "./index.css?raw"
-import speciesOverviewCss from "./species-overview.css?raw"
-import speciesEntryCss from "./species-entry.css?raw"
-import entryScienceCss from "./entry-science.css?raw"
-import conformerGroupCss from "./conformer-group.css?raw"
-import geometryDetailCss from "./geometry-detail.css?raw"
-import calculationDetailCss from "./calculation-detail.css?raw"
 
 /**
  * `theme.css` is the app's one and only place a colour is allowed to be a
@@ -22,24 +15,43 @@ import calculationDetailCss from "./calculation-detail.css?raw"
  * this file is either a bug in this pass or a future regression the same
  * shape as the one this file guards against.
  *
- * New page stylesheets (a follow-up `*.css` file, e.g. a future component
- * page) should be added to `NON_TOKEN_STYLESHEETS` below and styled
- * through the same tokens -- that is the whole point of centralising them.
+ * New page stylesheets are picked up automatically (see the glob below);
+ * they must style through the same tokens -- that is the whole point of
+ * centralising them.
  */
-const NON_TOKEN_STYLESHEETS: Record<string, string> = {
-    "index.css": indexCss,
-    "species-overview.css": speciesOverviewCss,
-    "species-entry.css": speciesEntryCss,
-    "entry-science.css": entryScienceCss,
-    "conformer-group.css": conformerGroupCss,
-    "geometry-detail.css": geometryDetailCss,
-    "calculation-detail.css": calculationDetailCss,
-}
+// DISCOVERED, never enumerated. An explicit list is a guard pointed at a
+// fixed set of targets, and this one was already escaped once: #295 landed
+// `geometry-measure.css` with 22 hex literals while this suite was green,
+// because a file absent from the list is not "passing" -- it is unexamined,
+// and the two are indistinguishable from the outside. The comment that used
+// to sit here asked a future author to remember to add their file. Asking is
+// not a guard. `import.meta.glob` enumerates what actually exists, so a new
+// stylesheet is covered the moment it is created and a deletion cannot
+// silently shrink the checked set.
+const STYLESHEET_SOURCES = import.meta.glob("./*.css", { query: "?raw", import: "default", eager: true }) as Record<string, string>
+
+const NON_TOKEN_STYLESHEETS: Record<string, string> = Object.fromEntries(
+    Object.entries(STYLESHEET_SOURCES)
+        .map(([path, css]) => [path.replace(/^\.\//, ""), css])
+        .filter(([name]) => name !== "theme.css"),
+)
 
 const ALL_STYLESHEETS: Record<string, string> = {
     "theme.css": themeCss,
     ...NON_TOKEN_STYLESHEETS,
 }
+
+// The discovery itself needs an assertion: a glob that silently matched
+// nothing would make every loop below vacuous -- zero files scanned, zero
+// failures, green. Pin a floor and name a file that must always be there.
+describe("the stylesheet inventory is discovered, not assumed", () => {
+    it("finds every stylesheet in src/, not a hand-maintained subset", () => {
+        const names = Object.keys(NON_TOKEN_STYLESHEETS)
+        expect(names.length).toBeGreaterThanOrEqual(8)
+        expect(names).toContain("geometry-measure.css")  // the file the old allowlist missed
+        expect(names).toContain("index.css")
+    })
+})
 
 const HEX_LITERAL = /#[0-9a-fA-F]{3,8}\b/g
 const RGBA_LITERAL = /rgba?\(\s*\d/g
@@ -121,7 +133,7 @@ describe("every var(--x) referenced is defined at :root somewhere", () => {
     // by theme and so have no dark-mode block of their own. Both count.
     const rootDeclaredNames = new Set<string>([
         ...declaredCustomProperties(extractBlock(themeCss, /^:root \{/m)),
-        ...declaredCustomProperties(extractBlock(indexCss, /^:root \{/m)),
+        ...declaredCustomProperties(extractBlock(NON_TOKEN_STYLESHEETS["index.css"], /^:root \{/m)),
     ])
 
     for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
