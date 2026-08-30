@@ -28,6 +28,7 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     SupersessionNotice,
     TemperatureCoverage,
+    WorkflowToolReleaseSummary,
 )
 from app.services.trust.models import TrustFragment
 
@@ -144,17 +145,54 @@ class ThermoProvenance(BaseModel):
 
     Phase B: integer ``*_id`` fields keep their place; ``*_ref`` siblings
     carry the public stable handles.
+
+    Two distinct kinds of "software" can appear on a thermo record, and
+    issue #284 was exactly the two getting collapsed into one field:
+
+    - ``software_release`` / ``workflow_tool_release`` — what computed
+      *this thermochemistry* (e.g. Arkane, run by ARC). Sourced strictly
+      from ``thermo.software_release_id`` / ``thermo.workflow_tool_release_id``
+      — the thermo row's own FKs, never a calculation's. When the thermo
+      carries no software of its own (a value fitted or transcribed
+      without a recorded fitting tool), both are ``null``. This is a
+      complete, honest answer for records whose only real evidence is a
+      software attribution and no source-calculation chain — it must
+      never be backfilled from ``primary_calculation.software``.
+    - ``primary_calculation.software`` — what ran the *electronic
+      structure* underneath (e.g. Gaussian), nested inside the primary
+      source-calculation summary where it has always correctly lived.
+
+    A client that wants "what tool do I cite for this thermochemistry"
+    reads ``software_release`` / ``workflow_tool_release``; one that wants
+    "what ran the QM" reads ``primary_calculation.software``. Neither
+    substitutes for the other.
+
+    ``conformer_observation_id`` / ``conformer_observation_ref`` and
+    ``conformer_group_id`` / ``conformer_group_ref`` resolve the same
+    single calculation used for ``primary_calculation`` one hop further,
+    through ``calculation.conformer_observation_id`` to the conformer
+    basin it belongs to. All four are ``null`` when the record has no
+    resolvable primary calculation (no source calc, direct or borrowed
+    from statmech) — a record with no calculation has no conformer to
+    report, and this block does not invent one.
     """
 
     primary_calculation: CalculationEvidenceSummary | None = None
     level_of_theory: LevelOfTheorySummary | None = None
-    software: SoftwareReleaseSummary | None = None
+    #: The thermo's OWN software provenance — never the calculation's.
+    #: See class docstring.
+    software_release: SoftwareReleaseSummary | None = None
+    workflow_tool_release: WorkflowToolReleaseSummary | None = None
     statmech_id: int | None = None
     statmech_ref: str | None = None
     freq_calculation_id: int | None = None
     freq_calculation_ref: str | None = None
     sp_calculation_id: int | None = None
     sp_calculation_ref: str | None = None
+    conformer_observation_id: int | None = None
+    conformer_observation_ref: str | None = None
+    conformer_group_id: int | None = None
+    conformer_group_ref: str | None = None
 
 
 class GroupAdditivityComponentBlock(BaseModel):

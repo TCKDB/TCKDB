@@ -29,7 +29,7 @@ from app.db.models.group_additivity import (
 )
 from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.software import Software, SoftwareRelease
-from app.db.models.species import SpeciesEntry
+from app.db.models.species import ConformerGroup, ConformerObservation, SpeciesEntry
 from app.db.models.statmech import Statmech, StatmechSourceCalculation
 from app.db.models.thermo import (
     Thermo,
@@ -39,6 +39,7 @@ from app.db.models.thermo import (
     ThermoSourceCalculation,
     ThermoWilhoit,
 )
+from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     CalculationEvidenceSummary,
@@ -46,6 +47,7 @@ from app.schemas.reads.scientific_common import (
     LevelOfTheorySummary,
     SelectionPolicy,
     SoftwareReleaseSummary,
+    WorkflowToolReleaseSummary,
     simple_selection_sort_key,
 )
 from app.schemas.reads.scientific_thermo import (
@@ -329,6 +331,29 @@ def get_species_thermo(
     scf_vals = _scf_stabilities(session, all_source_calc_ids)
     calc_meta = _calc_lot_meta(session, all_source_calc_ids)
     calc_refs = _calc_refs(session, all_source_calc_ids)
+    # The conformer this thermo record traces to, resolved one hop past
+    # the primary calculation. Loaded for every calc the primary picker
+    # can possibly land on (same id set as calc_meta/calc_refs above).
+    conformer_links = _conformer_links(session, all_source_calc_ids)
+
+    # Thermo's OWN software/workflow-tool provenance (issue #284): bulk-load
+    # by the thermo rows' own FKs, completely independent of any calc's
+    # software. A record with neither FK set surfaces both as null — never
+    # backfilled from a calculation.
+    thermo_software_release_ids = {
+        t.software_release_id for t in thermo_rows if t.software_release_id is not None
+    }
+    thermo_workflow_tool_release_ids = {
+        t.workflow_tool_release_id
+        for t in thermo_rows
+        if t.workflow_tool_release_id is not None
+    }
+    thermo_software_summaries = _load_software_release_summaries(
+        session, thermo_software_release_ids
+    )
+    thermo_workflow_tool_summaries = _load_workflow_tool_release_summaries(
+        session, thermo_workflow_tool_release_ids
+    )
 
     records: list[ThermoRecord] = []
     for t, model_kind in classified:
@@ -396,6 +421,17 @@ def get_species_thermo(
             statmech_id=record_statmech_id,
             statmech_refs=statmech_refs,
             statmech_sources=record_statmech_sources,
+            thermo_software=(
+                thermo_software_summaries.get(t.software_release_id)
+                if t.software_release_id is not None
+                else None
+            ),
+            thermo_workflow_tool=(
+                thermo_workflow_tool_summaries.get(t.workflow_tool_release_id)
+                if t.workflow_tool_release_id is not None
+                else None
+            ),
+            conformer_links=conformer_links,
         )
 
         record = ThermoRecord(
@@ -833,6 +869,104 @@ def _load_statmech_refs(
     return dict(rows)
 
 
+def _load_software_release_summaries(
+    session: Session, software_release_ids: set[int]
+) -> dict[int, SoftwareReleaseSummary]:
+    """Bulk-project ``software_release`` rows for the thermo's OWN FK.
+
+    Distinct from ``_calc_lot_meta``, which projects a *calculation's*
+    software. This loader is keyed by ``thermo.software_release_id``
+    values and feeds ``ThermoProvenance.software_release`` — issue #284.
+    """
+    if not software_release_ids:
+        return {}
+    rows = session.execute(
+        select(
+            SoftwareRelease.id,
+            SoftwareRelease.public_ref,
+            Software.name,
+            SoftwareRelease.version,
+        )
+        .join(Software, Software.id == SoftwareRelease.software_id)
+        .where(SoftwareRelease.id.in_(software_release_ids))
+    ).all()
+    return {
+        row[0]: SoftwareReleaseSummary(
+            software_release_id=row[0],
+            software_release_ref=row[1],
+            software=row[2] or "",
+            version=row[3],
+        )
+        for row in rows
+    }
+
+
+def _load_workflow_tool_release_summaries(
+    session: Session, workflow_tool_release_ids: set[int]
+) -> dict[int, WorkflowToolReleaseSummary]:
+    """Bulk-project ``workflow_tool_release`` rows for the thermo's OWN FK.
+
+    Feeds ``ThermoProvenance.workflow_tool_release`` (e.g. ARC 1.1.0) —
+    previously dropped entirely from the response.
+    """
+    if not workflow_tool_release_ids:
+        return {}
+    rows = session.execute(
+        select(
+            WorkflowToolRelease.id,
+            WorkflowToolRelease.public_ref,
+            WorkflowTool.name,
+            WorkflowToolRelease.version,
+        )
+        .join(WorkflowTool, WorkflowTool.id == WorkflowToolRelease.workflow_tool_id)
+        .where(WorkflowToolRelease.id.in_(workflow_tool_release_ids))
+    ).all()
+    return {
+        row[0]: WorkflowToolReleaseSummary(
+            workflow_tool_release_id=row[0],
+            workflow_tool_release_ref=row[1],
+            workflow_tool=row[2],
+            version=row[3],
+        )
+        for row in rows
+    }
+
+
+def _conformer_links(
+    session: Session, calc_ids: set[int]
+) -> dict[int, tuple[int, str, int, str]]:
+    """Bulk-load {calculation_id: (obs_id, obs_ref, group_id, group_ref)}.
+
+    Walks the only path from a calculation to a conformer basin:
+    ``calculation.conformer_observation_id -> conformer_observation ->
+    conformer_group`` (``conformer_observation_id`` is the load-bearing
+    anchor; DAG dependency edges are opportunistic and not used here).
+    Only calcs with a non-null ``conformer_observation_id`` appear in the
+    result — a calc with none is simply absent, not mapped to ``None``.
+    """
+    if not calc_ids:
+        return {}
+    rows = session.execute(
+        select(
+            Calculation.id,
+            ConformerObservation.id,
+            ConformerObservation.public_ref,
+            ConformerGroup.id,
+            ConformerGroup.public_ref,
+        )
+        .join(
+            ConformerObservation,
+            ConformerObservation.id == Calculation.conformer_observation_id,
+        )
+        .join(
+            ConformerGroup,
+            ConformerGroup.id == ConformerObservation.conformer_group_id,
+        )
+        .where(Calculation.id.in_(calc_ids))
+    ).all()
+    return {row[0]: (row[1], row[2], row[3], row[4]) for row in rows}
+
+
 # ---------------------------------------------------------------------------
 # Inference helpers
 # ---------------------------------------------------------------------------
@@ -904,6 +1038,9 @@ def _build_provenance(
     statmech_id: int | None,
     statmech_refs: dict[int, str],
     statmech_sources: list[StatmechSourceCalculation],
+    thermo_software: SoftwareReleaseSummary | None,
+    thermo_workflow_tool: WorkflowToolReleaseSummary | None,
+    conformer_links: dict[int, tuple[int, str, int, str]],
 ) -> ThermoProvenance:
     """Build a ``ThermoProvenance`` block for one thermo record.
 
@@ -920,6 +1057,20 @@ def _build_provenance(
     linked statmech). ``statmech_sources`` are that same statmech's source
     calcs — so the surfaced ``statmech_ref`` and the borrowed source calcs
     always come from the one statmech the record actually derives from.
+
+    ``thermo_software`` / ``thermo_workflow_tool`` are the record's OWN
+    software/tool provenance, already resolved by the caller from
+    ``thermo.software_release_id`` / ``thermo.workflow_tool_release_id``
+    (bulk-loaded — never touched here, never substituted with the
+    calculation's). This is the issue #284 fix: the two must never be
+    conflated, in either direction.
+
+    ``conformer_links`` maps calculation id -> conformer link tuple (see
+    ``_conformer_links``). The conformer this thermo record traces to is
+    resolved from the SAME primary calculation used for
+    ``primary_calculation`` / ``level_of_theory`` above — not an
+    independent pick — so a record with no resolvable primary calculation
+    (population B: no source calcs at all) reports no conformer either.
     """
     primary_calc_id_v = _primary_calc_id(sources)
     # Fall back to a statmech-derived primary when thermo declared none.
@@ -929,7 +1080,6 @@ def _build_provenance(
 
     primary_calc_summary: CalculationEvidenceSummary | None = None
     primary_lot: LevelOfTheorySummary | None = None
-    primary_sw: SoftwareReleaseSummary | None = None
 
     if primary_meta is not None:
         gv = primary_meta["geometry_validation"]
@@ -945,7 +1095,6 @@ def _build_provenance(
             software=_sw_summary(primary_meta),
         )
         primary_lot = _lot_summary(primary_meta)
-        primary_sw = _sw_summary(primary_meta)
 
     freq_calc_id = _calc_id_for_role(sources, ThermoCalculationRole.freq)
     if freq_calc_id is None:
@@ -958,6 +1107,16 @@ def _build_provenance(
             statmech_sources, StatmechCalculationRole.sp
         )
 
+    conformer_link = (
+        conformer_links.get(primary_calc_id_v)
+        if primary_calc_id_v is not None
+        else None
+    )
+    if conformer_link is not None:
+        conf_obs_id, conf_obs_ref, conf_group_id, conf_group_ref = conformer_link
+    else:
+        conf_obs_id = conf_obs_ref = conf_group_id = conf_group_ref = None
+
     # ``statmech_id`` is resolved per record by the caller: the thermo's own
     # ``statmech_id`` FK when set, else the entry-min fallback. The surfaced
     # ref and the borrowed source calcs above therefore come from the exact
@@ -965,13 +1124,18 @@ def _build_provenance(
     return ThermoProvenance(
         primary_calculation=primary_calc_summary,
         level_of_theory=primary_lot,
-        software=primary_sw,
+        software_release=thermo_software,
+        workflow_tool_release=thermo_workflow_tool,
         statmech_id=statmech_id,
         statmech_ref=statmech_refs.get(statmech_id) if statmech_id is not None else None,
         freq_calculation_id=freq_calc_id,
         freq_calculation_ref=calc_refs.get(freq_calc_id) if freq_calc_id is not None else None,
         sp_calculation_id=sp_calc_id,
         sp_calculation_ref=calc_refs.get(sp_calc_id) if sp_calc_id is not None else None,
+        conformer_observation_id=conf_obs_id,
+        conformer_observation_ref=conf_obs_ref,
+        conformer_group_id=conf_group_id,
+        conformer_group_ref=conf_group_ref,
     )
 
 
