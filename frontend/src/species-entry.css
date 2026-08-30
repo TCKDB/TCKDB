@@ -1,280 +1,411 @@
+/*
+ * SpeciesEntryPage — conformer-first pass (design/species-entry-conformer-first).
+ *
+ * Exclusively this page's stylesheet (only `SpeciesEntryPage.tsx` imports
+ * it) so it is free to define its own token system without risk to any
+ * other route. Every rule that touches a class name ALSO defined in
+ * `conformer-group.css` (`.ledger-section`, `.review-badge`,
+ * `.stage-table`, `.empty-projection` — restyled in `entry-science.css`)
+ * is scoped under `.entry-page`, this page's unique wrapper, so it can
+ * never win the cascade on another route even after a client-side
+ * navigation leaves this chunk's CSS injected (Vite never unloads a
+ * route chunk's CSS — see the header comment in `entry-science.css` for
+ * the collision this already bit the project once).
+ *
+ * Token system, revised:
+ *   The previous pass split "evidence" (blue) from "computed products"
+ *   (a rust `--product: #8a4a1f`, with `box-shadow: inset 3px 0 0`
+ *   rails on every card and rust-colored links). The owner's review:
+ *   "I do not like so many of the red links... it appears the website is
+ *   more CLI geared." A record's own fact -- "this entry has thermo" --
+ *   is not an alert, and a colored rail on every card read as one. Once a
+ *   selected conformer carries the page's structure (pick a basin, then
+ *   read its evidence in tabs), the evidence/product split stops doing
+ *   real work: both are just "this page's one accent" now. `--product`
+ *   and its rail are GONE, not merely recolored -- there is one accent,
+ *   `--accent`, reused site-wide (the same #205493 blue `.eyebrow` already
+ *   uses on the front door: not a new hue invented for this page, the
+ *   house's own "computed/theoretical" color, applied consistently).
+ *
+ *   --ink/--ink-2/--muted/--faint — text hierarchy (unchanged).
+ *   --line/--line-2 — hairlines (unchanged).
+ *   --accent/--accent-700/--accent-50 — the page's one accent: links,
+ *                 the active tab's underline, selected-conformer state.
+ *                 No second color competes with it anywhere on this page.
+ * Type: IBM Plex Serif for titles and scientific headline numbers; IBM
+ * Plex Sans for UI chrome and prose; IBM Plex Mono for every reference,
+ * unit and coefficient — unchanged, already the house pairing.
+ */
+
 .entry-page {
-    max-width: 76rem;
+    --ink: #16202c;
+    --ink-2: #3c4856;
+    --muted: #6b7888;
+    --faint: #9aa6b3;
+    --line: #dbe2ea;
+    --line-2: #eaeef3;
+    --surface: #ffffff;
+
+    --accent: #205493;
+    --accent-700: #173f6e;
+    --accent-50: #eaf1f8;
+
+    max-width: 74rem;
     margin: 0 auto;
-    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
+    padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
 }
 
-.entry-header {
-    max-width: 62rem;
-}
+/* ---------------------------------------------------------------------
+   Hero: chemistry leads. The formula is the largest thing on the page;
+   stable refs are demoted to a quiet strip beneath the facts, present and
+   copyable but never competing with the science for attention.
+   --------------------------------------------------------------------- */
 
-.entry-title {
+.entry-hero { max-width: 56rem; }
+
+.entry-formula-row {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
     gap: 1rem;
+    margin-top: .6rem;
 }
 
-.entry-title h1,
-.entry-page h2 {
-    font-family: var(--serif);
-}
-
-.entry-title h1 {
+.entry-formula-row h1 {
     margin: 0;
-    font-size: clamp(3.4rem, 8vw, 6rem);
-    letter-spacing: -.05em;
-}
-
-.state-mark {
-    padding: .25rem .45rem;
-    background: #eaf1f8;
-    color: #173f6e;
-    font: .7rem var(--mono);
-    text-transform: uppercase;
-}
-
-.identity-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    margin: 1.7rem 0 0;
-    border-top: 1px solid #dbe2ea;
-    border-bottom: 1px solid #dbe2ea;
-}
-
-.identity-grid div {
     min-width: 0;
-    padding: .85rem .8rem .85rem 0;
-}
-
-.identity-grid dt,
-.rail-node > span {
-    color: #6b7888;
-    font: .64rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.identity-grid dd {
     overflow-wrap: anywhere;
-    margin: .35rem 0 0;
-    font: .75rem/1.4 var(--mono);
+    font: 600 clamp(3rem, 7.5vw, 5.5rem)/.95 var(--serif);
+    letter-spacing: -.045em;
+    color: var(--ink);
 }
 
-.identity-grid a,
-.rail-links a {
-    color: #205493;
-    text-decoration: underline;
-    text-decoration-color: #b8cce0;
-    text-underline-offset: .16em;
-}
-
-.entry-tabs {
-    display: flex;
-    overflow-x: auto;
-    gap: 1.1rem;
-    margin: 2.3rem 0;
-    padding-bottom: .65rem;
-    border-bottom: 1px solid #dbe2ea;
-}
-
-.entry-tabs a {
-    padding: .25rem 0;
-    color: #3c4856;
-    font-size: .82rem;
+.state-chip {
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    color: var(--ink-2);
+    font: .68rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
     white-space: nowrap;
 }
 
-.entry-tabs a[aria-current="page"] {
-    box-shadow: inset 0 -2px #205493;
-    color: #173f6e;
-    font-weight: 600;
+.entry-smiles { margin: 1.1rem 0 0; }
+
+.entry-smiles code {
+    overflow-wrap: anywhere;
+    padding: .3rem .6rem;
+    border-radius: .35rem;
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font: 1.05rem var(--mono);
 }
 
-.section-heading {
-    max-width: 43rem;
+.entry-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.8rem;
+    margin: 1.6rem 0 0;
+    padding: 1.1rem 0 0;
+    border-top: 1px solid var(--line);
+    list-style: none;
 }
 
-.section-heading h2,
-.entry-panel h2 {
+.entry-facts li {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    min-width: 8.5rem;
+}
+
+.entry-facts span {
+    color: var(--muted);
+    font: .64rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+}
+
+.entry-facts strong {
+    overflow-wrap: anywhere;
+    color: var(--ink-2);
+    font: 600 .85rem var(--sans);
+}
+
+/* Collapsed by default -- one "References (N)" toggle per record, not an
+   always-open strip. The ref stays in the DOM (Ctrl+F-findable, selectable,
+   copyable) once opened; nothing here substitutes a label for it. */
+.refs-disclosure {
+    margin-top: 1.75rem;
+    border: 1px solid var(--line-2);
+    border-radius: .5rem;
+    background: #fbfcfe;
+}
+
+.refs-disclosure summary {
+    padding: .6rem 1rem;
+    color: var(--muted);
+    font: .68rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    cursor: pointer;
+}
+
+.refs-disclosure[open] summary { border-bottom: 1px solid var(--line-2); }
+
+.refs-disclosure-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1.4rem;
+    padding: .8rem 1rem;
+}
+
+.conformer-card .refs-disclosure {
+    margin-top: 0;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    background: none;
+}
+
+.ref-item {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: .5rem;
+}
+
+.ref-item-label {
+    flex: none;
+    color: var(--faint);
+    font: .6rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+}
+
+.ref-item a,
+.ref-item-value {
+    overflow-wrap: anywhere;
+    font: .72rem var(--mono);
+}
+
+.ref-item-value { color: var(--muted); }
+
+.ref-item a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: .16em;
+}
+
+.ref-item a:hover { text-decoration-color: currentColor; }
+
+.copy-button {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: .3rem;
+    background: #fff;
+    color: var(--muted);
+    font: .58rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: .15rem .4rem;
+    cursor: pointer;
+}
+
+.copy-button:hover { border-color: var(--accent); color: var(--accent); }
+.copy-button[data-copied="true"] { border-color: var(--accent); color: var(--accent-700); }
+
+/* ---------------------------------------------------------------------
+   Conformer picker — the page's signature interaction, replacing the
+   numbered provenance trail: a plain list of selectable basin cards, not
+   ref-heavy chapter links. Choosing one is the entry point to every tab
+   below it, not a destination of its own.
+   --------------------------------------------------------------------- */
+
+.conformer-picker {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
+}
+
+.conformer-picker h2 {
     margin: 0;
-    font-size: 2rem;
+    font: 600 1.9rem var(--serif);
     letter-spacing: -.025em;
+    color: var(--ink);
 }
 
-.section-heading > p:last-child,
-.entry-panel > p:not(.eyebrow) {
-    color: #3c4856;
+.conformer-picker-note {
+    max-width: 42rem;
+    margin: .6rem 0 0;
+    color: var(--ink-2);
     line-height: 1.6;
 }
 
-.lineage-rail {
+.conformer-list {
     display: grid;
-    grid-template-columns: 1.1fr 2rem 1fr 2rem 1.5fr 2rem 1fr;
-    align-items: stretch;
-    gap: .55rem;
-    margin-top: 1.35rem;
-    padding: 1.2rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+    margin-top: 1.3rem;
 }
 
-.rail-node {
+/* The card itself is a plain, non-interactive wrapper: a <details>
+   (References) can't nest inside a <button>, so the selectable area
+   (`.conformer-card-select`) and the references disclosure are two
+   separate controls stacked inside it. */
+.conformer-card {
     display: flex;
-    min-width: 0;
+    flex-direction: column;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: #fff;
+    overflow: hidden;
+}
+
+.conformer-card:hover { border-color: var(--accent); }
+
+.conformer-card[data-selected="true"] {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.conformer-card-select {
+    display: flex;
     flex-direction: column;
     gap: .4rem;
+    padding: 1.1rem 1.25rem;
+    border: 0;
+    background: none;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
 }
 
-.rail-node strong {
-    color: #173f6e;
-    font: 600 .9rem var(--sans);
+.conformer-card-label {
+    font: 600 1.05rem var(--serif);
+    color: var(--ink);
 }
 
-.rail-node > a {
-    color: #173f6e;
-    font: 600 1rem var(--serif);
+.conformer-card[data-selected="true"] .conformer-card-label { color: var(--accent-700); }
+
+.conformer-card-meta,
+.conformer-card-coverage {
+    color: var(--ink-2);
+    font: .72rem var(--mono);
 }
 
-.rail-node small {
-    overflow-wrap: anywhere;
-    color: #6b7888;
-    font: .6rem var(--mono);
+.conformer-card-coverage { color: var(--muted); }
+
+/* ---------------------------------------------------------------------
+   Entry tabs — a real ARIA tablist. One flat row, one accent, no second
+   color marking "this is a computed product": the selected conformer
+   already carries that distinction now.
+   --------------------------------------------------------------------- */
+
+.entry-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.6rem;
+    margin: 2.5rem 0 0;
+    padding-bottom: 0;
+    border-bottom: 1px solid var(--line);
 }
 
-.rail-node p,
-.coverage {
+.entry-tabs a {
+    padding: .1rem 0 .9rem;
+    color: var(--ink-2);
+    font: 500 .88rem var(--sans);
+    white-space: nowrap;
+}
+
+.entry-tabs a:hover { color: var(--accent-700); }
+
+.entry-tabs a[aria-selected="true"] {
+    box-shadow: inset 0 -2px var(--accent);
+    color: var(--accent-700);
+    font-weight: 600;
+}
+
+.entry-tabs a:focus-visible,
+.conformer-card-select:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.tab-panel { margin-top: 2rem; }
+
+/* ---------------------------------------------------------------------
+   Section heading rhythm, shared by the geometry/single-point panels.
+   --------------------------------------------------------------------- */
+
+.section-heading { max-width: 44rem; }
+
+.section-heading h2 {
     margin: 0;
-    color: #3c4856;
-    font: .68rem/1.45 var(--mono);
+    font: 600 1.9rem var(--serif);
+    letter-spacing: -.025em;
+    color: var(--ink);
 }
 
-.rail-links {
+.section-heading > p:last-child {
+    max-width: 42rem;
+    color: var(--ink-2);
+    line-height: 1.6;
+}
+
+/* ---------------------------------------------------------------------
+   Geometry tab: distinct stored geometries, then a per-observation list.
+   --------------------------------------------------------------------- */
+
+.geometry-list {
     display: grid;
-    gap: .28rem;
-    margin-top: .25rem;
-}
-
-.rail-links a {
-    overflow-wrap: anywhere;
-    font: .64rem/1.35 var(--mono);
-}
-
-.rail-arrow {
-    position: relative;
-    align-self: center;
-    height: 1px;
-    background: #7ea7cf;
-}
-
-.rail-arrow::after {
-    position: absolute;
-    top: -3px;
-    right: 0;
-    border: 3px solid transparent;
-    border-left-color: #7ea7cf;
-    content: "";
-}
-
-.geometry-node {
-    padding: .55rem;
-    background: linear-gradient(135deg, #fff 0%, #eaf1f8 100%);
-}
-
-.empty-projection {
-    margin: 1.35rem 0 0;
-    padding: 1.1rem;
-    border: 1px dashed #b8cce0;
-    background: #fff;
-    color: #6b7888;
-}
-
-.entry-panel {
-    margin-top: 2.5rem;
-    padding: 1.4rem;
-    border-left: 3px solid #205493;
-    background: #fff;
-}
-
-.lot-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 1rem;
-    margin-top: 1rem;
-}
-
-.lot-grid strong {
-    color: #173f6e;
-    font: .7rem var(--mono);
-    text-transform: uppercase;
-}
-
-.lot-grid ul {
-    margin: .45rem 0 0;
+    gap: .6rem;
+    margin: 1.2rem 0 0;
     padding: 0;
     list-style: none;
 }
 
-.lot-grid li {
-    margin-top: .25rem;
-    font: .76rem var(--mono);
+.geometry-item {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .3rem 1rem;
+    padding: .7rem .9rem;
+    border: 1px solid var(--line-2);
+    border-radius: .4rem;
 }
 
-.availability-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-top: 2.5rem;
+.geometry-item a {
+    overflow-wrap: anywhere;
+    color: var(--accent);
+    font: 600 .82rem var(--mono);
 }
 
-.availability {
-    min-height: 8rem;
-    padding: 1.15rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+.geometry-meta {
+    color: var(--muted);
+    font: .72rem var(--mono);
 }
 
-.availability strong {
-    display: block;
-    color: #173f6e;
-}
+/* ---------------------------------------------------------------------
+   Records grouped by whether they trace to the selected conformer's own
+   evidence, or sit at entry level (not linked to one conformer). Neither
+   group is styled as more or less trustworthy than the other — this is
+   provenance shape, not a quality signal.
+   --------------------------------------------------------------------- */
 
-.availability a,
-.availability p:last-child {
-    display: block;
-    margin-top: .8rem;
-    color: #205493;
-    font-size: .8rem;
-}
+.conformer-evidence-group { margin-top: 1.75rem; }
 
-.availability p:last-child {
-    color: #6b7888;
-    line-height: 1.45;
+.conformer-evidence-group-heading {
+    margin: 0;
+    color: var(--ink);
+    font: 600 1.1rem var(--serif);
 }
 
 @media (max-width: 680px) {
-    .availability-grid,
-    .lineage-rail {
-        grid-template-columns: 1fr;
-    }
-
-    .identity-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-
-    .rail-arrow {
-        width: 1px;
-        height: 1.3rem;
-        justify-self: center;
-    }
-
-    .rail-arrow::after {
-        top: auto;
-        right: -3px;
-        bottom: 0;
-        border-color: #7ea7cf transparent transparent;
-    }
-
-    .entry-tabs {
-        gap: .8rem;
-    }
+    .entry-facts { gap: .85rem 1.2rem; }
+    .entry-tabs { gap: 1.1rem 1.6rem; }
+    .conformer-list { grid-template-columns: 1fr; }
 }

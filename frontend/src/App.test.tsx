@@ -125,6 +125,10 @@ describe("public archive shell", () => {
         await user.type(await screen.findByLabelText("Exact species identifier"), entryRef)
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
+        // The entry ref lives in the collapsed References disclosure --
+        // opening it is the real end-to-end check that it's actually there,
+        // not just present-but-hidden in the DOM.
+        await user.click(screen.getByText("References (3)"))
         expect(screen.getByText(entryRef)).toBeVisible()
     })
 

@@ -184,6 +184,129 @@
     color: #536578;
 }
 
+/* Evidence-completeness rubric: the score already says how many of N
+   checks passed, so only the FAILED checks are named by default -- named
+   as chips, not a sentence, so a reader can find "uncertainty" without
+   parsing eight lines that mostly say "Present". Full checklist stays
+   reachable behind a disclosure. */
+.evidence-missing {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem .5rem;
+    margin: .6rem 0 0;
+    color: #536578;
+    font: .78rem var(--mono);
+}
+
+.evidence-chip {
+    padding: .15rem .5rem;
+    border: 1px solid #dbe2ea;
+    border-radius: 999px;
+    color: #3c4856;
+    font-size: .72rem;
+}
+
+.evidence-full-checklist {
+    margin-top: .6rem;
+}
+
+.evidence-full-checklist summary {
+    color: #536578;
+    font: .74rem var(--mono);
+    cursor: pointer;
+}
+
 @media (max-width: 680px) {
     .science-record .kv-list { grid-template-columns: 1fr; }
+}
+
+/*
+ * ---------------------------------------------------------------------
+ * Conformer-first pass (design/species-entry-conformer-first): reskin of
+ * the vocabulary this file borrows from `conformer-group.css`
+ * (`.ledger-section`, `.ledger-heading`, `.review-badge`, `.stage-table`,
+ * bare `.empty-projection`) into the entry page's own token system. Every
+ * rule below is scoped under `.entry-page` — this route's unique wrapper
+ * (`SpeciesEntryPage.tsx`) — for the exact reason the file header above
+ * already scopes `.kv-list`/`.table-scroll .stage-table` under
+ * `.science-record`: Vite never unloads a route chunk's CSS, so a bare
+ * redefinition of a `conformer-group.css` class here would win the
+ * cascade on ConformerGroupPage/ConformerObservationPage too, the moment
+ * a reader visits this page first and then navigates there client-side.
+ * `.entry-page` never exists in those pages' DOM (they render
+ * `.conformer-page`), so these rules are structurally inert there
+ * regardless of load order — conformer-group.css itself is untouched.
+ *
+ * The previous pass gave every `.science-record` card a rust
+ * `box-shadow: inset 3px 0 0 var(--product)` rail and colored its
+ * headings/badges/table headers the same rust — the "so many red links...
+ * more CLI geared" the owner reviewed against. That token (`--product`)
+ * is gone from `species-entry.css`; every fallback literal below that
+ * used to repeat its hex value (`var(--product-700, #6b3416)`) would
+ * silently keep rendering that exact rust once the token disappeared, so
+ * each one is replaced here, not left to fall back. One accent
+ * (`--accent`, the house blue) for a link or an active state; everything
+ * else -- headings, table headers, card borders -- is plain ink or a
+ * hairline, because "this record has thermo" is a fact, not an alert.
+ *
+ * Custom properties (--accent, --ink-2, --muted, --line, …) are declared
+ * on `.entry-page` in `species-entry.css`; they inherit down to every
+ * element below through the live DOM, not through file order, so it does
+ * not matter that this file never imports that one.
+ */
+
+.entry-page .ledger-section { margin-top: 3.5rem; }
+.entry-page .ledger-heading { max-width: 44rem; }
+
+.entry-page .ledger-section h2 {
+    margin: 0;
+    font: 600 1.9rem var(--serif);
+    letter-spacing: -.025em;
+    color: var(--ink, #16202c);
+}
+
+.entry-page .ledger-heading > p:last-child {
+    max-width: 42rem;
+    color: var(--ink-2, #3c4856);
+    line-height: 1.6;
+}
+
+.entry-page .review-badge {
+    border: 1px solid var(--line, #dbe2ea);
+    border-radius: 999px;
+    background: var(--line-2, #eaeef3);
+    color: var(--ink-2, #3c4856);
+}
+
+.entry-page .empty-projection {
+    padding: 1.05rem 1.2rem;
+    border: 1px dashed var(--line, #dbe2ea);
+    border-radius: .4rem;
+    background: #fbfcfe;
+    color: var(--muted, #6b7888);
+}
+
+.entry-page .science-record {
+    border-radius: .5rem;
+    border-color: var(--line, #dbe2ea);
+}
+
+.entry-page .science-record-heading h3 { color: var(--ink, #16202c); }
+
+.entry-page .stage-table thead th {
+    color: var(--ink, #16202c);
+}
+
+.entry-page .stage-table tbody tr:nth-child(even) td {
+    background: var(--line-2, #eaeef3);
+}
+
+.entry-page .stage-table td:not(:first-child) {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.entry-page .supersession-notice {
+    border-radius: .4rem;
 }

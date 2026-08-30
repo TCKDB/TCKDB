@@ -6,13 +6,34 @@ import {
 } from "./scientificSpeciesSchemas"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
 
+const softwareReleaseSchema = z.object({
+    software_release_ref: z.string(),
+    software: z.string(),
+    version: z.string().nullable().optional(),
+}).passthrough()
+
+const workflowToolReleaseSchema = z.object({
+    workflow_tool_release_ref: z.string(),
+    workflow_tool: z.string(),
+    version: z.string().nullable().optional(),
+}).passthrough()
+
+// `software_release` / `workflow_tool_release` are measured-present on this
+// endpoint's calculation rows (live, `conformers/search?include=calculations`)
+// even though nothing here previously typed them -- `.passthrough()` already
+// carried them at runtime; these two fields just give the geometry/SP tabs a
+// typed way to read what was already on the wire, not a new request shape.
 const calculationSchema = z.object({
     calculation_ref: z.string(),
     type: z.string(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
+    software_release: softwareReleaseSchema.nullable().optional(),
+    workflow_tool_release: workflowToolReleaseSchema.nullable().optional(),
 }).passthrough()
+const observationCalculationsSchema = z.array(calculationSchema).nullable().optional()
 const observationSchema = z.object({
     conformer_observation: z.object({ conformer_observation_ref: z.string() }).passthrough(),
+    calculations: observationCalculationsSchema,
 }).passthrough()
 
 const conformerResponseSchema = z.object({
@@ -35,9 +56,14 @@ const conformerResponseSchema = z.object({
         }).passthrough(),
         observations: z.array(observationSchema).nullable().optional(),
         calculations: z.array(calculationSchema).nullable().optional(),
+        // `role` is measured-present on this endpoint's geometry links
+        // (live: "final") but was never typed by the shared
+        // `geometrySummarySchema` -- extended locally here, the same way
+        // `calculationSchema` above extends the shared calculation shape,
+        // rather than widening a schema three other API modules also import.
         geometries: z.array(z.object({
             calculation_ref: z.string(),
-            geometry: geometrySummarySchema,
+            geometry: geometrySummarySchema.extend({ role: z.string().nullable().optional() }),
         }).passthrough()).nullable().optional(),
     }).passthrough()),
 }).passthrough()
