@@ -170,7 +170,12 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 </div>
             </section>
 
-            <ViewerSection atoms={atoms} atomsAvailability={atomsAvailability} formula={formula} />
+            <ViewerSection
+                atoms={atoms}
+                atomsAvailability={atomsAvailability}
+                formula={formula}
+                xyzText={geometry.xyz_text ?? null}
+            />
 
             <CoordinateTableSection
                 atoms={atoms}
@@ -221,10 +226,11 @@ function SectionEmptyMessage({ availability, emptyText }: { availability: Sectio
     return <p className="empty-projection">{emptyText}</p>
 }
 
-function ViewerSection({ atoms, atomsAvailability, formula }: {
+function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
     atoms: GeometryRecord["atoms"]
     atomsAvailability: SectionAvailability
     formula: string
+    xyzText: string | null
 }) {
     const rows = atoms ?? []
     return (
@@ -242,7 +248,7 @@ function ViewerSection({ atoms, atomsAvailability, formula }: {
                         </p>
                     )}
                 >
-                    <GeometryViewer atoms={rows} formula={formula} />
+                    <GeometryViewer atoms={rows} formula={formula} xyzText={xyzText} />
                 </SectionErrorBoundary>
             ) : (
                 <SectionEmptyMessage

@@ -50,40 +50,19 @@
     max-width: 30rem;
 }
 
-.viewer-controls {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem;
-}
-
-.viewer-controls button {
-    padding: .4rem .75rem;
-    border: 1px solid #b8c4d1;
-    background: #fff;
-    color: #205493;
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    cursor: pointer;
-}
-
-.viewer-controls button:hover {
-    border-color: #205493;
-    background: #eaf1f8;
-}
-
-.viewer-svg {
+/* 3Dmol sizes its canvas from this element's offsetWidth/offsetHeight
+   (see node_modules/3dmol/src/GLViewer.ts getWidth/getHeight) — it does
+   not size itself from CSS on the canvas it creates, only from the
+   container it is given. A fixed aspect-ratio box keeps that size stable
+   across the "loading" -> "ready"/"unavailable" status swap above it, so
+   nothing else on the page reflows once the viewer resolves either way. */
+.viewer-canvas {
+    position: relative;
     width: 100%;
     max-width: 22rem;
-    height: auto;
     aspect-ratio: 1 / 1;
     border: 1px solid #dbe2ea;
     background: #fff;
-}
-
-.viewer-bonds line {
-    stroke: #8a97a6;
-    stroke-width: 2;
 }
 
 @media (max-width: 680px) {

@@ -1,135 +1,137 @@
-import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, render } from "@testing-library/react"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
+import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import { GeometryViewer } from "./GeometryViewer"
 
-afterEach(cleanup)
-
 /**
- * Component-level tests for the hand-rolled SVG projection math itself —
- * separate from `GeometryDetailPage.test.tsx`, which exercises this
- * component only through a full page render. These exist because a
- * mutation-testing pass found the projection math had NO test pinning an
- * actual screen coordinate: flipping the x axis, doubling the scale
- * factor, and reversing the depth (paint-order) sort all survived 108/108
- * with only an atom-*count* assertion in place. An x-axis flip in
- * particular is a mirror reflection — on a chiral geometry it silently
- * shows the wrong enantiomer while every count-only assertion stays
- * green, since a mirror image has exactly as many atoms as the original.
+ * These tests exercise the "3Dmol succeeded" path, which needs two things
+ * jsdom does not provide on its own:
+ *
+ *  1. A working WebGL context — jsdom has none at all (see
+ *     `GeometryViewer.webgl-unavailable.test.tsx`, which tests the real,
+ *     unmocked failure path instead). "3dmol" is mocked here with a fake
+ *     viewer that records what it was called with, so these tests can
+ *     pin the exact data 3Dmol receives without needing real WebGL.
+ *  2. A non-zero-size container — jsdom never lays elements out, so
+ *     `offsetWidth`/`offsetHeight` are always 0 (see the size-check
+ *     comment in `GeometryViewer.tsx`), which this component treats the
+ *     same as a WebGL failure. `stubOffsetSize` below overrides both on
+ *     `HTMLElement.prototype` for the lifetime of each test so the
+ *     component takes the "container is real" branch.
+ *
+ * Kept in its own file from `GeometryViewer.webgl-unavailable.test.tsx`
+ * for the same reason `GeometryDetailPage.errorBoundary.test.tsx` is
+ * split out from `GeometryDetailPage.test.tsx`: `vi.mock` is hoisted to
+ * the top of the file and would otherwise apply to every test in it,
+ * including the ones that specifically need the real, unmocked module.
  */
+
+type FakeViewerCalls = {
+    createViewer: unknown[][]
+    addModel: unknown[][]
+    setStyle: unknown[][]
+    zoomTo: unknown[][]
+    spin: unknown[][]
+    animate: unknown[][]
+    render: unknown[][]
+    clear: unknown[][]
+}
+
+const calls: FakeViewerCalls = {
+    createViewer: [],
+    addModel: [],
+    setStyle: [],
+    zoomTo: [],
+    spin: [],
+    animate: [],
+    render: [],
+    clear: [],
+}
+
+function resetCalls() {
+    for (const key of Object.keys(calls) as (keyof FakeViewerCalls)[]) calls[key] = []
+}
+
+vi.mock("3dmol", () => ({
+    createViewer: (...args: unknown[]) => {
+        calls.createViewer.push(args)
+        return {
+            addModel: (...a: unknown[]) => { calls.addModel.push(a) },
+            setStyle: (...a: unknown[]) => { calls.setStyle.push(a) },
+            zoomTo: (...a: unknown[]) => { calls.zoomTo.push(a) },
+            spin: (...a: unknown[]) => { calls.spin.push(a) },
+            animate: (...a: unknown[]) => { calls.animate.push(a) },
+            render: (...a: unknown[]) => { calls.render.push(a) },
+            clear: (...a: unknown[]) => { calls.clear.push(a) },
+        }
+    },
+}))
+
+/** jsdom reports 0 for both on every element; 3Dmol needs a real size. */
+function stubNonZeroContainerSize() {
+    Object.defineProperty(HTMLElement.prototype, "offsetWidth", { configurable: true, value: 320 })
+    Object.defineProperty(HTMLElement.prototype, "offsetHeight", { configurable: true, value: 320 })
+}
+
+let restoreOffsetWidth: PropertyDescriptor | undefined
+let restoreOffsetHeight: PropertyDescriptor | undefined
+
+beforeEach(() => {
+    restoreOffsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetWidth")
+    restoreOffsetHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "offsetHeight")
+    stubNonZeroContainerSize()
+    resetCalls()
+})
+
+afterEach(() => {
+    cleanup()
+    if (restoreOffsetWidth) Object.defineProperty(HTMLElement.prototype, "offsetWidth", restoreOffsetWidth)
+    if (restoreOffsetHeight) Object.defineProperty(HTMLElement.prototype, "offsetHeight", restoreOffsetHeight)
+})
+
+const CH_XYZ = "2\n\nC 0.000000 0.000000 0.000000\nH 0.000000 0.000000 1.090000"
+const CH_ATOMS = [
+    { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
+    { atom_index: 2, element: "H", x: 0, y: 0, z: 1.09 },
+]
+
 describe("GeometryViewer", () => {
-    it("pins each atom's projected screen position for the default rotation — catches an axis flip or a scale error", () => {
-        // Three atoms placed only along the z-axis (x=y=0 for all), so
-        // their centroid is already the origin and centering is a no-op —
-        // the projection formula can be hand-verified exactly rather than
-        // approximately. At the default yaw=-30deg / pitch=15deg:
-        //   x1 = x*cos(yaw) + z*sin(yaw) = z*sin(-30deg) = z*(-0.5)
-        //   z1 = -x*sin(yaw) + z*cos(yaw) = z*cos(-30deg) = z*0.8660254
-        //   y2 = y1*cos(pitch) - z1*sin(pitch) = -z1*sin(15deg)  (y1=0)
-        //   depth (z2) = y1*sin(pitch) + z1*cos(pitch) = z1*cos(15deg)
-        // maxNorm = 2 (the |z|=2 atoms), scale = (160-34)/2 = 63, giving
-        // exact screenX = 160 + x1*63 of 223 / 160 / 97 for z = -2 / 0 / 2.
-        const { container } = render(
-            <GeometryViewer
-                atoms={[
-                    { atom_index: 1, element: "C", x: 0, y: 0, z: -2 },
-                    { atom_index: 2, element: "N", x: 0, y: 0, z: 0 },
-                    { atom_index: 3, element: "O", x: 0, y: 0, z: 2 },
-                ]}
-                formula="CNO"
-            />,
-        )
-        const carbon = container.querySelector('circle[fill="#3c4856"]') as SVGCircleElement
-        const nitrogen = container.querySelector('circle[fill="#205493"]') as SVGCircleElement
-        const oxygen = container.querySelector('circle[fill="#b23b3b"]') as SVGCircleElement
-        expect(carbon).not.toBeNull()
-        expect(nitrogen).not.toBeNull()
-        expect(oxygen).not.toBeNull()
-
-        // Negating x1 (a naive "flip the x axis" mutation) would swap the
-        // carbon and oxygen screenX values below (223 <-> 97); doubling
-        // `scale` would push every value roughly 2x farther from center
-        // (160). Both are observable here.
-        expect(Number(carbon.getAttribute("cx"))).toBeCloseTo(223, 1)
-        expect(Number(carbon.getAttribute("cy"))).toBeCloseTo(131.76, 1)
-        expect(Number(nitrogen.getAttribute("cx"))).toBeCloseTo(160, 1)
-        expect(Number(nitrogen.getAttribute("cy"))).toBeCloseTo(160, 1)
-        expect(Number(oxygen.getAttribute("cx"))).toBeCloseTo(97, 1)
-        expect(Number(oxygen.getAttribute("cy"))).toBeCloseTo(188.24, 1)
+    it("passes the archive's own xyz_text to 3Dmol unmodified — the picture and the raw XYZ block read the same string", async () => {
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.addModel).toHaveLength(1))
+        expect(calls.addModel[0][0]).toBe(CH_XYZ)
+        expect(calls.addModel[0][1]).toBe("xyz")
     })
 
-    it("paints atoms back-to-front by projected depth — farthest first, nearest last on top", () => {
-        // Same three atoms as above. Their depth (z2) is z*0.8365163: the
-        // carbon (z=-2) has the smallest (most negative) depth and must be
-        // painted first; the oxygen (z=2) has the largest depth and must
-        // be painted last, on top. A reversed sort comparator produces the
-        // opposite DOM order without changing any individual atom's cx/cy,
-        // so this needs its own assertion — the position-pin test above
-        // cannot catch a reversed paint order on its own.
-        const { container } = render(
-            <GeometryViewer
-                atoms={[
-                    { atom_index: 1, element: "C", x: 0, y: 0, z: -2 },
-                    { atom_index: 2, element: "N", x: 0, y: 0, z: 0 },
-                    { atom_index: 3, element: "O", x: 0, y: 0, z: 2 },
-                ]}
-                formula="CNO"
-            />,
+    it("falls back to a synthesized XYZ block, built from the same atom rows as the coordinate table, when xyz_text is absent — and that block matches the raw atom data exactly", async () => {
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={null} />)
+        await waitFor(() => expect(calls.addModel).toHaveLength(1))
+        expect(calls.addModel[0][0]).toBe(
+            "2\n\nC 0 0 0\nH 0 0 1.09",
         )
-        const fills = [...container.querySelectorAll(".viewer-atoms circle")].map((c) => c.getAttribute("fill"))
-        expect(fills).toEqual(["#3c4856", "#205493", "#b23b3b"])
     })
 
-    it("draws no bond between atoms farther apart than any plausible covalent distance", () => {
-        // The same C/N/O trio: every pairwise distance here (2 A, 2 A, 4 A)
-        // exceeds every pairwise covalent-radius-sum cutoff this component
-        // uses (all under 1.95 A) — deliberately, so that a "bond between
-        // every pair" mutation is observable as 3 unwanted lines instead
-        // of the correct 0.
-        const { container } = render(
-            <GeometryViewer
-                atoms={[
-                    { atom_index: 1, element: "C", x: 0, y: 0, z: -2 },
-                    { atom_index: 2, element: "N", x: 0, y: 0, z: 0 },
-                    { atom_index: 3, element: "O", x: 0, y: 0, z: 2 },
-                ]}
-                formula="CNO"
-            />,
-        )
-        expect(container.querySelectorAll(".viewer-bonds line")).toHaveLength(0)
+    it("never calls spin or animate, and calls zoomTo with no animation duration — reduced motion is the only possible outcome, not a media-query branch", async () => {
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.render).toHaveLength(1))
+        expect(calls.spin).toHaveLength(0)
+        expect(calls.animate).toHaveLength(0)
+        expect(calls.zoomTo).toHaveLength(1)
+        expect(calls.zoomTo[0]).toEqual([])
     })
 
-    it("draws a bond between atoms within a plausible covalent distance", () => {
-        // A realistic C-H bond length (1.09 A), well inside this
-        // component's (0.76+0.31)*1.3 = 1.391 A cutoff for a C-H pair — a
-        // positive control alongside the negative one above, so "bonds
-        // never drawn at all" is also a distinguishable failure.
-        const { container } = render(
-            <GeometryViewer
-                atoms={[
-                    { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
-                    { atom_index: 2, element: "H", x: 0, y: 0, z: 1.09 },
-                ]}
-                formula="CH"
-            />,
-        )
-        expect(container.querySelectorAll(".viewer-bonds line")).toHaveLength(1)
+    it("marks the WebGL canvas container as a supplementary picture, not the accessible representation", async () => {
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        const container = document.querySelector(".viewer-canvas")
+        expect(container).toHaveAttribute("aria-hidden", "true")
+        await waitFor(() => expect(container).toHaveAttribute("data-viewer-status", "ready"))
     })
 
     it("discloses that bonds are inferred from interatomic distance, not deposited data", () => {
-        const { container } = render(
-            <GeometryViewer
-                atoms={[
-                    { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
-                    { atom_index: 2, element: "H", x: 0, y: 0, z: 1.09 },
-                ]}
-                formula="CH"
-            />,
-        )
-        // A distinct sentence from "not an interactive 3D molecular
-        // viewer" — the two live in the same paragraph, and a mutation
-        // that deletes only this sentence must not be able to hide behind
-        // an assertion that only matches the other one.
-        expect(container.textContent).toMatch(
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        // A distinct sentence from the "interactive 3D view" framing
+        // sentence in the same paragraph, so a mutation that deletes only
+        // this sentence cannot hide behind an assertion on the other one.
+        expect(screen.getByText(/An interactive 3D view/).textContent).toMatch(
             /Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record\./,
         )
     })

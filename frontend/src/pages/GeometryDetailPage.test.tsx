@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 
@@ -240,34 +240,48 @@ describe("GeometryDetailPage", () => {
         expect(within(xyzSection).getByText(/H 0\.110000 0\.220000 0\.330000/)).toBeVisible()
     })
 
-    it("renders the projection with one atom mark per atom row", async () => {
+    it("renders the WebGL viewer container in place of the old SVG projection, with the bond-inference disclosure intact", async () => {
+        // This page does not mock "3dmol" (that mock lives in
+        // GeometryViewer.test.tsx, split out for the same reason
+        // GeometryDetailPage.errorBoundary.test.tsx is split out), and
+        // jsdom has neither real WebGL nor real layout — see the
+        // size-check comment in GeometryViewer.tsx — so the viewer
+        // mounted here will genuinely settle into its "unavailable"
+        // status, exactly as it would in a real browser with no WebGL
+        // and a not-yet-laid-out container. What this test pins is the
+        // page-level wiring: the structure section renders the new
+        // `.viewer-canvas` element (never an SVG projection any more)
+        // and keeps the disclosure paragraph next to it.
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const viewerSection = screen.getByRole("heading", { name: "Structure projection" }).closest("section") as HTMLElement
-        const svg = viewerSection.querySelector("svg.viewer-svg") as SVGElement
-        expect(svg).not.toBeNull()
-        expect(svg.querySelectorAll("circle")).toHaveLength(5)
-        expect(within(viewerSection).getByText(/not an interactive 3D molecular viewer/)).toBeVisible()
-        // A distinct sentence from the one above — the two live in the same
-        // paragraph, and a mutation that deletes only the bond-inference
-        // disclaimer must not be able to hide behind an assertion that
-        // only matches the "not a 3D viewer" sentence next to it. See also
-        // the isolated component-level test in `GeometryViewer.test.tsx`.
+        expect(viewerSection.querySelector("svg")).toBeNull()
+        expect(viewerSection.querySelector(".viewer-canvas")).not.toBeNull()
+        // A distinct sentence from the "interactive 3D view" framing
+        // sentence in the same paragraph, so a mutation that deletes only
+        // the bond-inference disclaimer must not be able to hide behind
+        // an assertion that only matches the framing sentence next to it.
+        // See also the isolated component-level test in
+        // `GeometryViewer.test.tsx`.
         expect(within(viewerSection).getByText(
             /Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record\./,
         )).toBeVisible()
     })
 
-    it("keeps the projection's atom count stable across rotation", async () => {
-        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+    it("forwards this geometry's own xyz_text to the viewer section — the picture and the raw XYZ block read the same record", async () => {
+        const record = mockRecord()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
-        const viewerSection = screen.getByRole("heading", { name: "Structure projection" }).closest("section") as HTMLElement
-        fireEvent.click(within(viewerSection).getByRole("button", { name: "Rotate right" }))
-        fireEvent.click(within(viewerSection).getByRole("button", { name: "Rotate up" }))
-        const svg = viewerSection.querySelector("svg.viewer-svg") as SVGElement
-        expect(svg.querySelectorAll("circle")).toHaveLength(5)
+        const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
+        // Confirms the page-level source of truth for the raw XYZ block —
+        // GeometryViewer.test.tsx (mocked 3dmol) separately pins that
+        // GeometryViewer itself forwards this same string to 3Dmol
+        // unmodified, so together these two tests cover the full path
+        // from API response to what 3Dmol actually receives.
+        expect(within(xyzSection).getByText(/H 0\.630000 -0\.630000 -0\.630000/)).toBeVisible()
+        expect(record.xyz_text).toContain("H 0.630000 -0.630000 -0.630000")
     })
 
     it("binds each produced-by row's own type and role — not the first row's", async () => {
