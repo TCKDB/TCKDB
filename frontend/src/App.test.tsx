@@ -127,8 +127,10 @@ describe("public archive shell", () => {
         expect(await screen.findByRole("heading", { name: "O" })).toBeVisible()
         // The entry ref lives in the collapsed References disclosure --
         // opening it is the real end-to-end check that it's actually there,
-        // not just present-but-hidden in the DOM.
-        await user.click(screen.getByText("References (3)"))
+        // not just present-but-hidden in the DOM. Only Species + Entry live
+        // here now (2, not 3) -- InChIKey moved to the always-visible
+        // chemistry-identifiers row above, alongside SMILES.
+        await user.click(screen.getByText("References (2)"))
         expect(screen.getByText(entryRef)).toBeVisible()
     })
 

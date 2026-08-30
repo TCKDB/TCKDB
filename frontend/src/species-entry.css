@@ -35,6 +35,19 @@
  * Type: IBM Plex Serif for titles and scientific headline numbers; IBM
  * Plex Sans for UI chrome and prose; IBM Plex Mono for every reference,
  * unit and coefficient — unchanged, already the house pairing.
+ *
+ * Width, revised ("we need to use more of the space on the webpage"):
+ *   `.entry-page` was 74rem (1184px) -- at a 1440px viewport that leaves
+ *   ~128px of empty margin per side; at 1920px, ~368px per side. Widened
+ *   to 100rem (1600px): full-bleed (minus the 1.25rem side padding) up to
+ *   about a 1640px viewport, then a real cap so a 2560px+ monitor doesn't
+ *   stretch a table row edge-to-edge. This is a deliberate widen, not a
+ *   removal of the constraint -- prose stays narrow on its OWN max-widths
+ *   (`.entry-hero` 56rem, `.conformer-picker-note`/`.section-heading`
+ *   42-44rem, all unchanged below), so only the elements that actually
+ *   benefit from more room -- the conformer card grid, the evidence
+ *   linkage flow, and every wide `.stage-table` in the tab panels -- pick
+ *   up the extra width.
  */
 
 .entry-page {
@@ -50,7 +63,7 @@
     --accent-700: #173f6e;
     --accent-50: #eaf1f8;
 
-    max-width: 74rem;
+    max-width: 100rem;
     margin: 0 auto;
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
 }
@@ -91,16 +104,45 @@
     white-space: nowrap;
 }
 
-.entry-smiles { margin: 1.1rem 0 0; }
-
-.entry-smiles code {
-    overflow-wrap: anywhere;
-    padding: .3rem .6rem;
-    border-radius: .35rem;
-    background: var(--accent-50);
-    color: var(--accent-700);
-    font: 1.05rem var(--mono);
+/* SMILES + InChIKey — always visible chemistry facts, never behind the
+   References disclosure ("INCHI with SMILES should always be shown"). Only
+   the InChIKey is served on this record (no full InChI is stored anywhere
+   in the archive -- see `SpeciesEntrySummary.tsx`), so it is labeled
+   "InChIKey", never "InChI". */
+.entry-identifiers {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem 1rem;
+    margin: 1.1rem 0 0;
+    padding: 0;
+    list-style: none;
 }
+
+.identifier-chip {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: .5rem;
+    padding: .3rem .3rem .3rem .7rem;
+    border-radius: .4rem;
+    background: var(--accent-50);
+}
+
+.identifier-chip-label {
+    flex: none;
+    color: var(--accent-700);
+    font: 600 .62rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+}
+
+.identifier-chip code {
+    overflow-wrap: anywhere;
+    color: var(--accent-700);
+    font: 1rem var(--mono);
+}
+
+.identifier-chip .copy-button { background: none; }
 
 .entry-facts {
     display: flex;
@@ -300,6 +342,99 @@
 .conformer-card-coverage { color: var(--muted); }
 
 /* ---------------------------------------------------------------------
+   Evidence linkage — the shape behind the conformer card's own numbers:
+   observations fan out to calculation rows, calculation rows converge on
+   shared geometries. Directly answers the owner's report that "2 distinct
+   Geoms but then 4 conformers... 14 calculation rows but only 12 I see" --
+   every number was already correct, it just never said what it counted.
+   --------------------------------------------------------------------- */
+
+.evidence-linkage {
+    margin-top: 2rem;
+    padding: 1.5rem 1.5rem 1.75rem;
+    border: 1px solid var(--line);
+    border-radius: .6rem;
+    background: #fbfcfe;
+}
+
+.evidence-linkage h2 {
+    margin: 0;
+    font: 600 1.3rem var(--serif);
+    letter-spacing: -.02em;
+    color: var(--ink);
+}
+
+.evidence-linkage-note {
+    max-width: 46rem;
+    margin: .5rem 0 0;
+    color: var(--ink-2);
+    font: .82rem/1.55 var(--sans);
+}
+
+.linkage-flow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    gap: 1rem 0;
+    margin-top: 1.4rem;
+}
+
+.linkage-step {
+    display: flex;
+    flex: 1 1 14rem;
+    flex-direction: column;
+    gap: .25rem;
+    min-width: 12rem;
+    padding: 0 1.25rem;
+}
+
+.linkage-step-count {
+    color: var(--accent-700);
+    font: 600 2rem var(--serif);
+    line-height: 1;
+}
+
+.linkage-step-unit {
+    color: var(--ink);
+    font: 600 .8rem var(--sans);
+}
+
+.linkage-step-detail {
+    color: var(--muted);
+    font: .72rem/1.5 var(--mono);
+}
+
+.linkage-geometry-list {
+    margin: .4rem 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--ink-2);
+    font: .72rem/1.7 var(--mono);
+}
+
+.linkage-geometry-list code { color: var(--accent-700); }
+
+.linkage-connector {
+    display: flex;
+    flex: none;
+    align-items: center;
+    align-self: center;
+    color: var(--faint);
+    font-size: 1.4rem;
+}
+
+.linkage-coverage {
+    max-width: 52rem;
+    margin: 1.4rem 0 0;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--line-2);
+    color: var(--ink-2);
+    font: .78rem/1.6 var(--sans);
+}
+
+.linkage-coverage strong { color: var(--ink); }
+
+/* ---------------------------------------------------------------------
    Entry tabs — a real ARIA tablist. One flat row, one accent, no second
    color marking "this is a computed product": the selected conformer
    already carries that distinction now.
@@ -408,4 +543,7 @@
     .entry-facts { gap: .85rem 1.2rem; }
     .entry-tabs { gap: 1.1rem 1.6rem; }
     .conformer-list { grid-template-columns: 1fr; }
+    .linkage-flow { flex-direction: column; }
+    .linkage-step { flex: none; padding: 0; }
+    .linkage-connector { align-self: flex-start; transform: rotate(90deg); margin: .3rem 0 .3rem .4rem; }
 }

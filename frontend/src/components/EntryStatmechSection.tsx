@@ -12,7 +12,7 @@ import {
     type StatmechSectionToken,
 } from "../api/statmechApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { partitionByConformerLink, statmechConformerGroupRef } from "../domain/conformerEvidence"
+import { conformerLabel, partitionByConformerLink, statmechConformerGroupRef } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
@@ -337,7 +337,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
                 conformer.conformer_group.conformer_group_ref,
                 (record) => statmechConformerGroupRef(conformersState.dataByRef.get(record.statmech.statmech_ref)),
             )}
-            selectedLabel={conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref}
+            selectedLabel={conformerLabel(conformer)}
             renderRecord={renderStatmechRecord}
             thisConformerNote="Computed against this conformer's own basin, per the archive's own conformer link."
             thisConformerEmptyText="No statmech record is linked to this conformer yet."

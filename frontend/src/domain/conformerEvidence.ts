@@ -1,11 +1,78 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
 
+// The archive's own auto-numbering convention for a basin that was never
+// given a real depositor-chosen label: `conformer_<N>`. A reader who
+// doesn't know that convention reads it as an opaque token, not as "the
+// Nth conformer group" -- so it displays as "Conformer Group N" instead.
+// Anchored at both ends so a label that merely CONTAINS the pattern (a
+// depositor-chosen label like "conformer_1_reoptimized") is left alone.
+const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
+
 /**
- * The label a reader picks a conformer by: its deposited basin label when
- * one exists, its stable ref otherwise. Never invents a name.
+ * The label a reader picks a conformer by.
+ *
+ * - No deposited label at all (`null`): falls back to the group's own
+ *   stable ref, verbatim. A ref is not a label and is never run through
+ *   the pattern below -- this function never invents a display name for
+ *   a group that was never given one.
+ * - A deposited label matching the archive's `conformer_<N>` auto-numbering
+ *   convention: displays as "Conformer Group N".
+ * - Any other deposited label (including one a depositor chose themselves,
+ *   even if it happens to contain the word "conformer"): renders verbatim.
+ *   This function never coerces a label into a shape it does not have.
  */
 export function conformerLabel(conformer: ConformerProjection): string {
-    return conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref
+    const label = conformer.conformer_group.label
+    if (label === null) return conformer.conformer_group.conformer_group_ref
+    const match = label.match(AUTO_NUMBERED_LABEL)
+    return match ? `Conformer Group ${match[1]}` : label
+}
+
+// Stages read in a fixed, chemistry-meaningful order (opt precedes freq
+// precedes sp, the order evidence normally accumulates) with any type this
+// module doesn't specifically know about appended afterward -- never
+// dropped, just unordered relative to the three named stages.
+const KNOWN_CALCULATION_TYPE_ORDER = ["opt", "freq", "sp"]
+
+export type CalculationTypeCount = { type: string; count: number }
+
+/**
+ * Raw calculation-row counts by stage (`type`), read off the conformer's
+ * own flat `calculations` list -- e.g. 7 opt + 4 freq + 3 sp. This is a
+ * DIFFERENT number from `evidence_summary.evidence_coverage`, which counts
+ * observations having a stage, not calculation rows of that stage. Never
+ * conflate the two: this function answers "how many rows", coverage
+ * answers "how many observations".
+ */
+export function calculationTypeCounts(conformer: ConformerProjection): CalculationTypeCount[] {
+    const counts = new Map<string, number>()
+    for (const calculation of conformer.calculations ?? []) {
+        counts.set(calculation.type, (counts.get(calculation.type) ?? 0) + 1)
+    }
+    const known = KNOWN_CALCULATION_TYPE_ORDER
+        .filter((type) => counts.has(type))
+        .map((type) => ({ type, count: counts.get(type) as number }))
+    const rest = [...counts.entries()]
+        .filter(([type]) => !KNOWN_CALCULATION_TYPE_ORDER.includes(type))
+        .map(([type, count]) => ({ type, count }))
+    return [...known, ...rest]
+}
+
+export type GeometryConvergenceEntry = { geometryRef: string; calculationCount: number }
+
+/**
+ * How many calculation outputs converge on each distinct stored geometry
+ * this conformer's evidence links to -- e.g. one geometry produced by 4
+ * calculation outputs, another by 3. Derived from the conformer's own
+ * `geometries` link list (never from a pre-aggregated count, since the
+ * per-geometry breakdown has no other source on the wire).
+ */
+export function geometryConvergence(conformer: ConformerProjection): GeometryConvergenceEntry[] {
+    const counts = new Map<string, number>()
+    for (const link of conformer.geometries ?? []) {
+        counts.set(link.geometry.geometry_ref, (counts.get(link.geometry.geometry_ref) ?? 0) + 1)
+    }
+    return [...counts.entries()].map(([geometryRef, calculationCount]) => ({ geometryRef, calculationCount }))
 }
 
 export type ConformerAttribution<T> = {

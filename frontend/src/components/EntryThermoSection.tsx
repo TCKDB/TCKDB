@@ -4,7 +4,7 @@ import "../entry-science.css"
 import { lotLabel } from "../api/scientificSchemas"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
-import { partitionByConformerLink, thermoConformerGroupRef } from "../domain/conformerEvidence"
+import { conformerLabel, partitionByConformerLink, thermoConformerGroupRef } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
@@ -143,7 +143,7 @@ function ThermoList({ response, conformer, conformers }: {
                         conformer.conformer_group.conformer_group_ref,
                         thermoConformerGroupRef,
                     )}
-                    selectedLabel={conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref}
+                    selectedLabel={conformerLabel(conformer)}
                     renderRecord={renderThermoRecord}
                     thisConformerNote="Traced to this conformer's own primary calculation."
                     thisConformerEmptyText="No thermo record traces to this conformer yet."

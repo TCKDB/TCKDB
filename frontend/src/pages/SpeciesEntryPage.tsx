@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
+import { ConformerEvidenceLinkage } from "../components/ConformerEvidenceLinkage"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
 import { ConformerSelector } from "../components/ConformerSelector"
 import { ConformerSinglePointTab } from "../components/ConformerSinglePointTab"
@@ -128,6 +129,7 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
             selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}
             onSelect={selectConformer}
         />
+        {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
 
         <EntryTabs entryRef={entryRef} activeSection={activeSection} conformerQuery={conformerQuery} />
         <TabPanel section={activeSection} entryRef={entryRef} conformer={selectedConformer} conformers={conformers} />
