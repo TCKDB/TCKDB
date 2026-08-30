@@ -95,8 +95,21 @@ import { buildXyzBlock } from "../domain/geometryXyz"
  *
  * The fix here re-enables 3Dmol's own mouse/touch handling in full
  * (`nomouse` is no longer passed at all — 3Dmol's own default is
- * `false`), so drag-to-rotate and two-finger touch gestures work
- * exactly as 3Dmol implements them. On top of that, this component adds
+ * `false`), so mouse drag and multi-finger touch gestures reach 3Dmol
+ * and work exactly as 3Dmol implements them — but "3Dmol implements
+ * them" is not the same claim as "every gesture rotates the model".
+ * Measured live via `getView()` before/after each gesture: two-finger
+ * touch is zoom-only (the rotation quaternion is unchanged, only camera
+ * distance moves) and three-finger touch translates the model; neither
+ * rotates it. One-finger touch is the gesture that *would* rotate, and
+ * it is exactly the gesture this component intercepts for page scroll
+ * (below) — so on a touchscreen, no gesture rotates the model at all.
+ * That is the right trade (a reader who cannot scroll past the viewer
+ * has lost more than one who cannot rotate it with a finger), but it
+ * means the Rotate buttons below are not merely a keyboard-accessible
+ * addition on touch — they are the *only* way to rotate there. On
+ * desktop, mouse drag is untouched by any of this and rotates normally.
+ * On top of that, this component adds
  * its own **capture-phase** `wheel`/`touchmove` listeners on the
  * *container* — an ancestor of the `<canvas>` 3Dmol appends into it —
  * that call `event.stopPropagation()` (never `preventDefault()`) for:
@@ -198,9 +211,23 @@ import { buildXyzBlock } from "../domain/geometryXyz"
  * `createViewer()` on the same container — which React's
  * `<StrictMode>` dev double-invoke of effects causes on every mount —
  * stacks a second absolutely-positioned canvas on top of the first.
- * `container.replaceChildren()` after `clear()` removes 3Dmol's canvas
- * (and, with it, the DOM-node-scoped listeners, including this
- * component's own capture-phase wheel/touchmove listeners) outright.
+ * `container.replaceChildren()` after `clear()` removes 3Dmol's own
+ * `<canvas>` — and, with it, the DOM-node-scoped listeners 3Dmol
+ * registered directly ON THAT CANVAS — outright.
+ *
+ * That does NOT include this component's own capture-phase wheel/
+ * touchstart/touchmove listeners from the "Mouse/touch" section above:
+ * those are registered on the *container* itself, a node
+ * `replaceChildren()` clears the CONTENTS of but does not itself
+ * remove. (An earlier draft of this comment claimed
+ * `replaceChildren()` removed those too — it does not; a docstring
+ * claiming a property the code doesn't have is worse than no comment,
+ * since a reader has no way to tell it's wrong without independently
+ * re-deriving the DOM semantics.) They are removed explicitly, by name,
+ * in this same effect's cleanup function below (`removeEventListener`
+ * calls) — that explicit removal, not `replaceChildren()`, is what
+ * stops React `<StrictMode>`'s double-invoke from stacking a second set
+ * of these listeners on the container alongside the first.
  */
 
 type ViewerStatus = "loading" | "ready" | "unavailable"
@@ -225,7 +252,22 @@ const STYLE_SPECS: Record<StyleMode, Record<string, unknown>> = {
     // der Waals radius when scale is omitted, which is exactly a
     // spacefill/CPK representation, not an arbitrary shrunken sphere.
     spacefill: { sphere: {} },
-    wireframe: { line: { linewidth: 2 } },
+    // NOT `{ line: { linewidth: 2 } }` — that was the first version of
+    // this spec, and it rendered as an essentially empty box. WebGL
+    // clamps `gl.lineWidth()` to 1.0 in Chromium/ANGLE regardless of the
+    // requested value (a longstanding, spec-permitted WebGL1 limitation,
+    // not a 3Dmol bug), so `linewidth: 2` was a silent no-op — 3Dmol drew
+    // 1px element-coloured lines (grey carbon, white hydrogen) on a white
+    // background. Measured on a real 704×704 render: no pixel darker
+    // than 200/255, and only 0.021% of pixels darker than 240/255 at
+    // all — effectively invisible, vs. ball & stick's minimum pixel
+    // value of 2 with 1.5% of the image below 200. A `stick` spec draws
+    // actual cylinder geometry (rasterised, not a 1px GL line), so it
+    // renders with real contrast regardless of the lineWidth clamp, at a
+    // thin enough radius to still read as "wireframe" rather than
+    // "ball & stick". This also keeps `STYLE_BOND_NOTE.wireframe` (below)
+    // truthful — it still draws an explicit bond primitive.
+    wireframe: { stick: { radius: 0.03 } },
 }
 
 const STYLE_LABELS: Record<StyleMode, string> = {
@@ -235,15 +277,24 @@ const STYLE_LABELS: Record<StyleMode, string> = {
 }
 
 /**
- * Whether the given style draws an explicit bond primitive (a stick or a
- * line) rather than touching/overlapping spheres with no bond geometry
- * of their own. Spacefill is the one style here where it is false — see
- * the module docstring's "Bonds 3Dmol draws" section.
+ * The bond-disclosure sentence shown under the picture, one full string
+ * per style — deliberately NOT a shared boolean (`drawsBonds ? A : B`)
+ * selecting between two sentences. A boolean-keyed lookup lets exactly
+ * one style's flip corrupt every OTHER style sharing that branch without
+ * any test noticing (this happened during review here: flipping
+ * `wireframe`'s bond-drawing boolean to `false` made the page render
+ * spacefill's "does not draw an explicit bond" sentence while the
+ * Wireframe button read `aria-pressed="true"` — a self-contradicting
+ * disclosure about inferred-vs-deposited data, the one thing this
+ * sentence exists to get right — and every existing test still passed,
+ * since only ballstick/spacefill were asserted). Each style owning its
+ * own literal sentence here makes that class of bug structurally
+ * impossible: there is no shared branch left to corrupt.
  */
-const STYLE_DRAWS_BONDS: Record<StyleMode, boolean> = {
-    ballstick: true,
-    spacefill: false,
-    wireframe: true,
+const STYLE_BOND_NOTE: Record<StyleMode, string> = {
+    ballstick: "Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record.",
+    wireframe: "Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record.",
+    spacefill: "This spacefill style does not draw an explicit bond between atoms; each sphere marks exactly one deposited atomic position.",
 }
 
 const LABEL_MODE_OPTIONS: { value: LabelMode; text: string }[] = [
@@ -288,6 +339,10 @@ export function GeometryViewer({
     const containerRef = useRef<HTMLDivElement | null>(null)
     const viewerRef = useRef<Viewer3DHandle | null>(null)
     const initialViewRef = useRef<number[] | null>(null)
+    // See the label effect below — tracks whether labels are currently
+    // drawn so its ready-transition run (default "none", nothing to
+    // clear) can skip a redundant render() call.
+    const labelsPresentRef = useRef(false)
     const [status, setStatus] = useState<ViewerStatus>("loading")
     const [style, setStyleMode] = useState<StyleMode>("ballstick")
     const [labelMode, setLabelMode] = useState<LabelMode>("none")
@@ -374,20 +429,27 @@ export function GeometryViewer({
                         })
                         if (!created) throw new Error("3Dmol did not return a viewer")
                         created.addModel(xyzForViewer, "xyz")
-                        created.setStyle({}, STYLE_SPECS.ballstick)
-                        // animationDuration defaults to 0 on both calls below
-                        // — no camera animation, so there is nothing for
-                        // prefers-reduced-motion to gate.
+                        // animationDuration defaults to 0 below — no
+                        // camera animation, so there is nothing for
+                        // prefers-reduced-motion to gate. No `setStyle`/
+                        // `render` call here: an unstyled model draws
+                        // nothing visible, so there is no meaningful
+                        // frame to render before the style-effect below
+                        // (which depends on `status`, so it fires as
+                        // soon as `viewerRef.current` is set and
+                        // `status` flips to "ready") applies the current
+                        // style and renders — once, not twice. See that
+                        // effect's own comment for why this split
+                        // doesn't duplicate a render call.
                         created.zoomTo()
-                        created.render()
                         viewerRef.current = created
                         initialViewRef.current = created.getView?.() ?? null
                         setStatus("ready")
                     } catch {
                         // Covers both a thrown `createViewer` (no WebGL
                         // context available — see the module docstring) and
-                        // any error from the subsequent addModel/setStyle/
-                        // render calls.
+                        // any error from the subsequent addModel/zoomTo
+                        // calls.
                         setStatus("unavailable")
                     }
                 })
@@ -427,29 +489,56 @@ export function GeometryViewer({
         }
     }, [xyzForViewer, viewerDomId])
 
-    // Re-applies the selected representation style to the existing viewer
-    // instance (no re-init, so the reader's current rotation/zoom is not
-    // reset by a style change). A no-op until the viewer is ready — the
-    // style/label controls are only rendered once `status === "ready"`
-    // (see below), so `style` cannot change before then and this effect's
-    // very first run (while `viewerRef.current` is still null) is always
-    // a no-op, never a redundant duplicate of the initial ballstick
-    // setStyle call inside `attemptInit` above.
+    // Applies the selected representation style to the viewer — this is
+    // now the ONLY place that ever calls `setStyle`, for both the very
+    // first frame and every later style click, which is what removes the
+    // latent coupling `attemptInit` used to have: that function no
+    // longer hardcodes `STYLE_SPECS.ballstick` (or any style) at all, so
+    // there is only one source of truth for "what style is currently
+    // applied" instead of two that happen to agree only because the
+    // style/label controls are gated on `status === "ready"` (see
+    // below). `status` is a deliberate dependency, not an oversight: it
+    // is what makes this effect actually fire the moment
+    // `viewerRef.current` becomes non-null (a ref by itself is not
+    // trackable as a dependency; `status` flipping to "ready" is this
+    // component's proxy signal that it did). This does NOT double up
+    // with a render `attemptInit` used to do itself — `attemptInit` no
+    // longer calls `setStyle`/`render` at all (an unstyled model draws
+    // nothing, so there was never a meaningful frame to render before
+    // this effect's own render call), so exactly one `setStyle`+`render`
+    // pair happens per style change, including the very first one.
     useEffect(() => {
         const viewer = viewerRef.current
         if (!viewer) return
         viewer.setStyle?.({}, STYLE_SPECS[style])
         viewer.render?.()
-    }, [style])
+    }, [style, status])
 
     // See the module docstring's "Labels follow the coordinate table"
     // section — positions/text come from this component's own `atoms`
     // prop, never from querying 3Dmol's model back out.
+    //
+    // `status` is a dependency for the same reason as the style effect
+    // above (fires once `viewerRef.current` becomes non-null, decoupling
+    // this from any hardcoded default in `attemptInit`). Unlike style,
+    // "nothing to draw yet" genuinely IS a no-op for labels — the
+    // default label mode is "none", so the common case at the
+    // ready-transition really does have nothing to clear and nothing to
+    // add. `labelsPresentRef` tracks whether labels currently exist so
+    // that exact no-op case can skip its `render()` call (keeping the
+    // ready-transition's total render count at exactly one — the style
+    // effect's — not two), while every run that actually changes
+    // anything (including switching back to "none" FROM a labelled
+    // state, which must still repaint to make the labels disappear)
+    // still renders.
     useEffect(() => {
         const viewer = viewerRef.current
         if (!viewer) return
+        const hadLabels = labelsPresentRef.current
+        const willHaveLabels = labelMode !== "none"
+        if (!hadLabels && !willHaveLabels) return
         viewer.removeAllLabels?.()
-        if (labelMode !== "none") {
+        if (willHaveLabels) {
             for (const atom of atoms) {
                 viewer.addLabel?.(labelTextFor(labelMode, atom), {
                     position: { x: atom.x, y: atom.y, z: atom.z },
@@ -464,7 +553,8 @@ export function GeometryViewer({
             }
         }
         viewer.render?.()
-    }, [labelMode, atoms])
+        labelsPresentRef.current = willHaveLabels
+    }, [labelMode, atoms, status])
 
     function rotateBy(angle: number, axis: "x" | "y") {
         const viewer = viewerRef.current
@@ -488,9 +578,7 @@ export function GeometryViewer({
         viewer.render?.()
     }
 
-    const bondsSentence = STYLE_DRAWS_BONDS[style]
-        ? "Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record."
-        : "This spacefill style does not draw an explicit bond between atoms; each sphere marks exactly one deposited atomic position."
+    const bondsSentence = STYLE_BOND_NOTE[style]
 
     return (
         <div className="geometry-viewer">

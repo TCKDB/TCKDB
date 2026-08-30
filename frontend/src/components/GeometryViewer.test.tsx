@@ -7,7 +7,7 @@ import { GeometryViewer } from "./GeometryViewer"
  * jsdom does not provide on its own:
  *
  *  1. A working WebGL context — jsdom has none at all (see
- *     `GeometryViewer.webgl-unavailable.test.tsx`, which tests the real,
+ *     `GeometryViewer.zero-size.test.tsx`, which tests the real,
  *     unmocked zero-size path instead — a genuinely different failure mode
  *     from the one below). "3dmol" is mocked here with a fake viewer that
  *     records what it was called with, so these tests can pin the exact
@@ -20,7 +20,7 @@ import { GeometryViewer } from "./GeometryViewer"
  *     each test so the component takes the "container is real" branch
  *     immediately, without needing a ResizeObserver in play.
  *
- * Kept in its own file from `GeometryViewer.webgl-unavailable.test.tsx`
+ * Kept in its own file from `GeometryViewer.zero-size.test.tsx`
  * for the same reason `GeometryDetailPage.errorBoundary.test.tsx` is
  * split out from `GeometryDetailPage.test.tsx`: `vi.mock` is hoisted to
  * the top of the file and would otherwise apply to every test in it,
@@ -184,7 +184,65 @@ describe("GeometryViewer", () => {
             canvas.dispatchEvent(event)
 
             expect(sawWheelOnCanvas).toBe(false)
-            expect(event.defaultPrevented).toBe(false)
+            // NOT also `expect(event.defaultPrevented).toBe(false)` here:
+            // this component's own listener is registered `{passive:
+            // true}` (asserted separately below), and a passive listener
+            // is structurally incapable of setting defaultPrevented —
+            // that assertion would read `false` whether or not
+            // stopPropagation actually ran, so it verifies nothing this
+            // specific test doesn't already verify via `sawWheelOnCanvas`.
+        })
+
+        it("this component's own wheel/touchstart/touchmove listeners are registered with passive:true — never preventDefault, structurally, regardless of any logic bug in the handler body", () => {
+            const addSpy = vi.spyOn(HTMLElement.prototype, "addEventListener")
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+
+            const ownCaptureCalls = addSpy.mock.calls.filter(
+                (call) =>
+                    ["wheel", "touchstart", "touchmove"].includes(call[0] as string) &&
+                    (call[2] as AddEventListenerOptions | undefined)?.capture === true,
+            )
+            expect(ownCaptureCalls.length).toBeGreaterThanOrEqual(3)
+            for (const call of ownCaptureCalls) {
+                expect((call[2] as AddEventListenerOptions).passive).toBe(true)
+            }
+            addSpy.mockRestore()
+        })
+
+        it("removes its own wheel/touchstart/touchmove listeners on unmount — clear()/replaceChildren() do NOT do this for it (those act on 3Dmol's own canvas, a descendant; this component's own listeners are on the container itself), so this component must remove them explicitly or React <StrictMode>'s double-invoke stacks duplicate listeners on every mount", async () => {
+            const { unmount } = render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            await waitFor(() => expect(document.querySelector(".viewer-canvas")).toHaveAttribute("data-viewer-status", "ready"))
+            const container = document.querySelector(".viewer-canvas") as HTMLElement
+            const removeSpy = vi.spyOn(container, "removeEventListener")
+
+            unmount()
+
+            const removedTypes = removeSpy.mock.calls
+                .filter((call) => (call[2] as boolean | AddEventListenerOptions | undefined) === true || (call[2] as AddEventListenerOptions | undefined)?.capture === true)
+                .map((call) => call[0])
+            expect(removedTypes).toEqual(expect.arrayContaining(["wheel", "touchstart", "touchmove"]))
+            removeSpy.mockRestore()
+        })
+
+        it("registers its own capture listeners on the viewer container, not document/window — a wheel dispatched on a sibling element outside .viewer-canvas is completely unaffected", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            // `.section-note` is a sibling of `.viewer-canvas` under the
+            // same `.geometry-viewer` root — never a descendant of it —
+            // so this event's propagation path never passes through the
+            // container this component's listeners are actually
+            // registered on. If those listeners were mistakenly
+            // registered on `document`/`window` instead (every element
+            // on the page is a descendant of those), this same dispatch
+            // would be intercepted and this listener would never fire.
+            await waitFor(() => expect(document.querySelector(".viewer-canvas")).toHaveAttribute("data-viewer-status", "ready"))
+            const sibling = document.querySelector(".section-note") as HTMLElement
+            expect(sibling).not.toBeNull()
+            let sawWheelOnSibling = false
+            sibling.addEventListener("wheel", () => { sawWheelOnSibling = true })
+
+            sibling.dispatchEvent(new Event("wheel", { bubbles: true, cancelable: true }))
+
+            expect(sawWheelOnSibling).toBe(true)
         })
 
         it("a one-finger touchmove dispatched on the nested canvas never reaches a listener registered on that canvas", async () => {
@@ -203,7 +261,8 @@ describe("GeometryViewer", () => {
             canvas.dispatchEvent(event)
 
             expect(sawTouchMoveOnCanvas).toBe(false)
-            expect(event.defaultPrevented).toBe(false)
+            // See the wheel test above for why a `defaultPrevented`
+            // assertion here would be vacuous under `passive: true`.
         })
 
         it("a two-finger touchmove is left alone — it does reach the nested canvas, so pinch/two-finger drag still work", async () => {
@@ -240,7 +299,8 @@ describe("GeometryViewer", () => {
             canvas.dispatchEvent(event)
 
             expect(sawTouchStartOnCanvas).toBe(false)
-            expect(event.defaultPrevented).toBe(false)
+            // See the wheel test above for why a `defaultPrevented`
+            // assertion here would be vacuous under `passive: true`.
         })
 
         it("a two-finger touchstart is left alone — 3Dmol needs both touch points at touchstart to compute its pinch baseline distance", async () => {
@@ -395,8 +455,18 @@ describe("GeometryViewer", () => {
             fireEvent.click(within(group).getByRole("button", { name: "Ball & stick" }))
             await waitFor(() => expect(calls.setStyle).toHaveLength(3))
 
-            expect(calls.setStyle[1][1]).toEqual({ line: { linewidth: 2 } })
+            expect(calls.setStyle[1][1]).toEqual({ stick: { radius: 0.03 } })
             expect(calls.setStyle[2][1]).toEqual({ stick: { radius: 0.14 }, sphere: { scale: 0.28 } })
+        })
+
+        it("the wireframe spec draws real stick geometry, not a bare GL `line` — WebGL clamps lineWidth to 1px in Chromium/ANGLE, which measured as effectively invisible (see the STYLE_SPECS comment)", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            fireEvent.click(within(group).getByRole("button", { name: "Wireframe" }))
+            await waitFor(() => expect(calls.setStyle).toHaveLength(2))
+            const spec = calls.setStyle[1][1] as Record<string, unknown>
+            expect(spec).not.toHaveProperty("line")
+            expect(spec).toEqual({ stick: { radius: 0.03 } })
         })
 
         it("spacefill swaps the bond-disclosure sentence for a style-accurate one — spacefill draws no explicit bond primitive", async () => {
@@ -408,6 +478,25 @@ describe("GeometryViewer", () => {
             )
             expect(screen.getByText(/An interactive 3D view/).textContent).not.toMatch(
                 /Bonds shown are inferred from interatomic distance/,
+            )
+        })
+
+        it("wireframe keeps the bonds-are-inferred sentence — it draws explicit stick geometry, unlike spacefill", async () => {
+            // Guards the exact bug review caught: STYLE_DRAWS_BONDS (a
+            // shared boolean map) let a mutation on wireframe's entry
+            // silently swap in spacefill's sentence while
+            // aria-pressed="true" still said "Wireframe" — a
+            // self-contradicting disclosure, and every other test here
+            // (which only asserted ballstick/spacefill) missed it.
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            fireEvent.click(within(group).getByRole("button", { name: "Wireframe" }))
+            expect(within(group).getByRole("button", { name: "Wireframe" })).toHaveAttribute("aria-pressed", "true")
+            expect(screen.getByText(/An interactive 3D view/).textContent).toMatch(
+                /Bonds shown are inferred from interatomic distance for legibility only; they are not part of the deposited record\./,
+            )
+            expect(screen.getByText(/An interactive 3D view/).textContent).not.toMatch(
+                /does not draw an explicit bond/,
             )
         })
     })
@@ -442,6 +531,13 @@ describe("GeometryViewer", () => {
                 { x: 0, y: 0, z: 0 },
                 { x: 0, y: 0, z: 1.09 },
             ])
+            // `inFront: true` — without it, a label sinks inside the
+            // atom's own sphere geometry and becomes invisible in
+            // spacefill (the sphere occludes it); this is what keeps a
+            // label legible across every style, not only ball & stick.
+            for (const call of calls.addLabel) {
+                expect((call[1] as { inFront: unknown }).inFront).toBe(true)
+            }
         })
 
         it("'Symbols' labels each atom with its element only", async () => {
