@@ -170,7 +170,12 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 </div>
             </section>
 
-            <ViewerSection atoms={atoms} atomsAvailability={atomsAvailability} formula={formula} />
+            <ViewerSection
+                atoms={atoms}
+                atomsAvailability={atomsAvailability}
+                formula={formula}
+                xyzText={geometry.xyz_text ?? null}
+            />
 
             <CoordinateTableSection
                 atoms={atoms}
@@ -221,33 +226,34 @@ function SectionEmptyMessage({ availability, emptyText }: { availability: Sectio
     return <p className="empty-projection">{emptyText}</p>
 }
 
-function ViewerSection({ atoms, atomsAvailability, formula }: {
+function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
     atoms: GeometryRecord["atoms"]
     atomsAvailability: SectionAvailability
     formula: string
+    xyzText: string | null
 }) {
     const rows = atoms ?? []
     return (
         <section className="ledger-section" aria-labelledby="viewer-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Structure</p>
-                <h2 id="viewer-heading">Structure projection</h2>
+                <h2 id="viewer-heading">Structure view</h2>
             </div>
             {atomsAvailability === "populated" ? (
                 <SectionErrorBoundary
                     fallback={(
                         <p className="empty-projection" role="alert">
-                            This structure projection could not be drawn. The coordinate table and raw XYZ
+                            This structure view could not be drawn. The coordinate table and raw XYZ
                             block below are unaffected.
                         </p>
                     )}
                 >
-                    <GeometryViewer atoms={rows} formula={formula} />
+                    <GeometryViewer atoms={rows} formula={formula} xyzText={xyzText} />
                 </SectionErrorBoundary>
             ) : (
                 <SectionEmptyMessage
                     availability={atomsAvailability}
-                    emptyText="No atom rows are recorded for this geometry, so no projection can be drawn."
+                    emptyText="No atom rows are recorded for this geometry, so no view can be drawn."
                 />
             )}
         </section>
@@ -273,8 +279,8 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                 <h2 id="coordinates-heading">Coordinate table</h2>
                 <p>
                     Every atom in this geometry, in the order the archive returned them. This table is the
-                    accessible, selectable fallback for the projection above — it renders whether or not that
-                    projection does.
+                    accessible, selectable fallback for the view above — it renders whether or not that
+                    view does.
                 </p>
             </div>
             {countMismatch && (
