@@ -141,7 +141,15 @@ function ThermoList({ response, conformer, conformers }: {
                         records,
                         conformers,
                         conformer.conformer_group.conformer_group_ref,
-                        thermoConformerGroupRef,
+                        // Thermo's link is genuinely single-valued (one
+                        // primary calculation, one basin) -- wrapped in a
+                        // one-element array for `partitionByConformerLink`'s
+                        // set-membership contract, shared with statmech's
+                        // genuinely multi-valued link.
+                        (record) => {
+                            const ref = thermoConformerGroupRef(record)
+                            return ref ? [ref] : []
+                        },
                     )}
                     selectedLabel={conformerLabel(conformer)}
                     renderRecord={renderThermoRecord}

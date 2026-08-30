@@ -2,10 +2,14 @@ import { describe, expect, it } from "vitest"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import {
     calculationTypeCounts,
+    conformerDisplayNumber,
     conformerLabel,
+    describeConformerEvidence,
     geometryConvergence,
+    optimizationStaging,
     partitionByConformerLink,
-    statmechConformerGroupRef,
+    sortConformersForDisplay,
+    statmechConformerGroupRefs,
     thermoConformerGroupRef,
 } from "./conformerEvidence"
 
@@ -151,61 +155,277 @@ describe("thermoConformerGroupRef", () => {
     })
 })
 
-describe("statmechConformerGroupRef", () => {
-    it("reads the real conformer_group_ref off the include=conformers field", () => {
-        expect(statmechConformerGroupRef([{ conformer_group_ref: "cg_two" }])).toBe("cg_two")
+describe("statmechConformerGroupRefs", () => {
+    it("reads every conformer_group_ref off the include=conformers field, in the wire's own order", () => {
+        expect(statmechConformerGroupRefs([{ conformer_group_ref: "cg_two" }])).toEqual(["cg_two"])
+        // The real, on-the-wire case that exposed the bug: an ensemble-level
+        // statmech treatment naming THREE groups. An earlier version of this
+        // function read only `[0]`, so this multi-element case is the one
+        // that must never regress back to a single ref.
+        expect(statmechConformerGroupRefs([
+            { conformer_group_ref: "cg_one" },
+            { conformer_group_ref: "cg_two" },
+            { conformer_group_ref: "cg_three" },
+        ])).toEqual(["cg_one", "cg_two", "cg_three"])
     })
 
-    it("returns null for an unrequested/empty conformer context, not an error", () => {
-        expect(statmechConformerGroupRef(null)).toBeNull()
-        expect(statmechConformerGroupRef(undefined)).toBeNull()
-        expect(statmechConformerGroupRef([])).toBeNull()
+    it("returns an empty array for an unrequested/empty conformer context, not an error", () => {
+        expect(statmechConformerGroupRefs(null)).toEqual([])
+        expect(statmechConformerGroupRefs(undefined)).toEqual([])
+        expect(statmechConformerGroupRefs([])).toEqual([])
     })
 })
 
 describe("partitionByConformerLink", () => {
-    type Row = { id: string; ref: string | null }
-    const linkedRef = (row: Row) => row.ref
+    type Row = { id: string; refs: string[] }
+    const linkedRefs = (row: Row) => row.refs
 
     it("splits into thisConformer / otherConformers (one bucket per DISTINCT other conformer, named) / noLink", () => {
         const rows: Row[] = [
-            { id: "a", ref: "cg_one" }, // this conformer (selected)
-            { id: "b", ref: "cg_two" }, // a different, named conformer
-            { id: "c", ref: "cg_three" }, // yet another different, named conformer
-            { id: "d", ref: "cg_two" }, // same "other" conformer as b -- must land in the SAME bucket, not a new one
-            { id: "e", ref: null }, // no link at all
+            { id: "a", refs: ["cg_one"] }, // this conformer (selected)
+            { id: "b", refs: ["cg_two"] }, // a different, named conformer
+            { id: "c", refs: ["cg_three"] }, // yet another different, named conformer
+            { id: "d", refs: ["cg_two"] }, // same "other" conformer as b -- must land in the SAME bucket, not a new one
+            { id: "e", refs: [] }, // no link at all
         ]
-        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
-        expect(result.thisConformer).toEqual([{ id: "a", ref: "cg_one" }])
-        expect(result.noLink).toEqual([{ id: "e", ref: null }])
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRefs)
+        expect(result.thisConformer).toEqual([{ id: "a", refs: ["cg_one"] }])
+        expect(result.noLink).toEqual([{ id: "e", refs: [] }])
         // Two distinct other conformers, each its own labeled bucket --
         // never merged into one generic "other" group, and "b"/"d" (both
         // cg_two) land together in the SAME bucket.
         expect(result.otherConformers).toHaveLength(2)
         const byRef = new Map(result.otherConformers.map((bucket) => [bucket.ref, bucket]))
-        expect(byRef.get("cg_two")).toEqual({ ref: "cg_two", label: "Conformer Group 2", records: [{ id: "b", ref: "cg_two" }, { id: "d", ref: "cg_two" }] })
-        expect(byRef.get("cg_three")).toEqual({ ref: "cg_three", label: "Conformer Group 3", records: [{ id: "c", ref: "cg_three" }] })
+        expect(byRef.get("cg_two")).toEqual({ ref: "cg_two", label: "Conformer Group 2", records: [{ id: "b", refs: ["cg_two"] }, { id: "d", refs: ["cg_two"] }] })
+        expect(byRef.get("cg_three")).toEqual({ ref: "cg_three", label: "Conformer Group 3", records: [{ id: "c", refs: ["cg_three"] }] })
     })
 
     it("never claims 'no link' about a record the wire attributes to a different conformer -- the exact regression this replaced", () => {
-        const rows: Row[] = [{ id: "a", ref: "cg_two" }]
-        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
+        const rows: Row[] = [{ id: "a", refs: ["cg_two"] }]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRefs)
         expect(result.noLink).toEqual([])
         expect(result.thisConformer).toEqual([])
-        expect(result.otherConformers).toEqual([{ ref: "cg_two", label: "Conformer Group 2", records: [{ id: "a", ref: "cg_two" }] }])
+        expect(result.otherConformers).toEqual([{ ref: "cg_two", label: "Conformer Group 2", records: [{ id: "a", refs: ["cg_two"] }] }])
     })
 
     it("falls back to the raw ref as the label when the linked group isn't in the loaded conformer list", () => {
-        const rows: Row[] = [{ id: "a", ref: "cg_unknown" }]
-        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
-        expect(result.otherConformers).toEqual([{ ref: "cg_unknown", label: "cg_unknown", records: [{ id: "a", ref: "cg_unknown" }] }])
+        const rows: Row[] = [{ id: "a", refs: ["cg_unknown"] }]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRefs)
+        expect(result.otherConformers).toEqual([{ ref: "cg_unknown", label: "cg_unknown", records: [{ id: "a", refs: ["cg_unknown"] }] }])
     })
 
     it("puts everything in noLink when nothing links anywhere, and nothing in the other two groups", () => {
-        const rows: Row[] = [{ id: "a", ref: null }, { id: "b", ref: null }]
-        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
+        const rows: Row[] = [{ id: "a", refs: [] }, { id: "b", refs: [] }]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRefs)
         expect(result.thisConformer).toEqual([])
         expect(result.otherConformers).toEqual([])
         expect(result.noLink).toEqual(rows)
+    })
+
+    // The bug this whole section exists to close: "Thermochemistry is
+    // bust... it always shows From Conformer Group 1 even if I click
+    // another group." Measured live on spe_mbdqifmaclaakukr7agxbuq3wa: one
+    // statmech record names all three of that entry's conformer groups
+    // (`['conformer_1', 'conformer_2', 'conformer_3']`). A record naming
+    // the SELECTED group anywhere in its list must file under
+    // `thisConformer`, regardless of which OTHER groups it also names and
+    // regardless of which position the selected ref sits at in the list --
+    // a first-match implementation (reading only `refs[0]`) passes when the
+    // selected group happens to be first and fails for second/third, which
+    // is exactly the production bug.
+    it("files a record naming multiple groups under the SELECTED one, whichever position it's named in -- never a first-match", () => {
+        const multiGroupRecord: Row = { id: "ensemble", refs: ["cg_one", "cg_two", "cg_three"] }
+
+        const selectedFirst = partitionByConformerLink([multiGroupRecord], allConformers, "cg_one", linkedRefs)
+        expect(selectedFirst.thisConformer).toEqual([multiGroupRecord])
+        expect(selectedFirst.otherConformers).toEqual([])
+
+        const selectedSecond = partitionByConformerLink([multiGroupRecord], allConformers, "cg_two", linkedRefs)
+        expect(selectedSecond.thisConformer).toEqual([multiGroupRecord])
+        expect(selectedSecond.otherConformers).toEqual([])
+
+        const selectedThird = partitionByConformerLink([multiGroupRecord], allConformers, "cg_three", linkedRefs)
+        expect(selectedThird.thisConformer).toEqual([multiGroupRecord])
+        expect(selectedThird.otherConformers).toEqual([])
+    })
+
+    it("files a record naming several groups, NONE of them selected, under every one of those groups' own buckets", () => {
+        const spanning: Row = { id: "ensemble", refs: ["cg_two", "cg_three"] }
+        const result = partitionByConformerLink([spanning], allConformers, "cg_one", linkedRefs)
+        expect(result.thisConformer).toEqual([])
+        expect(result.otherConformers).toHaveLength(2)
+        const byRef = new Map(result.otherConformers.map((bucket) => [bucket.ref, bucket]))
+        expect(byRef.get("cg_two")?.records).toEqual([spanning])
+        expect(byRef.get("cg_three")?.records).toEqual([spanning])
+    })
+})
+
+describe("conformerDisplayNumber", () => {
+    it("parses the numeral out of an auto-numbered label as a NUMBER", () => {
+        expect(conformerDisplayNumber(group({ conformer_group: { conformer_group_ref: "cg_a", label: "conformer_7" } }))).toBe(7)
+        expect(conformerDisplayNumber(group({ conformer_group: { conformer_group_ref: "cg_b", label: "conformer_10" } }))).toBe(10)
+    })
+
+    it("returns null for anything the auto-numbering pattern doesn't match", () => {
+        expect(conformerDisplayNumber(group({ conformer_group: { conformer_group_ref: "cg_c", label: null } }))).toBeNull()
+        expect(conformerDisplayNumber(group({ conformer_group: { conformer_group_ref: "cg_d", label: "anti-periplanar" } }))).toBeNull()
+        expect(conformerDisplayNumber(group({ conformer_group: { conformer_group_ref: "cg_e", label: "conformer_1_reoptimized" } }))).toBeNull()
+    })
+})
+
+describe("sortConformersForDisplay", () => {
+    it("sorts numbered conformers ascending by the PARSED numeral, not string order -- conformer_10 after conformer_9, never between 1 and 2", () => {
+        const c1 = group({ conformer_group: { conformer_group_ref: "cg_1", label: "conformer_1" } })
+        const c2 = group({ conformer_group: { conformer_group_ref: "cg_2", label: "conformer_2" } })
+        const c9 = group({ conformer_group: { conformer_group_ref: "cg_9", label: "conformer_9" } })
+        const c10 = group({ conformer_group: { conformer_group_ref: "cg_10", label: "conformer_10" } })
+        // A lexicographic sort of the LABEL passes a 1/2/3 fixture and fails
+        // only once a two-digit numeral is in the mix ("10" < "2" as
+        // strings) -- this is the fixture that actually exercises that.
+        const sorted = sortConformersForDisplay([c10, c2, c9, c1])
+        expect(sorted.map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_2", "cg_9", "cg_10"])
+    })
+
+    it("sorts non-numbered conformers after every numbered one, alphabetically by display label", () => {
+        const c1 = group({ conformer_group: { conformer_group_ref: "cg_1", label: "conformer_1" } })
+        const named = group({ conformer_group: { conformer_group_ref: "cg_named", label: "anti-periplanar" } })
+        const unlabeled = group({ conformer_group: { conformer_group_ref: "cg_unlabeled", label: null } })
+        const other = group({ conformer_group: { conformer_group_ref: "cg_other", label: "gauche" } })
+        const sorted = sortConformersForDisplay([unlabeled, other, c1, named])
+        // Numbered first (cg_1), then non-numbered alphabetically by display
+        // label: "anti-periplanar" < "cg_unlabeled" (its own ref, since it
+        // has no label) < "gauche".
+        expect(sorted.map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_named", "cg_unlabeled", "cg_other"])
+    })
+
+    it("never mutates the input array, and produces a total order stable across repeated calls", () => {
+        const c2 = group({ conformer_group: { conformer_group_ref: "cg_2", label: "conformer_2" } })
+        const c1 = group({ conformer_group: { conformer_group_ref: "cg_1", label: "conformer_1" } })
+        const input = [c2, c1]
+        const sorted = sortConformersForDisplay(input)
+        expect(input).toEqual([c2, c1]) // untouched
+        expect(sorted).not.toBe(input)
+        expect(sorted.map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_2"])
+        // Same input, called again -- same order, never a coin-flip.
+        expect(sortConformersForDisplay(input).map((c) => c.conformer_group.conformer_group_ref)).toEqual(["cg_1", "cg_2"])
+    })
+})
+
+// A per-observation fixture builder: `types` is that ONE observation's own
+// raw calculation-type list, exactly as `include=calculations` on
+// `conformers/search` would return it nested under `observations[]`.
+function observationWith(ref: string, types: string[]): NonNullable<ConformerProjection["observations"]>[number] {
+    return {
+        conformer_observation: { conformer_observation_ref: ref },
+        calculations: types.map((type, index) => ({ calculation_ref: `${ref}_${index}`, type })),
+    } as NonNullable<ConformerProjection["observations"]>[number]
+}
+
+describe("optimizationStaging", () => {
+    it("is 'unknown' when the calculation breakdown hasn't loaded at all", () => {
+        const conformer = group({ calculations: null } as Partial<ConformerProjection>)
+        expect(optimizationStaging(conformer)).toEqual({ kind: "unknown" })
+    })
+
+    it("falls back to 'aggregate' when the chain count exceeds observations-with-opt -- an independent (non-collapsing) chain could be hiding behind one observation's raw row count", () => {
+        // 2 observations, both covered by opt, but 3 CHAINS -- one
+        // observation is holding two independent chains, which raw counts
+        // alone cannot distinguish from one two-stage chain.
+        const conformer = group({
+            observations_summary: { total: 2 },
+            evidence_summary: {
+                calculation_count: 4, optimization_chain_count: 3, geometry_count: 1,
+                evidence_coverage: { opt: 2, freq: 0, sp: 0 }, levels_of_theory: {},
+            },
+            observations: [observationWith("co_a", ["opt", "opt"]), observationWith("co_b", ["opt", "opt"])],
+            calculations: [
+                { calculation_ref: "c1", type: "opt" }, { calculation_ref: "c2", type: "opt" },
+                { calculation_ref: "c3", type: "opt" }, { calculation_ref: "c4", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        const staging = optimizationStaging(conformer)
+        expect(staging).toMatchObject({ kind: "aggregate", rawOptCount: 4, chainCount: 3, stagedRowCount: 1 })
+    })
+
+    it("falls back to 'aggregate' when not every observation's own calculation list is loaded, even if the chain count would otherwise match", () => {
+        const conformer = group({
+            observations_summary: { total: 2 },
+            evidence_summary: {
+                calculation_count: 3, optimization_chain_count: 2, geometry_count: 1,
+                evidence_coverage: { opt: 2, freq: 0, sp: 0 }, levels_of_theory: {},
+            },
+            observations: [
+                observationWith("co_a", ["opt", "opt"]),
+                { conformer_observation: { conformer_observation_ref: "co_b" }, calculations: null } as NonNullable<ConformerProjection["observations"]>[number],
+            ],
+            calculations: [
+                { calculation_ref: "c1", type: "opt" }, { calculation_ref: "c2", type: "opt" }, { calculation_ref: "c3", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        expect(optimizationStaging(conformer).kind).toBe("aggregate")
+    })
+
+    it("attributes an exact per-observation stage count when the safety condition holds (chain count == observations with opt)", () => {
+        const conformer = group({
+            observations_summary: { total: 2 },
+            evidence_summary: {
+                calculation_count: 3, optimization_chain_count: 2, geometry_count: 1,
+                evidence_coverage: { opt: 2, freq: 0, sp: 0 }, levels_of_theory: {},
+            },
+            observations: [observationWith("co_a", ["opt", "opt"]), observationWith("co_b", ["opt"])],
+            calculations: [
+                { calculation_ref: "c1", type: "opt" }, { calculation_ref: "c2", type: "opt" }, { calculation_ref: "c3", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        const staging = optimizationStaging(conformer)
+        expect(staging.kind).toBe("per-observation")
+        if (staging.kind === "per-observation") {
+            expect(staging.perObservation).toEqual(new Map([["co_a", 2], ["co_b", 1]]))
+        }
+    })
+})
+
+describe("describeConformerEvidence", () => {
+    it("says plainly when a conformer genuinely has no observations", () => {
+        expect(describeConformerEvidence(group({ observations_summary: { total: 0 } })))
+            .toBe("No observations are deposited for this conformer yet.")
+    })
+
+    it("never reads the sp coverage count where the freq coverage belongs, or vice versa", () => {
+        const conformer = group({
+            observations_summary: { total: 4 },
+            evidence_summary: {
+                calculation_count: 4, optimization_chain_count: 4, geometry_count: 1,
+                evidence_coverage: { opt: 4, freq: 4, sp: 1 }, levels_of_theory: {},
+            },
+            calculations: [
+                { calculation_ref: "c1", type: "opt" }, { calculation_ref: "c2", type: "opt" },
+                { calculation_ref: "c3", type: "opt" }, { calculation_ref: "c4", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        const story = describeConformerEvidence(conformer)
+        expect(story).toContain("Every sighting got a frequency calculation.")
+        expect(story).toContain("One of the four sightings got a single-point energy.")
+        expect(story).not.toContain("Every sighting got a single-point energy.")
+    })
+
+    it("never reads the chain count where the row count belongs, or vice versa, in the aggregate sentence", () => {
+        const conformer = group({
+            observations_summary: { total: 4 },
+            evidence_summary: {
+                calculation_count: 7, optimization_chain_count: 4, geometry_count: 1,
+                evidence_coverage: { opt: 4, freq: 0, sp: 0 }, levels_of_theory: {},
+            },
+            calculations: [
+                { calculation_ref: "c1", type: "opt" }, { calculation_ref: "c2", type: "opt" }, { calculation_ref: "c3", type: "opt" },
+                { calculation_ref: "c4", type: "opt" }, { calculation_ref: "c5", type: "opt" }, { calculation_ref: "c6", type: "opt" },
+                { calculation_ref: "c7", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        // 7 raw opt rows, 4 chains, 3 staged -- three mutually distinct
+        // numbers, so a swap of any pair against another is observable.
+        const story = describeConformerEvidence(conformer)
+        expect(story).toContain("Seven optimization calculations are on file across four independent optimization chains")
+        expect(story).toContain("three of those calculations are a coarse pass later refined")
     })
 })

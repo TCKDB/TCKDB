@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
 
@@ -444,8 +444,15 @@ describe("species-entry page: conformer picker", () => {
         const panelHeading = () => screen.getByRole("heading", { name: /^Evidence for / })
         const stepFor = (kind: "observations" | "calculations" | "geometries") =>
             document.querySelector(`[data-linkage-step="${kind}"]`) as HTMLElement
+        // The step figures live inside a collapsed-by-default `<details>`
+        // (the "mechanics", one click away from the prose story) -- open it
+        // once; it stays open across the conformer switch below since
+        // re-selecting a conformer re-renders the panel's CONTENT, not the
+        // `<details>` element's own open/closed state.
+        const openMechanics = () => user.click(screen.getByText(/^How this evidence connects/))
 
         expect(panelHeading()).toHaveTextContent("Evidence for Conformer Group 1")
+        await openMechanics()
         expect(within(stepFor("observations")).getByText("2")).toBeVisible()
         expect(within(stepFor("calculations")).getByText("7")).toBeVisible()
         expect(within(stepFor("geometries")).getByText("2")).toBeVisible()
@@ -454,6 +461,8 @@ describe("species-entry page: conformer picker", () => {
             .getByRole("button", { name: /Conformer Group 2/ }))
 
         expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
+        const details = screen.getByText(/^How this evidence connects/).closest("details") as HTMLDetailsElement
+        if (!details.open) await openMechanics()
         expect(within(stepFor("observations")).getByText("1")).toBeVisible()
         expect(within(stepFor("calculations")).getByText("3")).toBeVisible()
         expect(within(stepFor("geometries")).getByText("1")).toBeVisible()
@@ -612,8 +621,16 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         render(<App />)
         expect(await screen.findByText("thm_one")).toBeVisible()
         expect(screen.getByText("thm_two")).toBeVisible()
-        expect(screen.getByText("thm_three")).toBeVisible()
+        // thm_three is linked to a DIFFERENT conformer than the one
+        // selected -- present (never deleted) but demoted into the
+        // collapsed "other conformers" disclosure, so it's in the document
+        // without being visible until opened.
+        expect(screen.getByText("thm_three")).toBeInTheDocument()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails.open).toBe(false)
+        fireEvent.click(within(otherDetails).getByText(/records? from other conformers/))
 
         const groupHeadings = screen.getAllByRole("heading", { level: 3 })
             .filter((node) => node.className === "conformer-evidence-group-heading")
@@ -653,6 +670,10 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         ))
         expect(sourceCalcsRow).not.toBeVisible()
         // thm_three: every check true -- reads as fully satisfied, no chips.
+        // It's linked to a different conformer than the one selected, so it
+        // sits inside the collapsed "other conformers" disclosure -- open
+        // it before checking visibility.
+        fireEvent.click(screen.getByText(/records? from other conformers/))
         expect(screen.getByText("Every evidence-completeness check is satisfied.")).toBeVisible()
         // The full checklist stays reachable behind its own disclosure.
         expect(screen.getAllByText(/^Full checklist \(/).length).toBeGreaterThan(0)
