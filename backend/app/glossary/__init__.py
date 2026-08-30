@@ -1,4 +1,4 @@
-"""The vocabulary a reader of the public API or the landing page meets.
+"""The vocabulary a reader of the public API meets.
 
 Why this exists
 ---------------
@@ -27,14 +27,14 @@ The inclusion rule
 **A token belongs here when both halves hold.**
 
 1. **A reader can meet it.** The literal string can appear in a public
-   API response body or on the landing page rendered from one. This
-   half is mechanical: :func:`app.glossary.reachability.wire_enums`
-   computes the enums reachable from ``app/schemas/reads/**`` and from
-   the trust fragment, and
-   ``backend/tests/scripts/test_api_vocabulary.py`` refuses a declared
-   vocabulary that is not in that set. An enum only an administrator, a
-   migration or an internal service ever sees is not vocabulary a reader
-   needs; it is implementation detail with a public-looking name.
+   API response body. This half is mechanical:
+   :func:`app.glossary.reachability.wire_enums` computes the enums
+   reachable from ``app/schemas/reads/**`` and from the trust fragment,
+   and ``backend/tests/scripts/test_api_vocabulary.py`` refuses a
+   declared vocabulary that is not in that set. An enum only an
+   administrator, a migration or an internal service ever sees is not
+   vocabulary a reader needs; it is implementation detail with a
+   public-looking name.
 
 2. **Chemistry does not decode it.** The token names something about
    *TCKDB's own process* — how a record was reviewed, how much evidence

@@ -1,9 +1,10 @@
 """Frequency results on ``/scientific/species-calculations/search``.
 
 Before this surface projected them, a ``freq`` record carried exactly one
-result key -- ``energy: null`` -- and the public landing page rendered a
-card titled "frequencies" whose only line read *Electronic energy — not
-recorded*. The numbers were stored the whole time: measured on the
+result key -- ``energy: null`` -- and the (since-deleted) public landing
+page rendered a card titled "frequencies" whose only line read
+*Electronic energy — not recorded*. The numbers were stored the whole
+time: measured on the
 deployed database, species entry ``spe_bcbdjwkip75yoziblpntwzblzu``
 (``[CH3]``) has four frequency calculations, each with ``n_imag = 0``,
 ``zpe_hartree ~ 0.029723`` and six ``calc_freq_mode`` rows -- ``3N-6``

@@ -43,6 +43,24 @@ def test_docs_disabled_hides_routes(_client_factory, monkeypatch):
         assert c.get("/redoc").status_code == 404
 
 
+def test_reference_only_exposes_redoc_but_not_swagger(_client_factory, monkeypatch):
+    """The hosted middle case: ``EXPOSE_API_DOCS=false`` with
+    ``EXPOSE_API_REFERENCE=true`` -- the app factory's ``_docs_kwargs``
+    resolves ``redoc_url`` from ``REDOC_PATH`` here, and this was the one
+    branch nothing exercised: both other tests in this module pin
+    ``expose_api_reference`` to its default (unset here, so it never
+    hits this line) rather than True. A dropped or renamed
+    ``REDOC_PATH`` therefore raised nothing in the suite until this
+    test was added.
+    """
+    monkeypatch.setattr(settings, "expose_api_docs", False)
+    monkeypatch.setattr(settings, "expose_api_reference", True)
+    with _client_factory() as c:
+        assert c.get("/redoc").status_code == 200
+        assert c.get("/openapi.json").status_code == 200
+        assert c.get("/docs").status_code == 404
+
+
 def test_scientific_routes_work_when_docs_disabled(_client_factory, monkeypatch):
     """Disabling docs must not affect the scientific read API."""
     monkeypatch.setattr(settings, "expose_api_docs", False)

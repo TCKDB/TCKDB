@@ -26,11 +26,11 @@ TCKDB.
 A token is here when **both** of these hold:
 
 1. **You can meet it.** The literal string can appear in a public API response
-   body, or on the landing page rendered from one. This half is checked
-   mechanically: `app/glossary/reachability.py` computes the vocabulary the
-   read schemas and the trust fragment can serialise, and the test suite
-   refuses an entry outside that set. A word only an administrator or an
-   internal service sees is not vocabulary you need.
+   body. This half is checked mechanically: `app/glossary/reachability.py`
+   computes the vocabulary the read schemas and the trust fragment can
+   serialise, and the test suite refuses an entry outside that set. A word
+   only an administrator or an internal service sees is not vocabulary you
+   need.
 2. **Chemistry does not decode it.** The token says something about *TCKDB's
    own process* — how a record was reviewed, how much evidence stands behind
    it, how your query matched, how a record is named, or why a request was
@@ -448,7 +448,7 @@ Which way round the stored equation had to be read for your query to match it. T
 | Token | What it means |
 | --- | --- |
 | `forward` | Your query matched the reaction as stored: what you asked for as reactants are that reaction's reactants. |
-| `reverse` | Your query matched the reaction read backwards: **what you asked for as reactants are that reaction's products.** The landing page renders this as "matched in reverse". |
+| `reverse` | Your query matched the reaction read backwards: **what you asked for as reactants are that reaction's products.** |
 | `either` | Match the reaction in whichever orientation works. This is the default on a request; it is not an answer a result row gives — a matched row always reports `forward` or `reverse`. |
 
 > Search `reactants=NN` and one of the results is `[NH2] + [NH2] <=> NN` with `matched_direction: "reverse"`. Nothing is wrong: NN is stored as a **product** of that reaction, and reading the equation backwards puts it on the reactant side, which is what your query asked about. What `matched_direction` does **not** tell you is which way round the rate coefficients on that record run: a kinetics record carries its own `direction` (below), stated relative to the stored orientation. So read both — `matched_direction` says how TCKDB found the reaction for you, `direction` says what the numbers on it describe.

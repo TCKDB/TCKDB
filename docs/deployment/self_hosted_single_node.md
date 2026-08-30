@@ -871,7 +871,9 @@ curl -s -o /dev/null -w "%{http_code}\n" \
 # expect 200 with EXPOSE_API_REFERENCE=true, which is intended
 curl -s -o /dev/null -w "%{http_code}\n" \
     https://api.tckdb.example.org/
-# expect 200 — the landing page, served regardless of either setting
+# expect 404 — the API serves no human-facing root; if you want one,
+# deploy the frontend container (see frontend-pi.md) and point the
+# tunnel at it instead, proxying /api/ through
 ```
 
 If `/docs` returns 200, `EXPOSE_API_DOCS=true` slipped through — fix

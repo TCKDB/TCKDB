@@ -7,8 +7,10 @@ deposited evidence behind a result:
 
 `Search → Species → Electronic-state entry → Conformer basin → Observation → Calculation / Geometry / Result`
 
-The landing page remains public discovery and orientation. It should link into
-this hierarchy rather than become a complete provenance browser.
+The landing page (the frontend SPA's `ArchiveHomePage`, not the backend's
+former root-`/` HTML route, deleted along with `app/api/landing.py`) remains
+public discovery and orientation. It should link into this hierarchy rather
+than become a complete provenance browser.
 
 ## Information architecture
 
@@ -83,4 +85,5 @@ deposits is grouped by state without losing any stable entry record.
 ## Non-goals
 
 No editing/submission/authentication flows, PubChem name resolution, guessed
-record equivalence, dashboard aggregates, or wholesale landing-page rewrite.
+record equivalence, dashboard aggregates, or wholesale rewrite of the
+frontend SPA's landing page (`ArchiveHomePage`).
