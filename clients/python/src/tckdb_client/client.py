@@ -69,6 +69,7 @@ from tckdb_client.scientific_types import (
     ReactionKineticsResponse,
     ReactionRecord,
     ReactionSearchResponse,
+    SpeciesBrowseResponse,
     SpeciesCalculationRecord,
     SpeciesCalculationsSearchResponse,
     SpeciesRecord,
@@ -1160,6 +1161,90 @@ class TCKDBClient:
         return self.request_json(
             "GET",
             "/scientific/species/search",
+            params=params,
+            authenticated=False,
+        ).data
+
+    def browse_species(
+        self,
+        *,
+        formula: str | None = None,
+        charge: int | None = None,
+        multiplicity: int | None = None,
+        electronic_state_kind: str | None = None,
+        species_entry_kind: str | None = None,
+        elements: str | None = None,
+        elem_mode: str | None = None,
+        max_heavy_atoms: int | None = None,
+        min_heavy_atoms: int | None = None,
+        min_review_status: str | None = None,
+        include_deprecated: bool | None = None,
+        include_rejected: bool | None = None,
+        include: list[str] | None = None,
+        collapse: str | None = None,
+        offset: int | None = None,
+        limit: int | None = None,
+        profile: str | None = None,
+    ) -> SpeciesBrowseResponse:
+        """``GET /scientific/species/browse`` -- list species, no identifier required.
+
+        The sibling of :meth:`search_species` for "what does this archive
+        hold" rather than "find this species": every parameter here is
+        species-level (narrows which species are candidates) except the
+        five review/entry filters, which behave exactly as they do on
+        ``search_species``. No identifier parameter exists on this method
+        at all -- ``smiles`` / ``inchi`` / ``inchi_key`` / ``species_ref``
+        / ``species_entry_ref`` are not accepted by the backend route and
+        are not offered here.
+
+        ``elements`` is a comma-separated list of element symbols (e.g.
+        ``"C,N,S"``); ``elem_mode`` is ``"all"`` (default -- every listed
+        element must be present) or ``"any"`` (at least one is enough).
+        ``max_heavy_atoms`` / ``min_heavy_atoms`` bound the species' non-
+        hydrogen atom count, inclusive on both ends.
+
+        ``include`` accepts only ``"review"``, ``"internal_ids"`` and
+        ``"all"`` on this endpoint. Unlike ``search_species``, the four
+        section tokens (``"thermo"``, ``"statmech"``, ``"transport"``,
+        ``"conformers"``) are refused here with 422
+        ``unknown_include_token`` -- their payload is a raw integer-
+        primary-key array, which is fine to hand to a caller who supplied
+        an identifier but not to an unauthenticated, identifier-free,
+        whole-corpus listing. This method does not offer them.
+
+        Server-side bounds this method does not mirror or re-validate:
+        ``limit`` is capped at 200, ``elements`` accepts at most 10
+        comma-separated symbols and 256 characters. A violation surfaces
+        as a 422 from the request rather than a client-side exception --
+        deliberately, so the two bounds cannot drift apart the way a
+        duplicated constant would.
+
+        Returns the parsed ``ScientificSpeciesBrowseResponse`` JSON
+        envelope -- field-for-field identical to ``search_species``'s
+        response (see :data:`tckdb_client.scientific_types.SpeciesBrowseResponse`).
+        """
+        params = {
+            "formula": formula,
+            "charge": charge,
+            "multiplicity": multiplicity,
+            "electronic_state_kind": electronic_state_kind,
+            "species_entry_kind": species_entry_kind,
+            "elements": elements,
+            "elem_mode": elem_mode,
+            "max_heavy_atoms": max_heavy_atoms,
+            "min_heavy_atoms": min_heavy_atoms,
+            "min_review_status": min_review_status,
+            "include_deprecated": include_deprecated,
+            "include_rejected": include_rejected,
+            "include": include,
+            "collapse": collapse,
+            "offset": offset,
+            "limit": limit,
+            "profile": profile,
+        }
+        return self.request_json(
+            "GET",
+            "/scientific/species/browse",
             params=params,
             authenticated=False,
         ).data
@@ -2696,6 +2781,16 @@ class TCKDBClient:
         """Lazily yield every species record matching ``search_species``."""
 
         return iter_paginated_records(self.search_species, parameters)
+
+    def iter_species_browse(self, **parameters: Any) -> Iterator[SpeciesRecord]:
+        """Lazily yield every species record matching ``browse_species``.
+
+        Named ``iter_species_browse`` rather than ``iter_species`` --
+        already taken by :meth:`search_species`'s iterator -- even
+        though the two yield the identical ``SpeciesRecord`` shape.
+        """
+
+        return iter_paginated_records(self.browse_species, parameters)
 
     def iter_reactions(self, **parameters: Any) -> Iterator[ReactionRecord]:
         """Lazily yield every reaction record matching ``search_reactions``."""

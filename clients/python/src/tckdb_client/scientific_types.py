@@ -905,6 +905,16 @@ class AnalyticsResponse(TypedDict, Generic[RecordT], total=False):
 
 
 SpeciesSearchResponse: TypeAlias = ScientificSearchResponse[SpeciesRecord]
+# The backend's ScientificSpeciesBrowseResponse is a subclass of
+# ScientificSpeciesSearchResponse that adds no fields (verified against
+# app/schemas/reads/scientific_species.py, not assumed from a docstring):
+# request / review_summary / records / pagination, same SpeciesRecord
+# shape underneath. A distinct alias for the same underlying generic
+# instantiation, not a reuse of SpeciesSearchResponse by name, mirrors
+# the backend's own choice to declare browse's envelope as its own class
+# "so the OpenAPI document and generated clients name the two surfaces
+# separately even though nothing about the shape differs."
+SpeciesBrowseResponse: TypeAlias = ScientificSearchResponse[SpeciesRecord]
 ReactionSearchResponse: TypeAlias = ScientificSearchResponse[ReactionRecord]
 ThermoSearchResponse: TypeAlias = ScientificSearchResponse[ThermoSearchRecord]
 
@@ -1042,6 +1052,7 @@ __all__ = [
     "ScientificRequestEcho",
     "ScientificSearchResponse",
     "ScientificSoftwareReleaseIdentity",
+    "SpeciesBrowseResponse",
     "SpeciesCalculationRecord",
     "SpeciesCalculationsSearchResponse",
     "SpeciesRecord",

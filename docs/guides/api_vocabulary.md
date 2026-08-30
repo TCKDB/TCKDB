@@ -63,8 +63,8 @@ Three things are deliberately absent:
 | Status, badge and query words | 107 | 24 enums, declared in `backend/app/glossary/declarations.py` |
 | Identifier prefixes | 34 | `backend/app/services/public_refs.py` |
 | Trust check names | 143 | `backend/app/services/trust/rubrics.py` |
-| Refusal codes a caller can receive | 155 | `backend/app/api/code_catalogue.py` |
-| **total** | **439** | |
+| Refusal codes a caller can receive | 157 | `backend/app/api/code_catalogue.py` |
+| **total** | **441** | |
 
 ## How a record is named
 
@@ -683,7 +683,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `unique_conflict` | a relationship — read `context` |
 | `username_taken` | a thing |
 
-### HTTP 422 (112 codes)
+### HTTP 422 (114 codes)
 
 | Code | Names |
 | --- | --- |
@@ -783,6 +783,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `thermo_source_calculation_owner_mismatch` | a relationship — read `context` |
 | `thermo_source_role_type_mismatch` | a relationship — read `context` |
 | `thermo_statmech_owner_mismatch` | a relationship — read `context` |
+| `too_many_element_symbols` | a relationship — read `context` |
 | `transition_state_charge_mismatch` | a relationship — read `context` |
 | `transition_state_composition_mismatch` | a relationship — read `context` |
 | `transition_state_irc_mapping_element_mismatch` | a relationship — read `context` |
@@ -790,6 +791,7 @@ There is deliberately no definition column: the refusal already sent you a sente
 | `transition_state_no_imaginary_mode` | a thing |
 | `transition_state_reaction_coordinate_ambiguous` | a relationship — read `context` |
 | `transition_state_reaction_coordinate_not_designated` | a thing |
+| `unknown_element_symbol` | a thing |
 | `unknown_include_token` | a thing |
 | `unknown_record_type` | a thing |
 | `unsafe_lowest_energy_comparison` | a thing |

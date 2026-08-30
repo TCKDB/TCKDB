@@ -5,6 +5,8 @@ See docs/specs/read_api_mvp.md §Endpoint 1.
 
 from __future__ import annotations
 
+from enum import Enum
+
 from pydantic import BaseModel, Field
 
 from app.db.models.common import (
@@ -12,6 +14,9 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     StationaryPointKind,
     StereoKind,
+)
+from app.schemas.reads._field_bounds import (
+    MAX_ELEMENTS_LENGTH as _MAX_ELEMENTS_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
     MAX_FORMULA_LENGTH as _MAX_FORMULA_LENGTH,
@@ -39,6 +44,20 @@ from app.schemas.reads.scientific_common import (
 # ---------------------------------------------------------------------------
 # Request
 # ---------------------------------------------------------------------------
+
+
+class ElementMatchMode(str, Enum):
+    """How :attr:`SpeciesBrowseRequest.elements` combines more than one symbol.
+
+    ``all``  every listed element must be present (composition superset).
+    ``any``  at least one listed element must be present (composition union).
+
+    Mirrors ``elem_mode`` on the ``HAb_DB`` species router this filter is
+    modeled on. Default is ``all``, matching that precedent.
+    """
+
+    all = "all"
+    any = "any"
 
 
 class SpeciesFilterRequest(BaseModel):
@@ -114,7 +133,35 @@ class SpeciesBrowseRequest(SpeciesFilterRequest):
     ``species_entry_ref``) — the route that constructs this model does not
     accept them as query parameters, so "browse with no identifier" is a
     property of the type, not a value a caller happened not to supply.
+
+    Composition filters
+    --------------------
+    ``elements`` / ``elem_mode`` / ``max_heavy_atoms`` / ``min_heavy_atoms``
+    are **browse-only**, deliberately absent from :class:`SpeciesFilterRequest`
+    so ``/species/search`` cannot reach them. Modeled on
+    ``HAb_DB``'s ``api/routers/species.py`` composition filters, whose own
+    comment is the load-bearing design note: "Composition filters (used
+    only when q is empty)" — composition is a browse concern (selecting
+    from a bounded, paged listing), not a search one (a fuzzy ``C`` query
+    that would match every carbon-containing species unboundedly). See
+    ``species.py::_formula_has_element_expr`` and
+    ``species.py::_heavy_atom_count_expr`` for what "element present" and
+    "heavy atom" mean here, pinned against real archive SMILES shapes
+    (radicals, charged species, explicit ``[H]``, isotopes) in
+    ``tests/services/scientific_read/test_browse_species.py``.
+
+    ``elements`` is a comma-separated list of element symbols (e.g.
+    ``"C,N,S"``); an unrecognised symbol is refused with 422
+    ``unknown_element_symbol`` rather than silently matching nothing (a
+    typo must not read as "we hold none of that element"). ``max_heavy_atoms``
+    / ``min_heavy_atoms`` bound the species' non-hydrogen atom count,
+    inclusive on both ends.
     """
+
+    elements: str | None = Field(default=None, max_length=_MAX_ELEMENTS_LENGTH)
+    elem_mode: ElementMatchMode = ElementMatchMode.all
+    max_heavy_atoms: int | None = Field(default=None, ge=0)
+    min_heavy_atoms: int | None = Field(default=None, ge=0)
 
 
 # ---------------------------------------------------------------------------

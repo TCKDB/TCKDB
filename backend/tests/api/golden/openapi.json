@@ -13812,6 +13812,15 @@
         "title": "ElectronicLevelIn",
         "type": "object"
       },
+      "ElementMatchMode": {
+        "description": "How :attr:`SpeciesBrowseRequest.elements` combines more than one symbol.\n\n``all``  every listed element must be present (composition superset).\n``any``  at least one listed element must be present (composition union).\n\nMirrors ``elem_mode`` on the ``HAb_DB`` species router this filter is\nmodeled on. Default is ``all``, matching that precedent.",
+        "enum": [
+          "all",
+          "any"
+        ],
+        "title": "ElementMatchMode",
+        "type": "string"
+      },
       "EnergyCorrectionApplicationRole-Output": {
         "description": "Semantic role of an applied energy correction result.",
         "enum": [
@@ -72118,7 +72127,7 @@
     },
     "/api/v1/scientific/species/browse": {
       "get": {
-        "description": "List species with no identifier required, for a catalogue page.\n\nEvery secondary filter ``/species/search`` accepts alongside an\nidentifier is accepted here too, so a listing can be narrowed after\nit is opened. ``limit`` is capped at 200 (default 50, same as\n``/species/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nOrdering is ``review_rank ASC, has_entries DESC, created_at DESC,\nid DESC`` — the same default as ``/species/search`` — which is what\nkeeps pagination stable across requests. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
+        "description": "List species with no identifier required, for a catalogue page.\n\nEvery secondary filter ``/species/search`` accepts alongside an\nidentifier is accepted here too, so a listing can be narrowed after\nit is opened. ``elements`` / ``elem_mode`` / ``max_heavy_atoms`` /\n``min_heavy_atoms`` are the exception: composition filters exist only\nhere, not on ``/species/search`` — see\n:class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`\nfor why. ``limit`` is capped at 200 (default 50, same as\n``/species/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nOrdering is ``review_rank ASC, has_entries DESC, created_at DESC,\nid DESC`` — the same default as ``/species/search`` — which is what\nkeeps pagination stable across requests. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
         "operationId": "species_browse_api_v1_scientific_species_browse_get",
         "parameters": [
           {
@@ -72199,6 +72208,67 @@
                 }
               ],
               "title": "Species Entry Kind"
+            }
+          },
+          {
+            "description": "Comma-separated element symbols, e.g. 'C,N,S'. Browse-only -- see SpeciesBrowseRequest for why this is not on /species/search.",
+            "in": "query",
+            "name": "elements",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Comma-separated element symbols, e.g. 'C,N,S'. Browse-only -- see SpeciesBrowseRequest for why this is not on /species/search.",
+              "title": "Elements"
+            }
+          },
+          {
+            "in": "query",
+            "name": "elem_mode",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ElementMatchMode",
+              "default": "all"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_heavy_atoms",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Max Heavy Atoms"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_heavy_atoms",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Heavy Atoms"
             }
           },
           {

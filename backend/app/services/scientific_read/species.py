@@ -23,10 +23,13 @@ has the measurement.
 
 from __future__ import annotations
 
-from sqlalchemy import Text, and_, case, func, select
+import re
+
+from rdkit import Chem, RDLogger
+from sqlalchemy import Text, and_, case, func, not_, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.error_contract import reject_unsupported_filters
+from app.api.error_contract import CodedValueError, reject_unsupported_filters
 from app.db.models.calculation import Calculation
 from app.db.models.common import (
     SubmissionRecordType,
@@ -39,11 +42,15 @@ from app.db.models.species import (
 from app.db.models.statmech import Statmech
 from app.db.models.thermo import Thermo
 from app.db.models.transport import Transport
+from app.schemas.reads._field_bounds import (
+    MAX_ELEMENT_SYMBOLS as _MAX_ELEMENT_SYMBOLS,
+)
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
 )
 from app.schemas.reads.scientific_species import (
+    ElementMatchMode,
     RequestEcho,
     ScientificSpeciesBrowseResponse,
     ScientificSpeciesSearchResponse,
@@ -160,6 +167,209 @@ def _formula_expr():
     wheel, which ``pyproject.toml`` declares as an opt-in ``[rdkit]`` extra.
     """
     return func.mol_formula(func.mol_from_smiles(Species.smiles)).cast(Text)
+
+
+def _heavy_atom_count_expr():
+    """The species' heavy (non-hydrogen) atom count, via the RDKit cartridge.
+
+    ``mol_numheavyatoms(mol_from_smiles(sp.smiles))`` counts every atom of
+    atomic number greater than 1 in the molecular graph RDKit parses from
+    the identity SMILES. "Heavy atom" here means the conventional
+    chemistry sense -- non-hydrogen -- and that holds regardless of *how*
+    the SMILES spells its hydrogens:
+
+    * Implicit hydrogens (``C`` for methane, ``[CH3]`` for the methyl
+      radical) are never graph atoms at all, so they were never going to
+      be counted.
+    * Explicit hydrogens (``[H][H]`` for molecular hydrogen, ``[OH-]``
+      for hydroxide) *are* graph atoms, but of atomic number 1, so
+      ``mol_numheavyatoms`` excludes them the same as an implicit one --
+      RDKit's underlying ``GetNumHeavyAtoms()`` counts by atomic number,
+      not by which atoms the SMILES happened to spell out.
+    * Isotope labels do not change the count: ``mol_numheavyatoms`` reads
+      atomic number, not mass number, so ``[2H]O[2H]`` (heavy water)
+      counts the same one heavy atom as ``O`` (light water) -- consistent
+      with :func:`_formula_expr`, whose ``mol_formula()`` drops isotope
+      labels for the same reason.
+
+    Pinned against these exact shapes (bracket radical, explicit-H,
+    charged, isotope-labelled) in
+    ``tests/services/scientific_read/test_browse_species.py`` rather than
+    assumed: RDKit's implicit/explicit-hydrogen bookkeeping is exactly
+    the kind of thing that is "quietly ambiguous" until a real SMILES is
+    run through it.
+
+    Same source column, same NULL-on-unparseable behavior as
+    :func:`_formula_expr` — an unparseable SMILES yields SQL NULL, which
+    fails every ``<=``/``>=`` comparison and so drops the row from a
+    ``max_heavy_atoms``/``min_heavy_atoms`` filter rather than raising.
+    """
+    return func.mol_numheavyatoms(func.mol_from_smiles(Species.smiles))
+
+
+def _formula_has_element_expr(symbol: str):
+    """Whether the species' Hill-notation formula names element ``symbol``.
+
+    Built over :func:`_formula_expr` rather than a second, parallel
+    derivation from the mol object — the same one-expression precedent
+    that keeps ``formula=`` and the served ``formula`` field from
+    disagreeing extends to composition: "does this species contain
+    nitrogen" is answered from the identical string a caller reads back
+    as ``formula``.
+
+    Hill notation writes each element as exactly one token — an
+    uppercase letter optionally followed by one lowercase letter (``H``,
+    ``Cl``, ``Fe``) — with no separator between adjacent elements
+    (``CH3``, not ``C H3``). A naive substring test (``formula LIKE
+    '%N%'``) would match the ``n``-less token ``Mn`` has none of, and
+    worse, would match a query for ``C`` against a formula that is only
+    ``Cl``. The pattern ``symbol(?![a-z])`` (a negative lookahead,
+    supported by PostgreSQL's ``~`` advanced-regex operator) rules that
+    out: it requires the match not be followed by a lowercase letter, so
+    ``C`` matches the ``C`` in ``CH3`` but not the ``C`` inside ``Cl2``.
+    No lookbehind is needed on the other side — Hill tokens are never
+    preceded by a lowercase letter belonging to a different element (each
+    element appears at most once, and the trailing ionic charge suffix
+    ``+``/``-`` and the digit counts are not letters), so there is no way
+    for a two-letter symbol's second character to be mistaken for the
+    start of the next token.
+
+    :param symbol: An already-validated element symbol (see
+        :func:`_validate_element_symbols`) — title case, e.g. ``"Cl"``.
+    """
+    pattern = re.escape(symbol) + "(?![a-z])"
+    return _formula_expr().op("~")(pattern)
+
+
+def _reject_unknown_element(raw: str) -> None:
+    raise ValueError(
+        f"unknown_element_symbol: {raw!r} supplied to elements= is "
+        "not a recognised element symbol."
+    )
+
+
+def _validate_element_symbols(raw_symbols: list[str]) -> list[str]:
+    """Resolve and validate caller-supplied element symbols.
+
+    Case-insensitive on input (``"cl"``, ``"CL"`` and ``"Cl"`` all resolve
+    to ``"Cl"``, matching the codebase's existing convention in
+    :func:`app.chemistry.geometry.normalize_element_symbol`). An unknown
+    symbol is refused loudly — 422 ``unknown_element_symbol`` — rather
+    than silently matching nothing: a typo'd ``Xx`` must not read as "we
+    hold nothing of that element" (an honest answer would be "you asked
+    for something that is not an element").
+
+    Two checks guard the lookup, not one, because RDKit's periodic table
+    answers "is this a symbol" more loosely than the plain-English
+    question implies:
+
+    * ``symbol.isalpha()`` rejects anything that is not letters before
+      RDKit ever sees it — in particular ``*``, RDKit's *dummy atom*
+      wildcard. ``GetAtomicNumber("*")`` does not raise; it returns
+      ``0``. Without this check ``elements=*`` would be accepted, match
+      no Hill-notation token (a formula never contains ``*``), and come
+      back ``200`` with an empty page — exactly the "typo reads as
+      empty archive" failure this whole function exists to prevent, just
+      reached through a symbol that ``.capitalize()`` cannot flag as
+      malformed the way ``isalpha()`` can.
+    * The atomic-number result is checked for ``0`` too, as defence in
+      depth: ``isalpha()`` is what actually stops ``*`` (a non-letter),
+      but a future non-letter dummy-atom spelling should not silently
+      slip back in if that check is ever loosened.
+
+    :class:`rdkit.RDLogger` is disabled around the lookup: an unknown
+    symbol makes the RDKit C++ layer print an several-kilobyte
+    "Post-condition Violation" stack trace to stderr on every call, and
+    this is a public, unauthenticated endpoint — logging that once per
+    rejected request is amplification an anonymous caller can trigger
+    for free. The ``isalpha()`` pre-check already avoids the RDKit call
+    (and therefore the trace) for most typos (``Xx``, ``*``, ``123``);
+    disabling the logger covers the rest (a well-formed but unrecognised
+    letters-only symbol, e.g. a two-letter combination that names no
+    element).
+
+    Deliberately does **not** resolve isotope tokens (``D``/``T``) to
+    ``H`` the way
+    :func:`app.chemistry.geometry.resolve_element_symbol` does for
+    geometry composition counts. This filter answers an *elements*
+    question, not an *isotopes* question — see :func:`_formula_expr`,
+    whose ``mol_formula()`` already collapses every isotope of hydrogen
+    into the same ``H`` token, so ``elements=H`` already matches a
+    deuterated species (pinned in the test suite). RDKit's periodic
+    table does not recognise ``D``/``T`` as element symbols at all, so
+    they are refused here the same as any other unrecognised token —
+    which is the correct refusal for a filter that cannot select for or
+    against deuteration.
+
+    :raises ValueError: 422 ``unknown_element_symbol`` for any symbol
+        RDKit's periodic table does not recognise, or that is not a
+        recognisable element symbol at all (``*`` and other non-letter
+        tokens).
+    """
+    table = Chem.GetPeriodicTable()
+    resolved: list[str] = []
+    RDLogger.DisableLog("rdApp.*")
+    try:
+        for raw in raw_symbols:
+            symbol = raw.strip().capitalize()
+            if not symbol:
+                continue
+            if not symbol.isalpha():
+                _reject_unknown_element(raw)
+            try:
+                atomic_number = table.GetAtomicNumber(symbol)
+            except RuntimeError as exc:
+                raise ValueError(
+                    f"unknown_element_symbol: {raw!r} supplied to elements= "
+                    "is not a recognised element symbol."
+                ) from exc
+            if atomic_number == 0:
+                # Belt-and-suspenders for the dummy-atom case (see
+                # docstring): isalpha() already stops "*" itself, this
+                # guards any future non-letter dummy-atom spelling.
+                _reject_unknown_element(raw)
+            resolved.append(symbol)
+    finally:
+        RDLogger.EnableLog("rdApp.*")
+    return resolved
+
+
+def _parse_elements_filter(request: SpeciesBrowseRequest) -> list[str] | None:
+    """Parse + validate ``request.elements`` into a symbol list, or ``None``.
+
+    ``None`` means "no elements filter was supplied" (the field itself
+    was absent). A supplied value that reduces to no symbols at all
+    (``""``, ``","``, blank entries only) is treated the same as
+    "not supplied" — there is nothing to filter on, and refusing an
+    all-whitespace value would be a stricter contract than the rest of
+    this endpoint's optional filters enforce elsewhere. Callers that need
+    to tell "no filter" apart from "filter present but named nothing" —
+    e.g. the request echo, which must not claim a filter that was never
+    applied — check the return value against ``None``, not against
+    ``request.elements``.
+
+    :raises ValueError: 422 ``unknown_element_symbol``, propagated from
+        :func:`_validate_element_symbols`; or 422
+        ``too_many_element_symbols`` if the caller named more than
+        :data:`app.schemas.reads._field_bounds.MAX_ELEMENT_SYMBOLS`
+        distinct symbols.
+    """
+    if request.elements is None:
+        return None
+    raw_symbols = [s for s in (p.strip() for p in request.elements.split(",")) if s]
+    if not raw_symbols:
+        return None
+    if len(raw_symbols) > _MAX_ELEMENT_SYMBOLS:
+        raise CodedValueError(
+            "too_many_element_symbols",
+            f"elements= names {len(raw_symbols)} symbols; at most "
+            f"{_MAX_ELEMENT_SYMBOLS} are accepted per request.",
+            context={
+                "max_elements": _MAX_ELEMENT_SYMBOLS,
+                "elements_count": len(raw_symbols),
+            },
+        )
+    return _validate_element_symbols(raw_symbols)
 
 
 def search_species(
@@ -347,6 +557,31 @@ def browse_species(
     :class:`SpeciesBrowseRequest` to read one from), so with every
     optional filter absent it is every species in the corpus.
 
+    **#277 (and its follow-up).** A candidate species that has *some*
+    ``species_entry`` rows but none currently visible is not a useful
+    catalogue listing under any circumstance, so both ``pagination.total``
+    (:func:`_browse_visible_species_total`) and the page itself
+    (:func:`_rank_and_slice_species` with ``require_visible_entries=True``)
+    drop it unconditionally. This used to be conditional on whether the
+    caller had typed one of five specific request fields
+    (min_review_status / include_rejected / include_deprecated /
+    electronic_state_kind / species_entry_kind) — a check that missed the
+    read-profile floor :func:`app.services.scientific_read.common.visible_statuses`
+    also applies (``profile=curated`` narrows visibility to ``approved``
+    with no request field set at all, so ``?profile=curated`` reproduced
+    the exact bug verbatim), and that inverted itself for
+    ``include_rejected``/``include_deprecated``: those only ever *widen*
+    visibility, so treating them as a trigger could drop an entry-less
+    species that a plainer request kept. Applying the rule unconditionally
+    removes the whole class rather than patching the two known instances —
+    a third way to narrow visibility reintroduces the bug with a
+    field-name-keyed trigger in place, and cannot with a structural one.
+    :func:`_has_any_entry_expr` is what keeps this safe for a species with
+    *zero* ``species_entry`` rows: such a species is never dropped, under
+    any filter, narrowed or not — it is still a valid (empty) catalogue
+    entry, and dropping it would break the endpoint's other headline
+    feature (see ``test_browse_with_no_filters_lists_every_created_species``).
+
     :param session: SQLAlchemy session bound to the read DB.
     :param request: Parsed request model.
     :returns: ``ScientificSpeciesBrowseResponse`` Pydantic model.
@@ -362,19 +597,29 @@ def browse_species(
     )
     includes = filter_internal_ids_from_resolved(includes)
 
+    # Validated (and case-normalised) up front so an unknown symbol 422s
+    # before any SQL runs, the same way reject_client_sort / validate_pagination
+    # / validate_includes fail closed before the candidate query is built.
+    element_symbols = _parse_elements_filter(request)
+
     visible = visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
         include_deprecated=request.include_deprecated,
     )
 
-    candidates = _browse_candidate_species_stmt(request).subquery("candidate_species")
+    candidates = _browse_candidate_species_stmt(
+        request, element_symbols
+    ).subquery("candidate_species")
 
-    pre_collapse_total = (
-        session.scalar(select(func.count()).select_from(candidates)) or 0
+    # #277 (see the docstring above): always drop a candidate species that
+    # has entries but none currently visible, unconditionally -- not just
+    # when a specific request field triggered it.
+    pre_collapse_total = _browse_visible_species_total(
+        session, candidates, request, visible
     )
     if pre_collapse_total == 0:
-        return _empty_browse_response(request, includes, offset, limit)
+        return _empty_browse_response(request, includes, offset, limit, element_symbols)
 
     summary = summary_from_sql(
         session,
@@ -390,6 +635,7 @@ def browse_species(
         species_entry_ref_id=None,
         offset=0 if collapse_first else offset,
         limit=1 if collapse_first else limit,
+        require_visible_entries=True,
     )
     if collapse_first:
         page_species_ids = page_species_ids[offset : offset + limit]
@@ -413,7 +659,7 @@ def browse_species(
 
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
-            filter=_browse_filter_echo(request),
+            filter=_browse_filter_echo(request, element_symbols),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
@@ -473,7 +719,9 @@ def _candidate_species_stmt(
     return stmt
 
 
-def _browse_candidate_species_stmt(request: SpeciesBrowseRequest):
+def _browse_candidate_species_stmt(
+    request: SpeciesBrowseRequest, element_symbols: list[str] | None
+):
     """The browse candidate set as a ``SELECT id, created_at`` over ``species``.
 
     Same shape and same use (a subquery for the count, the summary and the
@@ -486,9 +734,15 @@ def _browse_candidate_species_stmt(request: SpeciesBrowseRequest):
     written here, on a request type that has no identifier fields to read
     one from.
 
-    With ``charge``, ``multiplicity`` and ``formula`` all absent (the
-    default, empty browse request) this is every species in the corpus —
-    which is the whole point of the endpoint.
+    With ``charge``, ``multiplicity``, ``formula`` and every composition
+    filter absent (the default, empty browse request) this is every
+    species in the corpus — which is the whole point of the endpoint.
+
+    :param element_symbols: Already-validated, title-case element symbols
+        parsed from ``request.elements`` by :func:`_parse_elements_filter`
+        (``None`` when the caller supplied none). Threaded in rather than
+        re-parsed here so validation happens exactly once, before any SQL
+        runs, in :func:`browse_species`.
     """
     stmt = select(Species.id, Species.created_at)
     if request.charge is not None:
@@ -500,6 +754,20 @@ def _browse_candidate_species_stmt(request: SpeciesBrowseRequest):
         # unparseable behavior as _candidate_species_stmt(); see
         # _formula_expr() for the full rationale.
         stmt = stmt.where(_formula_expr() == request.formula.strip())
+    if element_symbols:
+        element_predicates = [
+            _formula_has_element_expr(symbol) for symbol in element_symbols
+        ]
+        if request.elem_mode is ElementMatchMode.any:
+            stmt = stmt.where(or_(*element_predicates))
+        else:
+            stmt = stmt.where(and_(*element_predicates))
+    if request.max_heavy_atoms is not None or request.min_heavy_atoms is not None:
+        heavy_atoms = _heavy_atom_count_expr()
+        if request.max_heavy_atoms is not None:
+            stmt = stmt.where(heavy_atoms <= request.max_heavy_atoms)
+        if request.min_heavy_atoms is not None:
+            stmt = stmt.where(heavy_atoms >= request.min_heavy_atoms)
     return stmt
 
 
@@ -573,46 +841,22 @@ def _join_entries_and_reviews(
     )
 
 
-def _rank_and_slice_species(
-    session: Session,
-    candidates,
-    request: SpeciesFilterRequest,
-    visible: set,
-    *,
-    species_entry_ref_id: int | None,
-    offset: int,
-    limit: int,
-) -> list[int]:
-    """Order the candidate species and return one page of ids.
+def _visible_rank_expr(review, visible: set):
+    """The per-row ``CASE`` that decides whether a joined entry row is visible.
 
-    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``, where
-    ``review_rank`` is the best rank among a species' *visible* entries and
-    :data:`_NO_VISIBLE_ENTRY_RANK` when it has none.
-
-    Visibility is a ``CASE`` inside the aggregate rather than a ``WHERE``.
-    A ``WHERE`` would drop species whose every entry is invisible, and those
-    species are still records — with an empty ``entries`` list. ``MIN``
-    ignores NULLs, so an invisible entry contributes nothing and a species
-    with no visible entry aggregates to NULL, which the ``COALESCE`` turns
-    into the sorts-last rank.
+    One definition, two consumers: :func:`_rank_and_slice_species` (which
+    ``MIN``/``COUNT``s it for ranking) and :func:`_browse_visible_species_total`
+    (which ``COUNT``s it to decide whether a candidate species survives an
+    entry-level ``/species/browse`` filter). Factored out precisely so those
+    two can never silently disagree about which entries are visible — the
+    same "one expression, used everywhere" reasoning as :func:`_formula_expr`.
 
     The ``SpeciesEntry.id IS NOT NULL`` guard is load-bearing: without it the
     outer join's all-NULL row for an entry-less species would satisfy the
     "no review row means not_reviewed" branch of the visibility predicate and
-    the species would rank as if it had a never-reviewed entry.
-
-    ``id`` desc is the tiebreak that makes this a total order; without it,
-    species sharing a ``created_at`` (every row inserted in one transaction
-    does) would page non-deterministically.
+    the species would rank (or count) as if it had a never-reviewed entry.
     """
-    stmt, review = _join_entries_and_reviews(
-        select(candidates.c.id),
-        candidates,
-        request,
-        species_entry_ref_id=species_entry_ref_id,
-        outer=True,
-    )
-    visible_rank = case(
+    return case(
         (
             and_(
                 SpeciesEntry.id.is_not(None),
@@ -622,11 +866,97 @@ def _rank_and_slice_species(
         ),
         else_=None,
     )
+
+
+def _has_any_entry_expr(candidates):
+    """Whether a candidate species has at least one ``species_entry`` row
+    *at all* — structurally, independent of every request filter.
+
+    Deliberately **not** derived from the outer join
+    :func:`_join_entries_and_reviews` builds. That join's ``ON`` condition
+    already applies :func:`_entry_filter_predicates` (``electronic_state_kind``
+    / ``species_entry_kind``), so *within* that join, "no entry matched the
+    filter" and "no entry exists" produce the identical all-NULL row and
+    cannot be told apart. They must stay distinguishable: a species whose
+    only entry fails ``electronic_state_kind=excited`` must still be
+    dropped by that filter (:func:`_visible_rank_expr` already makes that
+    entry invisible), while a species with zero ``species_entry`` rows must
+    never be dropped by *any* filter — it is still a valid catalogue
+    listing, just an empty one. This is a second, independent correlated
+    subquery over ``species_entry`` naming only ``species_id``, so no
+    request filter can touch it.
+    """
+    return (
+        select(func.count())
+        .select_from(SpeciesEntry)
+        .where(SpeciesEntry.species_id == candidates.c.id)
+        .correlate(candidates)
+        .scalar_subquery()
+    ) > 0
+
+
+def _rank_and_slice_species(
+    session: Session,
+    candidates,
+    request: SpeciesFilterRequest,
+    visible: set,
+    *,
+    species_entry_ref_id: int | None,
+    offset: int,
+    limit: int,
+    require_visible_entries: bool = False,
+) -> list[int]:
+    """Order the candidate species and return one page of ids.
+
+    ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``, where
+    ``review_rank`` is the best rank among a species' *visible* entries and
+    :data:`_NO_VISIBLE_ENTRY_RANK` when it has none.
+
+    Visibility is a ``CASE`` inside the aggregate (:func:`_visible_rank_expr`)
+    rather than a ``WHERE``. A ``WHERE`` would drop species whose every entry
+    is invisible, and by default those species are still records — with an
+    empty ``entries`` list. ``MIN`` ignores NULLs, so an invisible entry
+    contributes nothing and a species with no visible entry aggregates to
+    NULL, which the ``COALESCE`` turns into the sorts-last rank.
+
+    ``id`` desc is the tiebreak that makes this a total order; without it,
+    species sharing a ``created_at`` (every row inserted in one transaction
+    does) would page non-deterministically.
+
+    :param require_visible_entries: When ``True``, a ``HAVING`` clause drops
+        a candidate species from the page once it has *some* entries but
+        none of them are visible — see :func:`_has_any_entry_expr`, which is
+        what makes that "some entries, none visible" condition distinct from
+        "zero entries, structurally": a species with no ``species_entry``
+        rows at all is **never** dropped by this flag, only ranked last
+        (unchanged from the ``False`` default).
+
+        Default ``False`` preserves the original behaviour exactly (every
+        call from :func:`search_species` relies on this default: a species
+        named by identifier is still a record even with no visible entries
+        -- "CH3 exists but has no approved entries" is a defensible answer
+        when the caller named CH3 by identifier). ``/species/browse``
+        (:func:`browse_species`) always passes ``True`` unconditionally --
+        see its docstring for why an earlier version of this gated on which
+        request fields were set, and why that was wrong (issue #277
+        follow-up: review-profile-driven narrowing carries no request field
+        to key off of).
+    """
+    stmt, review = _join_entries_and_reviews(
+        select(candidates.c.id),
+        candidates,
+        request,
+        species_entry_ref_id=species_entry_ref_id,
+        outer=True,
+    )
+    visible_rank = _visible_rank_expr(review, visible)
     best_rank = func.coalesce(func.min(visible_rank), _NO_VISIBLE_ENTRY_RANK)
     has_entries = func.count(visible_rank) > 0
+    stmt = stmt.group_by(candidates.c.id, candidates.c.created_at)
+    if require_visible_entries:
+        stmt = stmt.having(or_(not_(_has_any_entry_expr(candidates)), has_entries))
     stmt = (
-        stmt.group_by(candidates.c.id, candidates.c.created_at)
-        .order_by(
+        stmt.order_by(
             best_rank.asc(),
             has_entries.desc(),
             candidates.c.created_at.desc(),
@@ -636,6 +966,46 @@ def _rank_and_slice_species(
         .limit(limit)
     )
     return list(session.scalars(stmt))
+
+
+def _browse_visible_species_total(
+    session: Session,
+    candidates,
+    request: SpeciesBrowseRequest,
+    visible: set,
+) -> int:
+    """Count of candidate species browse's paging step will actually keep.
+
+    Used by :func:`browse_species` unconditionally instead of a bare
+    ``count(*) from candidates``, so ``pagination.total`` reports the
+    species that survive the same "some entries but none visible get
+    dropped; zero entries stays" rule :func:`_rank_and_slice_species`
+    applies with ``require_visible_entries=True`` — the defect reported as
+    issue #277 (``min_review_status=approved`` reporting the full
+    unfiltered species count as ``total`` while every returned record
+    carried an empty ``entries`` list; a later follow-up found the same
+    defect reachable through ``profile=curated``, which narrows visibility
+    with no request field to key a trigger on at all).
+
+    Built over :func:`_visible_rank_expr` and :func:`_has_any_entry_expr`,
+    the same two expressions :func:`_rank_and_slice_species` groups,
+    orders and (when asked) filters by — one definition of "visible" and
+    one of "has any entry", so the count returned here and the set of
+    species that survive paging can never disagree about which species
+    that is.
+    """
+    stmt, review = _join_entries_and_reviews(
+        select(candidates.c.id),
+        candidates,
+        request,
+        species_entry_ref_id=None,
+        outer=True,
+    )
+    visible_rank = _visible_rank_expr(review, visible)
+    has_entries = func.count(visible_rank) > 0
+    keep = or_(not_(_has_any_entry_expr(candidates)), has_entries)
+    counted = stmt.group_by(candidates.c.id).having(keep).subquery("kept_species")
+    return session.scalar(select(func.count()).select_from(counted)) or 0
 
 
 def _visible_entry_rows(
@@ -969,7 +1339,9 @@ def _empty_response(
     )
 
 
-def _browse_filter_echo(request: SpeciesBrowseRequest) -> dict[str, object]:
+def _browse_filter_echo(
+    request: SpeciesBrowseRequest, element_symbols: list[str] | None
+) -> dict[str, object]:
     """:func:`_filter_echo`'s counterpart for browse.
 
     Not a call to ``_filter_echo`` with the identifier fields absent:
@@ -980,6 +1352,15 @@ def _browse_filter_echo(request: SpeciesBrowseRequest) -> dict[str, object]:
     the shared-field half rather than threading a field list through a
     common helper — so a change to one endpoint's echo can never silently
     move the other's.
+
+    :param element_symbols: The *parsed* result of
+        :func:`_parse_elements_filter`, not ``request.elements`` itself.
+        ``elements=" , "`` is a non-``None`` string that parses to no
+        symbols at all and applies no filter (see
+        :func:`_parse_elements_filter`) — echoing on
+        ``request.elements is not None`` would claim a filter that was
+        never applied to a single row. Gating on the parsed list instead
+        means the echo can only ever report a filter that ran.
     """
     echo: dict[str, object] = {}
     for field in ("formula", "charge", "multiplicity"):
@@ -990,6 +1371,13 @@ def _browse_filter_echo(request: SpeciesBrowseRequest) -> dict[str, object]:
         echo["electronic_state_kind"] = request.electronic_state_kind.value
     if request.species_entry_kind is not None:
         echo["species_entry_kind"] = request.species_entry_kind.value
+    if element_symbols:
+        echo["elements"] = request.elements
+        echo["elem_mode"] = request.elem_mode.value
+    if request.max_heavy_atoms is not None:
+        echo["max_heavy_atoms"] = request.max_heavy_atoms
+    if request.min_heavy_atoms is not None:
+        echo["min_heavy_atoms"] = request.min_heavy_atoms
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:
@@ -1004,10 +1392,11 @@ def _empty_browse_response(
     includes: set[str],
     offset: int,
     limit: int,
+    element_symbols: list[str] | None = None,
 ) -> ScientificSpeciesBrowseResponse:
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
-            filter=_browse_filter_echo(request),
+            filter=_browse_filter_echo(request, element_symbols),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
