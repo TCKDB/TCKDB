@@ -251,10 +251,37 @@ def test_a_markdown_only_change_outside_docs_expects_no_gate():
 
 
 def test_a_backend_change_expects_the_backend_gate_and_not_the_client_gate():
-    changed = ["backend/app/api/routes/health.py"]
+    """A backend change *outside* the API surface stays backend-only.
+
+    ``app/services/`` is deliberately not under ``backend/app/api/**`` --
+    see ``test_an_api_surface_change_expects_the_client_gate_too`` below
+    for the change that must (and, before that test's fix, silently did
+    not) also wake the client gate.
+    """
+    changed = ["backend/app/services/scientific_read/species.py"]
     assert gates.workflow_is_expected(_real(BACKEND_CI), changed)
     assert not gates.workflow_is_expected(_real(CLIENT_CI), changed)
     assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed)
+
+
+def test_an_api_surface_change_expects_the_client_gate_too():
+    """The fix for the gap that let #276 land without a ``_parity.py`` entry.
+
+    ``clients/python/tests/test_openapi_parity.py`` requires every backend
+    operation to be triaged in ``tckdb_client._parity``, but the client
+    workflow used to trigger only on ``clients/python/**`` and
+    ``schemas/python/tckdb-schemas/**`` -- so a backend-only PR that added
+    a route never ran it. A route file under ``backend/app/api/**`` and a
+    regenerated OpenAPI golden snapshot must both wake the client gate now,
+    alongside the backend gate; neither wakes the frontend gate.
+    """
+    for changed in (
+        ["backend/app/api/routes/scientific/species_browse.py"],
+        ["backend/tests/api/golden/openapi.json"],
+    ):
+        assert gates.workflow_is_expected(_real(BACKEND_CI), changed), changed
+        assert gates.workflow_is_expected(_real(CLIENT_CI), changed), changed
+        assert not gates.workflow_is_expected(_real(FRONTEND_CI), changed), changed
 
 
 def test_a_client_change_expects_the_client_gate():

@@ -6,6 +6,21 @@ on:
       - ".github/workflows/python-client-ci.yml"
       - "clients/python/**"
       - "schemas/python/tckdb-schemas/**"
+      # tests/test_openapi_parity.py requires every backend operation to
+      # be triaged in tckdb_client._parity -- a check that exists to catch
+      # the client silently falling behind the *backend*, so it must run
+      # when the backend API surface changes, not only when clients/python
+      # itself does. #276 added GET /species/browse without a matching
+      # _parity.py entry and this workflow never ran, because nothing
+      # under clients/python or schemas/python changed. backend/app/api/**
+      # covers new/changed routes directly; the golden OpenAPI snapshot
+      # covers the rest (a route-adjacent schema change that alters the
+      # live spec without touching a route file) because
+      # backend/tests/api/test_openapi_snapshot.py already requires that
+      # file to be regenerated whenever the live schema changes, so it is
+      # the one file guaranteed to move whenever the operation set does.
+      - "backend/app/api/**"
+      - "backend/tests/api/golden/openapi.json"
   push:
     branches:
       - main
@@ -13,6 +28,8 @@ on:
       - ".github/workflows/python-client-ci.yml"
       - "clients/python/**"
       - "schemas/python/tckdb-schemas/**"
+      - "backend/app/api/**"
+      - "backend/tests/api/golden/openapi.json"
   workflow_dispatch:
 
 permissions:
