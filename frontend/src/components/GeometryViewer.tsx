@@ -380,7 +380,41 @@ import "../geometry-measure.css"
 
 type ViewerStatus = "loading" | "ready" | "unavailable"
 
-const VIEWER_BACKGROUND = "white"
+// Theme-aware 3D canvas background. This is 3Dmol's own JS-level
+// `backgroundColor` (passed to `createViewer` and, on a later theme
+// change, `viewer.setBackgroundColor()`) — NOT a CSS property, so it is
+// this component's own responsibility to keep in sync with the resolved
+// theme; CSS alone (e.g. a dark-mode stylesheet) has no way to reach
+// into 3Dmol's WebGL clear color. Reported against the parallel
+// `frontend/theme-tokens` PR (#296): that PR establishes the app-wide
+// convention (a `data-theme="dark"|"light"` attribute on the document
+// root when a reader has made an explicit choice, `prefers-color-scheme`
+// for the unstamped default) but owns every `.css` file, none of which
+// this component touches — `resolveIsDarkTheme` below reads the same
+// convention directly, in TypeScript, so the two PRs coordinate on
+// behaviour without either editing a file the other owns.
+const LIGHT_VIEWER_BACKGROUND = "white"
+const DARK_VIEWER_BACKGROUND = "#1b1e23"
+
+/** Reads the SAME theme signal #296 established for CSS — a `data-theme`
+ * attribute on the document root when a reader made an explicit choice,
+ * falling back to `prefers-color-scheme` for the unstamped default — so
+ * this component's 3D canvas background always agrees with the rest of
+ * the page's theme, never independently "stuck" on white. Guarded for
+ * environments without `document`/`window` (SSR, some test setups) by
+ * simply falling back to the light background, the pre-existing default. */
+function resolveIsDarkTheme(): boolean {
+    if (typeof document !== "undefined" && document.documentElement) {
+        const stamped = document.documentElement.getAttribute("data-theme")
+        if (stamped === "dark") return true
+        if (stamped === "light") return false
+    }
+    if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        return window.matchMedia("(prefers-color-scheme: dark)").matches
+    }
+    return false
+}
+
 const ROTATE_STEP_DEG = 20
 const ZOOM_FACTOR = 1.2
 
@@ -467,6 +501,7 @@ type Viewer3DHandle = {
     getView?: () => number[]
     setView?: (view: number[]) => unknown
     setStyle?: (sel: Record<string, unknown>, style: Record<string, unknown>) => unknown
+    setBackgroundColor?: (hex: string, alpha?: number) => unknown
     addLabel?: (text: string, options: Record<string, unknown>) => unknown
     removeAllLabels?: () => unknown
     removeLabel?: (label: unknown) => unknown
@@ -515,12 +550,18 @@ function measurementDescription(m: Measurement): string {
     return `${MEASUREMENT_KIND_LABEL[m.kind]} ${m.atoms.map(atomTag).join("–")}`
 }
 
-/** Formats a degree value, guarding the (only reachable via a coincident
- * deposited atom position, not via this component's own selection model —
- * see `geometryMeasure.ts`'s degenerate-input docstrings) NaN case with an
- * honest label rather than a bare "NaN°". */
+/** Formats a degree value, guarding the NaN case with an honest label
+ * rather than a bare "NaN°". Reachable two ways, both via ordinary real
+ * clicks (see `geometryMeasure.ts`'s `angle()`/`dihedral()` docstrings):
+ * a coincident deposited atom position (two picked atoms at the exact
+ * same coordinates), or — the more common real case — three of the four
+ * picked atoms being collinear, which any linear fragment a reader can
+ * click produces (CO2, HCN, acetylene, the near-linear H...H-C of an
+ * abstraction saddle point). Deliberately does not say "coincident" on
+ * its own: that would misname the collinear case, and this label is the
+ * one place a reader sees an explanation for why a torsion is missing. */
 function formatDegrees(value: number): string {
-    if (Number.isNaN(value)) return "undefined (coincident atom positions)"
+    if (Number.isNaN(value)) return "undefined (coincident or collinear atom positions)"
     return `${value.toFixed(2)}°`
 }
 
@@ -612,6 +653,58 @@ export function GeometryViewer({
     // impossible) from colliding.
     const viewerDomId = useId()
 
+    // See `resolveIsDarkTheme` above. Read into a ref (not just state)
+    // because the create-viewer effect below reads its CURRENT value
+    // from inside a closure captured at mount time — a ref survives that
+    // without needing to be added to that effect's dependency array
+    // (which would otherwise tear down and recreate the whole 3Dmol
+    // viewer on every theme change, not just repaint its background).
+    const [isDarkTheme, setIsDarkTheme] = useState(resolveIsDarkTheme)
+    const isDarkThemeRef = useRef(isDarkTheme)
+    useEffect(() => {
+        isDarkThemeRef.current = isDarkTheme
+    }, [isDarkTheme])
+    // Which theme the LIVE viewer's background currently reflects — set
+    // once, at `createViewer` time, to whatever `isDarkThemeRef.current`
+    // was then (see the create-viewer effect below). The background-sync
+    // effect further down compares against this rather than against
+    // "did status just become ready" so that the ready-transition itself
+    // never triggers a redundant second `setBackgroundColor`+`render()`
+    // call on top of the style effect's one — mirroring
+    // `labelsPresentRef`/`measureDrawnRef`'s "skip when nothing actually
+    // changed" pattern elsewhere in this component.
+    const appliedDarkThemeRef = useRef<boolean | null>(null)
+
+    // Keeps `isDarkTheme` in sync with the SAME two signals
+    // `resolveIsDarkTheme` reads: a `MutationObserver` for `data-theme`
+    // changing on the document root (an explicit reader theme choice —
+    // #296's mechanism), and a `matchMedia` listener for
+    // `prefers-color-scheme` changing (the unstamped-default case, e.g.
+    // the OS theme changing while this page is open). Runs once, not
+    // keyed on anything reactive — this is app-wide theme state, not
+    // per-viewer state.
+    useEffect(() => {
+        if (typeof document === "undefined" || !document.documentElement) return
+        const root = document.documentElement
+        const mediaQuery =
+            typeof window !== "undefined" && typeof window.matchMedia === "function"
+                ? window.matchMedia("(prefers-color-scheme: dark)")
+                : null
+
+        function sync() {
+            setIsDarkTheme(resolveIsDarkTheme())
+        }
+
+        const observer = new MutationObserver(sync)
+        observer.observe(root, { attributes: true, attributeFilter: ["data-theme"] })
+        mediaQuery?.addEventListener?.("change", sync)
+
+        return () => {
+            observer.disconnect()
+            mediaQuery?.removeEventListener?.("change", sync)
+        }
+    }, [])
+
     const xyzForViewer = useMemo(() => {
         if (xyzText) return xyzText
         if (atoms.length === 0) return null
@@ -682,7 +775,7 @@ export function GeometryViewer({
                     if (cancelled) return
                     try {
                         const created = $3Dmol.createViewer(container, {
-                            backgroundColor: VIEWER_BACKGROUND,
+                            backgroundColor: isDarkThemeRef.current ? DARK_VIEWER_BACKGROUND : LIGHT_VIEWER_BACKGROUND,
                             id: `3dmol-canvas-${viewerDomId}`,
                         })
                         if (!created) throw new Error("3Dmol did not return a viewer")
@@ -716,6 +809,7 @@ export function GeometryViewer({
                         // types — the cast gives up no real safety.
                         viewerRef.current = created as unknown as Viewer3DHandle
                         initialViewRef.current = created.getView?.() ?? null
+                        appliedDarkThemeRef.current = isDarkThemeRef.current
                         setStatus("ready")
                     } catch {
                         // Covers both a thrown `createViewer` (no WebGL
@@ -866,6 +960,31 @@ export function GeometryViewer({
         viewer.setStyle?.({}, STYLE_SPECS[style])
         viewer.render?.()
     }, [style, status])
+
+    // Keeps the 3D canvas background in step with `isDarkTheme` AFTER the
+    // viewer already exists — the initial background is set once, at
+    // `createViewer` time, from `isDarkThemeRef.current` (see above); this
+    // effect is what repaints it live if the theme changes while this
+    // page is already open (a reader flips the app's theme toggle, or the
+    // OS theme changes while the page is on the unstamped default). Same
+    // `[…, status]` shape as the style effect immediately above, for the
+    // same reason: `status` is what makes this fire at the ready
+    // transition too — but the ready transition itself must NOT repaint
+    // a second time on top of the style effect's own render(), since the
+    // create-viewer effect already applied the correct initial background
+    // (see `appliedDarkThemeRef`). Comparing against that ref (rather
+    // than acting unconditionally whenever this effect runs) is what
+    // keeps this a true no-op on mount, only firing a real
+    // `setBackgroundColor`+`render()` pair when the theme actually
+    // changes while the viewer is live.
+    useEffect(() => {
+        const viewer = viewerRef.current
+        if (!viewer) return
+        if (appliedDarkThemeRef.current === isDarkTheme) return
+        viewer.setBackgroundColor?.(isDarkTheme ? DARK_VIEWER_BACKGROUND : LIGHT_VIEWER_BACKGROUND)
+        viewer.render?.()
+        appliedDarkThemeRef.current = isDarkTheme
+    }, [isDarkTheme, status])
 
     // See the module docstring's "Labels follow the coordinate table"
     // section — positions/text come from this component's own `atoms`

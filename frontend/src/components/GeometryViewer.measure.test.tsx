@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { GeometryViewer } from "./GeometryViewer"
+import { NAMED_DIHEDRAL_ORACLE_CASES } from "../domain/dihedralOracle.fixture"
 
 /**
  * Atom-picking measurements — see `GeometryViewer.tsx`'s module docstring,
@@ -122,6 +123,21 @@ const CH3_ATOMS = [
     { atom_index: 2, element: "H", x: -0.0, y: 1.078957, z: 0.0 },
     { atom_index: 3, element: "H", x: 0.934405, y: -0.539479, z: 0.0 },
     { atom_index: 4, element: "H", x: -0.934405, y: -0.539479, z: 0.0 },
+]
+
+// A non-planar 4-atom fixture (real, RDKit-verified coordinates — the
+// "butane_gauche_plus_60" case from `dihedralOracle.fixture.ts`, expected
+// dihedral +60.00°). Deliberately NOT the planar CH3 fixture above: every
+// permutation of 4 coplanar points still gives a 0/180 dihedral, so a
+// planar fixture cannot tell "clicked in the right order" apart from
+// "clicked in a permuted order" (see this describe block's own tests
+// below, and PR #295's review, which found exactly this gap).
+const NONPLANAR_CASE = NAMED_DIHEDRAL_ORACLE_CASES.find((c) => c.label === "butane_gauche_plus_60")!
+const NONPLANAR_ATOMS = [
+    { atom_index: 1, element: "C", ...NONPLANAR_CASE.a },
+    { atom_index: 2, element: "C", ...NONPLANAR_CASE.b },
+    { atom_index: 3, element: "C", ...NONPLANAR_CASE.c },
+    { atom_index: 4, element: "C", ...NONPLANAR_CASE.d },
 ]
 
 async function renderReady(props: Partial<React.ComponentProps<typeof GeometryViewer>> = {}) {
@@ -317,5 +333,160 @@ describe("GeometryViewer — atom-picking measurements", () => {
 
         await waitFor(() => expect(calls.addSphere.length).toBeGreaterThan(0))
         expect(calls.addCylinder.length).toBeGreaterThan(0)
+    })
+
+    it("an undefined torsion (3 of the 4 picked atoms collinear) reads as an honest 'undefined', never a confident 0.00° — the GeometryViewer.tsx NaN guard's only reachable path", async () => {
+        // a, b, c on a line; d off it. Any linear fragment a reader can
+        // actually click (CO2, HCN, acetylene, a near-linear abstraction
+        // saddle point) reaches this. Before the fix in geometryMeasure.ts,
+        // this returned exactly 0 — indistinguishable from a genuine
+        // syn-periplanar torsion — which is also why GeometryViewer.tsx's
+        // own `if (Number.isNaN(value)) ...` branch was unreachable: a
+        // mutation that replaced its condition with `false` still passed
+        // 406/406, because nothing ever produced a NaN to trigger it.
+        const collinearAtoms = [
+            { atom_index: 1, element: "C", x: 0, y: 0, z: 0 },
+            { atom_index: 2, element: "C", x: 1, y: 0, z: 0 },
+            { atom_index: 3, element: "C", x: 2, y: 0, z: 0 },
+            { atom_index: 4, element: "H", x: 2, y: 1, z: 1 },
+        ]
+        render(<GeometryViewer atoms={collinearAtoms} formula="C3H" xyzText={null} />)
+        await waitFor(() => expect(calls.setClickable).toHaveLength(1))
+        const onPick = capturedClickCallback!
+        click(onPick, 0)
+        click(onPick, 1)
+        click(onPick, 2)
+        click(onPick, 3)
+
+        const list = await screen.findByRole("list")
+        expect(within(list).getByText(/undefined \(coincident or collinear atom positions\)/)).toBeInTheDocument()
+        expect(within(list).queryByText(/^0\.00°$/)).toBeNull()
+    })
+})
+
+// R1 (PR #295 review): the atom order at the component's dihedral call
+// site (GeometryViewer.tsx, dihedralOf(atoms[0], atoms[1], atoms[2],
+// atoms[3])) was unverified — permuting it survived the entire suite,
+// because the only component-level dihedral test used planar CH3, where
+// every permutation still gives 0/180. This describe block uses a
+// non-planar fixture with a real signed expected value instead.
+describe("GeometryViewer — component-level dihedral wiring (non-planar fixture)", () => {
+    it("wires the 4 clicked atoms into dihedral() in click order — a-b-c-d, not a permutation", async () => {
+        render(<GeometryViewer atoms={NONPLANAR_ATOMS} formula="C4" xyzText={null} />)
+        await waitFor(() => expect(calls.setClickable).toHaveLength(1))
+        const onPick = capturedClickCallback!
+        click(onPick, 0) // C1 = a
+        click(onPick, 1) // C2 = b
+        click(onPick, 2) // C3 = c
+        click(onPick, 3) // C4 = d
+
+        const list = await screen.findByRole("list")
+        const item = within(list).getByText(/Dihedral C1–C2–C3–C4/)
+        // Target dihedral for this fixture is exactly +60.00°; a swapped
+        // operand order at the call site (e.g. dihedralOf(atoms[1],
+        // atoms[0], atoms[2], atoms[3])) produces a completely different
+        // value (~-87.8°) for this same fixture, not merely a sign flip —
+        // see this file's module-level comment on NONPLANAR_ATOMS.
+        expect(item.parentElement).toHaveTextContent("60.00°")
+
+        // The on-canvas convenience label is wired from the SAME
+        // measurement object as the DOM list, not recomputed separately —
+        // assert both actually agree.
+        const dihedralLabelCall = calls.addLabel.find((c) => typeof c[0] === "string" && (c[0] as string).includes("60.00°"))
+        expect(dihedralLabelCall).toBeDefined()
+    })
+})
+
+// R3 (PR #295 review): claimed the on-canvas label ignores the unit
+// toggle (hardcoded to "angstrom"), citing GeometryViewer.tsx:977. Read
+// against the actual shipped code at commit 838e8474: both the DOM list
+// AND the canvas label call `measurementValueText(m, coordinateUnitMode)`
+// — the SAME variable, not a hardcoded literal — so this specific claim
+// does not reproduce. This is a regression guard, not a fix: it locks in
+// the (already correct) behaviour so a future change can't reintroduce
+// exactly the divergence the review described.
+describe("GeometryViewer — canvas label follows the unit toggle (R3 regression guard)", () => {
+    it("the on-canvas label text uses the SAME unit as the DOM panel — bohr, when the page is on bohr", async () => {
+        render(<GeometryViewer atoms={CH3_ATOMS} formula="CH3" xyzText={CH3_XYZ} coordinateUnitMode="bohr" />)
+        await waitFor(() => expect(calls.setClickable).toHaveLength(1))
+        const onPick = capturedClickCallback!
+        click(onPick, 0)
+        click(onPick, 1)
+
+        const list = await screen.findByRole("list")
+        expect(list.textContent).toMatch(/2\.038933 bohr/)
+
+        const distanceLabelCall = calls.addLabel.find((c) => typeof c[0] === "string" && (c[0] as string).includes("bohr"))
+        expect(distanceLabelCall).toBeDefined()
+        expect(calls.addLabel.some((c) => typeof c[0] === "string" && (c[0] as string).includes("Å"))).toBe(false)
+    })
+})
+
+// R5 (PR #295 review): claimed measurementCentroid divides by 2 instead
+// of atoms.length. Read against the actual shipped code: it already
+// divides by `atoms.length`. This is a regression guard, not a fix — a
+// distance (2-atom) measurement can't distinguish /2 from /atoms.length,
+// so this uses a 4-atom dihedral with atoms spread away from the origin,
+// where the two formulas give clearly different results.
+describe("GeometryViewer — measurement label placement (R5 regression guard)", () => {
+    it("the on-canvas value label sits at the average of ALL measured atoms, not the sum divided by 2", async () => {
+        render(<GeometryViewer atoms={NONPLANAR_ATOMS} formula="C4" xyzText={null} />)
+        await waitFor(() => expect(calls.setClickable).toHaveLength(1))
+        const onPick = capturedClickCallback!
+        click(onPick, 0)
+        click(onPick, 1)
+        click(onPick, 2)
+        click(onPick, 3)
+
+        await waitFor(() => expect(calls.addLabel.length).toBeGreaterThan(0))
+        // This effect redraws from scratch on every click and `calls.addLabel`
+        // accumulates every call ever made (removed or not), so an
+        // intermediate 3-atom angle label ("111.xx°" for this butane
+        // skeleton) is ALSO in this array by the time all 4 clicks have
+        // landed. Match the exact final dihedral text ("60.00°"), not a
+        // generic "contains a degree sign" check, or this would silently
+        // grab the 3-atom angle's centroid instead of the 4-atom one.
+        const dihedralLabelCall = calls.addLabel.find((c) => c[0] === "60.00°")
+        expect(dihedralLabelCall).toBeDefined()
+        const options = dihedralLabelCall![1] as { position: { x: number; y: number; z: number } }
+
+        const { a, b, c, d } = NONPLANAR_CASE
+        const expectedCentroid = {
+            x: (a.x + b.x + c.x + d.x) / 4,
+            y: (a.y + b.y + c.y + d.y) / 4,
+            z: (a.z + b.z + c.z + d.z) / 4,
+        }
+        const wrongDivideByTwo = {
+            x: (a.x + b.x + c.x + d.x) / 2,
+            y: (a.y + b.y + c.y + d.y) / 2,
+            z: (a.z + b.z + c.z + d.z) / 2,
+        }
+
+        expect(options.position.x).toBeCloseTo(expectedCentroid.x, 6)
+        expect(options.position.y).toBeCloseTo(expectedCentroid.y, 6)
+        expect(options.position.z).toBeCloseTo(expectedCentroid.z, 6)
+        // A real, non-cosmetic assertion that the buggy /2 formula is
+        // NOT what produced this position — these two candidate points
+        // are far enough apart (the y coordinate alone differs by ~0.54)
+        // that toBeCloseTo would fail if the divisor were wrong.
+        expect(Math.abs(options.position.y - wrongDivideByTwo.y)).toBeGreaterThan(0.1)
+    })
+})
+
+// R9 (PR #295 review): claimed dropping aria-labelledby={headingId} from
+// <section className="viewer-measurements"> survived, since that
+// attribute is the measurement <ol>'s only accessible name. Read against
+// the actual shipped code: it's present. This is a regression guard, not
+// a fix.
+describe("GeometryViewer — measurements section accessible name (R9 guard)", () => {
+    it("the measurements section is labelled by its own visible 'Measurements' heading", async () => {
+        await renderReady()
+        const section = document.querySelector(".viewer-measurements") as HTMLElement
+        expect(section).not.toBeNull()
+        const labelledBy = section.getAttribute("aria-labelledby")
+        expect(labelledBy).toBeTruthy()
+        const heading = document.getElementById(labelledBy!)
+        expect(heading).not.toBeNull()
+        expect(heading).toHaveTextContent("Measurements")
     })
 })

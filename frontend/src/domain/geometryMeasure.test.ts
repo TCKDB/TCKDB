@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest"
 import { angle, dihedral, distance } from "./geometryMeasure"
+import {
+    NAMED_DIHEDRAL_ORACLE_CASES,
+    RANDOM_DIHEDRAL_ORACLE_CASES,
+    RDKIT_VERSION,
+} from "./dihedralOracle.fixture"
 
 const ORIGIN = { x: 0, y: 0, z: 0 }
 
@@ -82,9 +87,19 @@ describe("dihedral", () => {
     // p3 + (0, cos(theta), sin(theta)) — a rotation of theta around the
     // +x axis, starting from the same reference direction as a. Hand-
     // verified via cross products (see PR description) and cross-checked
-    // numerically: this construction's computed dihedral is -theta, a
-    // clean, independently-derived relationship (not "trust the function
-    // to agree with itself") that still gives an unambiguous +/- pair.
+    // against RDKit (see the "external oracle" describe block below,
+    // and `dihedralOracle.fixture.ts`): this construction's computed
+    // dihedral is +theta directly — the sign matches the rotation
+    // convention by design, so the fixtures below read as "theta in,
+    // theta out" rather than needing a separate negation step.
+    //
+    // A PRIOR VERSION of this file's expectations had this backwards
+    // (theta=+60 asserted to produce dihedral() === -60) because they
+    // were written by recording `dihedral()`'s own output at the time,
+    // not derived independently — see `geometryMeasure.ts`'s dihedral()
+    // docstring for the sign-inversion bug this masked (PR #295's
+    // review) and the "external oracle" block below for why a
+    // self-consistent suite could not have caught it on its own.
     const p1 = { x: -1, y: 1, z: 0 }
     const p2 = { x: 0, y: 0, z: 0 }
     const p3 = { x: 1, y: 0, z: 0 }
@@ -92,19 +107,19 @@ describe("dihedral", () => {
     it("+60 and -60 are mirror-image conformations — opposite, not equal, signs", () => {
         const cos60 = Math.cos(Math.PI / 3)
         const sin60 = Math.sin(Math.PI / 3)
-        const dPlus = { x: p3.x, y: p3.y + cos60, z: p3.z + sin60 } // theta=+60 -> dihedral -60
-        const dMinus = { x: p3.x, y: p3.y + cos60, z: p3.z - sin60 } // theta=-60 -> dihedral +60
+        const dPlus = { x: p3.x, y: p3.y + cos60, z: p3.z + sin60 } // theta=+60 -> dihedral +60
+        const dMinus = { x: p3.x, y: p3.y + cos60, z: p3.z - sin60 } // theta=-60 -> dihedral -60
 
         const plusResult = dihedral(p1, p2, p3, dPlus)
         const minusResult = dihedral(p1, p2, p3, dMinus)
 
-        expect(plusResult).toBeCloseTo(-60, 9)
-        expect(minusResult).toBeCloseTo(60, 9)
+        expect(plusResult).toBeCloseTo(60, 9)
+        expect(minusResult).toBeCloseTo(-60, 9)
         // The load-bearing assertion: these are NOT the same value with a
         // rounding wobble — they are exact opposites. A sign-convention
         // bug (e.g. swapping which cross product comes first) that always
         // returns the same magnitude regardless of theta's sign would
-        // pass toBeCloseTo(-60)/toBeCloseTo(60) individually being wrong
+        // pass toBeCloseTo(60)/toBeCloseTo(-60) individually being wrong
         // in a way that happens to cancel out is implausible, but this
         // assertion makes the "these must differ" requirement explicit
         // and mutation-visible on its own.
@@ -160,5 +175,103 @@ describe("dihedral", () => {
 
     it("degenerate: b and c coincide — returns NaN rather than a false torsion", () => {
         expect(dihedral(p1, p2, p2, p3)).toBeNaN()
+    })
+
+    it("degenerate: a and b coincide — returns NaN rather than a false torsion", () => {
+        expect(dihedral(p2, p2, p1, p3)).toBeNaN()
+    })
+
+    it("degenerate: c and d coincide — returns NaN rather than a false torsion", () => {
+        expect(dihedral(p1, p2, p3, p3)).toBeNaN()
+    })
+
+    describe("collinear-guard: an undefined torsion must read NaN, never a confident 0°", () => {
+        // The only pre-fix guard was b2Length === 0 (b coincides with c).
+        // If any THREE of the four points are collinear, n1 or n2 (the
+        // plane normals the "praxeolitic" formula needs) is a zero
+        // vector, so x = 0 and y = 0, and `Math.atan2(0, 0)` is exactly
+        // `0` — not NaN. 0° is itself a meaningful, real torsion
+        // (syn-periplanar), so an unguarded collinear case is a silent
+        // wrong answer indistinguishable from a correct one, not a
+        // visibly broken one. This is reachable from real clicks: any
+        // linear fragment (CO2, HCN, acetylene, a near-linear abstraction
+        // saddle point) puts three of the four picked atoms on one line
+        // — this is NOT the same unreachable-by-construction case as
+        // `angle()`'s coincident-vertex guard.
+        const a = { x: 0, y: 0, z: 0 }
+        const b = { x: 1, y: 0, z: 0 }
+        const c = { x: 2, y: 0, z: 0 }
+        const d = { x: 2, y: 1, z: 1 }
+
+        it("a, b, c collinear (n1 is zero) — NaN, not 0", () => {
+            const result = dihedral(a, b, c, d)
+            expect(result).not.toBe(0)
+            expect(result).toBeNaN()
+        })
+
+        it("b, c, d collinear (n2 is zero) — NaN, not 0", () => {
+            const result = dihedral(d, c, b, a) // reuses the same line for b-c-d
+            expect(result).not.toBe(0)
+            expect(result).toBeNaN()
+        })
+
+        it("all four points collinear — NaN, not 0", () => {
+            const p = { x: 0, y: 0, z: 0 }
+            const q = { x: 1, y: 0, z: 0 }
+            const r = { x: 2, y: 0, z: 0 }
+            const s = { x: 3, y: 0, z: 0 }
+            const result = dihedral(p, q, r, s)
+            expect(result).not.toBe(0)
+            expect(result).toBeNaN()
+        })
+
+        it("NEAR-collinear (not exactly) is just as undefined — a relative threshold, not === 0", () => {
+            // a, b, c are collinear to 1e-9 Å of a straight line — far
+            // tighter than any real deposited geometry's precision, but
+            // not mathematically exact. An === 0 guard would miss this
+            // and silently return a confident-looking finite value.
+            const nearA = { x: 0, y: 0, z: 0 }
+            const nearB = { x: 1, y: 0, z: 0 }
+            const nearC = { x: 2, y: 1e-9, z: 0 }
+            const result = dihedral(nearA, nearB, nearC, d)
+            expect(result).toBeNaN()
+        })
+    })
+
+    describe("external oracle: RDKit-verified fixtures (dihedralOracle.fixture.ts)", () => {
+        // Everything above this point was written by observing this
+        // module's own output and recording it as "expected" — which
+        // proves self-consistency, not correctness. PR #295's review
+        // demonstrated exactly that gap: a swapped cross-product operand
+        // order made dihedral() return the negation of the correct
+        // torsion for every input, and the hand-derived tests above
+        // (written against that buggy version) still passed, because
+        // they were self-consistent with the bug. This block checks
+        // dihedral() against RDKit's rdMolTransforms.GetDihedralDeg — a
+        // source that shares none of this module's code — instead.
+        it(`fixture was generated with RDKit ${RDKIT_VERSION}`, () => {
+            expect(RDKIT_VERSION).toMatch(/^\d+\.\d+/)
+        })
+
+        it.each(NAMED_DIHEDRAL_ORACLE_CASES)(
+            "$label (target $targetDeg°) matches RDKit to 6 decimal places",
+            ({ a, b, c, d, rdkitDihedralDeg }) => {
+                expect(dihedral(a, b, c, d)).toBeCloseTo(rdkitDihedralDeg, 6)
+            },
+        )
+
+        it("200 random well-conditioned 4-point sets all match RDKit to 6 decimal places", () => {
+            expect(RANDOM_DIHEDRAL_ORACLE_CASES.length).toBe(200)
+            for (const { a, b, c, d, rdkitDihedralDeg } of RANDOM_DIHEDRAL_ORACLE_CASES) {
+                const got = dihedral(a, b, c, d)
+                // atan2's branch cut means +180/-180 is the same physical
+                // angle read from either side — take the shorter
+                // circular distance between the two angles so that
+                // boundary case doesn't produce a spurious failure.
+                let diff = Math.abs(got - rdkitDihedralDeg)
+                if (diff > 180) diff = 360 - diff
+                expect(diff).toBeLessThan(1e-4)
+            }
+        })
     })
 })
