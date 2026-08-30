@@ -2,7 +2,9 @@ import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
 import { lotLabel } from "../api/scientificSchemas"
+import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
+import { conformerLabel, partitionByConformer, thermoMatchesConformer } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
@@ -33,7 +35,7 @@ const MODEL_KIND_LABELS: Record<string, string> = {
 const modelKindLabel = (kind: string) => MODEL_KIND_LABELS[kind] ?? kind.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 
-export function EntryThermoSection({ entryRef }: { entryRef: string }) {
+export function EntryThermoSection({ entryRef, conformer }: { entryRef: string; conformer?: ConformerProjection | null }) {
     const state = useEntryThermo(entryRef)
     if (state.status === "ready") {
         return (
@@ -47,7 +49,7 @@ export function EntryThermoSection({ entryRef }: { entryRef: string }) {
                     </section>
                 )}
             >
-                <ThermoList response={state.record} />
+                <ThermoList response={state.record} conformer={conformer} />
             </SectionErrorBoundary>
         )
     }
@@ -71,8 +73,57 @@ function reviewSummaryText(summary: ThermoListResponse["review_summary"]) {
     return parts.length > 0 ? parts.join(" · ") : "no records"
 }
 
-function ThermoList({ response }: { response: ThermoListResponse }) {
+function ThermoList({ response, conformer }: { response: ThermoListResponse; conformer?: ConformerProjection | null }) {
     const { records, review_summary: reviewSummary, pagination } = response
+    const countNote = (
+        <p className="records-note">
+            {pagination.total} record{pagination.total === 1 ? "" : "s"}
+            {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
+            {" · review: "}{reviewSummaryText(reviewSummary)}
+        </p>
+    )
+
+    // Two provenance shapes, not one plus an error state (see
+    // `domain/conformerEvidence.ts`): a record this client can trace to the
+    // selected conformer's own evidence renders under it; a record it
+    // cannot (today, always Arkane-produced "population B" thermo) renders
+    // as entry-level evidence, attributed to its own software -- never as
+    // missing or broken.
+    if (conformer) {
+        const { matched, entryLevel } = partitionByConformer(records, (record) => thermoMatchesConformer(record, conformer))
+        return (
+            <section className="ledger-section" aria-labelledby="thermo-heading">
+                <div className="ledger-heading">
+                    <p className="eyebrow">Deposited evidence</p>
+                    <h2 id="thermo-heading">Thermochemistry</h2>
+                    <p>
+                        Every thermo record deposited for this entry, each shown independently. Multiple deposits
+                        are never merged, averaged, or reduced to one preferred value on this page.
+                    </p>
+                </div>
+                {countNote}
+                {records.length === 0 ? (
+                    <p className="empty-projection">No thermochemistry records are deposited for this entry.</p>
+                ) : (
+                    <>
+                        <ThermoRecordGroup
+                            title={`From ${conformerLabel(conformer)}`}
+                            note="Traced through this conformer's own opt/freq/sp evidence."
+                            records={matched}
+                            emptyText="No thermo record traces to this conformer's evidence yet."
+                        />
+                        <ThermoRecordGroup
+                            title="Entry-level"
+                            note="Not linked to one conformer's evidence -- shown here by the software that produced it, not flagged as missing anything."
+                            records={entryLevel}
+                            emptyText="No entry-level thermo record is deposited for this entry."
+                        />
+                    </>
+                )}
+            </section>
+        )
+    }
+
     return (
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
@@ -83,11 +134,7 @@ function ThermoList({ response }: { response: ThermoListResponse }) {
                     are never merged, averaged, or reduced to one preferred value on this page.
                 </p>
             </div>
-            <p className="records-note">
-                {pagination.total} record{pagination.total === 1 ? "" : "s"}
-                {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
-                {" · review: "}{reviewSummaryText(reviewSummary)}
-            </p>
+            {countNote}
             {records.length === 0 ? (
                 <p className="empty-projection">No thermochemistry records are deposited for this entry.</p>
             ) : (
@@ -108,6 +155,39 @@ function ThermoList({ response }: { response: ThermoListResponse }) {
                 ))
             )}
         </section>
+    )
+}
+
+function ThermoRecordGroup({ title, note, records, emptyText }: {
+    title: string
+    note: string
+    records: ThermoRecord[]
+    emptyText: string
+}) {
+    return (
+        <div className="conformer-evidence-group">
+            <h3 className="conformer-evidence-group-heading">{title}</h3>
+            <p className="section-note">{note}</p>
+            {records.length === 0 ? (
+                <p className="empty-projection">{emptyText}</p>
+            ) : (
+                records.map((record) => (
+                    <SectionErrorBoundary
+                        key={record.thermo_ref}
+                        fallback={(
+                            <article className="science-record" role="alert">
+                                <p className="empty-projection">
+                                    Record <code>{record.thermo_ref}</code> could not be displayed. Other
+                                    records on this page are unaffected.
+                                </p>
+                            </article>
+                        )}
+                    >
+                        <ThermoRecordCard record={record} />
+                    </SectionErrorBoundary>
+                ))
+            )}
+        </div>
     )
 }
 

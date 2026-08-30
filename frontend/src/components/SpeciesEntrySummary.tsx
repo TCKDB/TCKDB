@@ -3,8 +3,6 @@ import { Link } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { words } from "../domain/provenanceFormat"
-import { sectionLabels } from "../domain/speciesEntrySections"
-import type { EntrySection } from "../domain/speciesEntrySections"
 import { Formula } from "./Formula"
 
 // `words` returns `null` for a missing/empty token (a case none of the
@@ -86,100 +84,4 @@ function CopyButton({ value, label }: { value: string; label: string }) {
                 })
         }}
     >{copied ? "Copied" : "Copy"}</button>
-}
-
-/**
- * Three named chapter groups instead of one flat row of tabs: "Record"
- * (this identity, always the same regardless of chapter), "Evidence
- * chain" (how the result was produced — conformers, calculation stages),
- * and "Computed products" (what the entry asserts — thermo, statmech,
- * transport). The grouping is the record's real shape, not a cosmetic
- * split; see the design rationale for why this replaced a flat tab bar.
- */
-const NAV_GROUPS: Array<{ caption: string; items: Array<{ path: string; label: string }> }> = [
-    { caption: "Record", items: [{ path: "", label: "Overview" }] },
-    {
-        caption: "Evidence chain",
-        items: [
-            { path: "conformers", label: sectionLabels.conformers },
-            { path: "calculations", label: sectionLabels.calculations },
-        ],
-    },
-    {
-        caption: "Computed products",
-        items: [
-            { path: "thermo", label: sectionLabels.thermo },
-            { path: "statmech", label: sectionLabels.statmech },
-            { path: "transport", label: sectionLabels.transport },
-        ],
-    },
-]
-
-export function EntryNavigation({ entryRef, activeSection }: { entryRef: string; activeSection: EntrySection }) {
-    return <nav className="entry-chapters" aria-label="Entry chapters">
-        {NAV_GROUPS.map((group) => <div className="chapter-group" key={group.caption}>
-            <p className="chapter-group-label">{group.caption}</p>
-            <div className="chapter-group-links">
-                {group.items.map(({ path, label }) => {
-                    const isActive = path === "" ? activeSection === "overview" : activeSection === path
-                    return <Link
-                        key={path || "overview"}
-                        aria-current={isActive ? "page" : undefined}
-                        to={path ? `/species-entries/${entryRef}/${path}` : `/species-entries/${entryRef}`}
-                    >
-                        {label}
-                    </Link>
-                })}
-            </div>
-        </div>)}
-    </nav>
-}
-
-/**
- * The overview chapter's boolean manifest card for thermo/statmech/
- * transport — ONLY ever rendered on the overview chapter
- * (`SpeciesEntryPage.tsx` renders it exclusively for `activeSection ===
- * "overview"`; the product chapters render `EntryThermoSection`/
- * `EntryStatmechSection`/`EntryTransportSection` instead, which read the
- * full deposited records rather than a boolean summary).
- */
-export function AvailabilitySection({ entry }: { entry: SpeciesEntryProjection }) {
-    return <section className="product-manifest" aria-labelledby="manifest-title">
-        <p className="eyebrow">Computed products</p>
-        <h2 id="manifest-title">What this entry has on record</h2>
-        <p>
-            Deposited, not derived: each card names a scientific product this entry either has, or genuinely
-            does not — an absent product reads as "unavailable", never as a failed lookup.
-        </p>
-        <div className="manifest-grid">
-            {(["thermo", "statmech", "transport"] as const).map((path) => <Availability
-                key={path}
-                label={sectionLabels[path]}
-                available={availabilityFor(entry, path)}
-                path={path}
-                entryRef={entry.species_entry_ref}
-            />)}
-        </div>
-    </section>
-}
-
-function availabilityFor(entry: SpeciesEntryProjection, path: "thermo" | "statmech" | "transport") {
-    if (path === "thermo") return entry.availability.has_thermo
-    if (path === "statmech") return entry.availability.has_statmech
-    return entry.availability.has_transport
-}
-
-function Availability({ label, available, path, entryRef }: {
-    label: string
-    available: boolean
-    path: "thermo" | "statmech" | "transport"
-    entryRef: string
-}) {
-    return <article className={`manifest-card${available ? " is-available" : " is-empty"}`}>
-        <p className="eyebrow">{label}</p>
-        <strong>{available ? "Available in this entry" : "Unavailable in this entry"}</strong>
-        {available
-            ? <Link to={`/species-entries/${entryRef}/${path}`}>View record section</Link>
-            : <p>No {label.toLowerCase()} record is projected for this entry.</p>}
-    </article>
 }

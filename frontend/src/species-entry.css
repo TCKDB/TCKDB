@@ -1,5 +1,5 @@
 /*
- * SpeciesEntryPage — design pass (design/species-entry-proposal).
+ * SpeciesEntryPage — conformer-first pass (design/species-entry-conformer-first).
  *
  * Exclusively this page's stylesheet (only `SpeciesEntryPage.tsx` imports
  * it) so it is free to define its own token system without risk to any
@@ -12,22 +12,29 @@
  * route chunk's CSS — see the header comment in `entry-science.css` for
  * the collision this already bit the project once).
  *
- * Token system:
- *   --evidence   (#205493) — the basin → observation → calculation → geometry
- *                 lineage: how a result was produced. Same blue the rest of
- *                 the archive already uses for "theoretical/computed".
- *   --product    (#8a4a1f) — thermo / statmech / transport: what the entry
- *                 asserts as a result. New for this page — gives "computed
- *                 products" a visual identity distinct from "evidence chain"
- *                 wherever the two appear side by side (chapter nav, ledger
- *                 headings, record cards).
- *   --ink/--ink-2/--muted/--faint — text hierarchy (unchanged from the
- *                 house palette already live on the front door).
- *   --line/--line-2 — hairlines.
- * Type: IBM Plex Serif for anything that is a title or a scientific
- * headline number: IBM Plex Sans for UI chrome and prose; IBM Plex Mono
- * for every reference, unit, and coefficient — already the house pairing,
- * reused deliberately rather than reinvented.
+ * Token system, revised:
+ *   The previous pass split "evidence" (blue) from "computed products"
+ *   (a rust `--product: #8a4a1f`, with `box-shadow: inset 3px 0 0`
+ *   rails on every card and rust-colored links). The owner's review:
+ *   "I do not like so many of the red links... it appears the website is
+ *   more CLI geared." A record's own fact -- "this entry has thermo" --
+ *   is not an alert, and a colored rail on every card read as one. Once a
+ *   selected conformer carries the page's structure (pick a basin, then
+ *   read its evidence in tabs), the evidence/product split stops doing
+ *   real work: both are just "this page's one accent" now. `--product`
+ *   and its rail are GONE, not merely recolored -- there is one accent,
+ *   `--accent`, reused site-wide (the same #205493 blue `.eyebrow` already
+ *   uses on the front door: not a new hue invented for this page, the
+ *   house's own "computed/theoretical" color, applied consistently).
+ *
+ *   --ink/--ink-2/--muted/--faint — text hierarchy (unchanged).
+ *   --line/--line-2 — hairlines (unchanged).
+ *   --accent/--accent-700/--accent-50 — the page's one accent: links,
+ *                 the active tab's underline, selected-conformer state.
+ *                 No second color competes with it anywhere on this page.
+ * Type: IBM Plex Serif for titles and scientific headline numbers; IBM
+ * Plex Sans for UI chrome and prose; IBM Plex Mono for every reference,
+ * unit and coefficient — unchanged, already the house pairing.
  */
 
 .entry-page {
@@ -39,14 +46,9 @@
     --line-2: #eaeef3;
     --surface: #ffffff;
 
-    --evidence: #205493;
-    --evidence-700: #173f6e;
-    --evidence-50: #eaf1f8;
-
-    --product: #8a4a1f;
-    --product-700: #6b3416;
-    --product-50: #f7ede1;
-    --product-100: #ecd9c3;
+    --accent: #205493;
+    --accent-700: #173f6e;
+    --accent-50: #eaf1f8;
 
     max-width: 74rem;
     margin: 0 auto;
@@ -95,8 +97,8 @@
     overflow-wrap: anywhere;
     padding: .3rem .6rem;
     border-radius: .35rem;
-    background: var(--evidence-50);
-    color: var(--evidence-700);
+    background: var(--accent-50);
+    color: var(--accent-700);
     font: 1.05rem var(--mono);
 }
 
@@ -166,7 +168,7 @@
 .ref-item-value { color: var(--muted); }
 
 .ref-item a {
-    color: var(--evidence);
+    color: var(--accent);
     text-decoration: underline;
     text-decoration-color: var(--line);
     text-underline-offset: .16em;
@@ -187,311 +189,192 @@
     cursor: pointer;
 }
 
-.copy-button:hover { border-color: var(--evidence); color: var(--evidence); }
-.copy-button[data-copied="true"] { border-color: var(--evidence); color: var(--evidence-700); }
+.copy-button:hover { border-color: var(--accent); color: var(--accent); }
+.copy-button[data-copied="true"] { border-color: var(--accent); color: var(--accent-700); }
 
 /* ---------------------------------------------------------------------
-   Chapter navigation. Three named groups instead of a flat tab row: the
-   grouping is the record's real shape (one identity, an evidence chain
-   that explains how, three product ledgers that state what) — not
-   decoration. The active-link accent switches from --evidence to
-   --product when the open chapter is a computed product, so the same
-   color language that separates evidence from product everywhere else on
-   the page also marks which kind of chapter is open.
+   Conformer picker — the page's signature interaction, replacing the
+   numbered provenance trail: a plain list of selectable basin cards, not
+   ref-heavy chapter links. Choosing one is the entry point to every tab
+   below it, not a destination of its own.
    --------------------------------------------------------------------- */
 
-.entry-chapters {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2.2rem 2.6rem;
-    margin: 3rem 0;
-    padding-bottom: 1.15rem;
-    border-bottom: 1px solid var(--line);
+.conformer-picker {
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
 }
 
-.chapter-group { min-width: 0; }
-
-.chapter-group-label {
-    margin: 0 0 .55rem;
-    color: var(--faint);
-    font: .6rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .1em;
-}
-
-.chapter-group-links {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .5rem 1.15rem;
-}
-
-.entry-chapters a {
-    padding: .2rem 0;
-    color: var(--ink-2);
-    font: 500 .86rem var(--sans);
-    white-space: nowrap;
-}
-
-.entry-chapters a:hover { color: var(--evidence-700); }
-
-.entry-chapters a[aria-current="page"] {
-    box-shadow: inset 0 -2px var(--evidence);
-    color: var(--evidence-700);
-    font-weight: 600;
-}
-
-.chapter-group:last-child a[aria-current="page"] {
-    box-shadow: inset 0 -2px var(--product);
-    color: var(--product-700);
-}
-
-/* ---------------------------------------------------------------------
-   Section heading rhythm, shared by the overview panels.
-   --------------------------------------------------------------------- */
-
-.section-heading { max-width: 44rem; }
-
-.section-heading h2,
-.methods-panel h2,
-.product-manifest h2 {
+.conformer-picker h2 {
     margin: 0;
     font: 600 1.9rem var(--serif);
     letter-spacing: -.025em;
     color: var(--ink);
 }
 
-.section-heading > p:last-child,
-.methods-panel > p:not(.eyebrow),
-.product-manifest > p:not(.eyebrow) {
+.conformer-picker-note {
+    max-width: 42rem;
+    margin: .6rem 0 0;
+    color: var(--ink-2);
+    line-height: 1.6;
+}
+
+.conformer-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    gap: 1rem;
+    margin-top: 1.3rem;
+}
+
+.conformer-card {
+    display: flex;
+    flex-direction: column;
+    gap: .4rem;
+    padding: 1.1rem 1.25rem;
+    border: 1px solid var(--line);
+    border-radius: .5rem;
+    background: #fff;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+}
+
+.conformer-card:hover { border-color: var(--accent); }
+
+.conformer-card[data-selected="true"] {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.conformer-card-label {
+    font: 600 1.05rem var(--serif);
+    color: var(--ink);
+}
+
+.conformer-card[data-selected="true"] .conformer-card-label { color: var(--accent-700); }
+
+.conformer-card-ref {
+    overflow-wrap: anywhere;
+    color: var(--muted);
+    font: .64rem var(--mono);
+}
+
+.conformer-card-meta,
+.conformer-card-coverage {
+    color: var(--ink-2);
+    font: .72rem var(--mono);
+}
+
+.conformer-card-coverage { color: var(--muted); }
+
+/* ---------------------------------------------------------------------
+   Entry tabs — a real ARIA tablist. One flat row, one accent, no second
+   color marking "this is a computed product": the selected conformer
+   already carries that distinction now.
+   --------------------------------------------------------------------- */
+
+.entry-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.6rem;
+    margin: 2.5rem 0 0;
+    padding-bottom: 0;
+    border-bottom: 1px solid var(--line);
+}
+
+.entry-tabs a {
+    padding: .1rem 0 .9rem;
+    color: var(--ink-2);
+    font: 500 .88rem var(--sans);
+    white-space: nowrap;
+}
+
+.entry-tabs a:hover { color: var(--accent-700); }
+
+.entry-tabs a[aria-selected="true"] {
+    box-shadow: inset 0 -2px var(--accent);
+    color: var(--accent-700);
+    font-weight: 600;
+}
+
+.entry-tabs a:focus-visible,
+.conformer-card:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+.tab-panel { margin-top: 2rem; }
+
+/* ---------------------------------------------------------------------
+   Section heading rhythm, shared by the geometry/single-point panels.
+   --------------------------------------------------------------------- */
+
+.section-heading { max-width: 44rem; }
+
+.section-heading h2 {
+    margin: 0;
+    font: 600 1.9rem var(--serif);
+    letter-spacing: -.025em;
+    color: var(--ink);
+}
+
+.section-heading > p:last-child {
     max-width: 42rem;
     color: var(--ink-2);
     line-height: 1.6;
 }
 
 /* ---------------------------------------------------------------------
-   The lineage trail — this page's signature element. A basin produces
-   observations; observations produce calculation stages; stages produce
-   stored geometries. That is a genuine, ordered process (not a decorative
-   sequence), so it earns numbered steps. Every node keeps its own count —
-   deposited observations, calculation rows, and stored geometries are
-   never added together into one figure.
+   Geometry tab: distinct stored geometries, then a per-observation list.
    --------------------------------------------------------------------- */
 
-.trail {
+.geometry-list {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 1.85rem;
-    margin: 1.85rem 0 0;
+    gap: .6rem;
+    margin: 1.2rem 0 0;
     padding: 0;
     list-style: none;
 }
 
-.trail-step {
-    position: relative;
-    padding-top: 1.5rem;
-}
-
-.trail-index {
-    position: absolute;
-    top: 0;
-    left: 0;
-    color: var(--faint);
-    font: .68rem var(--mono);
-    letter-spacing: .05em;
-}
-
-.trail-node {
-    position: relative;
+.geometry-item {
     display: flex;
-    height: 100%;
-    min-width: 0;
-    flex-direction: column;
-    gap: .45rem;
-    padding: 1rem;
-    border: 1px solid var(--line);
-    border-radius: .5rem;
-    background: var(--surface);
-}
-
-.trail-step:not(:first-child) .trail-node::before {
-    content: "→";
-    position: absolute;
-    top: 50%;
-    left: -1.5rem;
-    color: var(--faint);
-    font: 1rem var(--mono);
-    transform: translateY(-50%);
-}
-
-.trail-node.basin { background: linear-gradient(180deg, #fff 0%, var(--evidence-50) 140%); }
-.trail-node.geometry-node { background: linear-gradient(135deg, #fff 0%, var(--product-50) 150%); }
-
-.trail-label {
-    color: var(--muted);
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-}
-
-.trail-node strong {
-    overflow-wrap: anywhere;
-    color: var(--evidence-700);
-    font: 600 1.65rem var(--serif);
-}
-
-.trail-node > a {
-    overflow-wrap: anywhere;
-    color: var(--evidence-700);
-    font: 600 1.05rem var(--serif);
-}
-
-.trail-node small {
-    overflow-wrap: anywhere;
-    color: var(--muted);
-    font: .6rem var(--mono);
-}
-
-.trail-node p,
-.coverage {
-    margin: 0;
-    color: var(--ink-2);
-    font: .68rem/1.45 var(--mono);
-}
-
-.trail-links {
-    display: grid;
-    gap: .28rem;
-    max-height: 6.5rem;
-    margin-top: .2rem;
-    overflow-y: auto;
-}
-
-.trail-links a {
-    overflow-wrap: anywhere;
-    color: var(--evidence);
-    font: .62rem/1.35 var(--mono);
-    text-decoration: underline;
-    text-decoration-color: var(--line);
-    text-underline-offset: .14em;
-}
-
-/* ---------------------------------------------------------------------
-   Methods panel (levels of theory) — evidence-accented, so it reads as
-   part of "how", not "what".
-   --------------------------------------------------------------------- */
-
-.methods-panel {
-    margin-top: 3rem;
-    padding: 1.5rem 1.75rem;
-    border-left: 3px solid var(--evidence);
-    border-radius: 0 .4rem .4rem 0;
-    background: #fff;
-}
-
-.lot-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
-    gap: 1rem;
-    margin-top: 1.1rem;
-}
-
-.lot-card {
-    padding: .85rem .9rem;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .3rem 1rem;
+    padding: .7rem .9rem;
     border: 1px solid var(--line-2);
     border-radius: .4rem;
 }
 
-.lot-card strong {
-    color: var(--evidence-700);
-    font: .68rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
-}
-
-.lot-card ul {
-    margin: .5rem 0 0;
-    padding: 0;
-    list-style: none;
-}
-
-.lot-card li {
-    margin-top: .3rem;
+.geometry-item a {
     overflow-wrap: anywhere;
-    color: var(--ink-2);
-    font: .76rem var(--mono);
+    color: var(--accent);
+    font: 600 .82rem var(--mono);
+}
+
+.geometry-meta {
+    color: var(--muted);
+    font: .72rem var(--mono);
 }
 
 /* ---------------------------------------------------------------------
-   Product manifest (overview-only availability cards). Product-accented —
-   the empty-transport case is designed for directly: a dashed card with
-   the same weight as the two populated ones, not an error state.
+   Records grouped by whether they trace to the selected conformer's own
+   evidence, or sit at entry level (not linked to one conformer). Neither
+   group is styled as more or less trustworthy than the other — this is
+   provenance shape, not a quality signal.
    --------------------------------------------------------------------- */
 
-.product-manifest {
-    margin-top: 3.5rem;
-    padding-top: 2rem;
-    border-top: 1px solid var(--line);
-}
+.conformer-evidence-group { margin-top: 1.75rem; }
 
-.manifest-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin-top: 1.3rem;
-}
-
-.manifest-card {
-    display: flex;
-    min-height: 8.5rem;
-    flex-direction: column;
-    gap: .65rem;
-    padding: 1.25rem;
-    border: 1px solid var(--line);
-    border-radius: .5rem;
-    background: #fff;
-}
-
-.manifest-card.is-available { box-shadow: inset 3px 0 0 var(--product); }
-
-.manifest-card.is-empty {
-    border-style: dashed;
-    border-color: var(--line);
-    background: #fbfbfa;
-}
-
-.manifest-card strong { color: var(--ink); font: 600 .95rem var(--sans); }
-
-.manifest-card a {
-    margin-top: auto;
-    color: var(--product);
-    font: 600 .78rem var(--mono);
-}
-
-.manifest-card p:last-child {
+.conformer-evidence-group-heading {
     margin: 0;
-    color: var(--muted);
-    font-size: .82rem;
-    line-height: 1.5;
-}
-
-@media (max-width: 900px) {
-    .trail { grid-template-columns: repeat(2, 1fr); gap: 1.75rem 1.5rem; }
-    .trail-step:nth-child(3) .trail-node::before,
-    .trail-step:nth-child(1) .trail-node::before { display: none; }
-    .manifest-grid { grid-template-columns: 1fr 1fr; }
+    color: var(--ink);
+    font: 600 1.1rem var(--serif);
 }
 
 @media (max-width: 680px) {
-    .trail { grid-template-columns: 1fr; }
-
-    .trail-step:not(:first-child) .trail-node::before {
-        top: -1.35rem;
-        left: 50%;
-        content: "↓";
-        transform: translateX(-50%);
-    }
-
     .entry-facts { gap: .85rem 1.2rem; }
-    .manifest-grid { grid-template-columns: 1fr; }
-    .entry-chapters { gap: 1.5rem 2rem; }
+    .entry-tabs { gap: 1.1rem 1.6rem; }
+    .conformer-list { grid-template-columns: 1fr; }
 }
