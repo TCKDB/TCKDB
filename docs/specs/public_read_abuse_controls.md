@@ -409,9 +409,7 @@ violation list, and defaults to false so upgrading exposes nothing new.
 
 One caveat worth stating plainly: the ReDoc page FastAPI generates loads
 its renderer from `cdn.jsdelivr.net` and its fonts from Google Fonts, so
-`/redoc` is blank for a reader who blocks those hosts. The landing page at
-`/` is fully self-contained and carries the citation, data-model and
-API-entry information without loading anything.
+`/redoc` is blank for a reader who blocks those hosts.
 
 ### 7.4 Free-text input bounds (F9)
 

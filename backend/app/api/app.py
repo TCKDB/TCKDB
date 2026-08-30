@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.config import Settings, settings
 from app.api.errors import register_exception_handlers
-from app.api.landing import REDOC_PATH, landing_router
 from app.api.logging_config import configure_logging
 from app.api.public_openapi import install_hosted_openapi
 from app.api.rate_limit import RateLimitMiddleware
@@ -68,9 +67,12 @@ async def _lifespan(app: FastAPI):
 
 #: Paths FastAPI registers for each of the three built-in doc surfaces.
 #: Restated here rather than relying on the framework defaults so the
-#: landing page, the tests and the deployment checklist all name the
-#: same strings.
+#: tests and the deployment checklist all name the same strings. All
+#: three constants used to be shared with ``app/api/landing.py`` (the
+#: dead root-``/`` HTML page, deleted); ``REDOC_PATH`` lived there
+#: because the landing page linked to ReDoc, and moved here with it.
 SWAGGER_PATH = "/docs"
+REDOC_PATH = "/redoc"
 OPENAPI_PATH = "/openapi.json"
 
 
@@ -138,14 +140,6 @@ def create_app() -> FastAPI:
     app.add_middleware(RateLimitMiddleware)
     app.add_middleware(RequestIDMiddleware)
     app.include_router(api_router, prefix="/api/v1")
-    # Registered *after* the API router, and matching the single exact
-    # path ``/``. Starlette resolves routes in registration order, so a
-    # router added last can only ever be reached by a request no earlier
-    # route matched -- and ``/`` is not a prefix of ``/api/v1/...``
-    # anyway. Nothing that answered before this line answers differently
-    # after it; tests/api/test_landing_page.py asserts the full route
-    # table is unchanged apart from the one addition.
-    app.include_router(landing_router)
     register_exception_handlers(app)
     install_hosted_openapi(app)
     return app

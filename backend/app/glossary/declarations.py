@@ -640,8 +640,7 @@ _DIRECTION = Vocabulary(
             token="reverse",
             means=(
                 "Your query matched the reaction read backwards: **what you "
-                "asked for as reactants are that reaction's products.** The "
-                "landing page renders this as \"matched in reverse\"."
+                "asked for as reactants are that reaction's products.**"
             ),
         ),
         Term(

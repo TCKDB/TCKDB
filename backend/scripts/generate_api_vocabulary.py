@@ -27,10 +27,9 @@ The inclusion rule, which is the whole judgement
 A token is in when **both** halves hold:
 
 1. **A reader can meet it** — the literal string can appear in a public
-   response body or on the landing page rendered from one. Mechanical:
-   ``app.glossary.reachability`` computes the enums reachable from the
-   read schemas and the trust fragment, and the test suite refuses a
-   declared vocabulary outside that set.
+   response body. Mechanical: ``app.glossary.reachability`` computes
+   the enums reachable from the read schemas and the trust fragment,
+   and the test suite refuses a declared vocabulary outside that set.
 2. **Chemistry does not decode it** — the token names something about
    TCKDB's own process rather than about chemistry. Declared per
    vocabulary; the declaration is the claim.
@@ -127,11 +126,11 @@ TCKDB.
 A token is here when **both** of these hold:
 
 1. **You can meet it.** The literal string can appear in a public API response
-   body, or on the landing page rendered from one. This half is checked
-   mechanically: `app/glossary/reachability.py` computes the vocabulary the
-   read schemas and the trust fragment can serialise, and the test suite
-   refuses an entry outside that set. A word only an administrator or an
-   internal service sees is not vocabulary you need.
+   body. This half is checked mechanically: `app/glossary/reachability.py`
+   computes the vocabulary the read schemas and the trust fragment can
+   serialise, and the test suite refuses an entry outside that set. A word
+   only an administrator or an internal service sees is not vocabulary you
+   need.
 2. **Chemistry does not decode it.** The token says something about *TCKDB's
    own process* — how a record was reviewed, how much evidence stands behind
    it, how your query matched, how a record is named, or why a request was
