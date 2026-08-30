@@ -1,5 +1,5 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { conformerLabel } from "../domain/conformerEvidence"
+import { calculationTypeCounts, conformerLabel } from "../domain/conformerEvidence"
 import { RefsDisclosure } from "./RefsDisclosure"
 
 // The heading is imperative ("Choose a conformer") only when there is an
@@ -71,6 +71,7 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
     const ref = conformer.conformer_group.conformer_group_ref
     const total = conformer.observations_summary.total
     const coverage = conformer.evidence_summary.evidence_coverage
+    const typeCounts = calculationTypeCounts(conformer)
     return (
         <div className="conformer-card" data-selected={isSelected}>
             <button
@@ -81,10 +82,11 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
             >
                 <span className="conformer-card-label">{conformerLabel(conformer)}</span>
                 <span className="conformer-card-meta">
-                    {total} observation{total === 1 ? "" : "s"} · {conformer.evidence_summary.calculation_count} calculation rows
+                    {total} observation{total === 1 ? "" : "s"} · {conformer.evidence_summary.calculation_count} calculation row{conformer.evidence_summary.calculation_count === 1 ? "" : "s"}
+                    {typeCounts.length > 0 && ` (${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")})`}
                 </span>
                 <span className="conformer-card-coverage">
-                    opt {coverage.opt}/{total} · freq {coverage.freq}/{total} · sp {coverage.sp}/{total}
+                    opt {coverage.opt}/{total} obs · freq {coverage.freq}/{total} obs · sp {coverage.sp}/{total} obs
                 </span>
             </button>
             <RefsDisclosure refs={[{ label: "Conformer group", value: ref, to: `/conformer-groups/${ref}` }]} />

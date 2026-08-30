@@ -339,15 +339,29 @@ describe("species-entry page: identity and errors", () => {
         expect(screen.getByText("0 / doublet (2)")).toBeVisible()
         expect(screen.getByText("Conformers · thermo · statmech")).toBeVisible()
 
+        // SMILES and InChIKey are ALWAYS visible chemistry identifiers in
+        // the identity header -- never behind the References disclosure.
+        // Labeled explicitly (and honestly: this record only carries an
+        // InChIKey, never a full InChI, so the label says "InChIKey").
+        const identifiers = screen.getByRole("list", { name: "Chemical identifiers" })
+        expect(within(identifiers).getByText("SMILES")).toBeVisible()
+        expect(within(identifiers).getByText("[CH3]")).toBeVisible()
+        expect(within(identifiers).getByText("InChIKey")).toBeVisible()
+        expect(within(identifiers).getByText("WCYWZMWISLQXQU-UHFFFAOYSA-N")).toBeVisible()
+        expect(within(identifiers).queryByText("InChI", { exact: true })).not.toBeInTheDocument()
+
         // Public refs are collapsed by default (References disclosure) but
         // present, visible, and copyable once opened -- never hidden by
-        // substituting a label for the ref itself.
+        // substituting a label for the ref itself. Only the two STABLE
+        // refs (species, entry) live here now -- InChIKey moved to the
+        // always-visible identifiers row above, not duplicated here.
         expect(screen.queryByText("spc_atp56uqux2ajao7hvckx7gx7ca")).not.toBeVisible()
-        await user.click(screen.getByText("References (3)"))
+        await user.click(screen.getByText("References (2)"))
         expect(screen.getByRole("link", { name: "spc_atp56uqux2ajao7hvckx7gx7ca" })).toHaveAttribute(
             "href", "/species/spc_atp56uqux2ajao7hvckx7gx7ca",
         )
-        expect(screen.getByText("WCYWZMWISLQXQU-UHFFFAOYSA-N")).toBeVisible()
+        const refsPanel = screen.getByText("References (2)").closest("details") as HTMLElement
+        expect(within(refsPanel).queryByText("InChIKey")).not.toBeInTheDocument()
 
         // The availability card grid ("Available in this entry" / "View
         // record section") is gone -- plain navigation replaced it.
@@ -388,21 +402,61 @@ describe("species-entry page: conformer picker", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByText("Choose a conformer")
-        const conformerOne = screen.getByText("conformer_1").closest(".conformer-card") as HTMLElement
-        const conformerTwo = screen.getByText("conformer_2").closest(".conformer-card") as HTMLElement
-        expect(within(conformerOne).getByRole("button", { name: /conformer_1/ })).toHaveAttribute("aria-pressed", "true")
-        expect(within(conformerTwo).getByRole("button", { name: /conformer_2/ })).toHaveAttribute("aria-pressed", "false")
-        // Counts stay distinct: observations, calculation rows, and
-        // coverage are three different numbers, never conflated -- checked
-        // on BOTH cards, not just the first (a mutation reading every
-        // card's coverage off conformers[0] would still pass a
-        // first-card-only check).
-        expect(within(conformerOne).getByText("2 observations · 7 calculation rows")).toBeVisible()
-        expect(within(conformerOne).getByText("opt 2/2 · freq 2/2 · sp 1/2")).toBeVisible()
-        expect(within(conformerTwo).getByText("1 observation · 3 calculation rows")).toBeVisible()
-        expect(within(conformerTwo).getByText("opt 1/1 · freq 1/1 · sp 1/1")).toBeVisible()
+        // "conformer_1"/"conformer_2" are the ARCHIVE'S deposited labels
+        // (auto-numbered basins); the page renders them as "Conformer
+        // Group N" -- see `conformerLabel` (domain/conformerEvidence.ts).
+        const conformerOne = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
+        const conformerTwo = screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement
+        expect(within(conformerOne).getByRole("button", { name: /Conformer Group 1/ })).toHaveAttribute("aria-pressed", "true")
+        expect(within(conformerTwo).getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "false")
+        // Counts stay distinct: observations, calculation rows (with their
+        // own opt/freq/sp breakdown), and coverage are three DIFFERENT
+        // units, never conflated -- checked on BOTH cards, not just the
+        // first (a mutation reading every card's coverage off
+        // conformers[0] would still pass a first-card-only check). The
+        // breakdown (3 opt/2 freq/2 sp on card one) is the raw calculation
+        // count per stage; the coverage line below it (2/2 obs, a
+        // DIFFERENT number) is how many OBSERVATIONS have that stage --
+        // labeling both as "obs" makes the coverage line's unit explicit,
+        // never letting a reader sum it against calculation rows.
+        expect(within(conformerOne).getByText("2 observations · 7 calculation rows (3 opt · 2 freq · 2 sp)")).toBeVisible()
+        expect(within(conformerOne).getByText("opt 2/2 obs · freq 2/2 obs · sp 1/2 obs")).toBeVisible()
+        expect(within(conformerTwo).getByText("1 observation · 3 calculation rows (1 opt · 1 freq · 1 sp)")).toBeVisible()
+        expect(within(conformerTwo).getByText("opt 1/1 obs · freq 1/1 obs · sp 1/1 obs")).toBeVisible()
         // The URL becomes addressable for the default selection (reload survives it).
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+    })
+
+    it("renders the evidence-linkage panel under the picker, scoped to the SELECTED conformer, and updates it when the selection changes", async () => {
+        // No page-level test exercised this panel before -- removing the
+        // `<ConformerEvidenceLinkage>` line from `SpeciesEntryPage.tsx`, or
+        // wiring it to the wrong conformer, passed every other test. This
+        // is that coverage: the panel must be present under the picker,
+        // must reflect conformer ONE's own numbers by default, and must
+        // switch to conformer TWO's own (different) numbers once selected
+        // -- never staying pinned to whichever conformer loaded first.
+        const user = userEvent.setup()
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+
+        const panelHeading = () => screen.getByRole("heading", { name: /^Evidence for / })
+        const stepFor = (kind: "observations" | "calculations" | "geometries") =>
+            document.querySelector(`[data-linkage-step="${kind}"]`) as HTMLElement
+
+        expect(panelHeading()).toHaveTextContent("Evidence for Conformer Group 1")
+        expect(within(stepFor("observations")).getByText("2")).toBeVisible()
+        expect(within(stepFor("calculations")).getByText("7")).toBeVisible()
+        expect(within(stepFor("geometries")).getByText("2")).toBeVisible()
+
+        await user.click(within(screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement)
+            .getByRole("button", { name: /Conformer Group 2/ }))
+
+        expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
+        expect(within(stepFor("observations")).getByText("1")).toBeVisible()
+        expect(within(stepFor("calculations")).getByText("3")).toBeVisible()
+        expect(within(stepFor("geometries")).getByText("1")).toBeVisible()
     })
 
     it("collapses each conformer card's own ref behind a References disclosure, keeping the basin label visible outside it", async () => {
@@ -411,8 +465,8 @@ describe("species-entry page: conformer picker", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByText("Choose a conformer")
-        const conformerOne = screen.getByText("conformer_1").closest(".conformer-card") as HTMLElement
-        expect(within(conformerOne).getByText("conformer_1")).toBeVisible()
+        const conformerOne = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
+        expect(within(conformerOne).getByText("Conformer Group 1")).toBeVisible()
         expect(within(conformerOne).getByText("References (1)")).toBeInTheDocument()
         expect(within(conformerOne).queryByText(groupOneRef)).not.toBeVisible()
         await user.click(within(conformerOne).getByText("References (1)"))
@@ -516,7 +570,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         expect(await screen.findByRole("link", { name: "geom_g1" })).toBeVisible()
         expect(screen.queryByText("geom_g3")).not.toBeInTheDocument()
 
-        await user.click(within(screen.getByText("conformer_2").closest(".conformer-card") as HTMLElement).getByRole("button", { name: /conformer_2/ }))
+        await user.click(within(screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement).getByRole("button", { name: /Conformer Group 2/ }))
         expect(await screen.findByRole("link", { name: "geom_g3" })).toBeVisible()
         expect(screen.queryByText("geom_g1")).not.toBeInTheDocument()
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupTwoRef)
@@ -563,7 +617,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
 
         const groupHeadings = screen.getAllByRole("heading", { level: 3 })
             .filter((node) => node.className === "conformer-evidence-group-heading")
-        expect(groupHeadings.map((node) => node.textContent)).toEqual(["From conformer_1", "From conformer_2", "No conformer link"])
+        expect(groupHeadings.map((node) => node.textContent)).toEqual(["From Conformer Group 1", "From Conformer Group 2", "No conformer link"])
 
         const fromOne = groupHeadings[0].closest(".conformer-evidence-group") as HTMLElement
         const fromTwo = groupHeadings[1].closest(".conformer-evidence-group") as HTMLElement
@@ -571,7 +625,7 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         expect(within(fromOne).getByText("thm_one")).toBeVisible()
         expect(within(fromOne).queryByText("thm_two")).not.toBeInTheDocument()
         expect(within(fromOne).queryByText("thm_three")).not.toBeInTheDocument()
-        // thm_three is linked to conformer_2, NOT the selected conformer_1
+        // thm_three is linked to Conformer Group 2, NOT the selected Conformer Group 1
         // -- it must land under its own named group, never under "No
         // conformer link" (the exact regression this replaced).
         expect(within(fromTwo).getByText("thm_three")).toBeVisible()
@@ -611,10 +665,10 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         // The flat (ungrouped) list renders immediately while the
         // include=conformers refetch is in flight -- wait for the
         // ATTRIBUTED groups specifically, not just any "sm_1" text.
-        await screen.findByRole("heading", { name: "From conformer_1" })
+        await screen.findByRole("heading", { name: "From Conformer Group 1" })
         const groupHeadings = screen.getAllByRole("heading", { level: 3 })
             .filter((node) => node.className === "conformer-evidence-group-heading")
-        expect(groupHeadings.map((node) => node.textContent)).toEqual(["From conformer_1", "From conformer_2", "No conformer link"])
+        expect(groupHeadings.map((node) => node.textContent)).toEqual(["From Conformer Group 1", "From Conformer Group 2", "No conformer link"])
 
         const fromOne = groupHeadings[0].closest(".conformer-evidence-group") as HTMLElement
         const fromTwo = groupHeadings[1].closest(".conformer-evidence-group") as HTMLElement
