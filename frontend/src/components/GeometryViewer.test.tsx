@@ -32,6 +32,7 @@ type FakeViewerCalls = {
     addModel: unknown[][]
     setStyle: unknown[][]
     zoomTo: unknown[][]
+    zoom: unknown[][]
     spin: unknown[][]
     animate: unknown[][]
     render: unknown[][]
@@ -39,6 +40,8 @@ type FakeViewerCalls = {
     rotate: unknown[][]
     getView: unknown[][]
     setView: unknown[][]
+    addLabel: unknown[][]
+    removeAllLabels: unknown[][]
 }
 
 const calls: FakeViewerCalls = {
@@ -46,6 +49,7 @@ const calls: FakeViewerCalls = {
     addModel: [],
     setStyle: [],
     zoomTo: [],
+    zoom: [],
     spin: [],
     animate: [],
     render: [],
@@ -53,6 +57,8 @@ const calls: FakeViewerCalls = {
     rotate: [],
     getView: [],
     setView: [],
+    addLabel: [],
+    removeAllLabels: [],
 }
 
 /** The view "pinned" by the fake viewer's getView() — arbitrary but fixed, so Reset view's setView() call can be pinned exactly. */
@@ -86,6 +92,7 @@ vi.mock("3dmol", () => ({
             addModel: (...a: unknown[]) => { calls.addModel.push(a) },
             setStyle: (...a: unknown[]) => { calls.setStyle.push(a) },
             zoomTo: (...a: unknown[]) => { calls.zoomTo.push(a) },
+            zoom: (...a: unknown[]) => { calls.zoom.push(a) },
             spin: (...a: unknown[]) => { calls.spin.push(a) },
             animate: (...a: unknown[]) => { calls.animate.push(a) },
             render: (...a: unknown[]) => { calls.render.push(a) },
@@ -93,6 +100,8 @@ vi.mock("3dmol", () => ({
             rotate: (...a: unknown[]) => { calls.rotate.push(a) },
             getView: (...a: unknown[]) => { calls.getView.push(a); return FAKE_INITIAL_VIEW },
             setView: (...a: unknown[]) => { calls.setView.push(a) },
+            addLabel: (...a: unknown[]) => { calls.addLabel.push(a) },
+            removeAllLabels: (...a: unknown[]) => { calls.removeAllLabels.push(a) },
         }
     },
 }))
@@ -141,11 +150,116 @@ describe("GeometryViewer", () => {
         )
     })
 
-    it("passes nomouse:true to createViewer — 3Dmol's default wheel/touch handlers would otherwise trap page scroll on the canvas", async () => {
+    it("does NOT pass nomouse:true — 3Dmol's own drag-to-rotate/multi-touch handling stays enabled; only the scroll-trapping gestures are intercepted separately (see below)", async () => {
         render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
         await waitFor(() => expect(calls.createViewer).toHaveLength(1))
         const config = calls.createViewer[0][1] as Record<string, unknown>
-        expect(config.nomouse).toBe(true)
+        expect(config.nomouse).not.toBe(true)
+    })
+
+    describe("scroll-trap fix: capture-phase wheel/touchmove interception on the container", () => {
+        // jsdom implements real DOM event propagation/capture semantics
+        // (this is plain synchronous JS, not layout or native input), so
+        // it CAN prove that this component's own listener calls
+        // stopPropagation() (and never preventDefault()) for the right
+        // gestures. What jsdom cannot show is whether a real browser then
+        // actually still scrolls the page — that needs a real browser,
+        // verified separately (see the PR description for the measured
+        // real-Chromium numbers). These two kinds of coverage are
+        // deliberately not the same test.
+        it("a plain wheel event dispatched on the nested canvas never reaches a listener registered on that canvas — stopPropagation, not preventDefault", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const container = await waitFor(() => {
+                const el = document.querySelector(".viewer-canvas") as HTMLElement
+                expect(el.querySelector('[data-testid="fake-3dmol-canvas"]')).not.toBeNull()
+                return el
+            })
+            const canvas = container.querySelector('[data-testid="fake-3dmol-canvas"]') as HTMLElement
+            // Mirrors 3Dmol's own real listener registration exactly
+            // (GLViewer.ts:295): directly on the canvas, non-passive.
+            let sawWheelOnCanvas = false
+            canvas.addEventListener("wheel", () => { sawWheelOnCanvas = true }, { passive: false })
+
+            const event = new Event("wheel", { bubbles: true, cancelable: true })
+            canvas.dispatchEvent(event)
+
+            expect(sawWheelOnCanvas).toBe(false)
+            expect(event.defaultPrevented).toBe(false)
+        })
+
+        it("a one-finger touchmove dispatched on the nested canvas never reaches a listener registered on that canvas", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const container = await waitFor(() => {
+                const el = document.querySelector(".viewer-canvas") as HTMLElement
+                expect(el.querySelector('[data-testid="fake-3dmol-canvas"]')).not.toBeNull()
+                return el
+            })
+            const canvas = container.querySelector('[data-testid="fake-3dmol-canvas"]') as HTMLElement
+            let sawTouchMoveOnCanvas = false
+            canvas.addEventListener("touchmove", () => { sawTouchMoveOnCanvas = true }, { passive: false })
+
+            const event = new Event("touchmove", { bubbles: true, cancelable: true })
+            Object.defineProperty(event, "touches", { value: [{}], configurable: true })
+            canvas.dispatchEvent(event)
+
+            expect(sawTouchMoveOnCanvas).toBe(false)
+            expect(event.defaultPrevented).toBe(false)
+        })
+
+        it("a two-finger touchmove is left alone — it does reach the nested canvas, so pinch/two-finger drag still work", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const container = await waitFor(() => {
+                const el = document.querySelector(".viewer-canvas") as HTMLElement
+                expect(el.querySelector('[data-testid="fake-3dmol-canvas"]')).not.toBeNull()
+                return el
+            })
+            const canvas = container.querySelector('[data-testid="fake-3dmol-canvas"]') as HTMLElement
+            let sawTouchMoveOnCanvas = false
+            canvas.addEventListener("touchmove", () => { sawTouchMoveOnCanvas = true }, { passive: false })
+
+            const event = new Event("touchmove", { bubbles: true, cancelable: true })
+            Object.defineProperty(event, "touches", { value: [{}, {}], configurable: true })
+            canvas.dispatchEvent(event)
+
+            expect(sawTouchMoveOnCanvas).toBe(true)
+        })
+
+        it("a one-finger touchstart is ALSO intercepted, not just touchmove — measured live in a real browser (Playwright/Chromium): 3Dmol's own touchstart handler (_handleMouseDown) calls preventDefault() unconditionally too, and Chromium suppresses scrolling for the WHOLE touch sequence once touchstart has been prevented, even when every later touchmove in that sequence is left alone. Intercepting only touchmove reproduces the scroll trap; this is not redundant with the touchmove interception above", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const container = await waitFor(() => {
+                const el = document.querySelector(".viewer-canvas") as HTMLElement
+                expect(el.querySelector('[data-testid="fake-3dmol-canvas"]')).not.toBeNull()
+                return el
+            })
+            const canvas = container.querySelector('[data-testid="fake-3dmol-canvas"]') as HTMLElement
+            let sawTouchStartOnCanvas = false
+            canvas.addEventListener("touchstart", () => { sawTouchStartOnCanvas = true }, { passive: false })
+
+            const event = new Event("touchstart", { bubbles: true, cancelable: true })
+            Object.defineProperty(event, "touches", { value: [{}], configurable: true })
+            canvas.dispatchEvent(event)
+
+            expect(sawTouchStartOnCanvas).toBe(false)
+            expect(event.defaultPrevented).toBe(false)
+        })
+
+        it("a two-finger touchstart is left alone — 3Dmol needs both touch points at touchstart to compute its pinch baseline distance", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const container = await waitFor(() => {
+                const el = document.querySelector(".viewer-canvas") as HTMLElement
+                expect(el.querySelector('[data-testid="fake-3dmol-canvas"]')).not.toBeNull()
+                return el
+            })
+            const canvas = container.querySelector('[data-testid="fake-3dmol-canvas"]') as HTMLElement
+            let sawTouchStartOnCanvas = false
+            canvas.addEventListener("touchstart", () => { sawTouchStartOnCanvas = true }, { passive: false })
+
+            const event = new Event("touchstart", { bubbles: true, cancelable: true })
+            Object.defineProperty(event, "touches", { value: [{}, {}], configurable: true })
+            canvas.dispatchEvent(event)
+
+            expect(sawTouchStartOnCanvas).toBe(true)
+        })
     })
 
     it("actually styles the model — an unstyled 3Dmol model renders nothing visible, so setStyle must be called with a non-empty style", async () => {
@@ -192,7 +306,7 @@ describe("GeometryViewer", () => {
         })
     })
 
-    describe("rotate/reset controls (nomouse:true means these are the only way to move the view)", () => {
+    describe("rotate/zoom/reset controls (buttons are an addition to mouse/touch, not the only way to move the view)", () => {
         it("renders no controls until the viewer is actually ready", () => {
             render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
             expect(screen.queryByRole("group")).toBeNull()
@@ -215,6 +329,22 @@ describe("GeometryViewer", () => {
             ])
         })
 
+        it("Zoom in/out call viewer.zoom with a reciprocal factor pair, no animation duration argument (reduced-motion-safe by construction)", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const group = await screen.findByRole("group", { name: /Rotate the 3D view/ })
+
+            fireEvent.click(within(group).getByRole("button", { name: "Zoom in" }))
+            fireEvent.click(within(group).getByRole("button", { name: "Zoom out" }))
+
+            expect(calls.zoom).toHaveLength(2)
+            const [inFactor] = calls.zoom[0] as [number]
+            const [outFactor] = calls.zoom[1] as [number]
+            expect(inFactor).toBeGreaterThan(1)
+            expect(outFactor).toBeCloseTo(1 / inFactor)
+            expect(calls.zoom[0]).toHaveLength(1)
+            expect(calls.zoom[1]).toHaveLength(1)
+        })
+
         it("Reset view snaps back to the view captured right after load, via setView — not a fresh zoomTo that could land somewhere new", async () => {
             render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
             const group = await screen.findByRole("group", { name: /Rotate the 3D view/ })
@@ -225,11 +355,120 @@ describe("GeometryViewer", () => {
         it("buttons are ordinary focusable elements, not a mouse-only affordance", async () => {
             render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
             const group = await screen.findByRole("group", { name: /Rotate the 3D view/ })
-            for (const name of ["Rotate left", "Rotate right", "Rotate up", "Rotate down", "Reset view"]) {
+            for (const name of ["Rotate left", "Rotate right", "Rotate up", "Rotate down", "Zoom in", "Zoom out", "Reset view"]) {
                 const button = within(group).getByRole("button", { name })
                 button.focus()
                 expect(button).toHaveFocus()
             }
+        })
+    })
+
+    describe("representation style (ball & stick / spacefill / wireframe)", () => {
+        it("defaults to ball & stick, marked pressed", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            expect(within(group).getByRole("button", { name: "Ball & stick" })).toHaveAttribute("aria-pressed", "true")
+            expect(within(group).getByRole("button", { name: "Spacefill" })).toHaveAttribute("aria-pressed", "false")
+        })
+
+        it("switching to Spacefill calls setStyle again with the spacefill spec, without resetting the camera (no extra zoomTo)", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            await waitFor(() => expect(calls.setStyle).toHaveLength(1))
+            const group = await screen.findByRole("group", { name: /Display options/ })
+
+            fireEvent.click(within(group).getByRole("button", { name: "Spacefill" }))
+
+            await waitFor(() => expect(calls.setStyle).toHaveLength(2))
+            expect(calls.setStyle[1][0]).toEqual({})
+            expect(calls.setStyle[1][1]).toEqual({ sphere: {} })
+            expect(calls.zoomTo).toHaveLength(1)
+            expect(within(group).getByRole("button", { name: "Spacefill" })).toHaveAttribute("aria-pressed", "true")
+        })
+
+        it("switching back to a previously-selected style renders that style again (not stuck on the last one applied)", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            await waitFor(() => expect(calls.setStyle).toHaveLength(1))
+            const group = await screen.findByRole("group", { name: /Display options/ })
+
+            fireEvent.click(within(group).getByRole("button", { name: "Wireframe" }))
+            await waitFor(() => expect(calls.setStyle).toHaveLength(2))
+            fireEvent.click(within(group).getByRole("button", { name: "Ball & stick" }))
+            await waitFor(() => expect(calls.setStyle).toHaveLength(3))
+
+            expect(calls.setStyle[1][1]).toEqual({ line: { linewidth: 2 } })
+            expect(calls.setStyle[2][1]).toEqual({ stick: { radius: 0.14 }, sphere: { scale: 0.28 } })
+        })
+
+        it("spacefill swaps the bond-disclosure sentence for a style-accurate one — spacefill draws no explicit bond primitive", async () => {
+            render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            fireEvent.click(within(group).getByRole("button", { name: "Spacefill" }))
+            expect(screen.getByText(/An interactive 3D view/).textContent).toMatch(
+                /This spacefill style does not draw an explicit bond between atoms/,
+            )
+            expect(screen.getByText(/An interactive 3D view/).textContent).not.toMatch(
+                /Bonds shown are inferred from interatomic distance/,
+            )
+        })
+    })
+
+    describe("atom labels — must follow the coordinate table's own atom_index, not 3Dmol's internal numbering", () => {
+        // Deliberately non-sequential / non-zero-based atom_index values,
+        // so a mutation that labels from array position (0-based) or from
+        // some other counter cannot accidentally produce the same text as
+        // the correct atom_index-based label.
+        const ATOMS = [
+            { atom_index: 7, element: "C", x: 0, y: 0, z: 0 },
+            { atom_index: 12, element: "H", x: 0, y: 0, z: 1.09 },
+        ]
+        const XYZ = "2\n\nC 0 0 0\nH 0 0 1.09"
+
+        it("label mode defaults to None — no addLabel calls", async () => {
+            render(<GeometryViewer atoms={ATOMS} formula="CH" xyzText={XYZ} />)
+            await waitFor(() => expect(calls.render).toHaveLength(1))
+            expect(calls.addLabel).toHaveLength(0)
+        })
+
+        it("'Numbers' labels each atom with its own atom_index from the coordinate table, not a 0-based or serial-based counter", async () => {
+            render(<GeometryViewer atoms={ATOMS} formula="CH" xyzText={XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            fireEvent.change(within(group).getByLabelText("Atom labels"), { target: { value: "numbers" } })
+
+            await waitFor(() => expect(calls.addLabel).toHaveLength(2))
+            const texts = calls.addLabel.map((call) => call[0])
+            expect(texts).toEqual(["7", "12"])
+            const positions = calls.addLabel.map((call) => (call[1] as { position: unknown }).position)
+            expect(positions).toEqual([
+                { x: 0, y: 0, z: 0 },
+                { x: 0, y: 0, z: 1.09 },
+            ])
+        })
+
+        it("'Symbols' labels each atom with its element only", async () => {
+            render(<GeometryViewer atoms={ATOMS} formula="CH" xyzText={XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            fireEvent.change(within(group).getByLabelText("Atom labels"), { target: { value: "symbols" } })
+            await waitFor(() => expect(calls.addLabel).toHaveLength(2))
+            expect(calls.addLabel.map((call) => call[0])).toEqual(["C", "H"])
+        })
+
+        it("'Symbols + numbers' concatenates element and atom_index", async () => {
+            render(<GeometryViewer atoms={ATOMS} formula="CH" xyzText={XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            fireEvent.change(within(group).getByLabelText("Atom labels"), { target: { value: "both" } })
+            await waitFor(() => expect(calls.addLabel).toHaveLength(2))
+            expect(calls.addLabel.map((call) => call[0])).toEqual(["C7", "H12"])
+        })
+
+        it("switching back to None clears labels via removeAllLabels and adds none", async () => {
+            render(<GeometryViewer atoms={ATOMS} formula="CH" xyzText={XYZ} />)
+            const group = await screen.findByRole("group", { name: /Display options/ })
+            const select = within(group).getByLabelText("Atom labels")
+            fireEvent.change(select, { target: { value: "numbers" } })
+            await waitFor(() => expect(calls.addLabel).toHaveLength(2))
+            fireEvent.change(select, { target: { value: "none" } })
+            await waitFor(() => expect(calls.removeAllLabels.length).toBeGreaterThanOrEqual(2))
+            expect(calls.addLabel).toHaveLength(2)
         })
     })
 
