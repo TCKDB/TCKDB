@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
@@ -11,6 +11,9 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
     server.resetHandlers()
     cleanup()
+    // Some tests below stub `navigator.clipboard` (jsdom does not provide
+    // one). Reset it so a stub from one test cannot leak into the next.
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true })
 })
 afterAll(() => server.close())
 
@@ -208,9 +211,9 @@ describe("GeometryDetailPage", () => {
         // (or read one atom's coordinate for another's row) is observable
         // here, unlike a fixture whose x/y/z happened to share one value.
         const secondDataRow = rows[1]
-        expect(within(secondDataRow).getByText("0.11", { selector: "[data-label='x']" })).toBeVisible()
-        expect(within(secondDataRow).getByText("0.22", { selector: "[data-label='y']" })).toBeVisible()
-        expect(within(secondDataRow).getByText("0.33", { selector: "[data-label='z']" })).toBeVisible()
+        expect(within(secondDataRow).getByText("0.11", { selector: "[data-column='x']" })).toBeVisible()
+        expect(within(secondDataRow).getByText("0.22", { selector: "[data-column='y']" })).toBeVisible()
+        expect(within(secondDataRow).getByText("0.33", { selector: "[data-column='z']" })).toBeVisible()
     })
 
     it("flags a mismatch between the declared atom count and the returned coordinate rows", async () => {
@@ -505,7 +508,7 @@ describe("GeometryDetailPage", () => {
             // default unit to "bohr" would fail this (it would show the
             // converted 0.2079... value instead of 0.11).
             const secondRow = within(table).getAllByRole("row")[2]
-            expect(within(secondRow).getByText("0.11", { selector: "[data-label='x']" })).toBeVisible()
+            expect(within(secondRow).getByText("0.11", { selector: "[data-column='x']" })).toBeVisible()
         })
 
         it("converts every coordinate with the exact CODATA Å→bohr factor when toggled, and back when toggled again", async () => {
@@ -523,14 +526,14 @@ describe("GeometryDetailPage", () => {
             // 0.11 Å and -0.63 Å converted by the exact factor, not a
             // rounded approximation, not the untouched angstrom value,
             // and not an inverted (divided) factor.
-            expect(within(secondRow).getByText((0.11 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='x']" })).toBeVisible()
-            expect(within(secondRow).getByText((0.22 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='y']" })).toBeVisible()
-            expect(within(secondRow).getByText((0.33 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='z']" })).toBeVisible()
+            expect(within(secondRow).getByText((0.11 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='x']" })).toBeVisible()
+            expect(within(secondRow).getByText((0.22 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='y']" })).toBeVisible()
+            expect(within(secondRow).getByText((0.33 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='z']" })).toBeVisible()
             const thirdRow = within(table).getAllByRole("row")[3]
-            expect(within(thirdRow).getByText((-0.63 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-label='x']" })).toBeVisible()
+            expect(within(thirdRow).getByText((-0.63 * ANGSTROM_TO_BOHR).toFixed(6), { selector: "[data-column='x']" })).toBeVisible()
 
             fireEvent.click(within(section).getByRole("button", { name: "Å" }))
-            expect(within(secondRow).getByText("0.11", { selector: "[data-label='x']" })).toBeVisible()
+            expect(within(secondRow).getByText("0.11", { selector: "[data-column='x']" })).toBeVisible()
         })
 
         it("names the exact conversion factor and states the wire truth (stored in ångström), never implying the archive holds a bohr-valued record", async () => {
@@ -542,6 +545,83 @@ describe("GeometryDetailPage", () => {
             expect(within(section).getByText(/Always stored in ångström/)).toBeVisible()
             expect(within(section).getByText(new RegExp(ANGSTROM_TO_BOHR.toFixed(10).replace(".", "\\.")))).toBeVisible()
             expect(within(section).queryByText(/\(converted\)/i)).not.toBeInTheDocument()
+        })
+
+        it("flips the x/y/z column HEADERS to the active unit when toggled, not just the body", async () => {
+            // A mutation that froze the header text to "x (Å)" while the
+            // body kept rendering bohr numbers underneath survived the
+            // full suite before this test existed — the toggle's own
+            // tests above only ever read the body cells, never the
+            // <th>'s own text.
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+            expect(within(table).getByRole("columnheader", { name: "x (Å)" })).toBeVisible()
+            expect(within(table).getByRole("columnheader", { name: "y (Å)" })).toBeVisible()
+            expect(within(table).getByRole("columnheader", { name: "z (Å)" })).toBeVisible()
+
+            fireEvent.click(within(section).getByRole("button", { name: "bohr" }))
+
+            expect(within(table).getByRole("columnheader", { name: "x (bohr)" })).toBeVisible()
+            expect(within(table).getByRole("columnheader", { name: "y (bohr)" })).toBeVisible()
+            expect(within(table).getByRole("columnheader", { name: "z (bohr)" })).toBeVisible()
+            expect(within(table).queryByRole("columnheader", { name: "x (Å)" })).not.toBeInTheDocument()
+        })
+
+        it("renders every ångström decimal place the archive sent, never truncated to a fixed precision", async () => {
+            // Every coordinate in the shared `mockRecord()` fixture has at
+            // most 2 decimal places, so a mutation that swapped the
+            // ångström branch's `String(v)` for `v.toFixed(2)` produces
+            // byte-identical text against that fixture and survives every
+            // other test in this file. This fixture's first atom carries
+            // a genuinely 6-decimal coordinate (matching the precision the
+            // live archive actually returns, e.g. 1.078957), so a
+            // truncation is observable here. Built as a local override
+            // rather than editing the shared `mockRecord()` default,
+            // since dozens of other assertions in this file are pinned to
+            // that default's exact literal values (0.11, 0.22, ...).
+            const record = mockRecord({
+                atoms: [
+                    { atom_index: 1, element: "C", x: 1.078957, y: 0, z: 0 },
+                    { atom_index: 2, element: "H", x: 0.11, y: 0.22, z: 0.33 },
+                    { atom_index: 3, element: "H", x: -0.63, y: -0.63, z: 0.63 },
+                    { atom_index: 4, element: "H", x: -0.63, y: 0.63, z: -0.63 },
+                    { atom_index: 5, element: "H", x: 0.63, y: -0.63, z: -0.63 },
+                ],
+            })
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const firstDataRow = within(table).getAllByRole("row")[1]
+            expect(within(firstDataRow).getByText("1.078957", { selector: "[data-column='x']" })).toBeVisible()
+            // Would read "1.08" under a `.toFixed(2)` mutation of the
+            // ångström branch — asserted absent so this test actually
+            // fails under that mutation rather than merely not checking.
+            expect(within(firstDataRow).queryByText("1.08")).not.toBeInTheDocument()
+        })
+
+        it("carries the active unit in the mobile stacked-row label, not a bare axis letter", async () => {
+            // `conformer-group.css`'s mobile rule renders
+            // `td::before { content: attr(data-label) }` below 680px — a
+            // bare "x" label with no unit anywhere on the value is a
+            // wrong-unit-reading hazard one breakpoint away from the
+            // desktop layout. jsdom cannot evaluate the media query
+            // itself, but the attribute value this test reads is exactly
+            // what that CSS renders, unconditionally of viewport width.
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const section = table.closest("section") as HTMLElement
+            const firstDataRow = within(table).getAllByRole("row")[1]
+            const xCell = firstDataRow.querySelector("[data-column='x']") as HTMLElement
+            expect(xCell.getAttribute("data-label")).toBe("x (Å)")
+
+            fireEvent.click(within(section).getByRole("button", { name: "bohr" }))
+            expect(xCell.getAttribute("data-label")).toBe("x (bohr)")
         })
     })
 
@@ -600,6 +680,36 @@ describe("GeometryDetailPage", () => {
             await screen.findByRole("heading", { name: "CH4 geometry" })
             const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
             expect(within(xyzSection).queryByRole("button", { name: /Copy/ })).not.toBeInTheDocument()
+        })
+
+        it("copies the archive's own xyz_text verbatim, even while the coordinate table is showing bohr", async () => {
+            // Neither existing copy test above ever reads WHAT the button
+            // copies — both are presence-only (button exists / doesn't).
+            // A mutation that made the copy emit the bohr-converted block
+            // while the raw-XYZ <pre> still displayed ångström text
+            // survived the full suite. The coordinate table's unit toggle
+            // and the raw-XYZ copy button are wired to two entirely
+            // separate pieces of state; this pins that the latter is
+            // never affected by the former.
+            const writeText = vi.fn().mockResolvedValue(undefined)
+            Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+            const record = mockRecord()
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+
+            const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
+            const coordSection = table.closest("section") as HTMLElement
+            fireEvent.click(within(coordSection).getByRole("button", { name: "bohr" }))
+
+            const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
+            fireEvent.click(within(xyzSection).getByRole("button", { name: "Copy raw XYZ text" }))
+
+            expect(writeText).toHaveBeenCalledTimes(1)
+            expect(writeText).toHaveBeenCalledWith(record.xyz_text)
+            // Never the bohr-converted numbers the table happens to be
+            // showing at the moment of the click.
+            expect(writeText.mock.calls[0][0]).not.toContain((0.11 * ANGSTROM_TO_BOHR).toFixed(6))
         })
     })
 

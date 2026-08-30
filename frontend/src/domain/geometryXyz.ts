@@ -81,7 +81,18 @@ export const ELEMENT_ATOMIC_NUMBERS: Record<string, number> = {
  * `0`, which is not a valid atomic number and would read as a real (if
  * wrong) answer — for a symbol this table does not recognise, so a caller
  * can render an honest "unknown" instead.
+ *
+ * `Object.hasOwn`, not a plain `ELEMENT_ATOMIC_NUMBERS[symbol] ?? null`
+ * index: `ELEMENT_ATOMIC_NUMBERS` is a plain object literal, so it
+ * inherits `Object.prototype`, and `symbol` values like `"constructor"`
+ * or `"toString"` resolve to an inherited function rather than
+ * `undefined` — the old form returned that function (not `null`) for
+ * such a symbol, silently breaking the declared `number | null` return
+ * type. Unreachable from real chemistry data (no element is spelled
+ * "constructor"), but this docstring specifically promises unknown
+ * symbols are handled via `null`, so the promise should hold even for an
+ * adversarial or corrupted input.
  */
 export function atomicNumberForSymbol(symbol: string): number | null {
-    return ELEMENT_ATOMIC_NUMBERS[symbol] ?? null
+    return Object.hasOwn(ELEMENT_ATOMIC_NUMBERS, symbol) ? ELEMENT_ATOMIC_NUMBERS[symbol] : null
 }

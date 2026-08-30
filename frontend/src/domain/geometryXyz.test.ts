@@ -72,4 +72,17 @@ describe("atomicNumberForSymbol", () => {
         expect(atomicNumberForSymbol("NA")).toBeNull()
         expect(atomicNumberForSymbol("Na")).toBe(11)
     })
+
+    it("returns null for an inherited Object.prototype key, not the inherited function", () => {
+        // `ELEMENT_ATOMIC_NUMBERS` is a plain object literal, so a naive
+        // `table[symbol] ?? null` lookup resolves "constructor" to
+        // `Object` (a function) rather than `undefined` — silently
+        // breaking the declared `number | null` return type. No real
+        // element is spelled this way, but the docstring promises `null`
+        // for any unrecognised symbol, so this pins that the promise
+        // holds even here.
+        expect(atomicNumberForSymbol("constructor")).toBeNull()
+        expect(atomicNumberForSymbol("toString")).toBeNull()
+        expect(atomicNumberForSymbol("hasOwnProperty")).toBeNull()
+    })
 })

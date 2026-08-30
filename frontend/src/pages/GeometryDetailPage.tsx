@@ -14,10 +14,23 @@ type CoordinateUnitMode = "angstrom" | "bohr"
 type ElementDisplayMode = "symbol" | "number"
 
 function formatCoordinate(valueAngstrom: number, unit: CoordinateUnitMode): string {
-    // Angstrom keeps the archive's own raw numeric rendering (unchanged
-    // from before this toggle existed) — bohr is the one display-only
-    // conversion, rounded for a stable column width rather than trailing
-    // whatever float noise `* ANGSTROM_TO_BOHR` happens to produce.
+    // Angstrom keeps this page's own pre-existing numeric rendering
+    // (`String(valueAngstrom)`, unchanged from before this toggle
+    // existed) of the parsed `atoms[].x/y/z` JSON numbers — bohr is the
+    // one display-only conversion, rounded to 6dp for a stable column
+    // width rather than trailing whatever float noise
+    // `* ANGSTROM_TO_BOHR` happens to produce (the coordinate-toggle-note
+    // below the table says so).
+    //
+    // NOT claimed as fidelity to the archive's raw text: `String(-0)` is
+    // `"0"` in JS, but the Raw XYZ block renders the archive's own
+    // `xyz_text` string verbatim, which for the same atom can read
+    // `-0.000000000000` (however the server formatted it). So this
+    // ångström column and the Raw XYZ block below can print the same
+    // atom's coordinate two different ways on the same page. That is
+    // pre-existing (this toggle did not introduce it, and did not fix
+    // it) — noted here so this comment does not overclaim a round-trip
+    // guarantee the code does not have.
     if (unit === "angstrom") return String(valueAngstrom)
     return angstromToBohr(valueAngstrom).toFixed(6)
 }
@@ -311,6 +324,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
     const countMismatch = atomsAvailability === "populated" && natoms !== atoms.length
     const [unit, setUnit] = useState<CoordinateUnitMode>("angstrom")
     const [elementDisplay, setElementDisplay] = useState<ElementDisplayMode>("symbol")
+    const unitLabel = unit === "angstrom" ? "Å" : "bohr"
     return (
         <section className="ledger-section" aria-labelledby="coordinates-heading">
             <div className="ledger-heading">
@@ -344,11 +358,16 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                         cause that's how it's stored" — no "converted" badge next
                         to a value, and this note names the wire truth (angstrom
                         is what `coordinate_units` says and what the archive
-                        holds) rather than let the bohr column imply otherwise. */}
+                        holds) rather than let the bohr column imply otherwise.
+                        Also names the rounding: bohr values are computed then
+                        `.toFixed(6)`'d for a stable column width (see
+                        `formatCoordinate`), so a reader comparing this column
+                        against their own conversion is not surprised by a
+                        7th-digit difference this note never mentioned. */}
                     <p className="coordinate-toggle-note">
                         Always stored in ångström (<code>coordinate_units</code> on the wire);
-                        bohr here is a display conversion only, at 1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr
-                        (CODATA 2018 Bohr radius).
+                        bohr here is a display conversion only, rounded to 6 decimal places, at
+                        1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr (CODATA 2018 Bohr radius).
                     </p>
                 </div>
             )}
@@ -359,9 +378,15 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                             <tr>
                                 <th scope="col">Atom</th>
                                 <th scope="col">Element</th>
-                                <th scope="col">{`x (${unit === "angstrom" ? "Å" : "bohr"})`}</th>
-                                <th scope="col">{`y (${unit === "angstrom" ? "Å" : "bohr"})`}</th>
-                                <th scope="col">{`z (${unit === "angstrom" ? "Å" : "bohr"})`}</th>
+                                {/* `data-column` is the CSS/test hook for "this is
+                                    the x/y/z column" — stable across unit toggles,
+                                    unlike the visible header text below it (which
+                                    intentionally changes to name the active unit;
+                                    see geometry-detail.css's numeric-alignment rule
+                                    for why the two must not be the same attribute). */}
+                                <th scope="col" data-column="x">{`x (${unitLabel})`}</th>
+                                <th scope="col" data-column="y">{`y (${unitLabel})`}</th>
+                                <th scope="col" data-column="z">{`z (${unitLabel})`}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -369,9 +394,24 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                                 <tr key={atom.atom_index}>
                                     <td data-label="Atom">{atom.atom_index}</td>
                                     <td data-label="Element">{elementDisplayValue(atom.element, elementDisplay)}</td>
-                                    <td data-label="x">{formatCoordinate(atom.x, unit)}</td>
-                                    <td data-label="y">{formatCoordinate(atom.y, unit)}</td>
-                                    <td data-label="z">{formatCoordinate(atom.z, unit)}</td>
+                                    {/* `data-label` here carries the ACTIVE UNIT
+                                        (`x (Å)` / `x (bohr)`), not a bare axis
+                                        letter — this is what the mobile stacked
+                                        view's `td::before { content:
+                                        attr(data-label) }` (conformer-group.css)
+                                        actually shows a reader below the 680px
+                                        breakpoint. Without the unit in this
+                                        string, a phone reader in bohr mode saw
+                                        "X / 2.038933" with no unit anywhere on
+                                        the value — a wrong-unit-reading hazard.
+                                        `data-column` (unit-independent) is the
+                                        separate hook the desktop alignment CSS
+                                        keys on instead, so that rule does not
+                                        silently stop matching the moment this
+                                        label's text changes. */}
+                                    <td data-column="x" data-label={`x (${unitLabel})`}>{formatCoordinate(atom.x, unit)}</td>
+                                    <td data-column="y" data-label={`y (${unitLabel})`}>{formatCoordinate(atom.y, unit)}</td>
+                                    <td data-column="z" data-label={`z (${unitLabel})`}>{formatCoordinate(atom.z, unit)}</td>
                                 </tr>
                             ))}
                         </tbody>

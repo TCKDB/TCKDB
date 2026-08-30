@@ -139,7 +139,12 @@
     overflow-wrap: anywhere;
 }
 
-.validation-pointer dd a { margin-right: .5rem; }
+/* No margin here: the ", " literal rendered between links (see
+   GeometryDetailPage.tsx's `index > 0 && ", "`) already supplies the
+   space between consecutive links. A `margin-right` on every link
+   additionally pushed that following comma away from the link it
+   belongs to — MEASURED, "CALC_AFS… , CALC_2HH… ," reads with the comma
+   visibly detached from its own reference. */
 
 /* Owns no width of its own any more — the caption (`.viewer-caption`)
    and the picture+controls (`.viewer-stage`) size and centre
@@ -154,6 +159,7 @@
 
 .viewer-caption {
     max-width: 46rem;
+    margin: 0 auto;
 }
 
 /* Centred mid-page ("i also expect the struct view to may be middle"),
@@ -233,6 +239,40 @@
         transition: opacity .15s ease;
     }
 
+    /* Reveal on hovering the STAGE (the picture, or the card around it),
+       not only `.viewer-controls:hover` on its own — MEASURED (real
+       Chromium): with only the latter, hovering the canvas or the card
+       left `.viewer-controls` at opacity 0, because that selector's
+       hover target IS the invisible toolbar strip itself. A mouse aimed
+       at the picture — the one thing a user actually points at —
+       revealed nothing; the only way in was a blank ~30px band with no
+       affordance. That is worse than it sounds: wheel-over-canvas is
+       deliberately reserved for page scroll (see `.viewer-canvas` above
+       and GeometryViewer.tsx's module docstring, "Mouse/touch" section),
+       so on a `hover: hover` desktop the Zoom in / Zoom out buttons are
+       the ONLY zoom affordance in the product. `.viewer-controls:hover`
+       stays listed too, so the toolbar does not re-hide itself the
+       instant the pointer crosses from the stage onto a button at the
+       stage's edge. `:focus-within` stays for the keyboard path.
+
+       Judgment call (Rotate-only fade vs. keep-all-together): Zoom
+       in/out/Reset and the four Rotate buttons all render as one flat
+       button list inside a single `.viewer-controls` div, with no
+       sub-grouping in the DOM (see GeometryViewer.tsx, the
+       `.viewer-controls` block). Splitting "always-visible Zoom/Reset"
+       from "fades-on-hover Rotate" would need a second wrapper element —
+       an `nth-child` selector over the current flat list would silently
+       start targeting the wrong buttons the instant one is reordered or
+       another is added, which is exactly the fragile coupling this
+       codebase avoids elsewhere (see e.g. the `data-column` hook added
+       below, in preference to a label-text selector). The complaint that
+       forced this fix was "hovering the picture reveals nothing", not
+       "Zoom should never fade" — revealing the whole toolbar together,
+       the instant the pointer reaches the picture instead of a blank
+       strip, answers that directly. A DOM split into two independently
+       faded groups is a real, defensible follow-up, but it is a larger
+       structural change than this fixup takes on. */
+    .viewer-stage:hover .viewer-controls,
     .viewer-controls:hover,
     .viewer-controls:focus-within {
         opacity: 1;
@@ -386,14 +426,36 @@
    `.stage-table` column uses — scoped to `.coordinate-table` specifically
    (a modifier on this one table, not `.stage-table` generally) since the
    provenance tables sharing `.stage-table` have no numeric columns to
-   align. Confined to the desktop table layout: below 680px `.stage-table`
-   stacks into label/value rows (see `conformer-group.css`), where a
-   right-aligned value sitting under a left-aligned label looks worse, not
-   better. */
-@media (min-width: 681px) {
-    .coordinate-table td[data-label="x"],
-    .coordinate-table td[data-label="y"],
-    .coordinate-table td[data-label="z"] {
+   align.
+
+   Applies to BOTH `td` and `th`: MEASURED, an earlier version of this
+   rule right-aligned only the `td`s, leaving `X (Å)` sitting far left of
+   its own right-aligned column while `0.934405` sat far right — ~250px
+   apart at 1440px on a real 4-atom record — which made associating a
+   number with its heading harder than before this rule existed.
+
+   Selects on `data-column` ("x"/"y"/"z"), a hook that never changes, NOT
+   `data-label` — `data-label` on this table's `td`s now carries the
+   active unit (`x (Å)` / `x (bohr)`, see GeometryDetailPage.tsx) so the
+   mobile stacked-row view (`conformer-group.css`'s `td::before { content:
+   attr(data-label) }`) shows a reader which unit a value is in instead of
+   a bare axis letter with the unit only in a note above the table. A rule
+   keyed to `data-label="x"` would silently stop matching the moment that
+   label's text includes a unit, which is exactly the bug this hook
+   avoids reintroducing.
+
+   Confined to the desktop table layout: below the breakpoint
+   `.stage-table` stacks into label/value rows (see `conformer-group.css`),
+   where a right-aligned value sitting under a left-aligned label looks
+   worse, not better. The stacking breakpoint is `(max-width: 680px)`; this
+   query starts at `680.02px`, not `681px` — a bare `681px` left a
+   ~0.5px band (fractional device-pixel-ratio, browser zoom) matching
+   NEITHER query: not stacked, but also not right-aligned/tabular. `.02px`
+   is comfortably below any real viewport's resolution, so the two queries
+   now abut with no observable gap. */
+@media (min-width: 680.02px) {
+    .coordinate-table th[data-column],
+    .coordinate-table td[data-column] {
         font-variant-numeric: tabular-nums;
         text-align: right;
     }
