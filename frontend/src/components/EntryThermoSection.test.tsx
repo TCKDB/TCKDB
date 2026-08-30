@@ -64,7 +64,12 @@ function mockRecords() {
             },
             evidence_completeness: { score: 6, max: 8, checklist: { has_source_calculations: true, has_uncertainty: false } },
             provenance: {
-                primary_calculation: { calculation_ref: "calc_alpha_sp", calculation_type: "sp", converged: null, geometry_validation_status: "not_present", scf_stability_status: "not_present", level_of_theory: null, software: null },
+                // Population A: a real Gaussian chain on the CALCULATION, but
+                // no software recorded on the thermo itself (software_release
+                // below stays null). The one combination that catches a
+                // reintroduced #284 -- a fallback from software_release to
+                // primary_calculation.software would leak "Gaussian" here.
+                primary_calculation: { calculation_ref: "calc_alpha_sp", calculation_type: "sp", converged: null, geometry_validation_status: "not_present", scf_stability_status: "not_present", level_of_theory: null, software: { software_release_ref: "srel_gaussian", software: "Gaussian", version: "16, Revision C.02" } },
                 level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", level_of_theory_ref: "lot_alpha" },
                 software_release: null,
                 workflow_tool_release: null,
@@ -399,6 +404,22 @@ describe("EntryThermoSection", () => {
         const deltaCard = screen.getByText("thm_delta").closest("article") as HTMLElement
         expect(ddFor(deltaCard, "Software")).toBe("Arkane 1.0")
         expect(ddFor(deltaCard, "Workflow tool")).toBe("ARC 1.1.0")
+    })
+
+    it("never falls back to the calculation's software when the thermo's own is absent (issue #284, population A)", async () => {
+        // thm_alpha IS population A: primary_calculation.software is a real
+        // Gaussian summary, but provenance.software_release is null. A
+        // fixture where BOTH are null (as every other one in this file is)
+        // cannot catch a fallback from software_release to
+        // primary_calculation.software -- it never fires when there's
+        // nothing to fall back to. This is the one fixture with the
+        // combination that matters: thermo software absent, calculation
+        // software present.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
+        expect(ddFor(alphaCard, "Software")).toBe("not recorded")
     })
 
     it("states honestly when no thermo records are deposited for this entry", async () => {
