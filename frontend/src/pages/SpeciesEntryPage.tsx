@@ -152,6 +152,6 @@ function TabPanelBody({ section, entryRef, conformer }: {
             : <p className="empty-projection">No conformer basins are projected for this entry, so there is no single-point evidence to show.</p>
     }
     if (section === "statmech") return <EntryStatmechSection entryRef={entryRef} conformer={conformer} />
-    if (section === "thermo") return <EntryThermoSection entryRef={entryRef} conformer={conformer} />
+    if (section === "thermo") return <EntryThermoSection entryRef={entryRef} />
     return <EntryTransportSection entryRef={entryRef} />
 }

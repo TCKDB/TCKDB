@@ -4,14 +4,13 @@ import {
     conformerLabel,
     partitionByConformer,
     statmechMatchesConformer,
-    thermoMatchesConformer,
 } from "./conformerEvidence"
 
-// Two DISTINCT conformer basins, each with its own observation and its own
-// non-overlapping set of calculation refs -- this is the fixture shape the
-// design brief calls out by name: a fixture with only one conformer cannot
-// prove *which* conformer a match resolved to, only that matching happened
-// at all.
+// Two DISTINCT conformer basins -- a fixture with only one conformer could
+// never prove that `statmechMatchesConformer` resolved to a SPECIFIC group
+// rather than just returning true for anything. The per-observation
+// calculation refs below are otherwise unused now (no thermo-side matching
+// exists) but are kept as realistic shape, not exercised by these tests.
 function group(overrides: Partial<ConformerProjection> = {}): ConformerProjection {
     return {
         conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1" },
@@ -61,42 +60,14 @@ describe("conformerLabel", () => {
     })
 })
 
-describe("thermoMatchesConformer", () => {
-    it("matches a record whose sp_calculation_ref belongs to this conformer's own observation", () => {
-        const record = { provenance: { sp_calculation_ref: "calc_sp_1", freq_calculation_ref: null, primary_calculation: null } }
-        expect(thermoMatchesConformer(record, conformerOne)).toBe(true)
-        // The exact same ref must NOT match the other conformer -- this is
-        // what a single-conformer fixture could never prove.
-        expect(thermoMatchesConformer(record, conformerTwo)).toBe(false)
-    })
-
-    it("matches on freq_calculation_ref alone", () => {
-        const record = { provenance: { sp_calculation_ref: null, freq_calculation_ref: "calc_freq_2", primary_calculation: null } }
-        expect(thermoMatchesConformer(record, conformerTwo)).toBe(true)
-        expect(thermoMatchesConformer(record, conformerOne)).toBe(false)
-    })
-
-    it("matches on primary_calculation.calculation_ref alone", () => {
-        const record = { provenance: { sp_calculation_ref: null, freq_calculation_ref: null, primary_calculation: { calculation_ref: "calc_opt_1" } } }
-        expect(thermoMatchesConformer(record, conformerOne)).toBe(true)
-    })
-
-    it("treats a record with no matching ref as population B -- not an error, just unmatched", () => {
-        const arkaneRecord = { provenance: { sp_calculation_ref: null, freq_calculation_ref: null, primary_calculation: null } }
-        expect(thermoMatchesConformer(arkaneRecord, conformerOne)).toBe(false)
-        expect(thermoMatchesConformer(arkaneRecord, conformerTwo)).toBe(false)
-    })
-
-    it("treats a record with no provenance block at all the same way", () => {
-        expect(thermoMatchesConformer({}, conformerOne)).toBe(false)
-    })
-
-    it("never matches a conformer with no observations or calculations", () => {
-        const bare = group({ observations: [], calculations: [] })
-        const record = { provenance: { sp_calculation_ref: "calc_sp_1", freq_calculation_ref: null, primary_calculation: null } }
-        expect(thermoMatchesConformer(record, bare)).toBe(false)
-    })
-})
+// No `thermoMatchesConformer` test suite: the function it covered was
+// removed (see the header comment in `conformerEvidence.ts`) because it
+// could not actually distinguish the two thermo provenance shapes on the
+// current wire -- both carry populated `sp_calculation_ref`/etc, one via
+// its own opt/freq/sp chain, the other via a statmech-borrowed route this
+// client cannot tell apart from the first. A test suite that verified the
+// function's arithmetic would still be lying about what the function
+// proved, so it is gone along with the function.
 
 describe("statmechMatchesConformer", () => {
     it("matches on the real conformer_group_ref the archive returned", () => {

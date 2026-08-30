@@ -8,67 +8,35 @@ export function conformerLabel(conformer: ConformerProjection): string {
     return conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref
 }
 
-/**
- * Every calculation ref this conformer's deposited evidence actually
- * contains — pooled across its observations (the precise source) and its
- * own group-level `calculations` list (a fallback for a projection that
- * requested `include=calculations` without `include=observations`). A
- * calculation ref that appears here was run against THIS basin; nothing
- * else is inferred from that fact.
- */
-function conformerCalculationRefs(conformer: ConformerProjection): Set<string> {
-    const refs = new Set<string>()
-    for (const observation of conformer.observations ?? []) {
-        for (const calculation of observation.calculations ?? []) {
-            if (calculation.calculation_ref) refs.add(calculation.calculation_ref)
-        }
-    }
-    for (const calculation of conformer.calculations ?? []) {
-        if (calculation.calculation_ref) refs.add(calculation.calculation_ref)
-    }
-    return refs
-}
-
-export type ThermoProvenanceLike = {
-    provenance?: {
-        sp_calculation_ref?: string | null
-        freq_calculation_ref?: string | null
-        primary_calculation?: { calculation_ref?: string | null } | null
-    } | null
-}
-
-/**
- * SEAM (see the design brief for `design/species-entry-conformer-first`):
- * `thermo.provenance` carries no conformer key today — `sp_calculation_ref`,
- * `freq_calculation_ref` and `primary_calculation.calculation_ref` are the
- * only citations it makes, and none of them names a conformer or
- * observation directly. This infers the same link the archive itself
- * resolved under review, by testing whether any of those three cited refs
- * is a calculation this conformer's own observations actually contain.
- *
- * A record with no such intersection is not broken, not missing evidence,
- * and not this component's error to report — it is "population B": a
- * thermo record produced by a thermo tool (Arkane, etc.) rather than one
- * this client can trace through an opt/freq/sp chain to a single
- * observation. Callers must render that case as entry-level evidence
- * attributed to its own software, never as a failed or absent lookup.
- *
- * DELETE this function once `backend/thermo-provenance-truth` lands a real
- * `conformer_observation_ref` (or equivalent) on thermo provenance, and
- * match on that field directly instead of re-deriving it here.
- */
-export function thermoMatchesConformer(record: ThermoProvenanceLike, conformer: ConformerProjection): boolean {
-    const provenance = record.provenance
-    if (!provenance) return false
-    const refs = conformerCalculationRefs(conformer)
-    if (refs.size === 0) return false
-    const candidates = [
-        provenance.sp_calculation_ref,
-        provenance.freq_calculation_ref,
-        provenance.primary_calculation?.calculation_ref,
-    ]
-    return candidates.some((ref): ref is string => !!ref && refs.has(ref))
-}
+// ---------------------------------------------------------------------------
+// REMOVED: a thermo-side "which conformer does this belong to" inference
+// used to live here, matching `provenance.sp_calculation_ref` /
+// `freq_calculation_ref` / `primary_calculation.calculation_ref` against a
+// conformer's own observation calc-refs. It was wrong, not just imprecise:
+// measured against the archive (thermo id 4, `spe_dfcw4tvy6tkqxnyittmn6d3vdu`)
+// a record with ZERO source calculations of its own -- thermo's own
+// software is Arkane, `thermo_source_calculation` is empty -- still carries
+// a populated `sp_calculation_ref` on the wire, because that field is
+// filled via a SECOND route this client cannot distinguish from the first:
+// `thermo.statmech_id -> statmech_source_calculation -> calculation`. Both
+// "this thermo traces to one observation's own opt/freq/sp chain" (real
+// per-conformer evidence) and "this thermo was produced by a separate tool
+// but cites the statmech it borrowed frequencies from" (population B) put a
+// calculation ref in the same field. No amount of cleverness over the
+// CURRENT wire shape can tell those apart -- the fact that actually
+// separates them (does this thermo have its own source calculations, and
+// its own software) is exactly what the API does not serve today. That is
+// what `backend/thermo-provenance-truth` adds.
+//
+// So: no thermo-side matching function exists here. `EntryThermoSection`
+// renders every deposited thermo record for the entry, unfiltered by the
+// selected conformer, and says so explicitly rather than grouping records
+// under a conformer attribution this client cannot support. Once
+// `backend/thermo-provenance-truth` lands a real per-record conformer (or
+// observation) key, add a `thermoMatchesConformer(record, conformer)`
+// function here that matches on THAT field directly -- never re-derive one
+// from calculation refs again.
+// ---------------------------------------------------------------------------
 
 export type ConformerContextLike = Array<{ conformer_group_ref: string }> | null | undefined
 

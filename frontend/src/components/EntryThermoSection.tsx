@@ -2,9 +2,7 @@ import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
 import { lotLabel } from "../api/scientificSchemas"
-import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
-import { conformerLabel, partitionByConformer, thermoMatchesConformer } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
@@ -23,6 +21,23 @@ import { SupersessionNotice } from "./SupersessionNotice"
 // its own independent card — never flattened into one merged answer, never
 // reduced to "the first one" or "the best one". See `api/thermoApi.ts` for
 // the measured wire shape and why nothing here is include-gated.
+//
+// UNLIKE `EntryStatmechSection`, this component takes NO `conformer` prop
+// and never groups its records by conformer. A record's `provenance`
+// carries `sp_calculation_ref` / `freq_calculation_ref` /
+// `primary_calculation.calculation_ref`, but those refs are populated via
+// TWO different routes the wire does not distinguish: a record with its own
+// opt/freq/sp chain, and a record produced by a separate thermo tool that
+// merely cites the statmech it borrowed frequencies from
+// (`thermo.statmech_id -> statmech_source_calculation -> calculation`).
+// Measured live: a thermo record with zero source calculations of its own
+// (software Arkane) still carries a populated `sp_calculation_ref`. An
+// earlier version of this component intersected those refs against a
+// conformer's own calculation refs to guess an attribution — that guess
+// mislabeled every such record as conformer-linked. There is no field on
+// the current wire that actually distinguishes the two cases; only
+// `backend/thermo-provenance-truth` adding a real per-record conformer key
+// will. Until then this section states that plainly instead of guessing.
 // ---------------------------------------------------------------------------
 
 const MODEL_KIND_LABELS: Record<string, string> = {
@@ -35,7 +50,7 @@ const MODEL_KIND_LABELS: Record<string, string> = {
 const modelKindLabel = (kind: string) => MODEL_KIND_LABELS[kind] ?? kind.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 
-export function EntryThermoSection({ entryRef, conformer }: { entryRef: string; conformer?: ConformerProjection | null }) {
+export function EntryThermoSection({ entryRef }: { entryRef: string }) {
     const state = useEntryThermo(entryRef)
     if (state.status === "ready") {
         return (
@@ -49,7 +64,7 @@ export function EntryThermoSection({ entryRef, conformer }: { entryRef: string; 
                     </section>
                 )}
             >
-                <ThermoList response={state.record} conformer={conformer} />
+                <ThermoList response={state.record} />
             </SectionErrorBoundary>
         )
     }
@@ -73,57 +88,8 @@ function reviewSummaryText(summary: ThermoListResponse["review_summary"]) {
     return parts.length > 0 ? parts.join(" · ") : "no records"
 }
 
-function ThermoList({ response, conformer }: { response: ThermoListResponse; conformer?: ConformerProjection | null }) {
+function ThermoList({ response }: { response: ThermoListResponse }) {
     const { records, review_summary: reviewSummary, pagination } = response
-    const countNote = (
-        <p className="records-note">
-            {pagination.total} record{pagination.total === 1 ? "" : "s"}
-            {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
-            {" · review: "}{reviewSummaryText(reviewSummary)}
-        </p>
-    )
-
-    // Two provenance shapes, not one plus an error state (see
-    // `domain/conformerEvidence.ts`): a record this client can trace to the
-    // selected conformer's own evidence renders under it; a record it
-    // cannot (today, always Arkane-produced "population B" thermo) renders
-    // as entry-level evidence, attributed to its own software -- never as
-    // missing or broken.
-    if (conformer) {
-        const { matched, entryLevel } = partitionByConformer(records, (record) => thermoMatchesConformer(record, conformer))
-        return (
-            <section className="ledger-section" aria-labelledby="thermo-heading">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Deposited evidence</p>
-                    <h2 id="thermo-heading">Thermochemistry</h2>
-                    <p>
-                        Every thermo record deposited for this entry, each shown independently. Multiple deposits
-                        are never merged, averaged, or reduced to one preferred value on this page.
-                    </p>
-                </div>
-                {countNote}
-                {records.length === 0 ? (
-                    <p className="empty-projection">No thermochemistry records are deposited for this entry.</p>
-                ) : (
-                    <>
-                        <ThermoRecordGroup
-                            title={`From ${conformerLabel(conformer)}`}
-                            note="Traced through this conformer's own opt/freq/sp evidence."
-                            records={matched}
-                            emptyText="No thermo record traces to this conformer's evidence yet."
-                        />
-                        <ThermoRecordGroup
-                            title="Entry-level"
-                            note="Not linked to one conformer's evidence -- shown here by the software that produced it, not flagged as missing anything."
-                            records={entryLevel}
-                            emptyText="No entry-level thermo record is deposited for this entry."
-                        />
-                    </>
-                )}
-            </section>
-        )
-    }
-
     return (
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
@@ -131,10 +97,16 @@ function ThermoList({ response, conformer }: { response: ThermoListResponse; con
                 <h2 id="thermo-heading">Thermochemistry</h2>
                 <p>
                     Every thermo record deposited for this entry, each shown independently. Multiple deposits
-                    are never merged, averaged, or reduced to one preferred value on this page.
+                    are never merged, averaged, or reduced to one preferred value on this page. Not yet linked
+                    to a specific conformer on the wire — shown here for the whole entry, regardless of which
+                    conformer is selected above, until thermo provenance carries a conformer reference.
                 </p>
             </div>
-            {countNote}
+            <p className="records-note">
+                {pagination.total} record{pagination.total === 1 ? "" : "s"}
+                {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
+                {" · review: "}{reviewSummaryText(reviewSummary)}
+            </p>
             {records.length === 0 ? (
                 <p className="empty-projection">No thermochemistry records are deposited for this entry.</p>
             ) : (
@@ -155,39 +127,6 @@ function ThermoList({ response, conformer }: { response: ThermoListResponse; con
                 ))
             )}
         </section>
-    )
-}
-
-function ThermoRecordGroup({ title, note, records, emptyText }: {
-    title: string
-    note: string
-    records: ThermoRecord[]
-    emptyText: string
-}) {
-    return (
-        <div className="conformer-evidence-group">
-            <h3 className="conformer-evidence-group-heading">{title}</h3>
-            <p className="section-note">{note}</p>
-            {records.length === 0 ? (
-                <p className="empty-projection">{emptyText}</p>
-            ) : (
-                records.map((record) => (
-                    <SectionErrorBoundary
-                        key={record.thermo_ref}
-                        fallback={(
-                            <article className="science-record" role="alert">
-                                <p className="empty-projection">
-                                    Record <code>{record.thermo_ref}</code> could not be displayed. Other
-                                    records on this page are unaffected.
-                                </p>
-                            </article>
-                        )}
-                    >
-                        <ThermoRecordCard record={record} />
-                    </SectionErrorBoundary>
-                ))
-            )}
-        </div>
     )
 }
 

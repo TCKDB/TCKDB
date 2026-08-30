@@ -108,7 +108,7 @@ function conformerRecords() {
 function thermoRecords() {
     return [
         {
-            thermo_ref: "thm_pop_a",
+            thermo_ref: "thm_one",
             scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
             supersession: null,
@@ -134,22 +134,31 @@ function thermoRecords() {
             group_additivity: null,
         },
         {
-            thermo_ref: "thm_pop_b",
+            // Measured live (thermo id 4, spe_dfcw4tvy6tkqxnyittmn6d3vdu): a
+            // record with ZERO source calculations of its own -- own
+            // software is Arkane, `has_source_calculations: false` -- can
+            // STILL carry a populated `sp_calculation_ref`/`freq_calculation_ref`,
+            // because those are filled via a second route this client
+            // cannot tell apart from the first:
+            // `thermo.statmech_id -> statmech_source_calculation ->
+            // calculation`. Reusing the SAME refs as thm_one on purpose:
+            // a matching heuristic over these fields would wrongly call
+            // this "from conformer_1" too. This entry has no such
+            // heuristic any more -- see `domain/conformerEvidence.ts`.
+            thermo_ref: "thm_two",
             scientific_origin: "computed", model_kind: "nasa",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
             supersession: null,
             h298_kj_mol: 192.4, s298_j_mol_k: 380.3, h298_uncertainty_kj_mol: null, s298_uncertainty_j_mol_k: null,
             nasa: null, nasa9: null, wilhoit: null, points: null, temperature_coverage: null,
             evidence_completeness: { score: 6, max: 8, checklist: { has_source_calculations: false } },
-            // Population B: produced by a thermo tool directly, no opt/freq/sp
-            // chain this client can trace to one observation.
             provenance: {
                 primary_calculation: null,
                 level_of_theory: null,
                 software: { software_release_ref: "srel_arkane", software: "Arkane", version: "1.1.0" },
-                statmech_ref: null,
-                freq_calculation_ref: null,
-                sp_calculation_ref: null,
+                statmech_ref: "sm_1",
+                freq_calculation_ref: "calc_freq_1",
+                sp_calculation_ref: "calc_sp_1",
             },
             group_additivity: null,
         },
@@ -309,8 +318,8 @@ describe("species-entry page: conformer picker", () => {
         // Thermo/statmech/transport are entry-scoped lists, independent of
         // whether any conformer basin is projected -- they still render.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await screen.findByText("thm_pop_a")).toBeVisible()
-        expect(screen.getByText("thm_pop_b")).toBeVisible()
+        expect(await screen.findByText("thm_one")).toBeVisible()
+        expect(screen.getByText("thm_two")).toBeVisible()
     })
 })
 
@@ -345,7 +354,7 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         await screen.findByText("Choose a conformer")
 
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
-        expect(await within(screen.getByRole("tabpanel")).findByText("thm_pop_a")).toBeVisible()
+        expect(await within(screen.getByRole("tabpanel")).findByText("thm_one")).toBeVisible()
         // Only one tabpanel is ever mounted at a time -- the statmech
         // record's own heading text must not appear on the thermo panel.
         expect(within(screen.getByRole("tabpanel")).queryByText("Statistical mechanics")).not.toBeInTheDocument()
@@ -356,7 +365,7 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         // renders -- match on the visible record card's own `<code>` ref.
         const smRefs = await within(screen.getByRole("tabpanel")).findAllByText("sm_1")
         expect(smRefs.some((node) => node.tagName === "CODE")).toBe(true)
-        expect(within(screen.getByRole("tabpanel")).queryByText("thm_pop_a")).not.toBeInTheDocument()
+        expect(within(screen.getByRole("tabpanel")).queryByText("thm_one")).not.toBeInTheDocument()
         expect(within(screen.getByRole("tabpanel")).queryByText("Thermochemistry")).not.toBeInTheDocument()
     })
 
@@ -403,32 +412,61 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         expect(screen.getByText("No single-point calculation recorded for this observation.")).toBeVisible()
     })
 
-    it("renders population A thermo under the selected conformer, and population B as entry-level -- never as an error", async () => {
+    it("renders every deposited thermo record unfiltered, with no conformer attribution claimed -- never as an error", async () => {
+        // No `thermoMatchesConformer`/grouping exists any more: the archive
+        // does not carry a real per-record conformer link for thermo today
+        // (only statmech does, via `include=conformers`), and a client-side
+        // guess over calculation refs cannot tell the two provenance shapes
+        // apart -- see `domain/conformerEvidence.ts`. Both records render
+        // flatly, regardless of which conformer is selected, with an
+        // honest note saying so instead of a "From conformer_1" grouping.
+        const user = userEvent.setup()
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
         render(<App />)
-        expect(await screen.findByText("thm_pop_a")).toBeVisible()
-        expect(screen.getByText("thm_pop_b")).toBeVisible()
+        expect(await screen.findByText("thm_one")).toBeVisible()
+        expect(screen.getByText("thm_two")).toBeVisible()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
-        const groupHeadings = screen.getAllByRole("heading", { level: 3 }).map((node) => node.textContent)
-        expect(groupHeadings).toContain("From conformer_1")
-        expect(groupHeadings).toContain("Entry-level")
+        expect(screen.queryByText(/^From conformer_1$/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/^Entry-level$/)).not.toBeInTheDocument()
+        expect(screen.getByText(
+            "Not yet linked to a specific conformer on the wire — shown here for the whole entry, regardless of which"
+            + " conformer is selected above, until thermo provenance carries a conformer reference.",
+            { exact: false },
+        )).toBeVisible()
+
+        // Switching the selected conformer changes Geometry/SP; it must
+        // NOT change which thermo records are shown -- there is nothing on
+        // the wire today that would let it.
+        await user.click(screen.getByRole("button", { name: /conformer_2/ }))
+        expect(screen.getByText("thm_one")).toBeVisible()
+        expect(screen.getByText("thm_two")).toBeVisible()
     })
 
-    it("renders statmech's real conformer link the same way, once it resolves", async () => {
+    it("renders statmech's real conformer link the same way, once it resolves -- sm_1 under its conformer, sm_2 (no link) at entry level, never swapped", async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/statmech`)
         render(<App />)
         // "sm_1"/"sm_2" also appear (not visibly) inside the pre-existing
         // "Conformer context" disclosure this list already renders --
         // match on the visible record cards' own `<code>` refs.
-        const smOneRefs = await screen.findAllByText("sm_1")
-        expect(smOneRefs.some((node) => node.tagName === "CODE")).toBe(true)
-        const smTwoRefs = screen.getAllByText("sm_2")
-        expect(smTwoRefs.some((node) => node.tagName === "CODE")).toBe(true)
+        await screen.findAllByText("sm_1")
         const groupHeadings = screen.getAllByRole("heading", { level: 3 })
             .filter((node) => node.className === "conformer-evidence-group-heading")
-            .map((node) => node.textContent)
-        expect(groupHeadings).toEqual(["From conformer_1", "Entry-level"])
+        expect(groupHeadings.map((node) => node.textContent)).toEqual(["From conformer_1", "Entry-level"])
+
+        // Not just that both headings exist and both refs appear SOMEWHERE
+        // on the page -- each record must be under its OWN group. sm_1 has
+        // a real `include=conformers` link to conformer_1; sm_2 has none
+        // (an empty conformers array), so it belongs at entry level, not
+        // wrongly attributed to whichever conformer happens to be selected.
+        const fromConformerGroup = groupHeadings[0].closest(".conformer-evidence-group") as HTMLElement
+        const entryLevelGroup = groupHeadings[1].closest(".conformer-evidence-group") as HTMLElement
+        const fromConformerRefs = within(fromConformerGroup).getAllByText("sm_1").filter((node) => node.tagName === "CODE")
+        expect(fromConformerRefs.length).toBeGreaterThan(0)
+        expect(within(fromConformerGroup).queryByText("sm_2")).not.toBeInTheDocument()
+        const entryLevelRefs = within(entryLevelGroup).getAllByText("sm_2").filter((node) => node.tagName === "CODE")
+        expect(entryLevelRefs.length).toBeGreaterThan(0)
+        expect(within(entryLevelGroup).queryByText("sm_1")).not.toBeInTheDocument()
     })
 })
