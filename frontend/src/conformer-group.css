@@ -41,7 +41,7 @@
 
 .basin-intro {
     max-width: 44rem;
-    color: #3c4856;
+    color: var(--ink-2);
     font: 1.15rem/1.55 var(--serif);
 }
 
@@ -50,8 +50,8 @@
     display: inline-block;
     padding: .25rem .45rem;
     overflow-wrap: anywhere;
-    background: #eaf1f8;
-    color: #173f6e;
+    background: var(--accent-50);
+    color: var(--accent-700);
     font: .64rem var(--mono);
     text-transform: uppercase;
 }
@@ -62,14 +62,14 @@
     gap: 1rem;
     margin: 2rem 0 0;
     padding: 1rem 0;
-    border-block: 1px solid #dbe2ea;
+    border-block: 1px solid var(--line);
 }
 
 .basin-context dt,
 .metric span,
 .coverage-card span,
 .ledger-kicker {
-    color: #536578;
+    color: var(--muted);
     font: .64rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -85,7 +85,7 @@
 .stage-table a,
 .geometry-links a,
 .observation-geometries a {
-    color: #205493;
+    color: var(--accent);
     text-decoration: underline;
     text-underline-offset: .16em;
 }
@@ -94,21 +94,21 @@
     display: grid;
     grid-template-columns: repeat(3, 1fr) 1.8fr;
     margin: 2rem 0 3.5rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    border: 1px solid var(--line);
+    background: var(--surface);
 }
 
 .metric,
 .coverage-card {
     min-height: 8.5rem;
     padding: 1rem;
-    border-right: 1px solid #dbe2ea;
+    border-right: 1px solid var(--line);
 }
 
 .metric strong {
     display: block;
     margin-top: .55rem;
-    color: #173f6e;
+    color: var(--accent-700);
     font: 600 2.1rem var(--serif);
 }
 
@@ -116,14 +116,14 @@
 .coverage-card p {
     display: block;
     margin: .4rem 0 0;
-    color: #536578;
+    color: var(--muted);
     font: .68rem/1.45 var(--mono);
 }
 
 .coverage-card strong {
     display: block;
     margin-top: .55rem;
-    color: #173f6e;
+    color: var(--accent-700);
     font: .75rem/1.55 var(--mono);
 }
 
@@ -140,19 +140,19 @@ details.ledger-section summary {
 details.ledger-section summary h2 {
     display: inline;
     margin: 0;
-    color: #173f6e;
+    color: var(--accent-700);
     font: 600 .78rem var(--mono);
 }
 
 details.ledger-section summary:focus-visible {
-    outline: 3px solid #7ea7cf;
+    outline: 3px solid var(--accent-300);
     outline-offset: 3px;
 }
 
 details.ledger-section ul {
     margin: .85rem 0 0;
     padding-left: 1.2rem;
-    color: #3c4856;
+    color: var(--ink-2);
     font-size: .85rem;
 }
 .ledger-heading { max-width: 43rem; }
@@ -160,7 +160,7 @@ details.ledger-section ul {
 
 .ledger-heading > p:last-child,
 .geometry-ledger > p:not(.eyebrow) {
-    color: #3c4856;
+    color: var(--ink-2);
     line-height: 1.6;
 }
 
@@ -187,19 +187,19 @@ details.ledger-section ul {
     gap: .4rem;
     align-items: baseline;
     padding: .7rem .9rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    border: 1px solid var(--line);
+    background: var(--surface);
     font: .78rem var(--mono);
 }
 
 .observation-list > li a {
-    color: #173f6e;
+    color: var(--accent-700);
     font-weight: 600;
 }
 
 .observation-card {
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    border: 1px solid var(--line);
+    background: var(--surface);
 }
 
 .observation-card > header {
@@ -207,7 +207,7 @@ details.ledger-section ul {
     justify-content: space-between;
     gap: 1rem;
     padding: 1rem 1.1rem;
-    border-left: 3px solid #205493;
+    border-left: 3px solid var(--accent);
 }
 
 .observation-card header > div:first-child {
@@ -216,7 +216,7 @@ details.ledger-section ul {
 }
 
 .observation-card header a {
-    color: #173f6e;
+    color: var(--accent-700);
     font: 600 1rem var(--mono);
 }
 
@@ -224,14 +224,14 @@ details.ledger-section ul {
     display: grid;
     justify-items: end;
     gap: .35rem;
-    color: #536578;
+    color: var(--muted);
     font: .66rem var(--mono);
 }
 
 .observation-note {
     margin: 0;
     padding: 0 1.1rem 1rem;
-    color: #3c4856;
+    color: var(--ink-2);
     line-height: 1.5;
 }
 
@@ -245,14 +245,14 @@ details.ledger-section ul {
 .stage-table th,
 .stage-table td {
     padding: .75rem 0;
-    border-bottom: 1px solid #edf1f5;
+    border-bottom: 1px solid var(--line-2);
     text-align: left;
     vertical-align: top;
     overflow-wrap: anywhere;
 }
 
 .stage-table th {
-    color: #536578;
+    color: var(--muted);
     font-size: .6rem;
     text-transform: uppercase;
     letter-spacing: .05em;
@@ -263,12 +263,12 @@ details.ledger-section ul {
 
 .empty-stage {
     margin: .8rem 1.1rem 1.1rem;
-    color: #536578;
+    color: var(--muted);
     font-size: .8rem;
 }
 
 .empty-projection {
-    color: #536578;
+    color: var(--muted);
     font-size: .9rem;
 }
 
@@ -278,16 +278,16 @@ details.ledger-section ul {
     gap: .4rem;
     margin: 0;
     padding: .85rem 1.1rem;
-    border-top: 1px solid #dbe2ea;
-    background: #f8fbfe;
-    color: #40566d;
+    border-top: 1px solid var(--line);
+    background: var(--surface-sunken);
+    color: var(--tint-text);
     font: .68rem var(--mono);
 }
 
 .geometry-ledger {
     padding: 1.4rem;
-    border-left: 3px solid #205493;
-    background: #fff;
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
 }
 
 .geometry-links {
@@ -301,16 +301,16 @@ details.ledger-section ul {
     display: grid;
     gap: .25rem;
     padding: .65rem .75rem;
-    border: 1px solid #dbe2ea;
+    border: 1px solid var(--line);
     font: .7rem var(--mono);
 }
 
 .geometry-link:hover {
-    border-color: #7ea7cf;
-    background: #eaf1f8;
+    border-color: var(--accent-300);
+    background: var(--accent-50);
 }
 
-.geometry-link span { color: #536578; }
+.geometry-link span { color: var(--muted); }
 
 @media (max-width: 680px) {
     .basin-context,
@@ -319,7 +319,7 @@ details.ledger-section ul {
     .metric,
     .coverage-card {
         border-right: 0;
-        border-bottom: 1px solid #dbe2ea;
+        border-bottom: 1px solid var(--line);
     }
 
     .observation-card > header {
@@ -356,12 +356,12 @@ details.ledger-section ul {
 
     .stage-table tr {
         padding: .85rem 0;
-        border-bottom: 1px solid #edf1f5;
+        border-bottom: 1px solid var(--line-2);
     }
 
     .stage-table td::before {
         display: block;
-        color: #536578;
+        color: var(--muted);
         font-size: .58rem;
         text-transform: uppercase;
         content: attr(data-label);

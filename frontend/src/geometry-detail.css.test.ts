@@ -44,7 +44,11 @@ describe(".viewer-stage (defect 1: accent bar)", () => {
     })
 
     it("keeps a plain 1px border on all four sides", () => {
-        expect(rule).toMatch(/border:\s*1px solid #dbe2ea/)
+        // `#dbe2ea` was tokenised to `var(--line)` in the theme pass (see
+        // `theme.css`) -- same colour, now theme-aware. Matching the token
+        // rather than the retired literal keeps this guard aligned with
+        // that rename instead of failing on a colour that never regressed.
+        expect(rule).toMatch(/border:\s*1px solid var\(--line\)/)
     })
 })
 
@@ -58,6 +62,8 @@ describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
     })
 
     it("uses `outline` instead, which offsetWidth/offsetHeight never include", () => {
-        expect(rule).toMatch(/outline:\s*1px solid #dbe2ea/)
+        // See the note on the `.viewer-stage` border test above: `#dbe2ea`
+        // is now `var(--line)`.
+        expect(rule).toMatch(/outline:\s*1px solid var\(--line\)/)
     })
 })

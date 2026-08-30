@@ -1,0 +1,221 @@
+/*
+ * Theme tokens — the app's one and only source of colour.
+ *
+ * Every other stylesheet in this project styles components through
+ * `var(--token)` only; no `.css` file outside this one may contain a raw
+ * hex or rgba() literal (`theme.css.test.ts` guards this, and separately
+ * asserts that the three blocks below define the exact same set of names —
+ * a token present in light but missing from a dark block is exactly the
+ * bug that ships unreadable text).
+ *
+ * Names are chosen by ROLE, not appearance ("`--ink`", not "`--near-
+ * black`") — that is what lets a single name mean a light colour here and
+ * a dark colour under `prefers-color-scheme`/`[data-theme]` without lying
+ * about what it is.
+ *
+ * Three states, in cascade order:
+ *   1. Bare `:root`         — the complete LIGHT palette (the default —
+ *                              matches this app's colours before this
+ *                              file existed, unchanged, byte for byte).
+ *   2. `@media (prefers-color-scheme: dark)`, guarded by
+ *      `:root:not([data-theme="light"])` — the OS asked for dark, and the
+ *      reader has not explicitly chosen light. Redefines token VALUES
+ *      only, nothing selector-shaped, so an explicit light choice (state
+ *      3) still wins over it.
+ *   3. `:root[data-theme="dark"]` — the reader explicitly chose dark via
+ *      the in-app toggle (`hooks/useTheme.ts`). Wins over both the above,
+ *      in both directions: it beats a dark OS default when the reader
+ *      picked light instead (state 1 has no `[data-theme]` guard of its
+ *      own to lose to, but this selector's plain-attribute specificity
+ *      still applies over state 2's media-queried `:root`), and it applies
+ *      dark even when the OS itself is set to light.
+ *
+ * A colour must never be defined ONLY inside block 2 or 3 — an unstamped
+ * root (no OS preference, no stored choice: `hooks/useTheme.ts`'s
+ * `"system"` default before `prefers-color-scheme` resolves, or a browser
+ * that reports neither) would then read that token as unset, not as
+ * light. Every name below is declared in all three blocks for exactly
+ * this reason.
+ */
+
+:root {
+    /* ---- Text ---- */
+    --ink: #16202c;         /* primary body text, headings */
+    --ink-2: #3c4856;       /* secondary text: intros, descriptions */
+    --muted: #536578;       /* tertiary labels, captions, dt/eyebrow text
+                                (merges the near-identical #526171 — 7 uses
+                                across species-overview.css/index.css that
+                                measured within 4-7 units per channel of
+                                #536578's 29 uses elsewhere; one accidental-
+                                drift grey, not two intended ones) */
+    --muted-2: #6b7888;     /* SpeciesEntryPage's own secondary-label grey.
+                                Kept a DISTINCT name from --muted rather than
+                                merged into it: at a glance the two read as
+                                the same "quiet label" role, but side by side
+                                they are visibly different greys (#536578 vs
+                                #6b7888, an 8-14% delta per channel) used on
+                                two different pages — merging them would have
+                                silently shifted one page's already-shipped
+                                colour. */
+    --faint: #9aa6b3;       /* barely-there tertiary text: ref-item labels,
+                                the missing-formula fallback, linkage
+                                connectors (merges #8a97a6, index.css's
+                                search-result-formula-missing/search-result-ref
+                                grey — same "almost not there" role, a larger
+                                ~15/255-unit delta than the other merges here
+                                but still visually the same faint tier once
+                                rendered) */
+
+    /* ---- Hairlines & borders ---- */
+    --line: #dbe2ea;            /* the app's one hairline: card borders,
+                                    dividers, table rules */
+    --line-2: #eaeef3;          /* a second, even quieter hairline (nested
+                                    rows, disclosure bodies) — merges
+                                    #edf1f5 and #eef1f5, both within 4 units
+                                    of #eaeef3 per channel: three near-
+                                    identical greys from three files that
+                                    never coordinated, not three deliberate
+                                    ones */
+    --control-border: #b8c4d1;  /* geometry viewer buttons/select — kept
+                                    distinct from --line on purpose: it is a
+                                    clickable control's outline, not a
+                                    passive divider, and was visibly
+                                    stronger before this pass */
+    --divider: #cdd9e5;         /* species-overview.css .entry-state-disclosure
+                                    border — single use, kept apart from
+                                    --divider-strong rather than force-merged;
+                                    the two differ by ~20 units per channel,
+                                    outside the drift band the --line-2 merge
+                                    above sits in */
+    --divider-strong: #b8cbe0;  /* species-overview.css .entry-state-group
+                                    border-top — see --divider */
+
+    /* ---- Surfaces ---- */
+    --surface: #fff;              /* cards, panels (merges the one literal
+                                      #ffffff use — exact duplicate, not a
+                                      near-miss) */
+    --surface-sunken: #fbfcfe;     /* recessed panels: refs-disclosure,
+                                      evidence-linkage, empty-projection
+                                      backgrounds (merges #f8fbfe and
+                                      #f5f7fa — both within 3-6 units per
+                                      channel, the same "barely off-white
+                                      recess" role in three different
+                                      files) */
+    --page-bg: #f4f8fc;            /* whole-page backdrop, set once on
+                                      `body`. Kept separate from
+                                      --surface-sunken even though the two
+                                      are close in value: a page backdrop
+                                      and a recessed panel inside a white
+                                      card are different roles that happen
+                                      to sit near each other in light mode
+                                      — they diverge sharply in dark mode
+                                      (see below), which is the real test
+                                      of whether two "close" colours were
+                                      actually one role. */
+
+    /* ---- Accent (the house blue) ---- */
+    --accent: #205493;             /* links, active states, the one accent
+                                       used everywhere */
+    --accent-700: #173f6e;         /* hover/pressed emphasis — a darker
+                                       shade of --accent */
+    --accent-50: #eaf1f8;          /* pale accent tint: chip backgrounds,
+                                       selected-state fills */
+    --accent-300: #7ea7cf;         /* mid-strength accent: focus outlines,
+                                       hover borders */
+    --accent-underline: #a8c4dc;   /* text-decoration-color under accent
+                                       links, quieter than the link text
+                                       itself */
+    --tint-text: #40566d;          /* .observation-geometries text — a
+                                       desaturated navy, distinct from both
+                                       --ink-2 and --accent-700 */
+
+    /* ---- Semantic states (two DIFFERENT ambers — do not merge) ---- */
+    --warning: #a15c00;            /* clipboard-denied state on CopyButton.
+                                       A failure register. */
+    --notice-border: #c9a227;      /* supersession/correction notice — a
+                                       distinct, calmer amber-gold: "this
+                                       record was corrected", not a
+                                       failure. Kept apart from --warning
+                                       even though both read as "amber" at
+                                       a glance; they mean different
+                                       things and must be able to move
+                                       independently. */
+    --notice-bg: #fdf6e3;
+    --notice-text: #6b5209;
+
+    /* ---- Shadow ---- */
+    --shadow-color: rgba(22, 32, 44, .2); /* the search box / destination
+                                              card box-shadow colour, used
+                                              identically in three places
+                                              in index.css */
+
+    font-family: var(--sans);
+    color: var(--ink);
+    background: var(--page-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --ink: #e6ecf2;
+        --ink-2: #b7c2ce;
+        --muted: #99a7b8;
+        --muted-2: #7c8a9a;
+        --faint: #5f6d7e;
+
+        --line: #253241;
+        --line-2: #1c2732;
+        --control-border: #435265;
+        --divider: #2c3a49;
+        --divider-strong: #3c4d60;
+
+        --surface: #16202c;
+        --surface-sunken: #111925;
+        --page-bg: #0b1119;
+
+        --accent: #6ba3dd;
+        --accent-700: #9dc4ec;
+        --accent-50: #16283a;
+        --accent-300: #4d7aa8;
+        --accent-underline: #3c6690;
+        --tint-text: #9fb7cc;
+
+        --warning: #e2a33e;
+        --notice-border: #b8922a;
+        --notice-bg: #2b2412;
+        --notice-text: #e8c468;
+
+        --shadow-color: rgba(0, 0, 0, .55);
+    }
+}
+
+:root[data-theme="dark"] {
+    --ink: #e6ecf2;
+    --ink-2: #b7c2ce;
+    --muted: #99a7b8;
+    --muted-2: #7c8a9a;
+    --faint: #5f6d7e;
+
+    --line: #253241;
+    --line-2: #1c2732;
+    --control-border: #435265;
+    --divider: #2c3a49;
+    --divider-strong: #3c4d60;
+
+    --surface: #16202c;
+    --surface-sunken: #111925;
+    --page-bg: #0b1119;
+
+    --accent: #6ba3dd;
+    --accent-700: #9dc4ec;
+    --accent-50: #16283a;
+    --accent-300: #4d7aa8;
+    --accent-underline: #3c6690;
+    --tint-text: #9fb7cc;
+
+    --warning: #e2a33e;
+    --notice-border: #b8922a;
+    --notice-bg: #2b2412;
+    --notice-text: #e8c468;
+
+    --shadow-color: rgba(0, 0, 0, .55);
+}

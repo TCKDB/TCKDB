@@ -6,7 +6,7 @@
 
 .species-header {
     max-width: 65rem;
-    border-left: 4px solid #205493;
+    border-left: 4px solid var(--accent);
     padding-left: clamp(1rem, 3vw, 2rem);
 }
 
@@ -19,7 +19,7 @@
 
 .species-header h1 {
     margin: 0;
-    color: #16202c;
+    color: var(--ink);
     font-size: clamp(3.5rem, 8vw, 6.4rem);
     letter-spacing: -.055em;
     line-height: .94;
@@ -30,7 +30,7 @@
 .species-intro {
     max-width: 48rem;
     margin: 1.3rem 0 0;
-    color: #3c4856;
+    color: var(--ink-2);
     font: 1.05rem/1.6 var(--serif);
 }
 
@@ -38,8 +38,8 @@
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     margin: 2rem 0 0;
-    border-top: 1px solid #dbe2ea;
-    border-bottom: 1px solid #dbe2ea;
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
 }
 
 .species-identity-grid div {
@@ -49,7 +49,7 @@
 
 .species-identity-grid dt,
 .entry-facts dt {
-    color: #526171;
+    color: var(--muted);
     font: .64rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -59,7 +59,7 @@
 .entry-facts dd {
     overflow-wrap: anywhere;
     margin: .35rem 0 0;
-    color: #16202c;
+    color: var(--ink);
     font: .76rem/1.45 var(--mono);
 }
 
@@ -72,7 +72,7 @@
     justify-content: space-between;
     gap: 1rem;
     align-items: end;
-    border-bottom: 2px solid #205493;
+    border-bottom: 2px solid var(--accent);
     padding-bottom: .8rem;
 }
 
@@ -88,7 +88,7 @@
 
 .entry-index-heading > p {
     margin: 0;
-    color: #526171;
+    color: var(--muted);
     font: .72rem var(--mono);
     white-space: nowrap;
 }
@@ -96,7 +96,7 @@
 .entry-index-intro {
     max-width: 51rem;
     margin: 1rem 0 1.6rem;
-    color: #3c4856;
+    color: var(--ink-2);
     line-height: 1.55;
 }
 
@@ -113,7 +113,7 @@
 }
 
 .entry-state-group {
-    border-top: 1px solid #b8cbe0;
+    border-top: 1px solid var(--divider-strong);
 }
 
 .entry-state-group h3 {
@@ -123,13 +123,13 @@
     gap: 1rem;
     margin: 0;
     padding: 1rem 0 .7rem;
-    color: #16202c;
+    color: var(--ink);
     font-size: clamp(1.25rem, 2.5vw, 1.65rem);
     letter-spacing: -.02em;
 }
 
 .entry-state-group h3 span {
-    color: #526171;
+    color: var(--muted);
     font: .68rem var(--mono);
     letter-spacing: .04em;
     text-transform: uppercase;
@@ -137,14 +137,14 @@
 }
 
 .entry-state-disclosure {
-    border: 1px solid #cdd9e5;
-    background: #fff;
+    border: 1px solid var(--divider);
+    background: var(--surface);
 }
 
 .entry-state-disclosure summary {
     cursor: pointer;
     padding: .75rem 1rem;
-    color: #173f6e;
+    color: var(--accent-700);
     font-size: .83rem;
     font-weight: 600;
 }
@@ -153,14 +153,14 @@
     max-width: 52rem;
     margin: 0;
     padding: .1rem 1rem 1rem;
-    color: #3c4856;
+    color: var(--ink-2);
     font-size: .88rem;
     line-height: 1.55;
 }
 
 .entry-rows {
     display: grid;
-    border-top: 1px solid #dbe2ea;
+    border-top: 1px solid var(--line);
 }
 
 .entry-card {
@@ -169,7 +169,7 @@
     align-items: start;
     gap: 1rem;
     padding: 1rem;
-    border-bottom: 1px solid #dbe2ea;
+    border-bottom: 1px solid var(--line);
 }
 
 .entry-card-heading {
@@ -180,7 +180,7 @@
 
 .entry-card-type {
     margin: 0 0 .65rem;
-    color: #526171;
+    color: var(--muted);
     font: .66rem var(--mono);
     letter-spacing: .08em;
     text-transform: uppercase;
@@ -194,23 +194,23 @@
 
 .entry-card h4 a,
 .entry-card-action {
-    color: #173f6e;
+    color: var(--accent-700);
     text-decoration: underline;
-    text-decoration-color: #a8c4dc;
+    text-decoration-color: var(--accent-underline);
     text-underline-offset: .16em;
 }
 
 .entry-card h4 a:hover,
 .entry-card-action:hover {
-    color: #205493;
+    color: var(--accent);
     text-decoration-color: currentColor;
 }
 
 .entry-review {
     height: fit-content;
     padding: .25rem .4rem;
-    background: #eaf1f8;
-    color: #173f6e;
+    background: var(--accent-50);
+    color: var(--accent-700);
     font: .62rem var(--mono);
     text-transform: uppercase;
     white-space: nowrap;
@@ -235,7 +235,7 @@
     overflow-wrap: anywhere;
     flex: 1 0 100%;
     margin: 0;
-    color: #526171;
+    color: var(--muted);
     font: .62rem/1.4 var(--mono);
 }
 

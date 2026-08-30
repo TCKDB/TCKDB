@@ -1,29 +1,24 @@
 /*
- * Atom-picking measurements (GeometryViewer.tsx) — a NEW stylesheet, kept
- * deliberately separate from `geometry-detail.css` and every other
- * existing `.css` file in this app. A parallel branch
- * (frontend/theme-tokens) is tokenising the CSS palette and owns every
- * existing stylesheet for the duration of that work; this file is the one
- * place this feature's own styling lives so the two branches never touch
- * the same file.
+ * Atom-picking measurements (GeometryViewer.tsx). Kept as its own
+ * stylesheet rather than folded into `geometry-detail.css`: this feature
+ * and the theme pass were built on parallel branches, and a separate file
+ * is what let neither branch edit the other's.
  *
- * Colours here are plain hex literals, chosen to match the values already
- * visible on this page (`geometry-detail.css`, read but not edited):
- *   #205493 — accent (buttons, pressed state, links)
- *   #dbe2ea — border
- *   #536578 — muted text
- *   #fff    — surface
- * plus two new literals introduced by this feature alone, for the
- * on-canvas highlight/connector colours (`.viewer-canvas` never had a
- * "selection" or "measurement line" concept before this branch, so there
- * is no existing token to match): #ffcc00 (selection highlight, used only
- * inside the WebGL scene via 3Dmol's own `addSphere`, not in this
- * stylesheet) and #ff5a1f (measurement connector, same — noted here only
- * so a reader of this file's palette section knows where those two colours
- * live, even though they are not CSS at all). Once frontend/theme-tokens
- * lands, every literal below (the two 3Dmol-side ones included) will need
- * converting to that branch's token names — this file intentionally does
- * not try to guess those names ahead of time.
+ * Every colour below is a `var(--token)` from `theme.css` -- the app's one
+ * place a colour literal is allowed to live. See `theme.css.test.ts`,
+ * which discovers stylesheets by glob and fails this file if a literal
+ * reappears in it.
+ *
+ * Two colours this feature uses are deliberately NOT tokens and are not in
+ * this file at all: the selection highlight and the measurement connector,
+ * both set in `GeometryViewer.tsx` and handed to 3Dmol's `addSphere` /
+ * `addCylinder` as WebGL scene-object colours. They stay fixed across
+ * light and dark for the same reason CPK atom colours do -- they are
+ * objects rendered *in* the molecular scene, not UI chrome around it, and
+ * a chemist reads a highlight by its hue, not by its relationship to the
+ * page background. Both are chosen to hold contrast against the viewer's
+ * own background in either theme. Tokenising them would make a scene
+ * colour follow the page's theme, which is the wrong coupling.
  */
 
 .viewer-measurements {
@@ -31,8 +26,8 @@
     max-width: 36rem;
     margin: 0 auto;
     padding: 1rem 1.5rem 1.5rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    border: 1px solid var(--line);
+    background: var(--surface);
 }
 
 .viewer-measurements-header {
@@ -46,15 +41,15 @@
 .viewer-measurements-header h3 {
     margin: 0;
     font: 600 .82rem var(--mono, ui-monospace, monospace);
-    color: #16202c;
+    color: var(--ink);
 }
 
 .measure-clear-button {
     padding: .35rem .75rem;
-    border: 1px solid #b8c4d1;
+    border: 1px solid var(--control-border);
     border-radius: .3rem;
-    background: #fff;
-    color: #205493;
+    background: var(--surface);
+    color: var(--accent);
     font: .68rem var(--mono, ui-monospace, monospace);
     text-transform: uppercase;
     letter-spacing: .04em;
@@ -62,13 +57,13 @@
 }
 
 .measure-clear-button:hover:not(:disabled) {
-    border-color: #205493;
-    background: #eaf1f8;
+    border-color: var(--accent);
+    background: var(--accent-50);
 }
 
 .measure-clear-button:disabled {
-    color: #536578;
-    border-color: #dbe2ea;
+    color: var(--muted);
+    border-color: var(--line);
     cursor: not-allowed;
 }
 
@@ -81,14 +76,14 @@
 .viewer-measure-status {
     margin: .6rem 0 0;
     min-height: 1.1em;
-    color: #536578;
+    color: var(--muted);
     font-size: .72rem;
     line-height: 1.5;
 }
 
 .viewer-measure-hint {
     margin: .5rem 0 0;
-    color: #536578;
+    color: var(--muted);
     font-size: .78rem;
     line-height: 1.5;
 }
@@ -108,19 +103,19 @@
     justify-content: space-between;
     gap: .5rem .9rem;
     padding: .5rem .7rem;
-    border: 1px solid #dbe2ea;
-    background: #f5f7fa;
+    border: 1px solid var(--line);
+    background: var(--surface-sunken);
 }
 
 .measurement-kind {
-    color: #16202c;
+    color: var(--ink);
     font: .74rem var(--mono, ui-monospace, monospace);
     overflow-wrap: anywhere;
 }
 
 .measurement-value {
     flex: none;
-    color: #173f6e;
+    color: var(--accent-700);
     font: 600 .8rem var(--mono, ui-monospace, monospace);
     font-variant-numeric: tabular-nums;
 }

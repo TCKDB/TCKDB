@@ -2,6 +2,41 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <!--
+      Applies a stored explicit theme choice before the first paint, so a
+      reader who picked "Dark" (`hooks/useTheme.ts`, `components/
+      ThemeToggle.tsx`) never sees a flash of the light palette while React
+      mounts. Deliberately the very first thing in <head>, before any
+      generated stylesheet <link> (Vite appends the build's CSS link after
+      existing <head> content) -- this must run before that link is even
+      requested, not merely before it finishes loading, or the light
+      palette in theme.css's bare :root paints first regardless.
+
+      "system" (no stored choice, or storage unavailable) sets nothing:
+      the unstamped root already gets prefers-color-scheme's answer from
+      theme.css's `@media` block, so there is nothing this script needs to
+      do for that case -- setting a "system" attribute value here would
+      only add a fourth state theme.css does not define.
+
+      Wrapped in try/catch: localStorage throws outright in some privacy
+      contexts (Safari private browsing with "block all cookies", some
+      locked-down enterprise profiles) rather than merely being empty, and
+      this script runs before React (or anything else in this app) is
+      there to catch it.
+    -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("tckdb-theme");
+          if (stored === "light" || stored === "dark") {
+            document.documentElement.setAttribute("data-theme", stored);
+          }
+        } catch (e) {
+          // Storage unavailable -- leave data-theme unset; the reader
+          // gets the "system" behaviour (prefers-color-scheme) instead.
+        }
+      })();
+    </script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>tckdb-frontend</title>

@@ -19,7 +19,7 @@
    styling does not depend on load order or navigation history. */
 .section-note {
     margin: .5rem 0 0;
-    color: #536578;
+    color: var(--muted);
     font-size: .8rem;
     line-height: 1.5;
 }
@@ -38,8 +38,8 @@
     margin: 0;
     padding: 1rem 1.2rem;
     overflow-x: auto;
-    border: 1px solid #dbe2ea;
-    background: #f5f7fa;
+    border: 1px solid var(--line);
+    background: var(--surface-sunken);
     font: .78rem/1.55 var(--mono);
     white-space: pre;
 }
@@ -51,20 +51,24 @@
 }
 
 /* `.copy-button` itself is defined in `species-entry.css` (owned by a
-   parallel agent, off-limits here) against CSS custom properties
-   (`--line`/`--muted`/`--accent`) this page never defines. Rather than
-   depend on load order to happen to pull that stylesheet in first, this
-   page gives the same shared `CopyButton` component (`components/
-   RefsDisclosure.tsx`) its own scoped styling, in this page's own literal
-   tokens (#b8c4d1/#536578/#205493/#173f6e — the same ones `.viewer-
-   controls button` etc. use below) so it reads as part of this page's
-   language rather than an unstyled or borrowed one. */
+   parallel agent, off-limits here). This page gives the same shared
+   `CopyButton` component (`components/RefsDisclosure.tsx`) its own scoped
+   styling rather than depending on that other stylesheet happening to
+   load first. Theming pass: the colours below (`--control-border`,
+   `--muted`, `--accent`, `--accent-700`) used to be literal hex repeated
+   in this rule for exactly that reason — no shared token source existed
+   yet. They are now `theme.css`'s global tokens, loaded once for the
+   whole app before any page, so the load-order concern that justified
+   the duplication is gone; what is left is still deliberately its own
+   rule (matching `.viewer-controls button` etc. below) rather than a
+   reference to `species-entry.css`'s `.copy-button`, since this page
+   still should not depend on that file loading at all. */
 .geometry-page .copy-button {
     flex: none;
-    border: 1px solid #b8c4d1;
+    border: 1px solid var(--control-border);
     border-radius: .3rem;
-    background: #fff;
-    color: #536578;
+    background: var(--surface);
+    color: var(--muted);
     font: .64rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .05em;
@@ -72,15 +76,15 @@
     cursor: pointer;
 }
 
-.geometry-page .copy-button:hover { border-color: #205493; color: #205493; }
-.geometry-page .copy-button[data-copied="true"] { border-color: #205493; color: #173f6e; }
+.geometry-page .copy-button:hover { border-color: var(--accent); color: var(--accent); }
+.geometry-page .copy-button[data-copied="true"] { border-color: var(--accent); color: var(--accent-700); }
 /* Clipboard access is unavailable outside a secure context (plain http,
    not localhost) or can be denied even inside one — previously this was
    a silent no-op. `CopyButton` now surfaces it as its own visible state
    (button text flips to "Unavailable") rather than doing nothing, and
    this is that state's colour — a warm amber, not the page's blue accent,
    so it does not read as a second "success" colour. */
-.geometry-page .copy-button[data-copy-unavailable="true"] { border-color: #a15c00; color: #a15c00; }
+.geometry-page .copy-button[data-copy-unavailable="true"] { border-color: var(--warning); color: var(--warning); }
 
 /* This page's own `.ledger-summary` renders 2 `Metric` cards + 1
    `.coverage-card` = 3 children, not the 4 the shared grid template in
@@ -114,7 +118,7 @@
    above made its column too narrow. */
 .validation-card p {
     margin: .5rem 0 0;
-    color: #536578;
+    color: var(--muted);
     font: .68rem/1.5 var(--mono);
 }
 
@@ -126,7 +130,7 @@
 
 .validation-pointer dt {
     margin: 0;
-    color: #536578;
+    color: var(--muted);
     font: .6rem var(--mono);
     letter-spacing: .05em;
     text-transform: uppercase;
@@ -134,7 +138,7 @@
 
 .validation-pointer dd {
     margin: .3rem 0 0;
-    color: #173f6e;
+    color: var(--accent-700);
     font: .72rem/1.6 var(--mono);
     overflow-wrap: anywhere;
 }
@@ -168,7 +172,7 @@
    MEASURED regression, now reverted: this card briefly reused the
    accent-left-border card treatment `.geometry-ledger` and
    `.observation-card > header` use elsewhere in this app
-   (`border-left: 3px solid #205493`). That treatment reads correctly on
+   (`border-left: 3px solid var(--accent)`). That treatment reads correctly on
    those two — a left-aligned card inside a text column, where the 3px
    bar sits flush with the text edge and reads as a margin rule. This
    card is centred (`max-width: 36rem; margin: 0 auto`), floating
@@ -190,8 +194,8 @@
     max-width: 36rem;
     margin: 0 auto;
     padding: 1.5rem;
-    border: 1px solid #dbe2ea;
-    background: #fff;
+    border: 1px solid var(--line);
+    background: var(--surface);
 }
 
 /* 3Dmol sizes its canvas from this element's offsetWidth/offsetHeight
@@ -234,8 +238,8 @@
     width: 100%;
     max-width: 30rem;
     aspect-ratio: 1 / 1;
-    outline: 1px solid #dbe2ea;
-    background: #fff;
+    outline: 1px solid var(--line);
+    background: var(--surface);
 }
 
 /* Ordinary keyboard-operable buttons: rotate/zoom/reset the camera.
@@ -316,9 +320,9 @@
 .viewer-controls button,
 .viewer-style-choice button {
     padding: .4rem .75rem;
-    border: 1px solid #b8c4d1;
-    background: #fff;
-    color: #205493;
+    border: 1px solid var(--control-border);
+    background: var(--surface);
+    color: var(--accent);
     font: .72rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .04em;
@@ -327,8 +331,8 @@
 
 .viewer-controls button:hover,
 .viewer-style-choice button:hover {
-    border-color: #205493;
-    background: #eaf1f8;
+    border-color: var(--accent);
+    background: var(--accent-50);
 }
 
 /* Style (ball & stick / spacefill / wireframe) and atom-label controls —
@@ -357,13 +361,13 @@
     font: .72rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .04em;
-    color: #536578;
+    color: var(--muted);
 }
 
 .viewer-style-choice button[aria-pressed="true"] {
-    border-color: #205493;
-    background: #205493;
-    color: #fff;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
 }
 
 .viewer-label-choice {
@@ -373,14 +377,14 @@
     font: .72rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .04em;
-    color: #536578;
+    color: var(--muted);
 }
 
 .viewer-label-choice select {
     padding: .3rem .5rem;
-    border: 1px solid #b8c4d1;
-    background: #fff;
-    color: #205493;
+    border: 1px solid var(--control-border);
+    background: var(--surface);
+    color: var(--accent);
     font: .72rem var(--mono);
     text-transform: none;
     letter-spacing: normal;
@@ -413,14 +417,14 @@
     font: .64rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .05em;
-    color: #536578;
+    color: var(--muted);
 }
 
 .coordinate-toggle button {
     padding: .3rem .65rem;
-    border: 1px solid #b8c4d1;
-    background: #fff;
-    color: #205493;
+    border: 1px solid var(--control-border);
+    background: var(--surface);
+    color: var(--accent);
     font: .7rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .04em;
@@ -428,14 +432,14 @@
 }
 
 .coordinate-toggle button:hover {
-    border-color: #205493;
-    background: #eaf1f8;
+    border-color: var(--accent);
+    background: var(--accent-50);
 }
 
 .coordinate-toggle button[aria-pressed="true"] {
-    border-color: #205493;
-    background: #205493;
-    color: #fff;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
 }
 
 /* Never lets the bohr column read as "this is how the archive stores
@@ -446,7 +450,7 @@
 .coordinate-toggle-note {
     flex-basis: 100%;
     margin: 0;
-    color: #536578;
+    color: var(--muted);
     font-size: .66rem;
     line-height: 1.5;
 }

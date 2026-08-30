@@ -14,7 +14,7 @@
  *
  * Token system, revised:
  *   The previous pass split "evidence" (blue) from "computed products"
- *   (a rust `--product: #8a4a1f`, with `box-shadow: inset 3px 0 0`
+ *   (a rust `--product` token, with `box-shadow: inset 3px 0 0`
  *   rails on every card and rust-colored links). The owner's review:
  *   "I do not like so many of the red links... it appears the website is
  *   more CLI geared." A record's own fact -- "this entry has thermo" --
@@ -23,15 +23,27 @@
  *   read its evidence in tabs), the evidence/product split stops doing
  *   real work: both are just "this page's one accent" now. `--product`
  *   and its rail are GONE, not merely recolored -- there is one accent,
- *   `--accent`, reused site-wide (the same #205493 blue `.eyebrow` already
- *   uses on the front door: not a new hue invented for this page, the
- *   house's own "computed/theoretical" color, applied consistently).
+ *   `--accent`, reused site-wide (the same blue `.eyebrow` already uses on
+ *   the front door: not a new hue invented for this page, the house's own
+ *   "computed/theoretical" color, applied consistently).
  *
- *   --ink/--ink-2/--muted/--faint — text hierarchy (unchanged).
+ *   --ink/--ink-2/--faint — text hierarchy (unchanged).
  *   --line/--line-2 — hairlines (unchanged).
  *   --accent/--accent-700/--accent-50 — the page's one accent: links,
  *                 the active tab's underline, selected-conformer state.
  *                 No second color competes with it anywhere on this page.
+ *
+ * Theming pass (theme tokens): --ink/--ink-2/--faint/--line/--line-2/
+ * --surface/--accent/--accent-700/--accent-50 moved to theme.css's global
+ * :root (same names, same light-mode values) so they respond to dark
+ * mode; the local declarations that used to live here are gone -- every
+ * var(--ink) etc. below now resolves against the global token instead of
+ * a value fixed to this page. One rename: this page's own --muted was a
+ * visibly different grey from the site-wide --muted (29 uses elsewhere)
+ * that now lives at :root -- merging them would have silently recolored
+ * one of the two. Every reference to it below is now var(--muted-2),
+ * theme.css's name for this page's own value.
+ *
  * Type: IBM Plex Serif for titles and scientific headline numbers; IBM
  * Plex Sans for UI chrome and prose; IBM Plex Mono for every reference,
  * unit and coefficient — unchanged, already the house pairing.
@@ -50,19 +62,15 @@
  *   up the extra width.
  */
 
+/* Colour custom properties formerly declared here (--ink, --ink-2,
+   --muted, --faint, --line, --line-2, --surface, --accent, --accent-700,
+   --accent-50) now live on theme.css's global :root, under the same
+   names (this page's own --muted is theme.css's --muted-2 -- see the
+   file header). Redeclaring them here would pin this page to fixed
+   light-mode values regardless of theme, since a value set directly on
+   .entry-page wins the cascade over :root's dark-mode redefinition for
+   every element below it -- the one thing this page must not do. */
 .entry-page {
-    --ink: #16202c;
-    --ink-2: #3c4856;
-    --muted: #6b7888;
-    --faint: #9aa6b3;
-    --line: #dbe2ea;
-    --line-2: #eaeef3;
-    --surface: #ffffff;
-
-    --accent: #205493;
-    --accent-700: #173f6e;
-    --accent-50: #eaf1f8;
-
     max-width: 100rem;
     margin: 0 auto;
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
@@ -162,7 +170,7 @@
 }
 
 .entry-facts span {
-    color: var(--muted);
+    color: var(--muted-2);
     font: .64rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -181,12 +189,12 @@
     margin-top: 1.75rem;
     border: 1px solid var(--line-2);
     border-radius: .5rem;
-    background: #fbfcfe;
+    background: var(--surface-sunken);
 }
 
 .refs-disclosure summary {
     padding: .6rem 1rem;
-    color: var(--muted);
+    color: var(--muted-2);
     font: .68rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .06em;
@@ -232,7 +240,7 @@
     font: .72rem var(--mono);
 }
 
-.ref-item-value { color: var(--muted); }
+.ref-item-value { color: var(--muted-2); }
 
 .ref-item a {
     color: var(--accent);
@@ -247,8 +255,8 @@
     flex: none;
     border: 1px solid var(--line);
     border-radius: .3rem;
-    background: #fff;
-    color: var(--muted);
+    background: var(--surface);
+    color: var(--muted-2);
     font: .58rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .05em;
@@ -318,7 +326,7 @@
     flex-direction: column;
     border: 1px solid var(--line);
     border-radius: .5rem;
-    background: #fff;
+    background: var(--surface);
     overflow: hidden;
 }
 
@@ -355,7 +363,7 @@
     font: .72rem var(--mono);
 }
 
-.conformer-card-coverage { color: var(--muted); }
+.conformer-card-coverage { color: var(--muted-2); }
 
 /* ---------------------------------------------------------------------
    Evidence linkage — the shape behind the conformer card's own numbers:
@@ -370,7 +378,7 @@
     padding: 1.5rem 1.5rem 1.75rem;
     border: 1px solid var(--line);
     border-radius: .6rem;
-    background: #fbfcfe;
+    background: var(--surface-sunken);
 }
 
 .evidence-linkage h2 {
@@ -407,7 +415,7 @@
 
 .evidence-linkage-detail > summary {
     cursor: pointer;
-    color: var(--muted);
+    color: var(--muted-2);
     font: 600 .78rem var(--mono);
     letter-spacing: .03em;
 }
@@ -445,7 +453,7 @@
 }
 
 .linkage-step-detail {
-    color: var(--muted);
+    color: var(--muted-2);
     font: .72rem/1.5 var(--mono);
 }
 
@@ -565,7 +573,7 @@
 }
 
 .geometry-meta {
-    color: var(--muted);
+    color: var(--muted-2);
     font: .72rem var(--mono);
 }
 
@@ -609,7 +617,7 @@
 
 .conformer-attribution-other > summary {
     cursor: pointer;
-    color: var(--muted);
+    color: var(--muted-2);
     font: 600 .78rem var(--mono);
     letter-spacing: .03em;
 }
@@ -621,7 +629,7 @@
 }
 
 .conformer-attribution-other .conformer-evidence-group-heading {
-    color: var(--muted);
+    color: var(--muted-2);
     font-size: .95rem;
 }
 
