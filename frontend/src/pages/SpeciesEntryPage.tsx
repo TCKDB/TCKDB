@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams, useSearchParams } from "reac
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { ConformerEvidenceLinkage } from "../components/ConformerEvidenceLinkage"
+import { sortConformersForDisplay } from "../domain/conformerEvidence"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
 import { ConformerSelector } from "../components/ConformerSelector"
 import { ConformerSinglePointTab } from "../components/ConformerSinglePointTab"
@@ -89,7 +90,13 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
     const [searchParams, setSearchParams] = useSearchParams()
     const requestedRef = searchParams.get("conformer")
     const requestedConformer = conformers.find((conformer) => conformer.conformer_group.conformer_group_ref === requestedRef)
-    const selectedConformer = requestedConformer ?? conformers[0] ?? null
+    // Default to the FIRST CARD AS DISPLAYED, not the archive's top-ranked
+    // conformer. `conformers/search` orders by review rank, so `conformers[0]`
+    // is meaningful -- but the cards render in numeric label order, and a
+    // highlighted card that is not the first one reads as a bug rather than as
+    // a ranking signal. If that ranking is worth surfacing it needs to be
+    // visible on the card, not encoded in which one starts selected.
+    const selectedConformer = requestedConformer ?? sortConformersForDisplay(conformers)[0] ?? null
 
     // Self-heal the URL to name what's actually selected: an empty/stale
     // `conformer` param becomes the first conformer's ref, once conformers

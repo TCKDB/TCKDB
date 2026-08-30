@@ -290,6 +290,10 @@ function handlers(options: HandlerOptions = {}) {
             if (options.status) return HttpResponse.json({ detail: "archive unavailable" }, { status: options.status })
             if (options.noConformers) return HttpResponse.json({ records: [] })
             if (options.singleConformer) return HttpResponse.json({ records: [conformerRecords()[0]] })
+            // `conformers/search` orders by review rank, not by label number, so
+            // the archive really can return conformer_2 ahead of conformer_1 --
+            // measured on spe_mbdqifmaclaakukr7agxbuq3wa, which returns 3, 2, 1.
+            if (options.reversedOrder) return HttpResponse.json({ records: [...conformerRecords()].reverse() })
             return HttpResponse.json({ records: conformerRecords() })
         }),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => HttpResponse.json({
@@ -397,6 +401,19 @@ describe("species-entry page: identity and errors", () => {
 })
 
 describe("species-entry page: conformer picker", () => {
+    it("defaults to the FIRST CARD AS DISPLAYED even when the archive returns a different order", async () => {
+        // The wire hands back conformer_2 first (review rank), the cards render
+        // conformer_1 first (label order). A default of `conformers[0]` would
+        // highlight the second card -- which reads as a bug, not a ranking.
+        server.use(...handlers({ reversedOrder: true }))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        const cards = document.querySelectorAll(".conformer-card")
+        expect(within(cards[0] as HTMLElement).getByRole("button", { name: /Conformer Group 1/ })).toHaveAttribute("aria-pressed", "true")
+        expect(within(cards[1] as HTMLElement).getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "false")
+    })
+
     it("shows one basin card per conformer, each with its own distinct counts, and defaults to selecting the first", async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
