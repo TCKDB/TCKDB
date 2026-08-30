@@ -84,8 +84,8 @@ describe("ConformerEvidenceLinkage", () => {
         // sentence, which still directly answers "does the opt count include
         // the pre-opt" without naming which sighting was staged.
         expect(story).toHaveTextContent(
-            "This conformer was sighted three times. Three optimization calculations are on file across two "
-            + "independent optimization chains -- one of those calculations is a coarse pass later refined "
+            "This conformer was sighted three times. Three optimisation calculations are on file across two "
+            + "independent optimisation chains -- one of those calculations is a coarse pass later refined "
             + "within the same chain, though the archive does not say which sighting they belong to. Two of "
             + "the three sightings got a frequency calculation. One of the three sightings got a "
             + "single-point energy.",
@@ -118,7 +118,7 @@ describe("ConformerEvidenceLinkage", () => {
         // Breakdown by TYPE (3 opt/2 freq/2 sp) is the raw row count --
         // different from the 2 optimization CHAINS reported alongside it.
         expect(within(step("calculations")).getByText(
-            "3 opt · 2 freq · 2 sp, in 2 optimization chains (a staged coarse-then-fine reoptimization counts as one chain)",
+            "3 opt · 2 freq · 2 sp, in 2 optimisation chains (a staged coarse-then-fine reoptimisation counts as one chain)",
         )).toBeVisible()
     })
 
@@ -206,7 +206,7 @@ describe("ConformerEvidenceLinkage", () => {
         expect(within(step("observations")).getByText("deposited observation")).toBeVisible()
         expect(within(step("calculations")).getByText("calculation row")).toBeVisible()
         expect(within(step("geometries")).getByText("distinct stored geometry")).toBeVisible()
-        expect(within(step("calculations")).getByText(/1 optimization chain\b/)).toBeVisible()
+        expect(within(step("calculations")).getByText(/1 optimisation chain\b/)).toBeVisible()
         expect(within(step("geometries")).getByText(/1 calculation output\b/)).toBeVisible()
     })
 
@@ -292,7 +292,7 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={noStaging} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "This conformer was sighted two times. Two optimization calculations are on file, one per chain -- "
+            "This conformer was sighted twice. Two optimisation calculations are on file, one per chain -- "
             + "no chain was staged in more than one pass. None of the sightings got a frequency calculation. "
             + "None of the sightings got a single-point energy.",
         )
@@ -333,24 +333,39 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={noStaging} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "This conformer was sighted two times. Two were optimised in a single pass. "
+            "This conformer was sighted twice. Two were optimised in a single pass. "
             + "None of the sightings got a frequency calculation. None of the sightings got a single-point energy.",
         )
         expect(story).not.toHaveTextContent(/\bstages\b/)
         expect(story).not.toHaveTextContent(/\bstaged\b/)
     })
 
-    it("names three stages, never capping at two, for a genuine three-stage chain", () => {
-        // A group with ONE observation whose opt chain went through three
-        // stages (coarse, intermediate, fine) -- the exact case the brief
-        // warns against mislabeling as "two stages".
+    // Finding 3 of the BLOCK review: this test used to assert the SEQUENTIAL
+    // reading ("optimised in three stages" + "a coarse pass first, then
+    // refines it") for a 3-row/1-chain observation, and in doing so
+    // ENSHRINED an inference the wire cannot support rather than guarding
+    // against it. The backend's `_feeds_a_refinement_on_the_same_observation`
+    // (backend/app/services/scientific_read/conformers.py:645-666) collapses
+    // on ANY `optimized_from` parent without constraining the child, so this
+    // exact fixture -- 3 opt rows, 1 chain, 1 observation -- is
+    // byte-identical on the wire whether it is a genuine coarse->medium->fine
+    // SEQUENCE or two independent coarse attempts (A->C, B->C) both refined
+    // into the same final geometry in PARALLEL. Per that same backend
+    // docstring, the deployed database has no chain longer than two nodes
+    // today, making the parallel reading the MORE probable one for this
+    // shape, not a rare edge case to hedge against. The prose must say only
+    // what three rows in one chain actually proves -- that they belong to a
+    // single chain -- and must NOT claim a specific pass count or a
+    // coarse-then-fine sequence it cannot distinguish from parallel
+    // attempts.
+    it("says three rows belong to a single chain, without asserting a sequence the wire cannot distinguish from parallel attempts", () => {
         function observation(ref: string, optCount: number) {
             return {
                 conformer_observation: { conformer_observation_ref: ref },
                 calculations: Array.from({ length: optCount }, (_, index) => ({ calculation_ref: `${ref}_opt${index}`, type: "opt" })),
             } as ConformerProjection["observations"] extends (infer T)[] | null | undefined ? T : never
         }
-        const threeStage = conformer({
+        const threeRowsOneChain = conformer({
             observations_summary: { total: 1 },
             evidence_summary: {
                 calculation_count: 3,
@@ -366,14 +381,57 @@ describe("ConformerEvidenceLinkage", () => {
                 { calculation_ref: "co_only_opt2", type: "opt" },
             ] as ConformerProjection["calculations"],
         })
-        render(<ConformerEvidenceLinkage conformer={threeStage} />)
+        render(<ConformerEvidenceLinkage conformer={threeRowsOneChain} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "This conformer was sighted once. One was optimised in three stages. A staged optimisation runs a "
+            "This conformer was sighted once. One was optimised in three calculations belonging to a single "
+            + "chain. None of the sightings got a frequency calculation. None of the sightings got a "
+            + "single-point energy.",
+        )
+        // Neither a specific step count nor the coarse-then-fine SEQUENCE
+        // gloss may appear -- both assert more than three rows folded into
+        // one chain actually proves.
+        expect(story).not.toHaveTextContent(/\btwo stages\b/)
+        expect(story).not.toHaveTextContent(/\bthree stages\b/)
+        expect(story).not.toHaveTextContent(/coarse pass first, then refines it/)
+    })
+
+    // The two-row case is the one shape where "two stages" and "a coarse
+    // pass first, then refines it" are still licensed: with exactly two
+    // rows in one chain there is only one possible relationship between
+    // them (one refines the other) -- the parallel-attempts ambiguity only
+    // opens up at three rows and above. This guards that the finding-3 fix
+    // didn't overcorrect and start suppressing the sequential gloss here
+    // too.
+    it("still names two stages and the sequential gloss for a genuine two-row chain", () => {
+        function observation(ref: string, optCount: number) {
+            return {
+                conformer_observation: { conformer_observation_ref: ref },
+                calculations: Array.from({ length: optCount }, (_, index) => ({ calculation_ref: `${ref}_opt${index}`, type: "opt" })),
+            } as ConformerProjection["observations"] extends (infer T)[] | null | undefined ? T : never
+        }
+        const twoRowsOneChain = conformer({
+            observations_summary: { total: 1 },
+            evidence_summary: {
+                calculation_count: 2,
+                optimization_chain_count: 1,
+                geometry_count: 1,
+                evidence_coverage: { opt: 1, freq: 0, sp: 0 },
+                levels_of_theory: {},
+            },
+            observations: [observation("co_only", 2)],
+            calculations: [
+                { calculation_ref: "co_only_opt0", type: "opt" },
+                { calculation_ref: "co_only_opt1", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        render(<ConformerEvidenceLinkage conformer={twoRowsOneChain} />)
+        const story = document.querySelector(".evidence-linkage-story")
+        expect(story).toHaveTextContent(
+            "This conformer was sighted once. One was optimised in two stages. A staged optimisation runs a "
             + "coarse pass first, then refines it. None of the sightings got a frequency calculation. None of "
             + "the sightings got a single-point energy.",
         )
-        expect(story).not.toHaveTextContent(/\btwo stages\b/)
     })
 
     it("never renders single-conformer wording for a group with more than one sighting", () => {

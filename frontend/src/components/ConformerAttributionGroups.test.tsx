@@ -82,6 +82,40 @@ describe("ConformerAttributionGroups", () => {
         expect(within(details).getByRole("heading", { name: "From Conformer Group 3" })).toBeVisible()
     })
 
+    // Finding 4 of the BLOCK review: `partitionByConformerLink` files a
+    // record naming MULTIPLE other groups under EVERY one of those groups'
+    // own buckets -- the SAME record reference appears in more than one
+    // bucket array. The prior summary count (`reduce` summing bucket
+    // lengths) double-counted such a record, and the prior render (mapping
+    // each bucket independently) rendered that SAME record twice into the
+    // DOM. A caller gives each rendered record a fixed id derived from its
+    // own ref (e.g. `thermo-heading-${record.thermo_ref}`), so rendering it
+    // twice produces two elements sharing one id -- this test's `renderRecord`
+    // stands in for that with `data-testid`, which RTL's `getByTestId` also
+    // refuses to resolve past a single match, catching the same class of bug.
+    it("counts and renders a record naming MULTIPLE other conformers once, under a joint heading -- never double-counted or duplicated", () => {
+        const multiLinked = { id: "x" }
+        renderGroups({
+            thisConformer: [],
+            otherConformers: [
+                { ref: "cg_two", label: "Conformer Group 2", records: [multiLinked] },
+                { ref: "cg_three", label: "Conformer Group 3", records: [multiLinked] },
+            ],
+            noLink: [],
+        })
+        // Distinct-record count, not a sum of (possibly overlapping) bucket
+        // lengths: ONE record, even though it's named by two buckets.
+        expect(screen.getByText("1 record from other conformers")).toBeVisible()
+        const details = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        fireEvent.click(within(details).getByText("1 record from other conformers"))
+        // Renders exactly once -- getByTestId throws on more than one match,
+        // so this line itself is the duplicate-DOM-id guard.
+        expect(within(details).getByTestId("record-x")).toBeVisible()
+        // Named under a joint heading listing every group it actually
+        // traces to, not silently attributed to only one of them.
+        expect(within(details).getByRole("heading", { name: "From Conformer Group 2, Conformer Group 3" })).toBeVisible()
+    })
+
     it("never renders a collapsed other-conformers disclosure when there are none", () => {
         renderGroups({ thisConformer: [{ id: "mine" }], otherConformers: [], noLink: [] })
         expect(screen.queryByText(/records? from other conformers/)).not.toBeInTheDocument()

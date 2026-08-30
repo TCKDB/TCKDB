@@ -37,6 +37,12 @@ type HandlerOptions = {
     noConformers?: boolean
     singleConformer?: boolean
     statmechConformersIncludeFails?: boolean
+    // The archive orders `conformers/search` by review rank, not by label
+    // number, so wire order and display order genuinely differ live. The
+    // default fixture happens to return conformer_1 first, which makes the
+    // two indistinguishable -- this option is what lets a test tell them
+    // apart.
+    reversedOrder?: boolean
 }
 
 function conformerRecords() {
@@ -412,6 +418,13 @@ describe("species-entry page: conformer picker", () => {
         const cards = document.querySelectorAll(".conformer-card")
         expect(within(cards[0] as HTMLElement).getByRole("button", { name: /Conformer Group 1/ })).toHaveAttribute("aria-pressed", "true")
         expect(within(cards[1] as HTMLElement).getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "false")
+        // The self-heal must be bound to DISPLAY order too, not just the
+        // highlighted card: a default that highlighted the first card but
+        // still wrote the archive's own first-returned ref (conformer_2)
+        // into the URL would pass the two assertions above while still
+        // being wrong -- the address bar would name a different conformer
+        // than the one visibly selected.
+        expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
     })
 
     it("shows one basin card per conformer, each with its own distinct counts, and defaults to selecting the first", async () => {

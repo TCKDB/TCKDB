@@ -37,7 +37,42 @@ export function ConformerAttributionGroups<T>({
     noLinkNote: string
     noLinkEmptyText: string
 }) {
-    const otherRecordCount = attribution.otherConformers.reduce((sum, group) => sum + group.records.length, 0)
+    // A record can legitimately be named by MORE THAN ONE other-conformer
+    // bucket (`partitionByConformerLink` files a multi-linked record under
+    // EVERY group it names, on purpose -- an ensemble-level statmech
+    // treatment spanning several basins is the real, on-the-wire case). The
+    // buckets therefore are not disjoint: summing their lengths (the prior
+    // `reduce`) double-counts a record naming two other groups, and mapping
+    // each bucket independently rendered that SAME record twice into the
+    // DOM with the SAME `aria-labelledby`/id (`thermo-heading-<ref>` /
+    // `statmech-heading-<ref>`), making the id ambiguous. Grouping by
+    // object identity first -- the same `record` reference IS pushed into
+    // every bucket it belongs to, so `Map` keyed on the record itself finds
+    // exactly the true duplicates -- fixes both: the count becomes the
+    // number of DISTINCT records, and each one renders exactly once, under
+    // a heading naming every other conformer it traces to.
+    const labelsByRecord = new Map<T, string[]>()
+    for (const { label, records } of attribution.otherConformers) {
+        for (const record of records) {
+            const labels = labelsByRecord.get(record)
+            if (labels) labels.push(label)
+            else labelsByRecord.set(record, [label])
+        }
+    }
+    const otherRecordCount = labelsByRecord.size
+    // Records that trace to the exact same SET of other conformers still
+    // share one heading (two different records both linked only to
+    // "Conformer Group 1" render together under "From Conformer Group 1",
+    // as before) -- only a record whose own label set differs gets its own
+    // joint heading, e.g. "From Conformer Group 2, Conformer Group 3" for
+    // the one record actually linked to both.
+    const otherGroupsByLabel = new Map<string, T[]>()
+    for (const [record, labels] of labelsByRecord) {
+        const key = labels.join(", ")
+        const bucket = otherGroupsByLabel.get(key)
+        if (bucket) bucket.push(record)
+        else otherGroupsByLabel.set(key, [record])
+    }
     return (
         <>
             <AttributionGroup
@@ -48,15 +83,15 @@ export function ConformerAttributionGroups<T>({
                 renderRecord={renderRecord}
                 primary
             />
-            {attribution.otherConformers.length > 0 && (
+            {otherRecordCount > 0 && (
                 <details className="conformer-attribution-other">
                     <summary>
                         {otherRecordCount} record{otherRecordCount === 1 ? "" : "s"} from other conformers
                     </summary>
-                    {attribution.otherConformers.map(({ ref, label, records }) => (
+                    {[...otherGroupsByLabel.entries()].map(([labelKey, records]) => (
                         <AttributionGroup
-                            key={ref}
-                            title={`From ${label}`}
+                            key={labelKey}
+                            title={`From ${labelKey}`}
                             note={otherConformerNote}
                             records={records}
                             emptyText=""

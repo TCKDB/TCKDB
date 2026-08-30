@@ -295,10 +295,13 @@
    real card's own track can claim the freed space -- but paired with a
    `1fr` maximum that would let ONE card stretch across the entire 100rem
    row, which is no more readable than the bug it replaces. Capping the
-   maximum at `22rem` keeps every card (whether there's one or eleven) the
-   same comfortable width and lets `auto-fit` collapse only the truly empty
-   tracks, left-aligned with real whitespace after the last card rather than
-   a bordered card floating in front of invisible ones. */
+   maximum at `22rem` does NOT give every card the same width regardless of
+   count -- the track count is still computed at the `15rem` minimum, so
+   eleven cards sit narrower (~247px, six tracks at 1600px) than three
+   (~352px) -- but it keeps every card within one comfortable, capped range
+   at any count and lets `auto-fit` collapse only the truly empty tracks,
+   left-aligned with real whitespace after the last card rather than a
+   bordered card floating in front of invisible ones. */
 .conformer-list {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(15rem, 22rem));

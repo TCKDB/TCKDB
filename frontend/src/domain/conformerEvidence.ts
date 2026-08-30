@@ -185,7 +185,16 @@ export function optimizationStaging(conformer: ConformerProjection): Optimizatio
     return { kind: "per-observation", rawOptCount, chainCount, stagedRowCount, perObservation }
 }
 
-const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
+// Spelled out zero through nine; digits from ten up -- a single, fixed
+// threshold that never falls BETWEEN two numbers compared in the same
+// sentence. The prior array ran to "ten" (n < 11), which put nine and ten
+// on the word side and eleven on the digit side -- so a real archive
+// fixture (11 sightings, 10 with a stage) rendered "Ten of the 11
+// sightings", spelled word beside bare digit for two numbers a reader is
+// meant to read as the same kind of count. Any threshold has SOME boundary,
+// but only this one keeps both numbers in a comparison past ten uniformly
+// on the digit side.
+const NUMBER_WORDS = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"]
 
 function numberWord(n: number): string {
     return n >= 0 && n < NUMBER_WORDS.length ? NUMBER_WORDS[n] : String(n)
@@ -199,20 +208,28 @@ function capitalize(sentence: string): string {
     return sentence.length === 0 ? sentence : sentence[0].toUpperCase() + sentence.slice(1)
 }
 
-function describeStaging(staging: OptimizationStaging): string | null {
+function describeStaging(staging: OptimizationStaging, sightings: number): string | null {
     if (staging.kind === "unknown") return null
     if (staging.kind === "aggregate") {
         const { rawOptCount, chainCount, stagedRowCount } = staging
-        if (rawOptCount === 0) return "None of them have an optimization calculation on file."
+        if (rawOptCount === 0) return "None of them have an optimisation calculation on file."
         if (stagedRowCount === 0) {
-            return `${numberWord(rawOptCount)} optimization ${pluralize(rawOptCount, "calculation")}`
+            return `${numberWord(rawOptCount)} optimisation ${pluralize(rawOptCount, "calculation")}`
                 + ` ${pluralize(rawOptCount, "is", "are")} on file, one per chain -- no chain was staged in more than one pass.`
         }
-        return `${numberWord(rawOptCount)} optimization ${pluralize(rawOptCount, "calculation")} ${pluralize(rawOptCount, "is", "are")} on file across`
-            + ` ${numberWord(chainCount)} independent optimization ${pluralize(chainCount, "chain")} --`
+        return `${numberWord(rawOptCount)} optimisation ${pluralize(rawOptCount, "calculation")} ${pluralize(rawOptCount, "is", "are")} on file across`
+            + ` ${numberWord(chainCount)} independent optimisation ${pluralize(chainCount, "chain")} --`
             + ` ${numberWord(stagedRowCount)} of those calculations ${pluralize(stagedRowCount, "is", "are")} a coarse pass later refined within the same`
             + " chain, though the archive does not say which sighting they belong to."
     }
+    // Every sighting has zero opt rows -- there is nothing to bucket. Without
+    // this, the loop below runs over an empty map, `clauses` comes out
+    // empty, and the caller is left joining an empty array into "" and
+    // appending a bare "." -- a stray, meaningless sentence fragment
+    // ("This conformer was sighted two times. . Every sighting got...").
+    // Say the same honest thing the aggregate branch says for the identical
+    // fact (no opt evidence at all), rather than silently producing nothing.
+    if (staging.perObservation.size === 0) return "None of them have an optimisation calculation on file."
     const buckets = new Map<number, number>()
     for (const stageCount of staging.perObservation.values()) {
         buckets.set(stageCount, (buckets.get(stageCount) ?? 0) + 1)
@@ -223,12 +240,50 @@ function describeStaging(staging: OptimizationStaging): string | null {
     const sortedCounts = [...buckets.keys()].sort((a, b) => b - a)
     const clauses = sortedCounts.map((stageCount, index) => {
         const obsCount = buckets.get(stageCount) as number
-        const stageDesc = stageCount === 1 ? "a single pass" : `${numberWord(stageCount)} stages`
+        // At exactly two rows, "two stages" and "a coarse pass then a fine
+        // one" are the same fact -- with only two rows in one chain there is
+        // only one possible relationship between them (one refines the
+        // other). From THREE rows up that stops being true: the backend's
+        // `_feeds_a_refinement_on_the_same_observation`
+        // (backend/app/services/scientific_read/conformers.py:645-666)
+        // collapses on ANY `optimized_from` parent without constraining the
+        // child, so three opt rows folded into one chain is byte-identical
+        // on the wire whether they are a genuine coarse->medium->fine
+        // sequence OR two independent coarse attempts (A->C, B->C) both
+        // refined into the same final geometry -- and per that function's
+        // own docstring, the deployed database has no chain longer than two
+        // nodes today, which makes the parallel reading the MORE probable
+        // one for any 3-row/1-chain observation, not a rare edge case. Say
+        // only what the count licenses: N rows belonging to one chain, never
+        // a step count or a sequence, once stageCount passes two.
+        const stageDesc = stageCount === 1
+            ? "a single pass"
+            : stageCount === 2
+                ? "two stages"
+                : `${numberWord(stageCount)} calculations belonging to a single chain`
         if (index === 0) return `${numberWord(obsCount)} ${pluralize(obsCount, "was", "were")} optimised in ${stageDesc}`
         return `${numberWord(obsCount)} in ${stageDesc}`
     })
-    let sentence = `${clauses.join(", ")}.`
-    if (staging.stagedRowCount > 0) {
+    // Sightings whose own calculation list is loaded but carries no opt row
+    // at all never get an entry in `perObservation` (it's only populated
+    // when `optCount > 0`) -- without naming them, a reader has no way to
+    // tell "this sighting has no opt evidence" apart from "this sighting's
+    // opt evidence just wasn't worth mentioning", and the freq/sp sentences
+    // right beside this one DO carry a denominator over all sightings, so a
+    // silently short count here reads as a complete accounting when it
+    // is not.
+    const withoutOpt = sightings - staging.perObservation.size
+    let sentence = withoutOpt > 0
+        ? `${clauses.join(", ")}, and ${numberWord(withoutOpt)} had no optimisation on file.`
+        : `${clauses.join(", ")}.`
+    // The sequential gloss asserts a specific two-step relationship (coarse
+    // pass, then a refinement of it) that the wire only actually
+    // distinguishes from a parallel-attempts shape at exactly two rows --
+    // see the stageDesc comment above. Suppress it the instant any bucket
+    // has three or more rows, so it is never attached to a sentence that
+    // also, in its own next clause, admits it cannot tell a sequence from
+    // parallel attempts.
+    if (staging.stagedRowCount > 0 && sortedCounts[0] <= 2) {
         sentence += " A staged optimisation runs a coarse pass first, then refines it."
     }
     return sentence
@@ -255,8 +310,10 @@ export function describeConformerEvidence(conformer: ConformerProjection): strin
     const coverage = conformer.evidence_summary.evidence_coverage
     const lead = sightings === 1
         ? "This conformer was sighted once."
-        : `This conformer was sighted ${numberWord(sightings)} times.`
-    const stagingSentence = describeStaging(optimizationStaging(conformer))
+        : sightings === 2
+            ? "This conformer was sighted twice."
+            : `This conformer was sighted ${numberWord(sightings)} times.`
+    const stagingSentence = describeStaging(optimizationStaging(conformer), sightings)
     const freqSentence = coverageSentence(coverage.freq, sightings, "a frequency calculation")
     const spSentence = coverageSentence(coverage.sp, sightings, "a single-point energy")
     return [lead, stagingSentence, freqSentence, spSentence]

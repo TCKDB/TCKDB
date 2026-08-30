@@ -17,8 +17,8 @@ function calculationRowDetail(
     if (evidence.calculation_count === 0) return "no calculation rows recorded"
     if (typeCounts.length === 0) return "breakdown not loaded"
     return `${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")}, in `
-        + `${evidence.optimization_chain_count} optimization chain${evidence.optimization_chain_count === 1 ? "" : "s"}`
-        + " (a staged coarse-then-fine reoptimization counts as one chain)"
+        + `${evidence.optimization_chain_count} optimisation chain${evidence.optimization_chain_count === 1 ? "" : "s"}`
+        + " (a staged coarse-then-fine reoptimisation counts as one chain)"
 }
 
 /**

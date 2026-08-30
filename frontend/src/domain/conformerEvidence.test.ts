@@ -347,6 +347,29 @@ describe("optimizationStaging", () => {
         expect(staging).toMatchObject({ kind: "aggregate", rawOptCount: 4, chainCount: 3, stagedRowCount: 1 })
     })
 
+    // Finding 5 of the BLOCK review: the safety guard's `!==` was only
+    // tested in the direction where the chain count EXCEEDS
+    // observations-with-opt (the fixture above). The `<` direction is real
+    // too -- the backend's `_feeds_a_refinement_on_the_same_observation`
+    // does not constrain the superseding calculation's TYPE, so an opt row
+    // whose `optimized_from` child is a non-opt calculation on the same
+    // observation is superseded (contributes 0 chains) while still counting
+    // toward `evidence_coverage.opt` (1). A reviewer's `!==` -> `>` mutation
+    // passed all 347 existing tests specifically because no fixture ever
+    // exercised chainCount < coverageOpt -- this one does.
+    it("falls back to 'aggregate' when the chain count is LESS THAN observations-with-opt, not just greater", () => {
+        const conformer = group({
+            observations_summary: { total: 1 },
+            evidence_summary: {
+                calculation_count: 1, optimization_chain_count: 0, geometry_count: 1,
+                evidence_coverage: { opt: 1, freq: 0, sp: 0 }, levels_of_theory: {},
+            },
+            observations: [observationWith("co_a", ["opt"])],
+            calculations: [{ calculation_ref: "c1", type: "opt" }] as ConformerProjection["calculations"],
+        })
+        expect(optimizationStaging(conformer).kind).toBe("aggregate")
+    })
+
     it("falls back to 'aggregate' when not every observation's own calculation list is loaded, even if the chain count would otherwise match", () => {
         const conformer = group({
             observations_summary: { total: 2 },
@@ -425,7 +448,80 @@ describe("describeConformerEvidence", () => {
         // 7 raw opt rows, 4 chains, 3 staged -- three mutually distinct
         // numbers, so a swap of any pair against another is observable.
         const story = describeConformerEvidence(conformer)
-        expect(story).toContain("Seven optimization calculations are on file across four independent optimization chains")
+        expect(story).toContain("Seven optimisation calculations are on file across four independent optimisation chains")
         expect(story).toContain("three of those calculations are a coarse pass later refined")
     })
+
+    // Finding 1 of the BLOCK review: the per-observation branch had no
+    // equivalent of the aggregate branch's `rawOptCount === 0` guard. A
+    // conformer whose loaded observations carry freq/sp but no opt at all
+    // satisfies the safety condition (chainCount 0 === coverageOpt 0, every
+    // observation loaded) and used to fall through to an EMPTY `buckets`
+    // map, producing a stray "." sentence fragment.
+    it("says plainly that no observation has an optimization calculation, on the per-observation path, rather than a stray '.'", () => {
+        const conformer = group({
+            observations_summary: { total: 2 },
+            evidence_summary: {
+                calculation_count: 2, optimization_chain_count: 0, geometry_count: 0,
+                evidence_coverage: { opt: 0, freq: 2, sp: 0 }, levels_of_theory: {},
+            },
+            observations: [
+                { conformer_observation: { conformer_observation_ref: "co_a" }, calculations: [{ calculation_ref: "co_a_freq", type: "freq" }] },
+                { conformer_observation: { conformer_observation_ref: "co_b" }, calculations: [{ calculation_ref: "co_b_freq", type: "freq" }] },
+            ] as ConformerProjection["observations"],
+            calculations: [
+                { calculation_ref: "co_a_freq", type: "freq" }, { calculation_ref: "co_b_freq", type: "freq" },
+            ] as ConformerProjection["calculations"],
+        })
+        // Confirm this fixture actually reaches the per-observation path --
+        // otherwise this test would pass for the wrong reason.
+        expect(optimizationStaging(conformer).kind).toBe("per-observation")
+        const story = describeConformerEvidence(conformer)
+        expect(story).not.toMatch(/\.\s*\.\s/) // no stray empty sentence
+        expect(story).toContain("None of them have an optimisation calculation on file.")
+        expect(story).toBe(
+            "This conformer was sighted twice. None of them have an optimisation calculation on file. "
+            + "Every sighting got a frequency calculation. None of the sightings got a single-point energy.",
+        )
+    })
+
+    // Finding 2: the staging clause silently dropped sightings with no opt
+    // row -- `perObservation` only gets an entry when `optCount > 0`, and
+    // the old clause text carried no denominator, so 4 sightings with only
+    // 2 having opt printed a staging clause that read as a complete
+    // accounting of all 4 (the freq/sp sentences right beside it DO carry a
+    // "of the four" denominator). This fixture is untested territory per
+    // the review: no existing fixture had an opt-free observation on the
+    // per-observation path.
+    it("names how many sightings had NO optimisation on file, on the per-observation path, rather than silently dropping them", () => {
+        const conformer = group({
+            observations_summary: { total: 4 },
+            evidence_summary: {
+                calculation_count: 4, optimization_chain_count: 2, geometry_count: 1,
+                evidence_coverage: { opt: 2, freq: 0, sp: 0 }, levels_of_theory: {},
+            },
+            observations: [
+                { conformer_observation: { conformer_observation_ref: "co_a" }, calculations: [{ calculation_ref: "co_a_opt1", type: "opt" }, { calculation_ref: "co_a_opt2", type: "opt" }] },
+                { conformer_observation: { conformer_observation_ref: "co_b" }, calculations: [{ calculation_ref: "co_b_opt", type: "opt" }] },
+                { conformer_observation: { conformer_observation_ref: "co_c" }, calculations: [] },
+                { conformer_observation: { conformer_observation_ref: "co_d" }, calculations: [] },
+            ] as ConformerProjection["observations"],
+            calculations: [
+                { calculation_ref: "co_a_opt1", type: "opt" }, { calculation_ref: "co_a_opt2", type: "opt" }, { calculation_ref: "co_b_opt", type: "opt" },
+            ] as ConformerProjection["calculations"],
+        })
+        expect(optimizationStaging(conformer).kind).toBe("per-observation")
+        const story = describeConformerEvidence(conformer)
+        // Exact string: without the denominator fix, this reads
+        // "...single pass. A staged..." (period right after "single pass",
+        // silently dropping co_c/co_d) instead of "...single pass, and two
+        // had no optimisation on file. A staged...".
+        expect(story).toBe(
+            "This conformer was sighted four times. One was optimised in two stages, one in a single pass, "
+            + "and two had no optimisation on file. A staged optimisation runs a coarse pass first, then "
+            + "refines it. None of the sightings got a frequency calculation. None of the sightings got a "
+            + "single-point energy.",
+        )
+    })
+
 })
