@@ -453,8 +453,14 @@ describe("species-entry page: conformer picker", () => {
         expect(within(conformerOne).getByText("opt 2/2 obs · freq 2/2 obs · sp 1/2 obs")).toBeVisible()
         expect(within(conformerTwo).getByText("1 observation · 3 calculation rows (1 opt · 1 freq · 1 sp)")).toBeVisible()
         expect(within(conformerTwo).getByText("opt 1/1 obs · freq 1/1 obs · sp 1/1 obs")).toBeVisible()
-        // The URL becomes addressable for the default selection (reload survives it).
-        expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+        // The URL becomes addressable for the default selection (reload
+        // survives it). `waitFor`, not a bare expect: the self-heal runs in
+        // an effect AFTER the render that paints the cards, so a synchronous
+        // read here is a race -- it won locally and lost on CI, which is the
+        // worst way for a timing bug to present.
+        await waitFor(() => {
+            expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+        })
     })
 
     it("renders the evidence-linkage panel under the picker, scoped to the SELECTED conformer, and updates it when the selection changes", async () => {
