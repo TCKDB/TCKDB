@@ -18,6 +18,11 @@ import type { GeometryAtom } from "../api/geometryApi"
  * a rendered structure and the raw-XYZ block disagree about the same
  * geometry without either one individually looking wrong — see
  * `geometryXyz.test.ts` for a test that pins the exact output.
+ *
+ * Template-literal interpolation stringifies a `-0` coordinate as `"0"`
+ * (`` `${-0}` === "0" ``, standard JS number-to-string behaviour) — noted
+ * deliberately, not fixed: `-0` and `0` are the same physical position,
+ * so this is not a data-loss bug.
  */
 export function buildXyzBlock(atoms: GeometryAtom[]): string {
     const lines = atoms.map((atom) => `${atom.element} ${atom.x} ${atom.y} ${atom.z}`)

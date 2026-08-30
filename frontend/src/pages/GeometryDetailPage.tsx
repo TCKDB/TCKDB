@@ -237,13 +237,13 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
         <section className="ledger-section" aria-labelledby="viewer-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Structure</p>
-                <h2 id="viewer-heading">Structure projection</h2>
+                <h2 id="viewer-heading">Structure view</h2>
             </div>
             {atomsAvailability === "populated" ? (
                 <SectionErrorBoundary
                     fallback={(
                         <p className="empty-projection" role="alert">
-                            This structure projection could not be drawn. The coordinate table and raw XYZ
+                            This structure view could not be drawn. The coordinate table and raw XYZ
                             block below are unaffected.
                         </p>
                     )}
@@ -253,7 +253,7 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
             ) : (
                 <SectionEmptyMessage
                     availability={atomsAvailability}
-                    emptyText="No atom rows are recorded for this geometry, so no projection can be drawn."
+                    emptyText="No atom rows are recorded for this geometry, so no view can be drawn."
                 />
             )}
         </section>
@@ -279,8 +279,8 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                 <h2 id="coordinates-heading">Coordinate table</h2>
                 <p>
                     Every atom in this geometry, in the order the archive returned them. This table is the
-                    accessible, selectable fallback for the projection above — it renders whether or not that
-                    projection does.
+                    accessible, selectable fallback for the view above — it renders whether or not that
+                    view does.
                 </p>
             </div>
             {countMismatch && (

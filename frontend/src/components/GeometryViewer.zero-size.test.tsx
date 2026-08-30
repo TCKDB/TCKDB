@@ -5,23 +5,37 @@ import { GeometryViewer } from "./GeometryViewer"
 afterEach(cleanup)
 
 /**
- * Deliberately does NOT mock the "3dmol" module — jsdom (this project's
- * test environment) implements `HTMLCanvasElement.getContext` for the 2D
- * context only; `getContext('webgl'|'webgl2'|'experimental-webgl')`
- * genuinely returns `null` here, exactly as it would in a real browser
- * with WebGL disabled, blocked, or exhausted. That makes this the one
- * environment that exercises 3Dmol's actual WebGL-unavailable code path
- * for real, rather than through a stand-in.
+ * CORRECTION (post-review): this file's earlier docstring claimed it was
+ * "the one environment that exercises 3Dmol's actual WebGL-unavailable
+ * code path for real" — i.e. that jsdom's lack of a real WebGL context
+ * made `$3Dmol.createViewer()` throw here. That was never true, and is
+ * exactly the kind of stale/wrong coverage claim this repo has been
+ * bitten by before: jsdom also never performs layout, so
+ * `containerRef.current.offsetWidth`/`offsetHeight` are always 0, and
+ * `GeometryViewer`'s size guard (see its module docstring) intercepts
+ * *before* `import("3dmol")` is ever reached — `createViewer` is never
+ * called in this file at all. jsdom additionally has no `ResizeObserver`
+ * global (checked directly: `typeof ResizeObserver === "undefined"`
+ * here), so the component takes its "no way to ever detect a resize"
+ * fallback and reports `unavailable` immediately, without ever loading
+ * 3Dmol.
  *
- * Per the module docstring in `GeometryViewer.tsx`: `$3Dmol.createViewer`
- * throws synchronously in this situation, but from inside this
- * component's own `useEffect`, not during render — so a render-only
- * error boundary (`SectionErrorBoundary`, exercised separately in
- * `GeometryDetailPage.errorBoundary.test.tsx`) is not the mechanism doing
- * the catching here. This test pins the local, explicit handling instead.
+ * That is a real, distinct failure path worth testing on its own (a
+ * container that never gets laid out, on a browser too old for
+ * `ResizeObserver`, must still resolve to an honest status rather than
+ * hang on "loading" forever) — but it is NOT the WebGL-context-creation
+ * failure. That one is exercised for real in
+ * `GeometryViewer.test.tsx`, in the "a genuine WebGL failure
+ * (createViewer throws — not the zero-size path)" block, where a mocked
+ * `createViewer` throws exactly as real 3Dmol does with no WebGL context
+ * (see the module docstring in `GeometryViewer.tsx` for the call chain:
+ * `Renderer#initGL()` swallows a failed `getContext`, then
+ * `setDefaultGLState()` throws on the now-undefined context, and
+ * `createViewer` re-throws that).
  */
-describe("GeometryViewer — WebGL unavailable", () => {
+describe("GeometryViewer — zero-size container, no ResizeObserver to notice a later resize", () => {
     it("shows an honest status message instead of hanging or crashing, with no canvas left half-initialised", async () => {
+        expect(typeof (globalThis as Record<string, unknown>).ResizeObserver).toBe("undefined")
         render(
             <GeometryViewer
                 atoms={[

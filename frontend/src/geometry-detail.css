@@ -65,6 +65,34 @@
     background: #fff;
 }
 
+/* Ordinary keyboard-operable buttons standing in for the mouse/touch
+   rotation 3Dmol would otherwise install directly on the canvas
+   (`nomouse: true` in GeometryViewer.tsx — that default handling traps
+   scroll/swipe on a viewer this close to full width on a phone). Only
+   rendered once the viewer is "ready", so there is nothing to focus
+   before there is anything for it to control. */
+.viewer-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem;
+}
+
+.viewer-controls button {
+    padding: .4rem .75rem;
+    border: 1px solid #b8c4d1;
+    background: #fff;
+    color: #205493;
+    font: .72rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+
+.viewer-controls button:hover {
+    border-color: #205493;
+    background: #eaf1f8;
+}
+
 @media (max-width: 680px) {
     .geometry-viewer { max-width: 100%; }
 }

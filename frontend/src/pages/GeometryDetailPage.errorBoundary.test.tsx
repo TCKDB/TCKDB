@@ -8,11 +8,11 @@ import GeometryDetailPage from "./GeometryDetailPage"
 // vitest hoists `vi.mock` calls to the top of the file at transform time
 // regardless of where they're written, so `GeometryDetailPage` above
 // receives a `GeometryViewer` that throws on every render — simulating a
-// bug in the hand-rolled SVG projection math (a NaN from a degenerate
-// geometry, a malformed atom row) without needing to actually construct
-// one. Kept in its own file, separate from `GeometryDetailPage.test.tsx`,
-// because this mock would otherwise break every other test in that file
-// that expects a real projection to render.
+// bug in the 3D viewer (a malformed atom row, a bad prop) without needing
+// to actually construct one or a real WebGL context. Kept in its own
+// file, separate from `GeometryDetailPage.test.tsx`, because this mock
+// would otherwise break every other test in that file that expects a
+// real viewer to render.
 vi.mock("../components/GeometryViewer", () => ({
     GeometryViewer: () => {
         throw new Error("viewer boom")
@@ -61,7 +61,7 @@ function mockRecord() {
     }
 }
 
-describe("GeometryDetailPage — a broken structure projection", () => {
+describe("GeometryDetailPage — a broken structure view", () => {
     it("leaves the coordinate table, raw XYZ block and both provenance tables standing", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         // The error boundary's own componentDidCatch logs to console.error;
@@ -71,7 +71,7 @@ describe("GeometryDetailPage — a broken structure projection", () => {
         page()
         await screen.findByRole("heading", { name: "CH geometry" })
 
-        const viewerSection = screen.getByRole("heading", { name: "Structure projection" }).closest("section") as HTMLElement
+        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
         expect(within(viewerSection).getByRole("alert")).toHaveTextContent(/could not be drawn/)
         expect(viewerSection.querySelector("svg")).toBeNull()
 

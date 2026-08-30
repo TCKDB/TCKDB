@@ -255,7 +255,7 @@ describe("GeometryDetailPage", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
-        const viewerSection = screen.getByRole("heading", { name: "Structure projection" }).closest("section") as HTMLElement
+        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
         expect(viewerSection.querySelector("svg")).toBeNull()
         expect(viewerSection.querySelector(".viewer-canvas")).not.toBeNull()
         // A distinct sentence from the "interactive 3D view" framing
@@ -269,17 +269,20 @@ describe("GeometryDetailPage", () => {
         )).toBeVisible()
     })
 
-    it("forwards this geometry's own xyz_text to the viewer section — the picture and the raw XYZ block read the same record", async () => {
+    it("renders this geometry's own xyz_text verbatim in the Raw XYZ block", async () => {
+        // Only asserts what this test file can actually see: the Raw XYZ
+        // section's own rendering of the record's xyz_text. Whether that
+        // same string reaches <GeometryViewer xyzText={...}> — the prop,
+        // not the block below it — is a separate, page-level wiring claim
+        // this test cannot verify without mocking GeometryViewer, which
+        // would break every other (unmocked, real-3dmol) test in this
+        // file. See GeometryDetailPage.viewerWiring.test.tsx, split out
+        // for exactly that reason, for the prop-forwarding assertion.
         const record = mockRecord()
         server.use(http.get(ENDPOINT, () => HttpResponse.json(record)))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const xyzSection = screen.getByRole("heading", { name: "Raw XYZ" }).closest("section") as HTMLElement
-        // Confirms the page-level source of truth for the raw XYZ block —
-        // GeometryViewer.test.tsx (mocked 3dmol) separately pins that
-        // GeometryViewer itself forwards this same string to 3Dmol
-        // unmodified, so together these two tests cover the full path
-        // from API response to what 3Dmol actually receives.
         expect(within(xyzSection).getByText(/H 0\.630000 -0\.630000 -0\.630000/)).toBeVisible()
         expect(record.xyz_text).toContain("H 0.630000 -0.630000 -0.630000")
     })
@@ -393,7 +396,7 @@ describe("GeometryDetailPage", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ natoms: 0, symbols: [], coords: [], atoms: [] }))))
         page()
         await screen.findByRole("heading", { name: "Geometry" })
-        const viewerSection = screen.getByRole("heading", { name: "Structure projection" }).closest("section") as HTMLElement
+        const viewerSection = screen.getByRole("heading", { name: "Structure view" }).closest("section") as HTMLElement
         expect(within(viewerSection).getByText(/No atom rows are recorded/)).toBeVisible()
         expect(viewerSection.querySelector("svg")).toBeNull()
     })
