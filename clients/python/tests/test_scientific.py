@@ -108,6 +108,138 @@ def test_search_species_does_not_send_sort_param():
 
 
 # ===========================================================================
+# browse_species
+# ===========================================================================
+
+
+def test_browse_species_builds_correct_path_and_params():
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return _ok({"records": [{"species_id": 12}], "pagination": {"total": 1}})
+
+    client, _ = make_client(handler)
+    result = client.browse_species(formula="H2O", charge=0, limit=25)
+
+    assert len(seen) == 1
+    req = seen[0]
+    parsed = urlsplit(str(req.url))
+    assert parsed.path == "/api/v1/scientific/species/browse"
+    qs = _split_qs(str(req.url))
+    assert qs["formula"] == ["H2O"]
+    assert qs["charge"] == ["0"]
+    assert qs["limit"] == ["25"]
+    assert result["records"][0]["species_id"] == 12
+
+
+def test_browse_species_has_no_identifier_parameters():
+    """The backend route accepts no identifier at all -- neither does this method."""
+    import inspect
+
+    sig = inspect.signature(make_client(lambda r: _ok())[0].browse_species)
+    for name in ("smiles", "inchi", "inchi_key", "species_ref", "species_entry_ref"):
+        assert name not in sig.parameters, name
+
+
+def test_browse_species_serializes_composition_filters():
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(str(request.url))
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.browse_species(
+        elements="C,N", elem_mode="any", max_heavy_atoms=6, min_heavy_atoms=1
+    )
+
+    qs = _split_qs(captured[0])
+    assert qs["elements"] == ["C,N"]
+    assert qs["elem_mode"] == ["any"]
+    assert qs["max_heavy_atoms"] == ["6"]
+    assert qs["min_heavy_atoms"] == ["1"]
+
+
+def test_browse_species_serializes_include_as_repeated_params():
+    """Only legal browse tokens are exercised here -- see the docstring on
+    ``browse_species`` for why ``thermo``/``statmech``/``transport``/
+    ``conformers`` are never offered."""
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(str(request.url))
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.browse_species(include=["review", "internal_ids"])
+
+    qs = _split_qs(captured[0])
+    assert sorted(qs["include"]) == ["internal_ids", "review"]
+
+
+def test_browse_species_drops_none_params():
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(str(request.url))
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.browse_species(formula="H2O")
+
+    qs = _split_qs(captured[0])
+    assert qs == {"formula": ["H2O"]}
+
+
+def test_browse_species_serializes_bool_as_lowercase_string():
+    captured: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.append(str(request.url))
+        return _ok()
+
+    client, _ = make_client(handler)
+    client.browse_species(include_deprecated=True)
+
+    qs = _split_qs(captured[0])
+    assert qs["include_deprecated"] == ["true"]
+
+
+def test_browse_species_does_not_send_sort_param():
+    """No client-side `sort=` is supported, matching search_species."""
+    import inspect
+
+    sig = inspect.signature(make_client(lambda r: _ok())[0].browse_species)
+    assert "sort" not in sig.parameters
+
+
+def test_iter_species_browse_paginates_through_browse_species():
+    pages = [
+        {
+            "records": [{"species_id": 1}, {"species_id": 2}],
+            "pagination": {"offset": 0, "limit": 2, "returned": 2, "total": 3},
+        },
+        {
+            "records": [{"species_id": 3}],
+            "pagination": {"offset": 2, "limit": 2, "returned": 1, "total": 3},
+        },
+    ]
+    calls: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        qs = _split_qs(str(request.url))
+        calls.append(qs)
+        return _ok(pages[len(calls) - 1])
+
+    client, _ = make_client(handler)
+    records = list(client.iter_species_browse(limit=2))
+
+    assert [r["species_id"] for r in records] == [1, 2, 3]
+    assert len(calls) == 2
+
+
+# ===========================================================================
 # search_reactions (POST default + GET option)
 # ===========================================================================
 

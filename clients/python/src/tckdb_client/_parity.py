@@ -221,6 +221,10 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         "iter_species", "examples/scientific_reads.py", "tests/test_scientific.py",
     ),
     (
+        "GET", "/api/v1/scientific/species/browse", "browse_species",
+        "iter_species_browse", None, "tests/test_scientific.py",
+    ),
+    (
         "GET", "/api/v1/scientific/species/structure-search",
         "search_species_structures", "iter_species_structures", None,
         _NEW_METHOD_TESTS,
