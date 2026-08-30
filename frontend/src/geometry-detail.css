@@ -65,19 +65,20 @@
     background: #fff;
 }
 
-/* Ordinary keyboard-operable buttons standing in for the mouse/touch
-   rotation 3Dmol would otherwise install directly on the canvas
-   (`nomouse: true` in GeometryViewer.tsx — that default handling traps
-   scroll/swipe on a viewer this close to full width on a phone). Only
-   rendered once the viewer is "ready", so there is nothing to focus
-   before there is anything for it to control. */
+/* Ordinary keyboard-operable buttons: rotate/zoom/reset the camera.
+   Mouse drag-to-rotate and wheel/touch handling are also live on the
+   canvas itself (see the "Mouse/touch" section of GeometryViewer.tsx's
+   module docstring) — these buttons are an addition, not the only way
+   in. Only rendered once the viewer is "ready", so there is nothing to
+   focus before there is anything for it to control. */
 .viewer-controls {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem;
 }
 
-.viewer-controls button {
+.viewer-controls button,
+.viewer-style-choice button {
     padding: .4rem .75rem;
     border: 1px solid #b8c4d1;
     background: #fff;
@@ -88,9 +89,65 @@
     cursor: pointer;
 }
 
-.viewer-controls button:hover {
+.viewer-controls button:hover,
+.viewer-style-choice button:hover {
     border-color: #205493;
     background: #eaf1f8;
+}
+
+/* Style (ball & stick / spacefill / wireframe) and atom-label controls —
+   a second control group, kept visually distinct from the camera
+   controls above since it changes what is drawn rather than how it is
+   viewed. */
+.viewer-display-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .9rem;
+}
+
+.viewer-style-choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.viewer-style-choice legend {
+    padding: 0;
+    font: .72rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #536578;
+}
+
+.viewer-style-choice button[aria-pressed="true"] {
+    border-color: #205493;
+    background: #205493;
+    color: #fff;
+}
+
+.viewer-label-choice {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    font: .72rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #536578;
+}
+
+.viewer-label-choice select {
+    padding: .3rem .5rem;
+    border: 1px solid #b8c4d1;
+    background: #fff;
+    color: #205493;
+    font: .72rem var(--mono);
+    text-transform: none;
+    letter-spacing: normal;
 }
 
 @media (max-width: 680px) {
