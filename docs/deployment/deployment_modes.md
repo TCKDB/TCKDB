@@ -194,7 +194,7 @@ TCKDB instance it is configured against.
 | Rate limiting | Optional | Required | Required |
 | Swagger UI (`/docs`) | Operator choice | Hidden (`EXPOSE_API_DOCS=false`) | Hidden |
 | API reference (`/redoc`, `/openapi.json`) | Operator choice | Operator choice (`EXPOSE_API_REFERENCE`) | Published (`EXPOSE_API_REFERENCE=true`) |
-| API root (`/`) | Not served by the API (frontend SPA owns it) | Not served by the API (frontend SPA owns it) | Not served by the API (frontend SPA owns it) |
+| API root (`/`) | Not served by the API; no frontend in this mode ([non-goal](local-v0.md)) | Not served by the API; the canonical recipe has no frontend container ([frontend-pi.md](frontend-pi.md) is optional, separate) | Not served by the API; the frontend SPA container owns it |
 | TLS | Not required | Required (edge cert via Cloudflare or origin cert via proxy) | Required |
 | Secrets management | `.env` on local disk | `.env.selfhosted` outside repo, restricted perms | Operator-managed (vault/secret store) |
 

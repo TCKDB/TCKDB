@@ -66,11 +66,14 @@ async def _lifespan(app: FastAPI):
 
 
 #: Paths FastAPI registers for each of the three built-in doc surfaces.
-#: Restated here rather than relying on the framework defaults so the
-#: tests and the deployment checklist all name the same strings. All
-#: three constants used to be shared with ``app/api/landing.py`` (the
-#: dead root-``/`` HTML page, deleted); ``REDOC_PATH`` lived there
-#: because the landing page linked to ReDoc, and moved here with it.
+#: ``REDOC_PATH`` and ``OPENAPI_PATH`` are both consumed below, by
+#: ``_docs_kwargs``. ``SWAGGER_PATH`` is documentation-only: nothing in
+#: code imports it (FastAPI's own ``/docs`` default is what actually
+#: applies), and it is spelled out here only so a reader of this module
+#: sees all three doc paths named in one place. ``REDOC_PATH`` used to
+#: live in ``app/api/landing.py`` (the dead root-``/`` HTML page,
+#: deleted) because the landing page linked to ReDoc; it moved here, and
+#: only here, with that page's deletion.
 SWAGGER_PATH = "/docs"
 REDOC_PATH = "/redoc"
 OPENAPI_PATH = "/openapi.json"

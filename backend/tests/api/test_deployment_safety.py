@@ -23,6 +23,10 @@ def _safe_settings(mode: str) -> Settings:
         deployment_mode=mode,  # type: ignore[arg-type]
         auth_allow_open_registration=False,
         expose_api_docs=False,
+        expose_api_reference=True,  # hosted mode must ALLOW this; it is the whole
+                                     # reason it is a separate flag from EXPOSE_API_DOCS.
+                                     # Was pinned by tests/api/test_landing_page.py:2003
+                                     # before that module was deleted.
         legacy_reads_require_auth=True,
         session_cookie_secure=True,
         allow_public_internal_ids=False,
@@ -43,6 +47,9 @@ def test_local_mode_allows_developer_defaults():
     # flag is at its dev-friendly value. The guard must not complain.
     assert s.auth_allow_open_registration is True
     assert s.expose_api_docs is True
+    # Upgrading must not make an existing deployment more exposed: the
+    # reference-only surface defaults off, same as every other opt-in.
+    assert s.expose_api_reference is False
     validate_deployment_safety(s)  # does not raise
 
 
@@ -110,6 +117,21 @@ def test_hosted_public_rejects_unsafe_setting(case: _UnsafeCase):
 
 def test_hosted_public_accepts_safe_settings():
     validate_deployment_safety(_safe_settings("hosted_public"))
+
+
+def test_the_reference_is_allowed_in_hosted_mode():
+    """``EXPOSE_API_REFERENCE=true`` is a hosted-safe posture, not a
+    violation. It exists precisely so a hosted deployment can publish
+    ReDoc/OpenAPI (self-contained, no request console) without also
+    turning on Swagger UI's live "Try it out" against a public
+    instance -- that is the boot-refusing case (``EXPOSE_API_DOCS``).
+    Was ``tests/api/test_landing_page.py::test_the_reference_is_allowed_in_hosted_mode``
+    before that module was deleted; ported here so the guard's whole
+    reason for having two separate doc-exposure flags stays pinned.
+    """
+    s = _safe_settings("hosted_public")
+    assert s.expose_api_reference is True
+    validate_deployment_safety(s)  # does not raise
 
 
 def test_hosted_public_accepts_explicit_cors_allow_list():
