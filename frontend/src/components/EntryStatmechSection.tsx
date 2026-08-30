@@ -12,11 +12,12 @@ import {
     type StatmechSectionToken,
 } from "../api/statmechApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { conformerLabel, partitionByConformer, statmechMatchesConformer } from "../domain/conformerEvidence"
+import { partitionByConformerLink, statmechConformerGroupRef } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
+import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { LazyRowBody } from "./LazyRowBody"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
@@ -56,7 +57,11 @@ function reviewSummaryText(summary: StatmechListResponse["review_summary"]) {
     return parts.length > 0 ? parts.join(" · ") : "no records"
 }
 
-export function EntryStatmechSection({ entryRef, conformer }: { entryRef: string; conformer?: ConformerProjection | null }) {
+export function EntryStatmechSection({ entryRef, conformer, conformers }: {
+    entryRef: string
+    conformer?: ConformerProjection | null
+    conformers?: ConformerProjection[]
+}) {
     const state = useEntryStatmech(entryRef)
     if (state.status === "ready") {
         return (
@@ -70,7 +75,7 @@ export function EntryStatmechSection({ entryRef, conformer }: { entryRef: string
                     </section>
                 )}
             >
-                <StatmechList entryRef={entryRef} response={state.record} conformer={conformer} />
+                <StatmechList entryRef={entryRef} response={state.record} conformer={conformer} conformers={conformers ?? []} />
             </SectionErrorBoundary>
         )
     }
@@ -94,10 +99,11 @@ function useStatmechSection<T>(entryRef: string, token: StatmechSectionToken) {
     )
 }
 
-function StatmechList({ entryRef, response, conformer }: {
+function StatmechList({ entryRef, response, conformer, conformers }: {
     entryRef: string
     response: StatmechListResponse
     conformer?: ConformerProjection | null
+    conformers: ConformerProjection[]
 }) {
     const { records, review_summary: reviewSummary, pagination } = response
 
@@ -135,23 +141,14 @@ function StatmechList({ entryRef, response, conformer }: {
                 {records.length === 0 ? (
                     <p className="empty-projection">No statistical-mechanics records are deposited for this entry.</p>
                 ) : conformer ? (
-                    <ConformerScopedStatmechRecords conformer={conformer} records={records} conformersState={conformersState} />
+                    <ConformerScopedStatmechRecords
+                        conformer={conformer}
+                        conformers={conformers}
+                        records={records}
+                        conformersState={conformersState}
+                    />
                 ) : (
-                    records.map((record) => (
-                        <SectionErrorBoundary
-                            key={record.statmech.statmech_ref}
-                            fallback={(
-                                <article className="science-record" role="alert">
-                                    <p className="empty-projection">
-                                        Record <code>{record.statmech.statmech_ref}</code> could not be
-                                        displayed. Other records on this page are unaffected.
-                                    </p>
-                                </article>
-                            )}
-                        >
-                            <StatmechRecordCard record={record} />
-                        </SectionErrorBoundary>
-                    ))
+                    records.map(renderStatmechRecord)
                 )}
             </section>
 
@@ -286,76 +283,68 @@ function StatmechList({ entryRef, response, conformer }: {
     )
 }
 
+function statmechRecordFallback(record: StatmechRecord) {
+    return (
+        <article className="science-record" role="alert">
+            <p className="empty-projection">
+                Record <code>{record.statmech.statmech_ref}</code> could not be
+                displayed. Other records on this page are unaffected.
+            </p>
+        </article>
+    )
+}
+
+function renderStatmechRecord(record: StatmechRecord) {
+    return (
+        <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
+            <StatmechRecordCard record={record} />
+        </SectionErrorBoundary>
+    )
+}
+
 /**
  * Statmech's REAL conformer link (`include=conformers`, see
- * `domain/conformerEvidence.ts`) has to be fetched before this can
- * partition anything -- rendered as a short status line while that is in
- * flight, never a guess at which group a record belongs to.
+ * `domain/conformerEvidence.ts`) has to be fetched before it can be used to
+ * partition anything -- but a failed or in-flight refetch of that ONE
+ * optional include token must never delete records the list already has in
+ * hand. While non-ready, this renders the flat, ungrouped record list
+ * (identical to having no conformer selected) with a short status line
+ * above it -- never zero records for a count line that says otherwise.
  */
-function ConformerScopedStatmechRecords({ conformer, records, conformersState }: {
+function ConformerScopedStatmechRecords({ conformer, conformers, records, conformersState }: {
     conformer: ConformerProjection
+    conformers: ConformerProjection[]
     records: StatmechRecord[]
     conformersState: EntryListSectionState<StatmechRecord["conformers"]>
 }) {
     if (conformersState.status !== "ready") {
         return (
-            <p className="section-note" role="status">
-                {conformersState.status === "error" ? conformersState.message : "Resolving conformer links…"}
-            </p>
+            <>
+                <p className="section-note" role="status">
+                    {conformersState.status === "error"
+                        ? `${conformersState.message} Showing every record for this entry, ungrouped, until the conformer link resolves.`
+                        : "Resolving conformer links… showing every record for this entry, ungrouped, in the meantime."}
+                </p>
+                {records.map(renderStatmechRecord)}
+            </>
         )
     }
-    const { matched, entryLevel } = partitionByConformer(
-        records,
-        (record) => statmechMatchesConformer(conformersState.dataByRef.get(record.statmech.statmech_ref), conformer),
-    )
     return (
-        <>
-            <StatmechRecordGroup
-                title={`From ${conformerLabel(conformer)}`}
-                note="Computed against this conformer's own basin, per the archive's own conformer link."
-                records={matched}
-                emptyText="No statmech record is linked to this conformer yet."
-            />
-            <StatmechRecordGroup
-                title="Entry-level"
-                note="Not linked to this conformer's basin -- shown here regardless of which conformer is selected."
-                records={entryLevel}
-                emptyText="No entry-level statmech record is deposited for this entry."
-            />
-        </>
-    )
-}
-
-function StatmechRecordGroup({ title, note, records, emptyText }: {
-    title: string
-    note: string
-    records: StatmechRecord[]
-    emptyText: string
-}) {
-    return (
-        <div className="conformer-evidence-group">
-            <h3 className="conformer-evidence-group-heading">{title}</h3>
-            <p className="section-note">{note}</p>
-            {records.length === 0 ? (
-                <p className="empty-projection">{emptyText}</p>
-            ) : (
-                records.map((record) => (
-                    <SectionErrorBoundary
-                        key={record.statmech.statmech_ref}
-                        fallback={(
-                            <article className="science-record" role="alert">
-                                <p className="empty-projection">
-                                    Record <code>{record.statmech.statmech_ref}</code> could not be
-                                    displayed. Other records on this page are unaffected.
-                                </p>
-                            </article>
-                        )}
-                    >
-                        <StatmechRecordCard record={record} />
-                    </SectionErrorBoundary>
-                ))
+        <ConformerAttributionGroups
+            attribution={partitionByConformerLink(
+                records,
+                conformers,
+                conformer.conformer_group.conformer_group_ref,
+                (record) => statmechConformerGroupRef(conformersState.dataByRef.get(record.statmech.statmech_ref)),
             )}
-        </div>
+            selectedLabel={conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref}
+            renderRecord={renderStatmechRecord}
+            thisConformerNote="Computed against this conformer's own basin, per the archive's own conformer link."
+            thisConformerEmptyText="No statmech record is linked to this conformer yet."
+            otherConformerNote="Computed against a different conformer's basin than the one selected above."
+            noLinkNote="No conformer link on the wire for this record -- shown here regardless of which conformer is selected."
+            noLinkEmptyText="No entry-level statmech record is deposited for this entry."
+        />
     )
 }
 

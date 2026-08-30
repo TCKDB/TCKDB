@@ -163,6 +163,14 @@ const thermoProvenanceSchema = z.object({
     statmech_ref: z.string().nullable().optional(),
     freq_calculation_ref: z.string().nullable().optional(),
     sp_calculation_ref: z.string().nullable().optional(),
+    // PR #285: the conformer this record traces to, resolved server-side
+    // through the SAME primary calculation used for `primary_calculation`/
+    // `level_of_theory` above (`calculation.conformer_observation_id`),
+    // never an independent pick. `null` on a record with no resolvable
+    // primary calculation (population B) -- see
+    // `domain/conformerEvidence.ts`'s `thermoConformerGroupRef`.
+    conformer_observation_ref: z.string().nullable().optional(),
+    conformer_group_ref: z.string().nullable().optional(),
 }).passthrough()
 
 const groupAdditivityComponentSchema = z.object({

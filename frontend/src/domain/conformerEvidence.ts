@@ -8,55 +8,83 @@ export function conformerLabel(conformer: ConformerProjection): string {
     return conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref
 }
 
-// ---------------------------------------------------------------------------
-// REMOVED: a thermo-side "which conformer does this belong to" inference
-// used to live here, matching `provenance.sp_calculation_ref` /
-// `freq_calculation_ref` / `primary_calculation.calculation_ref` against a
-// conformer's own observation calc-refs. It was wrong, not just imprecise:
-// measured against the archive (thermo id 4, `spe_dfcw4tvy6tkqxnyittmn6d3vdu`)
-// a record with ZERO source calculations of its own -- thermo's own
-// software is Arkane, `thermo_source_calculation` is empty -- still carries
-// a populated `sp_calculation_ref` on the wire, because that field is
-// filled via a SECOND route this client cannot distinguish from the first:
-// `thermo.statmech_id -> statmech_source_calculation -> calculation`. Both
-// "this thermo traces to one observation's own opt/freq/sp chain" (real
-// per-conformer evidence) and "this thermo was produced by a separate tool
-// but cites the statmech it borrowed frequencies from" (population B) put a
-// calculation ref in the same field. No amount of cleverness over the
-// CURRENT wire shape can tell those apart -- the fact that actually
-// separates them (does this thermo have its own source calculations, and
-// its own software) is exactly what the API does not serve today. That is
-// what `backend/thermo-provenance-truth` adds.
-//
-// So: no thermo-side matching function exists here. `EntryThermoSection`
-// renders every deposited thermo record for the entry, unfiltered by the
-// selected conformer, and says so explicitly rather than grouping records
-// under a conformer attribution this client cannot support. Once
-// `backend/thermo-provenance-truth` lands a real per-record conformer (or
-// observation) key, add a `thermoMatchesConformer(record, conformer)`
-// function here that matches on THAT field directly -- never re-derive one
-// from calculation refs again.
-// ---------------------------------------------------------------------------
+export type ConformerAttribution<T> = {
+    thisConformer: T[]
+    /** Each entry is a DIFFERENT conformer the wire actually names — never merged into one generic "other" bucket. */
+    otherConformers: Array<{ ref: string; label: string; records: T[] }>
+    noLink: T[]
+}
+
+/**
+ * Three-way split by a record's own conformer-group link, never a guess:
+ * the group actually selected, any OTHER group the wire names (kept
+ * separate and labeled — a record IS linked, just not to what's selected),
+ * and records with no link at all. A binary matched/unmatched split cannot
+ * express the middle case honestly — it must either invent a match to the
+ * wrong conformer or claim "no link" about a record that has one. Shared by
+ * thermo (`thermoConformerGroupRef`, PR #285's real per-record field) and
+ * statmech (`statmechConformerGroupRef`, the real `include=conformers`
+ * field) — both extractors return a real wire value, never an inference.
+ */
+export function partitionByConformerLink<T>(
+    records: T[],
+    conformers: ConformerProjection[],
+    selectedRef: string,
+    linkedGroupRef: (record: T) => string | null | undefined,
+): ConformerAttribution<T> {
+    const thisConformer: T[] = []
+    const noLink: T[] = []
+    const otherByRef = new Map<string, T[]>()
+    for (const record of records) {
+        const ref = linkedGroupRef(record)
+        if (!ref) { noLink.push(record); continue }
+        if (ref === selectedRef) { thisConformer.push(record); continue }
+        const bucket = otherByRef.get(ref)
+        if (bucket) bucket.push(record)
+        else otherByRef.set(ref, [record])
+    }
+    const otherConformers = [...otherByRef.entries()].map(([ref, groupRecords]) => {
+        const match = conformers.find((candidate) => candidate.conformer_group.conformer_group_ref === ref)
+        // Falls back to the raw ref as its own label if the linked group
+        // somehow isn't in the loaded conformer list -- still true of the
+        // record (it IS linked to something), never invented.
+        return { ref, label: match ? conformerLabel(match) : ref, records: groupRecords }
+    })
+    return { thisConformer, otherConformers, noLink }
+}
+
+export type ThermoConformerLinkLike = {
+    provenance?: { conformer_group_ref?: string | null } | null
+}
+
+/**
+ * Thermo's REAL conformer link (PR #285): `provenance.conformer_group_ref`
+ * resolves through the SAME primary calculation already used for
+ * `primary_calculation`/`level_of_theory`, sourced server-side via
+ * `calculation.conformer_observation_id`. `null` for a record with no
+ * resolvable primary calculation (population B) -- reported as "no
+ * conformer link", never guessed at from calculation refs. The prior
+ * calc-ref-intersection heuristic that lived here was removed because it
+ * could not tell that case apart from a record that genuinely does trace
+ * to one observation's own opt/freq/sp chain -- see the review that caught
+ * it. This field is what makes the distinction real.
+ */
+export function thermoConformerGroupRef(record: ThermoConformerLinkLike): string | null {
+    return record.provenance?.conformer_group_ref ?? null
+}
 
 export type ConformerContextLike = Array<{ conformer_group_ref: string }> | null | undefined
 
 /**
- * Statmech's REAL (not inferred) conformer link: `include=conformers` on
- * the entry-scoped statmech list returns the conformer_group_ref(s) a
- * record was actually computed against — a first-class field, not a
- * client-side guess. Group-level, which matches the granularity the
- * conformer picker selects at.
+ * Statmech's REAL conformer link: `include=conformers` on the entry-scoped
+ * statmech list returns the conformer_group_ref(s) a record was actually
+ * computed against — a first-class field, not a client-side guess. A
+ * record can in principle name more than one group; this reads the first,
+ * which is every case observed live (a statmech treatment belongs to one
+ * basin's geometry) and documented here so a genuine multi-group record
+ * would show as linked-to-its-first-named-group rather than being dropped.
  */
-export function statmechMatchesConformer(conformerContext: ConformerContextLike, conformer: ConformerProjection): boolean {
-    if (!conformerContext || conformerContext.length === 0) return false
-    const ref = conformer.conformer_group.conformer_group_ref
-    return conformerContext.some((item) => item.conformer_group_ref === ref)
-}
-
-/** Splits `records` into what belongs to the selected conformer and what does not, preserving order in both. */
-export function partitionByConformer<T>(records: T[], matches: (record: T) => boolean): { matched: T[]; entryLevel: T[] } {
-    const matched: T[] = []
-    const entryLevel: T[] = []
-    for (const record of records) (matches(record) ? matched : entryLevel).push(record)
-    return { matched, entryLevel }
+export function statmechConformerGroupRef(conformerContext: ConformerContextLike): string | null {
+    if (!conformerContext || conformerContext.length === 0) return null
+    return conformerContext[0]?.conformer_group_ref ?? null
 }

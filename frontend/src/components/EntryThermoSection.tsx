@@ -2,10 +2,13 @@ import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
 import { lotLabel } from "../api/scientificSchemas"
+import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
+import { partitionByConformerLink, thermoConformerGroupRef } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
+import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -22,22 +25,20 @@ import { SupersessionNotice } from "./SupersessionNotice"
 // reduced to "the first one" or "the best one". See `api/thermoApi.ts` for
 // the measured wire shape and why nothing here is include-gated.
 //
-// UNLIKE `EntryStatmechSection`, this component takes NO `conformer` prop
-// and never groups its records by conformer. A record's `provenance`
-// carries `sp_calculation_ref` / `freq_calculation_ref` /
-// `primary_calculation.calculation_ref`, but those refs are populated via
-// TWO different routes the wire does not distinguish: a record with its own
-// opt/freq/sp chain, and a record produced by a separate thermo tool that
-// merely cites the statmech it borrowed frequencies from
-// (`thermo.statmech_id -> statmech_source_calculation -> calculation`).
-// Measured live: a thermo record with zero source calculations of its own
-// (software Arkane) still carries a populated `sp_calculation_ref`. An
-// earlier version of this component intersected those refs against a
-// conformer's own calculation refs to guess an attribution — that guess
-// mislabeled every such record as conformer-linked. There is no field on
-// the current wire that actually distinguishes the two cases; only
-// `backend/thermo-provenance-truth` adding a real per-record conformer key
-// will. Until then this section states that plainly instead of guessing.
+// PR #285 gave thermo a REAL per-record conformer link
+// (`provenance.conformer_group_ref`), resolved server-side through the
+// same primary calculation already used for `primary_calculation`/
+// `level_of_theory`. When a conformer is selected, records partition
+// three ways via `partitionByConformerLink` (shared with
+// `EntryStatmechSection`): traced to the selected conformer, traced to a
+// DIFFERENT named conformer, or carrying no conformer link at all
+// (population B — a record with no resolvable primary calculation). A
+// binary matched/unmatched split previously collapsed the middle case into
+// "no link", which is false of a record the wire does attribute elsewhere
+// — see the review that caught it. An earlier version of this file also
+// tried to INFER the link from calculation-ref intersection before this
+// field existed; that guess mislabeled population-B records as
+// conformer-linked and was removed outright, not patched.
 // ---------------------------------------------------------------------------
 
 const MODEL_KIND_LABELS: Record<string, string> = {
@@ -50,7 +51,11 @@ const MODEL_KIND_LABELS: Record<string, string> = {
 const modelKindLabel = (kind: string) => MODEL_KIND_LABELS[kind] ?? kind.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 
-export function EntryThermoSection({ entryRef }: { entryRef: string }) {
+export function EntryThermoSection({ entryRef, conformer, conformers }: {
+    entryRef: string
+    conformer?: ConformerProjection | null
+    conformers?: ConformerProjection[]
+}) {
     const state = useEntryThermo(entryRef)
     if (state.status === "ready") {
         return (
@@ -64,7 +69,7 @@ export function EntryThermoSection({ entryRef }: { entryRef: string }) {
                     </section>
                 )}
             >
-                <ThermoList response={state.record} />
+                <ThermoList response={state.record} conformer={conformer} conformers={conformers ?? []} />
             </SectionErrorBoundary>
         )
     }
@@ -88,7 +93,30 @@ function reviewSummaryText(summary: ThermoListResponse["review_summary"]) {
     return parts.length > 0 ? parts.join(" · ") : "no records"
 }
 
-function ThermoList({ response }: { response: ThermoListResponse }) {
+function thermoRecordFallback(record: ThermoRecord) {
+    return (
+        <article className="science-record" role="alert">
+            <p className="empty-projection">
+                Record <code>{record.thermo_ref}</code> could not be displayed. Other
+                records on this page are unaffected.
+            </p>
+        </article>
+    )
+}
+
+function renderThermoRecord(record: ThermoRecord) {
+    return (
+        <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
+            <ThermoRecordCard record={record} />
+        </SectionErrorBoundary>
+    )
+}
+
+function ThermoList({ response, conformer, conformers }: {
+    response: ThermoListResponse
+    conformer?: ConformerProjection | null
+    conformers: ConformerProjection[]
+}) {
     const { records, review_summary: reviewSummary, pagination } = response
     return (
         <section className="ledger-section" aria-labelledby="thermo-heading">
@@ -97,9 +125,7 @@ function ThermoList({ response }: { response: ThermoListResponse }) {
                 <h2 id="thermo-heading">Thermochemistry</h2>
                 <p>
                     Every thermo record deposited for this entry, each shown independently. Multiple deposits
-                    are never merged, averaged, or reduced to one preferred value on this page. Not yet linked
-                    to a specific conformer on the wire — shown here for the whole entry, regardless of which
-                    conformer is selected above, until thermo provenance carries a conformer reference.
+                    are never merged, averaged, or reduced to one preferred value on this page.
                 </p>
             </div>
             <p className="records-note">
@@ -109,22 +135,24 @@ function ThermoList({ response }: { response: ThermoListResponse }) {
             </p>
             {records.length === 0 ? (
                 <p className="empty-projection">No thermochemistry records are deposited for this entry.</p>
+            ) : conformer ? (
+                <ConformerAttributionGroups
+                    attribution={partitionByConformerLink(
+                        records,
+                        conformers,
+                        conformer.conformer_group.conformer_group_ref,
+                        thermoConformerGroupRef,
+                    )}
+                    selectedLabel={conformer.conformer_group.label ?? conformer.conformer_group.conformer_group_ref}
+                    renderRecord={renderThermoRecord}
+                    thisConformerNote="Traced to this conformer's own primary calculation."
+                    thisConformerEmptyText="No thermo record traces to this conformer yet."
+                    otherConformerNote="Traced to a different conformer than the one selected above."
+                    noLinkNote="No resolvable primary calculation to trace a conformer through -- shown here at entry level, not flagged as missing anything."
+                    noLinkEmptyText="No entry-level thermo record is deposited for this entry."
+                />
             ) : (
-                records.map((record) => (
-                    <SectionErrorBoundary
-                        key={record.thermo_ref}
-                        fallback={(
-                            <article className="science-record" role="alert">
-                                <p className="empty-projection">
-                                    Record <code>{record.thermo_ref}</code> could not be displayed. Other
-                                    records on this page are unaffected.
-                                </p>
-                            </article>
-                        )}
-                    >
-                        <ThermoRecordCard record={record} />
-                    </SectionErrorBoundary>
-                ))
+                records.map(renderThermoRecord)
             )}
         </section>
     )
@@ -333,6 +361,25 @@ function PointsBlock({ points, thermoRef }: { points: ThermoRecord["points"] | n
     )
 }
 
+// Real labels, not field names with underscores swapped for spaces --
+// "SCF stability check" reads; "scf stability" does not. Any checklist key
+// this map hasn't seen yet still renders (a stripped/spaced fallback,
+// `evidenceCheckLabel` below) rather than being silently dropped.
+const EVIDENCE_CHECK_LABELS: Record<string, string> = {
+    has_source_calculations: "source calculations",
+    has_statmech_source: "statmech source",
+    has_frequency_evidence: "frequency evidence",
+    has_sp_or_energy_evidence: "SP or energy evidence",
+    has_temperature_dependent_model: "temperature-dependent model",
+    has_uncertainty: "uncertainty",
+    has_geometry_validation: "geometry validation",
+    has_scf_stability: "SCF stability check",
+}
+
+function evidenceCheckLabel(key: string): string {
+    return EVIDENCE_CHECK_LABELS[key] ?? key.replace(/^has_/, "").replaceAll("_", " ")
+}
+
 function EvidenceCompletenessBlock({ completeness, thermoRef }: {
     completeness: ThermoRecord["evidence_completeness"] | null
     thermoRef: string
@@ -352,16 +399,33 @@ function EvidenceCompletenessBlock({ completeness, thermoRef }: {
             </section>
         )
     }
+    // The score already conveys how many of eight booleans are satisfied;
+    // enumerating every "Present" row alongside it repeats that number one
+    // check at a time and buries the two checks that matter. Name only
+    // what's FALSE by default -- the full checklist stays reachable behind
+    // a disclosure, never enumerated by default.
+    const missing = Object.entries(completeness.checklist).filter(([, value]) => !value).map(([key]) => key)
     return (
         <section aria-labelledby={`completeness-${thermoRef}`}>
             <h4 className="model-block-heading" id={`completeness-${thermoRef}`}>
                 Evidence completeness ({completeness.score} / {completeness.max})
             </h4>
-            <ul className="checklist">
-                {Object.entries(completeness.checklist).map(([key, value]) => (
-                    <li key={key}>{value ? "Present" : "Absent"} — {key.replaceAll("_", " ")}</li>
-                ))}
-            </ul>
+            {missing.length === 0 ? (
+                <p className="section-note">Every evidence-completeness check is satisfied.</p>
+            ) : (
+                <p className="evidence-missing">
+                    Missing:{" "}
+                    {missing.map((key) => <span key={key} className="evidence-chip">{evidenceCheckLabel(key)}</span>)}
+                </p>
+            )}
+            <details className="evidence-full-checklist">
+                <summary>Full checklist ({Object.keys(completeness.checklist).length})</summary>
+                <ul className="checklist">
+                    {Object.entries(completeness.checklist).map(([key, value]) => (
+                        <li key={key}>{value ? "Present" : "Absent"} — {evidenceCheckLabel(key)}</li>
+                    ))}
+                </ul>
+            </details>
         </section>
     )
 }
@@ -425,6 +489,14 @@ function ProvenanceBlock({ provenance, thermoRef }: {
                 {/* No dedicated statmech detail page exists in this project (see the
                     module docstring), so this stays plain text rather than a dead link. */}
                 <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ?? "not recorded"}</dd></div>
+                <div>
+                    <dt>Conformer</dt>
+                    <dd>
+                        {provenance.conformer_group_ref
+                            ? <Link to={`/conformer-groups/${provenance.conformer_group_ref}`}>{provenance.conformer_group_ref}</Link>
+                            : "not recorded"}
+                    </dd>
+                </div>
             </dl>
         </section>
     )

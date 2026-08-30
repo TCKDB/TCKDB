@@ -1,9 +1,8 @@
-import { useState } from "react"
-import { Link } from "react-router-dom"
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { words } from "../domain/provenanceFormat"
 import { Formula } from "./Formula"
+import { RefsDisclosure } from "./RefsDisclosure"
 
 // `words` returns `null` for a missing/empty token (a case none of the
 // tokens on this component's own wire type can actually hit -- `species_entry_kind`,
@@ -44,44 +43,18 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             <FactItem label="Review" value={displayToken(entry.review.status)} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
         </ul>
-        <div className="ref-strip" aria-label="Stable references for this record">
-            <RefItem label="Species" value={entry.speciesRef} to={`/species/${entry.speciesRef}`} />
-            <RefItem label="Entry" value={entry.species_entry_ref} />
-            <RefItem label="InChIKey" value={entry.inchiKey} />
-        </div>
+        {/* Collapsed by default (see `RefsDisclosure`) -- nothing else on
+            this page needs to distinguish two species entries at rest; the
+            formula/SMILES above already does that job, so every ref here
+            can collapse without losing anything a reader needs at a glance. */}
+        <RefsDisclosure refs={[
+            { label: "Species", value: entry.speciesRef, to: `/species/${entry.speciesRef}` },
+            { label: "Entry", value: entry.species_entry_ref },
+            { label: "InChIKey", value: entry.inchiKey },
+        ]} />
     </header>
 }
 
 function FactItem({ label, value }: { label: string; value: string }) {
     return <li><span>{label}</span><strong>{value}</strong></li>
-}
-
-function RefItem({ label, value, to }: { label: string; value: string; to?: string }) {
-    return <div className="ref-item">
-        <span className="ref-item-label">{label}</span>
-        {to ? <Link to={to}>{value}</Link> : <span className="ref-item-value">{value}</span>}
-        <CopyButton value={value} label={label} />
-    </div>
-}
-
-function CopyButton({ value, label }: { value: string; label: string }) {
-    const [copied, setCopied] = useState(false)
-    return <button
-        type="button"
-        className="copy-button"
-        data-copied={copied}
-        aria-label={`Copy ${label} reference`}
-        onClick={() => {
-            if (!navigator.clipboard) return
-            navigator.clipboard.writeText(value)
-                .then(() => {
-                    setCopied(true)
-                    setTimeout(() => setCopied(false), 1500)
-                })
-                .catch(() => {
-                    // Clipboard access can be denied or unavailable; the ref
-                    // text stays selectable on the page either way.
-                })
-        }}
-    >{copied ? "Copied" : "Copy"}</button>
 }

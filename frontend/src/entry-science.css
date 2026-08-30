@@ -184,6 +184,39 @@
     color: #536578;
 }
 
+/* Evidence-completeness rubric: the score already says how many of N
+   checks passed, so only the FAILED checks are named by default -- named
+   as chips, not a sentence, so a reader can find "uncertainty" without
+   parsing eight lines that mostly say "Present". Full checklist stays
+   reachable behind a disclosure. */
+.evidence-missing {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .4rem .5rem;
+    margin: .6rem 0 0;
+    color: #536578;
+    font: .78rem var(--mono);
+}
+
+.evidence-chip {
+    padding: .15rem .5rem;
+    border: 1px solid #dbe2ea;
+    border-radius: 999px;
+    color: #3c4856;
+    font-size: .72rem;
+}
+
+.evidence-full-checklist {
+    margin-top: .6rem;
+}
+
+.evidence-full-checklist summary {
+    color: #536578;
+    font: .74rem var(--mono);
+    cursor: pointer;
+}
+
 @media (max-width: 680px) {
     .science-record .kv-list { grid-template-columns: 1fr; }
 }

@@ -1,5 +1,5 @@
 import { useEffect } from "react"
-import { Link, useParams, useSearchParams } from "react-router-dom"
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
@@ -16,7 +16,23 @@ import { useSpeciesEntry } from "../hooks/useSpeciesEntry"
 
 export default function SpeciesEntryPage() {
     const { entryRef = "", section } = useParams<{ entryRef: string; section?: string }>()
+    const location = useLocation()
+    const navigate = useNavigate()
     const state = useSpeciesEntry(entryRef)
+
+    // Canonicalize an unrecognized section segment (e.g. a stale
+    // `/calculations` link from the earlier chapter-nav design) to the
+    // default tab's own path. `isEntrySection` below already falls back to
+    // `DEFAULT_SECTION` for what RENDERS; the address bar must say the same
+    // thing that's on screen, not silently keep showing a path for content
+    // that isn't there. `?conformer=` already self-heals on its own effect
+    // below -- this preserves it rather than dropping it.
+    useEffect(() => {
+        if (section !== undefined && !isEntrySection(section)) {
+            navigate(`/species-entries/${entryRef}/${DEFAULT_SECTION}${location.search}`, { replace: true })
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the entry/section identity changes, not on every navigate/location re-render
+    }, [entryRef, section])
 
     if (!state || state.entryRef !== entryRef) return <LoadingEntry />
     if ("status" in state && state.status === "missing") return <MissingEntry entryRef={entryRef} />
@@ -114,7 +130,7 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
         />
 
         <EntryTabs entryRef={entryRef} activeSection={activeSection} conformerQuery={conformerQuery} />
-        <TabPanel section={activeSection} entryRef={entryRef} conformer={selectedConformer} />
+        <TabPanel section={activeSection} entryRef={entryRef} conformer={selectedConformer} conformers={conformers} />
     </section>
 }
 
@@ -124,22 +140,24 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
 // Each panel body supplies its own `<h2>` instead, matching the
 // `ledger-section` shape `EntryThermoSection`/`EntryStatmechSection`/
 // `EntryTransportSection` already use.
-function TabPanel({ section, entryRef, conformer }: {
+function TabPanel({ section, entryRef, conformer, conformers }: {
     section: EntrySection
     entryRef: string
     conformer: ConformerProjection | null
+    conformers: ConformerProjection[]
 }) {
     return (
         <div className="tab-panel" role="tabpanel" id={`panel-${section}`} aria-labelledby={`tab-${section}`} tabIndex={0}>
-            <TabPanelBody section={section} entryRef={entryRef} conformer={conformer} />
+            <TabPanelBody section={section} entryRef={entryRef} conformer={conformer} conformers={conformers} />
         </div>
     )
 }
 
-function TabPanelBody({ section, entryRef, conformer }: {
+function TabPanelBody({ section, entryRef, conformer, conformers }: {
     section: EntrySection
     entryRef: string
     conformer: ConformerProjection | null
+    conformers: ConformerProjection[]
 }) {
     if (section === "geometry") {
         return conformer
@@ -151,7 +169,7 @@ function TabPanelBody({ section, entryRef, conformer }: {
             ? <ConformerSinglePointTab conformer={conformer} />
             : <p className="empty-projection">No conformer basins are projected for this entry, so there is no single-point evidence to show.</p>
     }
-    if (section === "statmech") return <EntryStatmechSection entryRef={entryRef} conformer={conformer} />
-    if (section === "thermo") return <EntryThermoSection entryRef={entryRef} />
+    if (section === "statmech") return <EntryStatmechSection entryRef={entryRef} conformer={conformer} conformers={conformers} />
+    if (section === "thermo") return <EntryThermoSection entryRef={entryRef} conformer={conformer} conformers={conformers} />
     return <EntryTransportSection entryRef={entryRef} />
 }

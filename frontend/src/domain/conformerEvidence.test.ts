@@ -2,15 +2,16 @@ import { describe, expect, it } from "vitest"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import {
     conformerLabel,
-    partitionByConformer,
-    statmechMatchesConformer,
+    partitionByConformerLink,
+    statmechConformerGroupRef,
+    thermoConformerGroupRef,
 } from "./conformerEvidence"
 
-// Two DISTINCT conformer basins -- a fixture with only one conformer could
-// never prove that `statmechMatchesConformer` resolved to a SPECIFIC group
-// rather than just returning true for anything. The per-observation
-// calculation refs below are otherwise unused now (no thermo-side matching
-// exists) but are kept as realistic shape, not exercised by these tests.
+// THREE distinct conformer basins -- the three-way partition
+// (this conformer / a DIFFERENT named conformer / no link at all) cannot be
+// proven correct against fewer than three: two conformers cannot show that
+// a record linked to "the other" one is labeled with THAT conformer's own
+// name, rather than lumped into a single undifferentiated "other" bucket.
 function group(overrides: Partial<ConformerProjection> = {}): ConformerProjection {
     return {
         conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1" },
@@ -22,14 +23,7 @@ function group(overrides: Partial<ConformerProjection> = {}): ConformerProjectio
             evidence_coverage: { opt: 1, freq: 1, sp: 1 },
             levels_of_theory: {},
         },
-        observations: [{
-            conformer_observation: { conformer_observation_ref: "co_one" },
-            calculations: [
-                { calculation_ref: "calc_opt_1", type: "opt" },
-                { calculation_ref: "calc_freq_1", type: "freq" },
-                { calculation_ref: "calc_sp_1", type: "sp" },
-            ],
-        }],
+        observations: [],
         calculations: [],
         geometries: [],
         ...overrides,
@@ -37,17 +31,9 @@ function group(overrides: Partial<ConformerProjection> = {}): ConformerProjectio
 }
 
 const conformerOne = group()
-const conformerTwo = group({
-    conformer_group: { conformer_group_ref: "cg_two", label: "conformer_2" },
-    observations: [{
-        conformer_observation: { conformer_observation_ref: "co_two" },
-        calculations: [
-            { calculation_ref: "calc_opt_2", type: "opt" },
-            { calculation_ref: "calc_freq_2", type: "freq" },
-            { calculation_ref: "calc_sp_2", type: "sp" },
-        ],
-    }],
-})
+const conformerTwo = group({ conformer_group: { conformer_group_ref: "cg_two", label: "conformer_2" } })
+const conformerThree = group({ conformer_group: { conformer_group_ref: "cg_three", label: "conformer_3" } })
+const allConformers = [conformerOne, conformerTwo, conformerThree]
 
 describe("conformerLabel", () => {
     it("prefers the deposited basin label", () => {
@@ -60,39 +46,73 @@ describe("conformerLabel", () => {
     })
 })
 
-// No `thermoMatchesConformer` test suite: the function it covered was
-// removed (see the header comment in `conformerEvidence.ts`) because it
-// could not actually distinguish the two thermo provenance shapes on the
-// current wire -- both carry populated `sp_calculation_ref`/etc, one via
-// its own opt/freq/sp chain, the other via a statmech-borrowed route this
-// client cannot tell apart from the first. A test suite that verified the
-// function's arithmetic would still be lying about what the function
-// proved, so it is gone along with the function.
-
-describe("statmechMatchesConformer", () => {
-    it("matches on the real conformer_group_ref the archive returned", () => {
-        expect(statmechMatchesConformer([{ conformer_group_ref: "cg_one" }], conformerOne)).toBe(true)
-        expect(statmechMatchesConformer([{ conformer_group_ref: "cg_one" }], conformerTwo)).toBe(false)
+describe("thermoConformerGroupRef", () => {
+    it("reads the real conformer_group_ref off provenance (PR #285)", () => {
+        expect(thermoConformerGroupRef({ provenance: { conformer_group_ref: "cg_one" } })).toBe("cg_one")
     })
 
-    it("treats an unrequested/empty conformer context as unmatched, not an error", () => {
-        expect(statmechMatchesConformer(null, conformerOne)).toBe(false)
-        expect(statmechMatchesConformer(undefined, conformerOne)).toBe(false)
-        expect(statmechMatchesConformer([], conformerOne)).toBe(false)
+    it("returns null for population B (no resolvable primary calculation), never a guess", () => {
+        expect(thermoConformerGroupRef({ provenance: { conformer_group_ref: null } })).toBeNull()
+        expect(thermoConformerGroupRef({ provenance: null })).toBeNull()
+        expect(thermoConformerGroupRef({})).toBeNull()
     })
 })
 
-describe("partitionByConformer", () => {
-    it("keeps matched and entry-level records in their original order, never merging or dropping either group", () => {
-        const records = ["a", "b", "c", "d"]
-        const result = partitionByConformer(records, (value) => value === "b" || value === "d")
-        expect(result.matched).toEqual(["b", "d"])
-        expect(result.entryLevel).toEqual(["a", "c"])
+describe("statmechConformerGroupRef", () => {
+    it("reads the real conformer_group_ref off the include=conformers field", () => {
+        expect(statmechConformerGroupRef([{ conformer_group_ref: "cg_two" }])).toBe("cg_two")
     })
 
-    it("puts everything in entryLevel when nothing matches, and nothing in matched", () => {
-        const result = partitionByConformer([1, 2, 3], () => false)
-        expect(result.matched).toEqual([])
-        expect(result.entryLevel).toEqual([1, 2, 3])
+    it("returns null for an unrequested/empty conformer context, not an error", () => {
+        expect(statmechConformerGroupRef(null)).toBeNull()
+        expect(statmechConformerGroupRef(undefined)).toBeNull()
+        expect(statmechConformerGroupRef([])).toBeNull()
+    })
+})
+
+describe("partitionByConformerLink", () => {
+    type Row = { id: string; ref: string | null }
+    const linkedRef = (row: Row) => row.ref
+
+    it("splits into thisConformer / otherConformers (one bucket per DISTINCT other conformer, named) / noLink", () => {
+        const rows: Row[] = [
+            { id: "a", ref: "cg_one" }, // this conformer (selected)
+            { id: "b", ref: "cg_two" }, // a different, named conformer
+            { id: "c", ref: "cg_three" }, // yet another different, named conformer
+            { id: "d", ref: "cg_two" }, // same "other" conformer as b -- must land in the SAME bucket, not a new one
+            { id: "e", ref: null }, // no link at all
+        ]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
+        expect(result.thisConformer).toEqual([{ id: "a", ref: "cg_one" }])
+        expect(result.noLink).toEqual([{ id: "e", ref: null }])
+        // Two distinct other conformers, each its own labeled bucket --
+        // never merged into one generic "other" group, and "b"/"d" (both
+        // cg_two) land together in the SAME bucket.
+        expect(result.otherConformers).toHaveLength(2)
+        const byRef = new Map(result.otherConformers.map((bucket) => [bucket.ref, bucket]))
+        expect(byRef.get("cg_two")).toEqual({ ref: "cg_two", label: "conformer_2", records: [{ id: "b", ref: "cg_two" }, { id: "d", ref: "cg_two" }] })
+        expect(byRef.get("cg_three")).toEqual({ ref: "cg_three", label: "conformer_3", records: [{ id: "c", ref: "cg_three" }] })
+    })
+
+    it("never claims 'no link' about a record the wire attributes to a different conformer -- the exact regression this replaced", () => {
+        const rows: Row[] = [{ id: "a", ref: "cg_two" }]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
+        expect(result.noLink).toEqual([])
+        expect(result.thisConformer).toEqual([])
+        expect(result.otherConformers).toEqual([{ ref: "cg_two", label: "conformer_2", records: [{ id: "a", ref: "cg_two" }] }])
+    })
+
+    it("falls back to the raw ref as the label when the linked group isn't in the loaded conformer list", () => {
+        const rows: Row[] = [{ id: "a", ref: "cg_unknown" }]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
+        expect(result.otherConformers).toEqual([{ ref: "cg_unknown", label: "cg_unknown", records: [{ id: "a", ref: "cg_unknown" }] }])
+    })
+
+    it("puts everything in noLink when nothing links anywhere, and nothing in the other two groups", () => {
+        const rows: Row[] = [{ id: "a", ref: null }, { id: "b", ref: null }]
+        const result = partitionByConformerLink(rows, allConformers, "cg_one", linkedRef)
+        expect(result.thisConformer).toEqual([])
+        expect(result.otherConformers).toEqual([])
+        expect(result.noLink).toEqual(rows)
     })
 })
