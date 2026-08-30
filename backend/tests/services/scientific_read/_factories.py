@@ -1815,19 +1815,56 @@ def make_software(session: Session, *, name: str = "gaussian") -> Software:
 
 
 def make_software_release(
-    session: Session, *, name: str = "gaussian", version: str | None = "16"
+    session: Session,
+    *,
+    name: str = "gaussian",
+    version: str | None = "16",
+    revision: str | None = None,
+    build: str | None = None,
 ) -> SoftwareRelease:
-    """Create a Software + SoftwareRelease pair.
+    """Get-or-create a Software + SoftwareRelease pair.
 
-    Each call creates a fresh ``Software`` row (``name`` is uniquely
-    constrained), so callers needing two distinct software identities in
-    one test (e.g. Gaussian for a calculation vs. Arkane for a thermo's
-    own provenance) should pass distinct ``name`` values.
+    Mirrors ``make_workflow_tool_release``'s pattern and the real
+    uniqueness constraints:
+
+    - ``Software`` is uniquely keyed by ``name``; repeated calls with the
+      same ``name`` reuse the existing software rather than violating the
+      ``UniqueConstraint("name")``.
+    - ``SoftwareRelease`` is uniquely keyed by
+      ``(software_id, version, revision, build)`` (``NULLS NOT DISTINCT``);
+      repeated calls with the same tuple reuse the existing release. Two
+      default-named calls in one test used to raise ``IntegrityError`` on
+      the ``Software.name`` constraint before this was get-or-create.
+
+    Callers that want a fresh distinct release should pass a different
+    ``name``, ``version``, ``revision``, or ``build``.
     """
-    sw = Software(name=name)
-    session.add(sw)
-    session.flush()
-    sr = SoftwareRelease(software_id=sw.id, version=version)
+    from sqlalchemy import select as _select
+
+    sw = session.scalar(_select(Software).where(Software.name == name))
+    if sw is None:
+        sw = Software(name=name)
+        session.add(sw)
+        session.flush()
+
+    existing = session.scalar(
+        _select(SoftwareRelease).where(
+            SoftwareRelease.software_id == sw.id,
+            SoftwareRelease.version.is_(version)
+            if version is None
+            else SoftwareRelease.version == version,
+            SoftwareRelease.revision.is_(revision)
+            if revision is None
+            else SoftwareRelease.revision == revision,
+            SoftwareRelease.build.is_(build)
+            if build is None
+            else SoftwareRelease.build == build,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    sr = SoftwareRelease(software_id=sw.id, version=version, revision=revision, build=build)
     session.add(sr)
     session.flush()
     return sr

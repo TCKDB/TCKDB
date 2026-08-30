@@ -68,6 +68,17 @@ class ThermoReadRequest(BaseModel):
     level_of_theory_id: int | None = None
     # Phase C: LoT may be supplied by ref instead of (or alongside) id.
     level_of_theory_ref: str | None = None
+    # Filters on the PRIMARY CALCULATION's software name (see
+    # `_primary_software_name` in the service) -- i.e. what ran the
+    # electronic structure, matching `ThermoProvenance.primary_calculation
+    # .software`. It does NOT filter on `ThermoProvenance.software_release`
+    # (the thermo's own software, e.g. Arkane). A client that reads
+    # `software_release: "Arkane"` off a record and re-queries
+    # `?software=Arkane` gets zero rows for population-B-shaped records,
+    # which have no calculation named "Arkane" to match. Pre-existing
+    # behavior, unchanged by issue #284's fix -- documented here because the
+    # response-field rename (`software` -> `software_release`) makes the
+    # naming collision between this filter and the old field newly visible.
     software: str | None = None
 
     min_review_status: RecordReviewStatus | None = None

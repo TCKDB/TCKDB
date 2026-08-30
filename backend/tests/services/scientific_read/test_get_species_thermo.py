@@ -891,10 +891,22 @@ def _make_population_a(db_session, *, smiles="C#CCNCNCCC"):
     }
 
 
-def _make_population_b(db_session, *, smiles="C#CCNCNCCN"):
+def _make_thermo_with_no_evidence_chain(db_session, *, smiles="C#CCNCNCCN"):
     """Thermo carries its own software/workflow_tool (Arkane / ARC 1.1.0);
-    zero ThermoSourceCalculation rows and no linked statmech, so there is
-    no resolvable primary calculation and therefore no conformer.
+    zero ThermoSourceCalculation rows AND no linked statmech at all, so
+    there is no resolvable primary calculation and therefore no conformer.
+
+    NOT population B. Population B on the live archive (e.g. thermo id 4 /
+    ``spe_dfcw4tvy6tkqxnyittmn6d3vdu``) has zero *direct*
+    ``ThermoSourceCalculation`` rows but DOES have a linked statmech with
+    real freq/sp source calcs -- it resolves a primary calculation via the
+    statmech fallback and, when that fallback calc carries a
+    ``conformer_observation_id``, a real conformer too. See
+    ``_make_real_population_b`` below for that shape. This helper is a
+    third, simpler shape (no evidence chain whatsoever) kept only because
+    it is a genuine, distinguishable case worth guarding on its own: a
+    record that is truly orphaned must not inherit anything, including a
+    sibling record's conformer (mutation target 5).
     """
     from tests.services.scientific_read._factories import (
         make_software_release,
@@ -911,6 +923,90 @@ def _make_population_b(db_session, *, smiles="C#CCNCNCCN"):
         workflow_tool_release_id=arc.id,
     )
     return entry, thermo, {"software": arkane, "workflow_tool": arc}
+
+
+def _make_real_population_b(db_session, *, smiles="C#CCNCNCCNC"):
+    """The actual shape measured on the live archive for population B:
+    thermo carries its own software/workflow_tool (Arkane / ARC 1.1.0) AND
+    is linked to a statmech (``thermo.statmech_id``) whose SP source calc
+    carries a real ``conformer_observation_id`` -- but the thermo has ZERO
+    direct ``ThermoSourceCalculation`` rows of its own.
+
+    This is the shape that makes the statmech-fallback route load-bearing
+    for issue #284 / conformer resolution: ``primary_calc_id_v`` resolves
+    via ``_statmech_primary_calc_id`` (thermo -> statmech ->
+    statmech_source_calculation -> calculation), not via any direct
+    thermo-source row, and the conformer must follow that SAME resolved
+    calculation -- exercising ``_conformer_links`` over the FULL
+    ``all_source_calc_ids`` union (direct + statmech-derived), not just the
+    direct half.
+    """
+    from app.db.models.common import (
+        CalculationType,
+        ScientificOriginKind,
+        StatmechCalculationRole,
+    )
+    from app.db.models.statmech import Statmech, StatmechSourceCalculation
+    from tests.services.scientific_read._factories import (
+        make_calculation,
+        make_conformer_group,
+        make_conformer_observation,
+        make_lot,
+        make_software_release,
+        make_workflow_tool_release,
+    )
+
+    entry = _entry_with_smiles(db_session, smiles=smiles)
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    arkane = make_software_release(db_session, name="arkane", version="1.0")
+    arc = make_workflow_tool_release(db_session, name="arc", version="1.1.0")
+
+    group = make_conformer_group(db_session, entry, label="conformer_1")
+    observation = make_conformer_observation(db_session, conformer_group=group)
+
+    # Calc software is Gaussian (the calculation's own software) -- distinct
+    # from the thermo's own Arkane, exactly like the archive example.
+    calc_sw = make_software_release(
+        db_session, name="gaussian", version="16, Revision C.02"
+    )
+    sp_calc = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+        software_release_id=calc_sw.id,
+        conformer_observation_id=observation.id,
+    )
+
+    statmech = Statmech(
+        species_entry_id=entry.id, scientific_origin=ScientificOriginKind.computed
+    )
+    db_session.add(statmech)
+    db_session.flush()
+    db_session.add(
+        StatmechSourceCalculation(
+            statmech_id=statmech.id,
+            calculation_id=sp_calc.id,
+            role=StatmechCalculationRole.sp,
+        )
+    )
+    db_session.flush()
+
+    thermo = make_thermo_scalar(
+        db_session,
+        species_entry=entry,
+        software_release_id=arkane.id,
+        workflow_tool_release_id=arc.id,
+        statmech_id=statmech.id,
+    )
+    return entry, thermo, {
+        "software": arkane,
+        "workflow_tool": arc,
+        "sp_calc": sp_calc,
+        "statmech": statmech,
+        "group": group,
+        "observation": observation,
+    }
 
 
 def test_population_a_reports_no_thermo_software_of_its_own(db_session):
@@ -942,10 +1038,17 @@ def test_population_a_reports_no_thermo_software_of_its_own(db_session):
 
 
 def test_population_b_workflow_tool_is_served_not_dropped(db_session):
-    """Mutation target 2: a population-B record's own workflow_tool_release
-    (ARC) must be served, not silently dropped from the response.
+    """Mutation target 2: a record's own workflow_tool_release (ARC) must
+    be served, not silently dropped from the response.
+
+    Asserts EVERY field of both summaries -- ref, name, and version -- for
+    both software_release and workflow_tool_release. An assertion that
+    only checked `_id` (as an earlier version of this test did) cannot
+    catch a bulk loader that serves a hardcoded `software_release_ref=""`
+    or a `version=None` regardless of the real value: both survived
+    mutation until this test asserted every field symmetrically.
     """
-    entry, _thermo, own = _make_population_b(db_session)
+    entry, _thermo, own = _make_thermo_with_no_evidence_chain(db_session)
 
     prov = (
         get_species_thermo(
@@ -957,6 +1060,10 @@ def test_population_b_workflow_tool_is_served_not_dropped(db_session):
 
     assert prov.software_release is not None
     assert prov.software_release.software_release_id == own["software"].id
+    assert prov.software_release.software_release_ref == own["software"].public_ref
+    assert prov.software_release.software == "arkane"
+    assert prov.software_release.version == own["software"].version == "1.0"
+
     assert prov.workflow_tool_release is not None
     assert (
         prov.workflow_tool_release.workflow_tool_release_id
@@ -966,6 +1073,58 @@ def test_population_b_workflow_tool_is_served_not_dropped(db_session):
         prov.workflow_tool_release.workflow_tool_release_ref
         == own["workflow_tool"].public_ref
     )
+    assert prov.workflow_tool_release.workflow_tool == "arc"
+    assert (
+        prov.workflow_tool_release.version
+        == own["workflow_tool"].version
+        == "1.1.0"
+    )
+
+
+def test_real_population_b_resolves_conformer_via_statmech_fallback_route(db_session):
+    """Real population B (``_make_real_population_b``): thermo has its own
+    Arkane/ARC provenance and ZERO direct ``ThermoSourceCalculation`` rows,
+    but IS linked to a statmech whose SP source calc carries a real
+    conformer observation.
+
+    This is the statmech-route coverage the direct-thermo-source-only
+    fixtures in this file cannot exercise: ``primary_calc_id_v`` resolves
+    via ``_statmech_primary_calc_id`` (not a direct thermo-source row), and
+    the conformer must follow THAT calculation. Regression target: feeding
+    ``_conformer_links`` only the direct thermo-source calc ids (dropping
+    the statmech-derived half of the ``all_source_calc_ids`` union at
+    ``thermo.py``) makes this test fail while every other conformer test in
+    this file keeps passing, because none of their statmech-fallback
+    fixtures set ``conformer_observation_id`` on any calc.
+    """
+    entry, _thermo, real = _make_real_population_b(db_session)
+
+    prov = (
+        get_species_thermo(
+            db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+        )
+        .records[0]
+        .provenance
+    )
+
+    # Thermo's own provenance -- unaffected by the calc fallback.
+    assert prov.software_release is not None
+    assert prov.software_release.software_release_id == real["software"].id
+    assert prov.workflow_tool_release is not None
+    assert prov.workflow_tool_release.workflow_tool_release_id == real["workflow_tool"].id
+
+    # Primary calculation resolved via the statmech fallback, not a direct
+    # thermo-source row (there are none).
+    assert prov.statmech_ref == real["statmech"].public_ref
+    assert prov.primary_calculation is not None
+    assert prov.primary_calculation.calculation_id == real["sp_calc"].id
+    assert prov.sp_calculation_id == real["sp_calc"].id
+
+    # The conformer follows that same statmech-derived calculation.
+    assert prov.conformer_observation_id == real["observation"].id
+    assert prov.conformer_observation_ref == real["observation"].public_ref
+    assert prov.conformer_group_id == real["group"].id
+    assert prov.conformer_group_ref == real["group"].public_ref
 
 
 def test_conformer_link_follows_the_primary_calculation_not_an_arbitrary_source(
@@ -1033,12 +1192,15 @@ def test_conformer_link_follows_the_primary_calculation_not_an_arbitrary_source(
     assert prov.conformer_observation_id != opt_obs.id
 
 
-def test_population_b_reports_no_conformer_even_when_others_have_one(db_session):
-    """Mutation target 5: a population-B record (no source calcs of its own)
-    must report no conformer, even when a SIBLING thermo record on the same
-    species_entry does have a resolvable conformer -- the per-record
-    resolution must never leak another record's conformer link in as a
-    fallback default.
+def test_no_evidence_chain_record_reports_no_conformer_even_when_a_sibling_has_one(
+    db_session,
+):
+    """Mutation target 5: a record with no evidence chain at all (no
+    ThermoSourceCalculation rows, no linked statmech -- see
+    ``_make_thermo_with_no_evidence_chain``) must report no conformer, even
+    when a SIBLING thermo record on the same species_entry does have a
+    resolvable conformer -- the per-record resolution must never leak
+    another record's conformer link in as a fallback default.
     """
     from tests.services.scientific_read._factories import (
         make_software_release,
@@ -1048,14 +1210,20 @@ def test_population_b_reports_no_conformer_even_when_others_have_one(db_session)
     entry, _pop_a_thermo, calcs = _make_population_a(
         db_session, smiles="C#CCNCNCCCC"
     )
-    arkane = make_software_release(db_session, name="arkane2", version="1.0")
-    arc = make_workflow_tool_release(db_session, name="arc2", version="1.1.0")
+    # Same shape as `_make_thermo_with_no_evidence_chain` (own software/tool,
+    # zero source calcs, no linked statmech), but attached to the SAME
+    # species_entry as the population-A record above so both are visible in
+    # one `get_species_thermo` call -- the helper always creates its own
+    # entry, so this is inlined rather than reused.
+    orphan_sw = make_software_release(db_session, name="arkane_orphan", version="1.0")
+    orphan_wt = make_workflow_tool_release(db_session, name="arc_orphan", version="1.1.0")
     make_thermo_scalar(
         db_session,
         species_entry=entry,
-        software_release_id=arkane.id,
-        workflow_tool_release_id=arc.id,
+        software_release_id=orphan_sw.id,
+        workflow_tool_release_id=orphan_wt.id,
     )
+    own = {"software": orphan_sw}
 
     response = get_species_thermo(
         db_session, species_entry_id=entry.id, request=ThermoReadRequest()
@@ -1070,11 +1238,11 @@ def test_population_b_reports_no_conformer_even_when_others_have_one(db_session)
         for rec in response.records
     }
 
-    pop_b_record = by_software["arkane2"]
-    assert pop_b_record.provenance.conformer_observation_id is None
-    assert pop_b_record.provenance.conformer_observation_ref is None
-    assert pop_b_record.provenance.conformer_group_id is None
-    assert pop_b_record.provenance.conformer_group_ref is None
+    orphan_record = by_software[own["software"].software.name]
+    assert orphan_record.provenance.conformer_observation_id is None
+    assert orphan_record.provenance.conformer_observation_ref is None
+    assert orphan_record.provenance.conformer_group_id is None
+    assert orphan_record.provenance.conformer_group_ref is None
 
     pop_a_record = by_software[None]
     assert pop_a_record.provenance.conformer_observation_id == calcs["observation"].id

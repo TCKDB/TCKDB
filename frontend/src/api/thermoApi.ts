@@ -126,6 +126,12 @@ const softwareReleaseSchema = z.object({
     version: z.string().nullable().optional(),
 }).passthrough()
 
+const workflowToolReleaseSchema = z.object({
+    workflow_tool_release_ref: z.string(),
+    workflow_tool: z.string(),
+    version: z.string().nullable().optional(),
+}).passthrough()
+
 const calculationEvidenceSummarySchema = z.object({
     calculation_ref: z.string().nullable().optional(),
     calculation_type: z.string(),
@@ -139,10 +145,21 @@ const calculationEvidenceSummarySchema = z.object({
 // Always present (`provenance: ThermoProvenance` is not `| None` on the
 // wire) — none of its fields is gated by any include token; see the module
 // docstring above.
+//
+// `software_release` / `workflow_tool_release` are the THERMO's own
+// provenance (e.g. Arkane / ARC), sourced from `thermo.software_release_id`
+// / `thermo.workflow_tool_release_id` server-side -- never backfilled from
+// the primary calculation's software. `primary_calculation.software`
+// (inside `calculationEvidenceSummarySchema` above) is the *calculation's*
+// software (e.g. Gaussian) and is a separate fact. Issue #284: these two
+// were previously collapsed into one field named `software` here, which
+// silently discarded both real keys under `.passthrough()` and rendered
+// every thermo record's software as "not recorded" on the live page.
 const thermoProvenanceSchema = z.object({
     primary_calculation: calculationEvidenceSummarySchema.nullable().optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
-    software: softwareReleaseSchema.nullable().optional(),
+    software_release: softwareReleaseSchema.nullable().optional(),
+    workflow_tool_release: workflowToolReleaseSchema.nullable().optional(),
     statmech_ref: z.string().nullable().optional(),
     freq_calculation_ref: z.string().nullable().optional(),
     sp_calculation_ref: z.string().nullable().optional(),
