@@ -163,13 +163,25 @@
 }
 
 /* Centred mid-page ("i also expect the struct view to may be middle"),
-   not left-anchored inside the 76rem `.geometry-page` column. Themed
-   with the same accent-left-border card treatment `.geometry-ledger`
-   and `.observation-card > header` already use elsewhere in this app
-   (`border-left: 3px solid #205493` on a white card) — reusing an
-   existing page token rather than inventing a new one — so the
-   structure view reads as part of this app's visual language instead of
-   a bare, undecorated box floating on the page background. */
+   not left-anchored inside the 76rem `.geometry-page` column.
+
+   MEASURED regression, now reverted: this card briefly reused the
+   accent-left-border card treatment `.geometry-ledger` and
+   `.observation-card > header` use elsewhere in this app
+   (`border-left: 3px solid #205493`). That treatment reads correctly on
+   those two — a left-aligned card inside a text column, where the 3px
+   bar sits flush with the text edge and reads as a margin rule. This
+   card is centred (`max-width: 36rem; margin: 0 auto`), floating
+   mid-page with no text edge to align to, so the same bar read instead
+   as a stray thick blue ruler line down the middle of the page (owner
+   report: "why is the structure view box with a big thick blue ruler
+   line"). Plain 1px border on all four sides instead — do not
+   reintroduce the accent bar here, and do not carry this fix backward
+   into `.geometry-ledger` or `.observation-card > header`, where the
+   treatment is correct. Independently, this app's design guidance
+   lists "accent bar/rail on cards" as a generic default to avoid, so
+   even setting the centring issue aside this treatment should not have
+   been reused. */
 .viewer-stage {
     display: flex;
     flex-direction: column;
@@ -179,7 +191,6 @@
     margin: 0 auto;
     padding: 1.5rem;
     border: 1px solid #dbe2ea;
-    border-left: 3px solid #205493;
     background: #fff;
 }
 
@@ -194,13 +205,36 @@
    76rem, well short of the 100rem page the earlier cap was never
    reconsidered against, but 352px still read as small on it — 30rem
    (480px) is a proportionally sized middle ground, still comfortably
-   inside `.viewer-stage`'s 36rem card. */
+   inside `.viewer-stage`'s 36rem card.
+
+   `outline`, not `border` — MEASURED (real Chromium, live geometry
+   record proxied into a dev server): with `border: 1px solid`, this
+   element's own `offsetWidth`/`offsetHeight` (global `box-sizing:
+   border-box`, `index.css:8`) already INCLUDE the 1px border on each
+   side, so 3Dmol sized the injected `<canvas>` to that border-inclusive
+   figure (480x480) and then positioned it flush with the CONTENT box
+   (478x478 origin) — 1px larger than the box it was placed inside on
+   every axis. Anchored top-left, the overflow spilled over the right
+   and bottom edges only, painting over exactly those two border sides
+   while leaving top and left alone (owner report: "only got 2/4
+   outlines of the box"). `outline` sits outside the border box
+   entirely — it is never part of `offsetWidth`/`offsetHeight` and
+   never part of layout at all, so there is no border thickness left
+   for 3Dmol to both measure into its size and get placed inside of.
+   Chosen over moving the border to a wrapper element or insetting the
+   canvas because it is a one-line fix that touches neither the DOM
+   structure GeometryViewer.tsx relies on (`containerRef` is this
+   element) nor the 480px figure 3Dmol zooms the molecule to — the
+   border-box width this element resolves to (`width: 100%` up to
+   `max-width: 30rem`, still under `box-sizing: border-box`) is
+   unchanged by outline having zero width, so the rendered molecule's
+   size does not change either. */
 .viewer-canvas {
     position: relative;
     width: 100%;
     max-width: 30rem;
     aspect-ratio: 1 / 1;
-    border: 1px solid #dbe2ea;
+    outline: 1px solid #dbe2ea;
     background: #fff;
 }
 
