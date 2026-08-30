@@ -1,0 +1,131 @@
+/*
+ * Atom-picking measurements (GeometryViewer.tsx) — a NEW stylesheet, kept
+ * deliberately separate from `geometry-detail.css` and every other
+ * existing `.css` file in this app. A parallel branch
+ * (frontend/theme-tokens) is tokenising the CSS palette and owns every
+ * existing stylesheet for the duration of that work; this file is the one
+ * place this feature's own styling lives so the two branches never touch
+ * the same file.
+ *
+ * Colours here are plain hex literals, chosen to match the values already
+ * visible on this page (`geometry-detail.css`, read but not edited):
+ *   #205493 — accent (buttons, pressed state, links)
+ *   #dbe2ea — border
+ *   #536578 — muted text
+ *   #fff    — surface
+ * plus two new literals introduced by this feature alone, for the
+ * on-canvas highlight/connector colours (`.viewer-canvas` never had a
+ * "selection" or "measurement line" concept before this branch, so there
+ * is no existing token to match): #ffcc00 (selection highlight, used only
+ * inside the WebGL scene via 3Dmol's own `addSphere`, not in this
+ * stylesheet) and #ff5a1f (measurement connector, same — noted here only
+ * so a reader of this file's palette section knows where those two colours
+ * live, even though they are not CSS at all). Once frontend/theme-tokens
+ * lands, every literal below (the two 3Dmol-side ones included) will need
+ * converting to that branch's token names — this file intentionally does
+ * not try to guess those names ahead of time.
+ */
+
+.viewer-measurements {
+    width: 100%;
+    max-width: 36rem;
+    margin: 0 auto;
+    padding: 1rem 1.5rem 1.5rem;
+    border: 1px solid #dbe2ea;
+    background: #fff;
+}
+
+.viewer-measurements-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.viewer-measurements-header h3 {
+    margin: 0;
+    font: 600 .82rem var(--mono, ui-monospace, monospace);
+    color: #16202c;
+}
+
+.measure-clear-button {
+    padding: .35rem .75rem;
+    border: 1px solid #b8c4d1;
+    border-radius: .3rem;
+    background: #fff;
+    color: #205493;
+    font: .68rem var(--mono, ui-monospace, monospace);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+
+.measure-clear-button:hover:not(:disabled) {
+    border-color: #205493;
+    background: #eaf1f8;
+}
+
+.measure-clear-button:disabled {
+    color: #536578;
+    border-color: #dbe2ea;
+    cursor: not-allowed;
+}
+
+/* The short, transient message ("Distance measured.") — NOT the payload.
+   House rule: a role="status"/aria-live region holds a message only; the
+   actual measurement list below is ordinary DOM, read once by assistive
+   tech and re-read in full only when IT changes, not on every keystroke
+   of this status line. Visually small and muted so it reads as a status
+   line, not as a second heading. */
+.viewer-measure-status {
+    margin: .6rem 0 0;
+    min-height: 1.1em;
+    color: #536578;
+    font-size: .72rem;
+    line-height: 1.5;
+}
+
+.viewer-measure-hint {
+    margin: .5rem 0 0;
+    color: #536578;
+    font-size: .78rem;
+    line-height: 1.5;
+}
+
+.measurement-list {
+    display: grid;
+    gap: .5rem;
+    margin: .75rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.measurement-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: .5rem .9rem;
+    padding: .5rem .7rem;
+    border: 1px solid #dbe2ea;
+    background: #f5f7fa;
+}
+
+.measurement-kind {
+    color: #16202c;
+    font: .74rem var(--mono, ui-monospace, monospace);
+    overflow-wrap: anywhere;
+}
+
+.measurement-value {
+    flex: none;
+    color: #173f6e;
+    font: 600 .8rem var(--mono, ui-monospace, monospace);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 680px) {
+    .viewer-measurements { padding: .9rem 1rem 1.2rem; }
+    .measurement-list li { flex-direction: column; align-items: flex-start; }
+}

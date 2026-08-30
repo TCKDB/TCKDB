@@ -1,6 +1,8 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react"
 import type { GeometryAtom } from "../api/geometryApi"
-import { buildXyzBlock } from "../domain/geometryXyz"
+import { angstromToBohr, buildXyzBlock, type CoordinateUnitMode } from "../domain/geometryXyz"
+import { angle as angleBetween, dihedral as dihedralOf, distance as distanceBetween } from "../domain/geometryMeasure"
+import "../geometry-measure.css"
 
 /**
  * A real WebGL 3D viewer, built on 3Dmol.js — replaces a hand-rolled SVG
@@ -228,6 +230,152 @@ import { buildXyzBlock } from "../domain/geometryXyz"
  * calls) — that explicit removal, not `replaceChildren()`, is what
  * stops React `<StrictMode>`'s double-invoke from stacking a second set
  * of these listeners on the container alongside the first.
+ *
+ * ## Atom-picking measurements
+ *
+ * Click 2/3/4 atoms to measure a distance/angle/dihedral, matching
+ * GaussView/ChemCraft — the owner's own comparison. Uses 3Dmol's native
+ * `viewer.setClickable(sel, true, callback)` (`GLViewer.ts:3964`), not a
+ * hand-rolled raycast: `setClickable` marks every atom in `sel` (here
+ * `{}` — every atom) with `.clickable = true` and stores `callback`,
+ * which `handleClickSelection` (`GLViewer.ts:432`) invokes with the
+ * picked atom whenever `_handleMouseUp` (`GLViewer.ts:1038`) decides the
+ * gesture was a genuine click, not a drag: `closeEnoughForClick`
+ * (`GLViewer.ts:524`) compares the mouseup position against the
+ * mousedown position (a `5`px tolerance for touch, exact for mouse) and
+ * `handleClickSelection` only runs when that check passes AND the
+ * pointer is still over the viewer. This is why this component adds no
+ * mousedown/mousemove/mouseup handling of its own for picking: 3Dmol's
+ * own click/drag disambiguation already exists, runs before this
+ * component's callback is ever invoked, and is what keeps drag-to-rotate
+ * (a mousedown, several mousemoves, then a mouseup somewhere else) from
+ * ever registering as an atom pick — a rotate gesture fails
+ * `closeEnoughForClick` and `handleClickSelection` (and this component's
+ * callback) never runs at all for it.
+ *
+ * `setClickable` is registered in its own effect below, keyed on
+ * `[status]` only (not on `atoms`/`handleAtomPick`) — deliberately
+ * mirroring `initialViewRef`'s "capture once, at the ready transition"
+ * pattern. 3Dmol stores the callback on its own internal atom objects
+ * (`GLModel.ts`'s `setClickable`: `selected[i].callback = callback`),
+ * not tied to a specific render, so it keeps working correctly across
+ * every later re-render without needing re-registration — re-registering
+ * on every `atoms`/`handleAtomPick` change would be redundant work for
+ * an identical result. That effect is declared BEFORE the style effect
+ * above (source order, not just visual proximity — React runs a
+ * component's effects in declaration order within one commit) so that
+ * the style effect's own `viewer.render()` — already happening on the
+ * exact same ready-transition — is what satisfies 3Dmol's "`render`
+ * must be called for [setClickable] to take effect" contract, rather
+ * than this feature adding a second `render()` call that would silently
+ * double `GeometryViewer.test.tsx`'s `calls.render` count on load.
+ *
+ * The click callback receives 3Dmol's own atom object, whose only
+ * reliable identity field is `serial` — the 0-based position 3Dmol's XYZ
+ * parser assigned each atom as it read the block top to bottom
+ * (`node_modules/3dmol/src/parsers/XYZ.ts`: `atom.serial = i` inside the
+ * same loop that reads `x`/`y`/`z`, single-model case, so `serial` is
+ * exactly that atom's index in the block). Since this component builds
+ * that block from its own `atoms` prop in the exact same order (either
+ * the archive's own `xyz_text`, one line per `atoms[]` row in order, or
+ * `buildXyzBlock(atoms)` — see that function) `atoms[serial]` recovers
+ * the correct row every time. This is a position mapping, not an
+ * identity trust: exactly the same principle "Labels follow the
+ * coordinate table" above already established for atom labels, applied
+ * in the opposite direction (reading an atom back out of 3Dmol, instead
+ * of placing one into it).
+ *
+ * Selection model (see `handleAtomPick`): a running list of 0-4 picked
+ * atoms. 2/3/4 atoms compute a distance/angle/dihedral from
+ * `domain/geometryMeasure.ts` (see that module for the maths and its
+ * sign/clamp reasoning) and update in place as the same selection keeps
+ * growing — clicking a 3rd atom turns a shown distance into an angle of
+ * those three, not a second, separate measurement. Clicking an
+ * already-selected atom removes it from the CURRENT selection (shrinking
+ * or clearing whatever is currently being built). Clicking a 5th atom
+ * does not extend past 4 — it finalises whatever the current selection
+ * was (leaving it in the persisted list untouched) and starts a brand
+ * new one-atom selection. Measurements persist across this process and
+ * across every rotate/zoom/style/label change until "Clear measurements"
+ * is pressed — there is no auto-expiry.
+ *
+ * On-canvas visuals (a highlight sphere per selected/measured atom, a
+ * thin connector cylinder between consecutive picked atoms, and a small
+ * value label near each measurement) are drawn via `addSphere`/
+ * `addCylinder`/`addLabel` and are a CONVENIENCE layer only — see the
+ * accessibility note below for why the real, authoritative rendering of
+ * every measured value is the DOM list next to the viewer, not this
+ * canvas overlay (`aria-hidden`, same as the rest of the WebGL scene).
+ * Its own effect (`measureShapeHandlesRef`/`measureLabelHandlesRef`)
+ * tracks exactly the shapes/labels IT created and removes only those —
+ * via `removeShape`/`removeLabel` (individual removal), never
+ * `removeAllShapes`/`removeAllLabels` for the label case specifically,
+ * because `removeAllLabels` is GLOBAL and the atom-numbering label
+ * effect above already calls it on every `labelMode` change, which would
+ * silently wipe this feature's own value labels too if this effect
+ * didn't independently know to redraw right after. That effect is
+ * declared AFTER the atom-numbering label effect and lists `labelMode`
+ * in its own dependency array for exactly that reason — not because it
+ * reads `labelMode` for any other purpose, but so it re-runs on the same
+ * commit as the atom-numbering effect and reliably wins the last write.
+ * Like the label/style effects above, it no-ops entirely (no
+ * `render()` call) when there is nothing to clear and nothing to add —
+ * `measureDrawnRef` tracks this the same way `labelsPresentRef` does —
+ * so a page that never has the viewer clicked never pays an extra
+ * `render()` call, preserving every existing render-count assertion in
+ * `GeometryViewer.test.tsx`.
+ *
+ * ## Units: measured distances follow the Å/bohr toggle; angles/dihedrals don't
+ *
+ * `GeometryDetailPage` added an Å/bohr display toggle for the coordinate
+ * table. A measured DISTANCE is a length, exactly like the coordinate
+ * values that toggle already governs — showing a distance in a unit the
+ * reader did not choose, on the same page as a table they DID choose a
+ * unit for, is exactly the "bare 1.09 next to a page showing bohr"
+ * hazard this feature must not introduce. So this component accepts a
+ * `coordinateUnitMode` prop from `GeometryDetailPage` (lifted out of
+ * `CoordinateTableSection`, which used to own that state alone — see
+ * `GeometryDetailPage.tsx`) and every distance readout is computed in
+ * ångström (this archive's one wire unit — `coordinate_units` on
+ * `GeometryRecord`) and then, if the toggle is on bohr, scaled by
+ * `ANGSTROM_TO_BOHR` for display — never recomputed from bohr-valued
+ * points, since scaling every input coordinate by a constant scales the
+ * Euclidean distance by that exact same constant (see
+ * `geometryMeasure.ts`'s module docstring). The displayed unit is always
+ * spelled out on the value itself ("Å" or "bohr"), never implied by
+ * context alone.
+ *
+ * Angles and dihedrals are NOT unit-dependent: degrees are the same
+ * number whether the underlying coordinates were ångström or bohr (the
+ * unit cancels out of `acos`/`atan2` of a ratio of dot/cross products),
+ * so this component computes and displays them the same way regardless
+ * of `coordinateUnitMode` — there is nothing for that toggle to affect,
+ * and pretending there were would just be a second unit label to get
+ * wrong for no reason.
+ *
+ * ## Accessibility: DOM list is the delivery mechanism, not the canvas
+ *
+ * A value drawn on the WebGL canvas (`aria-hidden="true"` on this
+ * component's container, same as every other on-canvas visual here) is
+ * invisible to assistive technology and unselectable as text — exactly
+ * the same reasoning that already makes the coordinate table the
+ * "actual accessible/copyable fallback" for the picture itself (see
+ * above). Every measurement is therefore ALSO rendered as an ordinary
+ * `<ol>` list next to the viewer (`.measurement-list`, in
+ * `geometry-measure.css`) — readable, selectable, and copyable text,
+ * independent of whether the canvas overlay drew anything at all.
+ *
+ * The `role="status"` line (`.viewer-measure-status`) holds a short
+ * transient MESSAGE only ("Distance measured.", "Measurements
+ * cleared.") — never the measurement payload itself. `role="status"`
+ * carries an implicit `aria-atomic="true"`, so a growing list placed
+ * INSIDE such a region gets re-read from the top on every single
+ * change — announcing all N previous measurements again each time a
+ * reader adds one more. Keeping the list in ordinary DOM outside the
+ * live region avoids that: assistive tech is told once, briefly, that
+ * something changed, and can then read the (unabridged, always current)
+ * list on its own terms rather than having growing walls of text pushed
+ * at it.
  */
 
 type ViewerStatus = "loading" | "ready" | "unavailable"
@@ -321,6 +469,82 @@ type Viewer3DHandle = {
     setStyle?: (sel: Record<string, unknown>, style: Record<string, unknown>) => unknown
     addLabel?: (text: string, options: Record<string, unknown>) => unknown
     removeAllLabels?: () => unknown
+    removeLabel?: (label: unknown) => unknown
+    setClickable?: (sel: Record<string, unknown>, clickable: boolean, callback: (atom: PickedAtom) => void) => unknown
+    addSphere?: (spec: Record<string, unknown>) => unknown
+    addCylinder?: (spec: Record<string, unknown>) => unknown
+    removeShape?: (shape: unknown) => unknown
+}
+
+/** The only field this component reads off 3Dmol's own atom-click payload
+ * — see the module docstring's "Atom-picking measurements" section for why
+ * `serial` (not any richer identity) is the one thing trusted from it. */
+type PickedAtom = { serial?: number }
+
+// --- Atom-picking measurements ---------------------------------------------
+// See the module docstring's "Atom-picking measurements" section.
+
+type MeasurementKind = "distance" | "angle" | "dihedral"
+
+type Measurement = {
+    id: string
+    kind: MeasurementKind
+    /** 2 (distance), 3 (angle, vertex = atoms[1]), or 4 (dihedral) atoms, in click order. */
+    atoms: GeometryAtom[]
+}
+
+function measurementKindForCount(count: number): MeasurementKind | null {
+    if (count === 2) return "distance"
+    if (count === 3) return "angle"
+    if (count === 4) return "dihedral"
+    return null
+}
+
+const MEASUREMENT_KIND_LABEL: Record<MeasurementKind, string> = {
+    distance: "Distance",
+    angle: "Angle",
+    dihedral: "Dihedral",
+}
+
+/** `C1`, `H2`, ... — the same "element + atom_index" text `labelTextFor(mode="both", …)` uses. */
+function atomTag(atom: GeometryAtom): string {
+    return `${atom.element}${atom.atom_index}`
+}
+
+function measurementDescription(m: Measurement): string {
+    return `${MEASUREMENT_KIND_LABEL[m.kind]} ${m.atoms.map(atomTag).join("–")}`
+}
+
+/** Formats a degree value, guarding the (only reachable via a coincident
+ * deposited atom position, not via this component's own selection model —
+ * see `geometryMeasure.ts`'s degenerate-input docstrings) NaN case with an
+ * honest label rather than a bare "NaN°". */
+function formatDegrees(value: number): string {
+    if (Number.isNaN(value)) return "undefined (coincident atom positions)"
+    return `${value.toFixed(2)}°`
+}
+
+/** Distance value text, following `coordinateUnitMode` — see the module
+ * docstring's "Units" section for why distance (and only distance) does. */
+function formatDistanceValue(angstromValue: number, unitMode: CoordinateUnitMode): string {
+    if (unitMode === "bohr") return `${angstromToBohr(angstromValue).toFixed(6)} bohr`
+    return `${angstromValue.toFixed(4)} Å`
+}
+
+function measurementValueText(m: Measurement, unitMode: CoordinateUnitMode): string {
+    if (m.kind === "distance") {
+        return formatDistanceValue(distanceBetween(m.atoms[0], m.atoms[1]), unitMode)
+    }
+    if (m.kind === "angle") {
+        return formatDegrees(angleBetween(m.atoms[0], m.atoms[1], m.atoms[2]))
+    }
+    return formatDegrees(dihedralOf(m.atoms[0], m.atoms[1], m.atoms[2], m.atoms[3]))
+}
+
+/** Centroid of a measurement's atoms — where its on-canvas value label is placed. */
+function measurementCentroid(atoms: GeometryAtom[]): { x: number; y: number; z: number } {
+    const sum = atoms.reduce((acc, atom) => ({ x: acc.x + atom.x, y: acc.y + atom.y, z: acc.z + atom.z }), { x: 0, y: 0, z: 0 })
+    return { x: sum.x / atoms.length, y: sum.y / atoms.length, z: sum.z / atoms.length }
 }
 
 function hasMeasuredSize(el: HTMLDivElement) {
@@ -331,10 +555,16 @@ export function GeometryViewer({
     atoms,
     formula,
     xyzText,
+    coordinateUnitMode = "angstrom",
 }: {
     atoms: GeometryAtom[]
     formula: string
     xyzText: string | null
+    /** Follows `GeometryDetailPage`'s Å/bohr toggle — see the module
+     * docstring's "Units" section. Defaults to "angstrom" so every
+     * existing caller/test that doesn't pass it keeps behaving exactly
+     * as before this prop existed. */
+    coordinateUnitMode?: CoordinateUnitMode
 }) {
     const containerRef = useRef<HTMLDivElement | null>(null)
     const viewerRef = useRef<Viewer3DHandle | null>(null)
@@ -343,9 +573,37 @@ export function GeometryViewer({
     // drawn so its ready-transition run (default "none", nothing to
     // clear) can skip a redundant render() call.
     const labelsPresentRef = useRef(false)
+    // Mirrors the `atoms` prop for the atom-click callback registered
+    // below (see the module docstring's "Atom-picking measurements"
+    // section) — that callback is captured once, at the ready
+    // transition, and must still read the CURRENT `atoms` on every click
+    // rather than whatever `atoms` was at registration time.
+    const atomsRef = useRef(atoms)
+    useEffect(() => {
+        atomsRef.current = atoms
+    }, [atoms])
+    // Tracks whether the measurement shapes/labels effect below currently
+    // has anything drawn, the same way `labelsPresentRef` does for atom
+    // labels — lets that effect skip its `render()` call entirely on the
+    // (default, common) case where nothing has ever been picked.
+    const measureDrawnRef = useRef(false)
+    const measureShapeHandlesRef = useRef<unknown[]>([])
+    const measureLabelHandlesRef = useRef<unknown[]>([])
+    // Which persisted `measurements` entry (if any) is still "live" — the
+    // one the current in-progress `measureSelection` maps to, updated in
+    // place as it grows/shrinks rather than duplicated. Cleared (set to
+    // null) once a 5th atom starts a new selection, at which point the
+    // previous entry is left in `measurements` untouched.
+    const activeMeasurementIdRef = useRef<string | null>(null)
+    const measurementSeqRef = useRef(0)
     const [status, setStatus] = useState<ViewerStatus>("loading")
     const [style, setStyleMode] = useState<StyleMode>("ballstick")
     const [labelMode, setLabelMode] = useState<LabelMode>("none")
+    const [measureSelection, setMeasureSelection] = useState<GeometryAtom[]>([])
+    const [measurements, setMeasurements] = useState<Measurement[]>([])
+    // Short status-line MESSAGE only — never the measurement payload. See
+    // the module docstring's "Accessibility" section for why.
+    const [measureAnnouncement, setMeasureAnnouncement] = useState("")
     // 3Dmol unconditionally sets `this._canvas.id = parameters.id`
     // (Renderer.ts's constructor) whether or not an id was passed —
     // leaving it unset stamps the canvas with the literal string
@@ -442,7 +700,21 @@ export function GeometryViewer({
                         // effect's own comment for why this split
                         // doesn't duplicate a render call.
                         created.zoomTo()
-                        viewerRef.current = created
+                        // Cast, not a structural match: 3Dmol's real
+                        // `GLViewer` methods this component doesn't call
+                        // here (`removeLabel`, `setClickable`, …) take its
+                        // own internal classes (`Label`, a raw atom object
+                        // with many more fields than `PickedAtom` names)
+                        // as parameters, which TypeScript's (correct)
+                        // contravariant function-parameter checking would
+                        // otherwise reject assigning to this narrower,
+                        // `unknown`-parameter handle type. This component
+                        // only ever passes back a handle 3Dmol itself
+                        // returned into 3Dmol's own methods (never
+                        // constructs or inspects one), so nothing here
+                        // relies on TypeScript verifying those parameter
+                        // types — the cast gives up no real safety.
+                        viewerRef.current = created as unknown as Viewer3DHandle
                         initialViewRef.current = created.getView?.() ?? null
                         setStatus("ready")
                     } catch {
@@ -488,6 +760,87 @@ export function GeometryViewer({
             teardownViewer()
         }
     }, [xyzForViewer, viewerDomId])
+
+    // Builds/updates the current in-progress measurement in place as the
+    // selection grows/shrinks, and finalises (leaves untouched) whatever
+    // was active when a 5th atom starts a fresh selection instead. See
+    // the module docstring's "Atom-picking measurements" section — this
+    // is the one place that owns the "distance -> angle -> dihedral as
+    // you keep clicking, up to 4, then a 5th starts over" behaviour.
+    // Empty dependency array is correct, not an oversight: everything
+    // this closes over (`setMeasureSelection`, `setMeasurements`,
+    // `setMeasureAnnouncement`, and the two refs) is referentially stable
+    // across renders, so this callback's identity — and therefore its
+    // eligibility as an effect dependency below — never needs to change.
+    const handleAtomPick = useCallback((atom: GeometryAtom) => {
+        function syncActiveMeasurement(nextSelection: GeometryAtom[]) {
+            const kind = measurementKindForCount(nextSelection.length)
+            setMeasurements((prev) => {
+                const activeId = activeMeasurementIdRef.current
+                const withoutActive = activeId ? prev.filter((m) => m.id !== activeId) : prev
+                if (!kind) {
+                    activeMeasurementIdRef.current = null
+                    return withoutActive
+                }
+                const id = activeId ?? `measurement-${++measurementSeqRef.current}`
+                activeMeasurementIdRef.current = id
+                return [...withoutActive, { id, kind, atoms: nextSelection }]
+            })
+            if (kind) setMeasureAnnouncement(`${MEASUREMENT_KIND_LABEL[kind]} measured.`)
+        }
+
+        setMeasureSelection((prevSelection) => {
+            const alreadySelected = prevSelection.some((a) => a.atom_index === atom.atom_index)
+
+            if (alreadySelected) {
+                const nextSelection = prevSelection.filter((a) => a.atom_index !== atom.atom_index)
+                syncActiveMeasurement(nextSelection)
+                return nextSelection
+            }
+
+            if (prevSelection.length >= 4) {
+                // Finalise: the active entry already reflects the full
+                // 4-atom dihedral from the last update, so it needs no
+                // further change — just stop treating it as "active" and
+                // start a fresh one-atom selection.
+                activeMeasurementIdRef.current = null
+                return [atom]
+            }
+
+            const nextSelection = [...prevSelection, atom]
+            syncActiveMeasurement(nextSelection)
+            return nextSelection
+        })
+    }, [])
+
+    function clearMeasurements() {
+        setMeasureSelection([])
+        setMeasurements([])
+        activeMeasurementIdRef.current = null
+        setMeasureAnnouncement("Measurements cleared.")
+    }
+
+    // Registers 3Dmol's own click detection (see the module docstring's
+    // "Atom-picking measurements" section for why this component adds no
+    // mousedown/mouseup handling of its own — 3Dmol's `_handleMouseUp`
+    // already distinguishes a click from a drag before this callback ever
+    // runs). Declared BEFORE the style effect below on purpose: that
+    // effect's own `viewer.render()` call, already happening on this same
+    // ready transition, is what satisfies 3Dmol's "render must be called
+    // for [setClickable] to take effect" contract — adding a second
+    // `render()` call here would double `GeometryViewer.test.tsx`'s
+    // `calls.render` count on load for no visual difference.
+    useEffect(() => {
+        const viewer = viewerRef.current
+        if (!viewer) return
+        viewer.setClickable?.({}, true, (pickedAtom) => {
+            const index = pickedAtom?.serial
+            if (typeof index !== "number") return
+            const atom = atomsRef.current[index]
+            if (!atom) return
+            handleAtomPick(atom)
+        })
+    }, [status, handleAtomPick])
 
     // Applies the selected representation style to the viewer — this is
     // now the ONLY place that ever calls `setStyle`, for both the very
@@ -555,6 +908,88 @@ export function GeometryViewer({
         viewer.render?.()
         labelsPresentRef.current = willHaveLabels
     }, [labelMode, atoms, status])
+
+    // Draws the on-canvas convenience layer for measurements: a highlight
+    // sphere per selected/measured atom, a thin connector cylinder between
+    // consecutive picked atoms in each measurement, and a small value
+    // label near each one. See the module docstring's "Atom-picking
+    // measurements" section for why this depends on `labelMode` (so it
+    // reliably redraws after the atom-numbering effect's global
+    // `removeAllLabels()`, which this effect's own labels would otherwise
+    // silently lose) and why it is declared AFTER that effect (source
+    // order decides which one wins the last write on the same commit).
+    //
+    // Removes only the shapes/labels IT created (tracked in
+    // `measureShapeHandlesRef`/`measureLabelHandlesRef`), via
+    // `removeShape`/`removeLabel` — never `removeAllShapes`/
+    // `removeAllLabels` for labels specifically, since that call is
+    // global and would also remove the OTHER effect's atom-number labels.
+    // `removeAllShapes` would be safe in principle (nothing else in this
+    // component creates a GLShape), but individual `removeShape` is used
+    // for both, for the same reason as the label choice: symmetry, and no
+    // future shape-drawing feature added elsewhere in this file can
+    // silently start colliding with this effect's cleanup.
+    //
+    // No-ops entirely (no `render()` call) when there was nothing drawn
+    // and there is still nothing to draw — `measureDrawnRef` mirrors
+    // `labelsPresentRef`'s role for the label effect above, keeping the
+    // ready-transition's render count unaffected by this feature until a
+    // reader actually clicks an atom.
+    useEffect(() => {
+        const viewer = viewerRef.current
+        if (!viewer) return
+        const hadAny = measureDrawnRef.current
+        const willHaveAny = measureSelection.length > 0 || measurements.length > 0
+        if (!hadAny && !willHaveAny) return
+
+        for (const shape of measureShapeHandlesRef.current) viewer.removeShape?.(shape)
+        measureShapeHandlesRef.current = []
+        for (const label of measureLabelHandlesRef.current) viewer.removeLabel?.(label)
+        measureLabelHandlesRef.current = []
+
+        const highlighted = new Map<number, GeometryAtom>()
+        for (const atom of measureSelection) highlighted.set(atom.atom_index, atom)
+        for (const m of measurements) for (const atom of m.atoms) highlighted.set(atom.atom_index, atom)
+        for (const atom of highlighted.values()) {
+            const sphere = viewer.addSphere?.({
+                center: { x: atom.x, y: atom.y, z: atom.z },
+                radius: 0.32,
+                color: "#ffcc00",
+                opacity: 0.55,
+            })
+            if (sphere !== undefined) measureShapeHandlesRef.current.push(sphere)
+        }
+
+        for (const m of measurements) {
+            for (let i = 0; i + 1 < m.atoms.length; i++) {
+                const from = m.atoms[i]
+                const to = m.atoms[i + 1]
+                const cylinder = viewer.addCylinder?.({
+                    start: { x: from.x, y: from.y, z: from.z },
+                    end: { x: to.x, y: to.y, z: to.z },
+                    radius: 0.045,
+                    color: "#ff5a1f",
+                    fromCap: 2,
+                    toCap: 2,
+                })
+                if (cylinder !== undefined) measureShapeHandlesRef.current.push(cylinder)
+            }
+            const label = viewer.addLabel?.(measurementValueText(m, coordinateUnitMode), {
+                position: measurementCentroid(m.atoms),
+                fontSize: 11,
+                fontColor: "#173f6e",
+                backgroundColor: "white",
+                backgroundOpacity: 0.85,
+                inFront: true,
+                alignment: "center",
+                showBackground: true,
+            })
+            if (label !== undefined) measureLabelHandlesRef.current.push(label)
+        }
+
+        viewer.render?.()
+        measureDrawnRef.current = willHaveAny
+    }, [measurements, measureSelection, status, labelMode, coordinateUnitMode])
 
     function rotateBy(angle: number, axis: "x" | "y") {
         const viewer = viewerRef.current
@@ -660,6 +1095,83 @@ export function GeometryViewer({
                     </p>
                 )}
             </div>
+            {status === "ready" && (
+                <MeasurementsPanel
+                    formula={formula}
+                    measureSelection={measureSelection}
+                    measurements={measurements}
+                    coordinateUnitMode={coordinateUnitMode}
+                    announcement={measureAnnouncement}
+                    onClear={clearMeasurements}
+                />
+            )}
         </div>
+    )
+}
+
+/**
+ * The DOM delivery mechanism for measurements — see the module
+ * docstring's "Accessibility" section. Split out as its own component
+ * (rather than inlined in `GeometryViewer`'s return) purely for
+ * readability: it is pure presentation over props `GeometryViewer`
+ * already computed, with no state or effects of its own.
+ */
+function MeasurementsPanel({ formula, measureSelection, measurements, coordinateUnitMode, announcement, onClear }: {
+    formula: string
+    measureSelection: GeometryAtom[]
+    measurements: Measurement[]
+    coordinateUnitMode: CoordinateUnitMode
+    announcement: string
+    onClear: () => void
+}) {
+    const headingId = useId()
+    return (
+        <section className="viewer-measurements" aria-labelledby={headingId}>
+            <div className="viewer-measurements-header">
+                <h3 id={headingId}>Measurements</h3>
+                <button
+                    type="button"
+                    className="measure-clear-button"
+                    onClick={onClear}
+                    disabled={measurements.length === 0 && measureSelection.length === 0}
+                >
+                    Clear measurements
+                </button>
+            </div>
+            {/* Message only, never the list itself — see the module
+                docstring's "Accessibility" section for why a growing list
+                inside a role="status" region is the wrong shape. */}
+            <p className="viewer-measure-status" role="status">{announcement}</p>
+            {measureSelection.length === 1 && (
+                <p className="viewer-measure-hint">
+                    1 atom selected ({atomTag(measureSelection[0])}) — pick 1 more for a distance, 2 more for an
+                    angle, or 3 more for a dihedral.
+                </p>
+            )}
+            {measurements.length === 0 ? (
+                <p className="viewer-measure-hint">
+                    Click atoms in the 3D view of {formula || "this geometry"} above to measure: 2 atoms for a
+                    distance, 3 for an angle, 4 for a dihedral. Measurements stay listed here until you clear them.
+                </p>
+            ) : (
+                <ol className="measurement-list">
+                    {measurements.map((m) => (
+                        <li key={m.id}>
+                            {/* ": " is not decorative — with no separator
+                                the raw text of two adjacent spans (e.g. an
+                                atom tag ending "H4" immediately followed
+                                by a value starting "0.00°") reads back as
+                                the ambiguous "H40.00°" once CSS layout
+                                (which visually separates the two spans) is
+                                no longer in the picture: copy-pasted text,
+                                and some screen readers, have no such
+                                layout to lean on. */}
+                            <span className="measurement-kind">{measurementDescription(m)}:</span>
+                            <span className="measurement-value">{measurementValueText(m, coordinateUnitMode)}</span>
+                        </li>
+                    ))}
+                </ol>
+            )}
+        </section>
     )
 }
