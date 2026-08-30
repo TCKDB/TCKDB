@@ -1,11 +1,45 @@
+import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../geometry-detail.css"
 import { GeometryViewer } from "../components/GeometryViewer"
 import { RecordStatus } from "../components/RecordStatus"
 import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
+import { CopyButton } from "../components/RefsDisclosure"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
 import { useGeometry } from "../hooks/useGeometry"
+import { ANGSTROM_TO_BOHR, angstromToBohr, atomicNumberForSymbol } from "../domain/geometryXyz"
+
+type CoordinateUnitMode = "angstrom" | "bohr"
+type ElementDisplayMode = "symbol" | "number"
+
+function formatCoordinate(valueAngstrom: number, unit: CoordinateUnitMode): string {
+    // Angstrom keeps this page's own pre-existing numeric rendering
+    // (`String(valueAngstrom)`, unchanged from before this toggle
+    // existed) of the parsed `atoms[].x/y/z` JSON numbers — bohr is the
+    // one display-only conversion, rounded to 6dp for a stable column
+    // width rather than trailing whatever float noise
+    // `* ANGSTROM_TO_BOHR` happens to produce (the coordinate-toggle-note
+    // below the table says so).
+    //
+    // NOT claimed as fidelity to the archive's raw text: `String(-0)` is
+    // `"0"` in JS, but the Raw XYZ block renders the archive's own
+    // `xyz_text` string verbatim, which for the same atom can read
+    // `-0.000000000000` (however the server formatted it). So this
+    // ångström column and the Raw XYZ block below can print the same
+    // atom's coordinate two different ways on the same page. That is
+    // pre-existing (this toggle did not introduce it, and did not fix
+    // it) — noted here so this comment does not overclaim a round-trip
+    // guarantee the code does not have.
+    if (unit === "angstrom") return String(valueAngstrom)
+    return angstromToBohr(valueAngstrom).toFixed(6)
+}
+
+function elementDisplayValue(symbol: string, mode: ElementDisplayMode): string {
+    if (mode === "symbol") return symbol
+    const atomicNumber = atomicNumberForSymbol(symbol)
+    return atomicNumber === null ? `unknown (${symbol})` : String(atomicNumber)
+}
 
 // ---------------------------------------------------------------------------
 // This page has no on-demand ("behind a disclosure") sections — see the
@@ -122,51 +156,67 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 </dl>
             </header>
 
-            <section className="ledger-summary" aria-label="Geometry provenance summary">
+            <section className="ledger-summary geometry-summary" aria-label="Geometry provenance summary">
                 <Metric label="Producing calculations" value={producedBy.length} />
                 <Metric label="Consuming calculations" value={usedAsInputBy.length} />
-                <div className="coverage-card">
+                <div className="coverage-card validation-card">
                     <span>Validation</span>
                     <strong>Not recorded on this endpoint</strong>
                     <p>
                         This geometry record carries no validation field of its own. A geometry-vs-formula check,
                         where one was recorded, lives on the calculation that produced or consumed it, not here.
-                        {/* No `#section-geometry-validation` fragment: this app has no fragment-scroll
-                            handling (no ScrollRestoration, no hash effect) and a react-router `<Link>`
-                            does a pushState navigation the browser does not scroll for anyway — and the
-                            id sits inside a closed `<details>` whose content never loads until opened.
-                            A fragment that silently does nothing is worse than a plain link to the right
-                            page, so this links to the calculation only. Both producers AND consumers can
-                            carry the validation row (it references either `input_geometry_ref` or
-                            `output_geometry_ref`), so both lists are offered here, each labelled by its
-                            own relationship — never merged into one undifferentiated list. */}
-                        {producedBy.length > 0 && (
-                            <span data-testid="validation-producer-pointer">
-                                {" "}See "Geometry validation" on the producing calculation
-                                {producedBy.length > 1 ? "s" : ""}:{" "}
-                                {producedBy.map((link, index) => (
-                                    <span key={`validation-produced-${link.calculation_ref}`}>
-                                        {index > 0 && ", "}
-                                        <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
-                                    </span>
-                                ))}
-                                .
-                            </span>
-                        )}
-                        {usedAsInputBy.length > 0 && (
-                            <span data-testid="validation-consumer-pointer">
-                                {" "}See "Geometry validation" on the consuming calculation
-                                {usedAsInputBy.length > 1 ? "s" : ""}:{" "}
-                                {usedAsInputBy.map((link, index) => (
-                                    <span key={`validation-consumed-${link.calculation_ref}`}>
-                                        {index > 0 && ", "}
-                                        <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
-                                    </span>
-                                ))}
-                                .
-                            </span>
-                        )}
                     </p>
+                    {/* No `#section-geometry-validation` fragment: this app has no fragment-scroll
+                        handling (no ScrollRestoration, no hash effect) and a react-router `<Link>`
+                        does a pushState navigation the browser does not scroll for anyway — and the
+                        id sits inside a closed `<details>` whose content never loads until opened.
+                        A fragment that silently does nothing is worse than a plain link to the right
+                        page, so this links to the calculation only. Both producers AND consumers can
+                        carry the validation row (it references either `input_geometry_ref` or
+                        `output_geometry_ref`), so both lists are offered here, each labelled by its
+                        own relationship — never merged into one undifferentiated list.
+
+                        Shaped as a definition list of named pointers (one row per relationship),
+                        not one run-on sentence with links stitched into its prose — a geometry with
+                        several producers/consumers (the live CH3 record this page was measured
+                        against carries 4 producers and 10 consumers) turned that sentence into an
+                        unreadable wrapped blob inside this card's narrow column. */}
+                    {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
+                        <dl className="validation-pointers">
+                            {producedBy.length > 0 && (
+                                <div className="validation-pointer" data-testid="validation-producer-pointer">
+                                    <dt>
+                                        See "Geometry validation" on the producing calculation
+                                        {producedBy.length > 1 ? "s" : ""}
+                                    </dt>
+                                    <dd>
+                                        {producedBy.map((link, index) => (
+                                            <span key={`validation-produced-${link.calculation_ref}`}>
+                                                {index > 0 && ", "}
+                                                <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
+                                            </span>
+                                        ))}
+                                    </dd>
+                                </div>
+                            )}
+                            {usedAsInputBy.length > 0 && (
+                                <div className="validation-pointer" data-testid="validation-consumer-pointer">
+                                    <dt>
+                                        See "Geometry validation" on the consuming calculation
+                                        {usedAsInputBy.length > 1 ? "s" : ""}
+                                    </dt>
+                                    <dd>
+                                        {usedAsInputBy.map((link, index) => (
+                                            <span key={`validation-consumed-${link.calculation_ref}`}>
+                                                {index > 0 && ", "}
+                                                <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
+                                            </span>
+                                        ))}
+                                    </dd>
+                                </div>
+                            )}
+                        </dl>
+                    )}
                 </div>
             </section>
 
@@ -272,6 +322,9 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
     // never reconciled by this page's rendering. A mismatch is a real
     // archive-side inconsistency worth surfacing, not a client bug to hide.
     const countMismatch = atomsAvailability === "populated" && natoms !== atoms.length
+    const [unit, setUnit] = useState<CoordinateUnitMode>("angstrom")
+    const [elementDisplay, setElementDisplay] = useState<ElementDisplayMode>("symbol")
+    const unitLabel = unit === "angstrom" ? "Å" : "bohr"
     return (
         <section className="ledger-section" aria-labelledby="coordinates-heading">
             <div className="ledger-heading">
@@ -289,26 +342,76 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                     ({atoms.length}). Showing the rows the archive actually returned.
                 </p>
             )}
+            {atomsAvailability === "populated" && (
+                <div className="coordinate-controls">
+                    <fieldset className="coordinate-toggle">
+                        <legend>Units</legend>
+                        <button type="button" aria-pressed={unit === "angstrom"} onClick={() => setUnit("angstrom")}>Å</button>
+                        <button type="button" aria-pressed={unit === "bohr"} onClick={() => setUnit("bohr")}>bohr</button>
+                    </fieldset>
+                    <fieldset className="coordinate-toggle">
+                        <legend>Elements</legend>
+                        <button type="button" aria-pressed={elementDisplay === "symbol"} onClick={() => setElementDisplay("symbol")}>Symbol</button>
+                        <button type="button" aria-pressed={elementDisplay === "number"} onClick={() => setElementDisplay("number")}>Number</button>
+                    </fieldset>
+                    {/* Owner's own words: "plain toggle but starts with angstrom
+                        cause that's how it's stored" — no "converted" badge next
+                        to a value, and this note names the wire truth (angstrom
+                        is what `coordinate_units` says and what the archive
+                        holds) rather than let the bohr column imply otherwise.
+                        Also names the rounding: bohr values are computed then
+                        `.toFixed(6)`'d for a stable column width (see
+                        `formatCoordinate`), so a reader comparing this column
+                        against their own conversion is not surprised by a
+                        7th-digit difference this note never mentioned. */}
+                    <p className="coordinate-toggle-note">
+                        Always stored in ångström (<code>coordinate_units</code> on the wire);
+                        bohr here is a display conversion only, rounded to 6 decimal places, at
+                        1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr (CODATA 2018 Bohr radius).
+                    </p>
+                </div>
+            )}
             {atomsAvailability === "populated" ? (
                 <div className="table-scroll">
-                    <table className="stage-table" aria-label={`Coordinates for ${geometryRef}`}>
+                    <table className="stage-table coordinate-table" aria-label={`Coordinates for ${geometryRef}`}>
                         <thead>
                             <tr>
                                 <th scope="col">Atom</th>
                                 <th scope="col">Element</th>
-                                <th scope="col">x</th>
-                                <th scope="col">y</th>
-                                <th scope="col">z</th>
+                                {/* `data-column` is the CSS/test hook for "this is
+                                    the x/y/z column" — stable across unit toggles,
+                                    unlike the visible header text below it (which
+                                    intentionally changes to name the active unit;
+                                    see geometry-detail.css's numeric-alignment rule
+                                    for why the two must not be the same attribute). */}
+                                <th scope="col" data-column="x">{`x (${unitLabel})`}</th>
+                                <th scope="col" data-column="y">{`y (${unitLabel})`}</th>
+                                <th scope="col" data-column="z">{`z (${unitLabel})`}</th>
                             </tr>
                         </thead>
                         <tbody>
                             {atoms.map((atom) => (
                                 <tr key={atom.atom_index}>
                                     <td data-label="Atom">{atom.atom_index}</td>
-                                    <td data-label="Element">{atom.element}</td>
-                                    <td data-label="x">{atom.x}</td>
-                                    <td data-label="y">{atom.y}</td>
-                                    <td data-label="z">{atom.z}</td>
+                                    <td data-label="Element">{elementDisplayValue(atom.element, elementDisplay)}</td>
+                                    {/* `data-label` here carries the ACTIVE UNIT
+                                        (`x (Å)` / `x (bohr)`), not a bare axis
+                                        letter — this is what the mobile stacked
+                                        view's `td::before { content:
+                                        attr(data-label) }` (conformer-group.css)
+                                        actually shows a reader below the 680px
+                                        breakpoint. Without the unit in this
+                                        string, a phone reader in bohr mode saw
+                                        "X / 2.038933" with no unit anywhere on
+                                        the value — a wrong-unit-reading hazard.
+                                        `data-column` (unit-independent) is the
+                                        separate hook the desktop alignment CSS
+                                        keys on instead, so that rule does not
+                                        silently stop matching the moment this
+                                        label's text changes. */}
+                                    <td data-column="x" data-label={`x (${unitLabel})`}>{formatCoordinate(atom.x, unit)}</td>
+                                    <td data-column="y" data-label={`y (${unitLabel})`}>{formatCoordinate(atom.y, unit)}</td>
+                                    <td data-column="z" data-label={`z (${unitLabel})`}>{formatCoordinate(atom.z, unit)}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -333,7 +436,12 @@ function RawXyzSection({ xyzText }: { xyzText: string | null }) {
                 <p>The archive's own XYZ-format text block for this geometry, selectable as deposited.</p>
             </div>
             {xyzText ? (
-                <pre className="xyz-block"><code>{xyzText}</code></pre>
+                <>
+                    <div className="xyz-actions">
+                        <CopyButton value={xyzText} label="raw XYZ" srLabel="text" />
+                    </div>
+                    <pre className="xyz-block"><code>{xyzText}</code></pre>
+                </>
             ) : (
                 <p className="empty-projection">No raw XYZ text is recorded for this geometry.</p>
             )}
