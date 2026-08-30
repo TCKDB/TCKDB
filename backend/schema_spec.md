@@ -801,49 +801,48 @@ Ownership of geometric coordinate metadata across calculation tables:
 - `calc_scan_point` plus `calc_scan_point_coordinate_value` are the canonical store for **scan output**: per-point energy/geometry and the observed coordinate values along the scanned grid. They are write-once results, not input metadata.
 - `statmech_torsion` (with `statmech_torsion_definition`) is the canonical store for **thermochemical rotor interpretation** — the fitted treatment kind (hindered, free, rigid top), symmetry number, and dimension. It may reference its source scan via `source_scan_calculation_id` but does not replace scan-grid storage or constraint storage; it is a downstream interpretation, not a copy.
 
-**What a scan point's `coordinate_value` is measured against.** The column
-records the coordinate *as the producer parameterised its scan*, which is not
-necessarily the absolute internal coordinate. Every dihedral scan deposited to
-date — 46 series, all produced by Gaussian via ARC, measured against the hosted
-instance on 2026-08-30 — stores a **relative** sweep: `0, 8, 16 … 360` degrees
-of displacement from the starting geometry, with the absolute dihedral of that
-starting geometry carried separately in `calc_scan_coordinate.start_value` (and
-`end_value = start_value + 360`). For that corpus:
+**What `coordinate_value` holds.** It is the value of the internal coordinate
+at that sampled point, in that coordinate's own unit — degrees for `angle`,
+`dihedral` and `improper`, Ångström for `bond`. It is not a displacement, not an
+offset, and not relative to anything. `start_value` and `end_value` are the
+requested extent of the scan grid, input metadata beside `step_count` and
+`step_size`; neither is an anchor.
 
-```
-absolute, unwrapped = start_value + coordinate_value
-absolute dihedral   = (start_value + coordinate_value) mod 360
-```
+A periodic coordinate may continue past 360° where that keeps a sweep monotone,
+and a reader takes `mod 360` for the physical angle. 419.867° and 59.867° are
+the same value of the same coordinate; storing the continuation preserves which
+turn of a path-dependent relaxed scan a point belongs to, and makes visible that
+the first and last points of a full sweep are one geometry deposited twice.
 
-This was verified against stored geometry rather than inferred from the column
-names: for `calc_l43amz3thaubb5xoonwtgjmqlm` (dihedral 7-8-9-25,
-`start_value = 59.867`) the dihedral computed from each point's `geometry_id`
-reproduces `(start_value + coordinate_value) mod 360` to three decimals.
+A producer whose program prints a relative sweep converts before depositing. It
+necessarily holds the anchor, having computed the sweep from it. TCKDB does not
+adopt a producer's internal representation; see
+`docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md` for why the
+relative form does not generalise (a bond angle reflects at 180° rather than
+wrapping, a bond length has no branch cut, and an improper dihedral has no
+convention shared across codes).
 
-Nothing enforces it. There is no range constraint on `coordinate_value`, no
-check tying it to `start_value`, and no field declaring which axis a producer
-used, so an absolute-axis deposit would be accepted and would be
-indistinguishable from a relative one. A reader that needs a real internal
-coordinate — comparing two scans of the same torsion, plotting against a
-geometry, locating a minimum in dihedral space — must anchor with `start_value`
-first. A reader that needs only the shape of the potential (a Fourier rotor
-fit, a barrier height) is unaffected, because those are invariant to the
-offset; `backend/scripts/validation/arkane_statmech_roundtrip.py` is one such
-consumer, which is why the corpus has been usable without the convention ever
-being written down.
+**Conformance is checked, not assumed.** A stored value is compared against the
+coordinate recomputed from the sampled point's own geometry. The check needs no
+anchor and no producer-specific knowledge. It **warns** rather than blocking: a
+mis-stated axis and a mis-attached geometry present identically, so a
+disagreement says something is wrong without saying which. Its tolerance is
+derived from deposit precision (six decimal places on the current corpus, a
+floor of ~3.6e-5° on any recomputed dihedral) and the `1/(r sin θ)` conditioning
+of the quartet, never fixed by hand; where a quartet is near-collinear the
+dihedral is not a usable coordinate and the check reports **not checkable**,
+which is neither a pass nor a failure.
 
-Two cautions when converting. Prefer the **unwrapped** form: `mod 360` crosses
-the branch cut mid-sweep and destroys the monotonicity that makes the points a
-path, which is why `end_value` is already written unwrapped. And `start_value`
-is nullable, so an unanchored scan is expressible; where it is null the
-absolute axis is not recoverable from the scan tables alone, though a per-point
-`geometry_id` — present on every point of every series deposited to date —
-still permits measuring it. Note also that `start + coordinate_value` assumes
-the sweep runs in the positive direction, which no stored field asserts.
-
-The reasoning behind recording the producer's axis rather than normalising it
-at ingest is
-`docs/adr/0019-a-scan-point-records-the-producers-axis.md`.
+**Legacy.** The 46 dihedral scan series deposited before 2026-08-31 were stored
+on a relative axis, with the absolute dihedral of the starting geometry held in
+`start_value`. They are corrected in place — exactly and invertibly, since
+`start_value` is retained — by a migration that recomputes each point's dihedral
+from its own geometry and converts a row only where that recomputation confirms
+the result. Rows it cannot confirm are left as deposited and reported. That
+rewrite of append-only result rows is a narrow, one-time exception, taken
+because scan calculations carry no stored artifact (`opt` 232, `freq` 165, `sp`
+164, `scan` 0, measured 2026-08-31) and so cannot be re-derived. A future
+non-conforming deposit is corrected by re-depositing, not by migrating.
 
 ### 7.4 Direct Calculation Result Tables
 
@@ -1044,10 +1043,10 @@ not stability evidence.
 - `coordinate_value`
 - `value_unit`
 
-`coordinate_value` is recorded on the producer's axis and is not necessarily an
-absolute internal coordinate; `calc_scan_coordinate.start_value` is what anchors
-it. See "Ownership of geometric coordinate metadata across calculation tables"
-in §7.3 for the convention, the measured evidence, and the conversion.
+`coordinate_value` is the internal coordinate itself, in that coordinate's own
+unit — not a displacement and not relative to `start_value`. See "Ownership of
+geometric coordinate metadata across calculation tables" in §7.3 for the
+declared contract, how conformance is checked, and the legacy correction.
 
 ### Path-search calculations (NEB / GSM / string methods)
 
