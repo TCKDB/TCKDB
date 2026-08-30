@@ -8,9 +8,13 @@ import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import { CopyButton } from "../components/RefsDisclosure"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
 import { useGeometry } from "../hooks/useGeometry"
-import { ANGSTROM_TO_BOHR, angstromToBohr, atomicNumberForSymbol } from "../domain/geometryXyz"
+import {
+    ANGSTROM_TO_BOHR,
+    angstromToBohr,
+    atomicNumberForSymbol,
+    type CoordinateUnitMode,
+} from "../domain/geometryXyz"
 
-type CoordinateUnitMode = "angstrom" | "bohr"
 type ElementDisplayMode = "symbol" | "number"
 
 function formatCoordinate(valueAngstrom: number, unit: CoordinateUnitMode): string {
@@ -123,6 +127,15 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     // the richer `atoms` shape throughout rather than duplicating both.
     const formula = hillFormula(atoms.map((atom) => atom.element))
 
+    // Lifted out of `CoordinateTableSection` (where it lived alone until
+    // now) so `GeometryViewer`'s atom-picking measurements can follow the
+    // same Å/bohr toggle as the coordinate table beside it — see
+    // `GeometryViewer.tsx`'s module docstring for the units decision this
+    // serves. One piece of state, two controlled consumers below, rather
+    // than two independent toggles that could disagree about which unit
+    // is "current" for the same page.
+    const [coordinateUnit, setCoordinateUnit] = useState<CoordinateUnitMode>("angstrom")
+
     const producedByAvailability = sectionAvailability(geometry.provenance?.produced_by)
     const usedAsInputByAvailability = sectionAvailability(geometry.provenance?.used_as_input_by)
     const producedBy = geometry.provenance?.produced_by ?? []
@@ -225,6 +238,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 atomsAvailability={atomsAvailability}
                 formula={formula}
                 xyzText={geometry.xyz_text ?? null}
+                coordinateUnit={coordinateUnit}
             />
 
             <CoordinateTableSection
@@ -232,6 +246,8 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 atomsAvailability={atomsAvailability}
                 geometryRef={geometry.geometry_ref}
                 natoms={geometry.natoms}
+                unit={coordinateUnit}
+                onUnitChange={setCoordinateUnit}
             />
 
             <RawXyzSection xyzText={geometry.xyz_text ?? null} />
@@ -276,11 +292,12 @@ function SectionEmptyMessage({ availability, emptyText }: { availability: Sectio
     return <p className="empty-projection">{emptyText}</p>
 }
 
-function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
+function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateUnit }: {
     atoms: GeometryRecord["atoms"]
     atomsAvailability: SectionAvailability
     formula: string
     xyzText: string | null
+    coordinateUnit: CoordinateUnitMode
 }) {
     const rows = atoms ?? []
     return (
@@ -298,7 +315,7 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
                         </p>
                     )}
                 >
-                    <GeometryViewer atoms={rows} formula={formula} xyzText={xyzText} />
+                    <GeometryViewer atoms={rows} formula={formula} xyzText={xyzText} coordinateUnitMode={coordinateUnit} />
                 </SectionErrorBoundary>
             ) : (
                 <SectionEmptyMessage
@@ -310,11 +327,13 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText }: {
     )
 }
 
-function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms }: {
+function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms, unit, onUnitChange }: {
     atoms: NonNullable<GeometryRecord["atoms"]>
     atomsAvailability: SectionAvailability
     geometryRef: string
     natoms: number
+    unit: CoordinateUnitMode
+    onUnitChange: (unit: CoordinateUnitMode) => void
 }) {
     // `natoms` and `atoms.length` are two separately-sourced numbers on the
     // wire (see `app/services/scientific_read/geometry.py` — one is a
@@ -322,7 +341,9 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
     // never reconciled by this page's rendering. A mismatch is a real
     // archive-side inconsistency worth surfacing, not a client bug to hide.
     const countMismatch = atomsAvailability === "populated" && natoms !== atoms.length
-    const [unit, setUnit] = useState<CoordinateUnitMode>("angstrom")
+    // `unit` is now controlled by `GeometryDetail` (see its own comment) so
+    // `GeometryViewer`'s measurements can share it — this section no longer
+    // owns the state, only the two buttons that change it.
     const [elementDisplay, setElementDisplay] = useState<ElementDisplayMode>("symbol")
     const unitLabel = unit === "angstrom" ? "Å" : "bohr"
     return (
@@ -346,8 +367,8 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms 
                 <div className="coordinate-controls">
                     <fieldset className="coordinate-toggle">
                         <legend>Units</legend>
-                        <button type="button" aria-pressed={unit === "angstrom"} onClick={() => setUnit("angstrom")}>Å</button>
-                        <button type="button" aria-pressed={unit === "bohr"} onClick={() => setUnit("bohr")}>bohr</button>
+                        <button type="button" aria-pressed={unit === "angstrom"} onClick={() => onUnitChange("angstrom")}>Å</button>
+                        <button type="button" aria-pressed={unit === "bohr"} onClick={() => onUnitChange("bohr")}>bohr</button>
                     </fieldset>
                     <fieldset className="coordinate-toggle">
                         <legend>Elements</legend>

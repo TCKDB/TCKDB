@@ -1,6 +1,17 @@
 import type { GeometryAtom } from "../api/geometryApi"
 
 /**
+ * The two coordinate-display units this app offers on a geometry page —
+ * shared between `GeometryDetailPage` (the Å/bohr toggle on the
+ * coordinate table) and `GeometryViewer` (measured distances follow the
+ * same toggle; see that component's module docstring for why). Exported
+ * from here, not declared locally in either consumer, so there is exactly
+ * one name for "which unit a reader is currently looking at" rather than
+ * two structurally-identical types that happen to agree.
+ */
+export type CoordinateUnitMode = "angstrom" | "bohr"
+
+/**
  * Builds a minimal XYZ-format block from a geometry's own `atoms` rows —
  * the same rows the coordinate table renders — for the (expected-rare)
  * case where the archive did not return a ready-made `xyz_text`.

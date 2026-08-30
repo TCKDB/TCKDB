@@ -31,6 +31,7 @@ type FakeViewerCalls = {
     createViewer: unknown[][]
     addModel: unknown[][]
     setStyle: unknown[][]
+    setBackgroundColor: unknown[][]
     zoomTo: unknown[][]
     zoom: unknown[][]
     spin: unknown[][]
@@ -48,6 +49,7 @@ const calls: FakeViewerCalls = {
     createViewer: [],
     addModel: [],
     setStyle: [],
+    setBackgroundColor: [],
     zoomTo: [],
     zoom: [],
     spin: [],
@@ -91,6 +93,7 @@ vi.mock("3dmol", () => ({
         return {
             addModel: (...a: unknown[]) => { calls.addModel.push(a) },
             setStyle: (...a: unknown[]) => { calls.setStyle.push(a) },
+            setBackgroundColor: (...a: unknown[]) => { calls.setBackgroundColor.push(a) },
             zoomTo: (...a: unknown[]) => { calls.zoomTo.push(a) },
             zoom: (...a: unknown[]) => { calls.zoom.push(a) },
             spin: (...a: unknown[]) => { calls.spin.push(a) },
@@ -639,5 +642,115 @@ describe("GeometryViewer", () => {
             expect(container.querySelector('[data-testid="fake-3dmol-canvas"]')).toBeNull()
             expect(container.children).toHaveLength(0)
         })
+    })
+})
+
+/**
+ * Theme-aware 3D canvas background. This is 3Dmol's own JS-level
+ * `backgroundColor` (`createViewer` config, and later `setBackgroundColor()`
+ * on the live viewer) — not a CSS property, so a `.css`-file-only fix
+ * (owned by the parallel `frontend/theme-tokens` PR, #296) cannot reach it.
+ * This component reads the SAME `data-theme`/`prefers-color-scheme`
+ * convention #296 established for CSS, directly in TypeScript, without
+ * editing any file #296 owns.
+ */
+describe("GeometryViewer — theme-aware 3D canvas background", () => {
+    let originalMatchMedia: typeof window.matchMedia | undefined
+
+    /** A minimal, controllable `matchMedia` fake: reports `matches` and
+     * lets a test fire a `change` event to simulate the OS theme flipping
+     * while the page is open (the "unstamped default" case). */
+    function installFakeMatchMedia(matches: boolean) {
+        const listeners: Array<(e: { matches: boolean }) => void> = []
+        const mql = {
+            matches,
+            media: "(prefers-color-scheme: dark)",
+            addEventListener: (_event: string, cb: (e: { matches: boolean }) => void) => {
+                listeners.push(cb)
+            },
+            removeEventListener: (_event: string, cb: (e: { matches: boolean }) => void) => {
+                const i = listeners.indexOf(cb)
+                if (i >= 0) listeners.splice(i, 1)
+            },
+        }
+        ;(window as { matchMedia?: unknown }).matchMedia = vi.fn().mockReturnValue(mql)
+        return {
+            fire(next: boolean) {
+                mql.matches = next
+                for (const cb of [...listeners]) cb({ matches: next })
+            },
+        }
+    }
+
+    beforeEach(() => {
+        originalMatchMedia = window.matchMedia
+        document.documentElement.removeAttribute("data-theme")
+    })
+
+    afterEach(() => {
+        if (originalMatchMedia) window.matchMedia = originalMatchMedia
+        else delete (window as { matchMedia?: unknown }).matchMedia
+        document.documentElement.removeAttribute("data-theme")
+    })
+
+    it("defaults to white when no data-theme is stamped and prefers-color-scheme is light", async () => {
+        installFakeMatchMedia(false)
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.createViewer).toHaveLength(1))
+        const config = calls.createViewer[0][1] as Record<string, unknown>
+        expect(config.backgroundColor).toBe("white")
+    })
+
+    it("uses a dark, non-white background when no data-theme is stamped and prefers-color-scheme is dark", async () => {
+        installFakeMatchMedia(true)
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.createViewer).toHaveLength(1))
+        const config = calls.createViewer[0][1] as Record<string, unknown>
+        expect(config.backgroundColor).not.toBe("white")
+        expect(typeof config.backgroundColor).toBe("string")
+    })
+
+    it('an explicit data-theme="dark" wins over prefers-color-scheme: light', async () => {
+        installFakeMatchMedia(false)
+        document.documentElement.setAttribute("data-theme", "dark")
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.createViewer).toHaveLength(1))
+        const config = calls.createViewer[0][1] as Record<string, unknown>
+        expect(config.backgroundColor).not.toBe("white")
+    })
+
+    it('an explicit data-theme="light" wins over prefers-color-scheme: dark', async () => {
+        installFakeMatchMedia(true)
+        document.documentElement.setAttribute("data-theme", "light")
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.createViewer).toHaveLength(1))
+        const config = calls.createViewer[0][1] as Record<string, unknown>
+        expect(config.backgroundColor).toBe("white")
+    })
+
+    it("repaints the LIVE canvas via setBackgroundColor (not a re-init) when data-theme changes after mount", async () => {
+        installFakeMatchMedia(false)
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.createViewer).toHaveLength(1))
+        expect(calls.setBackgroundColor).toHaveLength(0)
+
+        document.documentElement.setAttribute("data-theme", "dark")
+
+        await waitFor(() => expect(calls.setBackgroundColor).toHaveLength(1))
+        // Not a teardown-and-recreate: the theme changing must not tear
+        // down the existing 3Dmol viewer, only repaint it.
+        expect(calls.createViewer).toHaveLength(1)
+        const [color] = calls.setBackgroundColor[0]
+        expect(color).not.toBe("white")
+    })
+
+    it("repaints when prefers-color-scheme changes (unstamped default) — an OS theme flip while the page is open", async () => {
+        const fakeMedia = installFakeMatchMedia(false)
+        render(<GeometryViewer atoms={CH_ATOMS} formula="CH" xyzText={CH_XYZ} />)
+        await waitFor(() => expect(calls.createViewer).toHaveLength(1))
+
+        fakeMedia.fire(true)
+
+        await waitFor(() => expect(calls.setBackgroundColor).toHaveLength(1))
     })
 })
