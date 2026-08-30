@@ -42113,8 +42113,54 @@
         "type": "object"
       },
       "ThermoProvenance": {
-        "description": "Thermo provenance block — keys always present, ``null`` when absent.\n\nPhase B: integer ``*_id`` fields keep their place; ``*_ref`` siblings\ncarry the public stable handles.",
+        "description": "Thermo provenance block — keys always present, ``null`` when absent.\n\nPhase B: integer ``*_id`` fields keep their place; ``*_ref`` siblings\ncarry the public stable handles.\n\nTwo distinct kinds of \"software\" can appear on a thermo record, and\nissue #284 was exactly the two getting collapsed into one field:\n\n- ``software_release`` / ``workflow_tool_release`` — what computed\n  *this thermochemistry* (e.g. Arkane, run by ARC). Sourced strictly\n  from ``thermo.software_release_id`` / ``thermo.workflow_tool_release_id``\n  — the thermo row's own FKs, never a calculation's. When the thermo\n  carries no software of its own (a value fitted or transcribed\n  without a recorded fitting tool), both are ``null``. This is a\n  complete, honest answer for records whose only real evidence is a\n  software attribution and no source-calculation chain — it must\n  never be backfilled from ``primary_calculation.software``.\n- ``primary_calculation.software`` — what ran the *electronic\n  structure* underneath (e.g. Gaussian), nested inside the primary\n  source-calculation summary where it has always correctly lived.\n\nA client that wants \"what tool do I cite for this thermochemistry\"\nreads ``software_release`` / ``workflow_tool_release``; one that wants\n\"what ran the QM\" reads ``primary_calculation.software``. Neither\nsubstitutes for the other.\n\n``conformer_observation_id`` / ``conformer_observation_ref`` and\n``conformer_group_id`` / ``conformer_group_ref`` resolve the same\nsingle calculation used for ``primary_calculation`` one hop further,\nthrough ``calculation.conformer_observation_id`` to the conformer\nbasin it belongs to. All four are ``null`` when the record has no\nresolvable primary calculation (no source calc, direct or borrowed\nfrom statmech) — a record with no calculation has no conformer to\nreport, and this block does not invent one.",
         "properties": {
+          "conformer_group_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "conformer_group_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Ref"
+          },
+          "conformer_observation_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Observation Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "conformer_observation_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Observation Ref"
+          },
           "freq_calculation_id": {
             "anyOf": [
               {
@@ -42158,7 +42204,7 @@
               }
             ]
           },
-          "software": {
+          "software_release": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/SoftwareReleaseSummary"
@@ -42213,6 +42259,16 @@
               }
             ],
             "title": "Statmech Ref"
+          },
+          "workflow_tool_release": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/app__schemas__reads__scientific_common__WorkflowToolReleaseSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "ThermoProvenance",

@@ -3,7 +3,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import { lotLabel } from "../api/scientificSchemas"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
-import { softwareLabel } from "../domain/provenanceFormat"
+import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
 import { QuantityValue } from "./QuantityValue"
@@ -373,7 +373,11 @@ function ProvenanceBlock({ provenance, thermoRef }: {
                 <div><dt>Level of theory ref</dt><dd>{provenance.level_of_theory?.level_of_theory_ref ?? "not recorded"}</dd></div>
                 <div>
                     <dt>Software</dt>
-                    <dd>{softwareLabel(provenance.software) ?? "not recorded"}</dd>
+                    <dd>{softwareLabel(provenance.software_release) ?? "not recorded"}</dd>
+                </div>
+                <div>
+                    <dt>Workflow tool</dt>
+                    <dd>{toolReleaseLabel(provenance.workflow_tool_release) ?? "not recorded"}</dd>
                 </div>
                 <div>
                     <dt>Primary calculation</dt>

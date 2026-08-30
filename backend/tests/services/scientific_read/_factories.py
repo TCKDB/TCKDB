@@ -56,6 +56,7 @@ from app.db.models.common import (
     StatmechTreatmentKind,
     StereoKind,
     SubmissionRecordType,
+    ThermoCalculationRole,
     TorsionTreatmentKind,
     TransitionStateEntryStatus,
     TransportCalculationRole,
@@ -84,7 +85,7 @@ from app.db.models.reaction import (
     ReactionParticipant,
 )
 from app.db.models.record_review import RecordReview
-from app.db.models.software import Software
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.species import (
     ConformerGroup,
     ConformerObservation,
@@ -104,6 +105,7 @@ from app.db.models.thermo import (
     ThermoNASA,
     ThermoNASA9Interval,
     ThermoPoint,
+    ThermoSourceCalculation,
     ThermoWilhoit,
 )
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
@@ -340,6 +342,8 @@ def make_calculation(
     species_entry_id: int | None = None,
     transition_state_entry_id: int | None = None,
     lot_id: int | None = None,
+    software_release_id: int | None = None,
+    conformer_observation_id: int | None = None,
 ) -> Calculation:
     """Create a minimal Calculation row.
 
@@ -352,6 +356,8 @@ def make_calculation(
         species_entry_id=species_entry_id,
         transition_state_entry_id=transition_state_entry_id,
         lot_id=lot_id,
+        software_release_id=software_release_id,
+        conformer_observation_id=conformer_observation_id,
     )
     session.add(calc)
     session.flush()
@@ -716,8 +722,16 @@ def make_thermo_scalar(
     tmin_k: float | None = None,
     tmax_k: float | None = None,
     scientific_origin: ScientificOriginKind = ScientificOriginKind.computed,
+    software_release_id: int | None = None,
+    workflow_tool_release_id: int | None = None,
+    statmech_id: int | None = None,
 ) -> Thermo:
-    """Create a Thermo row with only scalar h298/s298 (no NASA, no points)."""
+    """Create a Thermo row with only scalar h298/s298 (no NASA, no points).
+
+    ``software_release_id`` / ``workflow_tool_release_id`` are the thermo's
+    OWN provenance FKs (e.g. Arkane / ARC) — distinct from any software on
+    a source calculation. See ``ThermoProvenance`` (issue #284).
+    """
     t = Thermo(
         species_entry_id=species_entry.id,
         scientific_origin=scientific_origin,
@@ -725,10 +739,31 @@ def make_thermo_scalar(
         s298_j_mol_k=s298_j_mol_k,
         tmin_k=tmin_k,
         tmax_k=tmax_k,
+        software_release_id=software_release_id,
+        workflow_tool_release_id=workflow_tool_release_id,
+        statmech_id=statmech_id,
     )
     session.add(t)
     session.flush()
     return t
+
+
+def attach_thermo_source_calculation(
+    session: Session,
+    *,
+    thermo: Thermo,
+    calculation: Calculation,
+    role: ThermoCalculationRole = ThermoCalculationRole.sp,
+) -> ThermoSourceCalculation:
+    """Link a Calculation to a Thermo with a given role."""
+    row = ThermoSourceCalculation(
+        thermo_id=thermo.id,
+        calculation_id=calculation.id,
+        role=role,
+    )
+    session.add(row)
+    session.flush()
+    return row
 
 
 def attach_thermo_nasa(
@@ -1777,6 +1812,62 @@ def make_software(session: Session, *, name: str = "gaussian") -> Software:
     session.add(sw)
     session.flush()
     return sw
+
+
+def make_software_release(
+    session: Session,
+    *,
+    name: str = "gaussian",
+    version: str | None = "16",
+    revision: str | None = None,
+    build: str | None = None,
+) -> SoftwareRelease:
+    """Get-or-create a Software + SoftwareRelease pair.
+
+    Mirrors ``make_workflow_tool_release``'s pattern and the real
+    uniqueness constraints:
+
+    - ``Software`` is uniquely keyed by ``name``; repeated calls with the
+      same ``name`` reuse the existing software rather than violating the
+      ``UniqueConstraint("name")``.
+    - ``SoftwareRelease`` is uniquely keyed by
+      ``(software_id, version, revision, build)`` (``NULLS NOT DISTINCT``);
+      repeated calls with the same tuple reuse the existing release. Two
+      default-named calls in one test used to raise ``IntegrityError`` on
+      the ``Software.name`` constraint before this was get-or-create.
+
+    Callers that want a fresh distinct release should pass a different
+    ``name``, ``version``, ``revision``, or ``build``.
+    """
+    from sqlalchemy import select as _select
+
+    sw = session.scalar(_select(Software).where(Software.name == name))
+    if sw is None:
+        sw = Software(name=name)
+        session.add(sw)
+        session.flush()
+
+    existing = session.scalar(
+        _select(SoftwareRelease).where(
+            SoftwareRelease.software_id == sw.id,
+            SoftwareRelease.version.is_(version)
+            if version is None
+            else SoftwareRelease.version == version,
+            SoftwareRelease.revision.is_(revision)
+            if revision is None
+            else SoftwareRelease.revision == revision,
+            SoftwareRelease.build.is_(build)
+            if build is None
+            else SoftwareRelease.build == build,
+        )
+    )
+    if existing is not None:
+        return existing
+
+    sr = SoftwareRelease(software_id=sw.id, version=version, revision=revision, build=build)
+    session.add(sr)
+    session.flush()
+    return sr
 
 
 def make_workflow_tool_release(
