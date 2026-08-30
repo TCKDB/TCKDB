@@ -63,6 +63,18 @@ describe("conformerLabel", () => {
         const unlabeled = group({ conformer_group: { conformer_group_ref: "cg_unlabeled", label: null } })
         expect(conformerLabel(unlabeled)).toBe("cg_unlabeled")
     })
+
+    it("treats a blank or whitespace-only deposited label the same as no label -- falls back to the ref, never an empty display name", () => {
+        const empty = group({ conformer_group: { conformer_group_ref: "cg_empty", label: "" } })
+        expect(conformerLabel(empty)).toBe("cg_empty")
+        const whitespace = group({ conformer_group: { conformer_group_ref: "cg_ws", label: "   " } })
+        expect(conformerLabel(whitespace)).toBe("cg_ws")
+    })
+
+    it("preserves a leading zero in an auto-numbered label -- honest under the stated rule, never re-derived", () => {
+        const leadingZero = group({ conformer_group: { conformer_group_ref: "cg_lz", label: "conformer_01" } })
+        expect(conformerLabel(leadingZero)).toBe("Conformer Group 01")
+    })
 })
 
 describe("calculationTypeCounts", () => {

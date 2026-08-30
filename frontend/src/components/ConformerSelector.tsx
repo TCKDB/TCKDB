@@ -82,7 +82,7 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
             >
                 <span className="conformer-card-label">{conformerLabel(conformer)}</span>
                 <span className="conformer-card-meta">
-                    {total} observation{total === 1 ? "" : "s"} · {conformer.evidence_summary.calculation_count} calculation rows
+                    {total} observation{total === 1 ? "" : "s"} · {conformer.evidence_summary.calculation_count} calculation row{conformer.evidence_summary.calculation_count === 1 ? "" : "s"}
                     {typeCounts.length > 0 && ` (${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")})`}
                 </span>
                 <span className="conformer-card-coverage">

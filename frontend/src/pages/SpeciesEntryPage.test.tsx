@@ -427,6 +427,38 @@ describe("species-entry page: conformer picker", () => {
         expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
     })
 
+    it("renders the evidence-linkage panel under the picker, scoped to the SELECTED conformer, and updates it when the selection changes", async () => {
+        // No page-level test exercised this panel before -- removing the
+        // `<ConformerEvidenceLinkage>` line from `SpeciesEntryPage.tsx`, or
+        // wiring it to the wrong conformer, passed every other test. This
+        // is that coverage: the panel must be present under the picker,
+        // must reflect conformer ONE's own numbers by default, and must
+        // switch to conformer TWO's own (different) numbers once selected
+        // -- never staying pinned to whichever conformer loaded first.
+        const user = userEvent.setup()
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+
+        const panelHeading = () => screen.getByRole("heading", { name: /^Evidence for / })
+        const stepFor = (kind: "observations" | "calculations" | "geometries") =>
+            document.querySelector(`[data-linkage-step="${kind}"]`) as HTMLElement
+
+        expect(panelHeading()).toHaveTextContent("Evidence for Conformer Group 1")
+        expect(within(stepFor("observations")).getByText("2")).toBeVisible()
+        expect(within(stepFor("calculations")).getByText("7")).toBeVisible()
+        expect(within(stepFor("geometries")).getByText("2")).toBeVisible()
+
+        await user.click(within(screen.getByText("Conformer Group 2").closest(".conformer-card") as HTMLElement)
+            .getByRole("button", { name: /Conformer Group 2/ }))
+
+        expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
+        expect(within(stepFor("observations")).getByText("1")).toBeVisible()
+        expect(within(stepFor("calculations")).getByText("3")).toBeVisible()
+        expect(within(stepFor("geometries")).getByText("1")).toBeVisible()
+    })
+
     it("collapses each conformer card's own ref behind a References disclosure, keeping the basin label visible outside it", async () => {
         const user = userEvent.setup()
         server.use(...handlers())

@@ -412,7 +412,7 @@
     font: .72rem/1.7 var(--mono);
 }
 
-.linkage-geometry-list code { color: var(--accent-700); }
+.linkage-geometry-list code { overflow-wrap: anywhere; color: var(--accent-700); }
 
 .linkage-connector {
     display: flex;
@@ -539,11 +539,25 @@
     font: 600 1.1rem var(--serif);
 }
 
+/* `.linkage-flow`'s three steps (`flex: 1 1 14rem` + `0 1.25rem` padding
+   each, plus two connectors) have an intrinsic width around 836px -- wider
+   than the 680px breakpoint everything else on this page stacks at. Below
+   680px that gap is moot (the 680px rule below already stacks it), but the
+   681-836px tablet band (an iPad portrait at 768px, for instance) sat
+   between the two: too narrow for three steps side by side, too wide to
+   trigger the 680px stack, so the row wrapped mid-flow and left a "→"
+   pointing at nothing. This own breakpoint, above the tablet band, covers
+   it; the shared 680px rule below still handles the narrower stack for
+   phones (it doesn't need its own linkage rules once this one exists,
+   since a max-width media query still applies at any narrower width). */
+@media (max-width: 880px) {
+    .linkage-flow { flex-direction: column; }
+    .linkage-step { flex: none; padding: 0; }
+    .linkage-connector { align-self: flex-start; transform: rotate(90deg); margin: .3rem 0 .3rem .4rem; }
+}
+
 @media (max-width: 680px) {
     .entry-facts { gap: .85rem 1.2rem; }
     .entry-tabs { gap: 1.1rem 1.6rem; }
     .conformer-list { grid-template-columns: 1fr; }
-    .linkage-flow { flex-direction: column; }
-    .linkage-step { flex: none; padding: 0; }
-    .linkage-connector { align-self: flex-start; transform: rotate(90deg); margin: .3rem 0 .3rem .4rem; }
 }

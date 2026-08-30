@@ -11,10 +11,14 @@ const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
 /**
  * The label a reader picks a conformer by.
  *
- * - No deposited label at all (`null`): falls back to the group's own
- *   stable ref, verbatim. A ref is not a label and is never run through
- *   the pattern below -- this function never invents a display name for
- *   a group that was never given one.
+ * - No deposited label at all (`null`), or a deposited label that is empty
+ *   or whitespace-only: falls back to the group's own stable ref, verbatim.
+ *   A blank string is not a usable label any more than a missing one is --
+ *   without this, a blank label would render as an empty heading ("Evidence
+ *   for ") and a blank card, which is worse than the honest fallback. A ref
+ *   is not a label and is never run through the pattern below -- this
+ *   function never invents a display name for a group that was never given
+ *   a real one.
  * - A deposited label matching the archive's `conformer_<N>` auto-numbering
  *   convention: displays as "Conformer Group N".
  * - Any other deposited label (including one a depositor chose themselves,
@@ -23,7 +27,7 @@ const AUTO_NUMBERED_LABEL = /^conformer_(\d+)$/
  */
 export function conformerLabel(conformer: ConformerProjection): string {
     const label = conformer.conformer_group.label
-    if (label === null) return conformer.conformer_group.conformer_group_ref
+    if (label === null || label.trim() === "") return conformer.conformer_group.conformer_group_ref
     const match = label.match(AUTO_NUMBERED_LABEL)
     return match ? `Conformer Group ${match[1]}` : label
 }

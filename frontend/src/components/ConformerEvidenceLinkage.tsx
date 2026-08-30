@@ -1,6 +1,25 @@
 import type { ReactNode } from "react"
 import type { ConformerProjection } from "../api/speciesEntryApi"
+import type { CalculationTypeCount } from "../domain/conformerEvidence"
 import { calculationTypeCounts, conformerLabel, geometryConvergence } from "../domain/conformerEvidence"
+
+// The published `calculation_count` and the per-stage breakdown come from
+// TWO different sources on the wire (`evidence_summary.calculation_count`
+// vs. the conformer's own `calculations` list) -- a stale or not-yet-loaded
+// `calculations` array must never be read as "zero calculation rows exist"
+// when the archive's own published count says otherwise. Three states,
+// never conflated: genuinely zero rows, a positive published count with no
+// breakdown available, and a positive published count WITH a breakdown.
+function calculationRowDetail(
+    evidence: ConformerProjection["evidence_summary"],
+    typeCounts: CalculationTypeCount[],
+): string {
+    if (evidence.calculation_count === 0) return "no calculation rows recorded"
+    if (typeCounts.length === 0) return "breakdown not loaded"
+    return `${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")}, in `
+        + `${evidence.optimization_chain_count} optimization chain${evidence.optimization_chain_count === 1 ? "" : "s"}`
+        + " (a staged coarse-then-fine reoptimization counts as one chain)"
+}
 
 /**
  * Answers the owner's own confusion directly: "they see 2 distinct Geoms
@@ -33,22 +52,21 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
             </p>
             <div className="linkage-flow">
                 <LinkageStep
+                    kind="observations"
                     count={total}
                     unit={total === 1 ? "deposited observation" : "deposited observations"}
                     detail="each a separate sighting of this basin"
                 />
                 <LinkageConnector />
                 <LinkageStep
+                    kind="calculations"
                     count={evidence.calculation_count}
                     unit={evidence.calculation_count === 1 ? "calculation row" : "calculation rows"}
-                    detail={typeCounts.length > 0
-                        ? `${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")}, in `
-                            + `${evidence.optimization_chain_count} optimization chain${evidence.optimization_chain_count === 1 ? "" : "s"}`
-                            + " (a staged coarse-then-fine reoptimization counts as one chain)"
-                        : "no calculation rows recorded"}
+                    detail={calculationRowDetail(evidence, typeCounts)}
                 />
                 <LinkageConnector />
                 <LinkageStep
+                    kind="geometries"
                     count={evidence.geometry_count}
                     unit={evidence.geometry_count === 1 ? "distinct stored geometry" : "distinct stored geometries"}
                 >
@@ -57,7 +75,7 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                         here would give two same-named links their own separate targets
                         for assistive tech to disambiguate, for no navigational benefit
                         this summary needs to provide. */}
-                    {convergence.length > 0 && (
+                    {convergence.length > 0 ? (
                         <ul className="linkage-geometry-list">
                             {convergence.map((entry) => (
                                 <li key={entry.geometryRef}>
@@ -66,6 +84,8 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                                 </li>
                             ))}
                         </ul>
+                    ) : evidence.geometry_count > 0 && (
+                        <span className="linkage-step-detail">breakdown not loaded</span>
                     )}
                 </LinkageStep>
             </div>
@@ -78,14 +98,20 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
     )
 }
 
-function LinkageStep({ count, unit, detail, children }: {
+// `data-linkage-step` is a stable test hook: it lets a test bind a count
+// and its unit to the SAME step (`within(getStep("observations"))...`)
+// instead of two independent `getByText` calls that would still pass if
+// the observation and geometry counts were swapped -- the exact gap the
+// review round caught.
+function LinkageStep({ kind, count, unit, detail, children }: {
+    kind: "observations" | "calculations" | "geometries"
     count: number
     unit: string
     detail?: string
     children?: ReactNode
 }) {
     return (
-        <div className="linkage-step">
+        <div className="linkage-step" data-linkage-step={kind}>
             <span className="linkage-step-count">{count}</span>
             <span className="linkage-step-unit">{unit}</span>
             {detail && <span className="linkage-step-detail">{detail}</span>}
