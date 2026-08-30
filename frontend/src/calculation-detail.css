@@ -38,7 +38,7 @@
 
 .record-intro {
     max-width: 44rem;
-    color: #3c4856;
+    color: var(--ink-2);
     font: 1.15rem/1.55 var(--serif);
 }
 
@@ -48,11 +48,11 @@
     gap: 1rem;
     margin: 2rem 0 0;
     padding: 1rem 0;
-    border-block: 1px solid #dbe2ea;
+    border-block: 1px solid var(--line);
 }
 
 .record-context dt {
-    color: #536578;
+    color: var(--muted);
     font: .64rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -64,13 +64,13 @@
     font: .75rem var(--mono);
 }
 
-.record-context a { color: #205493; text-decoration: underline; text-underline-offset: .16em; }
+.record-context a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
 
 .owner-card {
     margin-top: 3.5rem;
     padding: 1.4rem;
-    border-left: 3px solid #205493;
-    background: #fff;
+    border-left: 3px solid var(--accent);
+    background: var(--surface);
 }
 
 .owner-card dl {
@@ -81,7 +81,7 @@
 }
 
 .owner-card dt {
-    color: #536578;
+    color: var(--muted);
     font: .64rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -93,7 +93,7 @@
     font: .8rem var(--mono);
 }
 
-.owner-card a { color: #205493; text-decoration: underline; text-underline-offset: .16em; }
+.owner-card a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
 
 /* On-demand ("behind a disclosure") sections. A section
    `available_sections` already reports empty renders as a plain
@@ -104,7 +104,7 @@
    heading-navigation still finds it. */
 .section-note {
     margin: .5rem 0 0;
-    color: #536578;
+    color: var(--muted);
     font-size: .8rem;
     line-height: 1.5;
 }
@@ -119,7 +119,7 @@
 }
 
 .kv-list dt {
-    color: #536578;
+    color: var(--muted);
     font: .64rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
