@@ -3,6 +3,7 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
+import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryThermoSection } from "./EntryThermoSection"
 
 const server = setupServer()
@@ -16,13 +17,26 @@ afterAll(() => server.close())
 const entryRef = "spe_test_ch3"
 const ENDPOINT = `/api/v1/scientific/species-entries/${entryRef}/thermo`
 
-function page() {
+function page(conformer?: ConformerProjection, conformers?: ConformerProjection[]) {
     return render(
         <MemoryRouter>
-            <EntryThermoSection entryRef={entryRef} />
+            <EntryThermoSection entryRef={entryRef} conformer={conformer} conformers={conformers} />
         </MemoryRouter>,
     )
 }
+
+function conformerGroup(ref: string, label: string): ConformerProjection {
+    return {
+        conformer_group: { conformer_group_ref: ref, label },
+        observations_summary: { total: 1 },
+        evidence_summary: {
+            calculation_count: 1, optimization_chain_count: 1, geometry_count: 1,
+            evidence_coverage: { opt: 1, freq: 1, sp: 1 }, levels_of_theory: {},
+        },
+        observations: [], calculations: [], geometries: [],
+    } as unknown as ConformerProjection
+}
+const conformerGroups = [conformerGroup("cg_one", "conformer_1"), conformerGroup("cg_two", "conformer_2")]
 
 /**
  * Deliberately NOT a copy of the live 3-records-all-identical-model-kind
@@ -446,5 +460,45 @@ describe("EntryThermoSection", () => {
         // silently delete this note's entire reason for existing.
         expect(await screen.findByText("5 records (showing 2) · review: 1 approved · 2 not reviewed")).toBeVisible()
         expect(screen.queryByText(/^2 records/)).not.toBeInTheDocument()
+    })
+
+    // The owner's report, thermo half: "he opened the Thermochemistry tab
+    // having selected conformer_2, and what sits there is another
+    // conformer's record under a heading he has to read carefully to
+    // notice." thm_alpha's own fixture traces to no primary calculation
+    // conformer at all here; give it one that names conformer_1, select
+    // conformer_2, and the panel must say plainly that conformer_2 has
+    // nothing -- never silently show thm_alpha as though it belonged there.
+    it("says plainly when the selected conformer has no thermo record, and demotes (never deletes) a record traced to a different one", async () => {
+        const [alpha, ...rest] = mockRecords()
+        const tracedToOne = { ...alpha, provenance: { ...alpha.provenance, conformer_group_ref: "cg_one" } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [tracedToOne, ...rest.map((r) => ({ ...r, provenance: { ...r.provenance, conformer_group_ref: null } })) ] }))))
+        page(conformerGroups[1], conformerGroups) // conformer_2 selected
+        await screen.findByRole("heading", { name: "From Conformer Group 2" })
+
+        const answer = screen.getByText("No thermo record traces to this conformer yet.")
+        expect(answer).toBeVisible()
+        expect(answer).toHaveClass("conformer-attribution-answer")
+        const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 2" }).closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).queryByText("thm_alpha")).not.toBeInTheDocument()
+
+        // thm_alpha is demoted, not deleted: reachable inside the collapsed
+        // other-conformers disclosure.
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails).not.toBeNull()
+        expect(otherDetails.open).toBe(false)
+        expect(within(otherDetails).getByText("thm_alpha")).toBeInTheDocument()
+        expect(within(otherDetails).getByRole("heading", { name: "From Conformer Group 1" })).toBeInTheDocument()
+    })
+
+    it("renders the selected conformer's own thermo record plainly, with no other-conformers disclosure at all, when it's the only one that traces anywhere", async () => {
+        const [alpha, ...rest] = mockRecords()
+        const tracedToTwo = { ...alpha, provenance: { ...alpha.provenance, conformer_group_ref: "cg_two" } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [tracedToTwo, ...rest.map((r) => ({ ...r, provenance: { ...r.provenance, conformer_group_ref: null } })) ] }))))
+        page(conformerGroups[1], conformerGroups) // conformer_2 selected
+        await screen.findByRole("heading", { name: "From Conformer Group 2" })
+        const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 2" }).closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).getByText("thm_alpha")).toBeVisible()
+        expect(document.querySelector(".conformer-attribution-other")).toBeNull()
     })
 })

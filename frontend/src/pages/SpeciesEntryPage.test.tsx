@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
 
@@ -37,6 +37,12 @@ type HandlerOptions = {
     noConformers?: boolean
     singleConformer?: boolean
     statmechConformersIncludeFails?: boolean
+    // The archive orders `conformers/search` by review rank, not by label
+    // number, so wire order and display order genuinely differ live. The
+    // default fixture happens to return conformer_1 first, which makes the
+    // two indistinguishable -- this option is what lets a test tell them
+    // apart.
+    reversedOrder?: boolean
 }
 
 function conformerRecords() {
@@ -290,6 +296,10 @@ function handlers(options: HandlerOptions = {}) {
             if (options.status) return HttpResponse.json({ detail: "archive unavailable" }, { status: options.status })
             if (options.noConformers) return HttpResponse.json({ records: [] })
             if (options.singleConformer) return HttpResponse.json({ records: [conformerRecords()[0]] })
+            // `conformers/search` orders by review rank, not by label number, so
+            // the archive really can return conformer_2 ahead of conformer_1 --
+            // measured on spe_mbdqifmaclaakukr7agxbuq3wa, which returns 3, 2, 1.
+            if (options.reversedOrder) return HttpResponse.json({ records: [...conformerRecords()].reverse() })
             return HttpResponse.json({ records: conformerRecords() })
         }),
         http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => HttpResponse.json({
@@ -397,6 +407,26 @@ describe("species-entry page: identity and errors", () => {
 })
 
 describe("species-entry page: conformer picker", () => {
+    it("defaults to the FIRST CARD AS DISPLAYED even when the archive returns a different order", async () => {
+        // The wire hands back conformer_2 first (review rank), the cards render
+        // conformer_1 first (label order). A default of `conformers[0]` would
+        // highlight the second card -- which reads as a bug, not a ranking.
+        server.use(...handlers({ reversedOrder: true }))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        const cards = document.querySelectorAll(".conformer-card")
+        expect(within(cards[0] as HTMLElement).getByRole("button", { name: /Conformer Group 1/ })).toHaveAttribute("aria-pressed", "true")
+        expect(within(cards[1] as HTMLElement).getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "false")
+        // The self-heal must be bound to DISPLAY order too, not just the
+        // highlighted card: a default that highlighted the first card but
+        // still wrote the archive's own first-returned ref (conformer_2)
+        // into the URL would pass the two assertions above while still
+        // being wrong -- the address bar would name a different conformer
+        // than the one visibly selected.
+        expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+    })
+
     it("shows one basin card per conformer, each with its own distinct counts, and defaults to selecting the first", async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
@@ -423,8 +453,14 @@ describe("species-entry page: conformer picker", () => {
         expect(within(conformerOne).getByText("opt 2/2 obs · freq 2/2 obs · sp 1/2 obs")).toBeVisible()
         expect(within(conformerTwo).getByText("1 observation · 3 calculation rows (1 opt · 1 freq · 1 sp)")).toBeVisible()
         expect(within(conformerTwo).getByText("opt 1/1 obs · freq 1/1 obs · sp 1/1 obs")).toBeVisible()
-        // The URL becomes addressable for the default selection (reload survives it).
-        expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+        // The URL becomes addressable for the default selection (reload
+        // survives it). `waitFor`, not a bare expect: the self-heal runs in
+        // an effect AFTER the render that paints the cards, so a synchronous
+        // read here is a race -- it won locally and lost on CI, which is the
+        // worst way for a timing bug to present.
+        await waitFor(() => {
+            expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+        })
     })
 
     it("renders the evidence-linkage panel under the picker, scoped to the SELECTED conformer, and updates it when the selection changes", async () => {
@@ -444,8 +480,15 @@ describe("species-entry page: conformer picker", () => {
         const panelHeading = () => screen.getByRole("heading", { name: /^Evidence for / })
         const stepFor = (kind: "observations" | "calculations" | "geometries") =>
             document.querySelector(`[data-linkage-step="${kind}"]`) as HTMLElement
+        // The step figures live inside a collapsed-by-default `<details>`
+        // (the "mechanics", one click away from the prose story) -- open it
+        // once; it stays open across the conformer switch below since
+        // re-selecting a conformer re-renders the panel's CONTENT, not the
+        // `<details>` element's own open/closed state.
+        const openMechanics = () => user.click(screen.getByText(/^How this evidence connects/))
 
         expect(panelHeading()).toHaveTextContent("Evidence for Conformer Group 1")
+        await openMechanics()
         expect(within(stepFor("observations")).getByText("2")).toBeVisible()
         expect(within(stepFor("calculations")).getByText("7")).toBeVisible()
         expect(within(stepFor("geometries")).getByText("2")).toBeVisible()
@@ -454,6 +497,8 @@ describe("species-entry page: conformer picker", () => {
             .getByRole("button", { name: /Conformer Group 2/ }))
 
         expect(await screen.findByRole("heading", { name: "Evidence for Conformer Group 2" })).toBeVisible()
+        const details = screen.getByText(/^How this evidence connects/).closest("details") as HTMLDetailsElement
+        if (!details.open) await openMechanics()
         expect(within(stepFor("observations")).getByText("1")).toBeVisible()
         expect(within(stepFor("calculations")).getByText("3")).toBeVisible()
         expect(within(stepFor("geometries")).getByText("1")).toBeVisible()
@@ -612,8 +657,16 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         render(<App />)
         expect(await screen.findByText("thm_one")).toBeVisible()
         expect(screen.getByText("thm_two")).toBeVisible()
-        expect(screen.getByText("thm_three")).toBeVisible()
+        // thm_three is linked to a DIFFERENT conformer than the one
+        // selected -- present (never deleted) but demoted into the
+        // collapsed "other conformers" disclosure, so it's in the document
+        // without being visible until opened.
+        expect(screen.getByText("thm_three")).toBeInTheDocument()
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails.open).toBe(false)
+        fireEvent.click(within(otherDetails).getByText(/records? from other conformers/))
 
         const groupHeadings = screen.getAllByRole("heading", { level: 3 })
             .filter((node) => node.className === "conformer-evidence-group-heading")
@@ -653,6 +706,10 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         ))
         expect(sourceCalcsRow).not.toBeVisible()
         // thm_three: every check true -- reads as fully satisfied, no chips.
+        // It's linked to a different conformer than the one selected, so it
+        // sits inside the collapsed "other conformers" disclosure -- open
+        // it before checking visibility.
+        fireEvent.click(screen.getByText(/records? from other conformers/))
         expect(screen.getByText("Every evidence-completeness check is satisfied.")).toBeVisible()
         // The full checklist stays reachable behind its own disclosure.
         expect(screen.getAllByText(/^Full checklist \(/).length).toBeGreaterThan(0)

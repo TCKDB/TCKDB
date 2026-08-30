@@ -1,5 +1,5 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { calculationTypeCounts, conformerLabel } from "../domain/conformerEvidence"
+import { calculationTypeCounts, conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
 import { RefsDisclosure } from "./RefsDisclosure"
 
 // The heading is imperative ("Choose a conformer") only when there is an
@@ -42,7 +42,13 @@ export function ConformerSelector({ conformers, selectedRef, onSelect }: {
                                 + "its geometry, single-point energy, statistical mechanics and thermochemistry."}
                     </p>
                     <div className="conformer-list" role="group" aria-labelledby="conformer-picker-title">
-                        {conformers.map((conformer) => (
+                        {/* Display order only -- `conformers/search`'s own ranking
+                            (review rank, then recency) is untouched everywhere else
+                            this list is passed (default selection, attribution
+                            lookups); this reorders only what's rendered here, so
+                            "Conformer Group 1" reads first, then 2, then 3, not
+                            whatever order the archive happened to rank them in. */}
+                        {sortConformersForDisplay(conformers).map((conformer) => (
                             <ConformerCard
                                 key={conformer.conformer_group.conformer_group_ref}
                                 conformer={conformer}

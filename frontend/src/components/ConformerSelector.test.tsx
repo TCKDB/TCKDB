@@ -34,6 +34,36 @@ function conformer(overrides: Partial<ConformerProjection> = {}): ConformerProje
     } as ConformerProjection
 }
 
+describe("ConformerSelector ordering", () => {
+    // Measured live on spe_mbdqifmaclaakukr7agxbuq3wa: `conformers/search`
+    // returned conformer_3, conformer_2, conformer_1 in that order (its own
+    // review-rank/recency ranking) -- the page showed "3, 2, 1" until this
+    // fix. Cards must read "1, 2, 3" regardless of what order the archive
+    // returned them in.
+    it("renders conformer cards in ascending numbered order, regardless of the archive's own ranking order", () => {
+        const three = conformer({ conformer_group: { conformer_group_ref: "cg_three", label: "conformer_3" } })
+        const two = conformer({ conformer_group: { conformer_group_ref: "cg_two", label: "conformer_2" } })
+        const one = conformer({ conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1" } })
+        renderSelector([three, two, one])
+        const labels = screen.getAllByText(/^Conformer Group \d+$/).map((el) => el.textContent)
+        expect(labels).toEqual(["Conformer Group 1", "Conformer Group 2", "Conformer Group 3"])
+    })
+
+    // The classic case a 1/2/3 fixture cannot catch: a lexicographic sort
+    // of the LABEL passes 1/2/3 (string order already agrees with numeric
+    // order there) and only fails once a two-digit numeral is in the mix
+    // ("10" sorts before "2" as a string).
+    it("sorts conformer_10 after conformer_9, not between conformer_1 and conformer_2 -- never a string sort", () => {
+        const ten = conformer({ conformer_group: { conformer_group_ref: "cg_ten", label: "conformer_10" } })
+        const two = conformer({ conformer_group: { conformer_group_ref: "cg_two", label: "conformer_2" } })
+        const nine = conformer({ conformer_group: { conformer_group_ref: "cg_nine", label: "conformer_9" } })
+        const one = conformer({ conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1" } })
+        renderSelector([ten, two, nine, one])
+        const labels = screen.getAllByText(/^Conformer Group \d+$/).map((el) => el.textContent)
+        expect(labels).toEqual(["Conformer Group 1", "Conformer Group 2", "Conformer Group 9", "Conformer Group 10"])
+    })
+})
+
 describe("ConformerSelector card", () => {
     it("uses singular wording for exactly ONE calculation row -- not '1 calculation rows'", () => {
         renderSelector([conformer()])

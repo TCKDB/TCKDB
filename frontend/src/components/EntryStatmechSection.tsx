@@ -12,7 +12,7 @@ import {
     type StatmechSectionToken,
 } from "../api/statmechApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
-import { conformerLabel, partitionByConformerLink, statmechConformerGroupRef } from "../domain/conformerEvidence"
+import { conformerLabel, partitionByConformerLink, statmechConformerGroupRefs } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
@@ -335,7 +335,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
                 records,
                 conformers,
                 conformer.conformer_group.conformer_group_ref,
-                (record) => statmechConformerGroupRef(conformersState.dataByRef.get(record.statmech.statmech_ref)),
+                (record) => statmechConformerGroupRefs(conformersState.dataByRef.get(record.statmech.statmech_ref)),
             )}
             selectedLabel={conformerLabel(conformer)}
             renderRecord={renderStatmechRecord}

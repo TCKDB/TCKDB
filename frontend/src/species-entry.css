@@ -286,9 +286,25 @@
     line-height: 1.6;
 }
 
+/* `auto-fill` reserves a track for every column that COULD fit the row,
+   whether or not a real card exists to fill it -- on this page's 100rem
+   width, a single conformer got one ~260px card sized down to its `15rem`
+   minimum, marooned at the left of a 1560px-wide row with five invisible
+   `1fr` tracks silently claiming the rest of the space (a reviewer caught
+   this rendered). `auto-fit` COLLAPSES those empty tracks instead, so a
+   real card's own track can claim the freed space -- but paired with a
+   `1fr` maximum that would let ONE card stretch across the entire 100rem
+   row, which is no more readable than the bug it replaces. Capping the
+   maximum at `22rem` does NOT give every card the same width regardless of
+   count -- the track count is still computed at the `15rem` minimum, so
+   eleven cards sit narrower (~247px, six tracks at 1600px) than three
+   (~352px) -- but it keeps every card within one comfortable, capped range
+   at any count and lets `auto-fit` collapse only the truly empty tracks,
+   left-aligned with real whitespace after the last card rather than a
+   bordered card floating in front of invisible ones. */
 .conformer-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(15rem, 22rem));
     gap: 1rem;
     margin-top: 1.3rem;
 }
@@ -364,11 +380,40 @@
     color: var(--ink);
 }
 
+/* The lead sentence -- `describeConformerEvidence` -- sits OUTSIDE the
+   `<details>` below, on purpose: it is the answer, and it must read without
+   a click. Set a size and two-line max-width so it reads as the panel's
+   thesis, not as another `.section-note`-weight caption. */
+.evidence-linkage-story {
+    max-width: 46rem;
+    margin: .6rem 0 0;
+    color: var(--ink);
+    font: 1rem/1.6 var(--serif);
+}
+
 .evidence-linkage-note {
     max-width: 46rem;
     margin: .5rem 0 0;
     color: var(--ink-2);
     font: .82rem/1.55 var(--sans);
+}
+
+/* Collapsed by default (per the owner: it "kinda hides the tabs of Geom
+   etc." when left open) -- the mechanics of how the story's numbers add up
+   are one click away, never zero, never mandatory. */
+.evidence-linkage-detail {
+    margin-top: 1.1rem;
+}
+
+.evidence-linkage-detail > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font: 600 .78rem var(--mono);
+    letter-spacing: .03em;
+}
+
+.evidence-linkage-detail[open] > summary {
+    margin-bottom: .5rem;
 }
 
 .linkage-flow {
@@ -537,6 +582,47 @@
     margin: 0;
     color: var(--ink);
     font: 600 1.1rem var(--serif);
+}
+
+/* "Say so first and plainly" -- when the selected conformer has no records
+   of this kind, that fact is the whole answer to the question the reader
+   opened this tab to ask. Emphasized relative to the plain `.empty-projection`
+   wording every OTHER empty state on this page uses, so it reads as an
+   answer rather than a caption easy to skim past. */
+.conformer-attribution-answer {
+    margin: .5rem 0 0;
+    padding: .85rem 1rem;
+    border: 1px solid var(--line);
+    border-radius: .4rem;
+    background: var(--accent-50);
+    color: var(--ink);
+    font: 600 .92rem/1.55 var(--sans);
+}
+
+/* Records traced to a conformer OTHER than the one selected are context,
+   not the answer -- collapsed by default, and visually secondary even once
+   opened, so "From Conformer Group 1" never reads with the same weight as
+   the selected conformer's own "From Conformer Group 2" heading above it. */
+.conformer-attribution-other {
+    margin-top: 1.75rem;
+}
+
+.conformer-attribution-other > summary {
+    cursor: pointer;
+    color: var(--muted);
+    font: 600 .78rem var(--mono);
+    letter-spacing: .03em;
+}
+
+.conformer-attribution-other .conformer-evidence-group {
+    margin-top: 1rem;
+    padding-left: 1rem;
+    border-left: 2px solid var(--line);
+}
+
+.conformer-attribution-other .conformer-evidence-group-heading {
+    color: var(--muted);
+    font-size: .95rem;
 }
 
 /* `.linkage-flow`'s three steps (`flex: 1 1 14rem` + `0 1.25rem` padding

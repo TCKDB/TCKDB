@@ -3,6 +3,7 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
+import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryStatmechSection } from "./EntryStatmechSection"
 
 const server = setupServer()
@@ -16,13 +17,28 @@ afterAll(() => server.close())
 const entryRef = "spe_test_ch3"
 const ENDPOINT = `/api/v1/scientific/species-entries/${entryRef}/statmech`
 
-function page() {
+function page(conformer?: ConformerProjection, conformers?: ConformerProjection[]) {
     return render(
         <MemoryRouter>
-            <EntryStatmechSection entryRef={entryRef} />
+            <EntryStatmechSection entryRef={entryRef} conformer={conformer} conformers={conformers} />
         </MemoryRouter>,
     )
 }
+
+// Three conformer groups -- the minimum that can prove a record naming all
+// three files under whichever ONE is selected, not always the first.
+function conformerGroup(ref: string, label: string): ConformerProjection {
+    return {
+        conformer_group: { conformer_group_ref: ref, label },
+        observations_summary: { total: 1 },
+        evidence_summary: {
+            calculation_count: 1, optimization_chain_count: 1, geometry_count: 1,
+            evidence_coverage: { opt: 1, freq: 1, sp: 1 }, levels_of_theory: {},
+        },
+        observations: [], calculations: [], geometries: [],
+    } as unknown as ConformerProjection
+}
+const conformerGroups = [conformerGroup("cg_one", "conformer_1"), conformerGroup("cg_two", "conformer_2"), conformerGroup("cg_three", "conformer_3")]
 
 function baseRecord(overrides: Record<string, unknown> = {}) {
     return {
@@ -361,5 +377,87 @@ describe("EntryStatmechSection", () => {
         expect(screen.queryByRole("heading", { name: "Frequencies" })).not.toBeInTheDocument()
         expect(screen.queryByRole("heading", { name: "Conformer context" })).not.toBeInTheDocument()
         expect(screen.queryByRole("heading", { name: "Review history" })).not.toBeInTheDocument()
+    })
+})
+
+describe("EntryStatmechSection conformer-scoped attribution", () => {
+    // The owner's report, reproduced: "Same for Statistical Mechanics [as
+    // Thermochemistry]... it always shows From Conformer Group 1 even if I
+    // click another group." Measured live on
+    // spe_mbdqifmaclaakukr7agxbuq3wa: one statmech record names all three
+    // of that entry's conformer groups. Selecting conformer_2 or
+    // conformer_3 must file the record under THAT group, never always
+    // under conformer_1 -- the exact defect a first-match implementation
+    // produces and a fixture naming only two groups could not catch (with
+    // two groups, "not group A" and "always group A" are indistinguishable
+    // half the time).
+    it("files a statmech record naming all three conformer groups under whichever ONE is selected, never always the first-named group", async () => {
+        function recordResponse(includeConformers: boolean) {
+            const record = baseRecord({
+                available_sections: { ...baseRecord().available_sections, has_conformers: true },
+                ...(includeConformers ? {
+                    conformers: [
+                        { conformer_group_ref: "cg_one", label: "conformer_1" },
+                        { conformer_group_ref: "cg_two", label: "conformer_2" },
+                        { conformer_group_ref: "cg_three", label: "conformer_3" },
+                    ],
+                } : {}),
+            })
+            return mockResponse([record])
+        }
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            return HttpResponse.json(recordResponse(includes.includes("conformers")))
+        }))
+
+        page(conformerGroups[1], conformerGroups) // conformer_2 selected
+        await screen.findByText("sm_one")
+        const primaryHeading = await screen.findByRole("heading", { name: "From Conformer Group 2" })
+        const primaryGroup = primaryHeading.closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).getByText("sm_one")).toBeInTheDocument()
+        // Never files under the first-named group instead.
+        expect(screen.queryByRole("heading", { name: "From Conformer Group 1" })).not.toBeInTheDocument()
+    })
+
+    it("files the SAME multi-group record under conformer_3 when conformer_3 is selected -- position in the name list is irrelevant", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                available_sections: { ...baseRecord().available_sections, has_conformers: true },
+                ...(includes.includes("conformers") ? {
+                    conformers: [
+                        { conformer_group_ref: "cg_one", label: "conformer_1" },
+                        { conformer_group_ref: "cg_two", label: "conformer_2" },
+                        { conformer_group_ref: "cg_three", label: "conformer_3" },
+                    ],
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page(conformerGroups[2], conformerGroups) // conformer_3 selected
+        await screen.findByText("sm_one")
+        const primaryHeading = await screen.findByRole("heading", { name: "From Conformer Group 3" })
+        const primaryGroup = primaryHeading.closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).getByText("sm_one")).toBeInTheDocument()
+    })
+
+    it("says plainly when the selected conformer has no statmech record, rather than silently showing another conformer's as though it did", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                available_sections: { ...baseRecord().available_sections, has_conformers: true },
+                ...(includes.includes("conformers") ? { conformers: [{ conformer_group_ref: "cg_one", label: "conformer_1" }] } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page(conformerGroups[1], conformerGroups) // conformer_2 selected; record only names conformer_1
+        await screen.findByText("No statmech record is linked to this conformer yet.")
+        const answer = screen.getByText("No statmech record is linked to this conformer yet.")
+        expect(answer).toHaveClass("conformer-attribution-answer")
+        // sm_one is still fully present -- reachable, just demoted --
+        // inside the collapsed other-conformers disclosure.
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails.open).toBe(false)
+        expect(within(otherDetails).getByText("sm_one")).toBeInTheDocument()
     })
 })
