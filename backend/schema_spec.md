@@ -801,6 +801,50 @@ Ownership of geometric coordinate metadata across calculation tables:
 - `calc_scan_point` plus `calc_scan_point_coordinate_value` are the canonical store for **scan output**: per-point energy/geometry and the observed coordinate values along the scanned grid. They are write-once results, not input metadata.
 - `statmech_torsion` (with `statmech_torsion_definition`) is the canonical store for **thermochemical rotor interpretation** — the fitted treatment kind (hindered, free, rigid top), symmetry number, and dimension. It may reference its source scan via `source_scan_calculation_id` but does not replace scan-grid storage or constraint storage; it is a downstream interpretation, not a copy.
 
+**What a scan point's `coordinate_value` is measured against.** The column
+records the coordinate *as the producer parameterised its scan*, which is not
+necessarily the absolute internal coordinate. Every dihedral scan deposited to
+date — 46 series, all produced by Gaussian via ARC, measured against the hosted
+instance on 2026-08-30 — stores a **relative** sweep: `0, 8, 16 … 360` degrees
+of displacement from the starting geometry, with the absolute dihedral of that
+starting geometry carried separately in `calc_scan_coordinate.start_value` (and
+`end_value = start_value + 360`). For that corpus:
+
+```
+absolute, unwrapped = start_value + coordinate_value
+absolute dihedral   = (start_value + coordinate_value) mod 360
+```
+
+This was verified against stored geometry rather than inferred from the column
+names: for `calc_l43amz3thaubb5xoonwtgjmqlm` (dihedral 7-8-9-25,
+`start_value = 59.867`) the dihedral computed from each point's `geometry_id`
+reproduces `(start_value + coordinate_value) mod 360` to three decimals.
+
+Nothing enforces it. There is no range constraint on `coordinate_value`, no
+check tying it to `start_value`, and no field declaring which axis a producer
+used, so an absolute-axis deposit would be accepted and would be
+indistinguishable from a relative one. A reader that needs a real internal
+coordinate — comparing two scans of the same torsion, plotting against a
+geometry, locating a minimum in dihedral space — must anchor with `start_value`
+first. A reader that needs only the shape of the potential (a Fourier rotor
+fit, a barrier height) is unaffected, because those are invariant to the
+offset; `backend/scripts/validation/arkane_statmech_roundtrip.py` is one such
+consumer, which is why the corpus has been usable without the convention ever
+being written down.
+
+Two cautions when converting. Prefer the **unwrapped** form: `mod 360` crosses
+the branch cut mid-sweep and destroys the monotonicity that makes the points a
+path, which is why `end_value` is already written unwrapped. And `start_value`
+is nullable, so an unanchored scan is expressible; where it is null the
+absolute axis is not recoverable from the scan tables alone, though a per-point
+`geometry_id` — present on every point of every series deposited to date —
+still permits measuring it. Note also that `start + coordinate_value` assumes
+the sweep runs in the positive direction, which no stored field asserts.
+
+The reasoning behind recording the producer's axis rather than normalising it
+at ingest is
+`docs/adr/0019-a-scan-point-records-the-producers-axis.md`.
+
 ### 7.4 Direct Calculation Result Tables
 
 `calc_sp_result` fields:
@@ -999,6 +1043,11 @@ not stability evidence.
 - `coordinate_index`
 - `coordinate_value`
 - `value_unit`
+
+`coordinate_value` is recorded on the producer's axis and is not necessarily an
+absolute internal coordinate; `calc_scan_coordinate.start_value` is what anchors
+it. See "Ownership of geometric coordinate metadata across calculation tables"
+in §7.3 for the convention, the measured evidence, and the conversion.
 
 ### Path-search calculations (NEB / GSM / string methods)
 
