@@ -404,7 +404,7 @@ def _seed_dihedral_series(
     _new_quartet_coordinate(
         conn, calculation_id, 1, start_value=start_value, value_unit=unit, kind=kind
     )
-    for i, (stored, true_dihedral) in enumerate(zip(stored_values, true_dihedrals), start=1):
+    for i, (stored, true_dihedral) in enumerate(zip(stored_values, true_dihedrals, strict=True), start=1):
         d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
         if bad_point_index == i:
             d = (d[0] + 0.7, d[1] - 0.4, d[2] + 0.3)
@@ -442,16 +442,17 @@ _LEGACY_DECIMAL_OFFSETS = [0.0, 8.123456, 16.246912, 24.370368, 32.493824, 40.61
 _LEGACY_DECIMAL_TRUE = [_LEGACY_DECIMAL_START + o for o in _LEGACY_DECIMAL_OFFSETS]
 
 #: The real corpus shape for calc_z63ecgljjdt2dvkqkjadmxkxou: a relative
-#: sweep stored on an anchor within a few ten-thousandths of a degree of a
-#: full turn, NOT a constant series (an earlier draft of this fixture used a
-#: constant value here and was flagged in review as misleading). Because
-#: start_value is within noise of 360, the physically deposited geometry
-#: (built to true_dihedrals below) ends up numerically equal to the stored
-#: relative value itself -- which is exactly why the "conforms trivially"
-#: bucket exists.
+#: sweep stored on an anchor a few ten-thousandths of a degree short of a
+#: full turn. The geometry is built to the dihedral the deposit actually
+#: describes, wrap(start_value + stored) == stored - 0.0006, NOT to the
+#: stored value itself. Two earlier drafts got this wrong -- first a constant
+#: series, then true == stored -- and both made the fixture agree with
+#: whatever the code did. 0.0006 is not "within noise" of a check whose floor
+#: is 1e-3: doubled, it is exactly what defeated the margin-based downgrade
+#: guard this fixture exists to guard against.
 _ANCHOR360_START = 359.9994
 _ANCHOR360_STORED = [0.0, 8.0001, 15.9998, 24.0003, 31.9997]
-_ANCHOR360_TRUE = list(_ANCHOR360_STORED)
+_ANCHOR360_TRUE = [(_ANCHOR360_START + s) % 360.0 for s in _ANCHOR360_STORED]
 
 
 def _seed(conn) -> dict[str, int]:
@@ -537,7 +538,7 @@ def _seed(conn) -> dict[str, int]:
     _new_quartet_coordinate(
         conn, ids["near_collinear_point"], 1, start_value=_LEGACY_START
     )
-    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE, strict=True), start=1):
         if i == 3:
             d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, 1.0, true_dihedral)
         else:
@@ -552,7 +553,7 @@ def _seed(conn) -> dict[str, int]:
     _new_quartet_coordinate(
         conn, ids["degenerate_bond_point"], 1, start_value=_LEGACY_START
     )
-    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE, strict=True), start=1):
         if i == 3:
             d = (_ATOM_C[0] + 1e-9, _ATOM_C[1], _ATOM_C[2])
         else:
@@ -566,7 +567,7 @@ def _seed(conn) -> dict[str, int]:
     _new_quartet_coordinate(
         conn, ids["missing_atom_point"], 1, start_value=_LEGACY_START
     )
-    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE, strict=True), start=1):
         d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
         atoms = [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C)]
         if i != 3:
@@ -580,7 +581,7 @@ def _seed(conn) -> dict[str, int]:
     _new_quartet_coordinate(
         conn, ids["missing_geometry_point"], 1, start_value=_LEGACY_START
     )
-    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE, strict=True), start=1):
         if i == 3:
             _new_scan_point(conn, ids["missing_geometry_point"], i, None)
         else:
@@ -597,7 +598,7 @@ def _seed(conn) -> dict[str, int]:
     _new_quartet_coordinate(
         conn, ids["point_unit_mismatch"], 1, start_value=_LEGACY_START
     )
-    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE, strict=True), start=1):
         d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
         gid = _new_geometry(conn, [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C), ("H", *d)])
         _new_scan_point(conn, ids["point_unit_mismatch"], i, gid)
