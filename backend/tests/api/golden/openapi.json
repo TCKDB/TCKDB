@@ -4166,7 +4166,7 @@
         "type": "object"
       },
       "CalculationEnergyBlock": {
-        "description": "Energy summary — present only for ``sp`` / ``opt`` calculations.\n\nFor other calculation types this block is ``null`` in the response\n(the field is always present so the JSON shape stays stable).",
+        "description": "Energy summary — present only for ``sp`` / ``opt`` calculations.\n\nFor other calculation types this block is ``null`` in the response\n(the field is always present so the JSON shape stays stable).\n\n``single_point_equivalent`` is populated only on an ``opt`` record,\nand only when no real ``sp`` calculation exists at the same\nconformer observation + level of theory; see\n:class:`DerivedSinglePointEnergy`.",
         "properties": {
           "energy_hartree": {
             "anyOf": [
@@ -4182,6 +4182,16 @@
           "energy_kind": {
             "title": "Energy Kind",
             "type": "string"
+          },
+          "single_point_equivalent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DerivedSinglePointEnergy"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -13672,6 +13682,30 @@
           "curation_policy"
         ],
         "title": "DatasetReleaseSummary",
+        "type": "object"
+      },
+      "DerivedSinglePointEnergy": {
+        "description": "A same-level-of-theory single-point-equivalent, read off an ``opt``.\n\nA geometry optimisation computes the electronic energy at its final\ngeometry; running a separate ``sp`` calculation at the *same* level of\ntheory would reproduce that number, not a different one (the house\nrule behind ``docs/decisions`` on SP-vs-opt energy). When a\nconformer observation has no independent ``sp`` calculation at the\n``opt``'s own ``level_of_theory_id``, this block offers the opt's own\n``final_energy_hartree`` as the value a caller would otherwise have\ngone looking for under ``calculation_type=sp``.\n\nThis is a **read-time derivation, never a fabricated record**: no\n``calculation`` row is created, and it is computed fresh on every\nresponse rather than stored. ``calculation_count``,\n``evidence_coverage.sp``, and ``has_sp`` are all read from real\n``sp`` calculation rows only and never see this value — see\n:mod:`app.services.scientific_read.conformers`.\n\nOnly ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`\n(never to an ``sp`` one — a real ``sp`` result is never replaced by a\nderivation), and only when the *same* conformer observation has no\n``sp`` calculation at the *same* ``level_of_theory_id``. An ``sp`` at\na **different** level of theory is a different number and does not\nsuppress this block.",
+        "properties": {
+          "derived_from_calculation_type": {
+            "default": "opt",
+            "title": "Derived From Calculation Type",
+            "type": "string"
+          },
+          "energy_hartree": {
+            "title": "Energy Hartree",
+            "type": "number"
+          },
+          "energy_kind": {
+            "default": "final_energy_as_single_point",
+            "title": "Energy Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "energy_hartree"
+        ],
+        "title": "DerivedSinglePointEnergy",
         "type": "object"
       },
       "DescribedRuntime": {

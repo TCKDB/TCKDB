@@ -161,8 +161,13 @@ def test_a_non_freq_record_carries_no_frequency_block(client, methyl):
         "read null rather than an all-null object -- the second would say "
         "'one belongs here and is missing'"
     )
-    # And the block it *does* carry is still there, unchanged.
-    assert opt["energy"] == {"energy_hartree": None, "energy_kind": "final_energy"}
+    # And the block it *does* carry is still there, unchanged. No derived
+    # single-point-equivalent either: the opt has no energy to derive from.
+    assert opt["energy"] == {
+        "energy_hartree": None,
+        "energy_kind": "final_energy",
+        "single_point_equivalent": None,
+    }
 
 
 def test_the_two_result_blocks_are_exact_mirrors(client, methyl):

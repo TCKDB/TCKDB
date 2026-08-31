@@ -603,6 +603,62 @@ that point to this calculation via `CalculationDependency.parent_calculation_id`
 — useful when the returned calculation is the parent (e.g. an opt)
 that has freq/sp children.
 
+### `energy.single_point_equivalent`: the opt's own energy, offered as an sp value
+
+A geometry optimisation's converged energy *is* the electronic energy at
+its final geometry. Running an independent `sp` calculation at the same
+level of theory would reproduce that number, not a different one — so
+when a conformer observation has no real `sp` calculation at the `opt`'s
+own `level_of_theory_id`, the `opt` record's `energy` block carries a
+second, nested field:
+
+```json
+"energy": {
+  "energy_hartree": -614.081188505,
+  "energy_kind": "final_energy",
+  "single_point_equivalent": {
+    "energy_hartree": -614.081188505,
+    "energy_kind": "final_energy_as_single_point",
+    "derived_from_calculation_type": "opt"
+  }
+}
+```
+
+Rules:
+
+- **Only ever attached to an `opt` record.** A real `sp` record's
+  `energy` block never carries this field — a real measurement is never
+  replaced by a derivation.
+- **Fires only when no real `sp` calculation exists at the same
+  conformer observation + `level_of_theory_id`.** An `sp` at a
+  *different* level of theory does not suppress it — that is a
+  different number and does not answer the same question. An `sp` at
+  the *same* level of theory — of any `calculation_quality` or review
+  status — does suppress it: "was an independent sp run" is an
+  existence question, not a trust question.
+- **This is a read-time derivation, never a fabricated record.** No
+  `calculation` row is created for it. It is computed fresh on every
+  response and never written anywhere. It is deliberately invisible to
+  `calculation_count`, `evidence_coverage.sp`, and `has_sp` on the
+  conformer-evidence surfaces (`/scientific/conformers*`,
+  `/scientific/transition-states*`) — those are read strictly from real
+  `sp` calculation rows, by design; a derived energy leaking into them
+  would claim a calculation exists that does not.
+- **`energy_kind` on the nested block is its own token**
+  (`final_energy_as_single_point`), distinct from `electronic_energy`
+  (a real `sp` measurement) and `final_energy` (the sibling field, the
+  opt's own kind) — so a reader can tell all three apart from the JSON
+  alone, with no side channel or convention to remember.
+- Only appears on this endpoint (`/scientific/species-calculations/search`),
+  the one surface with `energy_kind` on the wire today. The single-record
+  detail endpoint (`/scientific/calculations/{ref}`) and the
+  `include=calculations` list on `/scientific/conformers*` project a
+  calculation's *own* stored result row only, by design (`CalculationOptResultSummary`
+  is a direct projection of `calc_opt_result`) — this is the surface
+  that already cross-references sibling calculations to answer "what's
+  the energy for this species", so it is the one that gained the
+  derivation.
+
 ---
 
 ## Error model

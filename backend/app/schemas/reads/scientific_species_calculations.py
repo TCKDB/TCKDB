@@ -204,15 +204,56 @@ class CalculationCoreBlock(BaseModel):
     review: RecordReviewBadge
 
 
+class DerivedSinglePointEnergy(BaseModel):
+    """A same-level-of-theory single-point-equivalent, read off an ``opt``.
+
+    A geometry optimisation computes the electronic energy at its final
+    geometry; running a separate ``sp`` calculation at the *same* level of
+    theory would reproduce that number, not a different one (the house
+    rule behind ``docs/decisions`` on SP-vs-opt energy). When a
+    conformer observation has no independent ``sp`` calculation at the
+    ``opt``'s own ``level_of_theory_id``, this block offers the opt's own
+    ``final_energy_hartree`` as the value a caller would otherwise have
+    gone looking for under ``calculation_type=sp``.
+
+    This is a **read-time derivation, never a fabricated record**: no
+    ``calculation`` row is created, and it is computed fresh on every
+    response rather than stored. ``calculation_count``,
+    ``evidence_coverage.sp``, and ``has_sp`` are all read from real
+    ``sp`` calculation rows only and never see this value — see
+    :mod:`app.services.scientific_read.conformers`.
+
+    Only ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`
+    (never to an ``sp`` one — a real ``sp`` result is never replaced by a
+    derivation), and only when the *same* conformer observation has no
+    ``sp`` calculation at the *same* ``level_of_theory_id``. An ``sp`` at
+    a **different** level of theory is a different number and does not
+    suppress this block.
+    """
+
+    energy_hartree: float
+    #: Distinct from "electronic_energy" (a real sp measurement) and
+    #: "final_energy" (the opt's own kind, on the sibling field) so a
+    #: reader can tell all three apart without a side channel.
+    energy_kind: str = "final_energy_as_single_point"
+    derived_from_calculation_type: str = "opt"
+
+
 class CalculationEnergyBlock(BaseModel):
     """Energy summary — present only for ``sp`` / ``opt`` calculations.
 
     For other calculation types this block is ``null`` in the response
     (the field is always present so the JSON shape stays stable).
+
+    ``single_point_equivalent`` is populated only on an ``opt`` record,
+    and only when no real ``sp`` calculation exists at the same
+    conformer observation + level of theory; see
+    :class:`DerivedSinglePointEnergy`.
     """
 
     energy_hartree: float | None = None
     energy_kind: str  # "electronic_energy" for sp; "final_energy" for opt
+    single_point_equivalent: DerivedSinglePointEnergy | None = None
 
 
 class ConformerContextBlock(BaseModel):
