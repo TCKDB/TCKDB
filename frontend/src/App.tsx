@@ -5,6 +5,7 @@ import { AppShell } from "./components/AppShell"
 import { LoadingPage } from "./components/LoadingPage"
 
 const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
+const BrowsePage = lazy(() => import("./pages/BrowsePage"))
 const CalculationDetailPage = lazy(() => import("./pages/CalculationDetailPage"))
 const ConformerGroupPage = lazy(() => import("./pages/ConformerGroupPage"))
 const ConformerObservationPage = lazy(() => import("./pages/ConformerObservationPage"))
@@ -20,7 +21,7 @@ function App() {
         <Routes>
           <Route element={<AppShell />}>
             <Route path="/" element={<ArchiveHomePage />} />
-            <Route path="/species" element={<RecordPlaceholderPage kind="Species" />} />
+            <Route path="/species" element={<BrowsePage />} />
             <Route path="/species/:speciesRef" element={<SpeciesOverviewPage />} />
             <Route path="/species-entries/:entryRef" element={<SpeciesEntryPage />} />
             <Route path="/species-entries/:entryRef/:section" element={<SpeciesEntryPage />} />

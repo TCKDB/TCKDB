@@ -1,0 +1,43 @@
+import { Link } from "react-router-dom"
+import type { SpeciesBrowseRecord } from "../api/browseApi"
+import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { Formula } from "./Formula"
+
+function token(value: string) {
+    return value.replaceAll("_", " ")
+}
+
+/**
+ * A species row leads with FORMULA AND STRUCTURE -- the brief's own
+ * distinction from the transition-state row, which has no formula and
+ * leads with the reaction it connects instead. Formula falls back to the
+ * SMILES headline (never to the public ref, matching `IdentifierSearch`'s
+ * `MatchHeadline` rule) when the archive computed no formula for this
+ * species (#251).
+ */
+export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
+    return (
+        <li className="browse-row species-browse-row">
+            <div className="browse-row-headline">
+                <Link className="browse-row-title" to={`/species/${record.species_ref}`}>
+                    {record.formula ? <Formula value={record.formula} /> : record.canonical_smiles}
+                </Link>
+                <span className="browse-row-meta">
+                    charge {chargeDisplay(record.charge)} · spin {spinDisplay(record.multiplicity)}
+                </span>
+            </div>
+            {record.formula && <p className="browse-row-smiles">{record.canonical_smiles}</p>}
+            <ul className="browse-row-entries">
+                {record.entries.map((entry) => (
+                    <li className="browse-entry-chip" key={entry.species_entry_ref}>
+                        <Link to={`/species-entries/${entry.species_entry_ref}`}>
+                            {token(entry.species_entry_kind)} · {token(entry.electronic_state_kind)}
+                        </Link>
+                        <span className="browse-entry-review">{token(entry.review.status)}</span>
+                    </li>
+                ))}
+            </ul>
+            <code className="browse-row-ref">{record.species_ref}</code>
+        </li>
+    )
+}
