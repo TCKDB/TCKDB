@@ -343,6 +343,7 @@ def make_calculation(
     transition_state_entry_id: int | None = None,
     lot_id: int | None = None,
     software_release_id: int | None = None,
+    workflow_tool_release_id: int | None = None,
     conformer_observation_id: int | None = None,
 ) -> Calculation:
     """Create a minimal Calculation row.
@@ -357,6 +358,7 @@ def make_calculation(
         transition_state_entry_id=transition_state_entry_id,
         lot_id=lot_id,
         software_release_id=software_release_id,
+        workflow_tool_release_id=workflow_tool_release_id,
         conformer_observation_id=conformer_observation_id,
     )
     session.add(calc)

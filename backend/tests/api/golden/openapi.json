@@ -7141,6 +7141,15 @@
         "title": "CalculationRead",
         "type": "object"
       },
+      "CalculationRecordKind": {
+        "description": "Which top-level record family a calculation's owner belongs to.\n\nA ``calculation`` row is attached to exactly one of\n``species_entry_id`` / ``transition_state_entry_id``. This enum names\nthat split at the ``species`` / ``transition_state`` granularity (not\nthe entry-table granularity — that distinction is\n``CalculationOwnerKind`` in\n``app.schemas.reads.scientific_calculation_search``, used by the\ncalculation-search ``owner_kind`` filter). It exists so a usage-derived\nvocabulary read (e.g. ``/meta/software``) can be scoped to \"software\nused on a species calculation\" vs \"used on a transition-state\ncalculation\" without exposing the entry-level distinction to a caller\nwho only wants the coarser split.",
+        "enum": [
+          "species",
+          "transition_state"
+        ],
+        "title": "CalculationRecordKind",
+        "type": "string"
+      },
       "CalculationResultSummary": {
         "description": "Wrapper carrying exactly one populated per-type result block.\n\n``kind`` mirrors which sub-block is populated for cheap client-side\nbranching. Sub-blocks for the other types are ``None``. The result\nsummary intentionally omits internal integer ids and heavy point /\nmode arrays — those belong to ``include=scan``, ``include=irc``,\n``include=path_search`` (per the spec).",
         "properties": {
@@ -67604,9 +67613,25 @@
     },
     "/api/v1/scientific/meta/software": {
       "get": {
-        "description": "Distinct software names with usage counts.",
+        "description": "Software names actually used by ≥1 calculation, with calculation counts.\n\nDerived from calculations, not the ``software`` registry — a package\nregistered but never attributed to any calculation does not appear.\n``count`` is how many calculations attribute that software (across all\nof its releases). Optional ``record_kind`` (``species`` or\n``transition_state``) narrows to software used on calculations owned\nby that kind of record; omitted, it is any kind.",
         "operationId": "get_software_api_v1_scientific_meta_software_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "record_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CalculationRecordKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Record Kind"
+            }
+          },
           {
             "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
             "in": "query",
@@ -67669,7 +67694,7 @@
     },
     "/api/v1/scientific/meta/software-versions": {
       "get": {
-        "description": "Distinct release versions for one named software.\n\n``software`` is required (422 ``missing_version_parent`` otherwise) —\nsee :func:`app.services.scientific_read.meta.list_software_versions`\nfor why an unscoped call is refused rather than merging every\npackage's versions together.",
+        "description": "Distinct release versions for one named software, actually used.\n\n``software`` is required (422 ``missing_version_parent`` otherwise) —\nsee :func:`app.services.scientific_read.meta.list_software_versions`\nfor why an unscoped call is refused rather than merging every\npackage's versions together. Only versions with at least one\nattributing calculation are listed.",
         "operationId": "get_software_versions_api_v1_scientific_meta_software_versions_get",
         "parameters": [
           {
@@ -67750,7 +67775,7 @@
     },
     "/api/v1/scientific/meta/workflow-tool-versions": {
       "get": {
-        "description": "Distinct release versions for one named workflow tool.\n\n``workflow_tool`` is required (422 ``missing_version_parent``\notherwise) — mirrors ``/meta/software-versions``.",
+        "description": "Distinct release versions for one named workflow tool, actually used.\n\n``workflow_tool`` is required (422 ``missing_version_parent``\notherwise) — mirrors ``/meta/software-versions``. Only versions with\nat least one attributing calculation are listed.",
         "operationId": "get_workflow_tool_versions_api_v1_scientific_meta_workflow_tool_versions_get",
         "parameters": [
           {
@@ -67831,9 +67856,25 @@
     },
     "/api/v1/scientific/meta/workflow-tools": {
       "get": {
-        "description": "Distinct workflow tool names with usage counts.",
+        "description": "Workflow tool names actually used by ≥1 calculation, with calculation counts.\n\nMirrors ``/meta/software``: derived from calculations, not the\n``workflow_tool`` registry; ``count`` is the number of attributing\ncalculations; ``record_kind`` optionally narrows by owner kind.",
         "operationId": "get_workflow_tools_api_v1_scientific_meta_workflow_tools_get",
         "parameters": [
+          {
+            "in": "query",
+            "name": "record_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/CalculationRecordKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Record Kind"
+            }
+          },
           {
             "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
             "in": "query",

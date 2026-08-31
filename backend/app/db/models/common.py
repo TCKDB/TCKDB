@@ -274,6 +274,26 @@ class CalculationType(str, Enum):
     conf = "conf"
 
 
+class CalculationRecordKind(str, Enum):
+    """Which top-level record family a calculation's owner belongs to.
+
+    A ``calculation`` row is attached to exactly one of
+    ``species_entry_id`` / ``transition_state_entry_id``. This enum names
+    that split at the ``species`` / ``transition_state`` granularity (not
+    the entry-table granularity — that distinction is
+    ``CalculationOwnerKind`` in
+    ``app.schemas.reads.scientific_calculation_search``, used by the
+    calculation-search ``owner_kind`` filter). It exists so a usage-derived
+    vocabulary read (e.g. ``/meta/software``) can be scoped to "software
+    used on a species calculation" vs "used on a transition-state
+    calculation" without exposing the entry-level distinction to a caller
+    who only wants the coarser split.
+    """
+
+    species = "species"
+    transition_state = "transition_state"
+
+
 class PathSearchMethod(str, Enum):
     """Algorithmic family of a path-search calculation.
 

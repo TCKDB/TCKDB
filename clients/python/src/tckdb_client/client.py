@@ -3334,23 +3334,42 @@ class TCKDBClient:
             authenticated=False,
         ).data
 
-    def get_meta_software(self, *, profile: str | None = None) -> Any:
-        """``GET /scientific/meta/software``."""
+    def get_meta_software(
+        self,
+        *,
+        record_kind: str | None = None,
+        profile: str | None = None,
+    ) -> Any:
+        """``GET /scientific/meta/software`` — software used by ≥1 calculation.
+
+        ``record_kind`` (``"species"`` or ``"transition_state"``) narrows
+        to software used on calculations owned by that kind of record;
+        omitted, it is any kind.
+        """
 
         return self.request_json(
             "GET",
             "/scientific/meta/software",
-            params={"profile": profile},
+            params={"record_kind": record_kind, "profile": profile},
             authenticated=False,
         ).data
 
-    def get_meta_workflow_tools(self, *, profile: str | None = None) -> Any:
-        """``GET /scientific/meta/workflow-tools``."""
+    def get_meta_workflow_tools(
+        self,
+        *,
+        record_kind: str | None = None,
+        profile: str | None = None,
+    ) -> Any:
+        """``GET /scientific/meta/workflow-tools`` — tools used by ≥1 calculation.
+
+        Mirrors :meth:`get_meta_software`: ``record_kind`` optionally
+        narrows by owner kind.
+        """
 
         return self.request_json(
             "GET",
             "/scientific/meta/workflow-tools",
-            params={"profile": profile},
+            params={"record_kind": record_kind, "profile": profile},
             authenticated=False,
         ).data
 
