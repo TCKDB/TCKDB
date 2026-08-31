@@ -60,6 +60,26 @@ class CalculationScanCoordinateCreate(CalculationScanCoordinatePayload, SchemaBa
 
 
 class CalculationScanPointCoordinateValuePayload(BaseModel):
+    """One coordinate's value at one sampled scan point.
+
+    ``coordinate_value`` is the internal coordinate itself, in that
+    coordinate's own unit -- degrees for ``angle``/``dihedral``/
+    ``improper``, Angstrom for ``bond`` -- per ADR 0020
+    (``docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md``,
+    which supersedes 0019's relative-to-start reading). It is never a
+    displacement and never relative to anything; the matching
+    ``CalculationScanCoordinatePayload.start_value``/``end_value`` are the
+    requested grid's extent, not an anchor to add back onto this field.
+
+    A periodic coordinate may continue past 360 degrees where doing so
+    keeps a relaxed, path-dependent sweep monotone -- 419.867 and 59.867
+    are the same physical angle, and a reader takes ``mod 360``. Producers
+    are expected to convert before depositing: a program that prints a
+    sweep relative to its own starting geometry holds the anchor it
+    computed that sweep from, and must apply it here rather than have
+    TCKDB carry the producer's convention forward as its own contract.
+    """
+
     coordinate_index: int = Field(ge=1)
     coordinate_value: float
     value_unit: CoordinateUnit | None = None

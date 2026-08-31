@@ -872,13 +872,49 @@ class CalculationScanPoint(Base):
 
 
 class CalculationScanPointCoordinateValue(Base):
-    """Coordinate values for one sampled scan point."""
+    """Coordinate values for one sampled scan point.
+
+    ``coordinate_value``'s meaning is fixed by ADR 0020
+    (``docs/adr/0020-a-scan-coordinate-value-is-the-coordinate-itself.md``),
+    which supersedes ADR 0019's relative-axis reading. See the column
+    comment below for the contract; ``app.services.scan_coordinate_conformance``
+    is the read-time check that finds deposits that do not yet conform to it.
+    """
 
     __tablename__ = "calc_scan_point_coordinate_value"
 
     calculation_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     point_index: Mapped[int] = mapped_column(Integer, primary_key=True)
     coordinate_index: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    #: The value of the internal coordinate *itself* at this sampled point,
+    #: in that coordinate's own unit -- degrees for ``angle``/``dihedral``/
+    #: ``improper``, Angstrom for ``bond`` (ADR 0020). Not a displacement
+    #: and not relative to anything: ``calc_scan_coordinate.start_value``/
+    #: ``end_value`` are the requested grid's extent (metadata, alongside
+    #: ``step_count``/``step_size``), never an anchor added onto this
+    #: column to recover the "real" value. ADR 0019 described the opposite
+    #: convention -- a sweep relative to the first point, with the
+    #: absolute value held in ``start_value`` -- and is SUPERSEDED.
+    #:
+    #: A periodic coordinate may continue past 360 degrees where doing so
+    #: keeps a relaxed, path-dependent sweep monotone (419.867 and 59.867
+    #: are the same physical angle; readers take ``mod 360``). Producers
+    #: convert before depositing -- a program that prints a relative sweep
+    #: necessarily holds the anchor it computed that sweep from, and
+    #: applies it before upload. TCKDB does not accept the transformation
+    #: and carry it forever, and does not adopt one producer's internal
+    #: representation as the database's contract.
+    #:
+    #: The deposited corpus (46 series, all one-dimensional dihedral scans
+    #: from a single producer) predates this decision and does not yet
+    #: conform to it -- every one of those series holds ADR 0019's
+    #: relative sweep. Correcting them in place is a separate, later
+    #: migration; ``app.services.scan_coordinate_conformance`` is the
+    #: read-time, warn-tier check (ADR 0008) that finds non-conforming
+    #: deposits by recomputing this column from the point's own stored
+    #: geometry, without reading ``start_value``/``end_value`` as an
+    #: anchor.
     coordinate_value: Mapped[float] = mapped_column(nullable=False)
     value_unit: Mapped[Optional[CoordinateUnit]] = mapped_column(
         SAEnum(CoordinateUnit, name="coordinate_unit", create_type=False),
