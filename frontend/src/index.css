@@ -7,6 +7,30 @@
 :root { --serif: "IBM Plex Serif", Georgia, serif; --sans: "IBM Plex Sans", system-ui, sans-serif; --mono: "IBM Plex Mono", ui-monospace, monospace; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: var(--page-bg); } a { color: inherit; text-decoration: none; } button, input { font: inherit; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
+/*
+ * `.archive-shell` is the top-level wrapper in `AppShell.tsx` around
+ * header / `<main>` / footer. Without an explicit height it was a plain
+ * block exactly as tall as its content, so on a short page (e.g. an
+ * empty `/species?kind=vdw` result, or a placeholder/error route) the
+ * footer sat directly under `<main>` with blank viewport below it
+ * instead of pinned to the bottom. This is the standard sticky-footer
+ * flex pattern: the shell stretches to at least the viewport height and
+ * `<main>` -- the only flexible child -- absorbs any slack, so the
+ * footer is pushed down on short pages but not pulled up over content
+ * on long ones (long pages still grow past 100dvh and scroll normally).
+ *
+ * `min-height: 100vh` is declared first as a fallback for browsers
+ * without `dvh` support, then immediately overridden by `100dvh`.
+ * `dvh` (dynamic viewport height) accounts for a mobile browser's
+ * collapsing URL bar, so the footer doesn't jump as it shows/hides --
+ * a bare `100vh` does. CSS cascade means the later declaration of the
+ * same property wins where a browser understands `dvh`; a browser that
+ * doesn't recognise `100dvh` as a valid value ignores that whole
+ * declaration and keeps the `100vh` one, so order (vh first, dvh
+ * second) is what makes the fallback actually a fallback.
+ */
+.archive-shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
+.archive-shell > main { flex: 1; }
 .utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }.brand { display: flex; gap: .55rem; align-items: center; font: 600 .76rem var(--mono); color: var(--ink-2); letter-spacing: .03em; }.brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: 600 .85rem var(--serif); }.utility-bar-end { display: flex; align-items: center; gap: clamp(.75rem, 2.5vw, 1.5rem); }.utility-bar nav { display: flex; gap: clamp(.75rem, 2.5vw, 1.5rem); }.utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font-size: .82rem; font-weight: 600; }.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
 .archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }.eyebrow { margin: 0 0 1.35rem; color: var(--accent); font: 400 .72rem var(--mono); letter-spacing: .19em; text-transform: uppercase; }.archive-hero h1, .record-placeholder h1 { margin: 0; font: 600 clamp(4.1rem, 11vw, 5rem)/.95 var(--serif); letter-spacing: -.045em; }.tagline { max-width: 41rem; margin: 1.4rem auto 0; color: var(--ink-2); font: 400 1.22rem/1.55 var(--serif); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: .66rem var(--mono); text-transform: uppercase; letter-spacing: .1em; }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
 .identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font-weight: 600; cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { margin: .65rem 0 0; color: var(--muted-2); font-size: .75rem; }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
