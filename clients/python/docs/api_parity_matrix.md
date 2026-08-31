@@ -12,9 +12,9 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 | Classification | Operations |
 |---|---|
 | typed | 93 |
-| raw_only | 105 |
+| raw_only | 106 |
 | not_applicable | 39 |
-| **total** | **237** |
+| **total** | **238** |
 
 ## Typed coverage
 
@@ -268,6 +268,12 @@ Deliberately reachable only through the generic request helpers. Each group stat
 | Operation | raw HTTP | typed client | iterator | example | contract test |
 |---|---|---|---|---|---|
 | `GET /api/v1/scientific/statmech/{statmech_ref_or_id}` | yes | — | — | — | — |
+
+> Identifier-free catalogue listing for the hosted web Browse page, sibling to search_transition_states() rather than a replacement for it -- same record shape, no owner/parent ref filters. Its audience is the Browse page's own frontend, not the producer/consumer scripts this client serves, which already reach the same records through search_transition_states(). Reachable via get_json().
+
+| Operation | raw HTTP | typed client | iterator | example | contract test |
+|---|---|---|---|---|---|
+| `GET /api/v1/scientific/transition-states/browse` | yes | — | — | — | — |
 
 > Single-record read of a row already returned in full by search_transport(transport_ref=...). Reachable via get_json() when only the ref is known.
 

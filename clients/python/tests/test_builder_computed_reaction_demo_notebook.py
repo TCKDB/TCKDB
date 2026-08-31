@@ -172,10 +172,19 @@ def test_notebook_executes_end_to_end(tmp_path):
     """Run the notebook headless without env vars and assert the
     outputs match the documented behaviour. ``--execute`` raises a
     non-zero exit code if any cell raises, so a clean returncode here
-    means every cell ran without error."""
+    means every cell ran without error.
+
+    ``TMPDIR`` is set on the nbconvert subprocess's own env, which the
+    ipykernel process it launches inherits (standard child-process env
+    inheritance) — this redirects the notebook's own
+    ``tempfile.mkdtemp(prefix="tckdb-builder-demo-")`` scratch dir into
+    pytest's ``tmp_path`` tree instead of leaking into the real system
+    temp dir on every test run.
+    """
     env = dict(os.environ)
     env.pop("TCKDB_BASE_URL", None)
     env.pop("TCKDB_API_KEY", None)
+    env["TMPDIR"] = str(tmp_path)
 
     out_path = tmp_path / "executed.ipynb"
     proc = subprocess.run(
@@ -266,6 +275,7 @@ def test_notebook_does_not_attempt_network_when_executed(tmp_path):
     env = dict(os.environ)
     env.pop("TCKDB_BASE_URL", None)
     env.pop("TCKDB_API_KEY", None)
+    env["TMPDIR"] = str(tmp_path)
     out_path = tmp_path / "executed.ipynb"
     proc = subprocess.run(
         [

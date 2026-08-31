@@ -57,7 +57,9 @@ from app.schemas.reads.scientific_transition_state import (
 )
 from app.schemas.reads.scientific_transition_state_search import (
     RequestEcho,
+    ScientificTransitionStatesBrowseResponse,
     ScientificTransitionStatesSearchResponse,
+    TransitionStatesBrowseRequest,
     TransitionStatesSearchRequest,
 )
 from app.services.scientific_read import levels_of_theory
@@ -277,6 +279,126 @@ def search_transition_states(
     )
 
 
+def browse_transition_states(
+    session: Session, request: TransitionStatesBrowseRequest
+) -> ScientificTransitionStatesBrowseResponse:
+    """List transition-state entries by secondary filter alone -- no identifier required.
+
+    See ``/scientific/transition-states/browse``. This is the identifier-free
+    catalogue read that :func:`search_transition_states` deliberately
+    cannot serve: that function's :func:`_enforce_at_least_one_filter`
+    rejects an empty query with 422 ``missing_filter`` to keep an
+    accidental unbounded scan from being possible on a route whose other
+    callers rely on that guard. Relaxing the guard in place would make one
+    route mean two different things depending on which query parameters
+    happened to be present; a bounded, paged "what does the archive hold"
+    listing is a different question with a different request shape
+    (:class:`TransitionStatesBrowseRequest`, which structurally cannot
+    carry the owner/parent ref filters that make search a lookup), so it
+    gets its own function and its own route, sibling to ``/search`` rather
+    than a flag on it.
+
+    Everything downstream of "which candidate TS entries" is shared with
+    :func:`search_transition_states` verbatim: the same scalar / evidence /
+    method-basis-software filter builders (:func:`_apply_scalar_filters`,
+    :func:`_apply_evidence_filters`, :func:`_apply_method_basis_software_filters`),
+    the same review-visibility gate (:func:`app.services.scientific_read.common.visible_statuses`),
+    the same ``review_rank ASC, created_at DESC, id DESC`` order, the same
+    bounded page size, and the same per-page record builder
+    (:func:`_materialize_records`) -- so a browse record and a search
+    record are byte-identical in shape.
+
+    Only the candidate set differs, and only by omission:
+    :func:`_apply_parent_filters` (the four owner/parent ref filters) is
+    never called here, because :class:`TransitionStatesBrowseRequest` has
+    no ref fields to read one from. With every optional filter absent
+    (the default, empty browse request) the candidate set is every
+    ``transition_state_entry`` row in the corpus -- the whole point of the
+    endpoint, and the 34-row live-archive gap this endpoint exists to
+    close.
+
+    :param session: SQLAlchemy session bound to the read DB.
+    :param request: Parsed request model.
+    :returns: ``ScientificTransitionStatesBrowseResponse`` Pydantic model.
+    :raises ValueError: 422 for sort/pagination/include validation failures.
+    """
+    reject_client_sort(request.sort)
+    offset, limit = validate_pagination(request.offset, request.limit)
+    includes = validate_includes(
+        request.include,
+        _LEGAL_INCLUDE_TOKENS,
+        "/scientific/transition-states/browse",
+        internal_tokens=_INTERNAL_INCLUDE_TOKENS,
+    )
+    includes = filter_internal_ids_from_resolved(includes)
+
+    # --- candidate query ----------------------------------------------------
+    # No _apply_parent_filters() call: TransitionStatesBrowseRequest carries
+    # no reaction_ref / reaction_entry_ref / transition_state_ref /
+    # transition_state_entry_ref, so there is nothing to join or filter on
+    # for owner/parent scope. See the docstring above.
+    stmt = select(
+        TransitionStateEntry.id,
+        TransitionStateEntry.created_at,
+    )
+    stmt = _apply_scalar_filters(stmt, request)
+    stmt = _apply_evidence_filters(stmt, request)
+    stmt = _apply_method_basis_software_filters(stmt, request)
+
+    rows = session.execute(stmt).all()
+    candidate_ids = [row.id for row in rows]
+    created_at_by_id = {row.id: row.created_at for row in rows}
+
+    if not candidate_ids:
+        return _empty_browse_response(request, includes, offset, limit)
+
+    # --- review filter ------------------------------------------------------
+    badges = fetch_review_badges(
+        session,
+        record_type=SubmissionRecordType.transition_state_entry,
+        record_ids=candidate_ids,
+    )
+    visible = visible_statuses(
+        min_review_status=request.min_review_status,
+        include_rejected=request.include_rejected,
+        include_deprecated=request.include_deprecated,
+    )
+    visible_ids = [
+        cid for cid in candidate_ids if badges[cid].status in visible
+    ]
+    if not visible_ids:
+        return _empty_browse_response(request, includes, offset, limit)
+
+    summary = review_summary(badges[cid] for cid in visible_ids)
+
+    # --- deterministic sort -------------------------------------------------
+    visible_ids.sort(
+        key=lambda cid: (
+            REVIEW_RANK[badges[cid].status],
+            -created_at_by_id[cid].timestamp(),
+            -cid,
+        )
+    )
+
+    total = len(visible_ids)
+    page_ids = visible_ids[offset : offset + limit]
+
+    records = _materialize_records(session, page_ids, badges, includes)
+
+    return ScientificTransitionStatesBrowseResponse(
+        request=RequestEcho(
+            filter=_browse_filter_echo(request),
+            sort=_DEFAULT_SORT_ECHO,
+            include=sorted(includes),
+        ),
+        review_summary=summary,
+        records=records,
+        pagination=build_pagination(
+            offset=offset, limit=limit, returned=len(records), total=total
+        ),
+    )
+
+
 # ---------------------------------------------------------------------------
 # Filter rule + ref resolution
 # ---------------------------------------------------------------------------
@@ -364,7 +486,7 @@ def _apply_parent_filters(
 
 
 def _apply_scalar_filters(
-    stmt, request: TransitionStatesSearchRequest
+    stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
 ):
     if request.status is not None:
         stmt = stmt.where(TransitionStateEntry.status == request.status)
@@ -378,7 +500,7 @@ def _apply_scalar_filters(
 
 
 def _apply_evidence_filters(
-    stmt, request: TransitionStatesSearchRequest
+    stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
 ):
     if request.has_calculations is not None:
         ex = exists().where(
@@ -430,7 +552,7 @@ def _apply_evidence_filters(
 
 
 def _apply_method_basis_software_filters(
-    stmt, request: TransitionStatesSearchRequest
+    stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
 ):
     """Method/basis/software/workflow filters narrow TS entries to those
     whose calculation evidence includes a row matching the supplied
@@ -641,6 +763,80 @@ def _request_filter_echo(request: TransitionStatesSearchRequest) -> dict[str, An
     return out
 
 
+# Filter fields shared by browse and search, minus the four owner/parent
+# ref filters (``reaction_ref`` etc.) that :class:`TransitionStatesBrowseRequest`
+# does not have attributes for. Duplicated from the tail of
+# ``_MEANINGFUL_FILTER_FIELDS`` rather than sliced from it, so a future
+# addition to one tuple cannot silently resize the other.
+_BROWSE_FILTER_FIELDS: tuple[str, ...] = (
+    "status",
+    "charge",
+    "multiplicity",
+    "has_calculations",
+    "has_opt",
+    "has_freq",
+    "has_sp",
+    "has_irc",
+    "has_path_search",
+    "has_geometry_validation",
+    "has_scf_stability",
+    "method",
+    "basis",
+    "software",
+    "software_version",
+    "workflow_tool",
+    "workflow_tool_version",
+)
+
+
+def _browse_filter_echo(request: TransitionStatesBrowseRequest) -> dict[str, Any]:
+    """:func:`_request_filter_echo`'s counterpart for browse.
+
+    Not a call to ``_request_filter_echo`` with the ref fields absent:
+    :class:`TransitionStatesBrowseRequest` has no ``reaction_ref`` /
+    ``reaction_entry_ref`` / ``transition_state_ref`` /
+    ``transition_state_entry_ref`` attributes to read, so
+    ``getattr(request, "reaction_ref")`` would raise rather than quietly
+    return ``None``. Same ``value is None`` gate as
+    :func:`_request_filter_echo` -- ``include_rejected`` /
+    ``include_deprecated`` are always echoed (they default ``False``, never
+    ``None``), matching the search sibling's existing wire behaviour.
+    """
+    out: dict[str, Any] = {}
+    for name in (
+        *_BROWSE_FILTER_FIELDS,
+        "include_rejected",
+        "include_deprecated",
+        "min_review_status",
+    ):
+        value = getattr(request, name)
+        if value is None:
+            continue
+        out[name] = value.value if hasattr(value, "value") else value
+    return out
+
+
+def _empty_browse_response(
+    request: TransitionStatesBrowseRequest,
+    includes: set[str],
+    offset: int,
+    limit: int,
+) -> ScientificTransitionStatesBrowseResponse:
+    return ScientificTransitionStatesBrowseResponse(
+        request=RequestEcho(
+            filter=_browse_filter_echo(request),
+            sort=_DEFAULT_SORT_ECHO,
+            include=sorted(includes),
+        ),
+        review_summary=review_summary([]),
+        records=[],
+        pagination=build_pagination(
+            offset=offset, limit=limit, returned=0, total=0
+        ),
+    )
+
+
 __all__ = [
+    "browse_transition_states",
     "search_transition_states",
 ]

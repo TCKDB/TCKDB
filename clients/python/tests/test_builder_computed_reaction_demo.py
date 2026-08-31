@@ -38,17 +38,27 @@ _DEMO_PATH = (
 
 
 @pytest.fixture(scope="module")
-def demo_run():
+def demo_run(tmp_path_factory):
     """Run the demo once, with the server env vars scrubbed.
 
     Cached across the whole module — every assertion below works off
     the same stdout/stderr capture so the suite pays one subprocess
     + interpreter startup cost regardless of how many checks we
     make.
+
+    ``TMPDIR`` is redirected into a pytest-managed directory so the
+    demo's own ``tempfile.mkdtemp(prefix="tckdb-builder-demo-")``
+    scratch directory lands under pytest's tree (cleaned up on a
+    rolling basis) instead of leaking into the real system temp dir
+    on every test run. ``tmp_path_factory`` is session-scoped, which
+    is what lets it compose with this module-scoped fixture — the
+    function-scoped ``tmp_path`` fixture cannot be injected here.
     """
     env = dict(os.environ)
     env.pop("TCKDB_BASE_URL", None)
     env.pop("TCKDB_API_KEY", None)
+    tmpdir_root = tmp_path_factory.mktemp("demo-tmpdir")
+    env["TMPDIR"] = str(tmpdir_root)
     proc = subprocess.run(
         [sys.executable, str(_DEMO_PATH)],
         capture_output=True,
@@ -56,6 +66,10 @@ def demo_run():
         env=env,
         timeout=60,
     )
+    # Stashed for test_demo_workdir_is_redirected_into_pytest_tmp_path
+    # below — regular attribute assignment works fine on a
+    # ``CompletedProcess`` instance.
+    proc.env_tmpdir = tmpdir_root
     return proc
 
 
@@ -174,6 +188,37 @@ def test_demo_writes_tempdir_for_artifact_files(demo_run):
     to inspect the filesystem after the fact."""
     out = demo_run.stdout
     assert "tckdb-builder-demo-" in out
+
+
+def test_demo_workdir_is_redirected_into_pytest_tmp_path(demo_run):
+    """Regression test for the tmpdir-leak fix.
+
+    The demo's ``tempfile.mkdtemp(prefix="tckdb-builder-demo-")``
+    workdir must land under the pytest-managed ``TMPDIR`` the
+    ``demo_run`` fixture sets, not under the raw system temp
+    directory — otherwise every test run leaks a directory into
+    ``/tmp`` that nothing ever cleans up. This asserts on the actual
+    artifact path the demo printed, so it fails if the ``TMPDIR``
+    override is ever removed from the fixture.
+    """
+    out = demo_run.stdout
+    path_lines = [
+        line
+        for line in out.splitlines()
+        if "tckdb-builder-demo-" in line and "output_log" in line
+    ]
+    assert path_lines, (
+        "expected an artifact summary line naming the demo workdir; "
+        f"stdout was:\n{out}"
+    )
+    printed_path = Path(path_lines[0].split()[-1]).resolve()
+    expected_root = demo_run.env_tmpdir.resolve()
+    assert printed_path.is_relative_to(expected_root), (
+        f"demo workdir {printed_path} is not under the pytest-managed "
+        f"TMPDIR root {expected_root}; the TMPDIR override in the "
+        "demo_run fixture appears to have been removed, which will "
+        "leak a directory into the real /tmp on every test run."
+    )
 
 
 def test_demo_diagnostic_codes_match_public_constants(demo_run):

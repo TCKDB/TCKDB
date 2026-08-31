@@ -23,6 +23,8 @@ Sub-routers:
                             → /scientific/calculations/{calculation_ref_or_id}/scan
                               /irc and /path-search
     calculations.router     → /scientific/calculations/{calculation_ref_or_id}
+    transition_states_browse.router
+                            → /scientific/transition-states/browse
     transition_states.ts_router
                             → /scientific/transition-states/search +
                               /scientific/transition-states/{ref_or_id}
@@ -64,6 +66,7 @@ from app.api.routes.scientific import (
     thermo,
     thermo_search,
     transition_states,
+    transition_states_browse,
     transport,
 )
 from app.api.routes.scientific._profile import resolve_profile_dependency
@@ -103,6 +106,13 @@ scientific_router.include_router(geometries.router)
 # correctness.
 scientific_router.include_router(calculation_paths.router)
 scientific_router.include_router(calculations.router)
+# Identifier-free catalogue read, registered right before the search +
+# detail router it deliberately does not modify -- and it must come
+# first: ts_router's ``/{transition_state_ref_or_id}`` catch-all is
+# registered by the time this module's own decorators could reach it, so
+# a route appended to ts_router afterwards would be shadowed. See
+# transition_states_browse.py's module docstring.
+scientific_router.include_router(transition_states_browse.router)
 scientific_router.include_router(transition_states.ts_router)
 scientific_router.include_router(transition_states.tse_router)
 scientific_router.include_router(conformers.search_router)
