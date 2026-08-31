@@ -114,13 +114,33 @@ function renderForm() {
     render(<Wrapper />)
 }
 
+describe("no vocabulary option renders a count", () => {
+    // The endpoints DO return a `count`, and it means different things per
+    // endpoint -- structurally always 1 for software/workflow-tool (both
+    // carry `UniqueConstraint("name")`), a real tally for methods/basis.
+    // A number beside an option reads as a record count either way, so a
+    // figure whose meaning changes between two adjacent dropdowns is worse
+    // than no figure. This asserts across EVERY vocabulary select, not one:
+    // a per-field flag is exactly how the inconsistency arose.
+    it("renders bare values in every select, never a trailing (n)", async () => {
+        server.use(...metaHandlers())
+        renderForm()
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        for (const label of ["Method", "Basis", "Software", "Workflow tool"]) {
+            const texts = [...screen.getByLabelText(label).querySelectorAll("option")].map((o) => o.textContent ?? "")
+            expect(texts.length).toBeGreaterThan(1)
+            for (const text of texts) expect(text).not.toMatch(/\s\(\d+\)$/)
+        }
+    })
+})
+
 describe("each vocabulary select is populated from ITS OWN endpoint", () => {
     it("Method reads /meta/methods, not any other endpoint's values", async () => {
         server.use(...metaHandlers())
         renderForm()
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
         const options = [...screen.getByLabelText("Method").querySelectorAll("option")].map((o) => o.textContent)
-        expect(options).toEqual(["Any", "CCSD(T)-F12 (12)", "MRCI+Davidson (8)", "b3lyp (5)", "wb97xd (3)"])
+        expect(options).toEqual(["Any", "CCSD(T)-F12", "MRCI+Davidson", "b3lyp", "wb97xd"])
     })
 
     it("Basis reads /meta/basis-sets, not Method's values", async () => {
@@ -128,7 +148,7 @@ describe("each vocabulary select is populated from ITS OWN endpoint", () => {
         renderForm()
         await waitFor(() => expect(screen.getByLabelText("Basis").querySelectorAll("option")).toHaveLength(BASIS_SETS.length + 1))
         const options = [...screen.getByLabelText("Basis").querySelectorAll("option")].map((o) => o.textContent)
-        expect(options).toEqual(["Any", "def2tzvp (9)", "aug-cc-pV(T+d)Z (4)", "cc-pVTZ-F12 (2)"])
+        expect(options).toEqual(["Any", "def2tzvp", "aug-cc-pV(T+d)Z", "cc-pVTZ-F12"])
     })
 
     it("Software reads /meta/software, not /meta/workflow-tools -- a select showing the right SHAPE of label while reading the wrong vocabulary is the exact failure this guards against", async () => {

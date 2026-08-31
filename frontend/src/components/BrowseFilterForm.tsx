@@ -91,13 +91,9 @@ function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChang
             options={[["", "Any"], ...TS_STATUSES.map((status): [string, string] => [status, token(status)])]}
             value={filters.status}
         />
-        <VocabField label="Method" onChange={(value) => onChange({ method: value })} showCount value={filters.method} vocab={methodVocab} />
-        <VocabField label="Basis" onChange={(value) => onChange({ basis: value })} showCount value={filters.basis} vocab={basisVocab} />
-        {/* `showCount={false}`: software/workflow-tool names carry a
-            `UniqueConstraint`, so their count is structurally always 1 --
-            see `vocabApi.ts`'s doc comment. Rendering it would dress a
-            constant up as data. */}
-        <VocabField label="Software" onChange={(value) => onChange({ software: value, softwareVersion: "" })} showCount={false} value={filters.software} vocab={softwareVocab} />
+        <VocabField label="Method" onChange={(value) => onChange({ method: value })} value={filters.method} vocab={methodVocab} />
+        <VocabField label="Basis" onChange={(value) => onChange({ basis: value })} value={filters.basis} vocab={basisVocab} />
+        <VocabField label="Software" onChange={(value) => onChange({ software: value, softwareVersion: "" })} value={filters.software} vocab={softwareVocab} />
         <VersionField
             label="Software version"
             onChange={(value) => onChange({ softwareVersion: value })}
@@ -106,7 +102,7 @@ function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChang
             value={filters.softwareVersion}
             vocab={softwareVersionVocab}
         />
-        <VocabField label="Workflow tool" onChange={(value) => onChange({ workflowTool: value, workflowToolVersion: "" })} showCount={false} value={filters.workflowTool} vocab={workflowToolVocab} />
+        <VocabField label="Workflow tool" onChange={(value) => onChange({ workflowTool: value, workflowToolVersion: "" })} value={filters.workflowTool} vocab={workflowToolVocab} />
         <VersionField
             label="Workflow tool version"
             onChange={(value) => onChange({ workflowToolVersion: value })}
@@ -164,15 +160,20 @@ function SelectField({ label, value, onChange, options }: {
  * -- because two values that merely look alike (e.g. Gaussian's `"16"`
  * and `"Gaussian 16, Revision C.02"`) can match different record subsets;
  * collapsing them would hide a real data inconsistency (issue #305) behind
- * a tidy control. `showCount` is false for software/workflow-tool, whose
- * count is a structural constant (see `EvidenceFields`'s doc comment).
+ * a tidy control.
+ *
+ * No option renders a count. The vocabulary endpoints do return one, but
+ * it means different things per endpoint -- structurally always 1 for
+ * software/workflow-tool (both carry `UniqueConstraint("name")`), a real
+ * tally elsewhere -- and a number beside an option reads as a record
+ * count regardless. A figure whose meaning changes between two adjacent
+ * dropdowns is worse than no figure.
  */
-function VocabField({ label, value, onChange, vocab, showCount }: {
+function VocabField({ label, value, onChange, vocab }: {
     label: string
     value: string
     onChange: (value: string) => void
     vocab: VocabularyState
-    showCount: boolean
 }) {
     const id = fieldId(label)
     const entries = vocab.status === "ready" ? vocab.entries : []
@@ -182,7 +183,7 @@ function VocabField({ label, value, onChange, vocab, showCount }: {
             <select disabled={vocab.status === "loading"} id={id} onChange={(event) => onChange(event.target.value)} value={value}>
                 <option value="">Any</option>
                 {entries.map((entry) => (
-                    <option key={entry.value} value={entry.value}>{showCount ? `${entry.value} (${entry.count})` : entry.value}</option>
+                    <option key={entry.value} value={entry.value}>{entry.value}</option>
                 ))}
             </select>
             {vocab.status === "loading" && <p className="browse-filter-hint">Loading {label.toLowerCase()} list…</p>}
@@ -218,7 +219,7 @@ function VersionField({ label, parentLabel, parent, value, onChange, vocab }: {
             <select disabled={vocab.status !== "ready"} id={id} onChange={(event) => onChange(event.target.value)} value={value}>
                 <option value="">Any</option>
                 {entries.map((entry) => (
-                    <option key={entry.value} value={entry.value}>{`${entry.value} (${entry.count})`}</option>
+                    <option key={entry.value} value={entry.value}>{entry.value}</option>
                 ))}
             </select>
             {vocab.status === "no-parent" && <p className="browse-filter-hint">Choose a {parentLabel} first.</p>}
