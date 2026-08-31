@@ -37,12 +37,31 @@ export function loadBasisSets(signal?: AbortSignal): Promise<VocabEntry[]> {
     return loadVocab("/api/v1/scientific/meta/basis-sets", signal)
 }
 
-export function loadSoftwareNames(signal?: AbortSignal): Promise<VocabEntry[]> {
-    return loadVocab("/api/v1/scientific/meta/software", signal)
+/**
+ * The calculation-owner granularity `/meta/software` and
+ * `/meta/workflow-tools` narrow by -- "species" or "transition_state",
+ * mirroring `CalculationRecordKind` (`app/db/models/common.py`). There is
+ * no "vdw" value: a van der Waals complex is a `species_entry` row like
+ * any other, so at the calculation-owner level it IS "species" -- see
+ * `BrowseFilterForm`'s `recordKindFor` helper, which maps the browse
+ * page's three-way `kind` down to this two-way scope.
+ */
+export type VocabRecordKind = "species" | "transition_state"
+
+/**
+ * `recordKind` narrows to software actually used by a calculation owned by
+ * that kind of record (added in #308, `/meta/software`'s own doc comment
+ * for the full rationale) -- omitted, the list is unscoped (any kind).
+ */
+export function loadSoftwareNames(recordKind?: VocabRecordKind, signal?: AbortSignal): Promise<VocabEntry[]> {
+    const query = recordKind ? `?${new URLSearchParams({ record_kind: recordKind })}` : ""
+    return loadVocab(`/api/v1/scientific/meta/software${query}`, signal)
 }
 
-export function loadWorkflowToolNames(signal?: AbortSignal): Promise<VocabEntry[]> {
-    return loadVocab("/api/v1/scientific/meta/workflow-tools", signal)
+/** Mirrors `loadSoftwareNames`'s `recordKind` scoping -- see there for the rationale. */
+export function loadWorkflowToolNames(recordKind?: VocabRecordKind, signal?: AbortSignal): Promise<VocabEntry[]> {
+    const query = recordKind ? `?${new URLSearchParams({ record_kind: recordKind })}` : ""
+    return loadVocab(`/api/v1/scientific/meta/workflow-tools${query}`, signal)
 }
 
 /**

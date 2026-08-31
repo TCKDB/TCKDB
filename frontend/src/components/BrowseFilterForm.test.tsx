@@ -4,20 +4,21 @@ import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { EMPTY_BROWSE_FILTERS } from "../api/browseApi"
-import type { BrowseFilters } from "../api/browseApi"
+import { BROWSE_KINDS, EMPTY_BROWSE_FILTERS } from "../api/browseApi"
+import type { BrowseFilters, BrowseKind } from "../api/browseApi"
 import { BrowseFilterForm } from "./BrowseFilterForm"
 
 /**
- * `BrowseFilterForm`'s six vocabulary-backed fields (Method, Basis,
- * Software, Software version, Workflow tool, Workflow tool version --
- * `EvidenceFields`, only mounted for `kind="transition_state"`). Fixtures
- * mirror the MEASURED live archive vocabulary (see the design brief), not
- * invented values: Gaussian genuinely has two version strings that look
- * like duplicates and are not (`"16"` vs `"Gaussian 16, Revision C.02"`,
- * a parsed output banner deposited into the version column -- issue
- * #305), Arkane genuinely appears in both the software and workflow-tool
- * lists, and ORCA/Molpro/Arkane genuinely have zero recorded versions
+ * `BrowseFilterForm`'s six vocabulary-backed PROVENANCE fields (Method,
+ * Basis, Software, Software version, Workflow tool, Workflow tool version
+ * -- `ProvenanceFields`, mounted for EVERY `kind`) and the transition-state-
+ * only `EvidenceFields` (Status + seven `has_*` flags). Fixtures mirror the
+ * MEASURED live archive vocabulary (see the design brief), not invented
+ * values: Gaussian genuinely has two version strings that look like
+ * duplicates and are not (`"16"` vs `"Gaussian 16, Revision C.02"`, a
+ * parsed output banner deposited into the version column -- issue #305),
+ * Arkane genuinely appears in both the software and workflow-tool lists,
+ * and ORCA/Molpro/Arkane genuinely have zero recorded versions
  * (`software_release.version` is NULL for all three).
  */
 
@@ -52,6 +53,8 @@ type MetaOptions = {
     methodsStatus?: number
     captureSoftwareVersionUrls?: URL[]
     captureWorkflowToolVersionUrls?: URL[]
+    captureSoftwareUrls?: URL[]
+    captureWorkflowToolUrls?: URL[]
     versionsByParent?: Record<string, { value: string; count: number }[]>
 }
 
@@ -63,8 +66,14 @@ function metaHandlers(options: MetaOptions = {}) {
             return HttpResponse.json({ results: METHODS })
         }),
         http.get("/api/v1/scientific/meta/basis-sets", () => HttpResponse.json({ results: BASIS_SETS })),
-        http.get("/api/v1/scientific/meta/software", () => HttpResponse.json({ results: SOFTWARE })),
-        http.get("/api/v1/scientific/meta/workflow-tools", () => HttpResponse.json({ results: WORKFLOW_TOOLS })),
+        http.get("/api/v1/scientific/meta/software", ({ request }) => {
+            options.captureSoftwareUrls?.push(new URL(request.url))
+            return HttpResponse.json({ results: SOFTWARE })
+        }),
+        http.get("/api/v1/scientific/meta/workflow-tools", ({ request }) => {
+            options.captureWorkflowToolUrls?.push(new URL(request.url))
+            return HttpResponse.json({ results: WORKFLOW_TOOLS })
+        }),
         http.get("/api/v1/scientific/meta/software-versions", ({ request }) => {
             const url = new URL(request.url)
             options.captureSoftwareVersionUrls?.push(url)
@@ -101,17 +110,22 @@ afterAll(() => server.close())
  * outgoing browse query, see the design brief's walkthrough). Reading
  * the state directly, not just what the browser happens to render,
  * is what makes that mutation actually fail a test.
+ *
+ * `kind` defaults to "transition_state" to keep every EXISTING test in
+ * this file (written against the six provenance fields plus the
+ * transition-state-only Status/`has_*` fields) unchanged; tests that care
+ * about a different kind pass it explicitly.
  */
-function Wrapper() {
+function Wrapper({ kind = "transition_state" }: { kind?: BrowseKind }) {
     const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
     return <>
-        <BrowseFilterForm filters={filters} kind="transition_state" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+        <BrowseFilterForm filters={filters} kind={kind} onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
         <output data-software-version={filters.softwareVersion} data-testid="debug-filters" data-workflow-tool-version={filters.workflowToolVersion} />
     </>
 }
 
-function renderForm() {
-    render(<Wrapper />)
+function renderForm(kind?: BrowseKind) {
+    render(<Wrapper kind={kind} />)
 }
 
 describe("no vocabulary option renders a count", () => {
@@ -358,5 +372,142 @@ describe("a failed vocabulary fetch degrades ONE select without breaking the oth
         expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(1) // "Any" only, never crashes into zero options
         await waitFor(() => expect(screen.getByLabelText("Basis").querySelectorAll("option")).toHaveLength(BASIS_SETS.length + 1))
         await waitFor(() => expect(screen.getByLabelText("Software").querySelectorAll("option")).toHaveLength(SOFTWARE.length + 1))
+    })
+})
+
+const PROVENANCE_LABELS = ["Method", "Basis", "Software", "Software version", "Workflow tool", "Workflow tool version"]
+const EVIDENCE_ONLY_LABELS = [
+    "Status", "Has optimization", "Has frequency", "Has single point", "Has IRC",
+    "Has path search", "Has geometry validation", "Has SCF stability",
+]
+
+// The six provenance selects used to live inside a section mounted ONLY
+// for `kind="transition_state"` -- `/species/browse` has genuinely
+// accepted all six all along (see the design brief), so hiding them on
+// "species"/"vdw" hid a real capability. This asserts PER KIND, not once,
+// because a bug here is exactly the kind that a single-kind assertion
+// (as `describe`s above all render with kind="transition_state") cannot
+// see: rendering correctly for TS while staying broken for the other two
+// would pass a suite that only ever mounts with TS.
+describe("the six provenance selects render on EVERY browse kind, not just transition state", () => {
+    for (const kind of BROWSE_KINDS) {
+        it(`kind="${kind}": all six provenance selects are present`, async () => {
+            server.use(...metaHandlers())
+            renderForm(kind)
+            await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+            for (const label of PROVENANCE_LABELS) expect(screen.getByLabelText(label)).toBeInTheDocument()
+        })
+    }
+})
+
+// The inverse claim: Status and the seven `has_*` evidence flags are
+// TRANSITION-STATE ONLY -- `/species/browse` accepts none of them, so if
+// they rendered for "species"/"vdw" a filled-in value would be silently
+// dropped on the way to the request rather than doing anything. Asserted
+// as an ABSENCE on the two kinds that must not have them, not just a
+// presence check on transition_state, per the design brief: a component
+// that renders both sections unconditionally would still pass any test
+// that only checks transition_state.
+describe("Status and the has_* evidence fields render ONLY on transition state", () => {
+    it('kind="species": none of the evidence-only fields are present', async () => {
+        server.use(...metaHandlers())
+        renderForm("species")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        for (const label of EVIDENCE_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+    })
+
+    it('kind="vdw": none of the evidence-only fields are present', async () => {
+        server.use(...metaHandlers())
+        renderForm("vdw")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        for (const label of EVIDENCE_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+    })
+
+    it('kind="transition_state": every evidence-only field IS present', async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        for (const label of EVIDENCE_ONLY_LABELS) expect(screen.getByLabelText(label)).toBeInTheDocument()
+    })
+})
+
+// `record_kind` scoping decision (see the design brief): Software and
+// Workflow tool narrow their /meta/* fetch to the calculation-owner scope
+// that matches the browse `kind` -- "species" for BOTH "species" and
+// "vdw" (a van der Waals complex is a species_entry row, so it has no
+// separate CalculationRecordKind value), "transition_state" for
+// "transition_state". Method and Basis carry NO such parameter, since
+// `/meta/methods`/`/meta/basis-sets` do not accept one.
+describe("Software/Workflow tool scope their vocabulary fetch by record_kind; Method/Basis do not", () => {
+    it('kind="species" sends record_kind=species on /meta/software and /meta/workflow-tools', async () => {
+        const softwareUrls: URL[] = []
+        const workflowToolUrls: URL[] = []
+        server.use(...metaHandlers({ captureSoftwareUrls: softwareUrls, captureWorkflowToolUrls: workflowToolUrls }))
+        renderForm("species")
+        await waitFor(() => expect(softwareUrls).toHaveLength(1))
+        await waitFor(() => expect(workflowToolUrls).toHaveLength(1))
+        expect(softwareUrls[0]?.searchParams.get("record_kind")).toBe("species")
+        expect(workflowToolUrls[0]?.searchParams.get("record_kind")).toBe("species")
+    })
+
+    it('kind="vdw" ALSO sends record_kind=species -- a vdW complex has no CalculationRecordKind of its own', async () => {
+        const softwareUrls: URL[] = []
+        server.use(...metaHandlers({ captureSoftwareUrls: softwareUrls }))
+        renderForm("vdw")
+        await waitFor(() => expect(softwareUrls).toHaveLength(1))
+        expect(softwareUrls[0]?.searchParams.get("record_kind")).toBe("species")
+    })
+
+    it('kind="transition_state" sends record_kind=transition_state', async () => {
+        const softwareUrls: URL[] = []
+        const workflowToolUrls: URL[] = []
+        server.use(...metaHandlers({ captureSoftwareUrls: softwareUrls, captureWorkflowToolUrls: workflowToolUrls }))
+        renderForm("transition_state")
+        await waitFor(() => expect(softwareUrls).toHaveLength(1))
+        await waitFor(() => expect(workflowToolUrls).toHaveLength(1))
+        expect(softwareUrls[0]?.searchParams.get("record_kind")).toBe("transition_state")
+        expect(workflowToolUrls[0]?.searchParams.get("record_kind")).toBe("transition_state")
+    })
+
+    it("Method and Basis carry no record_kind param on any kind -- /meta/methods and /meta/basis-sets accept none", async () => {
+        let methodsUrl: URL | undefined
+        let basisUrl: URL | undefined
+        server.use(
+            http.get("/api/v1/scientific/meta/methods", ({ request }) => {
+                methodsUrl = new URL(request.url)
+                return HttpResponse.json({ results: METHODS })
+            }),
+            http.get("/api/v1/scientific/meta/basis-sets", ({ request }) => {
+                basisUrl = new URL(request.url)
+                return HttpResponse.json({ results: BASIS_SETS })
+            }),
+            ...metaHandlers(),
+        )
+        renderForm("species")
+        await waitFor(() => expect(methodsUrl).toBeDefined())
+        await waitFor(() => expect(basisUrl).toBeDefined())
+        expect(methodsUrl?.searchParams.has("record_kind")).toBe(false)
+        expect(basisUrl?.searchParams.has("record_kind")).toBe(false)
+    })
+
+    it("switching from species to transition_state refetches Software with the new record_kind", async () => {
+        const user = userEvent.setup()
+        const softwareUrls: URL[] = []
+        server.use(...metaHandlers({ captureSoftwareUrls: softwareUrls }))
+        function SwitchableWrapper() {
+            const [kind, setKind] = useState<BrowseKind>("species")
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <button onClick={() => setKind("transition_state")} type="button">go TS</button>
+                <BrowseFilterForm filters={filters} kind={kind} onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+            </>
+        }
+        render(<SwitchableWrapper />)
+        await waitFor(() => expect(softwareUrls).toHaveLength(1))
+        expect(softwareUrls[0]?.searchParams.get("record_kind")).toBe("species")
+
+        await user.click(screen.getByRole("button", { name: "go TS" }))
+        await waitFor(() => expect(softwareUrls).toHaveLength(2))
+        expect(softwareUrls[1]?.searchParams.get("record_kind")).toBe("transition_state")
     })
 })

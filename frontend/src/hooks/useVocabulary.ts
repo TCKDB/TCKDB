@@ -16,13 +16,18 @@ export type VocabularyState =
 type VocabularyResult = { loader: unknown; status: "ready"; entries: VocabEntry[] } | { loader: unknown; status: "unavailable" }
 
 /**
- * Fetches an unscoped `/meta/*` list once per mount. `loader` is expected
- * to be a stable module-level function reference (e.g. `loadMethods`) so
- * the effect does not refire on every render -- it takes no arguments
- * other than the abort signal, so there is nothing else for it to depend
- * on. A failed fetch degrades to `unavailable` rather than throwing, so
- * one broken vocabulary endpoint cannot take the rest of the filter form
- * (or the listing behind it) down with it.
+ * Fetches a `/meta/*` list once per mount, and again whenever `loader`
+ * itself changes identity. `loader` is usually a stable module-level
+ * function reference (e.g. `loadMethods`) that takes no arguments other
+ * than the abort signal, so the effect fires exactly once. A scope-varying
+ * caller (e.g. `ProvenanceFields`'s `record_kind`-scoped software/workflow
+ * tool loaders) instead passes a closure memoized on the scoping value
+ * (`useMemo(..., [recordKind])`) -- stable across renders where the scope
+ * has not changed, and a fresh reference exactly when it has, so the
+ * effect refires only on a genuine scope change, not on every render. A
+ * failed fetch degrades to `unavailable` rather than throwing, so one
+ * broken vocabulary endpoint cannot take the rest of the filter form (or
+ * the listing behind it) down with it.
  *
  * "loading" is DERIVED during render (comparing the stored result's own
  * `loader` against the current one) rather than set synchronously inside

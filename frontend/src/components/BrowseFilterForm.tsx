@@ -1,5 +1,7 @@
+import { useMemo } from "react"
 import type { BrowseFilters, BrowseKind, TriState } from "../api/browseApi"
 import { loadBasisSets, loadMethods, loadSoftwareNames, loadSoftwareVersions, loadWorkflowToolNames, loadWorkflowToolVersions } from "../api/vocabApi"
+import type { VocabRecordKind } from "../api/vocabApi"
 import type { VersionVocabularyState, VocabularyState } from "../hooks/useVocabulary"
 import { useVersionVocabulary, useVocabulary } from "../hooks/useVocabulary"
 
@@ -43,6 +45,7 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
                 <CheckField label="Include deprecated" checked={filters.includeDeprecated} onChange={(checked) => onChange({ includeDeprecated: checked })} />
 
                 {kind !== "transition_state" && <CompositionFields filters={filters} onChange={onChange} />}
+                <ProvenanceFields filters={filters} kind={kind} onChange={onChange} />
                 {kind === "transition_state" && <EvidenceFields filters={filters} onChange={onChange} />}
             </div>
         </form>
@@ -70,27 +73,69 @@ function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onCh
     </>
 }
 
-function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
-    // Fetched once per mount of this section (i.e. once per switch to the
-    // "Transition state" kind) -- none of the four depend on any filter
-    // value, unlike the two version vocabularies below. Each is its own
-    // independent request/effect, so one failing degrades only its own
-    // select (see `useVocabulary`'s doc comment) and none of them block
-    // the listing itself, which fetches through the unrelated `useBrowse`.
+/**
+ * "species" and "vdw" both map to the "species" calculation-owner scope --
+ * a van der Waals complex is a `species_entry` row like any other, so it
+ * has no separate `CalculationRecordKind` value (see `VocabRecordKind`'s
+ * doc comment in `api/vocabApi.ts`). Only "transition_state" gets its own
+ * scope.
+ */
+function recordKindFor(kind: BrowseKind): VocabRecordKind {
+    return kind === "transition_state" ? "transition_state" : "species"
+}
+
+/**
+ * The six provenance selects -- Method, Basis, Software (+version),
+ * Workflow tool (+version) -- rendered for EVERY browse kind. Both
+ * underlying browse endpoints accept all six query parameters (see
+ * `buildSpeciesBrowseQuery` / `buildTransitionStateBrowseQuery` in
+ * `api/browseApi.ts`); this section used to be folded into
+ * `EvidenceFields` and mount only for "transition_state", which hid a
+ * capability `/species/browse` has genuinely had all along.
+ *
+ * Software and Workflow tool are further scoped by `record_kind` --
+ * narrowing the offered names to ones actually used by a calculation
+ * owned by a record of THIS kind (see `loadSoftwareNames`'s doc comment
+ * for why). Method and Basis are NOT scoped: `/meta/methods` and
+ * `/meta/basis-sets` take no such parameter, so scoping the other four
+ * would be inventing an inconsistency across the six selects that the
+ * backend does not support -- this mirrors what the API can actually do,
+ * not a design choice made here.
+ */
+function ProvenanceFields({ kind, filters, onChange }: {
+    kind: BrowseKind
+    filters: BrowseFilters
+    onChange: (patch: Partial<BrowseFilters>) => void
+}) {
+    const recordKind = recordKindFor(kind)
+    // Fetched once per mount of this section -- none of the four depend on
+    // any filter value, unlike the two version vocabularies below. Each is
+    // its own independent request/effect, so one failing degrades only its
+    // own select (see `useVocabulary`'s doc comment) and none of them
+    // block the listing itself, which fetches through the unrelated
+    // `useBrowse`.
     const methodVocab = useVocabulary(loadMethods)
     const basisVocab = useVocabulary(loadBasisSets)
-    const softwareVocab = useVocabulary(loadSoftwareNames)
-    const workflowToolVocab = useVocabulary(loadWorkflowToolNames)
+    // `useVocabulary` re-fetches only when the LOADER reference changes
+    // (see its own doc comment), so these are memoized on `recordKind` --
+    // a fresh closure every render would refire the fetch every render;
+    // stable per `recordKind` refires it only on a genuine species<->TS
+    // switch (never on a species<->vdw switch, since both resolve to the
+    // same "species" scope).
+    const loadScopedSoftwareNames = useMemo(
+        () => (signal?: AbortSignal) => loadSoftwareNames(recordKind, signal),
+        [recordKind],
+    )
+    const loadScopedWorkflowToolNames = useMemo(
+        () => (signal?: AbortSignal) => loadWorkflowToolNames(recordKind, signal),
+        [recordKind],
+    )
+    const softwareVocab = useVocabulary(loadScopedSoftwareNames)
+    const workflowToolVocab = useVocabulary(loadScopedWorkflowToolNames)
     const softwareVersionVocab = useVersionVocabulary(filters.software, loadSoftwareVersions)
     const workflowToolVersionVocab = useVersionVocabulary(filters.workflowTool, loadWorkflowToolVersions)
 
     return <>
-        <SelectField
-            label="Status"
-            onChange={(value) => onChange({ status: value })}
-            options={[["", "Any"], ...TS_STATUSES.map((status): [string, string] => [status, token(status)])]}
-            value={filters.status}
-        />
         <VocabField label="Method" onChange={(value) => onChange({ method: value })} value={filters.method} vocab={methodVocab} />
         <VocabField label="Basis" onChange={(value) => onChange({ basis: value })} value={filters.basis} vocab={basisVocab} />
         <VocabField label="Software" onChange={(value) => onChange({ software: value, softwareVersion: "" })} value={filters.software} vocab={softwareVocab} />
@@ -110,6 +155,23 @@ function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChang
             parentLabel="workflow tool"
             value={filters.workflowToolVersion}
             vocab={workflowToolVersionVocab}
+        />
+    </>
+}
+
+/**
+ * `Status` and the seven `has_*` evidence flags -- transition-state ONLY.
+ * `/species/browse` accepts none of these (unlike the six provenance
+ * fields above, which it does accept), so this section stays gated on
+ * `kind === "transition_state"` in `BrowseFilterForm`.
+ */
+function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    return <>
+        <SelectField
+            label="Status"
+            onChange={(value) => onChange({ status: value })}
+            options={[["", "Any"], ...TS_STATUSES.map((status): [string, string] => [status, token(status)])]}
+            value={filters.status}
         />
         <TriField label="Has optimization" onChange={(value) => onChange({ hasOpt: value })} value={filters.hasOpt} />
         <TriField label="Has frequency" onChange={(value) => onChange({ hasFreq: value })} value={filters.hasFreq} />
@@ -199,7 +261,7 @@ function VocabField({ label, value, onChange, vocab }: {
  * chosen, while its vocabulary is loading, or if the fetch failed -- so a
  * reader can never leave a version selected that no longer matches the
  * current parent. `onChange` here only ever carries THIS field's own
- * value; clearing the value on a parent change is `EvidenceFields`'s job
+ * value; clearing the value on a parent change is `ProvenanceFields`'s job
  * (each `Software`/`Workflow tool` `VocabField`'s `onChange` clears its
  * paired version field in the same patch), not this component's.
  */
