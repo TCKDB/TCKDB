@@ -105,6 +105,76 @@ class TransitionStatesSearchRequest(BaseModel):
     limit: int = 50
 
 
+class TransitionStatesBrowseRequest(BaseModel):
+    """Service-layer request for the identifier-free ``/transition-states/browse``.
+
+    Structurally has no ``reaction_ref`` / ``reaction_entry_ref`` /
+    ``transition_state_ref`` / ``transition_state_entry_ref`` field — the
+    four owner/parent filters :class:`TransitionStatesSearchRequest`
+    carries. Those are handles: a caller who already has one of them wants
+    an exact lookup on ``/transition-states/search``, not a catalogue
+    listing. Mirrors ``SpeciesBrowseRequest`` beside
+    ``SpeciesSearchRequest`` in ``scientific_species.py`` -- same
+    "identifier-free by construction, not by an unset field" argument.
+
+    Every other field is duplicated verbatim from
+    :class:`TransitionStatesSearchRequest` rather than shared through a
+    common base class. That is deliberate, matching
+    ``species.py::_browse_filter_echo``'s documented reasoning: a shared
+    base that both classes inherit is one edit away from a future
+    identifier field silently reaching browse through inheritance, and
+    reordering ``TransitionStatesSearchRequest``'s fields to make room for
+    a base class would perturb that route's request-body schema for no
+    behavioural gain. The only way ``/transition-states/browse`` gains an
+    identifier field is a change written on *this* class.
+
+    No composition filters exist here (contrast
+    ``SpeciesBrowseRequest.elements`` / ``max_heavy_atoms`` /
+    ``min_heavy_atoms``): a transition state has no formula of its own — it
+    is identified by the reaction it connects, not by a molecular graph —
+    so there is no composition axis to browse by. See
+    ``docs/specs/scientific_transition_state_reads.md``.
+    """
+
+    # --- TS-entry scalar filters -----------------------------------------
+    status: TransitionStateEntryStatus | None = None
+    charge: int | None = None
+    multiplicity: int | None = Field(default=None, ge=1)
+
+    # --- evidence filters ------------------------------------------------
+    has_calculations: bool | None = None
+    has_opt: bool | None = None
+    has_freq: bool | None = None
+    has_sp: bool | None = None
+    has_irc: bool | None = None
+    has_path_search: bool | None = None
+    has_geometry_validation: bool | None = None
+    has_scf_stability: bool | None = None
+
+    # --- level-of-theory / software / workflow filters -------------------
+    method: str | None = Field(default=None, max_length=_MAX_METHOD_LENGTH)
+    basis: str | None = Field(default=None, max_length=_MAX_BASIS_LENGTH)
+    software: str | None = Field(
+        default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH
+    )
+    software_version: str | None = Field(default=None, max_length=128)
+    workflow_tool: str | None = Field(
+        default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
+    )
+    workflow_tool_version: str | None = Field(default=None, max_length=128)
+
+    # --- review filters --------------------------------------------------
+    min_review_status: RecordReviewStatus | None = None
+    include_rejected: bool = False
+    include_deprecated: bool = False
+
+    # --- sort / include / pagination -------------------------------------
+    sort: str | None = None  # rejected non-None per v0 sort policy
+    include: list[str] = Field(default_factory=list)
+    offset: int = 0
+    limit: int = 50
+
+
 class RequestEcho(ProfiledRequestEcho):
     """Echo of the parsed request — surfaced in the response envelope."""
 
@@ -125,8 +195,23 @@ class ScientificTransitionStatesSearchResponse(BaseModel):
     pagination: Pagination
 
 
+class ScientificTransitionStatesBrowseResponse(ScientificTransitionStatesSearchResponse):
+    """Response envelope for /api/v1/scientific/transition-states/browse.
+
+    Field-for-field identical to
+    :class:`ScientificTransitionStatesSearchResponse` (same reason
+    ``ScientificSpeciesBrowseResponse`` subclasses its search sibling in
+    ``scientific_species.py``): a client's parser for the search response
+    works unmodified against a browse response. Declared as its own class
+    so the OpenAPI document and generated clients name the two surfaces
+    separately even though nothing about the shape differs.
+    """
+
+
 __all__ = [
     "RequestEcho",
+    "ScientificTransitionStatesBrowseResponse",
     "ScientificTransitionStatesSearchResponse",
+    "TransitionStatesBrowseRequest",
     "TransitionStatesSearchRequest",
 ]
