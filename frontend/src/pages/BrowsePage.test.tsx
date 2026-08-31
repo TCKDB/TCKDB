@@ -305,26 +305,56 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         expect(screen.getByLabelText("Charge")).toHaveValue("0")
     })
 
-    it("a Transition-state-only filter (method) does not survive switching back to Species", async () => {
+    // A genuinely transition-state-only field (`status` -- `/species/browse`
+    // accepts no such param, see `EvidenceFields`'s doc comment) does NOT
+    // survive switching back to Species: both from the request and from
+    // the form itself.
+    it("a Transition-state-only filter (Status) does not survive switching back to Species", async () => {
         const user = userEvent.setup()
         let lastSpeciesUrl: URL | undefined
-        // Registered BEFORE `handlers()` -- see the same note in the
-        // "vocabulary-backed filters" describe block below.
+        server.use(...handlers({ captureSpeciesUrl: (url) => { lastSpeciesUrl = url } }))
+        renderAt("/species?kind=transition_state")
+        await screen.findByText("A <=> B")
+
+        await user.selectOptions(screen.getByLabelText("Status"), "optimized")
+        await waitFor(() => expect(screen.getByLabelText("Status")).toHaveValue("optimized"))
+
+        await user.click(screen.getByRole("radio", { name: "Species" }))
+        await waitFor(() => expect(lastSpeciesUrl?.searchParams.has("species_entry_kind")).toBe(true))
+        expect(lastSpeciesUrl?.searchParams.has("status")).toBe(false)
+        expect(screen.queryByLabelText("Status")).not.toBeInTheDocument()
+    })
+
+    // Method is one of the six PROVENANCE fields, which apply to every
+    // kind (unlike Status/`has_*` above) -- so it is the opposite case:
+    // it must survive a kind switch, in BOTH directions, staying both in
+    // the form's own state (asserted via the select's value, since the
+    // field also stays mounted on both kinds) and on the outgoing request.
+    it("a shared provenance filter (Method) SURVIVES switching kinds, in both directions", async () => {
+        const user = userEvent.setup()
+        let lastSpeciesUrl: URL | undefined
+        let lastTsUrl: URL | undefined
         server.use(
             http.get("/api/v1/scientific/meta/methods", () => HttpResponse.json({ results: [{ value: "b3lyp", count: 5 }] })),
-            ...handlers({ captureSpeciesUrl: (url) => { lastSpeciesUrl = url } }),
+            ...handlers({
+                captureSpeciesUrl: (url) => { lastSpeciesUrl = url },
+                captureTsUrl: (url) => { lastTsUrl = url },
+            }),
         )
         renderAt("/species?kind=transition_state")
         await screen.findByText("A <=> B")
 
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(2))
         await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
-        await waitFor(() => expect(screen.getByLabelText("Method")).toHaveValue("b3lyp"))
+        await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
 
         await user.click(screen.getByRole("radio", { name: "Species" }))
-        await waitFor(() => expect(lastSpeciesUrl?.searchParams.has("species_entry_kind")).toBe(true))
-        expect(lastSpeciesUrl?.searchParams.has("method")).toBe(false)
-        expect(screen.queryByLabelText("Method")).not.toBeInTheDocument()
+        await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("method")).toBe("b3lyp"))
+        expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
+
+        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
+        expect(screen.getByLabelText("Method")).toHaveValue("b3lyp")
     })
 
     // The species->TS direction was the only one previously asserted, and
@@ -677,5 +707,71 @@ describe("browse page: vocabulary-backed filters reach the real browse query, an
 
         await user.selectOptions(screen.getByLabelText("Method"), "")
         await waitFor(() => expect(lastTsUrl?.searchParams.has("method")).toBe(false))
+    })
+})
+
+// `/species/browse` (species_browse.py) accepts the same six provenance
+// parameters (method/basis/software(+version)/workflow_tool(+version)) as
+// `/transition-states/browse` -- but the six selects used to be mounted
+// ONLY for kind="transition_state", and `buildSpeciesBrowseQuery` used to
+// drop all six params on the floor even if a caller supplied them. This is
+// the full-page counterpart to `browseApi.test.ts`'s unit coverage: it
+// exercises the real dropdown -> real outgoing request path, not just the
+// pure query builder in isolation.
+describe("browse page: the six provenance selects work on species, not just transition state", () => {
+    it("selecting a Method value on the default (species) kind adds method= to the outgoing /species/browse request -- asserts the URL, not just that something rendered", async () => {
+        const user = userEvent.setup()
+        let lastSpeciesUrl: URL | undefined
+        server.use(
+            http.get("/api/v1/scientific/meta/methods", () => HttpResponse.json({ results: [{ value: "b3lyp", count: 5 }] })),
+            ...handlers({ captureSpeciesUrl: (url) => { lastSpeciesUrl = url } }),
+        )
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(2))
+
+        await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
+        await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("method")).toBe("b3lyp"))
+        expect(lastSpeciesUrl?.searchParams.get("species_entry_kind")).toBe("minimum") // still the species request, not a different endpoint
+
+        await user.selectOptions(screen.getByLabelText("Method"), "")
+        await waitFor(() => expect(lastSpeciesUrl?.searchParams.has("method")).toBe(false))
+    })
+
+    // Reproduces the review's exact concern for this branch: `hasActiveFilters`
+    // used to only look at the six provenance fields when kind==="transition_state",
+    // so a species query narrowed to zero rows by `method=` alone would report
+    // "no filters active" and render the ARCHIVE-empty message ("nothing of this
+    // kind has been deposited") instead of the FILTERED-empty one ("filters
+    // excluded everything") -- exactly backwards, and the mirror image of the
+    // widening-toggle bug fixed earlier on this same page.
+    it("a species query narrowed to zero rows by Method alone reads 'filters excluded everything', never 'nothing deposited'", async () => {
+        const user = userEvent.setup()
+        server.use(
+            http.get("/api/v1/scientific/meta/methods", () => HttpResponse.json({ results: [{ value: "b3lyp", count: 5 }] })),
+            http.get("/api/v1/scientific/species/browse", ({ request }) => {
+                const url = new URL(request.url)
+                const offset = Number(url.searchParams.get("offset") ?? "0")
+                const limit = Number(url.searchParams.get("limit") ?? "20")
+                // A real narrowing: nonzero without `method=`, zero once it is set --
+                // not an unconditionally-empty fixture, which cannot tell "the filter
+                // did nothing" apart from "the filter genuinely excluded everything".
+                const rows = url.searchParams.get("method") ? [] : twoSpecies
+                return HttpResponse.json(speciesEnvelope(offset, limit, rows))
+            }),
+            // Registered AFTER the /meta/methods override above -- msw matches in
+            // registration order, so this generic (empty-results) /meta/methods
+            // handler never actually wins; it only backstops the other five
+            // /meta/* endpoints ProvenanceFields also fetches.
+            ...emptyVocabHandlers(),
+            http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(tsEnvelope(0, 20, twoTs))),
+        )
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(2))
+
+        await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
+        expect(await screen.findByText(/No species records match these filters/)).toBeVisible()
+        expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
     })
 })

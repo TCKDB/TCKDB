@@ -100,20 +100,32 @@ export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
 const COMPOSITION_DEFAULTS = {
     formula: "", elements: "", elemMode: "all" as const, minHeavyAtoms: "", maxHeavyAtoms: "", electronicStateKind: "",
 }
+/**
+ * `status` and the seven `has_*` evidence flags -- transition-state only;
+ * `/species/browse` accepts none of these. The six PROVENANCE fields
+ * (method/basis/software(+version)/workflow tool(+version)) are
+ * deliberately NOT in here or in any per-kind defaults object: they are
+ * NOT kind-specific -- `/species/browse` and `/transition-states/browse`
+ * both accept all six (see `buildSpeciesBrowseQuery` /
+ * `buildTransitionStateBrowseQuery`) -- so they are only ever cleared
+ * explicitly by a reader picking "Any", never by `clearInapplicableFilters`
+ * on a kind switch.
+ */
 const EVIDENCE_DEFAULTS = {
-    status: "", method: "", basis: "", software: "", softwareVersion: "", workflowTool: "", workflowToolVersion: "",
+    status: "",
     hasOpt: "" as TriState, hasFreq: "" as TriState, hasSp: "" as TriState, hasIrc: "" as TriState,
     hasPathSearch: "" as TriState, hasGeometryValidation: "" as TriState, hasScfStability: "" as TriState,
 }
 
 /**
  * Drops whichever half of the flat `BrowseFilters` shape does not apply to
- * `kind`, leaving the shared fields untouched. Called on every kind switch
- * so the FORM (not just the outgoing request) stops showing a filter that
- * can no longer take effect -- a composition filter surviving a switch to
+ * `kind`, leaving the shared fields (and the six provenance fields, which
+ * apply to every kind) untouched. Called on every kind switch so the FORM
+ * (not just the outgoing request) stops showing a filter that can no
+ * longer take effect -- a composition filter surviving a switch to
  * "Transition state" would look active while doing nothing, and a stale
- * evidence filter surviving a switch back to "Species" would silently do
- * nothing there either.
+ * `has_*`/`status` value surviving a switch back to "Species" would
+ * silently do nothing there either.
  */
 export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilters): BrowseFilters {
     if (kind === "transition_state") return { ...filters, ...COMPOSITION_DEFAULTS }
@@ -128,17 +140,25 @@ export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilter
  * default exclusion), so ticking one can never be the reason a listing came
  * back empty -- counting them as "active" made the empty-state copy claim a
  * widening toggle had narrowed the archive to zero, which is backwards.
+ *
+ * The six provenance fields count as active on EVERY kind, not just
+ * "transition_state" -- `/species/browse` answers all six (see
+ * `buildSpeciesBrowseQuery`), so a species query with only `method` set is
+ * a real narrowing filter, and reporting it as "nothing active" would make
+ * the empty state claim "nothing of this kind has been deposited" when the
+ * true reason is that the filters excluded everything.
  */
 export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): boolean {
     const sharedActive = filters.charge !== "" || filters.multiplicity !== "" || filters.minReviewStatus !== ""
     if (sharedActive) return true
+    const provenanceActive = filters.method !== "" || filters.basis !== "" || filters.software !== ""
+        || filters.softwareVersion !== "" || filters.workflowTool !== "" || filters.workflowToolVersion !== ""
+    if (provenanceActive) return true
     if (kind === "transition_state") {
-        return filters.status !== "" || filters.method !== "" || filters.basis !== "" || filters.software !== ""
-            || filters.softwareVersion !== "" || filters.workflowTool !== "" || filters.workflowToolVersion !== ""
-            || [
-                filters.hasOpt, filters.hasFreq, filters.hasSp, filters.hasIrc,
-                filters.hasPathSearch, filters.hasGeometryValidation, filters.hasScfStability,
-            ].some((value) => value !== "")
+        return filters.status !== "" || [
+            filters.hasOpt, filters.hasFreq, filters.hasSp, filters.hasIrc,
+            filters.hasPathSearch, filters.hasGeometryValidation, filters.hasScfStability,
+        ].some((value) => value !== "")
     }
     return filters.formula !== "" || filters.elements !== "" || filters.minHeavyAtoms !== ""
         || filters.maxHeavyAtoms !== "" || filters.electronicStateKind !== ""
@@ -162,6 +182,26 @@ function isCompleteInteger(value: string): boolean {
     return /^-?\d+$/.test(value)
 }
 
+/**
+ * The six provenance params -- method/basis/software(+version)/workflow
+ * tool(+version) -- shared verbatim between `buildSpeciesBrowseQuery` and
+ * `buildTransitionStateBrowseQuery` because both underlying endpoints
+ * accept the exact same six query-parameter names (measured against
+ * `species_browse.py` and `transition_states_browse.py`). Kept as its own
+ * function rather than folded into `sharedQueryParams` so each builder's
+ * own doc comment can still name its OWN kind-specific params next to the
+ * params call that emits them, while the two builders cannot drift apart
+ * on the shared six by one of them forgetting a line.
+ */
+function applyProvenanceParams(query: URLSearchParams, filters: BrowseFilters): void {
+    if (filters.method !== "") query.set("method", filters.method)
+    if (filters.basis !== "") query.set("basis", filters.basis)
+    if (filters.software !== "") query.set("software", filters.software)
+    if (filters.softwareVersion !== "") query.set("software_version", filters.softwareVersion)
+    if (filters.workflowTool !== "") query.set("workflow_tool", filters.workflowTool)
+    if (filters.workflowToolVersion !== "") query.set("workflow_tool_version", filters.workflowToolVersion)
+}
+
 function sharedQueryParams(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = new URLSearchParams()
     if (filters.charge !== "" && isCompleteInteger(filters.charge)) query.set("charge", filters.charge)
@@ -169,6 +209,7 @@ function sharedQueryParams(filters: BrowseFilters, offset: number, limit: number
     if (filters.minReviewStatus !== "") query.set("min_review_status", filters.minReviewStatus)
     if (filters.includeRejected) query.set("include_rejected", "true")
     if (filters.includeDeprecated) query.set("include_deprecated", "true")
+    applyProvenanceParams(query, filters)
     query.set("offset", String(offset))
     query.set("limit", String(limit))
     return query
@@ -198,12 +239,6 @@ export function buildSpeciesBrowseQuery(
 export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = sharedQueryParams(filters, offset, limit)
     if (filters.status !== "") query.set("status", filters.status)
-    if (filters.method !== "") query.set("method", filters.method)
-    if (filters.basis !== "") query.set("basis", filters.basis)
-    if (filters.software !== "") query.set("software", filters.software)
-    if (filters.softwareVersion !== "") query.set("software_version", filters.softwareVersion)
-    if (filters.workflowTool !== "") query.set("workflow_tool", filters.workflowTool)
-    if (filters.workflowToolVersion !== "") query.set("workflow_tool_version", filters.workflowToolVersion)
     const evidenceFlags: [string, TriState][] = [
         ["has_opt", filters.hasOpt], ["has_freq", filters.hasFreq], ["has_sp", filters.hasSp],
         ["has_irc", filters.hasIrc], ["has_path_search", filters.hasPathSearch],
