@@ -91,6 +91,7 @@ from app.schemas.reads.scientific_species_calculations import (
     CalculationProvenanceBlock,
     CalculationRanking,
     ConformerContextBlock,
+    DerivedSinglePointEnergy,
     GeometryBlock,
     GeometryRef,
     RequestEcho,
@@ -322,6 +323,23 @@ def search_species_calculations(
     modes_by_calc = (
         _load_freq_modes(session, calc_ids) if "freq_modes" in includes else None
     )
+    # Observation -> set of lot_ids carrying a real ``sp`` calculation, so
+    # ``_build_energy_block`` can decide whether an ``opt`` record's own
+    # final energy may be offered as a single-point-equivalent (only when
+    # no real sp exists at that observation's own lot). Scoped to the
+    # observations of opt rows that could actually use it, not the whole
+    # page.
+    sp_lot_pairs_by_obs = _load_sp_lot_pairs(
+        session,
+        {
+            r.conformer_observation_id
+            for r in rows
+            if r.calc_type == CalculationType.opt
+            and r.energy_hartree is not None
+            and r.conformer_observation_id is not None
+            and r.lot_id is not None
+        },
+    )
 
     # Build response records.
     records: list[SpeciesCalculationsSearchRecord] = []
@@ -338,7 +356,7 @@ def search_species_calculations(
                     created_at=r.created_at,
                     review=badges[r.calc_id],
                 ),
-                energy=_build_energy_block(r),
+                energy=_build_energy_block(r, sp_lot_pairs_by_obs),
                 frequency=_build_frequency_block(r, freq_by_calc.get(r.calc_id)),
                 freq_modes=(
                     None
@@ -1068,11 +1086,58 @@ def _load_conformer_contexts(
 # ---------------------------------------------------------------------------
 
 
-def _build_energy_block(row: _CalcRow) -> CalculationEnergyBlock | None:
+def _load_sp_lot_pairs(
+    session: Session, observation_ids: set[int]
+) -> dict[int, set[int]]:
+    """Map conformer_observation_id -> set of lot_ids with a real ``sp`` row.
+
+    Used only to decide whether an ``opt`` record's final energy may be
+    served as a single-point-equivalent (see :func:`_build_energy_block`):
+    that requires *no* real ``sp`` calculation at the same observation +
+    level-of-theory pair. This checks existence only — quality or review
+    status never gate it, because the question is "was an independent sp
+    actually run at this level of theory", not "was it a good one". A
+    rejected-quality or unreviewed sp still means one was run, so the
+    derivation must not fire.
+    """
+    if not observation_ids:
+        return {}
+    rows = session.execute(
+        select(Calculation.conformer_observation_id, Calculation.lot_id)
+        .where(
+            Calculation.type == CalculationType.sp,
+            Calculation.conformer_observation_id.in_(observation_ids),
+            Calculation.lot_id.is_not(None),
+        )
+        .distinct()
+    ).all()
+    out: defaultdict[int, set[int]] = defaultdict(set)
+    for obs_id, lot_id in rows:
+        out[obs_id].add(lot_id)
+    return dict(out)
+
+
+def _build_energy_block(
+    row: _CalcRow, sp_lot_pairs_by_obs: dict[int, set[int]]
+) -> CalculationEnergyBlock | None:
     if row.energy_kind is None:
         return None
+    single_point_equivalent: DerivedSinglePointEnergy | None = None
+    if (
+        row.calc_type == CalculationType.opt
+        and row.energy_hartree is not None
+        and row.conformer_observation_id is not None
+        and row.lot_id is not None
+        and row.lot_id
+        not in sp_lot_pairs_by_obs.get(row.conformer_observation_id, set())
+    ):
+        single_point_equivalent = DerivedSinglePointEnergy(
+            energy_hartree=row.energy_hartree
+        )
     return CalculationEnergyBlock(
-        energy_hartree=row.energy_hartree, energy_kind=row.energy_kind
+        energy_hartree=row.energy_hartree,
+        energy_kind=row.energy_kind,
+        single_point_equivalent=single_point_equivalent,
     )
 
 

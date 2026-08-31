@@ -834,3 +834,80 @@ def test_sp_calc_with_no_output_geometry_returns_empty_output_geometries(
     assert geom.output_geometries == []
     assert geom.primary_output_geometry_ref is None
     assert geom.primary_output_geometry_role is None
+
+
+# ---------------------------------------------------------------------------
+# energy.single_point_equivalent — opt energy served as the sp-equivalent
+# ---------------------------------------------------------------------------
+#
+# See docs/specs/species_calculation_search_api.md
+# §"energy.single_point_equivalent" for the full contract; the API-level
+# tests in tests/api/scientific/test_api_opt_energy_as_single_point.py cover
+# the same rules end-to-end together with the conformer evidence surface.
+# These service-level tests add the edge cases that need no conformer
+# observation / no lot_id, which the API tests don't exercise.
+
+
+def test_opt_without_conformer_observation_never_derives(db_session):
+    """No ``conformer_observation_id`` on the opt calc -> can't be scoped
+    to a matching predicate, so no derivation (never guess the scope)."""
+    _, entry = _entry(db_session, smiles="NOOBS")
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    opt = make_calculation(
+        db_session,
+        type=CalculationType.opt,
+        species_entry_id=entry.id,
+        lot_id=lot.id,
+    )
+    attach_opt_result(db_session, calculation=opt, final_energy_hartree=-42.0)
+
+    response = search_species_calculations(
+        db_session, SpeciesCalculationsSearchRequest(smiles="NOOBS")
+    )
+    assert len(response.records) == 1
+    assert response.records[0].energy.single_point_equivalent is None
+
+
+def test_opt_without_lot_never_derives(db_session):
+    """No ``lot_id`` on the opt calc -> no level of theory to match against,
+    so no derivation."""
+    species, entry = _entry(db_session, smiles="NOLOT")
+    cg = make_conformer_group(db_session, entry)
+    obs = make_conformer_observation(db_session, conformer_group=cg)
+    opt = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs,
+        type=CalculationType.opt,
+        lot_id=None,
+    )
+    attach_opt_result(db_session, calculation=opt, final_energy_hartree=-42.0)
+
+    response = search_species_calculations(
+        db_session, SpeciesCalculationsSearchRequest(smiles="NOLOT")
+    )
+    assert len(response.records) == 1
+    assert response.records[0].energy.single_point_equivalent is None
+
+
+def test_sp_record_never_carries_single_point_equivalent(db_session):
+    """The nested block only ever attaches to an ``opt`` record — a real
+    ``sp`` result is never wrapped as if it were itself a derivation."""
+    _, entry = _entry(db_session, smiles="SPNEVER")
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    cg = make_conformer_group(db_session, entry)
+    obs = make_conformer_observation(db_session, conformer_group=cg)
+    sp = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs,
+        type=CalculationType.sp,
+        lot_id=lot.id,
+    )
+    attach_sp_result(db_session, calculation=sp, electronic_energy_hartree=-99.0)
+
+    response = search_species_calculations(
+        db_session, SpeciesCalculationsSearchRequest(smiles="SPNEVER")
+    )
+    assert len(response.records) == 1
+    assert response.records[0].energy.single_point_equivalent is None
