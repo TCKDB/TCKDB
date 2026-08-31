@@ -270,7 +270,7 @@ describe("public archive shell", () => {
 })
 
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
-    ["/species", "Species", undefined],
+    ["/species", "Browse the archive", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
     ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
     ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
@@ -283,6 +283,11 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
 
 describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
     it("renders the declared public route deterministically", async () => {
+        if (path === "/species") {
+            server.use(http.get("/api/v1/scientific/species/browse", () => HttpResponse.json({
+                records: [], pagination: { offset: 0, limit: 20, returned: 0, total: 0, post_collapse_total: 0 },
+            })))
+        }
         if (path.startsWith("/species/")) {
             server.use(http.get("/api/v1/scientific/species/search", () => (
                 HttpResponse.json({ records: [overviewSpecies()] })
