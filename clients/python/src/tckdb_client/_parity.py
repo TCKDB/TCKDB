@@ -717,6 +717,17 @@ _RAW_ONLY: tuple[tuple[str, str, str], ...] = tuple(
         "same reasoning as the integrity listing above. Reachable via "
         "get_json().",
     ),
+    (
+        "GET",
+        "/api/v1/scientific/transition-states/browse",
+        "Identifier-free catalogue listing for the hosted web Browse page, "
+        "sibling to search_transition_states() rather than a replacement "
+        "for it -- same record shape, no owner/parent ref filters. Its "
+        "audience is the Browse page's own frontend, not the producer/"
+        "consumer scripts this client serves, which already reach the same "
+        "records through search_transition_states(). Reachable via "
+        "get_json().",
+    ),
 )
 
 # ---------------------------------------------------------------------------

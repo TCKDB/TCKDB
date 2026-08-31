@@ -35337,6 +35337,35 @@
         "title": "ScientificTransitionStateRecord",
         "type": "object"
       },
+      "ScientificTransitionStatesBrowseResponse": {
+        "description": "Response envelope for /api/v1/scientific/transition-states/browse.\n\nField-for-field identical to\n:class:`ScientificTransitionStatesSearchResponse` (same reason\n``ScientificSpeciesBrowseResponse`` subclasses its search sibling in\n``scientific_species.py``): a client's parser for the search response\nworks unmodified against a browse response. Declared as its own class\nso the OpenAPI document and generated clients name the two surfaces\nseparately even though nothing about the shape differs.",
+        "properties": {
+          "pagination": {
+            "$ref": "#/components/schemas/Pagination"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/ScientificTransitionStateEntryRecord"
+            },
+            "title": "Records",
+            "type": "array"
+          },
+          "request": {
+            "$ref": "#/components/schemas/app__schemas__reads__scientific_transition_state_search__RequestEcho"
+          },
+          "review_summary": {
+            "$ref": "#/components/schemas/ReviewStatusSummary"
+          }
+        },
+        "required": [
+          "request",
+          "review_summary",
+          "records",
+          "pagination"
+        ],
+        "title": "ScientificTransitionStatesBrowseResponse",
+        "type": "object"
+      },
       "ScientificTransitionStatesSearchResponse": {
         "description": "Response envelope for /api/v1/scientific/transition-states/search.\n\nRecords are at the transition-state-entry grain.",
         "properties": {
@@ -74291,6 +74320,436 @@
           }
         },
         "summary": "Scientific Transition State Entry Detail",
+        "tags": [
+          "scientific"
+        ]
+      }
+    },
+    "/api/v1/scientific/transition-states/browse": {
+      "get": {
+        "description": "List transition-state entries with no filter required, for a catalogue page.\n\nEvery filter ``/transition-states/search`` accepts *except* the four\nowner/parent ref filters (``reaction_ref``, ``reaction_entry_ref``,\n``transition_state_ref``, ``transition_state_entry_ref``) is accepted\nhere too, so a listing can be narrowed after it is opened. The four\nref filters are excluded because they are handles, not narrowing\nfilters: a caller who already has one wants an exact lookup on\n``/transition-states/search``, and there is no field on\n``TransitionStatesBrowseRequest`` to carry one. Unlike\n``/species/browse``, there are no composition filters here either --\na transition state has no formula of its own; it is identified by the\nreaction it connects, not by a molecular graph. ``limit`` is capped at\n200 (default 50, same as ``/transition-states/search``); ``offset`` is\ncapped by the hosted ``public_max_offset`` setting via the shared\npagination validator. Ordering is\n``review_rank ASC, created_at DESC, id DESC`` -- the same default as\n``/transition-states/search`` -- which is what keeps pagination stable\nacross requests. Client-supplied ``sort=`` is rejected with 422\n(``client_sort_not_supported``), matching the sibling endpoint.\n\nRecords are at the transition-state-entry grain, same shape as\n``/transition-states/search`` and the TS-entry detail endpoint\n(``ScientificTransitionStateEntryRecord``): each carries its own\n``transition_state_entry`` core block, its parent ``transition_state``\ncore block, and a ``reaction`` context block (refs plus a rendered\nequation string) -- enough to identify the record and say what\nreaction it belongs to without a second request.",
+        "operationId": "scientific_transition_states_browse_api_v1_scientific_transition_states_browse_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TransitionStateEntryStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "charge",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Charge"
+            }
+          },
+          {
+            "in": "query",
+            "name": "multiplicity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Multiplicity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_calculations",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Calculations"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_opt",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Opt"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_freq",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Freq"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_sp",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Sp"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_irc",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Irc"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_path_search",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Path Search"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_geometry_validation",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Geometry Validation"
+            }
+          },
+          {
+            "in": "query",
+            "name": "has_scf_stability",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Has Scf Stability"
+            }
+          },
+          {
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Method"
+            }
+          },
+          {
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Basis"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software"
+            }
+          },
+          {
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Software Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "in": "query",
+            "name": "min_review_status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/RecordReviewStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Min Review Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_rejected",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Rejected",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_deprecated",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Deprecated",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Sort"
+            }
+          },
+          {
+            "in": "query",
+            "name": "include",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Include"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*.",
+            "in": "query",
+            "name": "profile",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/ReadProfile",
+              "default": "exploratory",
+              "description": "Read contract. 'exploratory' (default) returns every visible candidate with its review state and carries no TCKDB recommendation. 'curated' restricts results to records at or above the 'approved' review floor and claims nothing further (profile_recommendation='approved_floor_only'); it does NOT mean a curator selected these records. For records an attributed release selection actually names, use /api/v1/scientific/releases/*."
+            }
+          },
+          {
+            "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+            "in": "query",
+            "name": "release",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
+              "title": "Release"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScientificTransitionStatesBrowseResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scientific Transition States Browse",
         "tags": [
           "scientific"
         ]
