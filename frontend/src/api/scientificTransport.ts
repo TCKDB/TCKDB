@@ -23,6 +23,35 @@ export class ScientificApiError extends Error {
     }
 }
 
+/**
+ * The error envelope's `detail` is a plain string for most errors (e.g.
+ * `geometry_too_large`) but FastAPI's own request-validation errors put a
+ * LIST of per-field problems there instead (`{"code":
+ * "request_validation_error", "detail": [{"loc": ["query", "charge"],
+ * "msg": "Input should be a valid integer...", ...}]}`, measured against
+ * the live `/species/browse?charge=abc`). Without this, that list form was
+ * silently dropped -- `typeof body.detail === "string"` is false for an
+ * array, so the archive's own explanation of what was wrong with the
+ * request never reached the caller, and every caller fell back to the same
+ * generic HTTP status text.
+ */
+function formatDetail(detail: unknown): string | undefined {
+    if (typeof detail === "string") return detail
+    if (Array.isArray(detail)) {
+        const parts = detail
+            .map((item): string | undefined => {
+                if (!item || typeof item !== "object") return undefined
+                const msg = "msg" in item && typeof item.msg === "string" ? item.msg : undefined
+                if (msg === undefined) return undefined
+                const loc = "loc" in item && Array.isArray(item.loc) ? item.loc.at(-1) : undefined
+                return typeof loc === "string" ? `${loc}: ${msg}` : msg
+            })
+            .filter((part): part is string => part !== undefined)
+        if (parts.length > 0) return parts.join("; ")
+    }
+    return undefined
+}
+
 export async function requestScientificJson(path: string, signal?: AbortSignal): Promise<unknown> {
     const response = await fetch(`${API_BASE}${path}`, {
         headers: { Accept: "application/json" },
@@ -33,8 +62,9 @@ export async function requestScientificJson(path: string, signal?: AbortSignal):
         let code: string | undefined
         try {
             const body: unknown = await response.json()
-            if (body && typeof body === "object" && "detail" in body && typeof body.detail === "string") {
-                detail = body.detail
+            if (body && typeof body === "object" && "detail" in body) {
+                const formatted = formatDetail(body.detail)
+                if (formatted !== undefined) detail = formatted
             }
             if (body && typeof body === "object" && "code" in body && typeof body.code === "string") {
                 code = body.code

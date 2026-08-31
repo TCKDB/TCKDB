@@ -9,7 +9,12 @@ import App from "../App"
 // Fixtures. Two DISTINCT rows per kind, each with different chemistry/
 // evidence, so a component that reads `records[0]` for every row (the exact
 // mutation the design brief calls out) fails on the SECOND row's assertions
-// -- checking only the first row would let that bug through.
+// -- checking only the first row would let that bug through. `twoSpecies`
+// additionally gives its first record a SECOND entry with a different
+// electronic state and review status, and `twoTs` gives its two records
+// different charge/multiplicity and independently-flipped evidence flags --
+// otherwise every field a row renders would be identical across fixtures,
+// and a hardcoded literal or a swapped flag label would stay green.
 // ---------------------------------------------------------------------------
 
 function speciesRecord(overrides: {
@@ -19,7 +24,9 @@ function speciesRecord(overrides: {
     charge: number
     multiplicity: number
     entryRef: string
+    entries?: { entryRef: string; electronicState?: string; reviewStatus?: string }[]
 }) {
+    const entries = overrides.entries ?? [{ entryRef: overrides.entryRef }]
     return {
         species_ref: overrides.speciesRef,
         canonical_smiles: overrides.smiles,
@@ -28,13 +35,13 @@ function speciesRecord(overrides: {
         charge: overrides.charge,
         multiplicity: overrides.multiplicity,
         stereo_kind: "achiral",
-        entries: [{
-            species_entry_ref: overrides.entryRef,
+        entries: entries.map((entry) => ({
+            species_entry_ref: entry.entryRef,
             species_entry_kind: "minimum",
-            electronic_state_kind: "ground",
-            review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
+            electronic_state_kind: entry.electronicState ?? "ground",
+            review: { status: entry.reviewStatus ?? "not_reviewed", reviewed_at: null, reviewer_kind: null },
             availability: { has_thermo: true, has_statmech: true, has_transport: false, has_conformers: true, calculation_count: 4 },
-        }],
+        })),
     }
 }
 
@@ -51,15 +58,19 @@ function speciesEnvelope(offset: number, limit: number, allRecords: ReturnType<t
 function tsRecord(overrides: {
     tsEntryRef: string
     reactionRef: string
-    equation: string
-    family: string
+    equation: string | null
+    family: string | null
     label: string
     hasIrc: boolean
+    charge?: number
+    multiplicity?: number
+    hasGeometryValidation?: boolean
+    hasScfStability?: boolean
 }) {
     return {
         transition_state_entry: {
             transition_state_entry_ref: overrides.tsEntryRef,
-            charge: 0, multiplicity: 2, status: "optimized", unmapped_smiles: null,
+            charge: overrides.charge ?? 0, multiplicity: overrides.multiplicity ?? 2, status: "optimized", unmapped_smiles: null,
             created_at: "2026-08-05T14:04:16.914780",
             review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
         },
@@ -74,7 +85,9 @@ function tsRecord(overrides: {
         },
         evidence_summary: {
             calculation_count: 4, has_opt: true, has_freq: true, has_sp: true, has_irc: overrides.hasIrc,
-            has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+            has_path_search: false,
+            has_geometry_validation: overrides.hasGeometryValidation ?? false,
+            has_scf_stability: overrides.hasScfStability ?? false,
             levels_of_theory: {},
         },
         validation: { irc: "absent" },
@@ -93,19 +106,37 @@ function tsEnvelope(offset: number, limit: number, allRecords: ReturnType<typeof
 }
 
 const twoSpecies = [
-    speciesRecord({ speciesRef: "spc_benzene", formula: "C6H6", smiles: "c1ccccc1", charge: 0, multiplicity: 1, entryRef: "spe_benzene" }),
+    speciesRecord({
+        speciesRef: "spc_benzene", formula: "C6H6", smiles: "c1ccccc1", charge: 0, multiplicity: 1, entryRef: "spe_benzene",
+        entries: [
+            { entryRef: "spe_benzene_ground", electronicState: "ground", reviewStatus: "not_reviewed" },
+            { entryRef: "spe_benzene_excited", electronicState: "excited", reviewStatus: "approved" },
+        ],
+    }),
     speciesRecord({ speciesRef: "spc_methyl", formula: "CH3", smiles: "[CH3]", charge: 0, multiplicity: 2, entryRef: "spe_methyl" }),
 ]
 
 const twoTs = [
-    tsRecord({ tsEntryRef: "tse_one", reactionRef: "rxn_one", equation: "A <=> B", family: "R_Addition_MultipleBond", label: "TS0", hasIrc: true }),
-    tsRecord({ tsEntryRef: "tse_two", reactionRef: "rxn_two", equation: "C <=> D + [H]", family: "H_Abstraction", label: "TS1", hasIrc: false }),
+    tsRecord({
+        tsEntryRef: "tse_one", reactionRef: "rxn_one", equation: "A <=> B", family: "R_Addition_MultipleBond", label: "TS0",
+        hasIrc: true, charge: 0, multiplicity: 2, hasGeometryValidation: true, hasScfStability: false,
+    }),
+    tsRecord({
+        tsEntryRef: "tse_two", reactionRef: "rxn_two", equation: "C <=> D + [H]", family: "H_Abstraction", label: "TS1",
+        hasIrc: false, charge: -1, multiplicity: 1, hasGeometryValidation: false, hasScfStability: true,
+    }),
 ]
+
+function manySpeciesRecords(count: number) {
+    return Array.from({ length: count }, (_, index) =>
+        speciesRecord({ speciesRef: `spc_p${index}`, formula: `P${index}`, smiles: `Page${index}Smiles`, charge: 0, multiplicity: 1, entryRef: `spe_p${index}` }))
+}
 
 type HandlerOptions = {
     speciesRecords?: ReturnType<typeof speciesRecord>[]
     tsRecords?: ReturnType<typeof tsRecord>[]
     speciesStatus?: number
+    speciesErrorBody?: unknown
     captureSpeciesUrl?: (url: URL) => void
     captureTsUrl?: (url: URL) => void
 }
@@ -117,11 +148,15 @@ function handlers(options: HandlerOptions = {}) {
         http.get("/api/v1/scientific/species/browse", ({ request }) => {
             const url = new URL(request.url)
             options.captureSpeciesUrl?.(url)
-            if (options.speciesStatus) return HttpResponse.json({ detail: "archive unavailable" }, { status: options.speciesStatus })
+            if (options.speciesStatus) {
+                return HttpResponse.json(options.speciesErrorBody ?? { detail: "archive unavailable" }, { status: options.speciesStatus })
+            }
             // The live vdW filter genuinely returns zero rows today (measured:
             // 60 minimum entries, 0 vdw_complex) -- mirrored here rather than
             // invented, so the fixture matches the real archive shape this
-            // page is built against.
+            // page is built against. Zero regardless of the widening flags
+            // (include_rejected/include_deprecated): the archive genuinely
+            // holds none, so those flags cannot change that.
             if (url.searchParams.get("species_entry_kind") === "vdw_complex") {
                 return HttpResponse.json(speciesEnvelope(0, 50, []))
             }
@@ -221,6 +256,14 @@ describe("browse page: kind selection queries the right endpoint with the right 
         await waitFor(() => expect(kinds).toContain("vdw_complex"))
         expect(kinds).toContain("minimum")
     })
+
+    it("sends collapse=all explicitly on the species/vdW query rather than relying on the server default", async () => {
+        let capturedUrl: URL | undefined
+        server.use(...handlers({ captureSpeciesUrl: (url) => { capturedUrl = url } }))
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        expect(capturedUrl?.searchParams.get("collapse")).toBe("all")
+    })
 })
 
 describe("browse page: switching kinds preserves shared filters and drops inapplicable ones", () => {
@@ -263,9 +306,44 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
         expect(lastSpeciesUrl?.searchParams.has("method")).toBe(false)
         expect(screen.queryByLabelText("Method")).not.toBeInTheDocument()
     })
+
+    // The species->TS direction was the only one previously asserted, and
+    // three params (include_rejected, include_deprecated, min_review_status)
+    // were never checked on the wire at all in EITHER direction -- deleting
+    // the first two, or misnaming the third, was invisible to the suite.
+    it("every shared filter, including include_rejected/include_deprecated/min_review_status, is sent on the wire and survives BOTH switch directions", async () => {
+        const user = userEvent.setup()
+        let lastSpeciesUrl: URL | undefined
+        let lastTsUrl: URL | undefined
+        server.use(...handlers({
+            captureSpeciesUrl: (url) => { lastSpeciesUrl = url },
+            captureTsUrl: (url) => { lastTsUrl = url },
+        }))
+        renderAt("/species?kind=transition_state")
+        await screen.findByText("A <=> B")
+
+        await user.type(screen.getByLabelText("Charge"), "0")
+        await user.type(screen.getByLabelText("Multiplicity"), "2")
+        await user.selectOptions(screen.getByLabelText("Minimum review status"), "approved")
+        await user.click(screen.getByLabelText("Include rejected"))
+        await user.click(screen.getByLabelText("Include deprecated"))
+        await waitFor(() => expect(lastTsUrl?.searchParams.get("include_deprecated")).toBe("true"))
+        expect(lastTsUrl?.searchParams.get("charge")).toBe("0")
+        expect(lastTsUrl?.searchParams.get("multiplicity")).toBe("2")
+        expect(lastTsUrl?.searchParams.get("min_review_status")).toBe("approved")
+        expect(lastTsUrl?.searchParams.get("include_rejected")).toBe("true")
+
+        // TS -> species direction: every shared value above must survive too.
+        await user.click(screen.getByRole("radio", { name: "Species" }))
+        await waitFor(() => expect(lastSpeciesUrl?.searchParams.get("include_deprecated")).toBe("true"))
+        expect(lastSpeciesUrl?.searchParams.get("charge")).toBe("0")
+        expect(lastSpeciesUrl?.searchParams.get("multiplicity")).toBe("2")
+        expect(lastSpeciesUrl?.searchParams.get("min_review_status")).toBe("approved")
+        expect(lastSpeciesUrl?.searchParams.get("include_rejected")).toBe("true")
+    })
 })
 
-describe("browse page: the three empty/error states are distinguishable", () => {
+describe("browse page: the four empty/failure states are distinguishable", () => {
     it("reads 'no records deposited' for van der Waals complexes with no filters applied -- an archive fact, not a broken search", async () => {
         const user = userEvent.setup()
         server.use(...handlers())
@@ -277,20 +355,73 @@ describe("browse page: the three empty/error states are distinguishable", () => 
         expect(screen.queryByRole("alert")).not.toBeInTheDocument()
     })
 
-    it("reads 'no records match these filters' when a filter excludes every species row", async () => {
+    // Reproduces the review's exact finding: a WIDENING toggle (Include
+    // rejected) must never flip an archive-empty listing into a
+    // filtered-empty one -- nothing was filtered, the archive holds zero.
+    it("ticking a widening filter (Include rejected) on an empty kind keeps the archive-empty message, not the filtered-empty one", async () => {
         const user = userEvent.setup()
-        server.use(...handlers({ speciesRecords: [] }))
+        server.use(...handlers())
         renderAt("/species")
+        await screen.findByText(/records · showing/)
+        await user.click(screen.getByRole("radio", { name: "Van der Waals complex" }))
+        expect(await screen.findByText(/No van der Waals complexes have been deposited in this archive yet/)).toBeVisible()
+
+        await user.click(screen.getByLabelText("Include rejected"))
+        expect(await screen.findByText(/No van der Waals complexes have been deposited in this archive yet/)).toBeVisible()
+        expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
+    })
+
+    it("reads 'no records match these filters' when a filter genuinely narrows a nonzero corpus to zero", async () => {
+        const user = userEvent.setup()
+        // Unlike a handler that is unconditionally empty, this one holds
+        // real records until `formula` is set -- so this test exercises an
+        // actual narrowing, the gap the original fixture (`speciesRecords:
+        // []`, empty regardless of the filter) let through.
+        server.use(http.get("/api/v1/scientific/species/browse", ({ request }) => {
+            const url = new URL(request.url)
+            const offset = Number(url.searchParams.get("offset") ?? "0")
+            const limit = Number(url.searchParams.get("limit") ?? "20")
+            const rows = url.searchParams.get("formula") ? [] : twoSpecies
+            return HttpResponse.json(speciesEnvelope(offset, limit, rows))
+        }), http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(tsEnvelope(0, 20, twoTs))))
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
         await user.type(screen.getByLabelText("Formula"), "Xx999")
         expect(await screen.findByText(/No species records match these filters/)).toBeVisible()
         expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
     })
 
-    it("reads a failure message, with role=alert, when the request errors -- distinct from either empty state", async () => {
+    it("reads a failure message, with role=alert, when the request errors with a 5xx -- distinct from either empty state", async () => {
         server.use(...handlers({ speciesStatus: 503 }))
         renderAt("/species")
         expect(await screen.findByRole("alert")).toHaveTextContent("The archive service could not load this listing. Try again later.")
         expect(screen.queryByText(/deposited in this archive yet/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
+    })
+
+    // Reproduces the review's second finding under item 1: a nonzero total
+    // with zero returned records (paging past the end) is neither
+    // "nothing deposited" nor "filters excluded everything".
+    it("reads its own message, not archive-empty or filtered-empty, when a page comes back empty with a positive pagination.total", async () => {
+        const user = userEvent.setup()
+        server.use(http.get("/api/v1/scientific/species/browse", ({ request }) => {
+            const offset = Number(new URL(request.url).searchParams.get("offset") ?? "0")
+            if (offset === 0) {
+                return HttpResponse.json({
+                    ...speciesEnvelope(0, 20, twoSpecies),
+                    pagination: { offset: 0, limit: 20, returned: 2, total: 25, post_collapse_total: 25 },
+                })
+            }
+            return HttpResponse.json({
+                ...speciesEnvelope(offset, 20, []),
+                pagination: { offset, limit: 20, returned: 0, total: 25, post_collapse_total: 25 },
+            })
+        }), http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(tsEnvelope(0, 20, twoTs))))
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText(/That is past the end of the species records this listing has/)).toBeVisible()
+        expect(screen.queryByText(/have been deposited in this archive yet/)).not.toBeInTheDocument()
         expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
     })
 
@@ -299,8 +430,15 @@ describe("browse page: the three empty/error states are distinguishable", () => 
     // strings identical -- guard that they are not.
     it("MUTATION CHECK: the archive-empty and filtered-empty messages are not the same string", async () => {
         const user = userEvent.setup()
-        server.use(...handlers({ speciesRecords: [] }))
+        server.use(http.get("/api/v1/scientific/species/browse", ({ request }) => {
+            const url = new URL(request.url)
+            const offset = Number(url.searchParams.get("offset") ?? "0")
+            const limit = Number(url.searchParams.get("limit") ?? "20")
+            const rows = url.searchParams.get("formula") ? [] : twoSpecies
+            return HttpResponse.json(speciesEnvelope(offset, limit, rows))
+        }), http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(tsEnvelope(0, 20, twoTs))))
         renderAt("/species")
+        await screen.findByText(/records · showing/)
         await user.type(screen.getByLabelText("Formula"), "Xx999")
         const filteredMessage = (await screen.findByText(/No species records match these filters/)).textContent
         cleanup()
@@ -313,8 +451,54 @@ describe("browse page: the three empty/error states are distinguishable", () => 
     })
 })
 
+describe("browse page: the coded error contract is respected, not collapsed into one outage message", () => {
+    it("a 422 surfaces the archive's own validation reason, including the list form of `detail`, instead of the generic outage copy", async () => {
+        server.use(...handlers({
+            speciesStatus: 422,
+            speciesErrorBody: {
+                code: "request_validation_error",
+                detail: [{ type: "int_parsing", loc: ["query", "charge"], msg: "Input should be a valid integer, unable to parse string as an integer", input: "abc" }],
+            },
+        }))
+        renderAt("/species")
+        const alert = await screen.findByRole("alert")
+        expect(alert).toHaveTextContent("charge: Input should be a valid integer")
+        expect(alert).not.toHaveTextContent("Try again later")
+    })
+
+    it("a 200 response that fails schema validation gets its own 'malformed' copy, not the outage copy", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species/browse", () => HttpResponse.json({ this: "does not match the schema" })),
+            http.get("/api/v1/scientific/transition-states/browse", () => HttpResponse.json(tsEnvelope(0, 20, twoTs))),
+        )
+        renderAt("/species")
+        const alert = await screen.findByRole("alert")
+        expect(alert).toHaveTextContent("could not be validated")
+        expect(alert).not.toHaveTextContent("Try again later")
+    })
+
+    // Reproduces the review's exact repro: "-" is the first keystroke of
+    // any anion charge, and is not yet a valid integer. It must never reach
+    // the wire (which would 422) or be reported as an outage.
+    it("typing '-' into Charge never sends an incomplete integer, and completing it to '-1' does", async () => {
+        const user = userEvent.setup()
+        let lastUrl: URL | undefined
+        server.use(...handlers({ captureSpeciesUrl: (url) => { lastUrl = url } }))
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+
+        await user.type(screen.getByLabelText("Charge"), "-")
+        await waitFor(() => expect(screen.getByLabelText("Charge")).toHaveValue("-"))
+        expect(screen.queryByRole("alert")).not.toBeInTheDocument()
+        expect(lastUrl?.searchParams.has("charge")).toBe(false)
+
+        await user.type(screen.getByLabelText("Charge"), "1")
+        await waitFor(() => expect(lastUrl?.searchParams.get("charge")).toBe("-1"))
+    })
+})
+
 describe("browse page: a species row and a TS row each render their OWN fields", () => {
-    it("renders both species rows with their own distinct SMILES and charge/spin -- not the first row's data repeated", async () => {
+    it("renders both species rows with their own distinct SMILES, charge/spin, and per-entry state/review -- not the first row's data repeated", async () => {
         server.use(...handlers())
         renderAt("/species")
         await screen.findByText(/records · showing/)
@@ -326,13 +510,32 @@ describe("browse page: a species row and a TS row each render their OWN fields",
         expect(within(rowOne).getByText("c1ccccc1")).toBeVisible()
         expect(within(rowOne).getByText(/charge 0 · spin singlet/)).toBeVisible()
         expect(within(rowOne).queryByText("[CH3]")).not.toBeInTheDocument()
+        // Benzene's two entries differ in BOTH electronic state and review
+        // status -- a component that hardcoded "minimum · ground" and
+        // "not reviewed" for every entry chip would fail on the second one.
+        expect(within(rowOne).getByText("minimum · ground")).toBeVisible()
+        expect(within(rowOne).getByText("not reviewed")).toBeVisible()
+        expect(within(rowOne).getByText("minimum · excited")).toBeVisible()
+        expect(within(rowOne).getByText("approved")).toBeVisible()
 
         expect(within(rowTwo).getByText("[CH3]")).toBeVisible()
         expect(within(rowTwo).getByText(/charge 0 · spin doublet/)).toBeVisible()
         expect(within(rowTwo).queryByText("c1ccccc1")).not.toBeInTheDocument()
     })
 
-    it("renders both TS rows with their own distinct equation/family/evidence -- not the first row's data repeated", async () => {
+    it("falls back to the canonical SMILES headline, never the public ref, when a species has no computed formula", async () => {
+        server.use(...handlers({
+            speciesRecords: [speciesRecord({
+                speciesRef: "spc_nullformula", formula: null, smiles: "NullFormulaSmiles",
+                charge: 0, multiplicity: 1, entryRef: "spe_nullformula",
+            })],
+        }))
+        renderAt("/species")
+        const headline = await screen.findByRole("link", { name: "NullFormulaSmiles" })
+        expect(headline).toHaveAttribute("href", "/species/spc_nullformula")
+    })
+
+    it("renders both TS rows with their own distinct equation/family/charge-spin/evidence -- not the first row's data repeated, and no flag labels swapped between rows", async () => {
         const user = userEvent.setup()
         server.use(...handlers())
         renderAt("/species")
@@ -346,48 +549,66 @@ describe("browse page: a species row and a TS row each render their OWN fields",
 
         expect(within(rowOne).getByText("A <=> B")).toBeVisible()
         expect(within(rowOne).getByText(/R Addition MultipleBond/)).toBeVisible()
-        expect(within(rowOne).getByText(/Evidence:.*irc/)).toBeVisible()
+        expect(within(rowOne).getByText(/charge 0 · spin doublet/)).toBeVisible()
+        expect(within(rowOne).getByText(/Evidence: opt · freq · sp · irc · geometry validation \(4 calculations\)/)).toBeVisible()
+        expect(within(rowOne).queryByText(/scf stability/)).not.toBeInTheDocument()
         expect(within(rowOne).queryByText("C <=> D + [H]")).not.toBeInTheDocument()
 
         expect(within(rowTwo).getByText("C <=> D + [H]")).toBeVisible()
         expect(within(rowTwo).getByText(/H Abstraction/)).toBeVisible()
-        expect(within(rowTwo).getByText(/Evidence: opt · freq · sp \(4 calculations\)/)).toBeVisible()
+        expect(within(rowTwo).getByText(/charge −1 · spin singlet/)).toBeVisible()
+        expect(within(rowTwo).getByText(/Evidence: opt · freq · sp · scf stability \(4 calculations\)/)).toBeVisible()
+        expect(within(rowTwo).queryByText(/geometry validation/)).not.toBeInTheDocument()
+        expect(within(rowTwo).queryByText(/· irc/)).not.toBeInTheDocument()
         expect(within(rowTwo).queryByText("A <=> B")).not.toBeInTheDocument()
+    })
+
+    it("renders 'family not recorded' and 'Equation not recorded' fallbacks -- the live archive has 16/34 TS records with family: null", async () => {
+        const user = userEvent.setup()
+        const nullFamily = tsRecord({ tsEntryRef: "tse_nullfamily", reactionRef: "rxn_nullfamily", equation: "E <=> F", family: null, label: "TS2", hasIrc: false })
+        const nullEquation = tsRecord({ tsEntryRef: "tse_nullequation", reactionRef: "rxn_nullequation", equation: null, family: "Disproportionation", label: "TS3", hasIrc: false })
+        server.use(...handlers({ tsRecords: [nullFamily, nullEquation] }))
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        await screen.findByText("E <=> F")
+        const rows = document.querySelectorAll(".ts-browse-row")
+        expect(rows).toHaveLength(2)
+        expect(within(rows[0] as HTMLElement).getByText(/family not recorded/)).toBeVisible()
+        expect(within(rows[1] as HTMLElement).getByText("Equation not recorded")).toBeVisible()
     })
 })
 
 describe("browse page: pagination moves the window and pages do not overlap", () => {
-    it("Next advances the offset and shows a disjoint page; Previous returns to the first page", async () => {
+    it("Next/Previous move through three REAL pages (sliced by the actual offset sent), with the exact range text on each and Next disabled only on the last page", async () => {
         const user = userEvent.setup()
-        const page1 = [speciesRecord({ speciesRef: "spc_p1", formula: "PP", smiles: "PageOneSmiles", charge: 0, multiplicity: 1, entryRef: "spe_p1" })]
-        const page2 = [speciesRecord({ speciesRef: "spc_p2", formula: "QQ", smiles: "PageTwoSmiles", charge: 0, multiplicity: 1, entryRef: "spe_p2" })]
-        // `total: 21` (bigger than one page) is what makes the Next button
-        // enabled on page one -- see `BrowseResults`'s `hasNextPage`.
-        server.use(http.get("/api/v1/scientific/species/browse", ({ request }) => {
-            const offset = Number(new URL(request.url).searchParams.get("offset") ?? "0")
-            if (offset === 0) {
-                return HttpResponse.json({
-                    ...speciesEnvelope(0, 20, page1),
-                    pagination: { offset: 0, limit: 20, returned: 1, total: 21, post_collapse_total: 21 },
-                })
-            }
-            return HttpResponse.json({
-                ...speciesEnvelope(0, 20, page2),
-                pagination: { offset: 20, limit: 20, returned: 1, total: 21, post_collapse_total: 21 },
-            })
-        }))
+        const allRecords = manySpeciesRecords(41) // PAGE_SIZE=20 -> pages of 20, 20, 1
+        server.use(...handlers({ speciesRecords: allRecords }))
+
         renderAt("/species")
-        expect(await screen.findByText("PageOneSmiles")).toBeVisible()
-        expect(screen.queryByText("PageTwoSmiles")).not.toBeInTheDocument()
+        expect(await screen.findByText("Page0Smiles")).toBeVisible()
+        expect(screen.getByText("41 records · showing 1–20")).toBeVisible()
+        expect(screen.queryByText("Page20Smiles")).not.toBeInTheDocument()
         expect(screen.getByRole("button", { name: "Previous" })).toBeDisabled()
         expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
 
         await user.click(screen.getByRole("button", { name: "Next" }))
-        expect(await screen.findByText("PageTwoSmiles")).toBeVisible()
-        expect(screen.queryByText("PageOneSmiles")).not.toBeInTheDocument() // pages do not overlap
+        expect(await screen.findByText("Page20Smiles")).toBeVisible()
+        expect(screen.getByText("41 records · showing 21–40")).toBeVisible()
+        expect(screen.queryByText("Page0Smiles")).not.toBeInTheDocument()
+        expect(screen.queryByText("Page19Smiles")).not.toBeInTheDocument() // page 1's last record does not leak into page 2 (catches a PAGE_SIZE-1 step)
+        expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled()
+        expect(screen.getByRole("button", { name: "Next" })).toBeEnabled()
+
+        await user.click(screen.getByRole("button", { name: "Next" }))
+        expect(await screen.findByText("Page40Smiles")).toBeVisible()
+        expect(screen.getByText("41 records · showing 41–41")).toBeVisible()
+        expect(screen.queryByText("Page20Smiles")).not.toBeInTheDocument()
+        expect(screen.getByRole("button", { name: "Next" })).toBeDisabled() // last page: no live Next past the end (catches `<=` for `<`)
+        expect(screen.getByRole("button", { name: "Previous" })).toBeEnabled()
 
         await user.click(screen.getByRole("button", { name: "Previous" }))
-        expect(await screen.findByText("PageOneSmiles")).toBeVisible()
-        expect(screen.queryByText("PageTwoSmiles")).not.toBeInTheDocument()
+        expect(await screen.findByText("Page20Smiles")).toBeVisible()
+        expect(screen.getByText("41 records · showing 21–40")).toBeVisible()
     })
 })

@@ -33,3 +33,15 @@ export function archiveEmptyMessage(kind: BrowseKind): string {
 export function filteredEmptyMessage(kind: BrowseKind): string {
     return `No ${KIND_PLURAL[kind]} match these filters. Clear or widen them to see more of the archive.`
 }
+
+/**
+ * A THIRD, distinct empty reason: `pagination.total > 0` but this page's
+ * `records` came back empty anyway -- the reader paged past the end of a
+ * nonzero corpus (e.g. clicking Next on the last page). Neither
+ * {@link archiveEmptyMessage} ("nothing exists") nor
+ * {@link filteredEmptyMessage} ("filters excluded everything") is true
+ * here, so this gets its own copy, checked ahead of both in `BrowsePage`.
+ */
+export function pagedPastEndMessage(kind: BrowseKind): string {
+    return `That is past the end of the ${KIND_PLURAL[kind]} this listing has. Go back to see the rest of the archive.`
+}

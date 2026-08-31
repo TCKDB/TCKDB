@@ -14,7 +14,7 @@ import { BrowseFilterForm } from "../components/BrowseFilterForm"
 import { BrowseKindSelector } from "../components/BrowseKindSelector"
 import { SpeciesBrowseRow } from "../components/SpeciesBrowseRow"
 import { TransitionStateBrowseRow } from "../components/TransitionStateBrowseRow"
-import { archiveEmptyMessage, filteredEmptyMessage } from "../domain/browseEmptyState"
+import { archiveEmptyMessage, filteredEmptyMessage, pagedPastEndMessage } from "../domain/browseEmptyState"
 import type { BrowseState } from "../hooks/useBrowse"
 import { useBrowse } from "../hooks/useBrowse"
 
@@ -100,22 +100,53 @@ function BrowseResults({ kind, filters, offset, setOffset, state }: {
             </p>
         )
     }
-    if (state.status === "error") {
+    // Three distinct FAILURE reasons -- an invalid request (a bad filter
+    // value, or an offset past the archive's cap) must never share copy
+    // with a malformed response (an archive-side schema bug) or a
+    // transient outage (5xx/network, where "try again later" is honest
+    // advice). See `useBrowse`'s doc comment for the full classification.
+    if (state.status === "invalid") {
         return <p className="browse-status" role="alert">{state.detail}</p>
+    }
+    if (state.status === "malformed") {
+        return (
+            <p className="browse-status" role="alert">
+                The archive responded, but this listing could not be validated. That is an archive-side issue, not a
+                connection problem.
+            </p>
+        )
+    }
+    if (state.status === "unavailable") {
+        return <p className="browse-status" role="alert">The archive service could not load this listing. Try again later.</p>
     }
 
     const { result } = state
+    const { pagination } = result
     if (result.records.length === 0) {
-        // Three states, never collapsed: this branch alone covers TWO of
-        // them ("nothing of this kind exists" vs "filters excluded
-        // everything") -- see `domain/browseEmptyState.ts` for why the
-        // copy must differ, and the `error` branch above for the third
-        // ("the request failed").
-        const message = hasActiveFilters(kind, filters) ? filteredEmptyMessage(kind) : archiveEmptyMessage(kind)
-        return <p className="browse-empty">{message}</p>
+        // FOUR states, never collapsed: this branch alone covers three of
+        // them. `pagination.total > 0` is checked FIRST -- a nonzero total
+        // with zero returned records means the reader paged past the end
+        // of the archive, which is neither "nothing of this kind exists"
+        // nor "filters excluded everything" and must not be reported as
+        // either. Only once that is ruled out does `hasActiveFilters`
+        // decide between the other two. See `domain/browseEmptyState.ts`.
+        // The failed-request states above cover the fourth.
+        const message = pagination.total > 0
+            ? pagedPastEndMessage(kind)
+            : hasActiveFilters(kind, filters) ? filteredEmptyMessage(kind) : archiveEmptyMessage(kind)
+        return <>
+            <p className="browse-empty">{message}</p>
+            {pagination.total > 0 && (
+                <div className="browse-pagination">
+                    <button disabled={offset === 0} onClick={() => setOffset((current) => Math.max(0, current - PAGE_SIZE))} type="button">
+                        Previous
+                    </button>
+                    <button disabled type="button">Next</button>
+                </div>
+            )}
+        </>
     }
 
-    const { pagination } = result
     const rangeStart = pagination.offset + 1
     const rangeEnd = pagination.offset + result.records.length
     const hasNextPage = rangeEnd < pagination.total

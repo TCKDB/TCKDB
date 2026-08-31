@@ -120,10 +120,17 @@ export function clearInapplicableFilters(kind: BrowseKind, filters: BrowseFilter
     return { ...filters, ...EVIDENCE_DEFAULTS }
 }
 
-/** True when any filter beyond the kind selector itself is set -- see `domain/browseEmptyState.ts`, which uses this to tell "nothing deposited" apart from "nothing matched". */
+/**
+ * True when any filter beyond the kind selector itself is set -- see
+ * `domain/browseEmptyState.ts`, which uses this to tell "nothing deposited"
+ * apart from "nothing matched". `includeRejected`/`includeDeprecated` are
+ * deliberately EXCLUDED here: both WIDEN the result set (they relax a
+ * default exclusion), so ticking one can never be the reason a listing came
+ * back empty -- counting them as "active" made the empty-state copy claim a
+ * widening toggle had narrowed the archive to zero, which is backwards.
+ */
 export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): boolean {
     const sharedActive = filters.charge !== "" || filters.multiplicity !== "" || filters.minReviewStatus !== ""
-        || filters.includeRejected || filters.includeDeprecated
     if (sharedActive) return true
     if (kind === "transition_state") {
         return filters.status !== "" || filters.method !== "" || filters.basis !== "" || filters.software !== ""
@@ -141,10 +148,24 @@ export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): bool
 // Query construction
 // ---------------------------------------------------------------------------
 
+/**
+ * Charge/multiplicity/min/max-heavy-atoms are free-text fields applied per
+ * keystroke (see `BrowseFilterForm`'s doc comment) -- a half-typed value
+ * like the lone `-` that starts any anion charge is not yet a valid
+ * integer, and sending it produces a live 422 mid-keystroke. Rather than
+ * changing the input type (which fights the browser's own handling of a
+ * leading `-`), an incomplete value is simply not sent: the field stays
+ * whatever the reader typed, but the query only gains the parameter once
+ * it parses as a complete optionally-signed integer.
+ */
+function isCompleteInteger(value: string): boolean {
+    return /^-?\d+$/.test(value)
+}
+
 function sharedQueryParams(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = new URLSearchParams()
-    if (filters.charge !== "") query.set("charge", filters.charge)
-    if (filters.multiplicity !== "") query.set("multiplicity", filters.multiplicity)
+    if (filters.charge !== "" && isCompleteInteger(filters.charge)) query.set("charge", filters.charge)
+    if (filters.multiplicity !== "" && isCompleteInteger(filters.multiplicity)) query.set("multiplicity", filters.multiplicity)
     if (filters.minReviewStatus !== "") query.set("min_review_status", filters.minReviewStatus)
     if (filters.includeRejected) query.set("include_rejected", "true")
     if (filters.includeDeprecated) query.set("include_deprecated", "true")
@@ -159,13 +180,17 @@ export function buildSpeciesBrowseQuery(
 ): URLSearchParams {
     const query = sharedQueryParams(filters, offset, limit)
     query.set("species_entry_kind", kind === "vdw" ? "vdw_complex" : "minimum")
+    // Sent explicitly rather than relying on the server default (`CollapseMode.all`,
+    // `species_browse.py:69`) so a future server-side default change cannot silently
+    // narrow this catalogue to one record per species without a test noticing.
+    query.set("collapse", "all")
     if (filters.formula !== "") query.set("formula", filters.formula)
     if (filters.elements !== "") {
         query.set("elements", filters.elements)
         query.set("elem_mode", filters.elemMode)
     }
-    if (filters.minHeavyAtoms !== "") query.set("min_heavy_atoms", filters.minHeavyAtoms)
-    if (filters.maxHeavyAtoms !== "") query.set("max_heavy_atoms", filters.maxHeavyAtoms)
+    if (filters.minHeavyAtoms !== "" && isCompleteInteger(filters.minHeavyAtoms)) query.set("min_heavy_atoms", filters.minHeavyAtoms)
+    if (filters.maxHeavyAtoms !== "" && isCompleteInteger(filters.maxHeavyAtoms)) query.set("max_heavy_atoms", filters.maxHeavyAtoms)
     if (filters.electronicStateKind !== "") query.set("electronic_state_kind", filters.electronicStateKind)
     return query
 }
