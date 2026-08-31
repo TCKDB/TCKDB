@@ -1,6 +1,14 @@
 # A scan point records the producer's axis, not an absolute coordinate
 
-**Status: accepted 2026-08-30.** Recording the deposited axis was chosen over
+**Status: accepted 2026-08-30; SUPERSEDED 2026-08-31 by**
+[0020](0020-a-scan-coordinate-value-is-the-coordinate-itself.md), which
+declares `coordinate_value` to be the coordinate itself and converts the
+deposited corpus. The reasoning below is retained as history; its central
+argument — that the axis cannot be normalised because the server cannot
+infer which one arrived — is circular, since the inference is only
+necessary while no contract exists. **Do not build against this record.**
+
+**Original status: accepted 2026-08-30.** Recording the deposited axis was chosen over
 normalising it at ingest; no schema change, no rewrite of the deposited corpus,
 and no enforcement of the convention beyond documenting it. Verifying a
 producer's anchor is named as future work and deliberately not built here.
