@@ -478,6 +478,18 @@ _TYPED: tuple[tuple[str, str, str, str | None, str | None, str], ...] = (
         _NEW_METHOD_TESTS,
     ),
     (
+        "GET", "/api/v1/scientific/meta/workflow-tools", "get_meta_workflow_tools",
+        None, None, _NEW_METHOD_TESTS,
+    ),
+    (
+        "GET", "/api/v1/scientific/meta/software-versions",
+        "get_meta_software_versions", None, None, _NEW_METHOD_TESTS,
+    ),
+    (
+        "GET", "/api/v1/scientific/meta/workflow-tool-versions",
+        "get_meta_workflow_tool_versions", None, None, _NEW_METHOD_TESTS,
+    ),
+    (
         "GET", "/api/v1/scientific/meta/reaction-families",
         "get_meta_reaction_families", None, None, _NEW_METHOD_TESTS,
     ),

@@ -639,6 +639,7 @@ class TestMetaAndProbes:
             ("get_meta_methods", "/scientific/meta/methods"),
             ("get_meta_basis_sets", "/scientific/meta/basis-sets"),
             ("get_meta_software", "/scientific/meta/software"),
+            ("get_meta_workflow_tools", "/scientific/meta/workflow-tools"),
             ("get_meta_reaction_families", "/scientific/meta/reaction-families"),
             ("readyz", "/readyz"),
         ],
@@ -658,6 +659,30 @@ class TestMetaAndProbes:
 
         assert client.get_meta_methods() == {"results": ["b3lyp"]}
         assert "x-api-key" not in {k.lower() for k in seen[0].headers}
+
+    def test_get_meta_software_versions_scopes_by_the_required_parent(self):
+        handler, seen = _capture({"results": [{"value": "16", "count": 1}]})
+        client, _ = make_client(handler)
+
+        result = client.get_meta_software_versions("gaussian")
+
+        assert result == {"results": [{"value": "16", "count": 1}]}
+        assert _path_of(str(seen[0].url)).endswith("/scientific/meta/software-versions")
+        query = _query_of(str(seen[0].url))
+        assert query["software"] == ["gaussian"]
+
+    def test_get_meta_workflow_tool_versions_scopes_by_the_required_parent(self):
+        handler, seen = _capture({"results": [{"value": "1.2.3", "count": 1}]})
+        client, _ = make_client(handler)
+
+        result = client.get_meta_workflow_tool_versions("arc")
+
+        assert result == {"results": [{"value": "1.2.3", "count": 1}]}
+        assert _path_of(str(seen[0].url)).endswith(
+            "/scientific/meta/workflow-tool-versions"
+        )
+        query = _query_of(str(seen[0].url))
+        assert query["workflow_tool"] == ["arc"]
 
 
 # ---------------------------------------------------------------------------

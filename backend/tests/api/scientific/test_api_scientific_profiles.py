@@ -106,6 +106,13 @@ _FILTER_LADDER = (
     "query_smiles=CCO",
     # Bulk exports take a seed, not a filter.
     "all=true",
+    # /meta/software-versions and /meta/workflow-tool-versions refuse a
+    # missing parent (``missing_version_parent``) rather than an unscoped
+    # query; the parent need not name a software/tool that actually exists
+    # -- an unrecognised parent is an empty result (200), not a refusal --
+    # so any non-empty value satisfies the ladder.
+    "software=gaussian",
+    "workflow_tool=arc",
 )
 
 
@@ -160,6 +167,7 @@ def test_meta_endpoints_echo_the_profile_too(client):
         "/api/v1/scientific/meta/methods",
         "/api/v1/scientific/meta/basis-sets",
         "/api/v1/scientific/meta/software",
+        "/api/v1/scientific/meta/workflow-tools",
         "/api/v1/scientific/meta/reaction-families",
     ):
         body = client.get(f"{path}?profile=curated").json()

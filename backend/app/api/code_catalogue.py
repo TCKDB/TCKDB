@@ -1228,6 +1228,16 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/reactions.py"),
     ApiCode("missing_structure_query", 422, Surface.message_prefix,
             "backend/app/services/scientific_read/structure_search.py"),
+    ApiCode("missing_version_parent", 422, Surface.message_prefix,
+            "backend/app/services/scientific_read/meta.py",
+            note=(
+                "Shared by /meta/software-versions and "
+                "/meta/workflow-tool-versions: the dependent-dropdown "
+                "parent (software= or workflow_tool=) was missing or "
+                "blank. Named which field like missing_identifier does, "
+                "not a relationship -- there is nothing on the other side "
+                "to compare it against."
+            )),
     ApiCode("ml_export_all_cap_exceeded", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/ml_dataset.py",
             shape=Shape.relationship,
