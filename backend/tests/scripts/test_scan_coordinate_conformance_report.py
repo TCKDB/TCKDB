@@ -28,6 +28,7 @@ from app.db.models.calculation import (
 )
 from app.db.models.common import CalculationType, CoordinateUnit, ScanCoordinateKind
 from app.db.models.geometry import Geometry, GeometryAtom
+from tests.services._scan_geometry import next_geom_hash, place_next_atom
 from tests.services.scientific_read._factories import make_species, make_species_entry
 
 _REPORT = (
@@ -80,44 +81,17 @@ def _run_main(report_script, monkeypatch, db_session, argv):
 # ---------------------------------------------------------------------------
 # Fixture builder: one real dihedral scan series, in the shape ADR 0020
 # describes as the corpus's actual defect -- stored values are a sweep
-# relative to the series' own start_value.
+# relative to the series' own start_value. Geometry placement
+# (``place_next_atom``) and hashing (``next_geom_hash``) are shared with
+# ``tests/services/test_scan_coordinate_conformance.py`` via
+# ``tests/services/_scan_geometry.py`` -- see that module's docstring for
+# why a second, independent-looking copy of the placement formula in this
+# file is exactly the thing not to have.
 # ---------------------------------------------------------------------------
-
-
-def _place_next_atom(a, b, c, *, bond_length, bond_angle_deg_, dihedral_deg_):
-    import math
-
-    theta = math.radians(bond_angle_deg_)
-    phi = math.radians(-dihedral_deg_)
-    bc = c - b
-    bc_hat = bc / np.linalg.norm(bc)
-    ab = b - a
-    n = np.cross(ab, bc_hat)
-    n_hat = n / np.linalg.norm(n)
-    m = np.cross(n_hat, bc_hat)
-    local = np.array(
-        [
-            -bond_length * math.cos(theta),
-            bond_length * math.sin(theta) * math.cos(phi),
-            bond_length * math.sin(theta) * math.sin(phi),
-        ]
-    )
-    basis = np.column_stack([bc_hat, m, n_hat])
-    return c + basis @ local
-
 
 _A = np.array([0.0, 0.0, 0.0])
 _B = np.array([1.50, 0.0, 0.0])
 _C = np.array([2.50, 1.30, 0.0])
-
-_geom_hash_counter = [0]
-
-
-def _next_geom_hash() -> str:
-    import hashlib
-
-    _geom_hash_counter[0] += 1
-    return hashlib.sha256(f"scan-report-test-{_geom_hash_counter[0]}".encode()).hexdigest()
 
 
 def _make_legacy_relative_sweep_scan(
@@ -155,10 +129,10 @@ def _make_legacy_relative_sweep_scan(
     for i in range(n_points):
         relative_value = i * step
         absolute_dihedral = ((start_value + relative_value + 180.0) % 360.0) - 180.0
-        d = _place_next_atom(
-            _A, _B, _C, bond_length=1.09, bond_angle_deg_=109.5, dihedral_deg_=absolute_dihedral
+        d = place_next_atom(
+            _A, _B, _C, bond_length=1.09, bond_angle_deg=109.5, dihedral_deg=absolute_dihedral
         )
-        geometry = Geometry(natoms=4, geom_hash=_next_geom_hash())
+        geometry = Geometry(natoms=4, geom_hash=next_geom_hash())
         session.add(geometry)
         session.flush()
         for idx, (element, coord) in enumerate(
@@ -185,6 +159,68 @@ def _make_legacy_relative_sweep_scan(
                 point_index=i + 1,
                 coordinate_index=1,
                 coordinate_value=relative_value,
+                value_unit=CoordinateUnit.degree,
+            )
+        )
+    session.flush()
+    return calc
+
+
+def _make_improper_only_scan(session, *, n_points: int = 4) -> Calculation:
+    """A scan whose only coordinate is ``improper`` -- always
+    ``not_applicable`` at every point (ADR 0020: no recomputable
+    convention), so the series classifies ``insufficient_data``. Used to
+    prove that ``insufficient_data`` is not counted as non-conforming.
+    """
+    species = make_species(session)
+    species_entry = make_species_entry(session, species)
+    calc = Calculation(type=CalculationType.scan, species_entry_id=species_entry.id)
+    session.add(calc)
+    session.flush()
+
+    coordinate = CalculationScanCoordinate(
+        calculation_id=calc.id,
+        coordinate_index=1,
+        coordinate_kind=ScanCoordinateKind.improper,
+        atom1_index=1,
+        atom2_index=2,
+        atom3_index=3,
+        atom4_index=4,
+        step_count=n_points,
+        value_unit=CoordinateUnit.degree,
+    )
+    session.add(coordinate)
+    session.flush()
+
+    for i in range(n_points):
+        d = place_next_atom(_A, _B, _C, bond_length=1.09, bond_angle_deg=109.5, dihedral_deg=float(i) * 10.0)
+        geometry = Geometry(natoms=4, geom_hash=next_geom_hash())
+        session.add(geometry)
+        session.flush()
+        for idx, (element, coord) in enumerate(
+            zip(["C", "C", "C", "H"], [_A, _B, _C, d], strict=True), start=1
+        ):
+            session.add(
+                GeometryAtom(
+                    geometry_id=geometry.id,
+                    atom_index=idx,
+                    element=element,
+                    x=float(coord[0]),
+                    y=float(coord[1]),
+                    z=float(coord[2]),
+                )
+            )
+        session.flush()
+
+        point = CalculationScanPoint(calculation_id=calc.id, point_index=i + 1, geometry_id=geometry.id)
+        session.add(point)
+        session.flush()
+        session.add(
+            CalculationScanPointCoordinateValue(
+                calculation_id=calc.id,
+                point_index=i + 1,
+                coordinate_index=1,
+                coordinate_value=17.0,
                 value_unit=CoordinateUnit.degree,
             )
         )
@@ -239,3 +275,44 @@ def test_the_report_writes_nothing(db_session, report_script, monkeypatch):
     assert not db_session.new
     assert not db_session.dirty
     assert not db_session.deleted
+
+
+def test_insufficient_data_is_not_counted_as_nonconforming(
+    db_session, report_script, monkeypatch, capsys
+):
+    """A series with no checkable points (an ``improper`` coordinate here)
+    is not evidence for or against ADR 0020 conformance -- it must not
+    trip EXIT_NONCONFORMING on its own, and must be printed separately
+    from the series that actually disagree with their own geometry.
+    """
+    calc = _make_improper_only_scan(db_session)
+    code = _run_main(report_script, monkeypatch, db_session, ["--all"])
+    out = capsys.readouterr().out
+
+    assert code == report_script.EXIT_OK, (
+        "an insufficient_data-only scope must not exit non-zero:\n" + out
+    )
+    assert "could not be checked at all" in out
+    assert calc.public_ref in out
+    assert "do not conform to ADR 0020" not in out
+    assert "RESULT: every checkable scan coordinate series in scope conforms" in out
+
+
+def test_insufficient_data_does_not_hide_a_real_nonconformance(
+    db_session, report_script, monkeypatch, capsys
+):
+    """Mixing an uncheckable series with a genuinely non-conforming one:
+    the exit code and the "do not conform" section must still fire, and
+    the uncheckable series must not appear in that section.
+    """
+    _make_improper_only_scan(db_session)
+    nonconforming_calc = _make_legacy_relative_sweep_scan(db_session)
+
+    code = _run_main(report_script, monkeypatch, db_session, ["--all"])
+    out = capsys.readouterr().out
+
+    assert code == report_script.EXIT_NONCONFORMING
+    assert "could not be checked at all" in out
+    assert "do not conform to ADR 0020:" in out
+    nonconforming_section = out.split("do not conform to ADR 0020:", 1)[1]
+    assert nonconforming_calc.public_ref in nonconforming_section

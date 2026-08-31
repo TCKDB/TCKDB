@@ -41,11 +41,19 @@ Usage::
 
 Exit status, on the same principle as ``project_imaginary_modes.py``: ``1``
 when at least one coordinate series is classified as anything other than
-``conforms`` -- the finding an operator (or the follow-up migration) needs to
-look at -- and ``2`` when the scope resolved to no scan calculations, because
-a confident "nothing to report" over an empty set is exactly the failure mode
-that script was built to close. ``0`` means every scan coordinate series in
-scope conforms to ADR 0020.
+``conforms`` or ``insufficient_data`` -- the finding an operator (or the
+follow-up migration) needs to look at -- and ``2`` when the scope resolved to
+no scan calculations, because a confident "nothing to report" over an empty
+set is exactly the failure mode that script was built to close. ``0`` means
+every *checkable* scan coordinate series in scope conforms to ADR 0020.
+
+``insufficient_data`` is deliberately excluded from the exit-1 accounting: it
+is not a conformance verdict, it means too few checkable points existed to
+say anything at all (an ``improper`` coordinate, correctly ``not_applicable``
+at every point, is the common case) -- counting it as "does not conform"
+would put a structurally unrelated absence in the same bucket as an actual
+non-conforming deposit. It is still printed, in its own section, because
+"nothing was measured" and "nothing was found wrong" are different findings.
 
 On the corpus this was built against, every series is expected to exit ``1``:
 all 46 deposited scan series predate ADR 0020 and hold ADR 0019's superseded
@@ -154,6 +162,13 @@ def main() -> int:
 
     classification_counts: dict[str, int] = {c.value: 0 for c in SeriesClassification}
     nonconforming: list[str] = []
+    # insufficient_data is not a conformance verdict at all -- it means the
+    # series had too few checkable points to say anything (e.g. an
+    # ``improper`` coordinate, correctly reported not_applicable at every
+    # point). Counting it as "does not conform to ADR 0020" would put a
+    # structurally unrelated absence in the same bucket as an actual
+    # non-conforming deposit, so it gets its own, separate accounting.
+    uncheckable: list[str] = []
 
     with SessionLocal() as session:
         targets = _scope(session, args)
@@ -174,11 +189,11 @@ def main() -> int:
                 n_series += 1
                 classification_counts[series.classification.value] += 1
                 _print_series(calc, series, verbose=args.verbose)
-                if series.classification is not SeriesClassification.conforms:
-                    nonconforming.append(
-                        f"{calc.public_ref} coordinate_index={series.coordinate_index} "
-                        f"({series.classification.value})"
-                    )
+                label = f"{calc.public_ref} coordinate_index={series.coordinate_index}"
+                if series.classification is SeriesClassification.insufficient_data:
+                    uncheckable.append(f"{label} ({series.classification.value})")
+                elif series.classification is not SeriesClassification.conforms:
+                    nonconforming.append(f"{label} ({series.classification.value})")
 
     print(f"{len(targets)} scan calculation(s), {n_series} coordinate series.\n")
     print("classification                              series")
@@ -186,10 +201,17 @@ def main() -> int:
         count = classification_counts[classification.value]
         print(f"  {classification.value:<42s}{count:>5d}")
 
+    if uncheckable:
+        print(
+            f"\n{len(uncheckable)} series could not be checked at all -- not "
+            "evidence for or against ADR 0020 conformance:"
+        )
+        for line in uncheckable:
+            print(f"  {line}")
+
     if nonconforming:
         print(
-            f"\n{len(nonconforming)} series do not conform to ADR 0020 (or could "
-            "not be classified):"
+            f"\n{len(nonconforming)} series do not conform to ADR 0020:"
         )
         for line in nonconforming:
             print(f"  {line}")
@@ -201,7 +223,7 @@ def main() -> int:
         )
         return EXIT_NONCONFORMING
 
-    print("\nRESULT: every scan coordinate series in scope conforms to ADR 0020.")
+    print("\nRESULT: every checkable scan coordinate series in scope conforms to ADR 0020.")
     return EXIT_OK
 
 

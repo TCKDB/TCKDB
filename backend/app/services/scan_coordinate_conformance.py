@@ -122,11 +122,26 @@ from app.scientific_checks import (
 #: "Two limits belong on the record" paragraph.
 FALLBACK_PRECISION_DECIMALS = 6
 
-#: Below this sample size, :func:`infer_precision_decimals` does not trust
-#: what it found and falls back -- a handful of coordinates that happen to
-#: round-trip at low precision is not evidence the whole geometry was
-#: deposited that coarsely.
-_MIN_PRECISION_DECIMALS_TO_TRUST = 3
+#: Below this sample *size* -- the count of Cartesian components fed to
+#: :func:`infer_precision_decimals`, not the decimal count it infers --
+#: the function does not trust what it found and falls back. A handful of
+#: coordinates that happen to round-trip at low precision by coincidence
+#: is not evidence the whole geometry was deposited that coarsely; three
+#: is deliberately small, one atom's worth of ``x``/``y``/``z`` -- a real
+#: call site passes every component of every atom of every geometry a
+#: scan touches, routinely hundreds, so this floor only ever bites a
+#: hand-built, near-empty sample.
+#:
+#: A prior version of this guard checked the wrong quantity -- the
+#: inferred decimal count itself, not the sample size the docstring above
+#: it argued about -- so a genuinely coarse deposit (say, honestly stored
+#: at 2 decimal places, in a large sample) fell back to the tighter
+#: 6-decimal-place assumption and was judged non-conforming by an
+#: artificially tight tolerance it never had a chance of meeting. See
+#: ``TestInferPrecisionDecimals`` for both directions: too few
+#: components falls back regardless of what they'd imply, and a large,
+#: genuinely coarse sample is trusted rather than overridden.
+_MIN_SAMPLE_SIZE_TO_TRUST = 3
 
 #: ADR 0020: "where a quartet is near-collinear the dihedral is not a usable
 #: coordinate at all". Below this, on either flanking bond angle, the point
@@ -199,6 +214,17 @@ def dihedral_deg(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarray) -> 
     Standard "praxeolitic" formula (atan2 of the projection of the two
     wing-bond normals onto the central bond's frame), the convention shared
     by RDKit, MDAnalysis and most quantum-chemistry output parsers.
+
+    Pinned directly against RDKit (``rdMolTransforms.GetDihedralDeg``) in
+    ``tests/services/test_scan_coordinate_conformance.py`` -- not against a
+    second hand-written formula in this repository, which a sign error in
+    both could pass silently. An earlier version of this function computed
+    ``y = dot(cross(n1, b2_unit), n2)``, which equals
+    ``-dot(cross(n1, n2), b2_unit)`` and returned the *negative* of the
+    dihedral; a test helper built to catch that was edited to negate its
+    own convention to match instead of pinning it externally, and the sign
+    error shipped for a full review cycle undetected. ``y`` below is
+    computed the one way that is not that mistake.
     """
     b1 = b - a
     b2 = c - b
@@ -206,9 +232,8 @@ def dihedral_deg(a: np.ndarray, b: np.ndarray, c: np.ndarray, d: np.ndarray) -> 
     b2_unit = b2 / np.linalg.norm(b2)
     n1 = np.cross(b1, b2)
     n2 = np.cross(b2, b3)
-    m1 = np.cross(n1, b2_unit)
     x = float(np.dot(n1, n2))
-    y = float(np.dot(m1, n2))
+    y = float(np.dot(np.cross(n1, n2), b2_unit))
     return math.degrees(math.atan2(y, x))
 
 
@@ -290,13 +315,14 @@ def infer_precision_decimals(
     (within floating-point noise) and takes the maximum across the sample --
     the coordinate needing the most decimals sets the precision the whole
     geometry was written at. Falls back to ``fallback`` when the sample is
-    empty, or too small to trust a low reading from (see
-    :data:`_MIN_PRECISION_DECIMALS_TO_TRUST` -- a handful of coordinates
-    that happen to land on round numbers is not evidence of coarse
-    precision).
+    empty, or its *size* is too small to trust any reading from at all
+    (see :data:`_MIN_SAMPLE_SIZE_TO_TRUST`). A large sample is trusted at
+    whatever precision it actually needs, including a low one: a
+    genuinely coarse deposit is real information, not noise to override
+    with the fallback.
     """
     values = [v for v in values if v is not None]
-    if not values:
+    if len(values) < _MIN_SAMPLE_SIZE_TO_TRUST:
         return fallback
 
     needed = 0
@@ -308,8 +334,6 @@ def infer_precision_decimals(
         else:
             needed = max(needed, max_decimals)
 
-    if needed < _MIN_PRECISION_DECIMALS_TO_TRUST:
-        return fallback
     return needed
 
 
@@ -537,6 +561,52 @@ class SeriesClassificationResult:
 _PATTERN_TOLERANCE_MULTIPLE = 5.0
 
 
+def _circular_mean_and_spread_deg(values_deg: np.ndarray) -> tuple[float, float]:
+    """Mean and spread of a set of degree values, respecting the 360 wrap.
+
+    A residual near +-180 degrees is the same physical offset whichever
+    sign it happens to carry, so an arithmetic ``mean``/``std`` over the
+    raw numbers is wrong exactly there: a series genuinely constant at
+    +179 degrees, sampled as [179, -179, 179, -179, ...] by ordinary
+    floating-point noise crossing the branch cut, averages to ~0 with a
+    spread of ~180 under plain statistics -- which reads as "wildly
+    incoherent" for a series that is in fact perfectly constant.
+
+    The circular mean is ``atan2(mean(sin), mean(cos))``, and the spread
+    returned is the circular standard deviation
+    ``sqrt(-2 * ln(R))`` (in degrees) where
+    ``R = |mean(exp(i * theta))|`` is the resultant length -- 1 for
+    identical angles, shrinking towards 0 as they scatter around the
+    circle. Standard directional-statistics definitions (Mardia & Jupp,
+    *Directional Statistics*); used here in place of the linear mean/std
+    that :func:`classify_series` used before this fix, which is what let
+    the two deposited series with ``start_value = 180.0`` -- landing
+    exactly on the branch cut -- classify as ``no_pattern_detected``
+    instead of ``consistent_with_legacy_relative_axis``.
+    """
+    radians = np.radians(values_deg)
+    sin_mean = float(np.mean(np.sin(radians)))
+    cos_mean = float(np.mean(np.cos(radians)))
+    mean_deg = math.degrees(math.atan2(sin_mean, cos_mean))
+    resultant_length = min(1.0, math.hypot(sin_mean, cos_mean))
+    if resultant_length <= 1e-12:
+        return mean_deg, 180.0
+    spread_deg = math.degrees(math.sqrt(-2.0 * math.log(resultant_length)))
+    return mean_deg, spread_deg
+
+
+def _unwrap_deg(values_deg: np.ndarray) -> np.ndarray:
+    """Remove artificial +-360 jumps from a *sequence* of degree residuals.
+
+    ``np.unwrap`` assumes consecutive samples are close on the circle --
+    true for a residual pattern sampled in point-index order, which is
+    what :func:`classify_series` always passes. Used so a genuine linear
+    ramp that happens to cross the 360-degree branch cut is fit as one
+    line rather than aliased into two disconnected halves.
+    """
+    return np.degrees(np.unwrap(np.radians(values_deg)))
+
+
 def classify_series(
     points: Sequence[PointCoordinateConformance],
     *,
@@ -598,10 +668,13 @@ def classify_series(
         )
 
     if n_deviating == n:
-        mean_residual = float(np.mean(residuals))
-        spread = float(np.std(residuals))
+        if is_periodic:
+            mean_residual, spread = _circular_mean_and_spread_deg(residuals)
+        else:
+            mean_residual = float(np.mean(residuals))
+            spread = float(np.std(residuals))
         if spread <= pattern_tol:
-            constant = _wrap_deg(mean_residual) if is_periodic else mean_residual
+            constant = mean_residual
             if step_size is not None and step_size > 0:
                 step_tol = max(pattern_tol, 0.1 * abs(step_size))
                 if abs(abs(constant) - abs(step_size)) <= step_tol:
@@ -614,7 +687,20 @@ def classify_series(
                             f"step_size ({step_size:.6g}) to within "
                             f"{step_tol:.3g}. Consistent with each point's "
                             "coordinate value paired to its neighbour's "
-                            "geometry (point/geometry off-by-one)."
+                            "geometry (point/geometry off-by-one). AMBIGUOUS: "
+                            "a constant this close to one grid step is "
+                            "structurally indistinguishable from "
+                            "consistent_with_legacy_relative_axis with a "
+                            "start_value that happens to equal roughly one "
+                            "step -- this check reports the step-sized "
+                            "reading because it is the narrower, more "
+                            "specific claim, not because it has ruled the "
+                            "other one out. It cannot: ADR 0020 forbids "
+                            "reading start_value to decide, which is exactly "
+                            "the number that would resolve the ambiguity. A "
+                            "human (or the corrective migration, which may "
+                            "read start_value) should confirm before acting "
+                            "on point/geometry off-by-one specifically."
                         ),
                     )
             return SeriesClassificationResult(
@@ -628,9 +714,14 @@ def classify_series(
                 ),
             )
 
-        slope, intercept = np.polyfit(indices, residuals, 1)
+        # Unwrapped before fitting: a genuine ramp that crosses the 360-degree
+        # branch cut (residual sweeping past +-180) would otherwise alias
+        # into two disconnected halves that no single line fits, and the
+        # ramp would never be detected for any periodic series that wraps.
+        ramp_residuals = _unwrap_deg(residuals) if is_periodic else residuals
+        slope, intercept = np.polyfit(indices, ramp_residuals, 1)
         fitted = slope * indices + intercept
-        fit_spread = float(np.std(residuals - fitted))
+        fit_spread = float(np.std(ramp_residuals - fitted))
         index_span = float(indices.max() - indices.min()) or 1.0
         if fit_spread <= pattern_tol and abs(slope) * index_span > pattern_tol:
             return SeriesClassificationResult(

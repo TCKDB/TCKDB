@@ -29,9 +29,8 @@ per positive one:
 
 from __future__ import annotations
 
-import hashlib
-import itertools
 import math
+import random
 
 import numpy as np
 import pytest
@@ -51,6 +50,7 @@ from app.services.scan_coordinate_conformance import (
     PointCoordinateConformance,
     PointStatus,
     SeriesClassification,
+    _wrap_deg,
     bond_angle_deg,
     bond_length_angstrom,
     build_scan_coordinate_conformance_report,
@@ -59,52 +59,33 @@ from app.services.scan_coordinate_conformance import (
     evaluate_point_coordinate_conformance,
     infer_precision_decimals,
 )
+from tests.services._scan_geometry import (
+    next_geom_hash,
+    place_next_atom,
+    rdkit_dihedral_deg,
+)
 from tests.services.scientific_read._factories import make_species, make_species_entry
 
 # ---------------------------------------------------------------------------
-# Independent geometry construction (NeRF placement) -- ground truth for the
-# pure vector-math tests. Deliberately *not* derived from the module under
-# test: if this placement and ``dihedral_deg`` disagreed on sign convention,
-# a round-trip test would not have caught it, which is why the very first
-# test below is exactly that cross-check.
+# Independent geometry construction (NeRF placement, shared with
+# tests/scripts/test_scan_coordinate_conformance_report.py via
+# tests/services/_scan_geometry.py) -- ground truth for the pure
+# vector-math tests below.
+#
+# A prior version of this file negated the dihedral passed into the NeRF
+# placement and justified it as "measured empirically against dihedral_deg
+# below" -- which quietly matched a sign bug in dihedral_deg itself instead
+# of catching it, for exactly the reason the (still true) warning below
+# names: a round-trip test between two hand-written formulas cannot tell a
+# shared sign error from correctness. The fix is that neither
+# ``dihedral_deg`` nor ``place_next_atom`` is asserted correct by the
+# other any more -- both are checked directly against RDKit,
+# independently, in ``TestDihedralDegAgreesWithRDKit`` and
+# ``TestPlacementHelperAgreesWithRDKit``. The round-trip test that
+# follows them is kept only as a *secondary* consistency check between two
+# already-independently-verified implementations, never as the sole
+# evidence.
 # ---------------------------------------------------------------------------
-
-
-def _place_next_atom(
-    a: np.ndarray,
-    b: np.ndarray,
-    c: np.ndarray,
-    *,
-    bond_length: float,
-    bond_angle_deg_: float,
-    dihedral_deg_: float,
-) -> np.ndarray:
-    """Place atom D such that dihedral(a, b, c, d) == dihedral_deg_ exactly.
-
-    Standard NeRF ("natural extension reference frame") placement. The sign
-    passed to the internal formula is negated relative to the public
-    parameter -- measured empirically against :func:`dihedral_deg` below,
-    not assumed -- so that this helper's ``dihedral_deg_`` and this module's
-    ``dihedral_deg`` agree.
-    """
-    theta = math.radians(bond_angle_deg_)
-    phi = math.radians(-dihedral_deg_)
-    bc = c - b
-    bc_hat = bc / np.linalg.norm(bc)
-    ab = b - a
-    n = np.cross(ab, bc_hat)
-    n_hat = n / np.linalg.norm(n)
-    m = np.cross(n_hat, bc_hat)
-    local = np.array(
-        [
-            -bond_length * math.cos(theta),
-            bond_length * math.sin(theta) * math.cos(phi),
-            bond_length * math.sin(theta) * math.sin(phi),
-        ]
-    )
-    basis = np.column_stack([bc_hat, m, n_hat])
-    return c + basis @ local
-
 
 # A fixed, well-conditioned backbone: A-B-C with a realistic bond length and
 # neither flanking angle anywhere near collinear.
@@ -116,22 +97,76 @@ _ANGLE_BCD = 109.5
 
 
 def _quartet_at_dihedral(dihedral_value: float) -> tuple[np.ndarray, ...]:
-    d = _place_next_atom(
+    d = place_next_atom(
         _A,
         _B,
         _C,
         bond_length=_BOND_LENGTH_CD,
-        bond_angle_deg_=_ANGLE_BCD,
-        dihedral_deg_=dihedral_value,
+        bond_angle_deg=_ANGLE_BCD,
+        dihedral_deg=dihedral_value,
     )
     return _A, _B, _C, d
 
 
-class TestPlacementHelperAgreesWithDihedralDeg:
-    """The ground-truth builder and the module's formula must agree.
+class TestDihedralDegAgreesWithRDKit:
+    """The external pin. Not validated against a second formula in this
+    repository -- RDKit is already an environment dependency, used
+    throughout ``app.chemistry``, and is the authority a sign convention
+    is checked against."""
 
-    Without this, every other geometry test below would be validating the
-    module against itself.
+    @pytest.mark.parametrize(
+        "target", [0.0, 1.0, 30.0, 60.0, 90.0, 105.8, 120.0, 150.0, 179.0, -30.0, -90.0, -150.0]
+    )
+    def test_matches_rdkit_at_fixed_targets(self, target: float) -> None:
+        a, b, c, d = _quartet_at_dihedral(target)
+        rdkit_value = rdkit_dihedral_deg(a, b, c, d)
+        assert dihedral_deg(a, b, c, d) == pytest.approx(rdkit_value, abs=1e-6)
+
+    def test_matches_rdkit_over_random_configurations(self) -> None:
+        rng = random.Random(20260831)
+        max_diff = 0.0
+        n_checked = 0
+        for _ in range(300):
+            pts = [np.array([rng.uniform(-3.0, 3.0) for _ in range(3)]) for _ in range(4)]
+            a, b, c, d = pts
+            if (
+                np.linalg.norm(b - a) < 0.3
+                or np.linalg.norm(c - b) < 0.3
+                or np.linalg.norm(d - c) < 0.3
+            ):
+                continue
+            theta_123 = bond_angle_deg(a, b, c)
+            theta_234 = bond_angle_deg(b, c, d)
+            if min(math.sin(math.radians(theta_123)), math.sin(math.radians(theta_234))) < 0.1:
+                continue
+            rdkit_value = rdkit_dihedral_deg(a, b, c, d)
+            ours = dihedral_deg(a, b, c, d)
+            diff = abs(((ours - rdkit_value + 180.0) % 360.0) - 180.0)
+            max_diff = max(max_diff, diff)
+            n_checked += 1
+        assert n_checked > 100, "too many degenerate quartets were skipped to trust this"
+        assert max_diff < 1e-6, f"dihedral_deg disagrees with RDKit by up to {max_diff} degrees"
+
+
+class TestPlacementHelperAgreesWithRDKit:
+    """``place_next_atom``'s own correctness, checked independently of
+    ``dihedral_deg`` -- via RDKit measuring the quartet it built, not via
+    this module's own formula."""
+
+    @pytest.mark.parametrize(
+        "target", [0.0, 1.0, 30.0, 60.0, 90.0, 120.0, 150.0, 179.0, -30.0, -90.0, -150.0]
+    )
+    def test_rdkit_measures_the_requested_dihedral(self, target: float) -> None:
+        a, b, c, d = _quartet_at_dihedral(target)
+        assert rdkit_dihedral_deg(a, b, c, d) == pytest.approx(target, abs=1e-6)
+
+
+class TestPlacementHelperAgreesWithDihedralDeg:
+    """Secondary consistency check between two implementations that are
+    each *already* pinned to RDKit independently above. Kept because it is
+    still useful (it also covers ``bond_length_angstrom``/``bond_angle_deg``
+    against the same fixture), but it is not, on its own, evidence that
+    either is correct -- see the two ``...AgreesWithRDKit`` classes above.
     """
 
     @pytest.mark.parametrize(
@@ -162,6 +197,42 @@ class TestPureVectorGeometry:
         b = np.array([0.0, 0.0, 0.0])
         c = np.array([1.0, 0.0, 0.0])
         assert bond_angle_deg(a, b, c) == pytest.approx(180.0)
+
+
+class TestWrapDeg:
+    """Direct coverage of ``_wrap_deg``'s branch cut.
+
+    Added to kill two mutants a review found surviving: replacing the
+    whole function with the identity, and deleting the ``<= -180``
+    correction branch. Neither showed up anywhere else in this suite --
+    every fixture elsewhere used residuals comfortably inside
+    ``(-180, 180)``, never at the boundary itself.
+    """
+
+    def test_ordinary_value_is_unchanged(self) -> None:
+        assert _wrap_deg(10.0) == pytest.approx(10.0)
+
+    def test_identity_mutant_is_killed(self) -> None:
+        # 200 degrees is not a valid member of (-180, 180]; the identity
+        # mutant would return it unchanged.
+        assert _wrap_deg(200.0) == pytest.approx(-160.0)
+        assert _wrap_deg(-200.0) == pytest.approx(160.0)
+        assert _wrap_deg(359.0) == pytest.approx(-1.0)
+
+    def test_plus_180_stays_plus_180(self) -> None:
+        """The interval is (-180, 180]: +180 is a member, -180 is not.
+
+        Kills the ``<= -180`` branch-deletion mutant: without that
+        correction, the raw ``(value + 180) % 360 - 180`` formula sends
+        180.0 to -180.0.
+        """
+        assert _wrap_deg(180.0) == pytest.approx(180.0)
+
+    def test_minus_180_maps_to_plus_180(self) -> None:
+        assert _wrap_deg(-180.0) == pytest.approx(180.0)
+
+    def test_540_wraps_to_plus_180(self) -> None:
+        assert _wrap_deg(540.0) == pytest.approx(180.0)
 
 
 # ---------------------------------------------------------------------------
@@ -310,6 +381,86 @@ class TestEvaluatePointCoordinateConformance:
         assert result.status is not PointStatus.deviates
         assert result.status is not PointStatus.not_applicable
 
+    def test_not_checkable_when_only_one_flanking_angle_is_near_collinear(self) -> None:
+        """The gate is ``min(sin_123, sin_234) < threshold``, not ``max``.
+
+        Kills a mutant a review found surviving: replacing ``min`` with
+        ``max``. The prior collinearity test made *both* flanking angles
+        near-collinear at once, so ``min`` and ``max`` of two small
+        numbers agree and the mutant passed unnoticed. Here only
+        theta_234 is degenerate; theta_123 is a clean 90 degrees.
+        ``max`` of (~1.0, ~0.0008) is ~1.0 -- comfortably above the
+        threshold -- so the mutant would (wrongly) treat this quartet as
+        checkable.
+        """
+        a = np.array([1.0, 0.0, 0.0])
+        b = np.array([0.0, 0.0, 0.0])
+        c = np.array([0.0, 1.5, 0.0])
+        d = np.array([0.001, 2.7, 0.0])  # b-c-d nearly collinear
+        theta_123 = bond_angle_deg(a, b, c)
+        theta_234 = bond_angle_deg(b, c, d)
+        sin_123 = math.sin(math.radians(theta_123))
+        sin_234 = math.sin(math.radians(theta_234))
+        assert sin_123 > 0.9, "theta_123 must be well-conditioned for this test to mean anything"
+        assert sin_234 < DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.dihedral,
+            stored_value=0.0,
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c, 4: d},
+            atom_indices=(1, 2, 3, 4),
+            precision_decimals=6,
+            point_index=1,
+        )
+        assert result.status is PointStatus.not_checkable
+
+    def test_dihedral_residual_wraps_across_the_360_branch_cut(self) -> None:
+        """Kills the raw-subtraction mutant (deleting the ``_wrap_deg`` call).
+
+        The true dihedral is +179.5 degrees; the stored value is -179.5,
+        one degree away going the short way around the circle. A raw
+        ``stored - expected`` gives -359.0, which would report ``deviates``
+        with a wildly wrong residual; the wrapped residual is +/-1.0 and
+        the tolerance (well under one degree) still correctly flags it as
+        ``deviates`` -- but with a residual that says what actually
+        happened, not the aliased -359.
+        """
+        a, b, c, d = _quartet_at_dihedral(179.5)
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.dihedral,
+            stored_value=-179.5,
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c, 4: d},
+            atom_indices=(1, 2, 3, 4),
+            precision_decimals=6,
+            point_index=1,
+        )
+        assert abs(result.residual) < 2.0, (
+            f"residual {result.residual} looks like the unwrapped -359, not "
+            "the true ~1 degree offset"
+        )
+        assert result.status is PointStatus.deviates
+
+    def test_angle_residual_wraps_across_the_360_branch_cut(self) -> None:
+        """Same mutant, the angle branch (a synthetic case: nothing stops a
+        stored ``angle`` value from being deposited outside [0, 180])."""
+        a = np.array([1.0, 0.0, 0.0])
+        b = np.array([0.0, 0.0, 0.0])
+        c = np.array([0.0, 1.0, 0.0])  # bond_angle_deg(a, b, c) == 90.0
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.angle,
+            stored_value=-270.0,  # -270 == 90 (mod 360)
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c},
+            atom_indices=(1, 2, 3),
+            precision_decimals=6,
+            point_index=1,
+        )
+        assert result.residual == pytest.approx(0.0, abs=1e-6), (
+            f"residual {result.residual} looks like the unwrapped -360, not 0"
+        )
+        assert result.status is PointStatus.conforms
+
     def test_degenerate_bond_is_not_checkable(self) -> None:
         a = np.array([0.0, 0.0, 0.0])
         b = np.array([0.0, 0.0, 0.0])
@@ -339,8 +490,24 @@ class TestInferPrecisionDecimals:
         values = [1.2345, -0.0001, 3.0000, 2.5000] * 5  # large sample, all 4 dp
         assert infer_precision_decimals(values) == 4
 
-    def test_falls_back_when_sample_too_coarse_to_trust(self) -> None:
-        values = [1.0, 2.0, 3.0]  # 0 decimals needed, below the trust floor
+    def test_trusts_a_genuinely_coarse_precision_given_enough_samples(self) -> None:
+        """The exact defect a review found: this used to check the wrong
+        quantity (the inferred decimal count, not the sample size) and
+        fell back to 6 dp here, tightening the tolerance far past what a
+        legitimately-coarse-but-conforming 2 dp deposit could pass."""
+        values = [1.23, 4.56, 7.89, 0.12, 3.45, -2.34, 8.76]  # 7 values, all 2 dp
+        assert infer_precision_decimals(values) == 2
+
+    def test_trusts_a_genuinely_zero_decimal_sample(self) -> None:
+        """A large sample that needs zero decimals is still trusted -- the
+        guard is about how many numbers were seen, not what they imply."""
+        values = [1.0, 2.0, 3.0, 4.0, 5.0]
+        assert infer_precision_decimals(values) == 0
+
+    def test_falls_back_when_the_sample_is_too_small(self) -> None:
+        """Below _MIN_SAMPLE_SIZE_TO_TRUST, regardless of what those few
+        values would themselves imply."""
+        values = [1.0, 2.0]  # only 2 values; would infer 0 dp if trusted
         assert infer_precision_decimals(values) == 6
 
     def test_falls_back_on_empty_sample(self) -> None:
@@ -381,6 +548,25 @@ class TestClassifySeries:
         assert result.classification is SeriesClassification.consistent_with_legacy_relative_axis
         assert result.implied_constant == pytest.approx(constant, abs=1e-6)
 
+    def test_constant_offset_at_the_branch_cut_is_still_recognised(self) -> None:
+        """The real defect a review found: a constant residual near
+        +/-180 degrees -- the shape produced by a series whose
+        ``start_value`` is 180.0 -- alternates sign under ordinary
+        floating-point noise (+179.9, -179.9, +179.9, ...). A linear
+        ``mean``/``std`` over that averages to ~0 with a spread of ~180,
+        which reads as totally incoherent for a series that is in fact
+        perfectly constant. The circular mean/spread must recognise it.
+        """
+        alternating = [179.9, -179.9, 179.9, -179.9, 179.9, -179.9, 179.9, -179.9]
+        points = [_checkable_point(i, r) for i, r in enumerate(alternating, start=1)]
+        result = classify_series(points, step_size=8.0, is_periodic=True)
+        assert result.classification is SeriesClassification.consistent_with_legacy_relative_axis
+        # The constant is reported on the (-180, 180] branch _wrap_deg uses;
+        # 179.9 and -179.9 are ~0.2 degrees apart on the circle, symmetric
+        # around +/-180, so the circular mean lands at +180 (not -180,
+        # which the plain arithmetic mean would give if it worked at all).
+        assert abs(result.implied_constant) == pytest.approx(180.0, abs=0.5)
+
     def test_uniform_one_step_offset_matches_grid_step_size(self) -> None:
         step = 8.0
         points = [_checkable_point(i, step) for i in range(1, 9)]
@@ -394,6 +580,25 @@ class TestClassifySeries:
         result = classify_series(points, step_size=8.0, is_periodic=True)
         assert result.classification is SeriesClassification.linear_ramp
         assert result.implied_constant == pytest.approx(slope, rel=0.05)
+
+    def test_linear_ramp_crossing_the_branch_cut_is_still_a_ramp(self) -> None:
+        """A "also decide" item from review: an un-wrap-aware polyfit is
+        unreachable for any real periodic series whose ramp crosses the
+        360-degree cut, because the wrapped observation aliases into two
+        disconnected halves that no single line fits.
+
+        True residual is a clean ramp from -170 to +190 in steps of 40;
+        the ninth observation (190) is what a real, wrapped dihedral
+        residual would actually read: -170. Unwrapped before fitting, the
+        line is recovered exactly.
+        """
+        true_ramp = [-170.0 + 40.0 * i for i in range(10)]
+        observed = [_wrap_deg(v) for v in true_ramp]
+        assert observed[-1] == pytest.approx(-170.0), "fixture must actually cross the cut"
+        points = [_checkable_point(i, r) for i, r in enumerate(observed, start=1)]
+        result = classify_series(points, step_size=8.0, is_periodic=True)
+        assert result.classification is SeriesClassification.linear_ramp
+        assert result.implied_constant == pytest.approx(40.0, rel=0.05)
 
     def test_single_outlier_is_one_bad_point_among_good_ones(self) -> None:
         points = [_checkable_point(i, 0.0001) for i in range(1, 8)]
@@ -412,6 +617,25 @@ class TestClassifySeries:
         points = [_checkable_point(i, r) for i, r in enumerate(residuals, start=1)]
         result = classify_series(points, step_size=8.0, is_periodic=True)
         assert result.classification is SeriesClassification.no_pattern_detected
+
+    def test_partial_deviation_is_neither_outlier_nor_constant_pattern(self) -> None:
+        """Kills the ``n_deviating == n`` -> ``n_deviating >= 1`` mutant.
+
+        Three of six points conform (near-zero residual), three deviate
+        incoherently. The correct gate requires *every* checkable point to
+        deviate before the constant/ramp analysis runs; a mutant that
+        loosens it to "at least one" would fold the three conforming,
+        near-zero residuals into that analysis and never reach the
+        fallback branch this test pins -- so its detail string, produced
+        only by that fallback, is the signal a wrong branch was taken.
+        """
+        residuals = [0.0001, 6.0, 0.0001, -9.0, 0.0001, 13.0]
+        points = [_checkable_point(i, r) for i, r in enumerate(residuals, start=1)]
+        result = classify_series(points, step_size=8.0, is_periodic=True)
+        assert result.classification is SeriesClassification.no_pattern_detected
+        assert result.implied_constant is None
+        assert "neither a single outlier nor every point" in result.detail
+        assert "3 of 6" in result.detail
 
     def test_classifications_are_mutually_distinguishable(self) -> None:
         """Every fixture above names a *different* classification -- the
@@ -471,15 +695,8 @@ def _make_scan_calculation(db_session) -> Calculation:
     return calc
 
 
-_geom_hash_counter = itertools.count()
-
-
-def _next_geom_hash() -> str:
-    return hashlib.sha256(f"scan-conformance-test-{next(_geom_hash_counter)}".encode()).hexdigest()
-
-
 def _make_geometry_for_quartet(db_session, atoms: tuple[np.ndarray, ...]) -> Geometry:
-    geometry = Geometry(natoms=len(atoms), geom_hash=_next_geom_hash())
+    geometry = Geometry(natoms=len(atoms), geom_hash=next_geom_hash())
     db_session.add(geometry)
     db_session.flush()
     elements = ["C", "C", "C", "H"]
