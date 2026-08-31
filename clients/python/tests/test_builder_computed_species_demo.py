@@ -40,10 +40,21 @@ _DEMO_PATH = (
 
 
 @pytest.fixture(scope="module")
-def demo_run():
+def demo_run(tmp_path_factory):
+    """Run the demo once; cached across the module (see the reaction
+    demo's ``demo_run`` fixture for the rationale).
+
+    ``TMPDIR`` redirects the demo's own
+    ``tempfile.mkdtemp(prefix="tckdb-builder-species-demo-")`` scratch
+    dir into a pytest-managed tree instead of the real system temp
+    dir. ``tmp_path_factory`` (session-scoped) is used instead of
+    ``tmp_path`` (function-scoped) because it composes with this
+    module-scoped fixture.
+    """
     env = dict(os.environ)
     env.pop("TCKDB_BASE_URL", None)
     env.pop("TCKDB_API_KEY", None)
+    env["TMPDIR"] = str(tmp_path_factory.mktemp("demo-tmpdir"))
     proc = subprocess.run(
         [sys.executable, str(_DEMO_PATH)],
         capture_output=True,
