@@ -45,11 +45,15 @@ from app.db.models.common import CalculationType, CoordinateUnit, ScanCoordinate
 from app.db.models.geometry import Geometry, GeometryAtom
 from app.services.scan_coordinate_conformance import (
     DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA,
+    TOLERANCE_CEILING_ANGSTROM,
+    TOLERANCE_CEILING_DEGREES,
+    TOLERANCE_FLOOR_ANGSTROM,
     TOLERANCE_FLOOR_DEGREES,
     CoordinateSeriesConformance,
     PointCoordinateConformance,
     PointStatus,
     SeriesClassification,
+    _residual_distribution,
     _wrap_deg,
     bond_angle_deg,
     bond_length_angstrom,
@@ -198,6 +202,31 @@ class TestPureVectorGeometry:
         c = np.array([1.0, 0.0, 0.0])
         assert bond_angle_deg(a, b, c) == pytest.approx(180.0)
 
+    def test_bond_angle_survives_floating_point_cos_theta_overshoot(self) -> None:
+        """Kills the cos_theta clamp-deletion mutant.
+
+        Without ``min(1.0, max(-1.0, cos_theta))``, ``math.acos`` raises
+        ``ValueError`` on a domain input outside [-1, 1] -- which
+        ordinary floating-point rounding produces for parallel vectors of
+        very different magnitude. Found by search, not constructed by
+        hand: ``b=(0,0,0)``, these ``a``/``c`` compute
+        ``dot(v1, v2) / (|v1| |v2|) == 1.0000000000000002``.
+        """
+        b = np.array([0.0, 0.0, 0.0])
+        a = np.array([-812.2808264515302, -943.3050469559873, 671.5302078397394])
+        c = np.array([-351574.4668224095, -408284.86667994584, 290654.25046135345])
+        # Confirm the fixture actually reproduces the overshoot (not just
+        # asserted by fiat) -- if numpy's arithmetic ever changes this
+        # under us, this line fails loudly instead of the test degrading
+        # into "acos never raised, who knows why".
+        v1, v2 = a - b, c - b
+        raw_cos_theta = float(np.dot(v1, v2)) / (
+            float(np.linalg.norm(v1)) * float(np.linalg.norm(v2))
+        )
+        assert raw_cos_theta > 1.0, "fixture no longer reproduces the fp overshoot"
+
+        assert bond_angle_deg(a, b, c) == pytest.approx(0.0, abs=1e-6)
+
 
 class TestWrapDeg:
     """Direct coverage of ``_wrap_deg``'s branch cut.
@@ -290,6 +319,86 @@ class TestEvaluatePointCoordinateConformance:
             point_index=1,
         )
         assert result.tolerance >= TOLERANCE_FLOOR_DEGREES
+
+    def test_a_real_error_inside_a_sane_tolerance_still_deviates(self) -> None:
+        """Direction one of the ceiling fix's two-direction proof: at a
+        precision fine enough for the tolerance to stay well under the
+        ceiling, a real error must still be caught. (This is also
+        ``test_catches_a_hundredth_of_a_degree_error`` above, at 6 dp;
+        this repeats it at 3 dp, where the derived tolerance is ~0.213
+        degrees -- comfortably below the 1 degree ceiling -- to confirm
+        the ceiling fix did not also loosen the ordinary case.)
+        """
+        a, b, c, d = _quartet_at_dihedral(47.0)
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.dihedral,
+            stored_value=47.0 + 5.0,  # 5 degrees, well past a ~0.21 degree tolerance
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c, 4: d},
+            atom_indices=(1, 2, 3, 4),
+            precision_decimals=3,
+            point_index=1,
+        )
+        assert result.tolerance is not None
+        assert result.tolerance < TOLERANCE_CEILING_DEGREES
+        assert result.status is PointStatus.deviates
+
+    def test_a_hopeless_tolerance_is_not_checkable_not_a_pass(self) -> None:
+        """Direction two: the finding itself. Before the ceiling existed,
+        a coordinate deposited at 0 decimal places derived a ~184.9 degree
+        tolerance and a 150 degree error silently CONFORMED -- a false
+        clean bill of health from a detector whose whole job is catching
+        exactly that. It must now report ``not_checkable``.
+        """
+        a, b, c, d = _quartet_at_dihedral(47.0)
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.dihedral,
+            stored_value=47.0 + 150.0,
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c, 4: d},
+            atom_indices=(1, 2, 3, 4),
+            precision_decimals=0,
+            point_index=1,
+        )
+        assert result.status is PointStatus.not_checkable
+        assert result.status is not PointStatus.conforms
+        assert result.tolerance is None
+        assert "exceeds the" in result.reason and "ceiling" in result.reason
+
+    def test_a_hopeless_bond_tolerance_is_not_checkable_not_a_pass(self) -> None:
+        """Same finding, the bond/Angstrom branch."""
+        a = np.array([0.0, 0.0, 0.0])
+        b = np.array([1.5, 0.0, 0.0])
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.bond,
+            stored_value=1.5 + 1.0,  # 1 Angstrom error
+            stored_unit=CoordinateUnit.angstrom,
+            coords_by_atom={1: a, 2: b},
+            atom_indices=(1, 2),
+            precision_decimals=0,
+            point_index=1,
+        )
+        assert result.status is PointStatus.not_checkable
+        assert result.tolerance is None
+        assert "exceeds the" in result.reason
+        assert f"{TOLERANCE_CEILING_ANGSTROM:g}" in result.reason
+
+    def test_1dp_dihedral_matches_the_reviewed_measurement(self) -> None:
+        """Pins the exact numbers a review measured against the unbounded
+        tolerance: 1 decimal place derives a ~21.1 degree tolerance, and a
+        15 degree error used to conform under it."""
+        a, b, c, d = _quartet_at_dihedral(47.0)
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.dihedral,
+            stored_value=47.0 + 15.0,
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c, 4: d},
+            atom_indices=(1, 2, 3, 4),
+            precision_decimals=1,
+            point_index=1,
+        )
+        assert result.status is PointStatus.not_checkable
+        assert result.tolerance is None
 
     def test_bond_conforms_and_deviates(self) -> None:
         a = np.array([0.0, 0.0, 0.0])
@@ -476,6 +585,102 @@ class TestEvaluatePointCoordinateConformance:
         assert result.status is PointStatus.not_checkable
 
 
+class TestTheDerivedToleranceIsOperative:
+    """Pins the precision-derived part of the tolerance directly, at 3
+    decimal places -- not the corpus's real 6, where a review found it is
+    always below the floor and never actually binds (the register's own
+    prose now says so explicitly).
+
+    The expected numbers below are computed by an independent formula
+    written *in this test*, not by calling
+    ``_sigma_pred_bond_angstrom``/``_sigma_pred_angle_deg``/
+    ``_sigma_pred_dihedral_deg`` or ``_quantization_sigma_angstrom`` from
+    the module under test -- calling them would validate a mutated
+    formula against itself, which is exactly the mistake the dihedral
+    sign bug taught this suite not to make. Kills, in one test class:
+    each ``_sigma_pred_*`` collapsing to ``return 0.0``, and the
+    quantization noise formula's ``lsb / sqrt(12)`` collapsing to
+    ``lsb / 12`` (a factor of ``sqrt(12)`` ~ 3.46 apart from correct --
+    comfortably outside the 1% tolerance below).
+    """
+
+    @staticmethod
+    def _sigma_pos_angstrom(precision_decimals: int) -> float:
+        """Independently re-derived: uniform rounding error in
+        ``[-LSB/2, LSB/2]`` has standard deviation ``LSB / sqrt(12)``."""
+        lsb = 10.0**-precision_decimals
+        return lsb / math.sqrt(12.0)
+
+    def test_bond_tolerance_at_3dp(self) -> None:
+        a = np.array([0.0, 0.0, 0.0])
+        b = np.array([1.5, 0.0, 0.0])
+        sigma_pos = self._sigma_pos_angstrom(3)
+        expected_sigma_pred = math.sqrt(2.0) * sigma_pos  # two atoms, unit sensitivity
+        expected_tolerance = max(TOLERANCE_FLOOR_ANGSTROM, 10.0 * expected_sigma_pred)
+
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.bond,
+            stored_value=1.5,
+            stored_unit=CoordinateUnit.angstrom,
+            coords_by_atom={1: a, 2: b},
+            atom_indices=(1, 2),
+            precision_decimals=3,
+            point_index=1,
+        )
+        assert result.tolerance == pytest.approx(expected_tolerance, rel=1e-3)
+        assert result.tolerance > TOLERANCE_FLOOR_ANGSTROM, (
+            "fixture must sit above the floor, or this pins the floor, not "
+            "the derived term"
+        )
+
+    def test_angle_tolerance_at_3dp(self) -> None:
+        a = np.array([1.0, 0.0, 0.0])
+        b = np.array([0.0, 0.0, 0.0])
+        c = np.array([0.0, 1.0, 0.0])  # r_ab = r_bc = 1.0, a clean right angle
+        sigma_pos = self._sigma_pos_angstrom(3)
+        sensitivity = math.sqrt((1.0 / 1.0) ** 2 + (1.0 / 1.0) ** 2)
+        expected_sigma_pred_deg = math.degrees(sigma_pos * sensitivity)
+        expected_tolerance = max(TOLERANCE_FLOOR_DEGREES, 10.0 * expected_sigma_pred_deg)
+
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.angle,
+            stored_value=90.0,
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c},
+            atom_indices=(1, 2, 3),
+            precision_decimals=3,
+            point_index=1,
+        )
+        assert result.tolerance == pytest.approx(expected_tolerance, rel=1e-3)
+        assert result.tolerance > TOLERANCE_FLOOR_DEGREES
+
+    def test_dihedral_tolerance_at_3dp(self) -> None:
+        a, b, c, d = _quartet_at_dihedral(47.0)
+        r_ab = bond_length_angstrom(a, b)
+        r_cd = bond_length_angstrom(c, d)
+        theta_123 = bond_angle_deg(a, b, c)
+        theta_234 = bond_angle_deg(b, c, d)
+        sigma_pos = self._sigma_pos_angstrom(3)
+        sensitivity = math.sqrt(
+            (1.0 / (r_ab * math.sin(math.radians(theta_123)))) ** 2
+            + (1.0 / (r_cd * math.sin(math.radians(theta_234)))) ** 2
+        )
+        expected_sigma_pred_deg = math.degrees(sigma_pos * sensitivity)
+        expected_tolerance = max(TOLERANCE_FLOOR_DEGREES, 10.0 * expected_sigma_pred_deg)
+
+        result = evaluate_point_coordinate_conformance(
+            kind=ScanCoordinateKind.dihedral,
+            stored_value=47.0,
+            stored_unit=CoordinateUnit.degree,
+            coords_by_atom={1: a, 2: b, 3: c, 4: d},
+            atom_indices=(1, 2, 3, 4),
+            precision_decimals=3,
+            point_index=1,
+        )
+        assert result.tolerance == pytest.approx(expected_tolerance, rel=1e-3)
+        assert result.tolerance > TOLERANCE_FLOOR_DEGREES
+
+
 # ---------------------------------------------------------------------------
 # infer_precision_decimals
 # ---------------------------------------------------------------------------
@@ -512,6 +717,34 @@ class TestInferPrecisionDecimals:
 
     def test_falls_back_on_empty_sample(self) -> None:
         assert infer_precision_decimals([]) == 6
+
+
+class TestResidualDistribution:
+    """Kills a p95 -> p50 mutant. With no test at all on this function, a
+    review found it -- a report-script-facing number nobody was checking.
+    Uses 20 distinct magnitudes so median (10.5) and the 95th percentile
+    (19.05, numpy's default linear interpolation) are unmistakably
+    different numbers -- a mutant returning the median under the p95 name
+    fails immediately rather than by coincidence."""
+
+    def test_min_median_p95_max_are_correct_and_distinct(self) -> None:
+        residuals = [float(i) for i in range(1, 21)]  # 1.0 .. 20.0
+        dist = _residual_distribution(residuals)
+        assert dist is not None
+        assert dist.min == pytest.approx(1.0)
+        assert dist.median == pytest.approx(10.5)
+        assert dist.p95 == pytest.approx(19.05)
+        assert dist.max == pytest.approx(20.0)
+
+    def test_uses_the_absolute_value_of_signed_residuals(self) -> None:
+        residuals = [-20.0, -1.0, 1.0, 20.0]
+        dist = _residual_distribution(residuals)
+        assert dist is not None
+        assert dist.min == pytest.approx(1.0)
+        assert dist.max == pytest.approx(20.0)
+
+    def test_empty_is_none(self) -> None:
+        assert _residual_distribution([]) is None
 
 
 # ---------------------------------------------------------------------------
@@ -599,6 +832,56 @@ class TestClassifySeries:
         result = classify_series(points, step_size=8.0, is_periodic=True)
         assert result.classification is SeriesClassification.linear_ramp
         assert result.implied_constant == pytest.approx(40.0, rel=0.05)
+
+    def test_linear_ramp_with_index_holes_is_not_falsely_detected(self) -> None:
+        """The exact defect a review reproduced: unwrapping ignores holes.
+
+        ``np.unwrap`` reasons about array-adjacent elements, not
+        point_index values. With a true slope of 100 degrees/point and
+        every other point missing (not_checkable), the surviving points
+        are really 200 degrees apart -- past unwrap's 180-degree
+        discontinuity threshold -- so unconditionally unwrapping them
+        aliased into a *confidently wrong* fit: slope -80.0 (fit residual
+        spread ~1.4e-13, i.e. a "perfect" line) against a true slope of
+        +100. That is a corrective migration being handed the wrong
+        number with no sign anything was off.
+
+        With the gap guard, the same input must not report ``linear_ramp``
+        at all -- a missed detection is the honest failure mode here, not
+        a wrong ``implied_constant``.
+        """
+        indices = [1, 3, 5, 7, 9, 11, 13]  # every other point_index is a hole
+        true_ramp = [100.0 * i for i in indices]
+        observed = [_wrap_deg(v) for v in true_ramp]
+        # the fixture actually exercises the failure: two checkable points
+        # in a row really are more than 180 degrees apart on the true ramp
+        assert abs(true_ramp[1] - true_ramp[0]) > 180.0
+
+        points = [
+            PointCoordinateConformance(
+                point_index=idx,
+                status=PointStatus.deviates,
+                stored_value=0.0,
+                expected_value=-r,
+                residual=r,
+                tolerance=0.5,
+            )
+            for idx, r in zip(indices, observed, strict=True)
+        ]
+        points += [
+            PointCoordinateConformance(
+                point_index=hole, status=PointStatus.not_checkable, reason="hole"
+            )
+            for hole in (2, 4, 6, 8, 10, 12)
+        ]
+
+        result = classify_series(points, step_size=8.0, is_periodic=True)
+        assert result.classification is not SeriesClassification.linear_ramp
+        if result.implied_constant is not None:
+            assert result.implied_constant != pytest.approx(-80.0, abs=5.0), (
+                "reproduces the exact wrong slope a review found: -80.0 "
+                "against a true slope of +100"
+            )
 
     def test_single_outlier_is_one_bad_point_among_good_ones(self) -> None:
         points = [_checkable_point(i, 0.0001) for i in range(1, 8)]

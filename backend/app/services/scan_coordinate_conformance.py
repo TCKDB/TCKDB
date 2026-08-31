@@ -157,6 +157,46 @@ TOLERANCE_FLOOR_DEGREES = 1e-3
 #: degree floor). Documented here as an assumption for a future revision.
 TOLERANCE_FLOOR_ANGSTROM = 1e-4
 
+#: Above this, a point is not "conforming with a generous window" -- it is
+#: unjudgeable, and is reported ``not_checkable`` rather than compared at
+#: all.
+#:
+#: Without a ceiling, ``max(floor, 10 * sigma_pred)`` has no upper bound:
+#: at coarse enough deposit precision, ``sigma_pred`` grows without limit
+#: (the ``1 / (r * sin(theta))`` conditioning is unbounded as precision
+#: degrades), so the derived tolerance eventually exceeds the entire
+#: physically meaningful range of a wrapped residual (+/-180 degrees) and
+#: *every* residual "conforms" -- a coordinate deposited at 0 decimal
+#: places was measured to yield a 184.9 degree tolerance, silently passing
+#: a 150 degree error. That is the opposite failure from the sign bug this
+#: module was built to catch first: not a false alarm, a false clean bill
+#: of health, in a detector whose entire job is catching exactly that.
+#:
+#: Fixed at a flat 1 degree rather than derived from the coordinate's own
+#: ``step_size``, deliberately. ``step_size`` is optional
+#: (``calc_scan_coordinate.step_size`` is nullable) -- a fraction-of-step
+#: ceiling would need a fallback for every coordinate that never declared
+#: one, which is either the same flat number in different clothing or a
+#: second unprincipled choice. A flat ceiling applies uniformly regardless
+#: of what grid metadata a deposit happened to include. 1 degree is not
+#: the floor's rejected 0.5/1.0 degree number wearing a different hat: the
+#: floor asks "how tight can we trust well-behaved data to be", the
+#: ceiling asks "how loose can a window get before it stops meaning
+#: anything", and those are different questions with different right
+#: answers. Measured against the precision ladder: 3 decimal places
+#: derives ~0.213 degrees (comfortably checkable), 2 decimal places
+#: derives above this ceiling (correctly not_checkable), so the cut lands
+#: between "coarse but real" and "too coarse to say anything" rather than
+#: inside either.
+TOLERANCE_CEILING_DEGREES = 1.0
+
+#: Same role as :data:`TOLERANCE_CEILING_DEGREES`, for ``bond``. 0.1
+#: Angstrom is roughly 5-10 percent of a typical single bond length (about
+#: 1-1.5 Angstrom) -- a derived tolerance that wide could not tell a
+#: genuine bond-length error from deposit noise, so it must not pass one
+#: silently either.
+TOLERANCE_CEILING_ANGSTROM = 0.1
+
 #: A degenerate (zero-length) bond makes every downstream direction
 #: undefined; below this length a point is reported ``not_checkable``
 #: rather than divided by a near-zero number.
@@ -295,12 +335,26 @@ def _sigma_pred_dihedral_deg(
     return math.degrees(sigma_pos * sensitivity)
 
 
-def _tolerance_degrees(sigma_pred_deg: float) -> float:
-    return max(TOLERANCE_FLOOR_DEGREES, 10.0 * sigma_pred_deg)
+def _tolerance_degrees(sigma_pred_deg: float) -> float | None:
+    """``max(floor, 10 * sigma)``, or ``None`` when that exceeds the ceiling.
+
+    ``None`` is the caller's signal to report ``not_checkable``: a window
+    this wide could not distinguish a real error from deposit noise, so
+    comparing against it would manufacture a false clean bill of health
+    rather than find a real one. See :data:`TOLERANCE_CEILING_DEGREES`.
+    """
+    candidate = 10.0 * sigma_pred_deg
+    if candidate > TOLERANCE_CEILING_DEGREES:
+        return None
+    return max(TOLERANCE_FLOOR_DEGREES, candidate)
 
 
-def _tolerance_angstrom(sigma_pred_angstrom: float) -> float:
-    return max(TOLERANCE_FLOOR_ANGSTROM, 10.0 * sigma_pred_angstrom)
+def _tolerance_angstrom(sigma_pred_angstrom: float) -> float | None:
+    """Same contract as :func:`_tolerance_degrees`, for ``bond``."""
+    candidate = 10.0 * sigma_pred_angstrom
+    if candidate > TOLERANCE_CEILING_ANGSTROM:
+        return None
+    return max(TOLERANCE_FLOOR_ANGSTROM, candidate)
 
 
 def infer_precision_decimals(
@@ -440,6 +494,18 @@ def evaluate_point_coordinate_conformance(
         expected = r
         sigma_pred = _sigma_pred_bond_angstrom(precision_decimals)
         tolerance = _tolerance_angstrom(sigma_pred)
+        if tolerance is None:
+            return PointCoordinateConformance(
+                point_index=point_index,
+                status=PointStatus.not_checkable,
+                sigma_pred=sigma_pred,
+                reason=(
+                    f"derived tolerance ({10.0 * sigma_pred:.3g} Angstrom, from "
+                    f"{precision_decimals} decimal place(s)) exceeds the "
+                    f"{TOLERANCE_CEILING_ANGSTROM:g} Angstrom ceiling -- too "
+                    "coarse a deposit to tell a real error from noise."
+                ),
+            )
         residual = stored_value - expected
 
     elif kind is ScanCoordinateKind.angle:
@@ -455,6 +521,18 @@ def evaluate_point_coordinate_conformance(
         expected = bond_angle_deg(a, b, c)
         sigma_pred = _sigma_pred_angle_deg(precision_decimals, r_ab, r_bc)
         tolerance = _tolerance_degrees(sigma_pred)
+        if tolerance is None:
+            return PointCoordinateConformance(
+                point_index=point_index,
+                status=PointStatus.not_checkable,
+                sigma_pred=sigma_pred,
+                reason=(
+                    f"derived tolerance ({10.0 * sigma_pred:.3g} degrees, from "
+                    f"{precision_decimals} decimal place(s)) exceeds the "
+                    f"{TOLERANCE_CEILING_DEGREES:g} degree ceiling -- too "
+                    "coarse a deposit to tell a real error from noise."
+                ),
+            )
         residual = _wrap_deg(stored_value - expected)
 
     else:  # dihedral
@@ -487,6 +565,18 @@ def evaluate_point_coordinate_conformance(
             precision_decimals, r_ab, r_cd, sin_123, sin_234
         )
         tolerance = _tolerance_degrees(sigma_pred)
+        if tolerance is None:
+            return PointCoordinateConformance(
+                point_index=point_index,
+                status=PointStatus.not_checkable,
+                sigma_pred=sigma_pred,
+                reason=(
+                    f"derived tolerance ({10.0 * sigma_pred:.3g} degrees, from "
+                    f"{precision_decimals} decimal place(s)) exceeds the "
+                    f"{TOLERANCE_CEILING_DEGREES:g} degree ceiling -- too "
+                    "coarse a deposit to tell a real error from noise."
+                ),
+            )
         residual = _wrap_deg(stored_value - expected)
 
     status = PointStatus.conforms if abs(residual) <= tolerance else PointStatus.deviates
@@ -598,11 +688,21 @@ def _circular_mean_and_spread_deg(values_deg: np.ndarray) -> tuple[float, float]
 def _unwrap_deg(values_deg: np.ndarray) -> np.ndarray:
     """Remove artificial +-360 jumps from a *sequence* of degree residuals.
 
-    ``np.unwrap`` assumes consecutive samples are close on the circle --
-    true for a residual pattern sampled in point-index order, which is
-    what :func:`classify_series` always passes. Used so a genuine linear
-    ramp that happens to cross the 360-degree branch cut is fit as one
-    line rather than aliased into two disconnected halves.
+    ``np.unwrap`` assumes consecutive *array elements* are close on the
+    circle. That assumption is only true here when consecutive elements
+    are also consecutive scan points -- i.e. when ``indices`` has no
+    holes. Callers must check that themselves (see the gap guard in
+    :func:`classify_series`): passing a residual sequence with a
+    not_checkable/not_applicable point skipped over -- so array-adjacent
+    residuals are really two or more point_index steps apart -- can hand
+    ``np.unwrap`` a true angular change bigger than its 180-degree
+    discontinuity threshold, which it will happily read as noise instead
+    of a wrap and "correct" incorrectly. A review reproduced this: a true
+    slope of 100 degrees/point with an alternating hole (real gap of 200
+    degrees between kept samples) classified ``linear_ramp`` with an
+    ``implied_constant`` of -80.0 against a true slope of 100 -- a
+    confidently wrong number handed to exactly the corrective migration
+    this field exists to feed.
     """
     return np.degrees(np.unwrap(np.radians(values_deg)))
 
@@ -718,7 +818,23 @@ def classify_series(
         # branch cut (residual sweeping past +-180) would otherwise alias
         # into two disconnected halves that no single line fits, and the
         # ramp would never be detected for any periodic series that wraps.
-        ramp_residuals = _unwrap_deg(residuals) if is_periodic else residuals
+        #
+        # Only when the checkable points are index-contiguous, though.
+        # ``np.unwrap`` reasons about array-adjacent elements, not
+        # point_index values -- if a not_checkable/not_applicable point was
+        # skipped, array-adjacent residuals are really two or more scan
+        # steps apart, and unwrapping across that hole can silently invent
+        # a wrap that never happened (or miss one that did). Refusing to
+        # unwrap there is the honest answer: a real ramp with a hole in it
+        # may then read as no_pattern_detected instead of linear_ramp, which
+        # is a missed detection, not a wrong number -- the failure mode this
+        # guard exists to rule out is a confidently wrong implied_constant.
+        index_gaps = np.diff(indices)
+        is_index_contiguous = bool(np.all(index_gaps == 1))
+        if is_periodic and is_index_contiguous:
+            ramp_residuals = _unwrap_deg(residuals)
+        else:
+            ramp_residuals = residuals
         slope, intercept = np.polyfit(indices, ramp_residuals, 1)
         fitted = slope * indices + intercept
         fit_spread = float(np.std(ramp_residuals - fitted))
@@ -736,12 +852,23 @@ def classify_series(
                 ),
             )
 
+        gap_note = (
+            " point_index has one or more gaps (a not_checkable/"
+            "not_applicable point in between), so a ramp crossing the "
+            "360-degree branch cut was not attempted: unwrapping across a "
+            "hole risks compressing the true spacing and reporting a "
+            "confidently wrong slope. A genuine ramp may be hiding in this "
+            "result."
+            if (is_periodic and not is_index_contiguous)
+            else ""
+        )
         return SeriesClassificationResult(
             classification=SeriesClassification.no_pattern_detected,
             implied_constant=None,
             detail=(
                 f"all {n} checkable points deviate, but not with a constant "
                 f"offset or a linear trend (residual spread {spread:.3g})."
+                f"{gap_note}"
             ),
         )
 
@@ -936,6 +1063,8 @@ __all__ = [
     "DIHEDRAL_NOT_CHECKABLE_MIN_SIN_THETA",
     "FALLBACK_PRECISION_DECIMALS",
     "MIN_CHECKABLE_POINTS_FOR_PATTERN",
+    "TOLERANCE_CEILING_ANGSTROM",
+    "TOLERANCE_CEILING_DEGREES",
     "TOLERANCE_FLOOR_ANGSTROM",
     "TOLERANCE_FLOOR_DEGREES",
     "CoordinateSeriesConformance",
@@ -1046,7 +1175,56 @@ CHECK_SCAN_COORDINATE_VALUE_MATCHES_GEOMETRY = ScientificCheck(
                 "roughly four orders of magnitude too loose -- correctly "
                 "stored data reproduces to about 1.5e-4 degrees (ADR "
                 "0020), and this floor still catches an injected 0.01 "
-                "degree error with two orders of magnitude to spare."
+                "degree error with two orders of magnitude to spare. This "
+                "is the tolerance every point in the current corpus is "
+                "actually compared against: at the corpus's real 6 "
+                "decimal-place precision the precision-derived term is "
+                "far below this floor, so the floor -- not the derived "
+                "term -- is what binds on real data today. The derived "
+                "term only starts to matter at coarser precision than the "
+                "corpus has ever used; see ``tolerance_ceiling_degrees`` "
+                "for what happens if it grows too large to trust."
+            ),
+        ),
+        ConstantThreshold(
+            name="tolerance_ceiling_degrees",
+            value=TOLERANCE_CEILING_DEGREES,
+            unit="degree",
+            rationale=(
+                "Without an upper bound, the precision-derived tolerance "
+                "grows without limit as deposit precision degrades -- "
+                "measured to reach 184.9 degrees at 0 decimal places, "
+                "silently passing an injected 150 degree error, because "
+                "the tolerance then exceeds the entire physically "
+                "meaningful range of a wrapped residual. Above this "
+                "ceiling the point is reported not_checkable instead of a "
+                "pass under a window too wide to mean anything -- the "
+                "detector failing loudly rather than reporting a false "
+                "clean bill of health. Fixed at a flat number rather than "
+                "derived from the coordinate's own step_size because "
+                "step_size is optional metadata (nullable) and a "
+                "fraction-of-step ceiling would need the same flat "
+                "fallback for every coordinate that never declared one. "
+                "Chosen to land between 3 decimal places (~0.213 degrees, "
+                "comfortably checkable) and 2 decimal places (derives "
+                "above this ceiling, correctly not_checkable) on the "
+                "measured precision ladder -- not the floor's rejected "
+                "0.5/1.0 degree number reused: the floor asks how tight "
+                "well-behaved data can be trusted to be, this asks how "
+                "loose a window can get before it stops meaning anything, "
+                "and those are different questions."
+            ),
+        ),
+        ConstantThreshold(
+            name="tolerance_ceiling_angstrom",
+            value=TOLERANCE_CEILING_ANGSTROM,
+            unit="Angstrom",
+            rationale=(
+                "Same role as tolerance_ceiling_degrees, for bond. 0.1 "
+                "Angstrom is roughly 5-10 percent of a typical single bond "
+                "length (about 1-1.5 Angstrom); a derived tolerance that "
+                "wide could not tell a genuine bond-length error from "
+                "deposit noise."
             ),
         ),
     ),

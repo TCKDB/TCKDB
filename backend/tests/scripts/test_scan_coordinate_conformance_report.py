@@ -316,3 +316,22 @@ def test_insufficient_data_does_not_hide_a_real_nonconformance(
     assert "do not conform to ADR 0020:" in out
     nonconforming_section = out.split("do not conform to ADR 0020:", 1)[1]
     assert nonconforming_calc.public_ref in nonconforming_section
+
+
+def test_limit_caps_the_number_of_calculations_scanned(
+    db_session, report_script, monkeypatch, capsys
+):
+    """No test exercised ``--limit`` at all before this; a review found it
+    among the surviving mutants. Two scan calculations in scope, capped
+    to one: exactly one must be scanned and printed, never both.
+    """
+    first = _make_legacy_relative_sweep_scan(db_session, start_value=10.0)
+    second = _make_legacy_relative_sweep_scan(db_session, start_value=20.0)
+
+    code = _run_main(report_script, monkeypatch, db_session, ["--all", "--limit", "1"])
+    out = capsys.readouterr().out
+
+    assert code in (report_script.EXIT_OK, report_script.EXIT_NONCONFORMING)
+    assert "1 scan calculation(s)" in out
+    seen = {ref for ref in (first.public_ref, second.public_ref) if ref in out}
+    assert len(seen) == 1, f"--limit 1 must scan exactly one calculation, saw {seen}"
