@@ -84,6 +84,7 @@ from app.services import (
     charge_multiplicity_reconciliation,
     frequency_geometry_linearity,
     reaction_resolution,
+    scan_coordinate_conformance,
     species_resolution,
     transition_state_validation,
 )
@@ -1305,6 +1306,7 @@ DECLARING_MODULES: tuple[ModuleType, ...] = (
     geometry_validation_service,
     reaction_atom_map_service,
     reaction_resolution,
+    scan_coordinate_conformance,
     species_resolution,
     transition_state_validation,
     sys.modules[__name__],

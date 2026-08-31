@@ -85,11 +85,11 @@ disagree, this one is right by construction.
 | Tier | Entries | Meaning |
 | --- | --- | --- |
 | `block` | 20 | Refuses the payload. ADR 0008 permits this only for a definition or a contract — a record no correct calculation could produce. |
-| `warn` | 9 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
+| `warn` | 10 | Accepts the payload and records a machine-readable warning. The tier for expectations (which could fire on a correct novel result) and for absences (an incomplete record is still a true one). |
 | `label` | 1 | Labels a stored record at read time without refusing anything — a `HardFailReason` in the trust evaluator. For facts TCKDB observes about a record after it was accepted, which no upload-time check could have refused because they did not exist yet. |
 | `review` | 0 | Referred to `machine_review` under a versioned rubric. ADR 0008 puts every cross-check against external reference data here. |
 | `structural` | 5 | Not an ADR 0008 consequence tier. The position is enforced by the shape of the schema, so a record violating it cannot be represented. |
-| **total** | **35** | |
+| **total** | **36** | |
 
 ## Where a check's code reaches a client
 
@@ -99,8 +99,8 @@ disagree, this one is right by construction.
 | `upload_warning` | 10 | the `code` field of an `UploadWarning` returned alongside the accepted upload |
 | `trust_label` | 1 | a read-time trust label (`HardFailReason`), not any refusal |
 | `database_constraint` | 1 | PostgreSQL only, so the refusal is a 409 rather than a 422 — named, where the constraint declares a rejection code |
-| `none` | 2 | *nothing carries a code* |
-| **total** | **35** | |
+| `none` | 3 | *nothing carries a code* |
+| **total** | **36** | |
 
 ## Recorded divergences
 
@@ -848,6 +848,39 @@ Where a check's documentation and its behaviour disagree, or where a guarantee i
 - `reproducibility_assessment` rows carry `described` / `auditable` / `rerunnable` under a versioned rubric, append-only, independent of `record_review` and of the trust evaluator (`app/services/trust/`)
 
 **Escape hatch.** None.
+
+*(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
+
+## Scan coordinates
+
+### 36. A scan point's stored coordinate_value is the internal coordinate at that point's own sampled geometry, in that coordinate's own unit (ADR 0020) -- never a displacement, and never compared against start_value as an anchor.
+
+| Field | Value |
+| --- | --- |
+| **Tier** | `warn` |
+| **Code** | *(none — prose only)* |
+| **Code reaches a client via** | *nothing carries a code* |
+| **Governing ADR** | 0020, 0008 |
+
+**Why this tier.** ADR 0020 is explicit that a disagreement here cannot say which of two things is wrong: a mis-stated axis and a mis-attached geometry present identically to a comparison that only sees the stored number and the recomputed one. Refusing the deposit would discard correct energies over an ambiguity this check cannot resolve on its own, which is the ADR 0008 argument for warn rather than block. It cannot become a blocking definition for a second, independent reason: every scan series deposited so far fails it -- all 46 hold ADR 0019's superseded relative-sweep convention -- and ADR 0008 reserves block for a record no correct calculation could produce, not for a corpus TCKDB itself has not yet corrected. No code or channel is declared because the check is not wired into any upload or read path: it runs standalone, from backend/scripts/validation/scan_coordinate_conformance_report.py, as the diagnostic ADR 0020 asks for ahead of the corrective migration it explicitly defers to a separate PR.
+
+**Enforced at.**
+
+- `evaluate_point_coordinate_conformance` — `backend/app/services/scan_coordinate_conformance.py::evaluate_point_coordinate_conformance`
+  *Recomputes the coordinate from the point's own stored geometry only -- bond distance, bond angle, or the standard four-atom dihedral formula -- and never reads calc_scan_coordinate.start_value/end_value, which ADR 0020 fixes as grid metadata, not an anchor. improper is reported not_applicable rather than guessed at: ADR 0020 records that TCKDB has no field distinguishing an out-of-plane-angle convention from a proper-style torsion, so assuming either would be exactly the inference ADR 0011 refuses to make for atom maps, applied one level up. A near-collinear dihedral quartet (min(sin(theta_123), sin(theta_234)) < 0.05) is reported not_checkable rather than compared, mirroring what the producing tools themselves do. classify_series in the same module turns a series of per-point disagreements into the specific pattern the follow-up corrective migration needs: a constant residual across every point, a linear ramp against point index, a residual equal to one grid step, or a lone outlier.*
+
+**Thresholds.**
+
+- `dihedral_not_checkable_min_sin_theta` = **0.05 dimensionless (sin of a flanking bond angle)** — a constant fixed in code.
+  ADR 0020: 'where a quartet is near-collinear the dihedral is not a usable coordinate at all'. Below this, 1/(r * sin(theta)) conditioning makes the recomputed dihedral's uncertainty diverge, so comparing it would manufacture a false disagreement rather than find a real one.
+- `tolerance_floor_degrees` = **0.001 degree** — a constant fixed in code.
+  Never let ten times the precision-derived sigma collapse below what a 6-decimal-place deposit can distinguish. Explicitly not the 0.5 or 1.0 degree floor rejected as roughly four orders of magnitude too loose -- correctly stored data reproduces to about 1.5e-4 degrees (ADR 0020), and this floor still catches an injected 0.01 degree error with two orders of magnitude to spare. This is the tolerance every point in the current corpus is actually compared against: at the corpus's real 6 decimal-place precision the precision-derived term is far below this floor, so the floor -- not the derived term -- is what binds on real data today. The derived term only starts to matter at coarser precision than the corpus has ever used; see `tolerance_ceiling_degrees` for what happens if it grows too large to trust.
+- `tolerance_ceiling_degrees` = **1 degree** — a constant fixed in code.
+  Without an upper bound, the precision-derived tolerance grows without limit as deposit precision degrades -- measured to reach 184.9 degrees at 0 decimal places, silently passing an injected 150 degree error, because the tolerance then exceeds the entire physically meaningful range of a wrapped residual. Above this ceiling the point is reported not_checkable instead of a pass under a window too wide to mean anything -- the detector failing loudly rather than reporting a false clean bill of health. Fixed at a flat number rather than derived from the coordinate's own step_size because step_size is optional metadata (nullable) and a fraction-of-step ceiling would need the same flat fallback for every coordinate that never declared one. Chosen to land between 3 decimal places (~0.213 degrees, comfortably checkable) and 2 decimal places (derives above this ceiling, correctly not_checkable) on the measured precision ladder -- not the floor's rejected 0.5/1.0 degree number reused: the floor asks how tight well-behaved data can be trusted to be, this asks how loose a window can get before it stops meaning anything, and those are different questions.
+- `tolerance_ceiling_angstrom` = **0.1 Angstrom** — a constant fixed in code.
+  Same role as tolerance_ceiling_degrees, for bond. 0.1 Angstrom is roughly 5-10 percent of a typical single bond length (about 1-1.5 Angstrom); a derived tolerance that wide could not tell a genuine bond-length error from deposit noise.
+
+**Escape hatch.** None needed -- the check never refuses, at any tier. Its cost runs the other way: today it reports every one of the 46 deposited scan series as non-conforming, which ADR 0020 records as the correct, intended finding rather than a defect to quiet.
 
 *(No machine-readable code reaches anybody for this one. Recorded as a gap rather than invented, because a code nothing carries is a code no client can match on. See the enforcement sites above for why: a position held by schema shape, or by a stored evidence row, never surfaces as a refusal at all. A position held by a database constraint no longer belongs here — such a constraint can declare a rejection code and be named in its 409.)*
 
