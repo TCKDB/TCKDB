@@ -145,6 +145,7 @@ class RejectionCode(str, Enum):
     MISSING_IDENTIFIER = "missing_identifier"
     MISSING_REACTION_SEARCH_FILTER = "missing_reaction_search_filter"
     MISSING_STRUCTURE_QUERY = "missing_structure_query"
+    MISSING_VERSION_PARENT = "missing_version_parent"
     ML_EXPORT_ALL_CAP_EXCEEDED = "ml_export_all_cap_exceeded"
     ML_EXPORT_LOT_UNRESOLVED = "ml_export_lot_unresolved"
     ML_EXPORT_SEED_EMPTY = "ml_export_seed_empty"
@@ -296,6 +297,7 @@ VALIDATION_REJECTION_CODES: frozenset[RejectionCode] = frozenset(
         RejectionCode.MISSING_IDENTIFIER,
         RejectionCode.MISSING_REACTION_SEARCH_FILTER,
         RejectionCode.MISSING_STRUCTURE_QUERY,
+        RejectionCode.MISSING_VERSION_PARENT,
         RejectionCode.ML_EXPORT_ALL_CAP_EXCEEDED,
         RejectionCode.ML_EXPORT_LOT_UNRESOLVED,
         RejectionCode.ML_EXPORT_SEED_EMPTY,
@@ -467,6 +469,7 @@ REJECTION_STATUSES: dict[RejectionCode, frozenset[int]] = {
     RejectionCode.MISSING_IDENTIFIER: frozenset({422}),
     RejectionCode.MISSING_REACTION_SEARCH_FILTER: frozenset({422}),
     RejectionCode.MISSING_STRUCTURE_QUERY: frozenset({422}),
+    RejectionCode.MISSING_VERSION_PARENT: frozenset({422}),
     RejectionCode.ML_EXPORT_ALL_CAP_EXCEEDED: frozenset({422}),
     RejectionCode.ML_EXPORT_LOT_UNRESOLVED: frozenset({422}),
     RejectionCode.ML_EXPORT_SEED_EMPTY: frozenset({422}),

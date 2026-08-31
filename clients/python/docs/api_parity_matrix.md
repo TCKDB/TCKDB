@@ -11,10 +11,10 @@ Every operation in the backend's OpenAPI document (`backend/tests/api/golden/ope
 
 | Classification | Operations |
 |---|---|
-| typed | 93 |
+| typed | 96 |
 | raw_only | 106 |
 | not_applicable | 39 |
-| **total** | **238** |
+| **total** | **241** |
 
 ## Typed coverage
 
@@ -75,6 +75,9 @@ A first-class client method exists for these operations.
 | `GET /api/v1/scientific/meta/methods` | yes | `get_meta_methods` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/meta/reaction-families` | yes | `get_meta_reaction_families` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/meta/software` | yes | `get_meta_software` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/meta/software-versions` | yes | `get_meta_software_versions` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/meta/workflow-tool-versions` | yes | `get_meta_workflow_tool_versions` | — | — | `tests/test_typed_parity_methods.py` |
+| `GET /api/v1/scientific/meta/workflow-tools` | yes | `get_meta_workflow_tools` | — | — | `tests/test_typed_parity_methods.py` |
 | `GET /api/v1/scientific/network-kinetics/search` | yes | `search_network_kinetics` | `iter_network_kinetics` | — | `tests/test_typed_scientific.py` |
 | `POST /api/v1/scientific/network-kinetics/search` | yes | `search_network_kinetics` | `iter_network_kinetics` | — | `tests/test_typed_scientific.py` |
 | `GET /api/v1/scientific/network-solves/search` | yes | `search_network_solves` | `iter_network_solves` | — | `tests/test_network_solve_client.py` |

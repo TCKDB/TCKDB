@@ -3344,6 +3344,51 @@ class TCKDBClient:
             authenticated=False,
         ).data
 
+    def get_meta_workflow_tools(self, *, profile: str | None = None) -> Any:
+        """``GET /scientific/meta/workflow-tools``."""
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/workflow-tools",
+            params={"profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_meta_software_versions(
+        self, software: str, *, profile: str | None = None
+    ) -> Any:
+        """``GET /scientific/meta/software-versions`` — one software's releases.
+
+        ``software`` is required by the endpoint (422
+        ``missing_version_parent`` without it): it backs a dependent
+        dropdown, and an unscoped call would merge every package's
+        version strings into one list with no way to say which package a
+        given version belongs to.
+        """
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/software-versions",
+            params={"software": software, "profile": profile},
+            authenticated=False,
+        ).data
+
+    def get_meta_workflow_tool_versions(
+        self, workflow_tool: str, *, profile: str | None = None
+    ) -> Any:
+        """``GET /scientific/meta/workflow-tool-versions`` — one tool's releases.
+
+        Mirrors :meth:`get_meta_software_versions`: ``workflow_tool`` is
+        required for the same reason.
+        """
+
+        return self.request_json(
+            "GET",
+            "/scientific/meta/workflow-tool-versions",
+            params={"workflow_tool": workflow_tool, "profile": profile},
+            authenticated=False,
+        ).data
+
     def get_meta_reaction_families(self, *, profile: str | None = None) -> Any:
         """``GET /scientific/meta/reaction-families``."""
 

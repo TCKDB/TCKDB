@@ -83,6 +83,8 @@ _REQUIRED_ARGUMENTS: dict[str, tuple] = {
     "get_literature": ("lit_1",),
     "get_literature_records": ("lit_1",),
     "get_network_solve": ("nsolve_1",),
+    "get_meta_software_versions": ("gaussian",),
+    "get_meta_workflow_tool_versions": ("arc",),
     "get_reaction_full": ("rxe_1",),
     "get_reaction_kinetics": ("rxe_1",),
     "get_species_thermo": ("spe_1",),
