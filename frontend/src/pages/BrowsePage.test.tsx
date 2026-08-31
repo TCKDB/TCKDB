@@ -141,10 +141,24 @@ type HandlerOptions = {
     captureTsUrl?: (url: URL) => void
 }
 
+// This page's OWN tests don't exercise the vocabulary dropdowns
+// (`BrowseFilterForm.test.tsx` does) -- but switching to "Transition
+// state" mounts `EvidenceFields`, which fires the four unscoped `/meta/*`
+// fetches unconditionally. Without a registered handler, this file's
+// `onUnhandledRequest: "error"` server would fail every one of the
+// several existing tests that click the "Transition state" radio, for a
+// reason that has nothing to do with what those tests assert. Empty
+// results are enough -- they only need to not blow up the listing.
+function emptyVocabHandlers() {
+    return ["methods", "basis-sets", "software", "workflow-tools", "software-versions", "workflow-tool-versions"].map((path) =>
+        http.get(`/api/v1/scientific/meta/${path}`, () => HttpResponse.json({ results: [] })))
+}
+
 function handlers(options: HandlerOptions = {}) {
     const speciesAll = options.speciesRecords ?? twoSpecies
     const tsAll = options.tsRecords ?? twoTs
     return [
+        ...emptyVocabHandlers(),
         http.get("/api/v1/scientific/species/browse", ({ request }) => {
             const url = new URL(request.url)
             options.captureSpeciesUrl?.(url)
@@ -294,11 +308,17 @@ describe("browse page: switching kinds preserves shared filters and drops inappl
     it("a Transition-state-only filter (method) does not survive switching back to Species", async () => {
         const user = userEvent.setup()
         let lastSpeciesUrl: URL | undefined
-        server.use(...handlers({ captureSpeciesUrl: (url) => { lastSpeciesUrl = url } }))
+        // Registered BEFORE `handlers()` -- see the same note in the
+        // "vocabulary-backed filters" describe block below.
+        server.use(
+            http.get("/api/v1/scientific/meta/methods", () => HttpResponse.json({ results: [{ value: "b3lyp", count: 5 }] })),
+            ...handlers({ captureSpeciesUrl: (url) => { lastSpeciesUrl = url } }),
+        )
         renderAt("/species?kind=transition_state")
         await screen.findByText("A <=> B")
 
-        await user.type(screen.getByLabelText("Method"), "b3lyp")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(2))
+        await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
         await waitFor(() => expect(screen.getByLabelText("Method")).toHaveValue("b3lyp"))
 
         await user.click(screen.getByRole("radio", { name: "Species" }))
@@ -610,5 +630,52 @@ describe("browse page: pagination moves the window and pages do not overlap", ()
         await user.click(screen.getByRole("button", { name: "Previous" }))
         expect(await screen.findByText("Page20Smiles")).toBeVisible()
         expect(screen.getByText("41 records · showing 21–40")).toBeVisible()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Vocabulary-backed evidence filters (Method/Basis/Software/Workflow tool
+// and their two dependent version selects). Per-select behaviour (own
+// endpoint, dependent refetch+clear, three-state copy, verbatim rendering)
+// is covered at the component level in `BrowseFilterForm.test.tsx` -- this
+// file only needs the two claims that require the FULL page: a failed
+// vocabulary fetch must not take the listing down, and a filter selected
+// through the dropdown must actually reach the real outgoing browse query
+// (not just the form's own local state).
+// ---------------------------------------------------------------------------
+
+describe("browse page: vocabulary-backed filters reach the real browse query, and a failed vocabulary fetch never blocks the listing", () => {
+    it("a 500 from /meta/methods still lets the TS records render, with the Method select degraded on its own", async () => {
+        // The methods override must be registered BEFORE `handlers()` --
+        // msw matches handlers in registration order, and `handlers()`
+        // already registers its own (empty-results) `/meta/methods`
+        // handler, which would otherwise shadow this one.
+        server.use(
+            http.get("/api/v1/scientific/meta/methods", () => HttpResponse.json({ detail: "unavailable" }, { status: 500 })),
+            ...handlers(),
+        )
+        renderAt("/species?kind=transition_state")
+        expect(await screen.findByText("A <=> B")).toBeVisible()
+        expect(await screen.findByText("Could not load method list.")).toBeVisible()
+        // The listing behind it is unaffected -- both TS rows are still there.
+        expect(screen.getByText("C <=> D + [H]")).toBeVisible()
+    })
+
+    it("selecting a Method value, then switching back to Any, adds then removes method= on the outgoing /transition-states/browse request", async () => {
+        const user = userEvent.setup()
+        let lastTsUrl: URL | undefined
+        server.use(
+            http.get("/api/v1/scientific/meta/methods", () => HttpResponse.json({ results: [{ value: "b3lyp", count: 5 }] })),
+            ...handlers({ captureTsUrl: (url) => { lastTsUrl = url } }),
+        )
+        renderAt("/species?kind=transition_state")
+        await screen.findByText("A <=> B")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(2))
+
+        await user.selectOptions(screen.getByLabelText("Method"), "b3lyp")
+        await waitFor(() => expect(lastTsUrl?.searchParams.get("method")).toBe("b3lyp"))
+
+        await user.selectOptions(screen.getByLabelText("Method"), "")
+        await waitFor(() => expect(lastTsUrl?.searchParams.has("method")).toBe(false))
     })
 })

@@ -1,4 +1,7 @@
 import type { BrowseFilters, BrowseKind, TriState } from "../api/browseApi"
+import { loadBasisSets, loadMethods, loadSoftwareNames, loadSoftwareVersions, loadWorkflowToolNames, loadWorkflowToolVersions } from "../api/vocabApi"
+import type { VersionVocabularyState, VocabularyState } from "../hooks/useVocabulary"
+import { useVersionVocabulary, useVocabulary } from "../hooks/useVocabulary"
 
 const REVIEW_STATUSES = ["not_reviewed", "under_review", "approved", "deprecated", "rejected"]
 const TS_STATUSES = ["guess", "optimized", "validated", "rejected"]
@@ -68,6 +71,19 @@ function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onCh
 }
 
 function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    // Fetched once per mount of this section (i.e. once per switch to the
+    // "Transition state" kind) -- none of the four depend on any filter
+    // value, unlike the two version vocabularies below. Each is its own
+    // independent request/effect, so one failing degrades only its own
+    // select (see `useVocabulary`'s doc comment) and none of them block
+    // the listing itself, which fetches through the unrelated `useBrowse`.
+    const methodVocab = useVocabulary(loadMethods)
+    const basisVocab = useVocabulary(loadBasisSets)
+    const softwareVocab = useVocabulary(loadSoftwareNames)
+    const workflowToolVocab = useVocabulary(loadWorkflowToolNames)
+    const softwareVersionVocab = useVersionVocabulary(filters.software, loadSoftwareVersions)
+    const workflowToolVersionVocab = useVersionVocabulary(filters.workflowTool, loadWorkflowToolVersions)
+
     return <>
         <SelectField
             label="Status"
@@ -75,12 +91,30 @@ function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChang
             options={[["", "Any"], ...TS_STATUSES.map((status): [string, string] => [status, token(status)])]}
             value={filters.status}
         />
-        <TextField label="Method" onChange={(value) => onChange({ method: value })} value={filters.method} />
-        <TextField label="Basis" onChange={(value) => onChange({ basis: value })} value={filters.basis} />
-        <TextField label="Software" onChange={(value) => onChange({ software: value })} value={filters.software} />
-        <TextField label="Software version" onChange={(value) => onChange({ softwareVersion: value })} value={filters.softwareVersion} />
-        <TextField label="Workflow tool" onChange={(value) => onChange({ workflowTool: value })} value={filters.workflowTool} />
-        <TextField label="Workflow tool version" onChange={(value) => onChange({ workflowToolVersion: value })} value={filters.workflowToolVersion} />
+        <VocabField label="Method" onChange={(value) => onChange({ method: value })} showCount value={filters.method} vocab={methodVocab} />
+        <VocabField label="Basis" onChange={(value) => onChange({ basis: value })} showCount value={filters.basis} vocab={basisVocab} />
+        {/* `showCount={false}`: software/workflow-tool names carry a
+            `UniqueConstraint`, so their count is structurally always 1 --
+            see `vocabApi.ts`'s doc comment. Rendering it would dress a
+            constant up as data. */}
+        <VocabField label="Software" onChange={(value) => onChange({ software: value, softwareVersion: "" })} showCount={false} value={filters.software} vocab={softwareVocab} />
+        <VersionField
+            label="Software version"
+            onChange={(value) => onChange({ softwareVersion: value })}
+            parent={filters.software}
+            parentLabel="software"
+            value={filters.softwareVersion}
+            vocab={softwareVersionVocab}
+        />
+        <VocabField label="Workflow tool" onChange={(value) => onChange({ workflowTool: value, workflowToolVersion: "" })} showCount={false} value={filters.workflowTool} vocab={workflowToolVocab} />
+        <VersionField
+            label="Workflow tool version"
+            onChange={(value) => onChange({ workflowToolVersion: value })}
+            parent={filters.workflowTool}
+            parentLabel="workflow tool"
+            value={filters.workflowToolVersion}
+            vocab={workflowToolVersionVocab}
+        />
         <TriField label="Has optimization" onChange={(value) => onChange({ hasOpt: value })} value={filters.hasOpt} />
         <TriField label="Has frequency" onChange={(value) => onChange({ hasFreq: value })} value={filters.hasFreq} />
         <TriField label="Has single point" onChange={(value) => onChange({ hasSp: value })} value={filters.hasSp} />
@@ -119,6 +153,78 @@ function SelectField({ label, value, onChange, options }: {
             <select id={id} onChange={(event) => onChange(event.target.value)} value={value}>
                 {options.map(([optionValue, optionLabel]) => <option key={optionValue} value={optionValue}>{optionLabel}</option>)}
             </select>
+        </div>
+    )
+}
+
+/**
+ * An unscoped vocabulary select (method, basis, software, workflow tool),
+ * backed by `useVocabulary`. Option VALUES are the archive's stored
+ * strings verbatim -- never deduped, normalised, or run through `token()`
+ * -- because two values that merely look alike (e.g. Gaussian's `"16"`
+ * and `"Gaussian 16, Revision C.02"`) can match different record subsets;
+ * collapsing them would hide a real data inconsistency (issue #305) behind
+ * a tidy control. `showCount` is false for software/workflow-tool, whose
+ * count is a structural constant (see `EvidenceFields`'s doc comment).
+ */
+function VocabField({ label, value, onChange, vocab, showCount }: {
+    label: string
+    value: string
+    onChange: (value: string) => void
+    vocab: VocabularyState
+    showCount: boolean
+}) {
+    const id = fieldId(label)
+    const entries = vocab.status === "ready" ? vocab.entries : []
+    return (
+        <div className="browse-filter-field">
+            <label htmlFor={id}>{label}</label>
+            <select disabled={vocab.status === "loading"} id={id} onChange={(event) => onChange(event.target.value)} value={value}>
+                <option value="">Any</option>
+                {entries.map((entry) => (
+                    <option key={entry.value} value={entry.value}>{showCount ? `${entry.value} (${entry.count})` : entry.value}</option>
+                ))}
+            </select>
+            {vocab.status === "loading" && <p className="browse-filter-hint">Loading {label.toLowerCase()} list…</p>}
+            {vocab.status === "unavailable" && <p className="browse-filter-hint">Could not load {label.toLowerCase()} list.</p>}
+        </div>
+    )
+}
+
+/**
+ * A parent-scoped version select (software version, workflow tool
+ * version), backed by `useVersionVocabulary`. Disabled in every state
+ * except "ready" -- there is nothing valid to pick before the parent is
+ * chosen, while its vocabulary is loading, or if the fetch failed -- so a
+ * reader can never leave a version selected that no longer matches the
+ * current parent. `onChange` here only ever carries THIS field's own
+ * value; clearing the value on a parent change is `EvidenceFields`'s job
+ * (each `Software`/`Workflow tool` `VocabField`'s `onChange` clears its
+ * paired version field in the same patch), not this component's.
+ */
+function VersionField({ label, parentLabel, parent, value, onChange, vocab }: {
+    label: string
+    parentLabel: string
+    parent: string
+    value: string
+    onChange: (value: string) => void
+    vocab: VersionVocabularyState
+}) {
+    const id = fieldId(label)
+    const entries = vocab.status === "ready" ? vocab.entries : []
+    return (
+        <div className="browse-filter-field">
+            <label htmlFor={id}>{label}</label>
+            <select disabled={vocab.status !== "ready"} id={id} onChange={(event) => onChange(event.target.value)} value={value}>
+                <option value="">Any</option>
+                {entries.map((entry) => (
+                    <option key={entry.value} value={entry.value}>{`${entry.value} (${entry.count})`}</option>
+                ))}
+            </select>
+            {vocab.status === "no-parent" && <p className="browse-filter-hint">Choose a {parentLabel} first.</p>}
+            {vocab.status === "loading" && <p className="browse-filter-hint">Loading versions…</p>}
+            {vocab.status === "ready" && entries.length === 0 && <p className="browse-filter-hint">No versions recorded for {parent}.</p>}
+            {vocab.status === "unavailable" && <p className="browse-filter-hint">Could not load versions.</p>}
         </div>
     )
 }
