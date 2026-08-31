@@ -1,12 +1,15 @@
 # A scan coordinate value is the coordinate itself, in its own unit
 
-**Status: accepted 2026-08-31.** Supersedes
+**Status: accepted 2026-08-31, amended 2026-08-31.** Supersedes
 [0019](0019-a-scan-point-records-the-producers-axis.md), whose central argument
 does not survive contact with the question it was answering. Constrained by
 [0008](0008-validation-tiers-definitions-block-expectations-warn.md) and
 [0011](0011-atom-mapping-is-declared-not-inferred.md). The correction of the 46
 already-deposited series and the conformance check that finds non-conforming
-deposits are decided here and implemented separately.
+deposits are decided here and implemented separately. The amendment corrects
+what "exact and invertible" claimed for the corrective migration below: the
+arithmetic is not bit-exact in IEEE754, and the reversal is not automatic --
+see the first of the three facts under "What this costs, and who pays".
 
 Yesterday's decision recorded that `calc_scan_point_coordinate_value.coordinate_value`
 carries whatever axis the depositing producer used, and that TCKDB documents the
@@ -102,8 +105,31 @@ were never deposited.
 So the correction is made in place, and this record is where that is declared.
 Three facts make it defensible:
 
-1. **It is exact and invertible.** `coordinate_value := start_value +
-   coordinate_value` loses nothing, because `start_value` is retained.
+1. **`start_value` is retained, which lets the transformation be reversed --
+   by a human who knows which rows were changed.** *(Amended 2026-08-31: the
+   original wording here said "exact and invertible", and both halves
+   overstated the case.)* `coordinate_value := start_value + coordinate_value`
+   is the literal inverse of `coordinate_value := coordinate_value -
+   start_value`, and nothing is discarded to compute it. Two things are true
+   underneath that, and neither is what "exact and invertible" implied.
+   Arithmetically, IEEE754 double-precision addition-then-subtraction does not
+   always return the original bit pattern: measured over all 1656 real
+   `(start_value, coordinate_value)` pairs in the ARC fixtures, 480 (29%) do
+   not round-trip bit-exactly, with a maximum deviation of 5.684×10⁻¹⁴ degrees
+   (about one unit in the last place) -- scientifically inert, ten orders of
+   magnitude below the tolerance floor in "Enforcement" below, but not
+   "exact". More consequentially, retaining `start_value` does not make the
+   correction *automatically* invertible: after conversion, a row this
+   migration changed and a row deposited correctly under this record's own
+   contract at an ordinary, non-trivial anchor are identical in every stored
+   column -- both have their first point equal to `start_value`, and both
+   agree with their own geometry. There is no query that tells them apart.
+   The corrective migration's `downgrade()` therefore performs no writes: it
+   logs exactly what `upgrade()` converted -- which calculation, which
+   coordinate, which `start_value` -- as the record a human reversal would
+   need, and states that the correction is one-way at the database level.
+   `start_value` being retained is what makes that hand reversal possible at
+   all; it is not what makes it automatic.
 2. **It touches no accepted science.** All 50 scan calculations are
    `not_reviewed` at quality `raw` (measured 2026-08-31). Nothing
    [0003](0003-freeze-ever-approved-science.md) freezes is in scope, and no
