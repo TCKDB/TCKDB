@@ -110,6 +110,22 @@ esac
         command.chmod(0o755)
     monkeypatch.setenv("FRONTEND_DEPLOY_LOG", str(log))
     monkeypatch.setenv("PATH", f"{bindir}:{os.environ['PATH']}")
+    # Scope the deploy script's advisory lock to this test's own tmp_path.
+    # The script defaults it to a FIXED /tmp path (see the script's
+    # LOCK_FILE line), which is right in production -- it is what stops two
+    # real deployments mutating the same container. Under pytest-xdist that
+    # single path is shared by every worker, so whichever test invokes the
+    # script first holds it and the rest die on "another frontend
+    # deployment holds ...; refusing concurrent mutation" -- a confident,
+    # plausible error with nothing to do with the change under test.
+    #
+    # Each worker already gets an isolated tmp_path; the lock was the one
+    # thing escaping that isolation, because the script resolves it
+    # internally rather than receiving it. Setting it here covers every
+    # test by default. `test_concurrent_lock_refuses_before_pull_or_mutation`
+    # still passes its own path explicitly via `_run(extra_env=...)`, since
+    # it has to hold the lock itself to assert the refusal.
+    monkeypatch.setenv("TCKDB_FRONTEND_LOCK_FILE", str(tmp_path / "frontend-deploy.lock"))
     return log
 
 
