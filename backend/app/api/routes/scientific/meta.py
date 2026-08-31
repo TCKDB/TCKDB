@@ -19,6 +19,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db
+from app.db.models.common import CalculationRecordKind
 from app.services.scientific_read import meta as meta_service
 from app.services.scientific_read.profile import current_read_profile
 
@@ -43,15 +44,40 @@ def get_basis_sets(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/software")
-def get_software(db: Session = Depends(get_db)) -> dict:
-    """Distinct software names with usage counts."""
-    return {"results": meta_service.list_software(db), **_echo()}
+def get_software(
+    record_kind: CalculationRecordKind | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Software names actually used by ≥1 calculation, with calculation counts.
+
+    Derived from calculations, not the ``software`` registry — a package
+    registered but never attributed to any calculation does not appear.
+    ``count`` is how many calculations attribute that software (across all
+    of its releases). Optional ``record_kind`` (``species`` or
+    ``transition_state``) narrows to software used on calculations owned
+    by that kind of record; omitted, it is any kind.
+    """
+    return {
+        "results": meta_service.list_software(db, record_kind),
+        **_echo(),
+    }
 
 
 @router.get("/workflow-tools")
-def get_workflow_tools(db: Session = Depends(get_db)) -> dict:
-    """Distinct workflow tool names with usage counts."""
-    return {"results": meta_service.list_workflow_tools(db), **_echo()}
+def get_workflow_tools(
+    record_kind: CalculationRecordKind | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Workflow tool names actually used by ≥1 calculation, with calculation counts.
+
+    Mirrors ``/meta/software``: derived from calculations, not the
+    ``workflow_tool`` registry; ``count`` is the number of attributing
+    calculations; ``record_kind`` optionally narrows by owner kind.
+    """
+    return {
+        "results": meta_service.list_workflow_tools(db, record_kind),
+        **_echo(),
+    }
 
 
 @router.get("/software-versions")
@@ -59,12 +85,13 @@ def get_software_versions(
     software: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Distinct release versions for one named software.
+    """Distinct release versions for one named software, actually used.
 
     ``software`` is required (422 ``missing_version_parent`` otherwise) —
     see :func:`app.services.scientific_read.meta.list_software_versions`
     for why an unscoped call is refused rather than merging every
-    package's versions together.
+    package's versions together. Only versions with at least one
+    attributing calculation are listed.
     """
     return {
         "results": meta_service.list_software_versions(db, software),
@@ -77,10 +104,11 @@ def get_workflow_tool_versions(
     workflow_tool: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Distinct release versions for one named workflow tool.
+    """Distinct release versions for one named workflow tool, actually used.
 
     ``workflow_tool`` is required (422 ``missing_version_parent``
-    otherwise) — mirrors ``/meta/software-versions``.
+    otherwise) — mirrors ``/meta/software-versions``. Only versions with
+    at least one attributing calculation are listed.
     """
     return {
         "results": meta_service.list_workflow_tool_versions(db, workflow_tool),
