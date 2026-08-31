@@ -16,6 +16,9 @@ from app.db.models.common import (
     StereoKind,
 )
 from app.schemas.reads._field_bounds import (
+    MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_ELEMENTS_LENGTH as _MAX_ELEMENTS_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
@@ -28,10 +31,19 @@ from app.schemas.reads._field_bounds import (
     MAX_INCHI_LENGTH as _MAX_INCHI_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
+    MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
     MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
+    MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
+    MAX_WORKFLOW_TOOL_LENGTH as _MAX_WORKFLOW_TOOL_LENGTH,
 )
 from app.schemas.reads.scientific_common import (
     CollapseMode,
@@ -156,12 +168,61 @@ class SpeciesBrowseRequest(SpeciesFilterRequest):
     typo must not read as "we hold none of that element"). ``max_heavy_atoms``
     / ``min_heavy_atoms`` bound the species' non-hydrogen atom count,
     inclusive on both ends.
+
+    Provenance filters
+    ------------------
+    ``method`` / ``basis`` / ``software`` / ``software_version`` /
+    ``workflow_tool`` / ``workflow_tool_version`` are also **browse-only**,
+    matching the composition filters above and mirroring
+    ``TransitionStatesBrowseRequest`` on the TS-browse sibling. A species
+    can have many ``species_entry`` rows, each with many ``calculation``
+    rows at potentially different levels of theory, so these are
+    **OR-across-calculation, at the species grain**: a species passes if
+    *at least one* of its calculations (belonging to *any* of its
+    entries) matches every supplied constraint simultaneously — the same
+    choice ``transition_states_search.py``'s
+    ``_apply_method_basis_software_filters`` already made for TS entries,
+    applied here one level up (species owns entries owns calculations,
+    where a TS entry owns calculations directly). "All calculations must
+    match" was rejected: a species with ten calculations at nine
+    different levels of theory and one at ``b3lyp`` is exactly the kind
+    of record a caller filtering by level of theory wants back, and
+    "all" would silently exclude it.
+
+    ``software_version`` requires ``software`` (and ``workflow_tool_version``
+    requires ``workflow_tool``) — refused with 422 ``missing_version_parent``
+    otherwise, matching ``/meta/software-versions`` and
+    ``/meta/workflow-tool-versions`` (#304). A version string alone is
+    ambiguous across packages (two software packages can each have a
+    release called "16"), and this endpoint already has a coded refusal
+    for exactly that shape of ambiguity elsewhere in the read API, so
+    reusing it here keeps one policy instead of two. This is a stricter
+    choice than ``TransitionStatesBrowseRequest`` currently makes (that
+    endpoint does not enforce the parent) — see the species-browse PR
+    description for why the two were allowed to diverge rather than
+    loosening this one to match.
+
+    See ``app.services.scientific_read.calculation_provenance_filters``
+    for the join logic these six fields drive (shared with TS
+    search/browse), and ``species.py::_apply_provenance_filters`` for how
+    it is anchored at the species grain.
     """
 
     elements: str | None = Field(default=None, max_length=_MAX_ELEMENTS_LENGTH)
     elem_mode: ElementMatchMode = ElementMatchMode.all
     max_heavy_atoms: int | None = Field(default=None, ge=0)
     min_heavy_atoms: int | None = Field(default=None, ge=0)
+
+    method: str | None = Field(default=None, max_length=_MAX_METHOD_LENGTH)
+    basis: str | None = Field(default=None, max_length=_MAX_BASIS_LENGTH)
+    software: str | None = Field(
+        default=None, max_length=_MAX_SOFTWARE_NAME_LENGTH
+    )
+    software_version: str | None = Field(default=None, max_length=128)
+    workflow_tool: str | None = Field(
+        default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
+    )
+    workflow_tool_version: str | None = Field(default=None, max_length=128)
 
 
 # ---------------------------------------------------------------------------

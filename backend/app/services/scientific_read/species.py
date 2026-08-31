@@ -62,6 +62,9 @@ from app.schemas.reads.scientific_species import (
     SpeciesScientificRecord,
     SpeciesSearchRequest,
 )
+from app.services.scientific_read.calculation_provenance_filters import (
+    apply_calculation_provenance_filter,
+)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -601,6 +604,7 @@ def browse_species(
     # before any SQL runs, the same way reject_client_sort / validate_pagination
     # / validate_includes fail closed before the candidate query is built.
     element_symbols = _parse_elements_filter(request)
+    _validate_provenance_version_parents(request)
 
     visible = visible_statuses(
         min_review_status=request.min_review_status,
@@ -768,7 +772,71 @@ def _browse_candidate_species_stmt(
             stmt = stmt.where(heavy_atoms <= request.max_heavy_atoms)
         if request.min_heavy_atoms is not None:
             stmt = stmt.where(heavy_atoms >= request.min_heavy_atoms)
+    stmt = _apply_provenance_filters(stmt, request)
     return stmt
+
+
+def _validate_provenance_version_parents(request: SpeciesBrowseRequest) -> None:
+    """Refuse a version filter given without its named parent.
+
+    ``software_version=16`` without ``software=Gaussian`` is ambiguous:
+    more than one software package can have a release called "16", so an
+    unscoped version filter would match calculations run with any of
+    them, not the one package the caller has in mind. Mirrors
+    ``/meta/software-versions`` / ``/meta/workflow-tool-versions``
+    (``missing_version_parent``, #304) rather than inventing a second
+    way to say the same thing — see
+    :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
+    for the full rationale, including why this is stricter than
+    ``TransitionStatesBrowseRequest`` today.
+
+    Raises ``ValueError("missing_version_parent: ...")`` (-> HTTP 422,
+    coded) when a ``*_version`` field is set and its parent is not.
+    Called before any SQL runs, alongside the other up-front validators
+    in :func:`browse_species`.
+    """
+    if request.software_version is not None and request.software is None:
+        raise ValueError(
+            "missing_version_parent: software is required when "
+            "software_version is supplied for /species/browse."
+        )
+    if (
+        request.workflow_tool_version is not None
+        and request.workflow_tool is None
+    ):
+        raise ValueError(
+            "missing_version_parent: workflow_tool is required when "
+            "workflow_tool_version is supplied for /species/browse."
+        )
+
+
+def _apply_provenance_filters(stmt, request: SpeciesBrowseRequest):
+    """Narrow browse candidates to species with >=1 matching calculation.
+
+    OR-across-calculation, at the *species* grain: a candidate species
+    passes if any ``calculation`` row belonging to *any* of its
+    ``species_entry`` rows matches every supplied
+    method/basis/software/workflow_tool constraint. Delegates the join
+    logic to :func:`app.services.scientific_read.calculation_provenance_filters.apply_calculation_provenance_filter`,
+    the same function ``transition_states_search.py`` uses for the
+    identical TS-entry-grained filter — see that module's docstring for
+    the semantics in full and
+    :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
+    for why species browse chose the same "any" reading one level up
+    (species -> entries -> calculations, vs. TS entry -> calculations
+    directly).
+
+    A no-op (returns ``stmt`` unchanged) when none of the six fields is
+    set, same as every other optional filter in this module.
+    """
+    return apply_calculation_provenance_filter(
+        stmt,
+        request,
+        select(Calculation.id)
+        .select_from(Calculation)
+        .join(SpeciesEntry, SpeciesEntry.id == Calculation.species_entry_id)
+        .where(SpeciesEntry.species_id == Species.id),
+    )
 
 
 def _entry_filter_predicates(
@@ -1378,6 +1446,17 @@ def _browse_filter_echo(
         echo["max_heavy_atoms"] = request.max_heavy_atoms
     if request.min_heavy_atoms is not None:
         echo["min_heavy_atoms"] = request.min_heavy_atoms
+    for field in (
+        "method",
+        "basis",
+        "software",
+        "software_version",
+        "workflow_tool",
+        "workflow_tool_version",
+    ):
+        value = getattr(request, field)
+        if value is not None:
+            echo[field] = value
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:

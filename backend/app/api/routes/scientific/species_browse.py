@@ -62,6 +62,54 @@ def species_browse(
     elem_mode: ElementMatchMode = Query(ElementMatchMode.all),
     max_heavy_atoms: int | None = Query(None, ge=0),
     min_heavy_atoms: int | None = Query(None, ge=0),
+    method: str | None = Query(
+        None,
+        description=(
+            "Level-of-theory method, e.g. 'b3lyp'. Matches a species with "
+            "at least one calculation (across any of its entries) at this "
+            "method -- OR-across-calculation, not 'every calculation must "
+            "match'. Browse-only, mirrors /transition-states/browse."
+        ),
+    ),
+    basis: str | None = Query(
+        None,
+        description=(
+            "Level-of-theory basis set, e.g. 'def2-tzvp'. Same "
+            "OR-across-calculation semantics as method=; AND-combines "
+            "with method= when both are supplied."
+        ),
+    ),
+    software: str | None = Query(
+        None,
+        description=(
+            "Software package name, e.g. 'Gaussian'. OR-across-calculation, "
+            "same as method=/basis=."
+        ),
+    ),
+    software_version: str | None = Query(
+        None,
+        description=(
+            "Software release version, e.g. '16'. Requires software= -- a "
+            "version string alone is ambiguous across packages. Refused "
+            "with 422 missing_version_parent if software= is absent, "
+            "matching /meta/software-versions."
+        ),
+    ),
+    workflow_tool: str | None = Query(
+        None,
+        description=(
+            "Workflow tool name, e.g. 'ARC'. OR-across-calculation, same "
+            "as method=/basis=/software=."
+        ),
+    ),
+    workflow_tool_version: str | None = Query(
+        None,
+        description=(
+            "Workflow tool release version. Requires workflow_tool= -- "
+            "refused with 422 missing_version_parent otherwise, matching "
+            "/meta/workflow-tool-versions."
+        ),
+    ),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -79,7 +127,14 @@ def species_browse(
     ``min_heavy_atoms`` are the exception: composition filters exist only
     here, not on ``/species/search`` — see
     :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
-    for why. ``limit`` is capped at 200 (default 50, same as
+    for why. ``method`` / ``basis`` / ``software`` / ``software_version`` /
+    ``workflow_tool`` / ``workflow_tool_version`` narrow by calculation
+    provenance the same way ``/transition-states/browse`` does —
+    OR-across-calculation (see the per-parameter descriptions below and
+    :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
+    for the full rationale); the two ``*_version`` fields require their
+    named parent and 422 with ``missing_version_parent`` otherwise.
+    ``limit`` is capped at 200 (default 50, same as
     ``/species/search``); ``offset`` is capped by the hosted
     ``public_max_offset`` setting via the shared pagination validator.
     Ordering is ``review_rank ASC, has_entries DESC, created_at DESC,
@@ -98,6 +153,12 @@ def species_browse(
         elem_mode=elem_mode,
         max_heavy_atoms=max_heavy_atoms,
         min_heavy_atoms=min_heavy_atoms,
+        method=method,
+        basis=basis,
+        software=software,
+        software_version=software_version,
+        workflow_tool=workflow_tool,
+        workflow_tool_version=workflow_tool_version,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
