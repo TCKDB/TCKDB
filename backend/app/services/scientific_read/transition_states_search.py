@@ -40,14 +40,11 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
-from app.db.models.level_of_theory import LevelOfTheory
 from app.db.models.reaction import ChemReaction, ReactionEntry
-from app.db.models.software import Software, SoftwareRelease
 from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
 )
-from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
@@ -63,6 +60,9 @@ from app.schemas.reads.scientific_transition_state_search import (
     TransitionStatesSearchRequest,
 )
 from app.services.scientific_read import levels_of_theory
+from app.services.scientific_read.calculation_provenance_filters import (
+    apply_calculation_provenance_filter,
+)
 from app.services.scientific_read.common import (
     build_pagination,
     fetch_review_badges,
@@ -558,62 +558,19 @@ def _apply_method_basis_software_filters(
     whose calculation evidence includes a row matching the supplied
     provenance. The match is an OR-across-calc set: a TS entry passes
     if at least one of its calculations matches.
-    """
-    method_or_basis = request.method is not None or request.basis is not None
-    sw_filter = (
-        request.software is not None or request.software_version is not None
-    )
-    wf_filter = (
-        request.workflow_tool is not None
-        or request.workflow_tool_version is not None
-    )
-    if not (method_or_basis or sw_filter or wf_filter):
-        return stmt
 
-    sub_clauses = [
-        Calculation.transition_state_entry_id == TransitionStateEntry.id,
-    ]
-    sub_select = select(Calculation.id).where(*sub_clauses)
-    if method_or_basis:
-        sub_select = sub_select.join(
-            LevelOfTheory, LevelOfTheory.id == Calculation.lot_id
-        )
-        if request.method is not None:
-            sub_select = sub_select.where(
-                LevelOfTheory.method == request.method
-            )
-        if request.basis is not None:
-            sub_select = sub_select.where(
-                LevelOfTheory.basis == request.basis
-            )
-    if sw_filter:
-        sub_select = sub_select.join(
-            SoftwareRelease,
-            SoftwareRelease.id == Calculation.software_release_id,
-        ).join(Software, Software.id == SoftwareRelease.software_id)
-        if request.software is not None:
-            sub_select = sub_select.where(Software.name == request.software)
-        if request.software_version is not None:
-            sub_select = sub_select.where(
-                SoftwareRelease.version == request.software_version
-            )
-    if wf_filter:
-        sub_select = sub_select.join(
-            WorkflowToolRelease,
-            WorkflowToolRelease.id == Calculation.workflow_tool_release_id,
-        ).join(
-            WorkflowTool,
-            WorkflowTool.id == WorkflowToolRelease.workflow_tool_id,
-        )
-        if request.workflow_tool is not None:
-            sub_select = sub_select.where(
-                WorkflowTool.name == request.workflow_tool
-            )
-        if request.workflow_tool_version is not None:
-            sub_select = sub_select.where(
-                WorkflowToolRelease.version == request.workflow_tool_version
-            )
-    return stmt.where(sub_select.exists())
+    Delegates the join/predicate construction to
+    :func:`app.services.scientific_read.calculation_provenance_filters.apply_calculation_provenance_filter`,
+    which ``/species/browse`` also uses — see that module's docstring for
+    why the extraction is behaviour-preserving here.
+    """
+    return apply_calculation_provenance_filter(
+        stmt,
+        request,
+        select(Calculation.id).where(
+            Calculation.transition_state_entry_id == TransitionStateEntry.id
+        ),
+    )
 
 
 # ---------------------------------------------------------------------------

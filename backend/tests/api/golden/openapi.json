@@ -72480,7 +72480,7 @@
     },
     "/api/v1/scientific/species/browse": {
       "get": {
-        "description": "List species with no identifier required, for a catalogue page.\n\nEvery secondary filter ``/species/search`` accepts alongside an\nidentifier is accepted here too, so a listing can be narrowed after\nit is opened. ``elements`` / ``elem_mode`` / ``max_heavy_atoms`` /\n``min_heavy_atoms`` are the exception: composition filters exist only\nhere, not on ``/species/search`` — see\n:class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`\nfor why. ``limit`` is capped at 200 (default 50, same as\n``/species/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nOrdering is ``review_rank ASC, has_entries DESC, created_at DESC,\nid DESC`` — the same default as ``/species/search`` — which is what\nkeeps pagination stable across requests. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
+        "description": "List species with no identifier required, for a catalogue page.\n\nEvery secondary filter ``/species/search`` accepts alongside an\nidentifier is accepted here too, so a listing can be narrowed after\nit is opened. ``elements`` / ``elem_mode`` / ``max_heavy_atoms`` /\n``min_heavy_atoms`` are the exception: composition filters exist only\nhere, not on ``/species/search`` — see\n:class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`\nfor why. ``method`` / ``basis`` / ``software`` / ``software_version`` /\n``workflow_tool`` / ``workflow_tool_version`` narrow by calculation\nprovenance the same way ``/transition-states/browse`` does —\nOR-across-calculation (see the per-parameter descriptions below and\n:class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`\nfor the full rationale); the two ``*_version`` fields require their\nnamed parent and 422 with ``missing_version_parent`` otherwise.\n``limit`` is capped at 200 (default 50, same as\n``/species/search``); ``offset`` is capped by the hosted\n``public_max_offset`` setting via the shared pagination validator.\nOrdering is ``review_rank ASC, has_entries DESC, created_at DESC,\nid DESC`` — the same default as ``/species/search`` — which is what\nkeeps pagination stable across requests. Client-supplied ``sort=`` is\nrejected with 422 (``client_sort_not_supported``), matching the\nsibling endpoint.",
         "operationId": "species_browse_api_v1_scientific_species_browse_get",
         "parameters": [
           {
@@ -72622,6 +72622,114 @@
                 }
               ],
               "title": "Min Heavy Atoms"
+            }
+          },
+          {
+            "description": "Level-of-theory method, e.g. 'b3lyp'. Matches a species with at least one calculation (across any of its entries) at this method -- OR-across-calculation, not 'every calculation must match'. Browse-only, mirrors /transition-states/browse.",
+            "in": "query",
+            "name": "method",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Level-of-theory method, e.g. 'b3lyp'. Matches a species with at least one calculation (across any of its entries) at this method -- OR-across-calculation, not 'every calculation must match'. Browse-only, mirrors /transition-states/browse.",
+              "title": "Method"
+            }
+          },
+          {
+            "description": "Level-of-theory basis set, e.g. 'def2-tzvp'. Same OR-across-calculation semantics as method=; AND-combines with method= when both are supplied.",
+            "in": "query",
+            "name": "basis",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Level-of-theory basis set, e.g. 'def2-tzvp'. Same OR-across-calculation semantics as method=; AND-combines with method= when both are supplied.",
+              "title": "Basis"
+            }
+          },
+          {
+            "description": "Software package name, e.g. 'Gaussian'. OR-across-calculation, same as method=/basis=.",
+            "in": "query",
+            "name": "software",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Software package name, e.g. 'Gaussian'. OR-across-calculation, same as method=/basis=.",
+              "title": "Software"
+            }
+          },
+          {
+            "description": "Software release version, e.g. '16'. Requires software= -- a version string alone is ambiguous across packages. Refused with 422 missing_version_parent if software= is absent, matching /meta/software-versions.",
+            "in": "query",
+            "name": "software_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Software release version, e.g. '16'. Requires software= -- a version string alone is ambiguous across packages. Refused with 422 missing_version_parent if software= is absent, matching /meta/software-versions.",
+              "title": "Software Version"
+            }
+          },
+          {
+            "description": "Workflow tool name, e.g. 'ARC'. OR-across-calculation, same as method=/basis=/software=.",
+            "in": "query",
+            "name": "workflow_tool",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workflow tool name, e.g. 'ARC'. OR-across-calculation, same as method=/basis=/software=.",
+              "title": "Workflow Tool"
+            }
+          },
+          {
+            "description": "Workflow tool release version. Requires workflow_tool= -- refused with 422 missing_version_parent otherwise, matching /meta/workflow-tool-versions.",
+            "in": "query",
+            "name": "workflow_tool_version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Workflow tool release version. Requires workflow_tool= -- refused with 422 missing_version_parent otherwise, matching /meta/workflow-tool-versions.",
+              "title": "Workflow Tool Version"
             }
           },
           {
