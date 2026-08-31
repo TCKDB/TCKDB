@@ -4,9 +4,16 @@
 from ADR 0019's superseded "sweep relative to the first point" convention to
 ADR 0020's "the coordinate itself": ``coordinate_value := start_value +
 coordinate_value``, applied per series only when every one of its points'
-own geometry proves the conversion. Everything here is a way that proof
-could go wrong while looking perfect against an empty database, which is why
-none of it is checked through a service layer -- the same reasoning
+own geometry proves the conversion. ``downgrade()`` performs no writes at
+all -- see "downgrade() is one-way, by design" in the revision's own module
+docstring, and the adversarial review that forced that design: an earlier
+draft's margin-based reversal guard corrupted the very series it claimed to
+protect (measured on the real corpus shape,
+``calc_z63ecgljjdt2dvkqkjadmxkxou``) and was, in general, structurally unable
+to tell a converted row apart from a row deposited correctly at an ordinary
+anchor. Everything here is a way that proof, or that refusal, could go wrong
+while looking perfect against an empty database, which is why none of it is
+checked through a service layer -- the same reasoning
 ``test_conformer_anchor_backfill_migration.py`` gives for ``b8e3f1a7c250``.
 
 Geometry fixtures are built, not guessed: every scan point's four atoms are
@@ -21,24 +28,45 @@ of the migration.
 seed series                   what it exists to pin
 ============================  =====================================
 ``legacy``                    the population this revision repairs
+``legacy_decimal``            conversion is close, not claimed bit-exact
 ``already_conforms_anchor0``  ADR 0020's ``conforms`` bucket, start≈0
-``already_conforms_anchor360``ADR 0020's ``conforms`` bucket, start≈360
+``already_conforms_anchor360``ADR 0020's ``conforms`` bucket, start≈360,
+                               seeded as an actual relative sweep (the real
+                               shape of ``calc_z63ecgljjdt2dvkqkjadmxkxou``)
+``correct_ordinary_anchor``   a CORRECT post-ADR-0020 deposit at a
+                               non-trivial anchor -- what the old,
+                               since-removed downgrade guard would have
+                               corrupted
 ``geometry_disagrees``        proof fails for every point -> untouched
-``one_bad_point``             proof fails for one point -> whole series untouched
-``non_dihedral``              ``coordinate_kind`` gate
-``unit_mismatch``             declared-unit gate
-``no_start_value``            ``start_value IS NOT NULL`` gate
+``one_bad_point``             proof fails for one point (bad distance) ->
+                               whole series untouched
+``near_collinear_point``      one point's quartet is near-collinear ->
+                               ``provable=False`` -> whole series untouched
+``degenerate_bond_point``     one point has a near-zero-length wing bond ->
+                               ``provable=False`` -> whole series untouched
+``missing_atom_point``        one point's geometry is missing atom_index=4
+                               -> ``provable=False`` -> whole series untouched
+``missing_geometry_point``    one point has ``geometry_id IS NULL`` ->
+                               whole series untouched (caught before proof)
+``point_unit_mismatch``       one point declares a non-degree ``value_unit``
+                               -> whole series untouched (caught before proof)
+``improper_kind``             ``coordinate_kind = 'improper'``, otherwise
+                               shaped exactly like ``legacy`` -> untouched
+``non_dihedral``               ``coordinate_kind = 'bond'`` gate
+``coordinate_unit_mismatch``   coordinate-level declared-unit gate
+``no_start_value``             ``start_value IS NOT NULL`` gate
 ============================  =====================================
 
-Only ``legacy`` may change under ``upgrade()``. Every other row is one
-clause away from being eligible, mirroring the near-miss table the
-anchor-backfill test uses for the same reason: a predicate whose narrowness
-nothing tests is a predicate that has been written down, not established.
+Only ``legacy`` and ``legacy_decimal`` may change under ``upgrade()``. Every
+other row is one clause, or one not-provable point, away from being
+eligible -- a predicate whose narrowness nothing tests is a predicate that
+has been written down, not established.
 """
 
 from __future__ import annotations
 
 import math
+import re
 import subprocess
 import uuid
 from pathlib import Path
@@ -91,7 +119,10 @@ def _place_fourth_atom(a, b, c, bond_length, angle_deg, dihedral_deg_target):
 
     Standard NeRF construction (Parsons et al. 2005). Cross-checked against
     the revision's own dihedral/angle formulas in
-    ``test_nerf_fixture_reproduces_its_own_target_dihedral``.
+    ``test_nerf_fixture_reproduces_its_own_target_dihedral``. A small
+    ``angle_deg`` is exactly how the ``near_collinear_point`` fixture below
+    drives ``sin(theta_234)`` under the revision's 0.05 threshold -- this
+    function's ``angle_deg`` parameter *is* that angle by construction.
     """
     theta = math.radians(angle_deg)
     phi = math.radians(dihedral_deg_target)
@@ -260,28 +291,33 @@ def _new_scan_calculation(conn, species_entry_id: int, *, dimension: int = 1) ->
     return calculation_id
 
 
-def _new_dihedral_coordinate(
+def _new_quartet_coordinate(
     conn,
     calculation_id: int,
     coordinate_index: int,
     *,
     start_value,
     value_unit: str | None = "degree",
+    kind: str = "dihedral",
     atom_indices: tuple[int, int, int, int] = (1, 2, 3, 4),
 ) -> None:
+    """A 4-atom scan coordinate: ``dihedral`` by default, or ``improper`` for
+    the fixture that pins the ``coordinate_kind = 'dihedral'`` eligibility
+    clause -- both kinds share the same arity and column shape."""
     conn.execute(
         text(
             "INSERT INTO calc_scan_coordinate "
             "(calculation_id, coordinate_index, coordinate_kind, "
             " atom1_index, atom2_index, atom3_index, atom4_index, "
             " start_value, value_unit) "
-            "VALUES (:cid, :cidx, CAST('dihedral' AS scan_coordinate_kind), "
+            "VALUES (:cid, :cidx, CAST(:kind AS scan_coordinate_kind), "
             "        :a1, :a2, :a3, :a4, :start, "
             "        CAST(:unit AS coordinate_unit))"
         ),
         {
             "cid": calculation_id,
             "cidx": coordinate_index,
+            "kind": kind,
             "a1": atom_indices[0],
             "a2": atom_indices[1],
             "a3": atom_indices[2],
@@ -307,7 +343,9 @@ def _new_bond_coordinate(conn, calculation_id: int, coordinate_index: int) -> No
     )
 
 
-def _new_scan_point(conn, calculation_id: int, point_index: int, geometry_id: int) -> None:
+def _new_scan_point(
+    conn, calculation_id: int, point_index: int, geometry_id: int | None
+) -> None:
     conn.execute(
         text(
             "INSERT INTO calc_scan_point (calculation_id, point_index, geometry_id) "
@@ -323,18 +361,22 @@ def _new_coordinate_value(
     point_index: int,
     coordinate_index: int,
     coordinate_value,
+    *,
+    value_unit: str | None = None,
 ) -> None:
     conn.execute(
         text(
             "INSERT INTO calc_scan_point_coordinate_value "
-            "(calculation_id, point_index, coordinate_index, coordinate_value) "
-            "VALUES (:cid, :pidx, :cidx, :value)"
+            "(calculation_id, point_index, coordinate_index, coordinate_value, "
+            " value_unit) "
+            "VALUES (:cid, :pidx, :cidx, :value, CAST(:unit AS coordinate_unit))"
         ),
         {
             "cid": calculation_id,
             "pidx": point_index,
             "cidx": coordinate_index,
             "value": coordinate_value,
+            "unit": value_unit,
         },
     )
 
@@ -348,17 +390,20 @@ def _seed_dihedral_series(
     true_dihedrals: list[float],
     bad_point_index: int | None = None,
     unit: str | None = "degree",
+    kind: str = "dihedral",
 ) -> int:
-    """A one-dimensional dihedral scan: ``stored_values[i]`` is what is
-    written to ``coordinate_value``, ``true_dihedrals[i]`` is the dihedral
-    the point's *geometry* is built to actually be. ``bad_point_index``
-    (1-based) corrupts one point's geometry by displacing its fourth atom,
-    independent of ``true_dihedrals`` -- the "one mis-attached geometry"
-    shape, as opposed to a series built to disagree throughout.
+    """A one-dimensional dihedral (or ``improper``, via ``kind``) scan:
+    ``stored_values[i]`` is what is written to ``coordinate_value``,
+    ``true_dihedrals[i]`` is the dihedral the point's *geometry* is built to
+    actually be. ``bad_point_index`` (1-based) corrupts one point's geometry
+    by displacing its fourth atom -- the "one mis-attached geometry" shape,
+    as opposed to a series built to disagree throughout.
     """
     assert len(stored_values) == len(true_dihedrals)
     calculation_id = _new_scan_calculation(conn, species_entry_id)
-    _new_dihedral_coordinate(conn, calculation_id, 1, start_value=start_value, value_unit=unit)
+    _new_quartet_coordinate(
+        conn, calculation_id, 1, start_value=start_value, value_unit=unit, kind=kind
+    )
     for i, (stored, true_dihedral) in enumerate(zip(stored_values, true_dihedrals), start=1):
         d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
         if bad_point_index == i:
@@ -388,6 +433,26 @@ _LEGACY_START = 45.0
 _LEGACY_OFFSETS = [0.0, 8.0, 16.0, 24.0, 32.0, 40.0]
 _LEGACY_TRUE = [_LEGACY_START + o for o in _LEGACY_OFFSETS]
 
+#: Same shape, at 6-decimal-place deposit precision -- the real corpus's
+#: precision (ADR 0020) -- specifically so the conversion test against it
+#: cannot claim bit-exactness. See test_upgrade_conversion_is_correct_within
+#: _a_stated_tolerance_not_claimed_bit_exact.
+_LEGACY_DECIMAL_START = 45.123456
+_LEGACY_DECIMAL_OFFSETS = [0.0, 8.123456, 16.246912, 24.370368, 32.493824, 40.61728]
+_LEGACY_DECIMAL_TRUE = [_LEGACY_DECIMAL_START + o for o in _LEGACY_DECIMAL_OFFSETS]
+
+#: The real corpus shape for calc_z63ecgljjdt2dvkqkjadmxkxou: a relative
+#: sweep stored on an anchor within a few ten-thousandths of a degree of a
+#: full turn, NOT a constant series (an earlier draft of this fixture used a
+#: constant value here and was flagged in review as misleading). Because
+#: start_value is within noise of 360, the physically deposited geometry
+#: (built to true_dihedrals below) ends up numerically equal to the stored
+#: relative value itself -- which is exactly why the "conforms trivially"
+#: bucket exists.
+_ANCHOR360_START = 359.9994
+_ANCHOR360_STORED = [0.0, 8.0001, 15.9998, 24.0003, 31.9997]
+_ANCHOR360_TRUE = list(_ANCHOR360_STORED)
+
 
 def _seed(conn) -> dict[str, int]:
     ids: dict[str, int] = {}
@@ -400,6 +465,13 @@ def _seed(conn) -> dict[str, int]:
         start_value=_LEGACY_START,
         stored_values=_LEGACY_OFFSETS,
         true_dihedrals=_LEGACY_TRUE,
+    )
+    ids["legacy_decimal"] = _seed_dihedral_series(
+        conn,
+        species_entry_id=entry,
+        start_value=_LEGACY_DECIMAL_START,
+        stored_values=_LEGACY_DECIMAL_OFFSETS,
+        true_dihedrals=_LEGACY_DECIMAL_TRUE,
     )
 
     # --- ADR 0020's "conforms" bucket: anchor within a turn of 0 --------
@@ -415,22 +487,29 @@ def _seed(conn) -> dict[str, int]:
     )
 
     # --- ADR 0020's "conforms" bucket: anchor within a turn of 360 ------
-    # Mirrors the real calc_z63ecgljjdt2dvkqkjadmxkxou / start_value=359.9994
-    # case -- constant series, deliberately not a sweep, since the point
-    # here is the anchor's near-360 value, not pattern classification.
-    near_360 = 359.9994
+    # Real shape (relative sweep), not a constant series -- see
+    # _ANCHOR360_* above.
     ids["already_conforms_anchor360"] = _seed_dihedral_series(
         conn,
         species_entry_id=entry,
-        start_value=near_360,
-        stored_values=[near_360, near_360, near_360],
-        true_dihedrals=[near_360, near_360, near_360],
+        start_value=_ANCHOR360_START,
+        stored_values=_ANCHOR360_STORED,
+        true_dihedrals=_ANCHOR360_TRUE,
+    )
+
+    # --- A CORRECT post-ADR-0020 deposit at an ordinary anchor -----------
+    # What the since-removed margin-based downgrade guard would have
+    # corrupted: stored values already ARE the absolute dihedral, at a
+    # start_value nowhere near a multiple of 360.
+    ids["correct_ordinary_anchor"] = _seed_dihedral_series(
+        conn,
+        species_entry_id=entry,
+        start_value=_LEGACY_START,
+        stored_values=_LEGACY_TRUE,
+        true_dihedrals=_LEGACY_TRUE,
     )
 
     # --- Geometry disagrees throughout: proof never holds ----------------
-    # Same start_value/stored_values shape as "legacy", but every point's
-    # geometry was built for a completely different dihedral -- neither the
-    # as-is nor the shifted hypothesis is confirmed anywhere.
     ids["geometry_disagrees"] = _seed_dihedral_series(
         conn,
         species_entry_id=entry,
@@ -439,10 +518,7 @@ def _seed(conn) -> dict[str, int]:
         true_dihedrals=[100.0, 100.0, 100.0, 100.0, 100.0, 100.0],
     )
 
-    # --- One bad point in an otherwise-good series ------------------------
-    # Every point but #3 is built exactly like "legacy"; #3's geometry is
-    # displaced. The whole series must stay untouched, not five-sixths
-    # converted.
+    # --- One bad point (bad distance) in an otherwise-good series --------
     ids["one_bad_point"] = _seed_dihedral_series(
         conn,
         species_entry_id=entry,
@@ -452,6 +528,96 @@ def _seed(conn) -> dict[str, int]:
         bad_point_index=3,
     )
 
+    # --- One point with a near-collinear quartet --------------------------
+    # angle_deg=1.0 makes sin(theta_234) = sin(1 degree) ~= 0.0175, below
+    # the revision's 0.05 not-checkable threshold, so this point's proof is
+    # provable=False -- exercising a genuinely different guard than
+    # one_bad_point's TOLERANCE-branch failure.
+    ids["near_collinear_point"] = _new_scan_calculation(conn, entry)
+    _new_quartet_coordinate(
+        conn, ids["near_collinear_point"], 1, start_value=_LEGACY_START
+    )
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+        if i == 3:
+            d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, 1.0, true_dihedral)
+        else:
+            d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
+        gid = _new_geometry(conn, [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C), ("H", *d)])
+        _new_scan_point(conn, ids["near_collinear_point"], i, gid)
+        _new_coordinate_value(conn, ids["near_collinear_point"], i, 1, stored)
+
+    # --- One point with a degenerate (near-zero-length) wing bond ---------
+    # Atom D placed on top of atom C for point 3: r_cd ~ 0, provable=False.
+    ids["degenerate_bond_point"] = _new_scan_calculation(conn, entry)
+    _new_quartet_coordinate(
+        conn, ids["degenerate_bond_point"], 1, start_value=_LEGACY_START
+    )
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+        if i == 3:
+            d = (_ATOM_C[0] + 1e-9, _ATOM_C[1], _ATOM_C[2])
+        else:
+            d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
+        gid = _new_geometry(conn, [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C), ("H", *d)])
+        _new_scan_point(conn, ids["degenerate_bond_point"], i, gid)
+        _new_coordinate_value(conn, ids["degenerate_bond_point"], i, 1, stored)
+
+    # --- One point whose geometry is missing atom_index=4 -----------------
+    ids["missing_atom_point"] = _new_scan_calculation(conn, entry)
+    _new_quartet_coordinate(
+        conn, ids["missing_atom_point"], 1, start_value=_LEGACY_START
+    )
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+        d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
+        atoms = [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C)]
+        if i != 3:
+            atoms.append(("H", *d))
+        gid = _new_geometry(conn, atoms)
+        _new_scan_point(conn, ids["missing_atom_point"], i, gid)
+        _new_coordinate_value(conn, ids["missing_atom_point"], i, 1, stored)
+
+    # --- One point with geometry_id IS NULL --------------------------------
+    ids["missing_geometry_point"] = _new_scan_calculation(conn, entry)
+    _new_quartet_coordinate(
+        conn, ids["missing_geometry_point"], 1, start_value=_LEGACY_START
+    )
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+        if i == 3:
+            _new_scan_point(conn, ids["missing_geometry_point"], i, None)
+        else:
+            d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
+            gid = _new_geometry(conn, [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C), ("H", *d)])
+            _new_scan_point(conn, ids["missing_geometry_point"], i, gid)
+        _new_coordinate_value(conn, ids["missing_geometry_point"], i, 1, stored)
+
+    # --- One point declaring a non-degree value_unit on itself -------------
+    # Distinct from coordinate_unit_mismatch below: the coordinate row here
+    # correctly declares 'degree', and only one POINT disagrees -- exercising
+    # _series_points's per-point unit check rather than the eligibility SQL.
+    ids["point_unit_mismatch"] = _new_scan_calculation(conn, entry)
+    _new_quartet_coordinate(
+        conn, ids["point_unit_mismatch"], 1, start_value=_LEGACY_START
+    )
+    for i, (stored, true_dihedral) in enumerate(zip(_LEGACY_OFFSETS, _LEGACY_TRUE), start=1):
+        d = _place_fourth_atom(_ATOM_A, _ATOM_B, _ATOM_C, _BOND_LENGTH, _BOND_ANGLE_DEG, true_dihedral)
+        gid = _new_geometry(conn, [("C", *_ATOM_A), ("C", *_ATOM_B), ("C", *_ATOM_C), ("H", *d)])
+        _new_scan_point(conn, ids["point_unit_mismatch"], i, gid)
+        unit = "angstrom" if i == 3 else None
+        _new_coordinate_value(conn, ids["point_unit_mismatch"], i, 1, stored, value_unit=unit)
+
+    # --- coordinate_kind = 'improper', otherwise shaped like 'legacy' -----
+    # If the eligibility SQL's coordinate_kind = 'dihedral' clause were
+    # dropped, this series' geometry (built for the dihedral formula) would
+    # pass the shifted-conforms proof and convert -- so this is a live
+    # positive control for that clause, not just a shape check.
+    ids["improper_kind"] = _seed_dihedral_series(
+        conn,
+        species_entry_id=entry,
+        start_value=_LEGACY_START,
+        stored_values=_LEGACY_OFFSETS,
+        true_dihedrals=_LEGACY_TRUE,
+        kind="improper",
+    )
+
     # --- Near-miss: not a dihedral ---------------------------------------
     ids["non_dihedral"] = _new_scan_calculation(conn, entry)
     _new_bond_coordinate(conn, ids["non_dihedral"], 1)
@@ -459,8 +625,8 @@ def _seed(conn) -> dict[str, int]:
     _new_scan_point(conn, ids["non_dihedral"], 1, g)
     _new_coordinate_value(conn, ids["non_dihedral"], 1, 1, 1.5)
 
-    # --- Near-miss: declared unit is not degree ---------------------------
-    ids["unit_mismatch"] = _seed_dihedral_series(
+    # --- Near-miss: coordinate-level declared unit is not degree ----------
+    ids["coordinate_unit_mismatch"] = _seed_dihedral_series(
         conn,
         species_entry_id=entry,
         start_value=_LEGACY_START,
@@ -482,16 +648,23 @@ def _seed(conn) -> dict[str, int]:
 
 
 #: What must convert.
-_CONVERTED = ("legacy",)
+_CONVERTED = ("legacy", "legacy_decimal")
 
 #: What must not move under upgrade(), and the clause/shape each one pins.
 _UNTOUCHED = (
     "already_conforms_anchor0",
     "already_conforms_anchor360",
+    "correct_ordinary_anchor",
     "geometry_disagrees",
     "one_bad_point",
+    "near_collinear_point",
+    "degenerate_bond_point",
+    "missing_atom_point",
+    "missing_geometry_point",
+    "point_unit_mismatch",
+    "improper_kind",
     "non_dihedral",
-    "unit_mismatch",
+    "coordinate_unit_mismatch",
     "no_start_value",
 )
 
@@ -525,6 +698,12 @@ def _full_row_set(conn) -> set[tuple]:
     }
 
 
+def _calculation_ref(conn, calculation_id: int) -> str:
+    return conn.scalar(
+        text("SELECT public_ref FROM calculation WHERE id = :id"), {"id": calculation_id}
+    )
+
+
 def _upgraded(harness) -> dict[str, int]:
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
@@ -534,20 +713,63 @@ def _upgraded(harness) -> dict[str, int]:
 
 
 # ---------------------------------------------------------------------------
-# Tests
+# upgrade(): conversion correctness
 # ---------------------------------------------------------------------------
 
 
-def test_legacy_series_converts_to_what_its_geometry_proves(harness) -> None:
+def test_legacy_series_converts_bit_exactly_for_integer_valued_fixture(harness) -> None:
+    """The one case where 'exact' is a literal claim: every stored/start
+    value here is an integer degree, exactly representable in IEEE754
+    double precision, so ``start + stored`` round-trips bit-for-bit. Real
+    6-decimal deposits do not, in general -- see
+    test_upgrade_conversion_is_correct_within_a_stated_tolerance_not_claimed_bit_exact.
+    """
     ids = _upgraded(harness)
     with harness.engine.connect() as conn:
         values = _all_values(conn)
 
     converted = values[ids["legacy"]]
     for i, expected in enumerate(_LEGACY_TRUE, start=1):
-        assert converted[i] == pytest.approx(expected, abs=1e-9), (
-            f"point_index={i} did not land on the value its own geometry proves"
+        assert converted[i] == expected, (
+            f"point_index={i} did not land bit-exactly on start_value + coordinate_value"
         )
+
+
+def test_upgrade_conversion_is_correct_within_a_stated_tolerance_not_claimed_bit_exact(
+    harness,
+) -> None:
+    """At realistic (6-decimal-place) deposit precision, ``start_value +
+    coordinate_value`` is not guaranteed to be bit-exact in IEEE754 -- ADR
+    0020's 2026-08-31 amendment measures 29% of real (start_value,
+    coordinate_value) pairs failing to round-trip bit-exactly, with a
+    maximum deviation of 5.684e-14 degrees. This test asserts closeness
+    against that same order of magnitude (comfortably looser, so it is not
+    fragile to which specific pairs round awkwardly) rather than equality.
+    """
+    ids = _upgraded(harness)
+    with harness.engine.connect() as conn:
+        values = _all_values(conn)
+
+    converted = values[ids["legacy_decimal"]]
+    for i, expected in enumerate(_LEGACY_DECIMAL_TRUE, start=1):
+        assert converted[i] == pytest.approx(expected, abs=1e-9), (
+            f"point_index={i} drifted further from start_value + coordinate_value "
+            "than IEEE754 rounding alone accounts for"
+        )
+
+
+def test_already_conforming_series_are_skipped_not_converted(harness) -> None:
+    ids = _upgraded(harness)
+    with harness.engine.connect() as conn:
+        values = _all_values(conn)
+
+    assert values[ids["already_conforms_anchor0"]] == {
+        1: 10.0, 2: 20.0, 3: 30.0, 4: 40.0, 5: 50.0, 6: 60.0,
+    }
+    for i, expected in enumerate(_ANCHOR360_STORED, start=1):
+        assert values[ids["already_conforms_anchor360"]][i] == expected
+    for i, expected in enumerate(_LEGACY_TRUE, start=1):
+        assert values[ids["correct_ordinary_anchor"]][i] == expected
 
 
 def test_near_misses_are_left_completely_untouched(harness) -> None:
@@ -571,29 +793,39 @@ def test_near_misses_are_left_completely_untouched(harness) -> None:
 
     for label in _UNTOUCHED:
         assert after[ids[label]] == with_original[label], (
-            f"{label} changed under upgrade(); it is one clause away from "
-            "the legacy series this revision converts, so the gate that "
-            "excludes it has been widened"
+            f"{label} changed under upgrade(); it is one clause (or one "
+            "not-provable point) away from the legacy series this revision "
+            "converts, so the gate that excludes it has been widened"
         )
-    # And the positive control actually did move, so this test cannot pass
+    # And the positive controls actually did move, so this test cannot pass
     # by the gate refusing everything.
-    assert after[ids["legacy"]] != with_original.get("legacy")
+    for label in _CONVERTED:
+        assert after[ids[label]] != before[ids[label]]
 
 
-def test_bad_geometry_series_is_left_untouched_and_logged(harness, caplog) -> None:
-    import logging
-
+def test_bad_geometry_series_is_left_untouched_and_logged(harness) -> None:
+    """``caplog`` cannot see this: ``harness.run`` drives ``alembic`` as a
+    real subprocess (so a genuinely fresh interpreter runs ``upgrade()``,
+    not a monkeypatched in-process one), and pytest's log-capture fixture
+    only ever sees logging inside its own process. The migration's own
+    stdout/stderr -- what an operator actually reads -- is what
+    ``subprocess.run(capture_output=True)`` hands back on ``completed``,
+    and that is what this test checks instead.
+    """
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
         ids = _seed(conn)
         before = dict(_all_values(conn)[ids["geometry_disagrees"]])
 
-    with caplog.at_level(logging.WARNING, logger="alembic.runtime.migration.a4f7c2e9d651"):
-        harness.run("upgrade", _MIGRATION.revision)
+    completed = harness.run("upgrade", _MIGRATION.revision)
 
     with harness.engine.connect() as conn:
         after = dict(_all_values(conn)[ids["geometry_disagrees"]])
     assert after == before, "a series whose geometry disagrees throughout was modified"
+
+    combined = completed.stdout + completed.stderr
+    assert f"calculation_id={ids['geometry_disagrees']}" in combined
+    assert "left untouched" in combined
 
 
 def test_partial_failure_converts_nothing_in_the_series(harness) -> None:
@@ -614,17 +846,106 @@ def test_partial_failure_converts_nothing_in_the_series(harness) -> None:
     )
 
 
-def test_already_conforming_series_are_skipped_not_converted(harness) -> None:
-    ids = _upgraded(harness)
-    with harness.engine.connect() as conn:
-        values = _all_values(conn)
+# ---------------------------------------------------------------------------
+# upgrade(): the "not provable" refusal family
+# ---------------------------------------------------------------------------
+#
+# Each test below reaches provable=False for a genuinely different reason,
+# and each is a live positive control: the fixture's geometry is built so
+# that IF the specific guard it targets were disabled, the series would
+# convert (or the point would be silently treated as provable), not merely
+# "look different". A prior version of this file never drove any fixture to
+# provable=False at all -- one_bad_point fails on the TOLERANCE branch, and
+# the old unit-mismatch fixture was caught by the eligibility SQL before
+# reaching a single point -- so five mutants covering this family survived
+# undetected. See the migration report for the mutation kill for each.
 
-    assert values[ids["already_conforms_anchor0"]] == {
-        1: 10.0, 2: 20.0, 3: 30.0, 4: 40.0, 5: 50.0, 6: 60.0,
-    }
-    near_360 = 359.9994
-    for point_value in values[ids["already_conforms_anchor360"]].values():
-        assert point_value == near_360
+
+def test_near_collinear_point_refuses_the_whole_series(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        before = dict(_all_values(conn)[ids["near_collinear_point"]])
+
+    harness.run("upgrade", _MIGRATION.revision)
+
+    with harness.engine.connect() as conn:
+        after = dict(_all_values(conn)[ids["near_collinear_point"]])
+    assert after == before, "a series with a near-collinear point was converted"
+
+
+def test_degenerate_bond_point_refuses_the_whole_series(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        before = dict(_all_values(conn)[ids["degenerate_bond_point"]])
+
+    harness.run("upgrade", _MIGRATION.revision)
+
+    with harness.engine.connect() as conn:
+        after = dict(_all_values(conn)[ids["degenerate_bond_point"]])
+    assert after == before, "a series with a degenerate wing bond was converted"
+
+
+def test_missing_atom_point_refuses_the_whole_series(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        before = dict(_all_values(conn)[ids["missing_atom_point"]])
+
+    harness.run("upgrade", _MIGRATION.revision)
+
+    with harness.engine.connect() as conn:
+        after = dict(_all_values(conn)[ids["missing_atom_point"]])
+    assert after == before, "a series with a point missing one atom was converted"
+
+
+def test_missing_geometry_point_refuses_the_whole_series(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        before = dict(_all_values(conn)[ids["missing_geometry_point"]])
+
+    harness.run("upgrade", _MIGRATION.revision)
+
+    with harness.engine.connect() as conn:
+        after = dict(_all_values(conn)[ids["missing_geometry_point"]])
+    assert after == before, "a series with a point missing its geometry_id was converted"
+
+
+def test_point_level_unit_mismatch_refuses_the_whole_series(harness) -> None:
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        before = dict(_all_values(conn)[ids["point_unit_mismatch"]])
+
+    harness.run("upgrade", _MIGRATION.revision)
+
+    with harness.engine.connect() as conn:
+        after = dict(_all_values(conn)[ids["point_unit_mismatch"]])
+    assert after == before, (
+        "a series with one point declaring a non-degree value_unit was converted"
+    )
+
+
+def test_improper_kind_is_never_converted(harness) -> None:
+    """The positive control for the eligibility SQL's coordinate_kind =
+    'dihedral' clause: this series' geometry is built exactly like
+    'legacy', so if the clause were dropped it WOULD pass the shifted-
+    conforms proof and convert."""
+    harness.run("upgrade", _MIGRATION.parent)
+    with harness.engine.begin() as conn:
+        ids = _seed(conn)
+        before = dict(_all_values(conn)[ids["improper_kind"]])
+
+    harness.run("upgrade", _MIGRATION.revision)
+
+    with harness.engine.connect() as conn:
+        after = dict(_all_values(conn)[ids["improper_kind"]])
+    assert after == before, (
+        "an 'improper' coordinate was converted -- the coordinate_kind = "
+        "'dihedral' eligibility clause is not doing its job"
+    )
 
 
 def test_rerunning_upgrade_after_conversion_is_a_no_op(harness) -> None:
@@ -660,69 +981,105 @@ def test_rerunning_upgrade_after_conversion_is_a_no_op(harness) -> None:
     }
 
 
-def test_downgrade_restores_the_legacy_series_exactly(harness) -> None:
-    ids = _upgraded(harness)
-    harness.run("downgrade", _MIGRATION.parent)
-    with harness.engine.connect() as conn:
-        values = _all_values(conn)
-    restored = values[ids["legacy"]]
-    for i, expected in enumerate(_LEGACY_OFFSETS, start=1):
-        assert restored[i] == expected, (
-            f"point_index={i} was not restored to its exact pre-upgrade value"
-        )
+# ---------------------------------------------------------------------------
+# upgrade(): the reversal-record log
+# ---------------------------------------------------------------------------
 
 
-def test_downgrade_does_not_touch_never_converted_series(harness) -> None:
-    """The whole reason downgrade() cannot just re-derive its targets from
-    the shape of the post-upgrade data: the two anchor≈0/360 series are, by
-    construction, structurally identical to a converted series after
-    upgrade -- their stored value already agrees with geometry. A downgrade
-    that subtracted start_value from every such series would destroy them.
-    """
-    ids = _upgraded(harness)
-    with harness.engine.connect() as conn:
-        before = {
-            label: dict(_all_values(conn)[ids[label]])
-            for label in ("already_conforms_anchor0", "already_conforms_anchor360")
-        }
+def test_upgrade_logs_a_reversal_record_for_every_converted_series(harness) -> None:
+    """This log line is the only record of what upgrade() changed --
+    downgrade() cannot reconstruct it (see below) -- so its content is load-
+    bearing, not decoration: calculation_id, calculation_ref, coordinate_index,
+    start_value, and a literal UPDATE naming exactly this series.
 
-    harness.run("downgrade", _MIGRATION.parent)
-
-    with harness.engine.connect() as conn:
-        after = {
-            label: dict(_all_values(conn)[ids[label]])
-            for label in ("already_conforms_anchor0", "already_conforms_anchor360")
-        }
-    assert after == before, (
-        "downgrade() moved a series it never converted -- the ambiguity "
-        "guard between 'converted' and 'always conformed' has failed"
-    )
-
-
-def test_round_trip_upgrade_then_downgrade_is_byte_exact(harness) -> None:
-    """The hard requirement: capture the full table, upgrade, downgrade,
-    capture again, and the two snapshots must be identical -- not merely
-    close. ``_LEGACY_OFFSETS`` and ``_LEGACY_START`` are integer-valued
-    degrees, chosen so that ``(start + stored) - start`` recovers ``stored``
-    bit-for-bit in IEEE754 double arithmetic; see the migration report for
-    why that is not true of every possible float pair (general decimal
-    values, e.g. 6-decimal-place deposits, are not guaranteed to survive an
-    add-then-subtract round trip bit-exactly -- a real limitation of storing
-    the correction in the same double-precision column, not a defect in the
-    selection logic this test exercises).
+    Checked against the migration subprocess's actual stdout/stderr, not
+    ``caplog`` -- see
+    ``test_bad_geometry_series_is_left_untouched_and_logged`` for why
+    ``caplog`` cannot see a subprocess's logging at all.
     """
     harness.run("upgrade", _MIGRATION.parent)
     with harness.engine.begin() as conn:
-        _seed(conn)
+        ids = _seed(conn)
+        legacy_ref = _calculation_ref(conn, ids["legacy"])
+
+    completed = harness.run("upgrade", _MIGRATION.revision)
+    combined = completed.stdout + completed.stderr
+
+    lines = [
+        line
+        for line in combined.splitlines()
+        if "SCAN_AXIS_REVERSAL_RECORD" in line
+        and f"calculation_id={ids['legacy']} " in line
+    ]
+    assert lines, (
+        "no SCAN_AXIS_REVERSAL_RECORD line named the converted 'legacy' series "
+        f"in:\n{combined}"
+    )
+    message = lines[0]
+    assert f"calculation_ref={legacy_ref}" in message
+    assert "coordinate_index=1" in message
+    assert f"start_value={_LEGACY_START!r}" in message
+    assert "UPDATE calc_scan_point_coordinate_value" in message
+    assert f"WHERE calculation_id = {ids['legacy']} AND coordinate_index = 1" in message
+
+    # A series that was skipped, not converted, gets no reversal record --
+    # there is nothing to reverse.
+    assert not any(
+        "SCAN_AXIS_REVERSAL_RECORD" in line
+        and f"calculation_id={ids['already_conforms_anchor0']} " in line
+        for line in combined.splitlines()
+    )
+
+
+# ---------------------------------------------------------------------------
+# downgrade(): refuses, always
+# ---------------------------------------------------------------------------
+
+
+def test_downgrade_performs_no_writes(harness) -> None:
+    """The blocking requirement, checked directly: after upgrade(), calling
+    downgrade() must not change a single row -- not the converted series,
+    not the untouched ones, not the already-conforming ones."""
+    ids = _upgraded(harness)
+    with harness.engine.connect() as conn:
         before = _full_row_set(conn)
 
-    harness.run("upgrade", _MIGRATION.revision)
     harness.run("downgrade", _MIGRATION.parent)
 
     with harness.engine.connect() as conn:
         after = _full_row_set(conn)
+    assert after == before, "downgrade() wrote to calc_scan_point_coordinate_value"
 
-    assert after == before, "upgrade() followed by downgrade() did not restore the exact row set"
+    # In particular, the specific population the old margin-based guard
+    # would have destroyed: a correct deposit at an ordinary anchor.
+    with harness.engine.connect() as conn:
+        values = _all_values(conn)
+    for i, expected in enumerate(_LEGACY_TRUE, start=1):
+        assert values[ids["correct_ordinary_anchor"]][i] == expected, (
+            "downgrade() moved a correctly-deposited series at an ordinary "
+            "anchor -- exactly the corruption the blocking review finding "
+            "was about"
+        )
+    # And the series named in the review as one the old guard's docstring
+    # claimed to protect but did not: unaffected, because nothing is written.
+    for i, expected in enumerate(_ANCHOR360_STORED, start=1):
+        assert values[ids["already_conforms_anchor360"]][i] == expected
+
+
+def test_downgrade_logs_the_refusal_and_how_to_reverse_by_hand(harness) -> None:
+    _upgraded(harness)
+    completed = harness.run("downgrade", _MIGRATION.parent)
+    assert completed.returncode == 0, "downgrade() must complete, not raise"
+
+    combined = completed.stdout + completed.stderr
+    assert "cannot be reversed automatically" in combined
+    assert "SCAN_AXIS_REVERSAL_RECORD" in combined
+    assert "makes no changes" in combined
+
+
+# ---------------------------------------------------------------------------
+# Structural invariants
+# ---------------------------------------------------------------------------
 
 
 def test_the_revision_touches_no_schema() -> None:
@@ -790,3 +1147,15 @@ def test_the_revision_does_not_import_the_conformance_check() -> None:
         "must carry its own logic, not reach into application code that "
         "moves independently of it"
     )
+
+
+def test_downgrade_does_no_reads_or_writes_at_the_sql_level() -> None:
+    """Structural check on the source: ``downgrade()`` must not contain a
+    ``bind.execute`` call at all -- not just "happens to write nothing" for
+    today's fixtures, but incapable of it by construction."""
+    source = _REVISION_FILE.read_text()
+    match = re.search(r"\ndef downgrade\(\)[^\n]*:\n((?:[ \t].*\n|\n)*)", source)
+    assert match, "could not locate downgrade() in the revision source"
+    body = match.group(1)
+    assert "bind.execute" not in body
+    assert "op.get_bind" not in body

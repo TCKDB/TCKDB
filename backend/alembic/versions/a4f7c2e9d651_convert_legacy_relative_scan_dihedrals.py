@@ -12,13 +12,20 @@ correction ADR 0020 authorises and describes exactly:
 
     ``coordinate_value := start_value + coordinate_value``
 
--- exact and invertible, because ``start_value`` is retained rather than
-consumed. ADR 0020's own three-part argument for why this is permissible at
-all is measured, not assumed here: every affected row is
-``record_review.status = 'not_reviewed'`` at ``calc_quality.raw`` (see "Why
-this does not use the accepted-science repair ledger" below), and it "refuses
-to guess" -- the conversion is applied to a series only when its geometry
-*proves* the conversion is right, point by point.
+-- an operation that keeps ``start_value`` rather than consuming it, so a
+converted row *can* be reversed once an operator knows which rows changed.
+That is weaker than "exact and invertible", the phrase ADR 0020 used before
+its 2026-08-31 amendment: IEEE754 double-precision arithmetic does not
+guarantee the naive round trip is bit-exact (see the amendment for the
+measurement), and retaining ``start_value`` does not let the *database* work
+out on its own which rows to reverse -- only a human who already knows can do
+that. See "downgrade() is one-way, by design" below for why this migration's
+``downgrade()`` performs no writes. ADR 0020's own three-part argument for why
+the correction is permissible at all is measured, not assumed here: every
+affected row is ``record_review.status = 'not_reviewed'`` at ``calc_quality.raw``
+(see "Why this does not use the accepted-science repair ledger" below), and it
+"refuses to guess" -- the conversion is applied to a series only when its
+geometry *proves* the conversion is right, point by point.
 
 What "proof" means, and why it is duplicated here rather than imported
 ------------------------------------------------------------------------
@@ -48,8 +55,14 @@ The rule, per series
 A coordinate series (``calculation_id``, ``coordinate_index``) is a
 **candidate** only when:
 
-* ``coordinate_kind = 'dihedral'`` and the effective unit is ``'degree'``
-  (the point's own ``value_unit`` when set, else the coordinate's);
+* ``coordinate_kind = 'dihedral'`` and the coordinate's own ``value_unit`` is
+  ``'degree'`` -- this is what makes the series eligible at all; a ``NULL``
+  or non-degree coordinate-level unit excludes it, even if every point
+  happens to declare ``'degree'`` itself, and no point's own ``value_unit``
+  can rescue it. A point's ``value_unit``, when set, is checked separately
+  and can only *disqualify* a series (declaring something other than
+  ``'degree'`` on any single point), never rescue one whose coordinate-level
+  unit is not ``'degree'``;
 * ``start_value IS NOT NULL``;
 * every one of its scan points has a coordinate value for this coordinate
   index, a non-null ``geometry_id``, and that geometry has all four atoms of
@@ -104,44 +117,73 @@ approved one of these calculations, ``tckdb_raise_if_accepted`` refuses the
 this revision runs under does not hold there, and failing loudly is the
 right outcome, not a gap to route around.
 
-The downgrade, and why it needs no ledger either
---------------------------------------------------
-``downgrade()`` reverses with ``coordinate_value := coordinate_value -
-start_value``, under the same per-series geometric guard -- but it cannot
-simply re-run the upgrade's selection logic, because after a successful
-conversion a converted series' stored value *itself* now agrees with its own
-geometry (that agreement is what conversion means), which is
-indistinguishable on its face from one of the three series that already
-conformed and were never touched. Naively reversing every series whose
-stored value currently agrees with geometry would erase those three.
+downgrade() is one-way, by design
+------------------------------------
+An earlier draft of this revision made ``downgrade()`` reverse the same way
+``upgrade()`` converts: re-derive the answer from geometry, on the theory
+that a series whose *current* value agrees with geometry but whose value
+*minus* ``start_value`` would not is a converted series, and a series where
+both agree is one that was always fine and must be left alone. That theory
+has a real margin, and adversarial review measured it directly: the
+distinguishing test's residual is ``2 * (360 - start_value)`` for a series
+anchored near a full turn, so the guard's true tolerance is half the
+stated one. On the real corpus, ``calc_z63ecgljjdt2dvkqkjadmxkxou`` at
+``start_value = 359.9994`` sits 6e-4 degrees outside that halved margin --
+the guard misses it, and a downgrade seeded with that series' real
+relative-sweep values moves all of its points by ``-359.9994``, corrupting
+exactly the series the module docstring claimed it protected.
 
-No new table is introduced to disambiguate (a data migration adds no schema),
-so the downgrade re-derives the answer instead of recording it: for a
-series whose current value agrees with geometry, it additionally checks
-whether *subtracting* ``start_value`` would **also** agree with geometry. For
-a genuinely converted series this is false -- subtracting again does not
-recover a value that matches geometry, it produces one off by
-``start_value`` itself, which is not near zero for a real conversion.  For a
-never-converted, already-conforming series (the three above, whose
-``start_value`` is within a turn of ``0``/``360``), subtracting is
-periodically almost a no-op and the candidate value matches geometry too --
-which is exactly the signal to leave it alone. So: current value conforms,
-and subtracting would *stop* it conforming -> reverse. Current value
-conforms, and subtracting would *still* conform -> ambiguous with the
-never-touched case, and left untouched, logged. Current value does not
-conform at all -> nothing to reverse (a series the upgrade itself skipped,
-including one that failed its geometric proof), left untouched.
+That was the narrow failure. The wide one is structural and has no
+tolerance that fixes it: after a successful conversion, a row this
+migration changed and a row deposited **correctly** under ADR 0020 at an
+ordinary, non-trivial ``start_value`` are identical in every stored column.
+Both have their first point equal to ``start_value``. Both agree with their
+own geometry. There is no query -- geometric, statistical, or otherwise --
+that tells them apart, because the two states genuinely carry the same
+information; nothing distinguishing was ever recorded, and no schema change
+is available here to start recording it now. A margin-based guard cannot
+fix an underdetermined problem; it can only move where it is wrong.
 
-Re-running ``upgrade()`` on already-converted data is therefore a no-op for
-the same reason, from the other side: a converted series' stored value now
-agrees with its own geometry, so the "already conforms" branch fires and
+So ``downgrade()`` performs no writes at all. It logs, once, why the
+correction cannot be reversed automatically -- the argument above -- and
+how to reverse it by hand: using the reversal record ``upgrade()`` itself
+wrote (see "What ``upgrade()`` logs" below), an operator who knows which
+rows this migration actually touched can run the literal inverse ``UPDATE``
+themselves, scoped to exactly those rows. Nothing here is a query the
+database could run on its own without that external knowledge.
+
+This diverges from the rest of this migration chain's usual both-directions
+rule -- ``b8e3f1a7c250``, for instance, reverses by primary key from its own
+repair ledger. It diverges deliberately: a downgrade that silently corrupts
+correct data is worse than one that refuses, and this table has nothing to
+catch a wrong automatic reversal against. ADR 0020 measures zero scan
+calculation artifacts on the hosted instance, so there is no raw log to
+re-derive a corrupted series from afterward -- a bad automatic reversal here
+would look exactly like a correct one and be unrecoverable in exactly the
+way the original problem was.
+
+What ``upgrade()`` logs
+------------------------
+Every series ``upgrade()`` actually converts produces one log line naming,
+in a form an operator can act on directly: ``calculation_id``, the
+calculation's public ``calc_...`` ref, ``coordinate_index``, the
+``start_value`` applied, and a literal, ready-to-run ``UPDATE`` statement
+that undoes exactly that series and no other. That log line -- not a
+database table, since no schema change is permitted in this revision -- is
+the reversal record referenced above. It is written whether or not any
+series is ever manually reversed; the record is the point, not the act.
+
+Re-running ``upgrade()`` on already-converted data is a no-op for an
+unrelated reason: a converted series' stored value now agrees with its own
+geometry, so the "already conforms" branch fires on the second run and
 nothing is written a second time. ``tests/db/test_scan_dihedral_axis_correction_migration.py``
 asserts this directly rather than assuming it, per this repository's own
 house rule against a check that has never observed a failure.
 
-No schema changes. Both directions touch only
+No schema changes. ``upgrade()`` touches only
 ``calc_scan_point_coordinate_value.coordinate_value``, selected by primary
 key (``calculation_id``, ``point_index``, ``coordinate_index``).
+``downgrade()`` touches nothing.
 
 Revision ID: a4f7c2e9d651
 Revises: b8e3f1a7c250
@@ -376,14 +418,20 @@ def _evaluate_point_proof(
 # Database glue
 # ---------------------------------------------------------------------------
 
+#: ``calculation_ref`` (the calculation's public ``calc_...`` ref) is pulled
+#: in purely so a converted series' log line can name something an operator
+#: can act on without a database session open in front of them -- see "What
+#: upgrade() logs" in the module docstring.
 _ELIGIBLE_SERIES_SQL = """
-    SELECT calculation_id, coordinate_index,
-           atom1_index, atom2_index, atom3_index, atom4_index, start_value
-      FROM calc_scan_coordinate
-     WHERE coordinate_kind = 'dihedral'
-       AND value_unit = 'degree'
-       AND start_value IS NOT NULL
-     ORDER BY calculation_id, coordinate_index
+    SELECT csc.calculation_id, csc.coordinate_index,
+           csc.atom1_index, csc.atom2_index, csc.atom3_index, csc.atom4_index,
+           csc.start_value, calc.public_ref AS calculation_ref
+      FROM calc_scan_coordinate AS csc
+      JOIN calculation AS calc ON calc.id = csc.calculation_id
+     WHERE csc.coordinate_kind = 'dihedral'
+       AND csc.value_unit = 'degree'
+       AND csc.start_value IS NOT NULL
+     ORDER BY csc.calculation_id, csc.coordinate_index
 """
 
 _SCAN_POINTS_SQL = """
@@ -528,22 +576,27 @@ def _all_within_tolerance(proofs: list[tuple[dict, _PointProof]], value_of) -> b
     return True
 
 
-def _process(bind: Connection, *, direction: str) -> None:
+def _convert_legacy_series(bind: Connection) -> None:
+    """The whole of ``upgrade()``: find every candidate series, and convert,
+    skip, or refuse each one on its own geometric merits. See the module
+    docstring's "The rule, per series"."""
     series_rows = bind.execute(text(_ELIGIBLE_SERIES_SQL)).all()
     precision_cache: dict[int, int] = {}
-    n_converted = n_skipped_conforms = n_skipped_failed = n_skipped_ambiguous = 0
+    n_converted = n_skipped_conforms = n_skipped_failed = 0
 
     for row in series_rows:
         cid = row.calculation_id
+        cref = row.calculation_ref
         cidx = row.coordinate_index
         atom_indices = (row.atom1_index, row.atom2_index, row.atom3_index, row.atom4_index)
         start_value = row.start_value
 
         if any(a is None for a in atom_indices):
             logger.warning(
-                "scan series calculation_id=%s coordinate_index=%s skipped: dihedral "
-                "coordinate missing one or more atom indices",
+                "scan series calculation_id=%s calculation_ref=%s coordinate_index=%s "
+                "skipped: dihedral coordinate missing one or more atom indices",
                 cid,
+                cref,
                 cidx,
             )
             continue
@@ -561,35 +614,29 @@ def _process(bind: Connection, *, direction: str) -> None:
         )
         if proofs is None:
             logger.warning(
-                "scan series calculation_id=%s coordinate_index=%s left untouched: %s",
+                "scan series calculation_id=%s calculation_ref=%s coordinate_index=%s "
+                "left untouched: %s",
                 cid,
+                cref,
                 cidx,
                 reason,
             )
             n_skipped_failed += 1
             continue
 
-        if direction == "upgrade":
-            outcome = _apply_upgrade(bind, cid, cidx, start_value, proofs)
-        else:
-            outcome = _apply_downgrade(bind, cid, cidx, start_value, proofs)
-
+        outcome = _apply_upgrade(bind, cid, cref, cidx, start_value, proofs)
         if outcome == "converted":
             n_converted += 1
         elif outcome == "already_conforms":
             n_skipped_conforms += 1
-        elif outcome == "ambiguous":
-            n_skipped_ambiguous += 1
         else:
             n_skipped_failed += 1
 
     logger.info(
-        "scan dihedral axis %s complete: %d series converted, %d already "
-        "conforming (skipped), %d ambiguous (skipped), %d failed proof (skipped)",
-        direction,
+        "scan dihedral axis upgrade complete: %d series converted, %d already "
+        "conforming (skipped), %d failed proof (skipped)",
         n_converted,
         n_skipped_conforms,
-        n_skipped_ambiguous,
         n_skipped_failed,
     )
 
@@ -597,6 +644,7 @@ def _process(bind: Connection, *, direction: str) -> None:
 def _apply_upgrade(
     bind: Connection,
     calculation_id: int,
+    calculation_ref: str,
     coordinate_index: int,
     start_value: float,
     proofs: list[tuple[dict, _PointProof]],
@@ -604,10 +652,11 @@ def _apply_upgrade(
     already_conforms = _all_within_tolerance(proofs, lambda p: p["coordinate_value"])
     if already_conforms:
         logger.info(
-            "scan series calculation_id=%s coordinate_index=%s already conforms to ADR "
-            "0020 as stored (start_value=%s is within a turn of a multiple of 360); "
-            "skipped, not converted",
+            "scan series calculation_id=%s calculation_ref=%s coordinate_index=%s "
+            "already conforms to ADR 0020 as stored (start_value=%s is within a turn "
+            "of a multiple of 360); skipped, not converted",
             calculation_id,
+            calculation_ref,
             coordinate_index,
             start_value,
         )
@@ -618,10 +667,11 @@ def _apply_upgrade(
     )
     if not shifted_conforms:
         logger.warning(
-            "scan series calculation_id=%s coordinate_index=%s left untouched: geometry "
-            "does not confirm start_value + coordinate_value for every point (%d points "
-            "checked)",
+            "scan series calculation_id=%s calculation_ref=%s coordinate_index=%s "
+            "left untouched: geometry does not confirm start_value + coordinate_value "
+            "for every point (%d points checked)",
             calculation_id,
+            calculation_ref,
             coordinate_index,
             len(proofs),
         )
@@ -637,65 +687,34 @@ def _apply_upgrade(
         for point, _ in proofs
     ]
     bind.execute(text(_UPDATE_VALUE_SQL), updates)
-    logger.info(
-        "scan series calculation_id=%s coordinate_index=%s converted: coordinate_value "
-        ":= start_value(%s) + coordinate_value, for %d points",
+
+    # The reversal record. downgrade() cannot reconstruct this on its own
+    # (see "downgrade() is one-way, by design" in the module docstring) --
+    # this line, plus the literal UPDATE it hands the operator, is the only
+    # place this migration's change to these rows is recorded anywhere.
+    # Named with a stable, grep-able tag rather than folded into the prose
+    # line above, so an operator can pull every reversal out of a migration
+    # log with one grep regardless of what else that run printed.
+    logger.warning(
+        "SCAN_AXIS_REVERSAL_RECORD calculation_id=%s calculation_ref=%s "
+        "coordinate_index=%s start_value=%r points_converted=%d -- reverse by hand "
+        "with: UPDATE calc_scan_point_coordinate_value SET coordinate_value = "
+        "coordinate_value - (%r) WHERE calculation_id = %s AND coordinate_index = %s;",
         calculation_id,
+        calculation_ref,
         coordinate_index,
         start_value,
         len(updates),
-    )
-    return "converted"
-
-
-def _apply_downgrade(
-    bind: Connection,
-    calculation_id: int,
-    coordinate_index: int,
-    start_value: float,
-    proofs: list[tuple[dict, _PointProof]],
-) -> str:
-    conforms_now = _all_within_tolerance(proofs, lambda p: p["coordinate_value"])
-    if not conforms_now:
-        logger.info(
-            "scan series calculation_id=%s coordinate_index=%s does not currently "
-            "conform to ADR 0020 as stored; nothing for the downgrade to reverse, left "
-            "untouched",
-            calculation_id,
-            coordinate_index,
-        )
-        return "failed_proof"
-
-    candidate_conforms = _all_within_tolerance(
-        proofs, lambda p: p["coordinate_value"] - start_value
-    )
-    if candidate_conforms:
-        logger.info(
-            "scan series calculation_id=%s coordinate_index=%s: subtracting "
-            "start_value(%s) would also agree with its own geometry -- indistinguishable "
-            "from a series this migration never converted (ADR 0020's 'conforms "
-            "trivially' case, start_value within a turn of a multiple of 360). Left "
-            "untouched rather than guessed at",
-            calculation_id,
-            coordinate_index,
-            start_value,
-        )
-        return "ambiguous"
-
-    updates = [
-        {
-            "cid": calculation_id,
-            "pidx": point["point_index"],
-            "cidx": coordinate_index,
-            "value": point["coordinate_value"] - start_value,
-        }
-        for point, _ in proofs
-    ]
-    bind.execute(text(_UPDATE_VALUE_SQL), updates)
-    logger.info(
-        "scan series calculation_id=%s coordinate_index=%s reversed: coordinate_value "
-        ":= coordinate_value - start_value(%s), for %d points",
+        start_value,
         calculation_id,
+        coordinate_index,
+    )
+    logger.info(
+        "scan series calculation_id=%s calculation_ref=%s coordinate_index=%s "
+        "converted: coordinate_value := start_value(%s) + coordinate_value, for %d "
+        "points",
+        calculation_id,
+        calculation_ref,
         coordinate_index,
         start_value,
         len(updates),
@@ -704,8 +723,31 @@ def _apply_downgrade(
 
 
 def upgrade() -> None:
-    _process(op.get_bind(), direction="upgrade")
+    _convert_legacy_series(op.get_bind())
 
 
 def downgrade() -> None:
-    _process(op.get_bind(), direction="downgrade")
+    """Refuses. See "downgrade() is one-way, by design" in the module
+    docstring for the full argument; this is the short version the log
+    carries at the point someone actually runs ``alembic downgrade``.
+
+    No writes, and no reads either -- there is nothing this function could
+    look up that would change its answer. The decision not to act does not
+    depend on the state of the database, only on the fact that a converted
+    row and a correctly-deposited row are indistinguishable once converted,
+    which is true regardless of which rows happen to be which today.
+    """
+    logger.error(
+        "a4f7c2e9d651 cannot be reversed automatically and makes no changes. "
+        "After a successful conversion, a row this migration changed and a row "
+        "deposited correctly under ADR 0020 at an ordinary start_value are "
+        "identical in every stored column -- both have their first point equal to "
+        "start_value, and both agree with their own geometry -- so there is no "
+        "query that tells them apart, and an automatic reversal would either miss "
+        "real conversions or corrupt correct deposits. To reverse by hand: find "
+        "this revision's 'SCAN_AXIS_REVERSAL_RECORD' lines in the upgrade log (one "
+        "per converted series, naming calculation_id, calculation_ref, "
+        "coordinate_index, start_value, and the literal UPDATE to undo it), and run "
+        "only those UPDATEs, scoped to exactly the (calculation_id, "
+        "coordinate_index) pairs they name."
+    )
