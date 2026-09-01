@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Iterable
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
@@ -13,6 +13,7 @@ from tckdb_schemas.stationary_point import has_structural_flag
 
 from app.db.models.calculation import (
     Calculation,
+    CalculationArtifact,
     CalculationConstraint,
     CalculationDependency,
     CalculationFreqMode,
@@ -35,6 +36,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationDependencyRole,
     CalculationGeometryRole,
+    CalculationRecordKind,
     CalculationType,
     IRCDirection,
     ParameterSource,
@@ -565,6 +567,243 @@ def record_software_reconciliation(
         calculation.software_release = corrected_release
 
     return result
+
+
+# ---------------------------------------------------------------------------
+# Converged-optimisation energy guard (issue #292)
+# ---------------------------------------------------------------------------
+#
+# Convergence is a statement about successive energies -- an optimiser
+# declares it when the energy change between steps falls below a
+# threshold. A ``calc_opt_result`` row claiming ``converged = true`` while
+# reporting no usable energy anywhere is claiming a result was reached
+# without reporting it. 52 records on the deployed archive did exactly
+# this (single depositor, 2026-07-15..2026-08-02): ``converged = true``,
+# ``final_energy_hartree`` NULL, ``n_steps`` NULL, no artifact -- and every
+# one of them turned out to have a real ``sp`` calculation for the same
+# owner, so the energy was recoverable, just not from this row.
+#
+# The settled rule (decided by the DB owner) is a disjunction, checked in
+# this order:
+#
+#   (a) a single-point calculation exists for the same owner (species_entry
+#       or transition_state_entry -- whichever this opt actually has) --
+#       *any* level of theory qualifies, because "optimise cheap,
+#       single-point expensive" is the normal workflow and a same-level
+#       requirement would refuse good science. The energy is obtainable
+#       from that ``sp``; this ``opt`` need not carry one.
+#   (b) no such single point exists -- then this ``opt`` must carry both
+#       its own ``final_energy_hartree`` *and* an artifact, and the
+#       deposit is accepting that the optimisation's own level of theory
+#       stands as the single-point level. Both are required here (and
+#       *only* here -- artifacts stay optional everywhere else in this
+#       database): an unevidenced number is exactly the "bare metadata"
+#       shape that produced the 52 historical rows in the first place.
+#
+# This is a WARNING, never a refusal -- see the docstring on
+# :func:`collect_converged_opt_energy_warnings` for why.
+
+#: Emitted when a converged optimisation has no path to a usable energy:
+#: no single-point calculation on the same owner (any level of theory),
+#: and the optimisation itself is missing its own energy, its own
+#: artifact, or both.
+W_CONVERGED_OPT_NO_USABLE_ENERGY = "converged_opt_no_usable_energy"
+
+
+def _load_sp_owner_ids(
+    session: Session,
+    owner_ids_by_kind: dict[CalculationRecordKind, set[int]],
+) -> dict[CalculationRecordKind, set[int]]:
+    """Which owners (species_entry_id / transition_state_entry_id) carry a
+    real ``sp`` calculation, at any level of theory.
+
+    Same owner-matching shape as
+    :func:`app.services.scientific_read.species_calculations_search._load_sp_lot_pairs`
+    -- "match on whichever owner column this calculation actually has" --
+    but scoped one level coarser. That function keys on
+    ``conformer_observation_id`` because its derivation (offering an opt's
+    own energy as a single-point-equivalent) is scoped to one conformer
+    basin. This guard's question is simpler and is answered by the rule
+    text itself: "a single-point calculation is deposited for the same
+    owner", where owner is the FK a ``calculation`` row actually carries
+    (``species_entry_id`` xor ``transition_state_entry_id`` -- the
+    ``one_owner`` check constraint), not the finer conformer-basin anchor,
+    and level of theory is explicitly unconstrained. Matching on the
+    owner-appropriate column keeps the two owner kinds from leaking into
+    each other's answer -- a foreign ``sp`` on a different species_entry
+    or a different transition_state_entry must never satisfy this.
+
+    Quality and review status are not checked, matching
+    ``_load_sp_lot_pairs``: the question is "was an independent sp
+    actually run for this owner", not "was it a good one".
+    """
+    species_ids = owner_ids_by_kind.get(CalculationRecordKind.species) or set()
+    ts_ids = (
+        owner_ids_by_kind.get(CalculationRecordKind.transition_state) or set()
+    )
+    if not species_ids and not ts_ids:
+        return {}
+    owner_conditions = []
+    if species_ids:
+        owner_conditions.append(Calculation.species_entry_id.in_(species_ids))
+    if ts_ids:
+        owner_conditions.append(
+            Calculation.transition_state_entry_id.in_(ts_ids)
+        )
+    rows = session.execute(
+        select(
+            Calculation.species_entry_id,
+            Calculation.transition_state_entry_id,
+        )
+        .where(
+            Calculation.type == CalculationType.sp,
+            or_(*owner_conditions),
+        )
+        .distinct()
+    ).all()
+    out: dict[CalculationRecordKind, set[int]] = {
+        CalculationRecordKind.species: set(),
+        CalculationRecordKind.transition_state: set(),
+    }
+    for species_entry_id, ts_entry_id in rows:
+        if species_entry_id is not None:
+            out[CalculationRecordKind.species].add(species_entry_id)
+        if ts_entry_id is not None:
+            out[CalculationRecordKind.transition_state].add(ts_entry_id)
+    return out
+
+
+def _load_calc_ids_with_artifacts(
+    session: Session, calc_ids: list[int]
+) -> set[int]:
+    """Which of ``calc_ids`` have at least one ``calculation_artifact`` row."""
+    if not calc_ids:
+        return set()
+    rows = session.execute(
+        select(CalculationArtifact.calculation_id)
+        .where(CalculationArtifact.calculation_id.in_(calc_ids))
+        .distinct()
+    ).all()
+    return {row[0] for row in rows}
+
+
+def _converged_opt_energy_warning_message(
+    *, has_energy: bool, has_artifact: bool
+) -> str:
+    if not has_energy:
+        missing = (
+            "reports no final_energy_hartree of its own, and no artifact "
+            "backs one either"
+            if not has_artifact
+            else "reports no final_energy_hartree of its own"
+        )
+    else:
+        missing = "reports a final_energy_hartree but no artifact backs it"
+    return (
+        "This optimisation is recorded as converged, which is itself a "
+        "claim about the energy -- an optimiser declares convergence when "
+        "the energy change between steps falls below a threshold. No "
+        "single-point calculation was found for the same owner (any level "
+        "of theory would satisfy this; none was required at the "
+        f"optimisation's own level), and this optimisation {missing}. "
+        "Deposit a single-point calculation for this species or "
+        "transition state, or supply this optimisation's own "
+        "final_energy_hartree together with an artifact backing it."
+    )
+
+
+def collect_converged_opt_energy_warnings(
+    session: Session,
+    calculation_ids: Iterable[int],
+) -> list[UploadWarning]:
+    """Warn on any converged ``opt`` among ``calculation_ids`` that has no
+    usable energy -- see the module-level note above for the rule and the
+    #292 history.
+
+    Intended to run once a request's calculations (and, for bundle
+    uploads, its inline artifacts) are all flushed -- callers pass every
+    calculation id the request touched, ``opt`` or not; non-``opt`` and
+    non-converged rows are filtered out here. Evaluates against session
+    state, so a single-point calculation or artifact deposited earlier in
+    the *same* request already counts.
+
+    **Never refuses.** A blocking check on this shape broke real ARC
+    ingestion earlier (#315's first version, since reverted for the same
+    reason); the DB owner was explicit that a bare, unevidenced number is
+    "not the end all be all" and refusal here would be "too harsh". All
+    52 historical rows this guard was written for satisfy branch (a) --
+    this bites only a future deposit with neither an sp nor an evidenced
+    opt energy, which is the genuinely unusable case.
+
+    :param session: Active SQLAlchemy session.
+    :param calculation_ids: Every calculation id the current request
+        persisted (or reused); non-``opt`` ids are simply filtered out.
+    :returns: One :class:`UploadWarning` per converged, energy-less
+        ``opt`` calculation with no qualifying single point.
+    """
+    calc_ids = list(dict.fromkeys(calculation_ids))
+    if not calc_ids:
+        return []
+    rows = session.execute(
+        select(
+            Calculation.id,
+            Calculation.species_entry_id,
+            Calculation.transition_state_entry_id,
+            CalculationOptResult.final_energy_hartree,
+        )
+        .join(
+            CalculationOptResult,
+            CalculationOptResult.calculation_id == Calculation.id,
+        )
+        .where(
+            Calculation.id.in_(calc_ids),
+            Calculation.type == CalculationType.opt,
+            CalculationOptResult.converged.is_(True),
+        )
+    ).all()
+    if not rows:
+        return []
+
+    species_ids = {r.species_entry_id for r in rows if r.species_entry_id is not None}
+    ts_ids = {
+        r.transition_state_entry_id
+        for r in rows
+        if r.transition_state_entry_id is not None
+    }
+    sp_owner_ids = _load_sp_owner_ids(
+        session,
+        {
+            CalculationRecordKind.species: species_ids,
+            CalculationRecordKind.transition_state: ts_ids,
+        },
+    )
+    energy_calc_ids = [r.id for r in rows if r.final_energy_hartree is not None]
+    artifact_calc_ids = _load_calc_ids_with_artifacts(session, energy_calc_ids)
+
+    warnings: list[UploadWarning] = []
+    for r in rows:
+        if r.species_entry_id is not None:
+            record_kind = CalculationRecordKind.species
+            owner_id = r.species_entry_id
+        else:
+            record_kind = CalculationRecordKind.transition_state
+            owner_id = r.transition_state_entry_id
+        if owner_id in sp_owner_ids.get(record_kind, set()):
+            continue  # (a): a same-owner sp makes the energy obtainable.
+        has_energy = r.final_energy_hartree is not None
+        has_artifact = r.id in artifact_calc_ids
+        if has_energy and has_artifact:
+            continue  # (b): evidenced own energy stands in for an sp.
+        warnings.append(
+            UploadWarning(
+                field="opt_result",
+                code=W_CONVERGED_OPT_NO_USABLE_ENERGY,
+                message=_converged_opt_energy_warning_message(
+                    has_energy=has_energy, has_artifact=has_artifact
+                ),
+            )
+        )
+    return warnings
 
 
 # ---------------------------------------------------------------------------

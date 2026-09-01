@@ -65,6 +65,7 @@ from app.services.calculation_resolution import (
     assert_dependency_role_type_compatible,
     attach_calculation_input_geometries,
     attach_calculation_output_geometries,
+    collect_converged_opt_energy_warnings,
     resolve_and_persist_calculation_with_results,
     resolve_software_release_ref,
     resolve_workflow_tool_release_ref,
@@ -740,6 +741,18 @@ def persist_computed_species_upload(
         targets=review_targets,
         policy=review_policy,
         created_by=created_by,
+    )
+
+    # Evaluated last, once every calculation *and* every inline artifact
+    # in the bundle (step 6, above) is flushed — an opt and its sibling
+    # sp, or an opt and its own artifact, can arrive as two calcs in the
+    # same bundle and both must already be visible here (#292).
+    bundle_calc_ids: list[int] = []
+    for outcome in conformer_outcomes:
+        bundle_calc_ids.append(outcome.primary_calculation.id)
+        bundle_calc_ids.extend(c.id for c in outcome.additional_calculations)
+    upload_warnings.extend(
+        collect_converged_opt_energy_warnings(session, bundle_calc_ids)
     )
 
     return ComputedSpeciesUploadOutcome(

@@ -18,6 +18,7 @@ from app.schemas.workflows.reaction_upload import (
 from app.schemas.workflows.transition_state_upload import (
     TransitionStateUploadRequest,
 )
+from app.services.calculation_resolution import collect_converged_opt_energy_warnings
 from app.services.geometry_resolution import resolve_geometry_payload
 from app.services.reaction_atom_map import persist_reaction_atom_map
 from app.services.reaction_resolution import (
@@ -213,5 +214,16 @@ def persist_transition_state_upload(
     apply_review_policy(
         session, targets=targets, policy=review_policy, created_by=created_by
     )
+
+    # Evaluated last, once every calculation this request touched (primary
+    # opt + additional) is flushed, so an sp deposited later in
+    # ``additional_calculations`` already counts (#292).
+    if warnings is not None:
+        warnings.extend(
+            collect_converged_opt_energy_warnings(
+                session,
+                [primary_calc.id, *(c.id for c in additional_calcs)],
+            )
+        )
 
     return ts_entry

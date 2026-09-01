@@ -60,6 +60,7 @@ from app.services.calculation_resolution import (
     assert_dependency_role_type_compatible,
     attach_calculation_input_geometries,
     attach_calculation_output_geometries,
+    collect_converged_opt_energy_warnings,
     resolve_and_persist_calculation_with_results,
     resolve_software_release_ref,
     resolve_workflow_tool_release_ref,
@@ -1517,6 +1518,17 @@ def persist_computed_reaction_upload(
         targets=review_targets,
         policy=review_policy,
         created_by=created_by,
+    )
+
+    # Evaluated last, once every calculation and every inline artifact in
+    # the bundle is flushed, over every calculation the bundle touched
+    # (species-owned and TS-owned alike) — an opt and its sibling sp can
+    # arrive as two calcs in the same bundle and both must already be
+    # visible here (#292).
+    sp_energy_warnings.extend(
+        collect_converged_opt_energy_warnings(
+            session, calculation_key_to_id.values()
+        )
     )
 
     return {
