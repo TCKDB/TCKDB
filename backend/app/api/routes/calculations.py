@@ -678,7 +678,9 @@ def upload_calculation_artifacts(
     # filling it when absent and flagging a mismatch for review.
     warnings: list[UploadWarning] = []
     for art_in in request.artifacts:
-        try_extract_parameters_from_input_upload(session, calculation, art_in)
+        try_extract_parameters_from_input_upload(
+            session, calculation, art_in, warnings=warnings
+        )
         sp_warning = try_reconcile_sp_energy_from_output_upload(
             session, calculation, art_in
         )

@@ -1319,6 +1319,7 @@ Table calculation {
   parameters_extracted_at timestamp
   software_reconciliation_status SoftwareReconciliationStatus
   observed_software_banner text
+  declared_software_banner text
   created_at timestamp [not null, default: 'now']
   created_by bigint [ref: > app_user.id]
   public_ref string [not null]

@@ -628,7 +628,7 @@ def persist_computed_species_upload(
                 # same as the standalone artifacts route.
                 for art_in in calc_in.artifacts:
                     try_extract_parameters_from_input_upload(
-                        session, calc_row, art_in
+                        session, calc_row, art_in, warnings=upload_warnings
                     )
                     sp_warning = try_reconcile_sp_energy_from_output_upload(
                         session, calc_row, art_in

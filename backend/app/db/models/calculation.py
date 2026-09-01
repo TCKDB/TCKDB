@@ -161,6 +161,19 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
         nullable=True,
         doc="Raw software version banner observed by the ESS output parser, when available.",
     )
+    declared_software_banner: Mapped[Optional[str]] = mapped_column(
+        Text,
+        nullable=True,
+        doc=(
+            "Compact rendering of the originally-declared software_release "
+            "(name/version/revision/build), preserved here only when "
+            "software_reconciliation_status='mismatch' identified a "
+            "different program and software_release_id was repointed at "
+            "the parser-observed release. NULL otherwise -- the declared "
+            "release is still reachable via software_release_id whenever "
+            "nothing overrode it."
+        ),
+    )
 
     species_entry: Mapped[Optional["SpeciesEntry"]] = relationship(
         back_populates="calculations",

@@ -195,7 +195,9 @@ def _persist_calculation(
         # abort the bundle. Input artifacts yield parameter rows; output
         # logs reconcile the single-point energy against the tool's
         # reported value (fill/mismatch), the same as the artifacts route.
-        try_extract_parameters_from_input_upload(session, calculation, artifact_in)
+        try_extract_parameters_from_input_upload(
+            session, calculation, artifact_in, warnings=sp_energy_warnings
+        )
         sp_warning = try_reconcile_sp_energy_from_output_upload(
             session, calculation, artifact_in
         )
