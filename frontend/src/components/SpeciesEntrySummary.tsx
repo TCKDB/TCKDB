@@ -2,6 +2,7 @@ import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { words } from "../domain/provenanceFormat"
 import { Formula } from "./Formula"
+import { RecordFacetChips } from "./RecordFacetChips"
 import { CopyButton, RefsDisclosure } from "./RefsDisclosure"
 
 // `words` returns `null` for a missing/empty token (a case none of the
@@ -55,6 +56,12 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             <FactItem label="Review" value={displayToken(entry.review.status)} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
         </ul>
+        {/* Classification facets -- identity, then facets, then provenance
+            (the shared record-page header order; see the design brief).
+            `RecordFacetChips` reads the four raw axes directly rather than
+            the collapsed `species_entry_label` discriminator string --
+            see `domain/recordFacets.ts` for the bug this replaces. */}
+        <RecordFacetChips entry={entry} />
         {/* Collapsed by default (see `RefsDisclosure`) -- nothing else on
             this page needs to distinguish two species entries at rest; the
             formula/SMILES/InChIKey above already does that job, so every

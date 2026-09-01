@@ -61,6 +61,13 @@ function Ledger({ group }: { group: ConformerGroup }) {
                     </div>
                     <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
                 </dl>
+                {/* Identity-first header, matching the shared record-page
+                    order (identity -> facets -> provenance). No facets tier
+                    follows: this endpoint's `species` context carries
+                    neither `species_entry_kind` nor `electronic_state_kind`
+                    to build one from (unlike the species entry surface),
+                    and no `submission_ref` provenance tier either -- both
+                    omitted rather than fabricated. */}
             </header>
             <section className="ledger-summary" aria-label="Basin evidence summary">
                 <Metric label="Deposited observations" value={summary.total} />

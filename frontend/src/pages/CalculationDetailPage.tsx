@@ -23,9 +23,11 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { EnergyDisplay } from "../components/EnergyDisplay"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
+import { RecordFacetChips } from "../components/RecordFacetChips"
 import { RecordStatus } from "../components/RecordStatus"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
@@ -103,6 +105,27 @@ const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_
 const roleLabel = (role: string) => DEPENDENCY_ROLE_LABELS[role] ?? role.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
+
+/**
+ * The one headline energy figure this page promotes into its header —
+ * see the design brief's "Promote the answer". Only `sp` (electronic
+ * energy) and `opt` (final energy) calculations have a single number
+ * that answers "what did this calculation compute" — `freq`/`scan`/
+ * `irc`/`path_search` results are multi-valued or process-shaped and get
+ * no headline here, never a guessed stand-in.
+ *
+ * Reads `results.kind` (never `type`, see `ResultsSection`'s own
+ * comment) so the headline and the "Result" section below always agree
+ * about which calculation's result they are describing — this function
+ * takes the SAME `calculation.results` object the page already fetched,
+ * never a second, independently-selected record.
+ */
+function headlineEnergy(results: CalculationRecord["results"]): { label: string; valueHartree: number | null } | null {
+    if (!results) return null
+    if (results.kind === "sp") return { label: "Electronic energy", valueHartree: results.sp?.electronic_energy_hartree ?? null }
+    if (results.kind === "opt") return { label: "Final energy", valueHartree: results.opt?.final_energy_hartree ?? null }
+    return null
+}
 
 // Three states an include-gated eager section can be in, kept distinct per
 // the house rule (see ConformerObservationPage.tsx): absence describes the
@@ -199,6 +222,15 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 
     const ownerSpecies = owner.kind === "species_entry" ? (owner.species_entry ?? null) : null
     const ownerTS = owner.kind === "transition_state_entry" ? (owner.transition_state_entry ?? null) : null
+    const headline = headlineEnergy(calculation.results)
+    // `provenance.submission_ref` is `string | null | undefined` on the
+    // wire: `undefined` means the KEY ITSELF was omitted (an anonymous
+    // caller — see `CalculationEvidenceProvenanceSummary`'s own
+    // docstring), `null` means an authenticated caller was told there is
+    // no linked submission, and a string is the ref. Only the first case
+    // renders no row at all; `null` still renders as "not recorded" so
+    // an authenticated reader can tell "checked, none" from "not told".
+    const submissionRefKeyPresent = "submission_ref" in provenance
 
     return (
         <section className="calc-page">
@@ -228,6 +260,34 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     and per-point data — are opt-in on this endpoint; this page loads a few small ones up
                     front and leaves the rest behind disclosures you can open.
                 </p>
+
+                {/* The answer this page exists to give, promoted to the
+                    largest weight on the page — previously it sat inside the
+                    "Result" section below at the same visual weight as the
+                    dependency graph and review history. Only sp/opt
+                    calculations have a single headline energy; every other
+                    calculation type renders nothing here rather than a
+                    fabricated or misleading figure. */}
+                {headline && (
+                    <div className="calc-headline-energy">
+                        <EnergyDisplay valueHartree={headline.valueHartree} label={headline.label} size="headline" />
+                    </div>
+                )}
+
+                {/* Shared header order: identity, then classification
+                    facets, then provenance — see `RecordIdentityHeader`'s
+                    own docstring. `OwnerCard` below is this page's identity
+                    tier (kept as its own component rather than folded into
+                    `RecordIdentityHeader` — it renders owner LINKS this
+                    endpoint has that the generic header does not model). */}
+                <OwnerCard ownerSpecies={ownerSpecies} ownerTS={ownerTS} />
+                {ownerSpecies && (
+                    <RecordFacetChips entry={{
+                        species_entry_kind: ownerSpecies.species_entry_kind,
+                        electronic_state_kind: ownerSpecies.electronic_state_kind,
+                    }} />
+                )}
+
                 <dl className="record-context">
                     <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
                     <div><dt>Quality</dt><dd>{core.quality}</dd></div>
@@ -251,7 +311,13 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         <dd>{toolReleaseLabel(workflow) ?? "not recorded"}</dd>
                     </div>
                     <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "not recorded"}</dd></div>
-                    <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "not recorded"}</dd></div>
+                    {/* No row at all when the key itself is absent (anonymous
+                        caller) — see `submissionRefKeyPresent` above. An
+                        anonymous reader is never told "not recorded" for a
+                        question they were never allowed to ask. */}
+                    {submissionRefKeyPresent && (
+                        <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "not recorded"}</dd></div>
+                    )}
                     <div>
                         <dt>Literature</dt>
                         <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "not recorded"}</dd>
@@ -259,8 +325,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "not recorded"}</dd></div>
                 </dl>
             </header>
-
-            <OwnerCard ownerSpecies={ownerSpecies} ownerTS={ownerTS} />
 
             <section className="ledger-summary" aria-label="Calculation evidence summary">
                 <Metric label="Input geometries" value={inputGeometries.length} />
@@ -289,13 +353,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 contradicted={resultsAvailability === "empty" && available.has_results}
             />
 
-            <DependenciesSection
-                dependencies={dependencies}
-                ownRef={core.calculation_ref}
-                availability={dependenciesAvailability}
-                contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
-            />
-
             <GeometriesSection
                 input={inputGeometries}
                 output={outputGeometries}
@@ -305,13 +362,25 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 outputContradicted={outputGeometriesAvailability === "empty" && available.has_output_geometries}
             />
 
+            <OnDemandSections calculation={calculation} available={available} />
+
+            {/* Demoted below every evidence section (results, geometries,
+                the on-demand disclosures): the graph and the review log are
+                provenance ABOUT this record, not the scientific evidence
+                itself, and the owner's complaint was that they were
+                competing with the evidence for the same visual weight. */}
+            <DependenciesSection
+                dependencies={dependencies}
+                ownRef={core.calculation_ref}
+                availability={dependenciesAvailability}
+                contradicted={dependenciesAvailability === "empty" && available.has_dependencies}
+            />
+
             <ReviewHistorySection
                 entries={reviewHistory}
                 currentStatus={core.review.status}
                 availability={reviewAvailability}
             />
-
-            <OnDemandSections calculation={calculation} available={available} />
             </PageShell>
         </section>
     )
@@ -325,8 +394,8 @@ function OwnerCard({
 }) {
     if (ownerSpecies) {
         return (
-            <section className="owner-card" aria-labelledby="owner-heading">
-                <SectionHeading id="owner-heading">Owner</SectionHeading>
+            <section className="owner-card" aria-labelledby="owner-heading-species-entry">
+                <SectionHeading id="owner-heading-species-entry">Owner</SectionHeading>
                 <dl>
                     <div>
                         <dt>Species</dt>
@@ -357,8 +426,8 @@ function OwnerCard({
     }
     if (ownerTS) {
         return (
-            <section className="owner-card" aria-labelledby="owner-heading">
-                <SectionHeading id="owner-heading">Owner</SectionHeading>
+            <section className="owner-card" aria-labelledby="owner-heading-transition-state-entry">
+                <SectionHeading id="owner-heading-transition-state-entry">Owner</SectionHeading>
                 <p className="section-note">
                     This calculation belongs to a transition-state entry. That record does not yet have a
                     dedicated page on this archive projection, so its reference is shown without a link.

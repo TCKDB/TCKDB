@@ -80,6 +80,85 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
     }
 }
 
+describe("GeometryDetailPage identity (#321)", () => {
+    // Deliberately a DIFFERENT formula from what the CH4 fixture's atom
+    // rows would Hill-derive ("CH4") -- a fixture where the two agree
+    // cannot tell "reads the served identity" apart from "still computes
+    // it client-side and got lucky".
+    const speciesIdentity = {
+        kind: "species_entry",
+        species_entry: {
+            species_ref: "spc_demo", species_entry_ref: "spe_demo", formula: "XeF6",
+            canonical_smiles: "F[Xe](F)(F)(F)(F)F", inchi_key: "AYEKOFBPNLCAJY-UHFFFAOYSA-N",
+            charge: 0, multiplicity: 1,
+        },
+        transition_state_entry: null,
+        ambiguous_owners: [],
+    }
+
+    it("renders the SERVED formula, not the client-derived Hill formula, when identity is present", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ identity: speciesIdentity }))))
+        page()
+        expect(await screen.findByRole("heading", { name: "XeF6 geometry" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "CH4 geometry" })).not.toBeInTheDocument()
+        expect(screen.queryByText(/computed on this page from atom symbols/)).not.toBeInTheDocument()
+    })
+
+    it("falls back to the client-derived Hill formula, labelled as such, when identity is absent", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ identity: null }))))
+        page()
+        expect(await screen.findByRole("heading", { name: "CH4 geometry" })).toBeVisible()
+        expect(screen.getByText(/computed on this page from atom symbols/)).toBeVisible()
+    })
+
+    it("renders the ambiguous case distinctly -- falls back to the Hill formula (never guesses an owner) and shows the owner list", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
+            identity: {
+                kind: null, species_entry: null, transition_state_entry: null,
+                ambiguous_owners: [{ kind: "species_entry", ref: "spe_a" }, { kind: "species_entry", ref: "spe_b" }],
+            },
+        }))))
+        page()
+        expect(await screen.findByRole("heading", { name: "CH4 geometry" })).toBeVisible()
+        expect(screen.getByTestId("record-identity-ambiguous")).toHaveTextContent(/more than one distinct owner/)
+        expect(screen.getByText("spe_a")).toBeVisible()
+        expect(screen.getByText("spe_b")).toBeVisible()
+    })
+
+    it("a transition-state owner never renders an empty SMILES field", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
+            identity: {
+                kind: "transition_state_entry", species_entry: null,
+                transition_state_entry: {
+                    transition_state_ref: "ts_demo", transition_state_entry_ref: "tse_demo",
+                    formula: null, unmapped_smiles: null, charge: 0, multiplicity: 2,
+                },
+                ambiguous_owners: [],
+            },
+        }))))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
+        expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
+        expect(screen.getByText("Unmapped SMILES")).toBeVisible()
+    })
+
+    it("renders no submission row when the key is absent (anonymous caller)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        expect(screen.queryByText("Submission")).not.toBeInTheDocument()
+    })
+
+    it("renders the submission ref when the key is present (authenticated caller)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({ submission_ref: "sub_demo" }))))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        expect(screen.getByText("Submission")).toBeVisible()
+        expect(screen.getByText("sub_demo")).toBeVisible()
+    })
+})
+
 describe("GeometryDetailPage", () => {
     it("requests include=provenance and renders a Hill-order formula heading", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {

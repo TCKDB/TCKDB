@@ -126,6 +126,20 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                     </div>
                     <div><dt>Species ref</dt><dd>{species.species_ref}</dd></div>
                     <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
+                    {/* InChIKey and charge/multiplicity complete this page's
+                        identity tier -- served here (unlike the conformer
+                        basin surface, which does not carry them), so shown
+                        rather than left off for consistency with a
+                        thinner sibling endpoint. No classification-facet
+                        tier follows: this endpoint's `species` context has
+                        no `species_entry_kind`/`electronic_state_kind` to
+                        build one from, and no `submission_ref` provenance
+                        tier either -- both omitted rather than fabricated. */}
+                    {species.inchi_key && <div><dt>InChIKey</dt><dd>{species.inchi_key}</dd></div>}
+                    {(species.charge !== null && species.charge !== undefined
+                        && species.multiplicity !== null && species.multiplicity !== undefined) && (
+                        <div><dt>Charge / multiplicity</dt><dd>{species.charge} / {species.multiplicity}</dd></div>
+                    )}
                 </dl>
                 {core.note && <p className="observation-note">{core.note}</p>}
             </header>
