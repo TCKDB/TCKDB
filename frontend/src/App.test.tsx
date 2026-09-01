@@ -89,7 +89,10 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
-        expect(screen.getByRole("link", { name: "minimum, ground state" }))
+        // The lone entry's group heading already says "ground electronic
+        // state" -- the card itself drops the redundant bare state phrase
+        // (see `domain/recordFacets.test.ts`'s `includeState` tests).
+        expect(screen.getByRole("link", { name: "minimum" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
     })
 

@@ -76,10 +76,6 @@
     padding-bottom: .8rem;
 }
 
-.entry-index-heading .eyebrow {
-    margin-bottom: .65rem;
-}
-
 .entry-index-heading h2 {
     margin: 0;
     font-size: clamp(2rem, 4vw, 3rem);
@@ -178,14 +174,6 @@
     gap: .8rem;
 }
 
-.entry-card-type {
-    margin: 0 0 .65rem;
-    color: var(--muted);
-    font: .66rem var(--mono);
-    letter-spacing: .08em;
-    text-transform: uppercase;
-}
-
 .entry-card h4 {
     margin: 0;
     font-size: 1.55rem;
@@ -204,19 +192,19 @@
     text-decoration-color: currentColor;
 }
 
-/* The heading link now wraps `RecordFacetChips`' `<ul>` of pills rather
-   than plain text -- an underline drawn under a row of chips (each
-   already outlined as its own pill) reads as a stray line, not as link
-   affordance, so this link relies on the chips' own hover/focus styling
-   instead of the shared underline `.entry-card-action` uses. */
+/* The heading link is plain text now (no more pill row inside it -- see
+   `SpeciesOverviewPage.tsx`'s `EntryCard`), so it gets the same underline
+   affordance every other link on this card uses. */
 .entry-card h4 a {
-    display: inline-block;
-    text-decoration: none;
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-underline);
+    text-underline-offset: .16em;
 }
 
-.entry-card h4 a:hover .record-facet-chip {
-    border-color: var(--accent-300);
+.entry-card h4 a:hover {
     color: var(--accent);
+    text-decoration-color: currentColor;
 }
 
 .entry-review {

@@ -2,10 +2,10 @@ import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../record-identity-header.css"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
 import type { RecordIdentity } from "../domain/recordIdentity"
 import { Formula } from "./Formula"
-import { RecordFacetChips } from "./RecordFacetChips"
 
 /**
  * The shared header block every record page (species entry, geometry,
@@ -37,7 +37,16 @@ export function RecordIdentityHeader({ identity, facets, submissionRef }: {
     return (
         <div className="record-identity-header">
             <IdentityTier identity={identity} />
-            {facets && <RecordFacetChips entry={facets} />}
+            {/* No pill boxes: a plain, readable phrase built from the same
+                raw axes a pill row used to read one-per-pill -- see
+                `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report
+                this pattern fixes elsewhere. No caller of this header
+                currently supplies `facets` at all (the geometry/conformer
+                surfaces this header serves today don't carry these axes on
+                the wire), so this line has no live duplication to worry
+                about yet -- it exists so a future caller that does supply
+                `facets` starts from the readable shape, not the pill one. */}
+            {facets && <p className="record-identity-facets">{facetChips(facets).join(" · ")}</p>}
             {submissionRef !== undefined && (
                 <p className="record-identity-provenance">
                     <span className="record-identity-provenance-label">Submission</span>

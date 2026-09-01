@@ -752,13 +752,16 @@ describe("CalculationDetailPage", () => {
         expect(document.getElementById("owner-heading-species-entry")).toBeNull()
     })
 
-    it("renders classification facet chips for the owner species entry, in the shared identity->facets->provenance order", async () => {
+    it("renders the owner's classification (kind, state) as labelled rows on the owner card -- no pill row duplicating them", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await screen.findByRole("heading", { name: "Frequency calculation" })
-        const chips = document.querySelector(".record-facet-chips") as HTMLElement
-        expect(within(chips).getByText("minimum")).toBeVisible()
-        expect(within(chips).getByText("ground state")).toBeVisible()
+        const owner = screen.getByRole("heading", { name: "Owner" }).closest("section") as HTMLElement
+        expect(ddFor(owner, "Entry kind")).toBe("minimum")
+        expect(ddFor(owner, "Electronic state")).toBe("ground")
+        // The bug this replaces: a `.record-facet-chips` pill row repeating
+        // the same two facts a second time, right below this same card.
+        expect(document.querySelector(".record-facet-chips")).not.toBeInTheDocument()
     })
 
     it("renders no submission row at all when the key is absent (anonymous caller)", async () => {

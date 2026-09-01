@@ -4,7 +4,6 @@ import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
 import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
-import { RecordFacetChips } from "../components/RecordFacetChips"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
@@ -98,8 +97,15 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
             </header>
             <section className="entry-index" aria-labelledby="electronic-state-entries">
                 <div className="entry-index-heading">
+                    {/* Was two headings saying the same thing, stacked (an
+                        "eyebrow" reading "State-specific records" directly
+                        above an <h2> reading "Electronic-state entries") --
+                        the owner quoted this exact nesting as noise. One
+                        heading carries it; the eyebrow pattern elsewhere on
+                        this page pairs a CATEGORY with a more specific
+                        heading ("Species record · chemical identity" above
+                        "CH3"), which this pairing never was. */}
                     <div>
-                        <p className="eyebrow">State-specific records</p>
                         <h2 id="electronic-state-entries">Electronic-state entries</h2>
                     </div>
                     <p>{species.entries.length} {species.entries.length === 1 ? "entry" : "entries"}</p>
@@ -149,7 +155,9 @@ function EntryStateGroup({
                     help distinguish records with the same state classification.
                 </p>
                 <ul className="entry-rows">
-                    {entries.map((entry) => <EntryCard entry={entry} key={entry.species_entry_ref} />)}
+                    {entries.map((entry) => (
+                        <EntryCard entry={entry} groupHeadingId={groupId} key={entry.species_entry_ref} />
+                    ))}
                 </ul>
             </details>
         </li>
@@ -160,7 +168,34 @@ function Identity({ label, value }: { label: string; value: string }) {
     return <div><dt>{label}</dt><dd>{value}</dd></div>
 }
 
-function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
+/**
+ * No pill boxes -- the heading used to render this entry's classification
+ * as a row of `RecordFacetChips` pills, ALONGSIDE a separate `entry-facts`
+ * `<dl>` that repeated the same State/Stereochemistry facts as labelled
+ * rows right below it. The owner's complaint: two representations of the
+ * same info stacked on one card. This card now states each fact exactly
+ * once -- the heading is plain text built from the same raw axes the
+ * pills used to read (`domain/recordFacets.ts`), so the "bare R" bug this
+ * replaced (a heading collapsing to the single character "R" for an entry
+ * distinguished only by stereochemistry) stays fixed: the heading is never
+ * `species_entry_label` (a compact SERVER discriminator, not free text --
+ * see that module's docstring) and always includes kind + state.
+ *
+ * `groupHeadingId` points at the enclosing `EntryStateGroup`'s own `<h3>`
+ * ("ground electronic state", "excited electronic state") -- since every
+ * card here is always rendered inside exactly one such group, the state
+ * portion of the heading phrase is redundant by construction and is
+ * dropped (`facetChips(entry, { includeState: false })`), while an
+ * `aria-describedby` back to that heading keeps the state programmatically
+ * associated with the card for a reader who lands on it directly (a
+ * fragment link, assistive-tech heading navigation) without having
+ * visually scrolled past the group heading first. `groupHeadingId` is
+ * optional and the state-drop only happens when it is supplied, so a
+ * hypothetical future caller that renders this card OUTSIDE a state group
+ * gets the full, unabridged phrase automatically -- nothing here assumes
+ * grouping will always exist.
+ */
+function EntryCard({ entry, groupHeadingId }: { entry: ScientificSpeciesEntrySummary; groupHeadingId?: string }) {
     const available = [
         entry.availability.has_conformers && "conformers",
         entry.availability.has_thermo && "thermo",
@@ -168,34 +203,19 @@ function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
         entry.availability.has_transport && "transport",
     ].filter(Boolean)
 
-    // The heading used to resolve as one collapsed string
-    // (`species_entry_label ?? electronic_state_label ?? "kind · state"`)
-    // -- see `domain/recordFacets.ts` for why that fallback is the source
-    // of the "bare R" bug and why chips, built only from the raw axes,
-    // fix it structurally rather than by reordering the same fallback.
-    // The `aria-label` gives the link one clean accessible name built
-    // from the same chip text a sighted reader sees, rather than letting
-    // it default to the nested `<ul>`'s concatenated text content.
-    const chips = facetChips(entry)
+    const chips = facetChips(entry, { includeState: groupHeadingId === undefined ? true : false })
+    const heading = chips.join(" · ")
 
     return (
         <li>
-            <article className="entry-card">
+            <article aria-describedby={groupHeadingId} className="entry-card">
                 <div className="entry-card-heading">
-                    <div>
-                        <p className="entry-card-type">{token(entry.species_entry_kind)}</p>
-                        <h4>
-                            <Link aria-label={chips.join(", ")} to={`/species-entries/${entry.species_entry_ref}`}>
-                                <RecordFacetChips entry={entry} />
-                            </Link>
-                        </h4>
-                    </div>
+                    <h4>
+                        <Link to={`/species-entries/${entry.species_entry_ref}`}>{heading}</Link>
+                    </h4>
                     <span className="entry-review">{token(entry.review.status)}</span>
                 </div>
                 <dl className="entry-facts">
-                    <div><dt>State</dt><dd>{token(entry.electronic_state_kind)}</dd></div>
-                    {entry.stereo_label && <div><dt>Stereochemistry</dt><dd>{entry.stereo_label}</dd></div>}
-                    {entry.term_symbol && <div><dt>Term symbol</dt><dd>{entry.term_symbol}</dd></div>}
                     <div><dt>Calculations</dt><dd>{entry.availability.calculation_count}</dd></div>
                     <div>
                         <dt>Available data</dt>

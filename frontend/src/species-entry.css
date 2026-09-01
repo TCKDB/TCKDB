@@ -101,17 +101,6 @@
     color: var(--ink);
 }
 
-.state-chip {
-    padding: .3rem .6rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    color: var(--ink-2);
-    font: .68rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    white-space: nowrap;
-}
-
 /* SMILES + InChIKey — always visible chemistry facts, never behind the
    References disclosure ("INCHI with SMILES should always be shown"). Only
    the InChIKey is served on this record (no full InChI is stored anywhere

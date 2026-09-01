@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerGroupPage from "./ConformerGroupPage"
 
@@ -120,15 +120,17 @@ describe("ConformerGroupPage", () => {
     })
 
     // This page renders exactly 2 sections at runtime (observation-scoped
-    // evidence, geometry records) -- below the shared shell's 4-section
-    // threshold (`MIN_SECTIONS_FOR_TOC`, `components/TableOfContents.tsx`).
-    // Real fixture, real page -- not a count hand-picked to land under the
-    // threshold.
-    it("renders no table of contents -- this page has only 2 sections", async () => {
+    // evidence, geometry records) -- at the shared shell's list threshold
+    // (`MIN_SECTIONS_FOR_LIST`, `components/TableOfContents.tsx`), so the
+    // table of contents DOES show here: a list is worth showing once there
+    // is more than one place to jump to. Real fixture, real page -- not a
+    // count hand-picked to land at the threshold.
+    it("renders a table of contents with both of this page's sections -- 2 sections is at the list threshold", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
         await screen.findByRole("heading", { name: "conformer_1" })
-        expect(screen.queryByRole("navigation", { name: "Sections on this page" })).not.toBeInTheDocument()
+        const toc = screen.getByRole("navigation", { name: "Sections on this page" })
+        expect(within(toc).getAllByRole("link")).toHaveLength(2)
     })
 
     it("shows a specific not-found state", async () => {

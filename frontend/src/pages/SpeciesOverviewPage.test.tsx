@@ -97,12 +97,19 @@ describe("species overview", () => {
         expect(screen.getByRole("heading", { name: /ground electronic state.*1 entry/i })).toBeVisible()
         expect(screen.getByRole("heading", { name: /excited electronic state.*1 entry/i })).toBeVisible()
 
+        // Each card sits inside an `EntryStateGroup` whose own heading
+        // already says "ground electronic state"/"excited electronic
+        // state" -- the card itself no longer repeats the bare state text
+        // (that redundancy was the owner's own report; see
+        // `domain/recordFacets.test.ts`'s `includeState` tests). A card's
+        // heading still carries anything the group heading does NOT
+        // establish -- here, the excited entry's own term symbol "T1".
         const groundCard = await cardFor(entryRef)
-        expect(within(groundCard).getByRole("link", { name: "minimum, ground state" }))
+        expect(within(groundCard).getByRole("link", { name: "minimum" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
 
         const excitedCard = await cardFor(excitedEntryRef)
-        expect(within(excitedCard).getByRole("link", { name: "minimum, excited state · T1" }))
+        expect(within(excitedCard).getByRole("link", { name: "minimum · T1" }))
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
 
         // Scoped to `dd` -- the formula heading above ("CH3") now renders
@@ -124,9 +131,9 @@ describe("species overview", () => {
 
         expect(await screen.findByRole("heading", { name: /ground electronic state.*2 entries/i })).toBeVisible()
         // Both ground entries carry the same axes (same kind, same state,
-        // no stereo/isotope), so they render IDENTICAL chip text -- their
-        // stable refs, not their chips, are what tells them apart.
-        const groundLinks = screen.getAllByRole("link", { name: "minimum, ground state" })
+        // no stereo/isotope), so they render IDENTICAL heading text --
+        // their stable refs, not their headings, are what tells them apart.
+        const groundLinks = screen.getAllByRole("link", { name: "minimum" })
         expect(groundLinks).toHaveLength(2)
         expect(groundLinks[0]).toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(groundLinks[1]).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
@@ -164,14 +171,14 @@ describe("species overview", () => {
     })
 })
 
-describe("species overview: facet chips (the bare-'R' bug)", () => {
+describe("species overview: card heading (the bare-'R' bug, no pill boxes)", () => {
     // The record measured against the live archive: spc_n7c5snosejeow4z2vr4aivmv34
     // has one entry whose heading rendered as a bare "R" where every
     // sibling species on the archive shows "minimum · ground". Its
     // `species_entry_label` really is `"R"` on the wire -- see
     // `domain/recordFacets.ts` for why that is the server's OWN compact
-    // discriminator, not free text, and why chips must not read that field
-    // at all. This fixture reproduces the real shape rather than a
+    // discriminator, not free text, and why the heading must not read that
+    // field at all. This fixture reproduces the real shape rather than a
     // convenient stand-in.
     const rEnantiomerSpeciesRef = "spc_n7c5snosejeow4z2vr4aivmv34"
     const rEnantiomerEntryRef = "spe_n7c5rentry00000000000000000"
@@ -202,43 +209,53 @@ describe("species overview: facet chips (the bare-'R' bug)", () => {
         }
     }
 
-    /** The heading itself -- an `<h4>` wrapping the chip row -- scoped
-     *  separately from the whole card, which also carries an unrelated
-     *  eyebrow ("minimum") and a pre-existing, correctly-labelled
-     *  `<dt>Stereochemistry</dt><dd>R</dd>` fact row further down. That
-     *  fact row is not the bug (it already says what "R" means); only the
-     *  HEADING collapsing to a bare "R" is. */
     function headingOf(card: HTMLElement): HTMLElement {
         const heading = card.querySelector("h4")
         if (!heading) throw new Error("No <h4> heading found in entry card")
         return heading
     }
 
-    it("renders the R record as three chips, not a bare 'R' heading -- this is the bug", async () => {
+    it("renders the R record as a readable phrase, not a bare 'R' heading -- this is the bug", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
         window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
         render(<App />)
 
         const heading = headingOf(await cardFor(rEnantiomerEntryRef))
-        expect(within(heading).getByText("minimum")).toBeVisible()
-        expect(within(heading).getByText("ground state")).toBeVisible()
-        expect(within(heading).getByText("R enantiomer")).toBeVisible()
-        expect(within(heading).getAllByRole("listitem")).toHaveLength(3)
+        // The lone entry's own state group has 1 member, so the bare
+        // "ground state" phrase is dropped as redundant with the group
+        // heading -- but stereochemistry is NOT established by that group
+        // heading, so it survives into the card: "minimum · R enantiomer".
+        expect(heading).toHaveTextContent("minimum · R enantiomer")
         // The bug: the heading's own accessible name must never collapse
         // to a bare, unexplained "R".
-        expect(heading).toHaveAccessibleName("minimum, ground state, R enantiomer")
+        expect(heading).not.toHaveTextContent(/^R$/)
+        expect(heading).toHaveAccessibleName("minimum · R enantiomer")
     })
 
-    it("renders no chip for an axis that is unset -- no placeholder, no 'none' pill", async () => {
-        // The R-entry sets one optional axis (stereochemistry) and leaves
-        // the isotopologue axis unset -- both are asserted here.
+    it("renders no pill boxes at all -- every fact is plain text", async () => {
         server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
         window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
         render(<App />)
 
-        const heading = headingOf(await cardFor(rEnantiomerEntryRef))
-        expect(within(heading).queryByText(/isotopologue/i)).not.toBeInTheDocument()
-        // Exactly 3 chips: kind, state, stereo -- not a 4th empty/placeholder one.
-        expect(within(heading).getAllByRole("listitem")).toHaveLength(3)
+        await cardFor(rEnantiomerEntryRef)
+        expect(document.querySelector(".record-facet-chips")).not.toBeInTheDocument()
+        expect(document.querySelector(".record-facet-chip")).not.toBeInTheDocument()
+    })
+
+    it("states the electronic state exactly once within its own state group -- the group heading, not the card, carries it", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
+        window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
+        render(<App />)
+
+        const card = await cardFor(rEnantiomerEntryRef)
+        const group = card.closest("li.entry-state-group") as HTMLElement
+        // Scoped to the group itself (not the whole page, which also
+        // carries an unrelated static intro paragraph that happens to
+        // mention "ground-state" in prose) -- within the group, the group
+        // heading is the ONE place "ground" appears for this entry; a
+        // mutation that re-adds the bare state phrase to the card's own
+        // heading would make this find two.
+        expect(within(group).getAllByText(/ground/i)).toHaveLength(1)
+        expect(within(card).queryByText(/ground/i)).not.toBeInTheDocument()
     })
 })

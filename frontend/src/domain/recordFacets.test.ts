@@ -70,3 +70,35 @@ describe("facetChips", () => {
             .toBe("van der Waals complex")
     })
 })
+
+describe("facetChips: includeState (grouped-card redundancy)", () => {
+    it("drops the bare state phrase when includeState is false", () => {
+        const chips = facetChips(
+            { species_entry_kind: "minimum", electronic_state_kind: "ground" },
+            { includeState: false },
+        )
+        expect(chips).toEqual(["minimum"])
+        expect(chips.some((chip) => /ground/i.test(chip))).toBe(false)
+    })
+
+    it("still surfaces electronic_state_label/term_symbol when includeState is false -- those are not established by a group heading that only names the bare state", () => {
+        const chips = facetChips(
+            { species_entry_kind: "minimum", electronic_state_kind: "excited", term_symbol: "T1" },
+            { includeState: false },
+        )
+        expect(chips).toEqual(["minimum", "T1"])
+    })
+
+    it("still surfaces stereochemistry and isotopologue when includeState is false", () => {
+        const chips = facetChips(
+            { species_entry_kind: "minimum", electronic_state_kind: "ground", stereo_label: "R", isotope_key: "13C1" },
+            { includeState: false },
+        )
+        expect(chips).toEqual(["minimum", "R enantiomer", "isotopologue 13C1"])
+    })
+
+    it("defaults to includeState: true when the option is omitted entirely", () => {
+        expect(facetChips({ species_entry_kind: "minimum", electronic_state_kind: "ground" }))
+            .toEqual(["minimum", "ground state"])
+    })
+})
