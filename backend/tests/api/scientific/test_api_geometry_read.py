@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     CalculationInputGeometry,
     CalculationOutputGeometry,
@@ -9,8 +10,14 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationGeometryRole,
     CalculationType,
+    SubmissionKind,
+    SubmissionRecordType,
+    SubmissionSourceKind,
+    SubmissionStatus,
 )
 from app.db.models.geometry import GeometryAtom
+from app.db.models.submission import Submission, SubmissionRecordLink
+from app.services.auth import create_api_key, create_session, revoke_api_key
 from tests.services.scientific_read._factories import (
     make_calculation,
     make_geometry,
@@ -209,3 +216,178 @@ def test_get_geometry_provenance_lists_producers_and_consumers(
     # provenance sub-block too.
     assert "calculation_id" not in prov["produced_by"][0]
     assert "calculation_id" not in prov["used_as_input_by"][0]
+
+
+# ---------------------------------------------------------------------------
+# Molecular identity
+# ---------------------------------------------------------------------------
+
+
+def _attach_output(db_session, *, calculation, geometry):
+    db_session.add(
+        CalculationOutputGeometry(
+            calculation_id=calculation.id,
+            geometry_id=geometry.id,
+            output_order=1,
+            role=CalculationGeometryRole.final,
+        )
+    )
+    db_session.flush()
+
+
+def test_get_geometry_identity_species_owned(client, db_session):
+    species = make_species(
+        db_session, smiles="O=C=O", inchi_key=next_inchi_key("API_ID1")
+    )
+    entry = make_species_entry(db_session, species)
+    geom = _seed_geometry(db_session)
+    opt_calc = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry.id
+    )
+    _attach_output(db_session, calculation=opt_calc, geometry=geom)
+
+    resp = client.get(f"/api/v1/scientific/geometries/{geom.public_ref}")
+    assert resp.status_code == 200
+    identity = resp.json()["identity"]
+    assert identity is not None
+    assert identity["kind"] == "species_entry"
+    assert identity["transition_state_entry"] is None
+    se = identity["species_entry"]
+    assert se["species_ref"] == species.public_ref
+    assert se["species_entry_ref"] == entry.public_ref
+    assert se["canonical_smiles"] == "O=C=O"
+    assert se["formula"] == "CO2"
+    assert se["charge"] == 0
+    assert se["multiplicity"] == 1
+    # Phase D default: ids stripped.
+    assert "species_id" not in se
+    assert "species_entry_id" not in se
+
+
+def test_get_geometry_identity_null_when_no_owner(client, db_session):
+    geom = _seed_geometry(db_session)
+    resp = client.get(f"/api/v1/scientific/geometries/{geom.public_ref}")
+    assert resp.status_code == 200
+    assert resp.json()["identity"] is None
+
+
+# ---------------------------------------------------------------------------
+# Auth-gated submission_ref
+# ---------------------------------------------------------------------------
+
+
+def _seed_geometry_with_submission(db_session, *, created_by: int):
+    species = make_species(
+        db_session, smiles="O", inchi_key=next_inchi_key("API_SUB")
+    )
+    entry = make_species_entry(db_session, species)
+    geom = _seed_geometry(db_session)
+    opt_calc = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry.id
+    )
+    _attach_output(db_session, calculation=opt_calc, geometry=geom)
+    submission = Submission(
+        created_by=created_by,
+        submission_kind=SubmissionKind.conformer,
+        source_kind=SubmissionSourceKind.api,
+        status=SubmissionStatus.pending,
+    )
+    db_session.add(submission)
+    db_session.flush()
+    db_session.add(
+        SubmissionRecordLink(
+            submission_id=submission.id,
+            record_type=SubmissionRecordType.calculation,
+            record_id=opt_calc.id,
+        )
+    )
+    db_session.flush()
+    return geom, submission
+
+
+def test_get_geometry_submission_ref_omitted_for_anonymous_caller(
+    client, db_session, _api_test_user
+):
+    """No credential on the request -> the key is absent, not null.
+
+    ``client`` pre-authenticates ``get_current_user`` for other routes,
+    but this route depends on ``get_optional_current_user`` instead,
+    which is not overridden — a plain request with no ``X-API-Key``
+    header and no session cookie really does resolve to an anonymous
+    caller here.
+    """
+    geom, submission = _seed_geometry_with_submission(
+        db_session, created_by=_api_test_user
+    )
+    resp = client.get(f"/api/v1/scientific/geometries/{geom.public_ref}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "submission_ref" not in body
+    assert "submission_id" not in body
+
+
+def test_get_geometry_submission_ref_present_for_api_key_caller(
+    client, db_session, _api_test_user
+):
+    geom, submission = _seed_geometry_with_submission(
+        db_session, created_by=_api_test_user
+    )
+    user = db_session.get(AppUser, _api_test_user)
+    _, raw_key = create_api_key(db_session, user)
+
+    resp = client.get(
+        f"/api/v1/scientific/geometries/{geom.public_ref}",
+        headers={"X-API-Key": raw_key},
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["submission_ref"] == submission.public_ref
+
+
+def test_get_geometry_submission_ref_present_for_session_cookie_caller(
+    client, db_session, _api_test_user
+):
+    geom, submission = _seed_geometry_with_submission(
+        db_session, created_by=_api_test_user
+    )
+    user = db_session.get(AppUser, _api_test_user)
+    _, raw_token = create_session(db_session, user)
+
+    client.cookies.set("tckdb_session", raw_token)
+    resp = client.get(f"/api/v1/scientific/geometries/{geom.public_ref}")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["submission_ref"] == submission.public_ref
+
+
+def test_get_geometry_invalid_api_key_returns_401_not_anonymous(
+    client, db_session, _api_test_user
+):
+    """An invalid credential must 401, never silently fall back to anonymous."""
+    geom, _submission = _seed_geometry_with_submission(
+        db_session, created_by=_api_test_user
+    )
+    resp = client.get(
+        f"/api/v1/scientific/geometries/{geom.public_ref}",
+        headers={"X-API-Key": "not-a-real-key"},
+    )
+    assert resp.status_code == 401
+
+
+def test_get_geometry_revoked_api_key_returns_401_not_anonymous(
+    client, db_session, _api_test_user
+):
+    """A revoked key must 401 -- treating it as anonymous would turn a
+    revocation into a silent downgrade instead of a refusal."""
+    geom, _submission = _seed_geometry_with_submission(
+        db_session, created_by=_api_test_user
+    )
+    user = db_session.get(AppUser, _api_test_user)
+    key_row, raw_key = create_api_key(db_session, user)
+    revoke_api_key(db_session, key_row)
+
+    resp = client.get(
+        f"/api/v1/scientific/geometries/{geom.public_ref}",
+        headers={"X-API-Key": raw_key},
+    )
+    assert resp.status_code == 401

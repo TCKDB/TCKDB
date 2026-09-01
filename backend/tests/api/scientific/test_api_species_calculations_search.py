@@ -229,3 +229,43 @@ def test_method_basis_filter_via_calculation_lot(client, db_session):
     assert {
         r["calculation"]["calculation_ref"] for r in body["records"]
     } == {in_lot.public_ref}
+
+
+# ---------------------------------------------------------------------------
+# Auth-gated submission_ref (provenance block)
+# ---------------------------------------------------------------------------
+#
+# ``record.provenance.submission_ref`` carries the same "which upload
+# produced this" fact as the calculation-detail and geometry-detail
+# endpoints, gated the same way: omitted entirely for an anonymous
+# caller rather than served as ``null``. See
+# ``app.services.scientific_read.auth_visibility``. (The service does
+# not populate this field's *value* yet on this endpoint -- it is
+# always ``None`` for an authenticated caller too, today -- but the
+# key-visibility gate applies regardless, so a future fix that starts
+# populating it inherits the gate rather than needing a second PR.)
+
+
+def test_get_submission_ref_omitted_for_anonymous_caller(client, db_session):
+    species, entry = _seed(db_session, smiles="C[CH2]O")
+    make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+
+    resp = client.get(
+        "/api/v1/scientific/species-calculations/search?smiles=C[CH2]O"
+    )
+    assert resp.status_code == 200
+    rec = resp.json()["records"][0]
+    assert "submission_ref" not in rec["provenance"]
+
+
+def test_post_submission_ref_omitted_for_anonymous_caller(client, db_session):
+    species, entry = _seed(db_session, smiles="C[CH2]N")
+    make_calculation(db_session, type=CalculationType.sp, species_entry_id=entry.id)
+
+    resp = client.post(
+        "/api/v1/scientific/species-calculations/search",
+        json={"smiles": "C[CH2]N"},
+    )
+    assert resp.status_code == 200
+    rec = resp.json()["records"][0]
+    assert "submission_ref" not in rec["provenance"]

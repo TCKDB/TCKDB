@@ -236,10 +236,14 @@ def test_detail_default_response_carries_summaries_and_review(
     assert record["provenance"]["has_result"] is False
     assert record["provenance"]["geometry_validation_status"] == "not_present"
     assert record["provenance"]["scf_stability_status"] == "not_present"
-    # Phase D default: integer submission_id is stripped; submission_ref
-    # remains visible (null when there is no submission link).
+    # Phase D default: integer submission_id is stripped. submission_ref
+    # is gated separately, on authentication rather than on internal-id
+    # policy: this default ``client`` call carries no ``X-API-Key``/
+    # session credential, so the anonymous caller does not receive the
+    # key at all (not even as null) — see
+    # ``app.services.scientific_read.auth_visibility``.
     assert "submission_id" not in record["provenance"]
-    assert record["provenance"]["submission_ref"] is None
+    assert "submission_ref" not in record["provenance"]
 
 
 # ---------------------------------------------------------------------------
@@ -3207,12 +3211,63 @@ def test_detail_include_review_returns_entry(client, db_session):
     assert entry["status"] == "approved"
     assert entry["note"] == "looks good"
     assert entry["reviewed_at"] is not None
-    # No submission link → submission_ref null.
-    assert entry["submission_ref"] is None
+    # ``submission_ref`` names "which upload does this review action tie
+    # to" -- the same class of fact as ``provenance.submission_ref`` above,
+    # so it is gated by the same authentication check rather than by the
+    # Phase D internal-id policy. This anonymous ``client`` call omits the
+    # key entirely (see ``app.services.scientific_read.auth_visibility``);
+    # ``test_api_calculation_submission_ref_auth.py`` covers the
+    # authenticated branch for ``record.provenance``, and
+    # ``test_detail_include_review_authenticated_caller_sees_submission_ref``
+    # below covers it for this nested block specifically.
+    assert "submission_ref" not in entry
     # Phase D default: integer ids stripped.
     assert "review_id" not in entry
     assert "reviewer_id" not in entry
     assert "submission_id" not in entry
+
+
+def test_detail_include_review_authenticated_caller_sees_submission_ref(
+    client, db_session, _api_test_user
+):
+    """The nested ``review_history[].submission_ref`` follows the same
+    authenticated-only gate as ``record.provenance.submission_ref``."""
+    from app.db.models.app_user import AppUser
+    from app.db.models.common import (
+        SubmissionKind,
+        SubmissionSourceKind,
+        SubmissionStatus,
+    )
+    from app.db.models.submission import Submission
+    from app.services.auth import create_api_key
+
+    _, _, calc = _make_species_owned_calc(db_session)
+    review = set_review(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=calc.id,
+        status=RecordReviewStatus.approved,
+    )
+    submission = Submission(
+        created_by=_api_test_user,
+        submission_kind=SubmissionKind.conformer,
+        source_kind=SubmissionSourceKind.api,
+        status=SubmissionStatus.pending,
+    )
+    db_session.add(submission)
+    db_session.flush()
+    review.submission_id = submission.id
+    db_session.flush()
+
+    user = db_session.get(AppUser, _api_test_user)
+    _, raw_key = create_api_key(db_session, user)
+
+    resp = client.get(
+        f"/api/v1/scientific/calculations/{calc.public_ref}?include=review",
+        headers={"X-API-Key": raw_key},
+    )
+    entry = resp.json()["record"]["review_history"][0]
+    assert entry["submission_ref"] == submission.public_ref
 
 
 def test_detail_include_review_returns_empty_list_when_no_row(
