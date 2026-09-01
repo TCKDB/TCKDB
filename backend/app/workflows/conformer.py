@@ -9,10 +9,12 @@ from app.chemistry.geometry import parse_xyz
 from app.db.models.common import CalculationType, SubmissionRecordType
 from app.db.models.species import ConformerObservation
 from app.schemas.fragments.geometry import GeometryPayload
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadRequest
 from app.services.calculation_resolution import (
     attach_calculation_input_geometries,
     attach_calculation_output_geometries,
+    collect_converged_opt_energy_warnings,
     persist_additional_calculations,
     resolve_and_persist_calculation_with_results,
 )
@@ -63,6 +65,10 @@ class ConformerUploadOutcome:
     additional_calculations: list[ConformerUploadCalculationRef] = field(
         default_factory=list
     )
+    #: Non-blocking warnings raised while persisting this conformer's
+    #: calculations -- currently only the converged-opt-energy guard
+    #: (issue #292); see :func:`collect_converged_opt_energy_warnings`.
+    warnings: list[UploadWarning] = field(default_factory=list)
 
 
 def persist_conformer_upload(
@@ -298,6 +304,14 @@ def persist_conformer_upload(
         created_by=created_by,
     )
 
+    # Evaluated last, once every calculation this request touched (primary
+    # + additional) is flushed, so a single-point calculation deposited
+    # later in the same ``additional_calculations`` list already counts.
+    energy_warnings = collect_converged_opt_energy_warnings(
+        session,
+        [calculation.id, *(c.id for c in additional_calcs)],
+    )
+
     return ConformerUploadOutcome(
         observation=observation,
         primary_calculation=ConformerUploadCalculationRef(
@@ -315,4 +329,5 @@ def persist_conformer_upload(
             )
             for i, child in enumerate(additional_calcs)
         ],
+        warnings=energy_warnings,
     )

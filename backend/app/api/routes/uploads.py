@@ -247,6 +247,7 @@ def upload_conformer(
     outcome = persist_conformer_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
     )
+    warnings.extend(outcome.warnings)
     observation = outcome.observation
     result = ConformerUploadResult(
         id=observation.id,
