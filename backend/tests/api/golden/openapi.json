@@ -4166,7 +4166,7 @@
         "type": "object"
       },
       "CalculationEnergyBlock": {
-        "description": "Energy summary — present only for ``sp`` / ``opt`` calculations.\n\nFor other calculation types this block is ``null`` in the response\n(the field is always present so the JSON shape stays stable).\n\n``single_point_equivalent`` is populated only on an ``opt`` record,\nand only when no real ``sp`` calculation exists at the same\nconformer observation + level of theory; see\n:class:`DerivedSinglePointEnergy`.",
+        "description": "Energy summary — present only for ``sp`` / ``opt`` calculations.\n\nFor other calculation types this block is ``null`` in the response\n(the field is always present so the JSON shape stays stable).\n\n``single_point_equivalent`` is populated only on an ``opt`` record,\nand only when no real ``sp`` calculation exists at the same owner\n(conformer observation for species, transition-state entry for a\ntransition state) + level of theory; see\n:class:`DerivedSinglePointEnergy`.",
         "properties": {
           "energy_hartree": {
             "anyOf": [
@@ -13685,7 +13685,7 @@
         "type": "object"
       },
       "DerivedSinglePointEnergy": {
-        "description": "A same-level-of-theory single-point-equivalent, read off an ``opt``.\n\nA geometry optimisation computes the electronic energy at its final\ngeometry; running a separate ``sp`` calculation at the *same* level of\ntheory would reproduce that number, not a different one (the house\nrule behind ``docs/decisions`` on SP-vs-opt energy). When a\nconformer observation has no independent ``sp`` calculation at the\n``opt``'s own ``level_of_theory_id``, this block offers the opt's own\n``final_energy_hartree`` as the value a caller would otherwise have\ngone looking for under ``calculation_type=sp``.\n\nThis is a **read-time derivation, never a fabricated record**: no\n``calculation`` row is created, and it is computed fresh on every\nresponse rather than stored. ``calculation_count``,\n``evidence_coverage.sp``, and ``has_sp`` are all read from real\n``sp`` calculation rows only and never see this value — see\n:mod:`app.services.scientific_read.conformers`.\n\nOnly ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`\n(never to an ``sp`` one — a real ``sp`` result is never replaced by a\nderivation), and only when the *same* conformer observation has no\n``sp`` calculation at the *same* ``level_of_theory_id``. An ``sp`` at\na **different** level of theory is a different number and does not\nsuppress this block.",
+        "description": "A same-level-of-theory single-point-equivalent, read off an ``opt``.\n\nA geometry optimisation computes the electronic energy at its final\ngeometry; running a separate ``sp`` calculation at the *same* level of\ntheory would reproduce that number, not a different one (the house\nrule behind ``docs/decisions`` on SP-vs-opt energy). When the opt's\nowner — a conformer observation for a species-owned calculation, a\ntransition-state entry for a TS-owned one, whichever owner the\ncalculation actually has — has no independent ``sp`` calculation at\nthe ``opt``'s own ``level_of_theory_id``, this block offers the opt's\nown ``final_energy_hartree`` as the value a caller would otherwise\nhave gone looking for under ``calculation_type=sp``.\n\nThis is a **read-time derivation, never a fabricated record**: no\n``calculation`` row is created, and it is computed fresh on every\nresponse rather than stored. ``calculation_count``,\n``evidence_coverage.sp``, and ``has_sp`` are all read from real\n``sp`` calculation rows only and never see this value — see\n:mod:`app.services.scientific_read.conformers` (species) and\n:mod:`app.services.scientific_read.transition_states` (transition\nstates).\n\nOnly ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`\n(never to an ``sp`` one — a real ``sp`` result is never replaced by a\nderivation), and only when the *same* owner (conformer observation or\ntransition-state entry) has no ``sp`` calculation at the *same*\n``level_of_theory_id``. An ``sp`` at a **different** level of theory,\nor on a **different** owner of the same kind, is a different number\nand does not suppress this block.",
         "properties": {
           "derived_from_calculation_type": {
             "default": "opt",
@@ -43811,7 +43811,7 @@
         "type": "object"
       },
       "TransitionStateCalculationSummary": {
-        "description": "Compact calculation projection embedded under a TS / TS-entry record.\n\nCarries enough provenance for a caller to decide whether to follow\nup with the full ``/scientific/calculations/{calculation_ref}``\ndetail call. Heavy include sections (results, dependencies,\nparameters, constraints, scan/IRC/path-search points) are NOT\nsurfaced here — they remain available on the calculation detail\nendpoint. ``primary_role`` records the dependency role this calc\nplays under the TS entry when known (``opt`` / ``freq`` / ``sp`` /\n``irc`` / ``path_search`` calcs map directly to their type for\nconvenience).",
+        "description": "Compact calculation projection embedded under a TS / TS-entry record.\n\nCarries enough provenance for a caller to decide whether to follow\nup with the full ``/scientific/calculations/{calculation_ref}``\ndetail call. Heavy include sections (full results, dependencies,\nparameters, constraints, scan/IRC/path-search points) are NOT\nsurfaced here — they remain available on the calculation detail\nendpoint. ``primary_role`` records the dependency role this calc\nplays under the TS entry when known (``opt`` / ``freq`` / ``sp`` /\n``irc`` / ``path_search`` calcs map directly to their type for\nconvenience).\n\n``energy`` is the one exception to \"heavy sections stay off this\nsummary\": it is the same compact block\n``/scientific/species-calculations/search`` serves (real\n``sp``/``opt`` energy, plus the read-time single-point-equivalent\nderivation on a converged ``opt`` with no same-level-of-theory\n``sp`` on this TS entry — see :class:`CalculationEnergyBlock` and\n:class:`DerivedSinglePointEnergy`). It was omitted here only\nbecause nothing computed it yet, not by design; a single scalar\nconvenience field is not the \"heavy\" result payload the rest of\nthis docstring is about.",
         "properties": {
           "calculation_id": {
             "title": "Calculation Id",
@@ -43826,6 +43826,16 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "energy": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalculationEnergyBlock"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "level_of_theory": {
             "anyOf": [

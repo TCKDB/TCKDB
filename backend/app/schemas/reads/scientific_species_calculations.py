@@ -210,25 +210,30 @@ class DerivedSinglePointEnergy(BaseModel):
     A geometry optimisation computes the electronic energy at its final
     geometry; running a separate ``sp`` calculation at the *same* level of
     theory would reproduce that number, not a different one (the house
-    rule behind ``docs/decisions`` on SP-vs-opt energy). When a
-    conformer observation has no independent ``sp`` calculation at the
-    ``opt``'s own ``level_of_theory_id``, this block offers the opt's own
-    ``final_energy_hartree`` as the value a caller would otherwise have
-    gone looking for under ``calculation_type=sp``.
+    rule behind ``docs/decisions`` on SP-vs-opt energy). When the opt's
+    owner — a conformer observation for a species-owned calculation, a
+    transition-state entry for a TS-owned one, whichever owner the
+    calculation actually has — has no independent ``sp`` calculation at
+    the ``opt``'s own ``level_of_theory_id``, this block offers the opt's
+    own ``final_energy_hartree`` as the value a caller would otherwise
+    have gone looking for under ``calculation_type=sp``.
 
     This is a **read-time derivation, never a fabricated record**: no
     ``calculation`` row is created, and it is computed fresh on every
     response rather than stored. ``calculation_count``,
     ``evidence_coverage.sp``, and ``has_sp`` are all read from real
     ``sp`` calculation rows only and never see this value — see
-    :mod:`app.services.scientific_read.conformers`.
+    :mod:`app.services.scientific_read.conformers` (species) and
+    :mod:`app.services.scientific_read.transition_states` (transition
+    states).
 
     Only ever attached to an ``opt`` calculation's :class:`CalculationEnergyBlock`
     (never to an ``sp`` one — a real ``sp`` result is never replaced by a
-    derivation), and only when the *same* conformer observation has no
-    ``sp`` calculation at the *same* ``level_of_theory_id``. An ``sp`` at
-    a **different** level of theory is a different number and does not
-    suppress this block.
+    derivation), and only when the *same* owner (conformer observation or
+    transition-state entry) has no ``sp`` calculation at the *same*
+    ``level_of_theory_id``. An ``sp`` at a **different** level of theory,
+    or on a **different** owner of the same kind, is a different number
+    and does not suppress this block.
     """
 
     energy_hartree: float
@@ -246,8 +251,9 @@ class CalculationEnergyBlock(BaseModel):
     (the field is always present so the JSON shape stays stable).
 
     ``single_point_equivalent`` is populated only on an ``opt`` record,
-    and only when no real ``sp`` calculation exists at the same
-    conformer observation + level of theory; see
+    and only when no real ``sp`` calculation exists at the same owner
+    (conformer observation for species, transition-state entry for a
+    transition state) + level of theory; see
     :class:`DerivedSinglePointEnergy`.
     """
 

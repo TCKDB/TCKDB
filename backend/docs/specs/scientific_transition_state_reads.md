@@ -158,9 +158,15 @@ transition-state surface differs from the conformer one, whose search
 returns conformer-*group* records and therefore gained an
 `evidence_match=any_observation|all_observations` parameter.)
 - `TransitionStateCalculationSummary` — compact calculation projection
-  (ref, type, quality, review, LoT, software, workflow) used by the
-  `include=calculations` token. Heavy include sections (results,
-  parameters, geometries) remain on the calculation detail endpoint.
+  (ref, type, quality, review, LoT, software, workflow, energy) used by
+  the `include=calculations` token. Heavy include sections (full
+  results, parameters, geometries) remain on the calculation detail
+  endpoint; `energy` is the one exception — the same compact
+  `sp`/`opt` energy block `/scientific/species-calculations/search`
+  serves, including the read-time single-point-equivalent derivation
+  on a converged `opt` with no same-level-of-theory `sp` on that TS
+  entry. It never changes `evidence_coverage.sp`, `has_sp`, or
+  `calculation_count` — those stay real-`sp`-only.
 - `AvailableTransitionStateSections` — `has_entries`,
   `has_calculations`, `has_geometries`, `has_review` boolean map for
   cheap "is there anything under this section?" client checks.

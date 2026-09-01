@@ -11,6 +11,7 @@ from app.db.models.common import (
     CalculationDependencyRole,
     CalculationGeometryRole,
     CalculationQuality,
+    CalculationRecordKind,
     CalculationType,
     ConformerSelectionKind,
     RecordReviewStatus,
@@ -24,6 +25,7 @@ from app.schemas.reads.scientific_species_calculations import (
     SpeciesCalculationsSearchRequest,
 )
 from app.services.scientific_read.species_calculations_search import (
+    _load_sp_lot_pairs,
     search_species_calculations,
 )
 from tests.services.scientific_read._factories import (
@@ -911,3 +913,44 @@ def test_sp_record_never_carries_single_point_equivalent(db_session):
     )
     assert len(response.records) == 1
     assert response.records[0].energy.single_point_equivalent is None
+
+
+def test_sp_lot_pairs_key_on_record_kind_not_bare_owner_id(db_session):
+    """The sp map key must be ``(record_kind, owner_id)``, never the id alone.
+
+    ``conformer_observation`` and ``transition_state_entry`` are separate
+    tables with separate id sequences, so the same integer routinely names
+    a row in both. Keying on the bare id would let a species observation's
+    ``sp`` suppress the single-point-equivalent derivation for an unrelated
+    transition-state entry sharing that number -- a wrong answer with no
+    error and no symptom: the reader simply sees no derived energy where
+    one was due.
+
+    This asserts the key STRUCTURE directly rather than staging a
+    collision, because whether two sequences happen to align is not
+    something a test should depend on. Verified: dropping the kind from
+    the key passes every other test in both derivation suites, so nothing
+    else covers this.
+    """
+    lot = make_lot(db_session, method="wb97xd", basis="def2tzvp")
+    _, entry = _entry(db_session, smiles="CCO")
+    group = make_conformer_group(db_session, entry, label="anti")
+    obs = make_conformer_observation(db_session, conformer_group=group)
+    sp = make_calculation(
+        db_session,
+        type=CalculationType.sp,
+        species_entry_id=entry.id,
+        conformer_observation_id=obs.id,
+        lot_id=lot.id,
+    )
+    attach_sp_result(db_session, calculation=sp, electronic_energy_hartree=-111.0)
+
+    pairs = _load_sp_lot_pairs(
+        db_session, {CalculationRecordKind.species: {obs.id}}
+    )
+
+    assert (CalculationRecordKind.species, obs.id) in pairs
+    # The same numeric id under the TS kind must NOT be populated by a
+    # species-owned sp. This is the assertion a bare-id key fails.
+    assert (CalculationRecordKind.transition_state, obs.id) not in pairs
+    assert all(isinstance(k, tuple) and len(k) == 2 for k in pairs)
