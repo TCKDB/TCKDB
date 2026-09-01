@@ -169,38 +169,40 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 <span aria-current="page">Geometry</span>
             </nav>
 
-            <PageShell>
-            <header className="basin-header">
-                <p className="eyebrow">Geometry · deposited evidence</p>
-                <div className="basin-title">
-                    <h1>{displayFormula ? `${displayFormula} geometry` : "Geometry"}</h1>
-                </div>
-                <p className="basin-intro">
-                    One stored set of atomic coordinates: the exact positions a calculation consumed or produced.
-                    This is not a species or a calculation — the same coordinates can be reused across more than
-                    one calculation, in either direction.
-                </p>
-                {formulaIsFallback && (
-                    // Only reachable when the archive's own identity is absent
-                    // or ambiguous — the honest label the brief asks for,
-                    // rather than presenting a client-computed value as if it
-                    // came from the archive.
-                    <p className="section-note">
-                        Formula computed on this page from atom symbols — the archive did not serve a formula
-                        for this geometry's owning entry.
-                    </p>
+            <PageShell
+                identity={(
+                    <header className="basin-header">
+                        <p className="eyebrow">Geometry · deposited evidence</p>
+                        <div className="basin-title">
+                            <h1>{displayFormula ? `${displayFormula} geometry` : "Geometry"}</h1>
+                        </div>
+                        <p className="basin-intro">
+                            One stored set of atomic coordinates: the exact positions a calculation consumed or
+                            produced. This is not a species or a calculation — the same coordinates can be reused
+                            across more than one calculation, in either direction.
+                        </p>
+                        {formulaIsFallback && (
+                            // Only reachable when the archive's own identity is absent
+                            // or ambiguous — the honest label the brief asks for,
+                            // rather than presenting a client-computed value as if it
+                            // came from the archive.
+                            <p className="section-note">
+                                Formula computed on this page from atom symbols — the archive did not serve a formula
+                                for this geometry's owning entry.
+                            </p>
+                        )}
+                        <RecordIdentityHeader identity={identity} submissionRef={geometry.submission_ref} />
+                        <dl className="basin-context">
+                            <div><dt>Geometry ref</dt><dd>{geometry.geometry_ref}</dd></div>
+                            <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
+                            <div><dt>Geometry hash</dt><dd>{geometry.geom_hash}</dd></div>
+                            <div><dt>Format</dt><dd>{geometry.format}</dd></div>
+                            <div><dt>Coordinate units</dt><dd>{geometry.coordinate_units}</dd></div>
+                            <div><dt>Deposited</dt><dd>{isoDate(geometry.created_at)}</dd></div>
+                        </dl>
+                    </header>
                 )}
-                <RecordIdentityHeader identity={identity} submissionRef={geometry.submission_ref} />
-                <dl className="basin-context">
-                    <div><dt>Geometry ref</dt><dd>{geometry.geometry_ref}</dd></div>
-                    <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
-                    <div><dt>Geometry hash</dt><dd>{geometry.geom_hash}</dd></div>
-                    <div><dt>Format</dt><dd>{geometry.format}</dd></div>
-                    <div><dt>Coordinate units</dt><dd>{geometry.coordinate_units}</dd></div>
-                    <div><dt>Deposited</dt><dd>{isoDate(geometry.created_at)}</dd></div>
-                </dl>
-            </header>
-
+            >
             <section className="ledger-summary geometry-summary" aria-label="Geometry provenance summary">
                 <Metric label="Producing calculations" value={producedBy.length} />
                 <Metric label="Consuming calculations" value={usedAsInputBy.length} />

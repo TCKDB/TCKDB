@@ -247,84 +247,86 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 <span aria-current="page">Calculation</span>
             </nav>
 
-            <PageShell>
-            <header className="record-header">
-                <p className="eyebrow">Calculation · deposited evidence</p>
-                <div className="record-title">
-                    <h1>{typeLabel(core.type)} calculation</h1>
-                    <span className="review-badge">{statusLabel(core.review.status)}</span>
-                </div>
-                <p className="record-intro">
-                    One calculation record. Its heavy sections — results, dependencies, artifacts, per-mode
-                    and per-point data — are opt-in on this endpoint; this page loads a few small ones up
-                    front and leaves the rest behind disclosures you can open.
-                </p>
+            <PageShell
+                identity={(
+                    <header className="record-header">
+                        <p className="eyebrow">Calculation · deposited evidence</p>
+                        <div className="record-title">
+                            <h1>{typeLabel(core.type)} calculation</h1>
+                            <span className="review-badge">{statusLabel(core.review.status)}</span>
+                        </div>
+                        <p className="record-intro">
+                            One calculation record. Its heavy sections — results, dependencies, artifacts, per-mode
+                            and per-point data — are opt-in on this endpoint; this page loads a few small ones up
+                            front and leaves the rest behind disclosures you can open.
+                        </p>
 
-                {/* The answer this page exists to give, promoted to the
-                    largest weight on the page — previously it sat inside the
-                    "Result" section below at the same visual weight as the
-                    dependency graph and review history. Only sp/opt
-                    calculations have a single headline energy; every other
-                    calculation type renders nothing here rather than a
-                    fabricated or misleading figure. */}
-                {headline && (
-                    <div className="calc-headline-energy">
-                        <EnergyDisplay valueHartree={headline.valueHartree} label={headline.label} size="headline" />
-                    </div>
+                        {/* The answer this page exists to give, promoted to the
+                            largest weight on the page — previously it sat inside the
+                            "Result" section below at the same visual weight as the
+                            dependency graph and review history. Only sp/opt
+                            calculations have a single headline energy; every other
+                            calculation type renders nothing here rather than a
+                            fabricated or misleading figure. */}
+                        {headline && (
+                            <div className="calc-headline-energy">
+                                <EnergyDisplay valueHartree={headline.valueHartree} label={headline.label} size="headline" />
+                            </div>
+                        )}
+
+                        {/* Shared header order: identity, then classification
+                            facets, then provenance — see `RecordIdentityHeader`'s
+                            own docstring. `OwnerCard` below is this page's identity
+                            tier (kept as its own component rather than folded into
+                            `RecordIdentityHeader` — it renders owner LINKS this
+                            endpoint does not model) and, since #322, is also where
+                            the classification facets live: an "Entry kind" row
+                            beside `OwnerCard`'s own "Electronic state" row, not a
+                            pill row repeating the same two facts a second time
+                            ("no pill boxes" — see `SpeciesEntrySummary.tsx`'s
+                            `EntryIdentity` for the report this fixes elsewhere on
+                            the same shared header pattern). */}
+                        <OwnerCard ownerSpecies={ownerSpecies} ownerTS={ownerTS} />
+
+                        <dl className="record-context">
+                            <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
+                            <div><dt>Quality</dt><dd>{core.quality}</dd></div>
+                            <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
+                            <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
+                            {/* The compact label above can be identical for two different rows —
+                                it omits dispersion, solvent and level_of_theory_ref on purpose (see
+                                the schema comment on `levelOfTheorySchema`). Those are the fields
+                                that actually distinguish them, so they get their own rows rather
+                                than being folded into the label. */}
+                            <div><dt>Level of theory ref</dt><dd>{lot?.level_of_theory_ref ?? "not recorded"}</dd></div>
+                            <div><dt>Dispersion</dt><dd>{lot?.dispersion ?? "not recorded"}</dd></div>
+                            <div><dt>Solvent</dt><dd>{lot?.solvent ?? "not recorded"}</dd></div>
+                            <div>
+                                <dt>Software</dt>
+                                <dd>{softwareLabel(software) ?? "not recorded"}</dd>
+                            </div>
+                            <div><dt>Software release ref</dt><dd>{software?.software_release_ref ?? "not recorded"}</dd></div>
+                            <div>
+                                <dt>Workflow tool</dt>
+                                <dd>{toolReleaseLabel(workflow) ?? "not recorded"}</dd>
+                            </div>
+                            <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "not recorded"}</dd></div>
+                            {/* No row at all when the key itself is absent (anonymous
+                                caller) — see `submissionRefKeyPresent` above. An
+                                anonymous reader is never told "not recorded" for a
+                                question they were never allowed to ask. */}
+                            {submissionRefKeyPresent && (
+                                <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "not recorded"}</dd></div>
+                            )}
+                            <div>
+                                <dt>Literature</dt>
+                                <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "not recorded"}</dd>
+                            </div>
+                            <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "not recorded"}</dd></div>
+                        </dl>
+                    </header>
                 )}
-
-                {/* Shared header order: identity, then classification
-                    facets, then provenance — see `RecordIdentityHeader`'s
-                    own docstring. `OwnerCard` below is this page's identity
-                    tier (kept as its own component rather than folded into
-                    `RecordIdentityHeader` — it renders owner LINKS this
-                    endpoint does not model) and, since #322, is also where
-                    the classification facets live: an "Entry kind" row
-                    beside `OwnerCard`'s own "Electronic state" row, not a
-                    pill row repeating the same two facts a second time
-                    ("no pill boxes" — see `SpeciesEntrySummary.tsx`'s
-                    `EntryIdentity` for the report this fixes elsewhere on
-                    the same shared header pattern). */}
-                <OwnerCard ownerSpecies={ownerSpecies} ownerTS={ownerTS} />
-
-                <dl className="record-context">
-                    <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
-                    <div><dt>Quality</dt><dd>{core.quality}</dd></div>
-                    <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                    <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
-                    {/* The compact label above can be identical for two different rows —
-                        it omits dispersion, solvent and level_of_theory_ref on purpose (see
-                        the schema comment on `levelOfTheorySchema`). Those are the fields
-                        that actually distinguish them, so they get their own rows rather
-                        than being folded into the label. */}
-                    <div><dt>Level of theory ref</dt><dd>{lot?.level_of_theory_ref ?? "not recorded"}</dd></div>
-                    <div><dt>Dispersion</dt><dd>{lot?.dispersion ?? "not recorded"}</dd></div>
-                    <div><dt>Solvent</dt><dd>{lot?.solvent ?? "not recorded"}</dd></div>
-                    <div>
-                        <dt>Software</dt>
-                        <dd>{softwareLabel(software) ?? "not recorded"}</dd>
-                    </div>
-                    <div><dt>Software release ref</dt><dd>{software?.software_release_ref ?? "not recorded"}</dd></div>
-                    <div>
-                        <dt>Workflow tool</dt>
-                        <dd>{toolReleaseLabel(workflow) ?? "not recorded"}</dd>
-                    </div>
-                    <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "not recorded"}</dd></div>
-                    {/* No row at all when the key itself is absent (anonymous
-                        caller) — see `submissionRefKeyPresent` above. An
-                        anonymous reader is never told "not recorded" for a
-                        question they were never allowed to ask. */}
-                    {submissionRefKeyPresent && (
-                        <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "not recorded"}</dd></div>
-                    )}
-                    <div>
-                        <dt>Literature</dt>
-                        <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "not recorded"}</dd>
-                    </div>
-                    <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "not recorded"}</dd></div>
-                </dl>
-            </header>
-
+            >
             <section className="ledger-summary" aria-label="Calculation evidence summary">
                 <Metric label="Input geometries" value={inputGeometries.length} />
                 <Metric label="Output geometries" value={outputGeometries.length} />

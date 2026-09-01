@@ -92,58 +92,61 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Observation</span>
             </nav>
-            <PageShell>
-            <header className="basin-header">
-                <p className="eyebrow">Conformer observation · deposited evidence</p>
-                <div className="basin-title">
-                    <h1>{originTitle(core.scientific_origin)}</h1>
-                    <span className="review-badge">{statusLabel(core.review.status)}</span>
-                </div>
-                <p className="basin-intro">
-                    One deposition of evidence for this torsional basin, and the provenance boundary to the
-                    calculations and geometries derived from it. This is one observation, not the basin itself.
-                </p>
-                <dl className="basin-context">
-                    <div><dt>Observation ref</dt><dd>{core.conformer_observation_ref}</dd></div>
-                    <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
-                    <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                    <div>
-                        <dt>Conformer basin</dt>
-                        <dd>
-                            <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
-                                {group.label ?? group.conformer_group_ref}
-                            </Link>
-                        </dd>
-                    </div>
-                    <div><dt>Group ref</dt><dd>{group.conformer_group_ref}</dd></div>
-                    <div>
-                        <dt>Species entry</dt>
-                        <dd>
-                            <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                {species.species_entry_label ?? species.species_entry_ref}
-                            </Link>
-                        </dd>
-                    </div>
-                    <div><dt>Species ref</dt><dd>{species.species_ref}</dd></div>
-                    <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
-                    {/* InChIKey and charge/multiplicity complete this page's
-                        identity tier -- served here (unlike the conformer
-                        basin surface, which does not carry them), so shown
-                        rather than left off for consistency with a
-                        thinner sibling endpoint. No classification-facet
-                        tier follows: this endpoint's `species` context has
-                        no `species_entry_kind`/`electronic_state_kind` to
-                        build one from, and no `submission_ref` provenance
-                        tier either -- both omitted rather than fabricated. */}
-                    {species.inchi_key && <div><dt>InChIKey</dt><dd>{species.inchi_key}</dd></div>}
-                    {(species.charge !== null && species.charge !== undefined
-                        && species.multiplicity !== null && species.multiplicity !== undefined) && (
-                        <div><dt>Charge / multiplicity</dt><dd>{species.charge} / {species.multiplicity}</dd></div>
-                    )}
-                </dl>
-                {core.note && <p className="observation-note">{core.note}</p>}
-            </header>
-
+            <PageShell
+                identity={(
+                    <header className="basin-header">
+                        <p className="eyebrow">Conformer observation · deposited evidence</p>
+                        <div className="basin-title">
+                            <h1>{originTitle(core.scientific_origin)}</h1>
+                            <span className="review-badge">{statusLabel(core.review.status)}</span>
+                        </div>
+                        <p className="basin-intro">
+                            One deposition of evidence for this torsional basin, and the provenance boundary to the
+                            calculations and geometries derived from it. This is one observation, not the basin
+                            itself.
+                        </p>
+                        <dl className="basin-context">
+                            <div><dt>Observation ref</dt><dd>{core.conformer_observation_ref}</dd></div>
+                            <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
+                            <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
+                            <div>
+                                <dt>Conformer basin</dt>
+                                <dd>
+                                    <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
+                                        {group.label ?? group.conformer_group_ref}
+                                    </Link>
+                                </dd>
+                            </div>
+                            <div><dt>Group ref</dt><dd>{group.conformer_group_ref}</dd></div>
+                            <div>
+                                <dt>Species entry</dt>
+                                <dd>
+                                    <Link to={`/species-entries/${species.species_entry_ref}`}>
+                                        {species.species_entry_label ?? species.species_entry_ref}
+                                    </Link>
+                                </dd>
+                            </div>
+                            <div><dt>Species ref</dt><dd>{species.species_ref}</dd></div>
+                            <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
+                            {/* InChIKey and charge/multiplicity complete this page's
+                                identity tier -- served here (unlike the conformer
+                                basin surface, which does not carry them), so shown
+                                rather than left off for consistency with a
+                                thinner sibling endpoint. No classification-facet
+                                tier follows: this endpoint's `species` context has
+                                no `species_entry_kind`/`electronic_state_kind` to
+                                build one from, and no `submission_ref` provenance
+                                tier either -- both omitted rather than fabricated. */}
+                            {species.inchi_key && <div><dt>InChIKey</dt><dd>{species.inchi_key}</dd></div>}
+                            {(species.charge !== null && species.charge !== undefined
+                                && species.multiplicity !== null && species.multiplicity !== undefined) && (
+                                <div><dt>Charge / multiplicity</dt><dd>{species.charge} / {species.multiplicity}</dd></div>
+                            )}
+                        </dl>
+                        {core.note && <p className="observation-note">{core.note}</p>}
+                    </header>
+                )}
+            >
             <section className="ledger-summary" aria-label="Observation evidence summary">
                 <Metric label="Calculation rows" value={evidence.calculation_count} />
                 <Metric label="Distinct stored geometries" value={evidence.geometry_count} />

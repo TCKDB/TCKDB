@@ -140,13 +140,14 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef 
             <span aria-hidden="true">/</span>
             <span aria-current="page">Species entry</span>
         </nav>
-        <EntryIdentity entry={entry} />
-
-        {/* `identity` is intentionally omitted here -- see `PageShell`'s own
-            docstring. The formula/SMILES/InChI header above (`EntryIdentity`)
-            stays exactly where it already rendered; it is not what the
-            reserved slot is for. */}
-        <PageShell>
+        {/* `EntryIdentity` now routes through `PageShell`'s `identity` slot
+            (previously it rendered directly above `<PageShell>`, spanning
+            full width above the ToC/content flex row -- an earlier version
+            of this comment called that placement intentional; it was
+            superseded by the ToC-top-alignment change, which puts every
+            record page's header through the same slot so the ToC rail
+            starts level with the header, not below it). */}
+        <PageShell identity={<EntryIdentity entry={entry} />}>
         <ConformerSelector
             conformers={conformers}
             selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}

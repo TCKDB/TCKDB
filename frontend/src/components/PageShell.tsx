@@ -20,13 +20,21 @@ import { TableOfContents } from "./TableOfContents"
  * widened to. `PageShell` only lays out what is INSIDE that width: the
  * ToC rail beside the content column.
  *
- * `identity` is a reserved, NAMED slot for the upcoming identity header
- * (species formula/SMILES/InChI + submission reference -- PR #321, still
- * in CI as of this shell). Every call site in this PR omits the prop, so
- * nothing renders in the slot at all -- not even an empty wrapper div --
- * rather than reserve visual space for content that does not exist yet.
- * It exists so that follow-up drops its header in without restructuring
- * this shell a second time.
+ * `identity` is a reserved, NAMED slot for each page's identity/header
+ * block (species formula/SMILES/InChI + submission reference, or the
+ * page's equivalent -- PR #321). It renders as the FIRST child of
+ * `.page-shell-content`, inside the flex row alongside the ToC, rather
+ * than above `.page-shell-layout` spanning full width -- the owner's own
+ * call between two mockups: "the ToC column starts level with the
+ * identity/header block, just under the breadcrumbs, with the header
+ * narrowing to make room" over keeping the header full-width and only
+ * tightening the ToC's sticky offset. Every record page routes its
+ * header through this slot now (see each page's own call site), so the
+ * ToC rail begins at the same height as the header on all of them, not
+ * only on whichever page happened to nest its header inside `children`.
+ * When a page omits the prop, nothing renders in the slot at all -- not
+ * even an empty wrapper div -- rather than reserve visual space for
+ * content that does not exist.
  *
  * The content pane comes BEFORE the ToC in markup on purpose -- a keyboard
  * or screen-reader user reaches the page's own content first and the
@@ -40,9 +48,11 @@ import { TableOfContents } from "./TableOfContents"
 export function PageShell({ identity, children }: { identity?: ReactNode; children: ReactNode }) {
     return (
         <PageSectionsProvider>
-            {identity !== undefined && <div className="page-shell-identity">{identity}</div>}
             <div className="page-shell-layout">
-                <div className="page-shell-content">{children}</div>
+                <div className="page-shell-content">
+                    {identity !== undefined && <div className="page-shell-identity">{identity}</div>}
+                    {children}
+                </div>
                 <TableOfContents />
             </div>
         </PageSectionsProvider>

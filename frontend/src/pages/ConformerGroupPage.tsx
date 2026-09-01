@@ -38,37 +38,40 @@ function Ledger({ group }: { group: ConformerGroup }) {
 
     return (
         <section className="conformer-page">
-            <PageShell>
-            <header className="basin-header">
-                <p className="eyebrow">Conformer basin · evidence ledger</p>
-                <div className="basin-title">
-                    <h1>{basin.label ?? basin.conformer_group_ref}</h1>
-                    <span className="review-badge">{statusLabel(basin.review.status)}</span>
-                </div>
-                <p className="basin-intro">
-                    One torsional basin, shown through its deposited observations. Calculation rows
-                    are evidence attached to those observations; they are not separate conformers.
-                </p>
-                <dl className="basin-context">
-                    <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
-                    <div>
-                        <dt>Species entry</dt>
-                        <dd>
-                            <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                {species.species_entry_label ?? species.species_entry_ref}
-                            </Link>
-                        </dd>
-                    </div>
-                    <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
-                </dl>
-                {/* Identity-first header, matching the shared record-page
-                    order (identity -> facets -> provenance). No facets tier
-                    follows: this endpoint's `species` context carries
-                    neither `species_entry_kind` nor `electronic_state_kind`
-                    to build one from (unlike the species entry surface),
-                    and no `submission_ref` provenance tier either -- both
-                    omitted rather than fabricated. */}
-            </header>
+            <PageShell
+                identity={(
+                    <header className="basin-header">
+                        <p className="eyebrow">Conformer basin · evidence ledger</p>
+                        <div className="basin-title">
+                            <h1>{basin.label ?? basin.conformer_group_ref}</h1>
+                            <span className="review-badge">{statusLabel(basin.review.status)}</span>
+                        </div>
+                        <p className="basin-intro">
+                            One torsional basin, shown through its deposited observations. Calculation rows
+                            are evidence attached to those observations; they are not separate conformers.
+                        </p>
+                        <dl className="basin-context">
+                            <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
+                            <div>
+                                <dt>Species entry</dt>
+                                <dd>
+                                    <Link to={`/species-entries/${species.species_entry_ref}`}>
+                                        {species.species_entry_label ?? species.species_entry_ref}
+                                    </Link>
+                                </dd>
+                            </div>
+                            <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
+                        </dl>
+                        {/* Identity-first header, matching the shared record-page
+                            order (identity -> facets -> provenance). No facets tier
+                            follows: this endpoint's `species` context carries
+                            neither `species_entry_kind` nor `electronic_state_kind`
+                            to build one from (unlike the species entry surface),
+                            and no `submission_ref` provenance tier either -- both
+                            omitted rather than fabricated. */}
+                    </header>
+                )}
+            >
             <section className="ledger-summary" aria-label="Basin evidence summary">
                 <Metric label="Deposited observations" value={summary.total} />
                 <Metric
