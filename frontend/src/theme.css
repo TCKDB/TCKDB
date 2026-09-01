@@ -149,6 +149,27 @@
                                               identically in three places
                                               in index.css */
 
+    /* ---- Chart series (Cp-vs-T, ThermoCpChart.tsx) ----
+       One categorical hue per overlaid thermo record/conformer — colour is
+       the ONLY thing that carries series identity (raw markers and the
+       fitted line for the same record share the same hue; line-vs-marker
+       shape is what separates measured from fitted, not colour). Eight
+       hand-picked hues, chosen to stay visually distinct from each other
+       AND from --accent/--warning/--notice-* (so a selected-series
+       highlight or an error state never gets mistaken for "just another
+       series"). Grid lines, axis text, and the residual zero-baseline
+       reuse existing structural tokens (--line-2, --muted, --divider) —
+       deliberately not new tokens, so the chart still retints correctly
+       from a single theme.css edit like everything else. */
+    --chart-series-1: #1b6ec2;
+    --chart-series-2: #d9730d;
+    --chart-series-3: #1a7f5a;
+    --chart-series-4: #8a3ffc;
+    --chart-series-5: #c9184a;
+    --chart-series-6: #0f9b8e;
+    --chart-series-7: #a4574c;
+    --chart-series-8: #5c6ac4;
+
     font-family: var(--sans);
     color: var(--ink);
     background: var(--page-bg);
@@ -184,6 +205,15 @@
         --notice-bg: #2b2412;
         --notice-text: #e8c468;
 
+        --chart-series-1: #6fb1f0;
+        --chart-series-2: #f2a65a;
+        --chart-series-3: #4fd1a5;
+        --chart-series-4: #b794f6;
+        --chart-series-5: #f472a0;
+        --chart-series-6: #63d9cc;
+        --chart-series-7: #d99a8c;
+        --chart-series-8: #9aa5f5;
+
         --shadow-color: rgba(0, 0, 0, .55);
     }
 }
@@ -216,6 +246,15 @@
     --notice-border: #b8922a;
     --notice-bg: #2b2412;
     --notice-text: #e8c468;
+
+    --chart-series-1: #6fb1f0;
+    --chart-series-2: #f2a65a;
+    --chart-series-3: #4fd1a5;
+    --chart-series-4: #b794f6;
+    --chart-series-5: #f472a0;
+    --chart-series-6: #63d9cc;
+    --chart-series-7: #d99a8c;
+    --chart-series-8: #9aa5f5;
 
     --shadow-color: rgba(0, 0, 0, .55);
 }

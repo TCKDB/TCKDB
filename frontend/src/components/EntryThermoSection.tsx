@@ -13,6 +13,7 @@ import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 import { SupersessionNotice } from "./SupersessionNotice"
+import { ThermoCpChart } from "./ThermoCpChart"
 
 // ---------------------------------------------------------------------------
 // The thermo/statmech/transport read surfaces are ENTRY-SCOPED LISTS
@@ -133,6 +134,20 @@ function ThermoList({ response, conformer, conformers }: {
                 {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                 {" · review: "}{reviewSummaryText(reviewSummary)}
             </p>
+            {records.length > 0 && (
+                // Driven from EVERY deposited record, not the conformer
+                // partition below -- comparing conformers against each other
+                // is the whole point (see the module docstring on
+                // `ThermoCpChart.tsx`), so this never filters to "this
+                // conformer's records" the way the list below does.
+                // `conformer` is only ever used here to decide which
+                // series gets highlighted, never which are shown.
+                <ThermoCpChart
+                    records={records}
+                    conformers={conformers}
+                    selectedConformerGroupRef={conformer?.conformer_group.conformer_group_ref ?? null}
+                />
+            )}
             {records.length === 0 ? (
                 <p className="empty-projection">No thermochemistry records are deposited for this entry.</p>
             ) : conformer ? (
