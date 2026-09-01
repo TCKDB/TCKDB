@@ -34,7 +34,7 @@ from __future__ import annotations
 from collections import defaultdict
 from dataclasses import dataclass
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
@@ -55,6 +55,7 @@ from app.db.models.calculation import (
 from app.db.models.common import (
     CalculationGeometryRole,
     CalculationQuality,
+    CalculationRecordKind,
     CalculationType,
     SubmissionRecordType,
 )
@@ -323,21 +324,23 @@ def search_species_calculations(
     modes_by_calc = (
         _load_freq_modes(session, calc_ids) if "freq_modes" in includes else None
     )
-    # Observation -> set of lot_ids carrying a real ``sp`` calculation, so
+    # Owner (conformer observation, for this species-scoped endpoint) ->
+    # set of lot_ids carrying a real ``sp`` calculation, so
     # ``_build_energy_block`` can decide whether an ``opt`` record's own
     # final energy may be offered as a single-point-equivalent (only when
-    # no real sp exists at that observation's own lot). Scoped to the
-    # observations of opt rows that could actually use it, not the whole
-    # page.
-    sp_lot_pairs_by_obs = _load_sp_lot_pairs(
+    # no real sp exists at that owner's own lot). Scoped to the owners of
+    # opt rows that could actually use it, not the whole page.
+    sp_lot_pairs = _load_sp_lot_pairs(
         session,
         {
-            r.conformer_observation_id
-            for r in rows
-            if r.calc_type == CalculationType.opt
-            and r.energy_hartree is not None
-            and r.conformer_observation_id is not None
-            and r.lot_id is not None
+            CalculationRecordKind.species: {
+                r.conformer_observation_id
+                for r in rows
+                if r.calc_type == CalculationType.opt
+                and r.energy_hartree is not None
+                and r.conformer_observation_id is not None
+                and r.lot_id is not None
+            }
         },
     )
 
@@ -356,7 +359,15 @@ def search_species_calculations(
                     created_at=r.created_at,
                     review=badges[r.calc_id],
                 ),
-                energy=_build_energy_block(r, sp_lot_pairs_by_obs),
+                energy=_build_energy_block(
+                    calc_type=r.calc_type,
+                    energy_hartree=r.energy_hartree,
+                    energy_kind=r.energy_kind,
+                    lot_id=r.lot_id,
+                    record_kind=CalculationRecordKind.species,
+                    owner_id=r.conformer_observation_id,
+                    sp_lot_pairs=sp_lot_pairs,
+                ),
                 frequency=_build_frequency_block(r, freq_by_calc.get(r.calc_id)),
                 freq_modes=(
                     None
@@ -1087,56 +1098,104 @@ def _load_conformer_contexts(
 
 
 def _load_sp_lot_pairs(
-    session: Session, observation_ids: set[int]
-) -> dict[int, set[int]]:
-    """Map conformer_observation_id -> set of lot_ids with a real ``sp`` row.
+    session: Session,
+    owner_ids_by_kind: dict[CalculationRecordKind, set[int]],
+) -> dict[tuple[CalculationRecordKind, int], set[int]]:
+    """Map (record_kind, owner_id) -> set of lot_ids with a real ``sp`` row.
+
+    ``owner_id`` is a ``conformer_observation_id`` for
+    ``CalculationRecordKind.species`` and a ``transition_state_entry_id``
+    for ``CalculationRecordKind.transition_state`` — whichever owner the
+    calculation actually has. A ``calculation`` row is attached to exactly
+    one of ``species_entry_id`` / ``transition_state_entry_id`` (DB check
+    constraint ``one_owner``); a transition-state calculation has no
+    conformer basin and so never carries a ``conformer_observation_id``.
+    Matching on the owner-appropriate column keeps the two owner kinds
+    from leaking into each other's answer — an ``sp`` on a different
+    conformer observation or a different transition-state entry must
+    never suppress this derivation.
 
     Used only to decide whether an ``opt`` record's final energy may be
     served as a single-point-equivalent (see :func:`_build_energy_block`):
-    that requires *no* real ``sp`` calculation at the same observation +
+    that requires *no* real ``sp`` calculation at the same owner +
     level-of-theory pair. This checks existence only — quality or review
     status never gate it, because the question is "was an independent sp
     actually run at this level of theory", not "was it a good one". A
     rejected-quality or unreviewed sp still means one was run, so the
     derivation must not fire.
     """
-    if not observation_ids:
+    species_ids = owner_ids_by_kind.get(CalculationRecordKind.species) or set()
+    ts_ids = (
+        owner_ids_by_kind.get(CalculationRecordKind.transition_state) or set()
+    )
+    if not species_ids and not ts_ids:
         return {}
+    owner_conditions = []
+    if species_ids:
+        owner_conditions.append(
+            Calculation.conformer_observation_id.in_(species_ids)
+        )
+    if ts_ids:
+        owner_conditions.append(
+            Calculation.transition_state_entry_id.in_(ts_ids)
+        )
     rows = session.execute(
-        select(Calculation.conformer_observation_id, Calculation.lot_id)
+        select(
+            Calculation.conformer_observation_id,
+            Calculation.transition_state_entry_id,
+            Calculation.lot_id,
+        )
         .where(
             Calculation.type == CalculationType.sp,
-            Calculation.conformer_observation_id.in_(observation_ids),
             Calculation.lot_id.is_not(None),
+            or_(*owner_conditions),
         )
         .distinct()
     ).all()
-    out: defaultdict[int, set[int]] = defaultdict(set)
-    for obs_id, lot_id in rows:
-        out[obs_id].add(lot_id)
+    out: defaultdict[tuple[CalculationRecordKind, int], set[int]] = defaultdict(
+        set
+    )
+    for obs_id, ts_entry_id, lot_id in rows:
+        if obs_id is not None:
+            out[(CalculationRecordKind.species, obs_id)].add(lot_id)
+        if ts_entry_id is not None:
+            out[(CalculationRecordKind.transition_state, ts_entry_id)].add(
+                lot_id
+            )
     return dict(out)
 
 
 def _build_energy_block(
-    row: _CalcRow, sp_lot_pairs_by_obs: dict[int, set[int]]
+    *,
+    calc_type: CalculationType,
+    energy_hartree: float | None,
+    energy_kind: str | None,
+    lot_id: int | None,
+    record_kind: CalculationRecordKind,
+    owner_id: int | None,
+    sp_lot_pairs: dict[tuple[CalculationRecordKind, int], set[int]],
 ) -> CalculationEnergyBlock | None:
-    if row.energy_kind is None:
+    """Build the energy block, deriving ``single_point_equivalent`` for
+    whichever owner (species conformer observation, or transition-state
+    entry) *calc_type*'s calculation actually has — see
+    :func:`_load_sp_lot_pairs`.
+    """
+    if energy_kind is None:
         return None
     single_point_equivalent: DerivedSinglePointEnergy | None = None
     if (
-        row.calc_type == CalculationType.opt
-        and row.energy_hartree is not None
-        and row.conformer_observation_id is not None
-        and row.lot_id is not None
-        and row.lot_id
-        not in sp_lot_pairs_by_obs.get(row.conformer_observation_id, set())
+        calc_type == CalculationType.opt
+        and energy_hartree is not None
+        and owner_id is not None
+        and lot_id is not None
+        and lot_id not in sp_lot_pairs.get((record_kind, owner_id), set())
     ):
         single_point_equivalent = DerivedSinglePointEnergy(
-            energy_hartree=row.energy_hartree
+            energy_hartree=energy_hartree
         )
     return CalculationEnergyBlock(
-        energy_hartree=row.energy_hartree,
-        energy_kind=row.energy_kind,
+        energy_hartree=energy_hartree,
+        energy_kind=energy_kind,
         single_point_equivalent=single_point_equivalent,
     )
 

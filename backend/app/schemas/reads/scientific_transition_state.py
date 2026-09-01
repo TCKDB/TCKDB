@@ -37,6 +37,9 @@ from app.schemas.reads.scientific_common import (
     SoftwareReleaseSummary,
     WorkflowToolReleaseSummary,
 )
+from app.schemas.reads.scientific_species_calculations import (
+    CalculationEnergyBlock,
+)
 from app.services.trust.models import TrustFragment
 
 # ---------------------------------------------------------------------------
@@ -134,13 +137,24 @@ class TransitionStateCalculationSummary(BaseModel):
 
     Carries enough provenance for a caller to decide whether to follow
     up with the full ``/scientific/calculations/{calculation_ref}``
-    detail call. Heavy include sections (results, dependencies,
+    detail call. Heavy include sections (full results, dependencies,
     parameters, constraints, scan/IRC/path-search points) are NOT
     surfaced here — they remain available on the calculation detail
     endpoint. ``primary_role`` records the dependency role this calc
     plays under the TS entry when known (``opt`` / ``freq`` / ``sp`` /
     ``irc`` / ``path_search`` calcs map directly to their type for
     convenience).
+
+    ``energy`` is the one exception to "heavy sections stay off this
+    summary": it is the same compact block
+    ``/scientific/species-calculations/search`` serves (real
+    ``sp``/``opt`` energy, plus the read-time single-point-equivalent
+    derivation on a converged ``opt`` with no same-level-of-theory
+    ``sp`` on this TS entry — see :class:`CalculationEnergyBlock` and
+    :class:`DerivedSinglePointEnergy`). It was omitted here only
+    because nothing computed it yet, not by design; a single scalar
+    convenience field is not the "heavy" result payload the rest of
+    this docstring is about.
     """
 
     calculation_id: int
@@ -152,6 +166,7 @@ class TransitionStateCalculationSummary(BaseModel):
     level_of_theory: LevelOfTheorySummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
+    energy: CalculationEnergyBlock | None = None
 
 
 # ---------------------------------------------------------------------------

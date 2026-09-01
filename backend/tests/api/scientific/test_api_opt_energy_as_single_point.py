@@ -160,6 +160,48 @@ def test_sp_at_a_different_lot_does_not_suppress_the_derivation(client, db_sessi
     assert ev["calculation_count"] == 2
 
 
+def test_sp_on_a_different_observation_does_not_suppress_the_derivation(
+    client, db_session
+):
+    """Cross-owner leakage guard: an ``sp`` at the *same* level of theory
+    but on a **different** conformer observation must not suppress the
+    derivation for this observation's ``opt``. This is the bug class a
+    join predicate matching more rows than intended would reintroduce
+    (the ``NOT EXISTS``-on-a-NULL-key sevenfold miscount was the same
+    family of mistake, one level up)."""
+    _, entry, obs = _seed(db_session, smiles="C[CH2]OES5")
+    _, other_entry, other_obs = _seed(db_session, smiles="C[CH2]OES6")
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    opt = make_calculation_with_conformer(
+        db_session,
+        species_entry=entry,
+        conformer_observation=obs,
+        type=CalculationType.opt,
+        lot_id=lot.id,
+    )
+    attach_opt_result(db_session, calculation=opt, final_energy_hartree=-77.0)
+    other_sp = make_calculation_with_conformer(
+        db_session,
+        species_entry=other_entry,
+        conformer_observation=other_obs,
+        type=CalculationType.sp,
+        lot_id=lot.id,
+    )
+    attach_sp_result(
+        db_session, calculation=other_sp, electronic_energy_hartree=-999.0
+    )
+
+    records = _search(client, entry.public_ref)
+    assert len(records) == 1
+    sp_equiv = records[0]["energy"]["single_point_equivalent"]
+    assert sp_equiv is not None
+    assert sp_equiv["energy_hartree"] == -77.0
+
+    ev = _evidence_summary(client, obs.public_ref)
+    assert ev["has_sp"] is False
+    assert ev["calculation_count"] == 1
+
+
 def test_opt_with_null_energy_yields_no_derivation(client, db_session):
     """No CalculationOptResult row at all -> no energy, no fabrication."""
     _, entry, obs = _seed(db_session, smiles="C[CH2]OES4")

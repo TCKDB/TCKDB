@@ -25,10 +25,13 @@ from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
     CalculationGeometryValidation,
+    CalculationOptResult,
     CalculationOutputGeometry,
     CalculationSCFStability,
+    CalculationSPResult,
 )
 from app.db.models.common import (
+    CalculationRecordKind,
     CalculationType,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -87,6 +90,10 @@ from app.services.scientific_read.handles import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.species_calculations_search import (
+    _build_energy_block,
+    _load_sp_lot_pairs,
 )
 from app.services.trust import (
     TrustFragment,
@@ -1226,8 +1233,36 @@ def _build_calculations_summary(
         },
     )
 
+    # Real sp/opt energy per calc, mirroring the projection
+    # ``species_calculations_search._query_candidate_calculations`` does
+    # for species-owned rows: "electronic_energy" for a real ``sp``
+    # result, "final_energy" for a real ``opt`` result, ``None`` for
+    # every other calc type (and for an sp/opt whose result row hasn't
+    # landed yet, energy_hartree stays null but the kind is still named).
+    energy_by_calc = _bulk_energy_values(session, calc_ids)
+
+    # transition_state_entry_id -> set of lot_ids carrying a real ``sp``
+    # calculation on *that* entry, so ``_build_energy_block`` can decide
+    # whether a converged ``opt``'s own final energy may be offered as a
+    # single-point-equivalent. Scoped to the entries of opt calcs that
+    # could actually use it (same restriction as the species side).
+    sp_lot_pairs = _load_sp_lot_pairs(
+        session,
+        {
+            CalculationRecordKind.transition_state: {
+                c.transition_state_entry_id
+                for c in calcs
+                if c.type == CalculationType.opt
+                and c.transition_state_entry_id is not None
+                and c.lot_id is not None
+                and energy_by_calc.get(c.id, (None, None))[0] is not None
+            }
+        },
+    )
+
     out: list[TransitionStateCalculationSummary] = []
     for c in calcs:
+        energy_hartree, energy_kind = energy_by_calc.get(c.id, (None, None))
         out.append(
             TransitionStateCalculationSummary(
                 calculation_id=c.id,
@@ -1244,8 +1279,55 @@ def _build_calculations_summary(
                 workflow_tool_release=wf_summaries.get(
                     c.workflow_tool_release_id
                 ),
+                energy=_build_energy_block(
+                    calc_type=c.type,
+                    energy_hartree=energy_hartree,
+                    energy_kind=energy_kind,
+                    lot_id=c.lot_id,
+                    record_kind=CalculationRecordKind.transition_state,
+                    owner_id=c.transition_state_entry_id,
+                    sp_lot_pairs=sp_lot_pairs,
+                ),
             )
         )
+    return out
+
+
+def _bulk_energy_values(
+    session: Session, calc_ids: list[int]
+) -> dict[int, tuple[float | None, str | None]]:
+    """Map calculation_id -> (energy_hartree, energy_kind) for sp/opt calcs.
+
+    Loaded from ``Calculation`` type plus an outer join against the two
+    per-type result tables so an sp/opt calc with no result row yet still
+    gets its ``energy_kind`` named (value ``None``) — the same three-way
+    shape ``species_calculations_search`` produces per row.
+    """
+    if not calc_ids:
+        return {}
+    rows = session.execute(
+        select(
+            Calculation.id,
+            Calculation.type,
+            CalculationSPResult.electronic_energy_hartree,
+            CalculationOptResult.final_energy_hartree,
+        )
+        .outerjoin(
+            CalculationSPResult,
+            CalculationSPResult.calculation_id == Calculation.id,
+        )
+        .outerjoin(
+            CalculationOptResult,
+            CalculationOptResult.calculation_id == Calculation.id,
+        )
+        .where(Calculation.id.in_(calc_ids))
+    ).all()
+    out: dict[int, tuple[float | None, str | None]] = {}
+    for calc_id, calc_type, sp_energy, opt_energy in rows:
+        if calc_type == CalculationType.sp:
+            out[calc_id] = (sp_energy, "electronic_energy")
+        elif calc_type == CalculationType.opt:
+            out[calc_id] = (opt_energy, "final_energy")
     return out
 
 
