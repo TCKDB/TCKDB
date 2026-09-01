@@ -25,8 +25,12 @@ around validation. Bundle paths keep the key-only component; see
 from __future__ import annotations
 
 import logging
-from collections.abc import Mapping
+from collections import defaultdict
+from collections.abc import Iterable, Mapping
+from enum import Enum
+from typing import NamedTuple
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 from tckdb_schemas.local_key_codes import (
     W_STATMECH_CALCULATION_KEY_UNDECLARED as _W_STATMECH_CALCULATION_KEY_UNDECLARED,
@@ -35,6 +39,8 @@ from tckdb_schemas.local_key_codes import (
 from app.api.error_contract import CodedValueError
 from app.db.models.calculation import Calculation
 from app.db.models.common import CalculationType, StatmechCalculationRole
+from app.db.models.energy_correction import FrequencyScaleFactor
+from app.db.models.software import Software, SoftwareRelease
 from app.db.models.statmech import (
     Statmech,
     StatmechElectronicLevel,
@@ -42,6 +48,7 @@ from app.db.models.statmech import (
     StatmechTorsion,
     StatmechTorsionDefinition,
 )
+from app.schemas.upload_warning import UploadWarning
 from app.schemas.workflows.conformer_upload import ConformerUploadStatmechPayload
 from app.services.calculation_ownership import (
     W_STATMECH_SOURCE_CALCULATION_OWNER_MISMATCH,
@@ -516,3 +523,236 @@ def resolve_or_create_statmech(
 
     session.flush()
     return statmech
+
+
+# ---------------------------------------------------------------------------
+# Frequency-scale-factor / freq-calculation software cross-check
+# ---------------------------------------------------------------------------
+#
+# A harmonic frequency scale factor is specific to a level of theory AND to
+# the electronic-structure software the factor was fit against -- the same
+# LOT in Gaussian vs ORCA can legitimately need a different factor (the
+# comment on `frequency_scale_factor.software_id` says so; DR context: the
+# column has carried this dimension since the initial schema). Nothing
+# previously checked that the software a factor was DERIVED FOR is the
+# software that actually produced the frequencies it was APPLIED TO. On the
+# deployed archive today the two always agree -- 95 statmech rows compare
+# cleanly (Gaussian/Gaussian and ORCA/ORCA) -- but that is because every
+# depositor so far happened to use one code for both roles, not because
+# anything verified it.
+#
+# This is a WARNING, never a refusal -- see
+# :func:`collect_converged_opt_energy_warnings` in
+# ``calculation_resolution.py`` for the house rationale: a deliberate
+# cross-code choice (re-scaling frequencies computed elsewhere) can be
+# legitimate and documented, and the archive's job is to surface it, not to
+# reject the deposit.
+
+#: Emitted when a statmech's frequency scale factor was derived for one
+#: software and its 'freq'-role source calculation ran in a different one.
+W_STATMECH_FSF_SOFTWARE_MISMATCH = "statmech_frequency_scale_factor_software_mismatch"
+
+
+class FSFSoftwareComparisonState(str, Enum):
+    """The three outcomes of comparing an FSF's software to a freq calc's.
+
+    ``not_comparable`` is a distinct state, not a synonym for ``match``.
+    Collapsing "nothing to compare" into "compared and agreed" is the exact
+    vacuous-check shape this archive keeps producing and keeps having to
+    dig back out (a check that passes having verified nothing) -- see
+    :func:`evaluate_frequency_scale_factor_software` for the conditions
+    that produce each state.
+    """
+
+    match = "match"
+    mismatch = "mismatch"
+    not_comparable = "not_comparable"
+
+
+class FSFSoftwareComparison(NamedTuple):
+    """One statmech's classification, plus the two software names.
+
+    ``fsf_software`` / ``freq_software`` are populated whenever known,
+    regardless of ``state`` -- including on ``not_comparable``, where one
+    or both may still be ``None`` (that is what made it not comparable).
+    """
+
+    state: FSFSoftwareComparisonState
+    fsf_software: str | None
+    freq_software: str | None
+
+
+def evaluate_frequency_scale_factor_software(
+    session: Session,
+    statmech_ids: Iterable[int],
+) -> dict[int, FSFSoftwareComparison]:
+    """Classify each statmech's FSF-software-vs-freq-calc-software pairing.
+
+    Three states, and only one of them is worth a warning:
+
+    1. **match** -- both sides resolve to a known software and they agree.
+    2. **mismatch** -- both sides resolve to a known software and they
+       differ.
+    3. **not_comparable** -- the statmech's ``frequency_scale_factor_id``
+       is null, its factor's ``software_id`` is null (a software-agnostic
+       factor), it has no ``role='freq'`` source calculation, or that
+       calculation's ``software_release_id`` (and thus its software) is
+       unresolved. This is deliberately never conflated with *match* --
+       see the class docstring on :class:`FSFSoftwareComparisonState`.
+
+    A statmech may carry more than one 'freq'-role source calculation
+    (``statmech_source_calculation``'s primary key is
+    ``(statmech_id, calculation_id, role)``, not unique per role); when
+    every freq calc with a resolvable software agrees with the factor,
+    that counts as a match, and the lowest-id mismatching calculation's
+    software is the one reported if any disagree.
+
+    :param session: Active SQLAlchemy session.
+    :param statmech_ids: Statmech ids to classify.
+    :returns: Every id from ``statmech_ids`` (deduplicated) mapped to its
+        :class:`FSFSoftwareComparison`. An id absent from the archive
+        entirely still comes back mapped to ``not_comparable``.
+    """
+    ids = list(dict.fromkeys(statmech_ids))
+    result: dict[int, FSFSoftwareComparison] = {
+        statmech_id: FSFSoftwareComparison(
+            FSFSoftwareComparisonState.not_comparable, None, None
+        )
+        for statmech_id in ids
+    }
+    if not ids:
+        return result
+
+    fsf_rows = session.execute(
+        select(Statmech.id, Software.id, Software.name)
+        .join(
+            FrequencyScaleFactor,
+            FrequencyScaleFactor.id == Statmech.frequency_scale_factor_id,
+        )
+        .outerjoin(Software, Software.id == FrequencyScaleFactor.software_id)
+        .where(
+            Statmech.id.in_(ids),
+            Statmech.frequency_scale_factor_id.is_not(None),
+        )
+    ).all()
+    if not fsf_rows:
+        return result
+    fsf_software_by_statmech: dict[int, tuple[int | None, str | None]] = {
+        row[0]: (row[1], row[2]) for row in fsf_rows
+    }
+
+    freq_rows = session.execute(
+        select(
+            StatmechSourceCalculation.statmech_id,
+            StatmechSourceCalculation.calculation_id,
+            Software.id,
+            Software.name,
+        )
+        .join(
+            Calculation,
+            Calculation.id == StatmechSourceCalculation.calculation_id,
+        )
+        .outerjoin(
+            SoftwareRelease,
+            SoftwareRelease.id == Calculation.software_release_id,
+        )
+        .outerjoin(Software, Software.id == SoftwareRelease.software_id)
+        .where(
+            StatmechSourceCalculation.statmech_id.in_(
+                fsf_software_by_statmech.keys()
+            ),
+            StatmechSourceCalculation.role == StatmechCalculationRole.freq,
+        )
+    ).all()
+    freq_by_statmech: dict[int, list[tuple[int, int | None, str | None]]] = (
+        defaultdict(list)
+    )
+    for statmech_id, calc_id, sw_id, sw_name in freq_rows:
+        freq_by_statmech[statmech_id].append((calc_id, sw_id, sw_name))
+
+    for statmech_id, (fsf_software_id, fsf_software_name) in (
+        fsf_software_by_statmech.items()
+    ):
+        if fsf_software_id is None:
+            continue  # (3): software-agnostic factor -- not comparable.
+        known_freq = [
+            (calc_id, sw_id, sw_name)
+            for calc_id, sw_id, sw_name in freq_by_statmech.get(statmech_id, [])
+            if sw_id is not None
+        ]
+        if not known_freq:
+            continue  # (3): no freq calc, or none with resolvable software.
+        mismatched = [
+            entry for entry in known_freq if entry[1] != fsf_software_id
+        ]
+        if mismatched:
+            _, _, freq_software_name = min(mismatched, key=lambda entry: entry[0])
+            result[statmech_id] = FSFSoftwareComparison(
+                FSFSoftwareComparisonState.mismatch,
+                fsf_software_name,
+                freq_software_name,
+            )
+        else:
+            # (1): every known freq software agrees -- report any one name.
+            _, _, freq_software_name = known_freq[0]
+            result[statmech_id] = FSFSoftwareComparison(
+                FSFSoftwareComparisonState.match,
+                fsf_software_name,
+                freq_software_name,
+            )
+    return result
+
+
+def collect_frequency_scale_factor_software_mismatch_warnings(
+    session: Session,
+    statmech_ids: Iterable[int],
+) -> list[UploadWarning]:
+    """Warn when a statmech's FSF software and its freq-calc software differ.
+
+    Thin wrapper over :func:`evaluate_frequency_scale_factor_software`
+    (see its docstring for the three states) that turns only the
+    ``mismatch`` outcomes into warnings -- ``match`` and ``not_comparable``
+    both stay silent here, on purpose (this is a WARNING, never a refusal:
+    see :func:`collect_converged_opt_energy_warnings` in
+    ``calculation_resolution.py`` for the house rationale -- a deliberate
+    cross-code choice, re-scaling frequencies computed elsewhere, can be
+    legitimate and documented, and the archive's job is to surface it, not
+    to reject the deposit).
+
+    Never leaks a database id into the warning text (matches the house
+    no-ID-leak rule) -- only software names, which are user-facing content
+    already surfaced elsewhere on the same record.
+
+    :param session: Active SQLAlchemy session.
+    :param statmech_ids: Every statmech id the current request persisted
+        (or touched).
+    :returns: One :class:`UploadWarning` per statmech whose factor and
+        freq-calculation softwares are both known and disagree.
+    """
+    ids = list(dict.fromkeys(statmech_ids))
+    if not ids:
+        return []
+    comparisons = evaluate_frequency_scale_factor_software(session, ids)
+
+    warnings: list[UploadWarning] = []
+    for comparison in comparisons.values():
+        if comparison.state is not FSFSoftwareComparisonState.mismatch:
+            continue
+        warnings.append(
+            UploadWarning(
+                field="frequency_scale_factor",
+                code=W_STATMECH_FSF_SOFTWARE_MISMATCH,
+                message=(
+                    "This statmech record's frequency scale factor was "
+                    f"derived for {comparison.fsf_software}, but its "
+                    f"'freq'-role source calculation ran in "
+                    f"{comparison.freq_software}. A harmonic scale factor "
+                    "is specific to the code it was fit against, so "
+                    "applying it across a different code is a deliberate "
+                    "choice, not an error -- confirm this is intentional "
+                    "and documented, or attach a scale factor derived for "
+                    f"{comparison.freq_software} instead."
+                ),
+            )
+        )
+    return warnings

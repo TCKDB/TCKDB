@@ -351,6 +351,20 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
 
 function StatmechRecordCard({ record }: { record: StatmechRecord }) {
     const core = record.statmech
+    // The software the scale factor was DERIVED FOR -- a harmonic scale
+    // factor is specific to level of theory AND to the electronic-structure
+    // code that produced the frequencies it was fit against (same LOT,
+    // different program, different factor). This is distinct from
+    // `record.software_release` below, which is the software attached to
+    // the statmech RECORD itself (often the analysis tool, e.g. Arkane) --
+    // the two happen to agree on every row in the archive today, so
+    // stacking them undifferentiated would read as one fact where the
+    // schema actually carries two. Rendered only when the archive recorded
+    // it: absence here describes "not requested/not on the wire", not "no
+    // software" -- no placeholder stands in for it.
+    const fsfSoftwareLabel = record.frequency_scale_factor?.software
+        ? softwareLabel(record.frequency_scale_factor.software)
+        : null
     return (
         <article className="science-record" aria-labelledby={`statmech-heading-${core.statmech_ref}`}>
             <div className="science-record-heading">
@@ -401,11 +415,12 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
                         invariant instead of hiding a false safety net behind it. */}
                     {` ${formatQuantity("statmech_frequency_scale_factor", record.frequency_scale_factor.value)!.value} (${statusLabel(record.frequency_scale_factor.scale_kind)})`}
                     {record.frequency_scale_factor.level_of_theory ? ` · ${lotLabel(record.frequency_scale_factor.level_of_theory)}` : ""}
+                    {fsfSoftwareLabel ? ` · derived for ${fsfSoftwareLabel}` : ""}
                 </p>
             )}
 
             <p className="section-note">
-                Software:{" "}
+                Record software:{" "}
                 {softwareLabel(record.software_release) ?? "not recorded"}
                 {" · "}Workflow:{" "}
                 {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}

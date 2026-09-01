@@ -55,6 +55,9 @@ from app.services.provenance_warnings import (
     collect_transport_provenance_warnings,
     statmech_has_rotational_structure,
 )
+from app.services.statmech_resolution import (
+    collect_frequency_scale_factor_software_mismatch_warnings,
+)
 from app.services.upload_reconciliation import (
     reconcile_species_entry,
     reconcile_species_entry_full,
@@ -473,6 +476,11 @@ def upload_statmech(
     )
     statmech = persist_statmech_upload(
         session, request, created_by=current_user.id, review_policy=sub.policy
+    )
+    warnings.extend(
+        collect_frequency_scale_factor_software_mismatch_warnings(
+            session, [statmech.id]
+        )
     )
     result = StatmechUploadResult(
         id=statmech.id,
