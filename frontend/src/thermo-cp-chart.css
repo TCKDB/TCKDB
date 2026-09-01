@@ -1,0 +1,222 @@
+/*
+ * `ThermoCpChart.tsx` — Cp-vs-T panel, residual panel, and their controls.
+ * Its own stylesheet per this project's convention (see the header comment
+ * in `entry-science.css`): a page/section's styling should not depend on
+ * another file's stylesheet having loaded first, and Vite never unloads a
+ * route chunk's CSS once injected. Every colour below is `var(--token)` —
+ * see `theme.css` for the palette (`theme.css.test.ts` enforces this).
+ */
+
+.cp-chart-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .75rem 1.5rem;
+    margin: 1.25rem 0 1rem;
+}
+
+.cp-chart-toggle {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.cp-chart-toggle legend {
+    padding: 0;
+    font: .64rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+}
+
+.cp-chart-toggle button {
+    padding: .3rem .65rem;
+    border: 1px solid var(--control-border);
+    background: var(--surface);
+    color: var(--accent);
+    font: .7rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+
+.cp-chart-toggle button:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.cp-chart-toggle button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
+}
+
+/* Same "never let the converted column imply otherwise" rule as the
+   Å/bohr note in geometry-detail.css: names the stored unit and the exact
+   conversion factor, rather than a bare "(converted)" badge near the
+   values. */
+.cp-chart-unit-note {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--muted);
+    font: .78rem/1.55 var(--mono);
+}
+
+.cp-chart-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem .9rem;
+    margin: 0 0 1.25rem;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-chart-legend-item {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .3rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+    font: .74rem var(--mono);
+    color: var(--ink-2);
+}
+
+.cp-chart-legend-item--selected {
+    border-color: var(--accent);
+    background: var(--accent-50);
+    color: var(--ink);
+}
+
+.cp-chart-swatch {
+    display: inline-block;
+    width: .65rem;
+    height: .65rem;
+    border-radius: 50%;
+    flex: none;
+}
+
+.cp-chart-legend-flag {
+    color: var(--accent-700);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    font-size: .64rem;
+}
+
+.cp-chart-panel {
+    position: relative;
+    margin: 0 0 1.5rem;
+}
+
+.cp-chart-panel--residual {
+    margin-top: 1.75rem;
+}
+
+.cp-chart-svg {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-width: 720px;
+}
+
+.cp-chart-gridline {
+    stroke: var(--line-2);
+    stroke-width: 1;
+}
+
+.cp-chart-axis-line {
+    stroke: var(--line);
+    stroke-width: 1.25;
+}
+
+/* The residual panel's own zero baseline — deliberately a stronger line
+   than the plain gridlines above it, since "does this cross zero" is the
+   one thing a reader scans this panel for first. */
+.cp-chart-zero-line {
+    stroke: var(--divider-strong);
+    stroke-width: 1.5;
+    stroke-dasharray: 4 3;
+}
+
+.cp-chart-tick-label {
+    fill: var(--muted);
+    font: .62rem var(--mono);
+}
+
+.cp-chart-tick-label--y {
+    text-anchor: end;
+    dominant-baseline: middle;
+}
+
+.cp-chart-tick-label--x {
+    text-anchor: middle;
+    dominant-baseline: hanging;
+}
+
+.cp-chart-axis-title {
+    margin: .3rem 0 0;
+    color: var(--muted);
+    font: .68rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.cp-chart-axis-title--x {
+    text-align: center;
+}
+
+.cp-chart-axis-title--y {
+    position: absolute;
+    top: 50%;
+    left: -2.1rem;
+    transform-origin: left center;
+    transform: rotate(-90deg) translateX(-50%);
+    white-space: nowrap;
+}
+
+.cp-chart-residual-line {
+    stroke-dasharray: 3 2;
+    opacity: .7;
+}
+
+/* A non-selected series dims once ANY series is selected, so the
+   highlighted conformer reads at a glance without the others vanishing —
+   they stay fully present and legible, just visually secondary. Motion is
+   opt-in only: the base state below is a plain CSS custom property with no
+   transition, and the transition itself is added ONLY under
+   prefers-reduced-motion: no-preference, per this project's own house
+   rule (see index.css's global reduced-motion block). */
+.cp-chart-series {
+    opacity: 1;
+}
+
+.cp-chart-series--dimmed {
+    opacity: .35;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .cp-chart-series {
+        transition: opacity .15s ease;
+    }
+}
+
+.cp-chart-absence-notes {
+    margin: 0 0 1rem;
+    padding: 0;
+    list-style: none;
+}
+
+.cp-chart-absence-notes li {
+    margin: .3rem 0;
+}
+
+@media (max-width: 680px) {
+    .cp-chart-axis-title--y {
+        display: none;
+    }
+}
