@@ -226,7 +226,7 @@ def test_ts_search_and_browse_include_calculations_carry_the_same_derivation(
 
     browse_body = client.get(
         "/api/v1/scientific/transition-states/browse"
-        f"?has_calculations=true&include=calculations"
+        "?has_calculations=true&include=calculations"
     ).json()
     browse_calc_by_ref = {
         c["calculation_ref"]: c
