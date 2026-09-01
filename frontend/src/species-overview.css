@@ -1,5 +1,5 @@
 .species-overview {
-    max-width: 76rem;
+    max-width: 100rem;
     margin: 0 auto;
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
@@ -192,7 +192,6 @@
     letter-spacing: -.025em;
 }
 
-.entry-card h4 a,
 .entry-card-action {
     color: var(--accent-700);
     text-decoration: underline;
@@ -200,10 +199,24 @@
     text-underline-offset: .16em;
 }
 
-.entry-card h4 a:hover,
 .entry-card-action:hover {
     color: var(--accent);
     text-decoration-color: currentColor;
+}
+
+/* The heading link now wraps `RecordFacetChips`' `<ul>` of pills rather
+   than plain text -- an underline drawn under a row of chips (each
+   already outlined as its own pill) reads as a stray line, not as link
+   affordance, so this link relies on the chips' own hover/focus styling
+   instead of the shared underline `.entry-card-action` uses. */
+.entry-card h4 a {
+    display: inline-block;
+    text-decoration: none;
+}
+
+.entry-card h4 a:hover .record-facet-chip {
+    border-color: var(--accent-300);
+    color: var(--accent);
 }
 
 .entry-review {

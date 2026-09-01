@@ -3,6 +3,7 @@ import "../conformer-group.css"
 import "../entry-science.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel } from "../domain/conformerEvidence"
+import { SectionHeading } from "./PageSections"
 
 /**
  * Reads straight off the conformer projection already loaded for the
@@ -19,7 +20,7 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
         <section className="ledger-section" aria-labelledby="geometry-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Evidence for this conformer</p>
-                <h2 id="geometry-heading">Geometry</h2>
+                <SectionHeading id="geometry-heading">Geometry</SectionHeading>
                 <p>
                     {uniqueGeometries.length} distinct stored geometr{uniqueGeometries.length === 1 ? "y" : "ies"} from{" "}
                     {geometryLinks.length} calculation output{geometryLinks.length === 1 ? "" : "s"} for {conformerLabel(conformer)}.

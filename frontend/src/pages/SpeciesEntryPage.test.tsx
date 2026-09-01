@@ -689,6 +689,29 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         expect(within(noLink).queryByText("thm_three")).not.toBeInTheDocument()
     })
 
+    // `SpeciesEntryPage.tsx` has exactly ONE `<h2>` in its own file -- a
+    // per-file scan would wrongly deny this page a table of contents. Its
+    // real sections live in child components (`ConformerSelector`,
+    // `ConformerEvidenceLinkage`, `EntryThermoSection`, `ThermoCpChart`),
+    // each registering itself at runtime (`SectionHeading`,
+    // `components/PageSections.tsx`) -- this is the case a naive,
+    // file-scoped implementation fails, using the SAME unmodified thermo
+    // fixture the test above already exercises (2 conformers, 3 thermo
+    // records), not a fixture rigged to hit a round section count.
+    it("shows a table of contents even though the page's own file declares only one <h2>", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)
+        render(<App />)
+        await screen.findByText("thm_one")
+
+        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
+        const labels = within(toc).getAllByRole("link").map((link) => link.textContent)
+        expect(labels).toContain("Choose a conformer")
+        expect(labels).toContain("Thermochemistry")
+        expect(labels).toContain("Heat capacity vs. temperature")
+        expect(labels.length).toBeGreaterThanOrEqual(4)
+    })
+
     it("renders the evidence-completeness rubric as a compact score plus chips for only the FAILED checks, not eight prose lines", async () => {
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/thermo`)

@@ -17,6 +17,7 @@ import {
 } from "../domain/thermoCpChartLayout"
 import { buildCpChartSeries, type CpChartSeries } from "../domain/thermoCpSeries"
 import { JOULES_PER_CALORIE, cpUnitLabel, type CpUnit } from "../domain/thermoNasa"
+import { SectionHeading } from "./PageSections"
 
 // ---------------------------------------------------------------------------
 // Hand-rolled SVG, no charting library: this project has no plotting
@@ -77,7 +78,7 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
         <section className="ledger-section cp-chart-section" aria-labelledby="cp-chart-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Derived view</p>
-                <h2 id="cp-chart-heading">Heat capacity vs. temperature</h2>
+                <SectionHeading id="cp-chart-heading">Heat capacity vs. temperature</SectionHeading>
                 <p>
                     Every deposited thermo record's own measured points and NASA-7 fit, overlaid — never combined
                     or averaged across conformers. Comparing the lines is how far the conformers actually agree.

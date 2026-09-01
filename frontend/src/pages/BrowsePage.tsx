@@ -12,6 +12,7 @@ import {
 import type { BrowseFilters, BrowseKind } from "../api/browseApi"
 import { BrowseFilterForm } from "../components/BrowseFilterForm"
 import { BrowseKindSelector } from "../components/BrowseKindSelector"
+import { PageShell } from "../components/PageShell"
 import { SpeciesBrowseRow } from "../components/SpeciesBrowseRow"
 import { TransitionStateBrowseRow } from "../components/TransitionStateBrowseRow"
 import { archiveEmptyMessage, filteredEmptyMessage, pagedPastEndMessage } from "../domain/browseEmptyState"
@@ -69,6 +70,7 @@ export default function BrowsePage() {
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Browse</span>
             </nav>
+            <PageShell>
             <header className="browse-header">
                 <p className="eyebrow">Archive index</p>
                 <h1>Browse the archive</h1>
@@ -82,6 +84,7 @@ export default function BrowsePage() {
             <BrowseFilterForm filters={filters} kind={kind} onChange={updateFilters} />
 
             <BrowseResults filters={filters} kind={kind} offset={offset} setOffset={setOffset} state={state} />
+            </PageShell>
         </section>
     )
 }

@@ -2,6 +2,8 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import type { ConformerObservation } from "../api/conformerObservationApi"
 import { lotLabel } from "../api/scientificSchemas"
+import { PageShell } from "../components/PageShell"
+import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { useConformerObservation } from "../hooks/useConformerObservation"
 
@@ -90,6 +92,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Observation</span>
             </nav>
+            <PageShell>
             <header className="basin-header">
                 <p className="eyebrow">Conformer observation · deposited evidence</p>
                 <div className="basin-title">
@@ -149,7 +152,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             <section className="ledger-section" aria-labelledby="lot-by-stage">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited provenance</p>
-                    <h2 id="lot-by-stage">Levels of theory by stage</h2>
+                    <SectionHeading id="lot-by-stage">Levels of theory by stage</SectionHeading>
                     <p>Each stage keeps its own method. Differing levels across stages are never flattened.</p>
                 </div>
                 {stages.length ? (
@@ -169,7 +172,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             <section className="ledger-section" aria-labelledby="calc-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Machine detail</p>
-                    <h2 id="calc-ledger">Calculation evidence</h2>
+                    <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
                     <p>
                         Rows are listed in the order the archive returned them. No dependency ordering is drawn
                         between rows here — that relationship is only shown when explicit dependency data backs it.
@@ -188,7 +191,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
 
             <section className="ledger-section geometry-ledger" aria-labelledby="geometry-ledger">
                 <p className="eyebrow">Stored coordinates</p>
-                <h2 id="geometry-ledger">Geometry records</h2>
+                <SectionHeading id="geometry-ledger">Geometry records</SectionHeading>
                 <p>
                     These are stored geometry objects linked from this observation's calculation output. Their
                     count is not a conformer count and is tracked separately from the calculation-row count above.
@@ -219,7 +222,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             <section className="ledger-section" aria-labelledby="sibling-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited provenance</p>
-                    <h2 id="sibling-ledger">Sibling observations</h2>
+                    <SectionHeading id="sibling-ledger">Sibling observations</SectionHeading>
                     <p>Each sibling is an independent deposition; none of them is this observation.</p>
                 </div>
                 {observationsAvailability === "populated" && siblings.length > 0 ? (
@@ -239,7 +242,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             <section className="ledger-section" aria-labelledby="review-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Review &amp; trust</p>
-                    <h2 id="review-ledger">Review history</h2>
+                    <SectionHeading id="review-ledger">Review history</SectionHeading>
                     <p>The current status is {statusLabel(core.review.status)}. This is the record of how it got there.</p>
                 </div>
                 {reviewAvailability === "populated" ? (
@@ -272,7 +275,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
 
             {selections.length > 0 && (
                 <details className="ledger-section">
-                    <summary><h2>Curation selections ({selections.length})</h2></summary>
+                    <summary><SectionHeading id="curation-selections" label={`Curation selections (${selections.length})`}>Curation selections ({selections.length})</SectionHeading></summary>
                     <ul>
                         {selections.map((selection, index) => (
                             <li key={`${selection.selection_kind}-${index}`}>
@@ -283,6 +286,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                     </ul>
                 </details>
             )}
+            </PageShell>
         </section>
     )
 }

@@ -11,7 +11,7 @@
  */
 
 .conformer-page {
-    max-width: 76rem;
+    max-width: 100rem;
     margin: 0 auto;
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }

@@ -731,4 +731,53 @@ describe("GeometryDetailPage", () => {
             expect(producerPointer.tagName).not.toBe("SPAN")
         })
     })
+
+    describe("page shell: table of contents and width caps", () => {
+        // This page's real, unmodified fixture (`mockRecord()`) renders 5
+        // `<h2>` sections at runtime -- Structure view, Coordinate table,
+        // Raw XYZ, Produced by, Used as input by -- even though the page's
+        // own file only declares 4 `<h2 ...>` call sites (`ProvenanceSection`
+        // is one component invoked twice). This is a REAL page rendering
+        // real data, not a fixture hand-built to hit a round number.
+        it("shows a table of contents with one entry per section that actually rendered", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+
+            const toc = screen.getByRole("navigation", { name: "Sections on this page" })
+            const links = within(toc).getAllByRole("link")
+            expect(links.map((link) => link.textContent)).toEqual([
+                "Structure view", "Coordinate table", "Raw XYZ", "Produced by", "Used as input by",
+            ])
+            expect(links[0]).toHaveAttribute("href", "#viewer-heading")
+        })
+
+        it("caps running prose at its own width while the 3D viewer and coordinate table use the page's full width", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+            const { container } = page()
+            await screen.findByRole("heading", { name: "CH4 geometry" })
+
+            const prose = container.querySelector(".basin-intro") as HTMLElement
+            const viewer = container.querySelector(".geometry-viewer") as HTMLElement
+            const table = container.querySelector(".stage-table") as HTMLElement
+            expect(prose).not.toBeNull()
+            expect(viewer).not.toBeNull()
+            expect(table).not.toBeNull()
+
+            const proseMaxWidth = getComputedStyle(prose).maxWidth
+            const viewerMaxWidth = getComputedStyle(viewer).maxWidth
+            // Prose has an explicit, narrow cap; the viewer and the table
+            // have none at all (the page's own 100rem cap is the only
+            // thing bounding them) -- the two must not resolve to the same
+            // value, which is what "wide page, capped prose" actually
+            // means as a checkable claim rather than a screenshot.
+            expect(proseMaxWidth).toBe("44rem")
+            expect(viewerMaxWidth).not.toBe(proseMaxWidth)
+            // jsdom's CSSOM reports an unset property as "" rather than
+            // resolving it to CSS's own "none" initial value -- either way,
+            // the point holds: nothing constrains this element's width.
+            expect(viewerMaxWidth).toBe("")
+            expect(getComputedStyle(table).maxWidth).not.toBe(proseMaxWidth)
+        })
+    })
 })

@@ -19,6 +19,7 @@ import { useEntryListSection, type EntryListSectionState } from "../hooks/useEnt
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { LazyRowBody } from "./LazyRowBody"
+import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -68,7 +69,7 @@ export function EntryStatmechSection({ entryRef, conformer, conformers }: {
             <SectionErrorBoundary
                 fallback={(
                     <section className="ledger-section" aria-labelledby="statmech-heading">
-                        <h2 id="statmech-heading">Statistical mechanics</h2>
+                        <SectionHeading id="statmech-heading">Statistical mechanics</SectionHeading>
                         <p className="empty-projection" role="alert">
                             This section could not be displayed. The rest of this entry is unaffected.
                         </p>
@@ -127,7 +128,7 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
             <section className="ledger-section" aria-labelledby="statmech-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
-                    <h2 id="statmech-heading">Statistical mechanics</h2>
+                    <SectionHeading id="statmech-heading">Statistical mechanics</SectionHeading>
                     <p>
                         Every statmech record deposited for this entry, each shown independently. Multiple
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
@@ -465,7 +466,7 @@ function StatmechLazySection<T>({
     if (!available) {
         return (
             <section className="ledger-section" aria-labelledby={headingId}>
-                <h2 id={headingId}>{heading}</h2>
+                <SectionHeading id={headingId}>{heading}</SectionHeading>
                 <p className="empty-projection">{notAvailableText}</p>
             </section>
         )
@@ -475,7 +476,7 @@ function StatmechLazySection<T>({
             className="ledger-section"
             onToggle={(event) => { if ((event.target as HTMLDetailsElement).open) onOpen() }}
         >
-            <summary><h2 id={headingId}>{heading}</h2></summary>
+            <summary><SectionHeading id={headingId}>{heading}</SectionHeading></summary>
             <p className="section-note" role="status">
                 {state.status === "idle" && "Expand to load this section from the archive."}
                 {state.status === "loading" && "Loading…"}
