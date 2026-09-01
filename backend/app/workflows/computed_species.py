@@ -101,7 +101,10 @@ from app.services.sp_energy_extraction import (
     try_reconcile_sp_energy_from_output_upload,
 )
 from app.services.species_resolution import resolve_species_entry
-from app.services.statmech_resolution import assert_statmech_role_compatible
+from app.services.statmech_resolution import (
+    assert_statmech_role_compatible,
+    collect_frequency_scale_factor_software_mismatch_warnings,
+)
 from app.services.thermo_resolution import persist_thermo, resolve_thermo_upload
 from app.workflows.thermo import assert_thermo_role_matches_calculation_type
 
@@ -1140,4 +1143,12 @@ def _persist_statmech_block(
                 )
 
     session.flush()
+
+    if warnings is not None:
+        warnings.extend(
+            collect_frequency_scale_factor_software_mismatch_warnings(
+                session, [statmech.id]
+            )
+        )
+
     return statmech

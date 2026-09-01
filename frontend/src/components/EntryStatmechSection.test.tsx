@@ -158,6 +158,21 @@ function cellAt(row: HTMLElement, label: string): string {
     return cell.textContent ?? ""
 }
 
+/**
+ * Finds the `<p class="section-note">` whose text starts with `prefix`.
+ * `getByText(/^Frequency scale factor/)` alone is ambiguous here -- the
+ * `<dt>Frequency scale factor</dt>` label in the `<dl>` above matches the
+ * same regex, so a plain text query throws "multiple elements found"
+ * rather than silently picking the wrong one. Scoping to `p.section-note`
+ * disambiguates without weakening the prefix match.
+ */
+function sectionNoteStartingWith(container: HTMLElement, prefix: string): string {
+    const paragraphs = Array.from(container.querySelectorAll("p.section-note"))
+    const match = paragraphs.find((el) => (el.textContent ?? "").startsWith(prefix))
+    if (!match) throw new Error(`No <p class="section-note"> starting with "${prefix}" found`)
+    return match.textContent ?? ""
+}
+
 function mockResponse(records = mockRecords()) {
     return {
         review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 2 },
@@ -216,10 +231,10 @@ describe("EntryStatmechSection", () => {
         expect(ddFor(card, "Frequency scale factor")).toBe("0.9877")
     })
 
-    it("renders Software and Workflow through their own label rules, not stuttered and not swapped", async () => {
+    it("renders Record software and Workflow through their own label rules, not stuttered and not swapped", async () => {
         // software_release's version already opens with its name (the
         // "Gaussian Gaussian 16" shape); workflow_tool_release's does not.
-        // If the two `<code>Software:</code>`/`<code>Workflow:</code>`
+        // If the two `<code>Record software:</code>`/`<code>Workflow:</code>`
         // fields were ever swapped to call the wrong helper on the wrong
         // shaped object (`toolReleaseLabel` reads `.workflow_tool`, which
         // `software_release` doesn't have), the swapped field would read
@@ -232,10 +247,66 @@ describe("EntryStatmechSection", () => {
         ]))))
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
-        const softwareLine = within(card).getByText(/^Software:/).closest("p") as HTMLElement
+        const softwareLine = within(card).getByText(/^Record software:/).closest("p") as HTMLElement
         expect(softwareLine.textContent).toContain("Gaussian 16, Revision C.02")
         expect(softwareLine.textContent).not.toMatch(/Gaussian Gaussian/)
         expect(softwareLine.textContent).toContain("ARC 2.1.0")
+    })
+
+    it("attributes the scale factor's software to the scale factor, distinct from and never swapped with the record's own software", async () => {
+        // The record's own software (Arkane, the analysis tool) and the
+        // scale factor's software (ORCA, the code the frequencies it was
+        // fit against actually ran in) are DELIBERATELY DIFFERENT codes
+        // here. A fixture where both happened to be the same code could not
+        // catch a swap -- reading either value under the other's label
+        // would still pass. Two distinct codes make a swap visible: the
+        // scale-factor line must show ORCA, and the record-software line
+        // must show Arkane, never the reverse.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({
+                frequency_scale_factor: {
+                    frequency_scale_factor_ref: "fsf_1",
+                    value: 0.998,
+                    scale_kind: "harmonic",
+                    level_of_theory: null,
+                    software: { software_release_ref: "srel_orca", software: "ORCA", version: "5.0.4" },
+                    source_literature: null,
+                },
+                software_release: { software_release_ref: "srel_arkane", software: "Arkane", version: null },
+            }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        const fsfLineText = sectionNoteStartingWith(card, "Frequency scale factor")
+        expect(fsfLineText).toContain("derived for ORCA 5.0.4")
+
+        const recordSoftwareLine = within(card).getByText(/^Record software:/).closest("p") as HTMLElement
+        expect(recordSoftwareLine.textContent).toContain("Arkane")
+        expect(recordSoftwareLine.textContent).not.toContain("ORCA")
+        expect(fsfLineText).not.toContain("Arkane")
+    })
+
+    it("renders no software placeholder on the scale factor line when the archive recorded none", async () => {
+        // Absence describes the request/data shape here, not "unknown
+        // software" -- there must be no "not recorded" stand-in, unlike
+        // the record-software line which does use that placeholder.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({
+                frequency_scale_factor: {
+                    frequency_scale_factor_ref: "fsf_2",
+                    value: 1.0,
+                    scale_kind: "harmonic",
+                    level_of_theory: null,
+                    software: null,
+                    source_literature: null,
+                },
+            }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        const fsfLineText = sectionNoteStartingWith(card, "Frequency scale factor")
+        expect(fsfLineText).not.toContain("derived for")
+        expect(fsfLineText).not.toContain("not recorded")
     })
 
     it("renders an available on-demand section as idle until opened, and fetches exactly its own token once", async () => {

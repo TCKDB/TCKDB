@@ -30,7 +30,10 @@ from app.services.record_review import (
     apply_review_policy,
 )
 from app.services.species_resolution import resolve_species_entry
-from app.services.statmech_resolution import resolve_or_create_statmech
+from app.services.statmech_resolution import (
+    collect_frequency_scale_factor_software_mismatch_warnings,
+    resolve_or_create_statmech,
+)
 from app.services.transport_resolution import resolve_and_create_transport
 
 
@@ -311,6 +314,12 @@ def persist_conformer_upload(
         session,
         [calculation.id, *(c.id for c in additional_calcs)],
     )
+    if statmech_row is not None:
+        energy_warnings.extend(
+            collect_frequency_scale_factor_software_mismatch_warnings(
+                session, [statmech_row.id]
+            )
+        )
 
     return ConformerUploadOutcome(
         observation=observation,
