@@ -119,6 +119,18 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByText(/Their count is not a conformer count/)).toBeVisible()
     })
 
+    // This page renders exactly 2 sections at runtime (observation-scoped
+    // evidence, geometry records) -- below the shared shell's 4-section
+    // threshold (`MIN_SECTIONS_FOR_TOC`, `components/TableOfContents.tsx`).
+    // Real fixture, real page -- not a count hand-picked to land under the
+    // threshold.
+    it("renders no table of contents -- this page has only 2 sections", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "conformer_1" })
+        expect(screen.queryByRole("navigation", { name: "Sections on this page" })).not.toBeInTheDocument()
+    })
+
     it("shows a specific not-found state", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => {
             return HttpResponse.json({}, { status: 404 })

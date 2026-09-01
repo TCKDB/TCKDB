@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { CalculationTypeCount } from "../domain/conformerEvidence"
 import { calculationTypeCounts, conformerLabel, describeConformerEvidence, geometryConvergence } from "../domain/conformerEvidence"
+import { SectionHeading } from "./PageSections"
 
 // The published `calculation_count` and the per-stage breakdown come from
 // TWO different sources on the wire (`evidence_summary.calculation_count`
@@ -49,7 +50,7 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
     return (
         <section className="evidence-linkage" aria-labelledby="evidence-linkage-heading">
             <p className="eyebrow">Evidence</p>
-            <h2 id="evidence-linkage-heading">Evidence for {label}</h2>
+            <SectionHeading id="evidence-linkage-heading" label={`Evidence for ${label}`}>Evidence for {label}</SectionHeading>
             <p className="evidence-linkage-story">{story}</p>
             <details className="evidence-linkage-detail">
                 {/* The count in the summary is the "References (4)" lesson applied

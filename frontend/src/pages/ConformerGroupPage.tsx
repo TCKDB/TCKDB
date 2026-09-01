@@ -2,6 +2,8 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import type { ConformerGroup } from "../api/conformerGroupApi"
 import { lotLabel } from "../api/scientificSchemas"
+import { PageShell } from "../components/PageShell"
+import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
@@ -36,6 +38,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
 
     return (
         <section className="conformer-page">
+            <PageShell>
             <header className="basin-header">
                 <p className="eyebrow">Conformer basin · evidence ledger</p>
                 <div className="basin-title">
@@ -80,7 +83,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
             <section className="ledger-section" aria-labelledby="observation-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited provenance</p>
-                    <h2 id="observation-ledger">Observation-scoped evidence</h2>
+                    <SectionHeading id="observation-ledger">Observation-scoped evidence</SectionHeading>
                     <p>Methods remain on their actual calculation rows so differing levels stay visible.</p>
                 </div>
                 {observations.length ? (
@@ -100,7 +103,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
             </section>
             <section className="ledger-section geometry-ledger" aria-labelledby="geometry-ledger">
                 <p className="eyebrow">Stored coordinates</p>
-                <h2 id="geometry-ledger">Geometry records</h2>
+                <SectionHeading id="geometry-ledger">Geometry records</SectionHeading>
                 <p>
                     These are stored geometry objects linked from calculation output. Their count is
                     not a conformer count.
@@ -125,6 +128,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                     </p>
                 )}
             </section>
+            </PageShell>
         </section>
     )
 }

@@ -25,7 +25,6 @@ function overviewSpecies(ref = speciesRef) {
             species_entry_ref: entryRef,
             species_entry_kind: "minimum",
             electronic_state_kind: "ground",
-            species_entry_label: "ground electronic state",
             review: { status: "not_reviewed" },
             availability: {
                 has_thermo: true,
@@ -90,7 +89,7 @@ describe("public archive shell", () => {
         await user.click(screen.getByRole("button", { name: "Search" }))
         expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
         expect(screen.getByText(speciesRef)).toBeVisible()
-        expect(screen.getByRole("link", { name: "ground electronic state" }))
+        expect(screen.getByRole("link", { name: "minimum, ground state" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
     })
 

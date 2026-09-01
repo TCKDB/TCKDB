@@ -8,7 +8,7 @@
  * shaping and coordinate-table controls below are new here.
  */
 
-.geometry-page { max-width: 76rem; }
+.geometry-page { max-width: 100rem; }
 
 /* `.section-note` is otherwise defined only in `calculation-detail.css`,
    which this page does not import — `GeometryViewer` used the class

@@ -1,5 +1,6 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { calculationTypeCounts, conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
+import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
 
 // The heading is imperative ("Choose a conformer") only when there is an
@@ -30,7 +31,7 @@ export function ConformerSelector({ conformers, selectedRef, onSelect }: {
     return (
         <section className="conformer-picker" aria-labelledby="conformer-picker-title">
             <p className="eyebrow">Conformers</p>
-            <h2 id="conformer-picker-title">{pickerHeading(conformers.length)}</h2>
+            <SectionHeading id="conformer-picker-title">{pickerHeading(conformers.length)}</SectionHeading>
             {conformers.length === 0 ? (
                 <p className="empty-projection">No conformer basins are projected for this entry.</p>
             ) : (

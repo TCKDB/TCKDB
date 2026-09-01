@@ -9,6 +9,7 @@ import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
+import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -63,7 +64,7 @@ export function EntryThermoSection({ entryRef, conformer, conformers }: {
             <SectionErrorBoundary
                 fallback={(
                     <section className="ledger-section" aria-labelledby="thermo-heading">
-                        <h2 id="thermo-heading">Thermochemistry</h2>
+                        <SectionHeading id="thermo-heading">Thermochemistry</SectionHeading>
                         <p className="empty-projection" role="alert">
                             This section could not be displayed. The rest of this entry is unaffected.
                         </p>
@@ -123,7 +124,7 @@ function ThermoList({ response, conformer, conformers }: {
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>
-                <h2 id="thermo-heading">Thermochemistry</h2>
+                <SectionHeading id="thermo-heading">Thermochemistry</SectionHeading>
                 <p>
                     Every thermo record deposited for this entry, each shown independently. Multiple deposits
                     are never merged, averaged, or reduced to one preferred value on this page.

@@ -1,0 +1,114 @@
+/*
+ * PageShell / TableOfContents — the layout every record page's content
+ * now renders through (`components/PageShell.tsx`). Page-root width caps
+ * (`.species-overview`, `.entry-page`, `.calc-page`, `.conformer-page`,
+ * `.geometry-page`, `.browse-page`, all `max-width: 100rem`) stay in each
+ * page's own stylesheet, unchanged in spirit from before this file
+ * existed -- this one only lays out what sits INSIDE that width: an
+ * optional sticky side rail next to the content column.
+ *
+ * Smooth anchor scrolling is opted into globally here (`:root`) rather
+ * than only for ToC links, since it is the right default for any
+ * same-page `#hash` jump this app makes. `index.css`'s existing
+ * `@media (prefers-reduced-motion: reduce)` rule already forces
+ * `scroll-behavior: auto !important` on every element, so a reader who
+ * has asked for reduced motion gets instant jumps regardless of this
+ * declaration -- nothing reduced-motion-specific needs to live here too.
+ */
+
+:root {
+    scroll-behavior: smooth;
+}
+
+.page-shell-layout {
+    display: flex;
+    align-items: flex-start;
+    gap: clamp(1.5rem, 4vw, 3rem);
+}
+
+.page-shell-content {
+    min-width: 0;
+    flex: 1 1 0;
+}
+
+.page-toc {
+    position: sticky;
+    top: 1.5rem;
+    flex: 0 0 14rem;
+    max-height: calc(100vh - 3rem);
+    overflow-y: auto;
+    border-left: 2px solid var(--line);
+    padding-left: 1rem;
+}
+
+.page-toc ul {
+    display: grid;
+    gap: .5rem;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.page-toc a {
+    display: block;
+    padding: .3rem .5rem;
+    border-left: 2px solid transparent;
+    color: var(--muted);
+    font: .74rem/1.4 var(--mono);
+    text-decoration: none;
+}
+
+.page-toc a:hover {
+    color: var(--accent-700);
+}
+
+.page-toc a:focus-visible {
+    outline: 2px solid var(--accent-300);
+    outline-offset: 2px;
+}
+
+.page-toc a.page-toc-active {
+    border-left-color: var(--accent);
+    color: var(--accent-700);
+    font-weight: 600;
+}
+
+/* Below this width the side rail has no room to sit beside the content
+   column without squeezing it -- collapse to a horizontal, scrollable
+   strip above the content instead of stacking vertically above it (which
+   would push every page's content down by a whole ToC's height on every
+   load, the opposite of "find info quickly"). */
+@media (max-width: 62rem) {
+    .page-shell-layout {
+        flex-direction: column;
+    }
+
+    .page-toc {
+        position: static;
+        width: 100%;
+        max-height: none;
+        overflow-y: visible;
+        overflow-x: auto;
+        border-left: 0;
+        border-bottom: 1px solid var(--line);
+        padding: 0 0 .6rem;
+    }
+
+    .page-toc ul {
+        grid-auto-flow: column;
+        grid-auto-columns: max-content;
+        gap: 1.25rem;
+    }
+
+    .page-toc a {
+        padding: .2rem 0;
+        border-left: 0;
+        border-bottom: 2px solid transparent;
+        white-space: nowrap;
+    }
+
+    .page-toc a.page-toc-active {
+        border-left-color: transparent;
+        border-bottom-color: var(--accent);
+    }
+}

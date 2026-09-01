@@ -1,0 +1,27 @@
+/*
+ * RecordFacetChips — one pill per species-entry identity axis (kind /
+ * electronic state / stereochemistry / isotopologue). Its own stylesheet
+ * per this project's convention (see the header comment in
+ * `entry-science.css`): a component's styling should not depend on
+ * another file's stylesheet having loaded first, and Vite never unloads a
+ * route chunk's CSS once injected.
+ */
+
+.record-facet-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin: .3rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.record-facet-chip {
+    padding: .3rem .65rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font: 600 .82rem/1.2 var(--sans);
+    white-space: nowrap;
+}

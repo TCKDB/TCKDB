@@ -6,6 +6,7 @@ import type { ConformerProjection } from "../api/speciesEntryApi"
 import { lotLabel } from "../api/scientificSchemas"
 import { conformerLabel } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
+import { SectionHeading } from "./PageSections"
 
 /**
  * One row per deposited observation, never merged: an observation with two
@@ -19,7 +20,7 @@ export function ConformerSinglePointTab({ conformer }: { conformer: ConformerPro
         <section className="ledger-section" aria-labelledby="sp-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Evidence for this conformer</p>
-                <h2 id="sp-heading">Single-point energy</h2>
+                <SectionHeading id="sp-heading">Single-point energy</SectionHeading>
                 <p>Single-point energy evidence for {conformerLabel(conformer)}, one row per deposited observation.</p>
             </div>
             {observations.length === 0 ? (

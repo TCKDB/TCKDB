@@ -3,6 +3,8 @@ import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../geometry-detail.css"
 import { GeometryViewer } from "../components/GeometryViewer"
+import { PageShell } from "../components/PageShell"
+import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
 import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import { CopyButton } from "../components/RefsDisclosure"
@@ -149,6 +151,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 <span aria-current="page">Geometry</span>
             </nav>
 
+            <PageShell>
             <header className="basin-header">
                 <p className="eyebrow">Geometry · deposited evidence</p>
                 <div className="basin-title">
@@ -269,6 +272,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 showRole={false}
                 emptyText="No calculation is recorded as having consumed this geometry as input."
             />
+            </PageShell>
         </section>
     )
 }
@@ -304,7 +308,7 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateU
         <section className="ledger-section" aria-labelledby="viewer-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Structure</p>
-                <h2 id="viewer-heading">Structure view</h2>
+                <SectionHeading id="viewer-heading">Structure view</SectionHeading>
             </div>
             {atomsAvailability === "populated" ? (
                 <SectionErrorBoundary
@@ -350,7 +354,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
         <section className="ledger-section" aria-labelledby="coordinates-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>
-                <h2 id="coordinates-heading">Coordinate table</h2>
+                <SectionHeading id="coordinates-heading">Coordinate table</SectionHeading>
                 <p>
                     Every atom in this geometry, in the order the archive returned them. This table is the
                     accessible, selectable fallback for the view above — it renders whether or not that
@@ -453,7 +457,7 @@ function RawXyzSection({ xyzText }: { xyzText: string | null }) {
         <section className="ledger-section" aria-labelledby="xyz-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Raw</p>
-                <h2 id="xyz-heading">Raw XYZ</h2>
+                <SectionHeading id="xyz-heading">Raw XYZ</SectionHeading>
                 <p>The archive's own XYZ-format text block for this geometry, selectable as deposited.</p>
             </div>
             {xyzText ? (
@@ -483,7 +487,7 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
         <section className="ledger-section" aria-labelledby={headingId}>
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited provenance</p>
-                <h2 id={headingId}>{title}</h2>
+                <SectionHeading id={headingId}>{title}</SectionHeading>
                 <p>{description}</p>
             </div>
             {availability === "populated" ? (

@@ -14,6 +14,7 @@ import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryTransport } from "../hooks/useEntryTransport"
 import { LazyRowBody } from "./LazyRowBody"
+import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
@@ -57,7 +58,7 @@ export function EntryTransportSection({ entryRef }: { entryRef: string }) {
             <SectionErrorBoundary
                 fallback={(
                     <section className="ledger-section" aria-labelledby="transport-heading">
-                        <h2 id="transport-heading">Transport</h2>
+                        <SectionHeading id="transport-heading">Transport</SectionHeading>
                         <p className="empty-projection" role="alert">
                             This section could not be displayed. The rest of this entry is unaffected.
                         </p>
@@ -99,7 +100,7 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
             <section className="ledger-section" aria-labelledby="transport-heading">
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited evidence</p>
-                    <h2 id="transport-heading">Transport</h2>
+                    <SectionHeading id="transport-heading">Transport</SectionHeading>
                     <p>
                         Every transport record deposited for this entry, each shown independently. Multiple
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
@@ -249,7 +250,7 @@ function TransportLazySection<T>({
     if (!available) {
         return (
             <section className="ledger-section" aria-labelledby={headingId}>
-                <h2 id={headingId}>{heading}</h2>
+                <SectionHeading id={headingId}>{heading}</SectionHeading>
                 <p className="empty-projection">{notAvailableText}</p>
             </section>
         )
@@ -259,7 +260,7 @@ function TransportLazySection<T>({
             className="ledger-section"
             onToggle={(event) => { if ((event.target as HTMLDetailsElement).open) onOpen() }}
         >
-            <summary><h2 id={headingId}>{heading}</h2></summary>
+            <summary><SectionHeading id={headingId}>{heading}</SectionHeading></summary>
             <p className="section-note" role="status">
                 {state.status === "idle" && "Expand to load this section from the archive."}
                 {state.status === "loading" && "Loading…"}

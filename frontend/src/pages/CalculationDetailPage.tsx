@@ -23,6 +23,8 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { PageShell } from "../components/PageShell"
+import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
 import { RecordStatus } from "../components/RecordStatus"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
@@ -214,6 +216,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 <span aria-current="page">Calculation</span>
             </nav>
 
+            <PageShell>
             <header className="record-header">
                 <p className="eyebrow">Calculation · deposited evidence</p>
                 <div className="record-title">
@@ -309,6 +312,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
             />
 
             <OnDemandSections calculation={calculation} available={available} />
+            </PageShell>
         </section>
     )
 }
@@ -322,7 +326,7 @@ function OwnerCard({
     if (ownerSpecies) {
         return (
             <section className="owner-card" aria-labelledby="owner-heading">
-                <h2 id="owner-heading">Owner</h2>
+                <SectionHeading id="owner-heading">Owner</SectionHeading>
                 <dl>
                     <div>
                         <dt>Species</dt>
@@ -354,7 +358,7 @@ function OwnerCard({
     if (ownerTS) {
         return (
             <section className="owner-card" aria-labelledby="owner-heading">
-                <h2 id="owner-heading">Owner</h2>
+                <SectionHeading id="owner-heading">Owner</SectionHeading>
                 <p className="section-note">
                     This calculation belongs to a transition-state entry. That record does not yet have a
                     dedicated page on this archive projection, so its reference is shown without a link.
@@ -404,7 +408,7 @@ function ResultsSection({ results, type, availability, contradicted }: {
         <section className="ledger-section" aria-labelledby="results-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited evidence</p>
-                <h2 id="results-heading">Result</h2>
+                <SectionHeading id="results-heading">Result</SectionHeading>
                 <p>The primary scientific result for this {kindLabel.toLowerCase()} calculation.</p>
             </div>
             {availability === "populated" && results ? <ResultBody results={results} /> : (
@@ -498,7 +502,7 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
         <section className="ledger-section" aria-labelledby="dependencies-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited provenance</p>
-                <h2 id="dependencies-heading">Dependency graph</h2>
+                <SectionHeading id="dependencies-heading">Dependency graph</SectionHeading>
                 <p>
                     Every edge here comes from a stored <code>calculation_dependency</code> row. Nothing is
                     inferred from calculation type, timestamps, or reference ordering.
@@ -553,7 +557,7 @@ function GeometriesSection({
     return (
         <section className="ledger-section geometry-ledger" aria-labelledby="geometries-heading">
             <p className="eyebrow">Stored coordinates</p>
-            <h2 id="geometries-heading">Geometries</h2>
+            <SectionHeading id="geometries-heading">Geometries</SectionHeading>
             <p>Links to the full coordinate records this calculation consumed and produced.</p>
             <GeometryLinkList
                 title="Input" links={input} emptyText="No input geometries are recorded."
@@ -604,7 +608,7 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
         <section className="ledger-section" aria-labelledby="review-heading">
             <div className="ledger-heading">
                 <p className="eyebrow">Review &amp; trust</p>
-                <h2 id="review-heading">Review history</h2>
+                <SectionHeading id="review-heading">Review history</SectionHeading>
                 <p>The current status is {statusLabel(currentStatus)}. This is the record of how it got there.</p>
             </div>
             {availability === "populated" ? (
@@ -685,7 +689,7 @@ function LazySection<T>({
     if (!available) {
         return (
             <section className="ledger-section" aria-labelledby={headingId}>
-                <h2 id={headingId}>{heading}</h2>
+                <SectionHeading id={headingId}>{heading}</SectionHeading>
                 <p className="empty-projection">{notAvailableText}</p>
             </section>
         )
@@ -697,7 +701,7 @@ function LazySection<T>({
                 if ((event.target as HTMLDetailsElement).open) onOpen()
             }}
         >
-            <summary><h2 id={headingId}>{heading}</h2></summary>
+            <summary><SectionHeading id={headingId}>{heading}</SectionHeading></summary>
             <p className="section-note" role="status">
                 {state.status === "idle" && "Expand to load this section from the archive."}
                 {state.status === "loading" && "Loading…"}

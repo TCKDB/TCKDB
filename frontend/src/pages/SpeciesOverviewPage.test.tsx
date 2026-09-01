@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import App from "../App"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
@@ -24,12 +24,17 @@ function speciesPayload(entries = [groundEntry(), excitedEntry()]) {
     }
 }
 
+// `species_entry_label` is left unset here on purpose: the server's own
+// discriminator (`species_identity.species_entry_label`) is `None` for a
+// plain ground-state minimum with nothing else to distinguish it -- see
+// `domain/recordFacets.ts`'s module docstring. Setting it to a hand-typed
+// "ground electronic state" string, as this fixture used to, is not a
+// shape the archive actually produces.
 function groundEntry() {
     return {
         species_entry_ref: entryRef,
         species_entry_kind: "minimum",
         electronic_state_kind: "ground",
-        species_entry_label: "ground electronic state",
         review: { status: "not_reviewed" },
         availability: {
             has_thermo: true,
@@ -46,7 +51,6 @@ function excitedEntry() {
         ...groundEntry(),
         species_entry_ref: excitedEntryRef,
         electronic_state_kind: "excited",
-        species_entry_label: "excited T1",
         term_symbol: "T1",
         availability: { ...groundEntry().availability, calculation_count: 3 },
     }
@@ -63,6 +67,17 @@ function secondGroundEntry() {
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
 afterAll(() => server.close())
+
+/** Scopes queries to one entry card, identified by its stable `<code>` ref
+ *  -- more robust than matching a link's accessible name, which is exactly
+ *  the thing under test here. Async: waits for the record to finish
+ *  loading, same as every other assertion on this page. */
+async function cardFor(ref: string): Promise<HTMLElement> {
+    const code = await screen.findByText(ref)
+    const card = code.closest("article")
+    if (!card) throw new Error(`No .entry-card ancestor found for ref "${ref}"`)
+    return card
+}
 
 describe("species overview", () => {
     it("requires explicit electronic-state entry selection and supplies accessible hierarchy links", async () => {
@@ -81,10 +96,15 @@ describe("species overview", () => {
         expect(screen.getByText("2 entries")).toBeVisible()
         expect(screen.getByRole("heading", { name: /ground electronic state.*1 entry/i })).toBeVisible()
         expect(screen.getByRole("heading", { name: /excited electronic state.*1 entry/i })).toBeVisible()
-        expect(screen.getByRole("link", { name: "ground electronic state" }))
+
+        const groundCard = await cardFor(entryRef)
+        expect(within(groundCard).getByRole("link", { name: "minimum, ground state" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
-        expect(screen.getByRole("link", { name: "excited T1" }))
+
+        const excitedCard = await cardFor(excitedEntryRef)
+        expect(within(excitedCard).getByRole("link", { name: "minimum, excited state · T1" }))
             .toHaveAttribute("href", `/species-entries/${excitedEntryRef}`)
+
         // Scoped to `dd` -- the formula heading above ("CH3") now renders
         // through `Formula`, which types the "3" subscript as its own
         // `<sub>3</sub>` element, so an unscoped `getByText("3")` would
@@ -103,7 +123,10 @@ describe("species overview", () => {
         render(<App />)
 
         expect(await screen.findByRole("heading", { name: /ground electronic state.*2 entries/i })).toBeVisible()
-        const groundLinks = screen.getAllByRole("link", { name: "ground electronic state" })
+        // Both ground entries carry the same axes (same kind, same state,
+        // no stereo/isotope), so they render IDENTICAL chip text -- their
+        // stable refs, not their chips, are what tells them apart.
+        const groundLinks = screen.getAllByRole("link", { name: "minimum, ground state" })
         expect(groundLinks).toHaveLength(2)
         expect(groundLinks[0]).toHaveAttribute("href", `/species-entries/${entryRef}`)
         expect(groundLinks[1]).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
@@ -138,5 +161,84 @@ describe("species overview", () => {
         )))
         render(<App />)
         expect(await screen.findByRole("alert")).toHaveTextContent("Species unavailable")
+    })
+})
+
+describe("species overview: facet chips (the bare-'R' bug)", () => {
+    // The record measured against the live archive: spc_n7c5snosejeow4z2vr4aivmv34
+    // has one entry whose heading rendered as a bare "R" where every
+    // sibling species on the archive shows "minimum · ground". Its
+    // `species_entry_label` really is `"R"` on the wire -- see
+    // `domain/recordFacets.ts` for why that is the server's OWN compact
+    // discriminator, not free text, and why chips must not read that field
+    // at all. This fixture reproduces the real shape rather than a
+    // convenient stand-in.
+    const rEnantiomerSpeciesRef = "spc_n7c5snosejeow4z2vr4aivmv34"
+    const rEnantiomerEntryRef = "spe_n7c5rentry00000000000000000"
+
+    function rEnantiomerPayload() {
+        return {
+            records: [{
+                species_ref: rEnantiomerSpeciesRef,
+                canonical_smiles: "C[C@H](N)C(=O)O",
+                inchi_key: "QNAYBMKLOCPYGJ-REOHCLBHSA-N",
+                formula: "C3H7NO2",
+                charge: 0,
+                multiplicity: 1,
+                stereo_kind: "enantiomer",
+                entries: [{
+                    species_entry_ref: rEnantiomerEntryRef,
+                    species_entry_kind: "minimum",
+                    electronic_state_kind: "ground",
+                    stereo_label: "R",
+                    species_entry_label: "R",
+                    review: { status: "not_reviewed" },
+                    availability: {
+                        has_thermo: false, has_statmech: false, has_transport: false,
+                        has_conformers: true, calculation_count: 5,
+                    },
+                }],
+            }],
+        }
+    }
+
+    /** The heading itself -- an `<h4>` wrapping the chip row -- scoped
+     *  separately from the whole card, which also carries an unrelated
+     *  eyebrow ("minimum") and a pre-existing, correctly-labelled
+     *  `<dt>Stereochemistry</dt><dd>R</dd>` fact row further down. That
+     *  fact row is not the bug (it already says what "R" means); only the
+     *  HEADING collapsing to a bare "R" is. */
+    function headingOf(card: HTMLElement): HTMLElement {
+        const heading = card.querySelector("h4")
+        if (!heading) throw new Error("No <h4> heading found in entry card")
+        return heading
+    }
+
+    it("renders the R record as three chips, not a bare 'R' heading -- this is the bug", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
+        window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
+        render(<App />)
+
+        const heading = headingOf(await cardFor(rEnantiomerEntryRef))
+        expect(within(heading).getByText("minimum")).toBeVisible()
+        expect(within(heading).getByText("ground state")).toBeVisible()
+        expect(within(heading).getByText("R enantiomer")).toBeVisible()
+        expect(within(heading).getAllByRole("listitem")).toHaveLength(3)
+        // The bug: the heading's own accessible name must never collapse
+        // to a bare, unexplained "R".
+        expect(heading).toHaveAccessibleName("minimum, ground state, R enantiomer")
+    })
+
+    it("renders no chip for an axis that is unset -- no placeholder, no 'none' pill", async () => {
+        // The R-entry sets one optional axis (stereochemistry) and leaves
+        // the isotopologue axis unset -- both are asserted here.
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(rEnantiomerPayload())))
+        window.history.replaceState({}, "", `/species/${rEnantiomerSpeciesRef}`)
+        render(<App />)
+
+        const heading = headingOf(await cardFor(rEnantiomerEntryRef))
+        expect(within(heading).queryByText(/isotopologue/i)).not.toBeInTheDocument()
+        // Exactly 3 chips: kind, state, stereo -- not a 4th empty/placeholder one.
+        expect(within(heading).getAllByRole("listitem")).toHaveLength(3)
     })
 })

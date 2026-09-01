@@ -3,7 +3,10 @@ import "../species-overview.css"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
 import { Formula } from "../components/Formula"
+import { PageShell } from "../components/PageShell"
+import { RecordFacetChips } from "../components/RecordFacetChips"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { facetChips } from "../domain/recordFacets"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 
 function token(value: string) {
@@ -71,6 +74,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Species</span>
             </nav>
+            <PageShell>
             <header className="species-header">
                 <p className="eyebrow">Species record · chemical identity</p>
                 {/* `formula` typeset with subscripts when the archive computed
@@ -116,6 +120,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     </p>
                 )}
             </section>
+            </PageShell>
         </section>
     )
 }
@@ -156,9 +161,6 @@ function Identity({ label, value }: { label: string; value: string }) {
 }
 
 function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
-    const label = entry.species_entry_label
-        ?? entry.electronic_state_label
-        ?? `${token(entry.species_entry_kind)} · ${token(entry.electronic_state_kind)}`
     const available = [
         entry.availability.has_conformers && "conformers",
         entry.availability.has_thermo && "thermo",
@@ -166,13 +168,27 @@ function EntryCard({ entry }: { entry: ScientificSpeciesEntrySummary }) {
         entry.availability.has_transport && "transport",
     ].filter(Boolean)
 
+    // The heading used to resolve as one collapsed string
+    // (`species_entry_label ?? electronic_state_label ?? "kind · state"`)
+    // -- see `domain/recordFacets.ts` for why that fallback is the source
+    // of the "bare R" bug and why chips, built only from the raw axes,
+    // fix it structurally rather than by reordering the same fallback.
+    // The `aria-label` gives the link one clean accessible name built
+    // from the same chip text a sighted reader sees, rather than letting
+    // it default to the nested `<ul>`'s concatenated text content.
+    const chips = facetChips(entry)
+
     return (
         <li>
             <article className="entry-card">
                 <div className="entry-card-heading">
                     <div>
                         <p className="entry-card-type">{token(entry.species_entry_kind)}</p>
-                        <h4><Link to={`/species-entries/${entry.species_entry_ref}`}>{label}</Link></h4>
+                        <h4>
+                            <Link aria-label={chips.join(", ")} to={`/species-entries/${entry.species_entry_ref}`}>
+                                <RecordFacetChips entry={entry} />
+                            </Link>
+                        </h4>
                     </div>
                     <span className="entry-review">{token(entry.review.status)}</span>
                 </div>

@@ -11,6 +11,7 @@ import { EntryStatmechSection } from "../components/EntryStatmechSection"
 import { EntryTabs } from "../components/EntryTabs"
 import { EntryThermoSection } from "../components/EntryThermoSection"
 import { EntryTransportSection } from "../components/EntryTransportSection"
+import { PageShell } from "../components/PageShell"
 import { EntryIdentity } from "../components/SpeciesEntrySummary"
 import { DEFAULT_SECTION, isEntrySection } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
@@ -131,6 +132,11 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
         </nav>
         <EntryIdentity entry={entry} />
 
+        {/* `identity` is intentionally omitted here -- see `PageShell`'s own
+            docstring. The formula/SMILES/InChI header above (`EntryIdentity`)
+            stays exactly where it already rendered; it is not what the
+            reserved slot is for. */}
+        <PageShell>
         <ConformerSelector
             conformers={conformers}
             selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}
@@ -140,6 +146,7 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
 
         <EntryTabs entryRef={entryRef} activeSection={activeSection} conformerQuery={conformerQuery} />
         <TabPanel section={activeSection} entryRef={entryRef} conformer={selectedConformer} conformers={conformers} />
+        </PageShell>
     </section>
 }
 
