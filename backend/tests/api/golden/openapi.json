@@ -4201,7 +4201,7 @@
         "type": "object"
       },
       "CalculationEvidenceProvenanceSummary": {
-        "description": "Lightweight provenance/evidence summary for the detail endpoint.\n\nCheap projection that surfaces:\n\n- whether the calculation has a primary result row (``has_result``),\n- the matching geometry-validation outcome (or ``not_present``),\n- the matching SCF-stability outcome (or ``not_present``),\n- convergence flag for opt/scan/irc/path-search calculations,\n- optional ``submission_ref``/``submission_id`` for traceability\n  back to the submission that created the calculation. The fields\n  are always present (possibly null) so callers can detect\n  \"no submission link\" without an extra include.",
+        "description": "Lightweight provenance/evidence summary for the detail endpoint.\n\nCheap projection that surfaces:\n\n- whether the calculation has a primary result row (``has_result``),\n- the matching geometry-validation outcome (or ``not_present``),\n- the matching SCF-stability outcome (or ``not_present``),\n- convergence flag for opt/scan/irc/path-search calculations,\n- ``submission_ref``/``submission_id`` for traceability back to the\n  submission that created the calculation.\n\n``submission_id`` follows the ordinary Phase D internal-id policy\n(hidden unless ``include=internal_ids`` *and* the deployment\npermits it). ``submission_ref`` is gated differently: it is present\n(possibly ``null``, so an authenticated caller can detect \"no\nsubmission link\") only for a caller that authenticates. An\nanonymous caller does not receive the key at all — see\n``app.services.scientific_read.auth_visibility`` and\n``app.api.deps.get_optional_current_user``.",
         "properties": {
           "converged": {
             "anyOf": [
@@ -6977,7 +6977,7 @@
         "type": "object"
       },
       "CalculationProvenanceBlock": {
-        "description": "Calculation-level provenance summary.\n\nPhase B: ``supporting_calculations`` object array and ``submission_ref``\ncarry the public stable handles alongside the legacy\n``supporting_calculation_ids`` and ``submission_id`` fields.",
+        "description": "Calculation-level provenance summary.\n\nPhase B: ``supporting_calculations`` object array and ``submission_ref``\ncarry the public stable handles alongside the legacy\n``supporting_calculation_ids`` and ``submission_id`` fields.\n\n``submission_ref`` is served only to an authenticated caller — the\nkey is omitted from the payload entirely for an anonymous request,\nthe same gate applied to ``record.provenance.submission_ref`` on the\ncalculation-detail endpoint. See\n``app.services.scientific_read.auth_visibility``.",
         "properties": {
           "artifacts_available": {
             "default": false,
@@ -16110,6 +16110,78 @@
         "title": "GeometryBlock",
         "type": "object"
       },
+      "GeometryIdentity": {
+        "description": "Molecular identity of the record that owns a geometry.\n\nExactly one of ``species_entry`` / ``transition_state_entry`` is\nnon-null in the ordinary case, mirroring ``kind``. ``kind`` is\n``null`` in exactly one situation: the geometry (deduped by content\nhash, so it can be shared) is reachable from calculations that\nbelong to *more than one* distinct owning entry — e.g. two\nisotopologues whose plain-element coordinates happen to be\nidentical. Rather than silently pick one, every per-owner field is\nleft null and ``ambiguous_owners`` lists every distinct owner found,\nso a reader can tell \"ambiguous\" apart from \"none\" and go look at\n``provenance`` to disambiguate by calculation.\n\nA geometry with no owning calculation at all (nothing in either\n``provenance.produced_by`` or ``provenance.used_as_input_by`` names\na calculation with an owner) serves ``identity: null`` on the\nresponse — this object is never emitted empty.",
+        "properties": {
+          "ambiguous_owners": {
+            "items": {
+              "$ref": "#/components/schemas/GeometryIdentityOwnerRef"
+            },
+            "title": "Ambiguous Owners",
+            "type": "array"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "species_entry",
+                  "transition_state_entry"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "species_entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeometrySpeciesIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "transition_state_entry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeometryTransitionStateIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "GeometryIdentity",
+        "type": "object"
+      },
+      "GeometryIdentityOwnerRef": {
+        "description": "One distinct owner found when a geometry resolves to more than one.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "species_entry",
+              "transition_state_entry"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "ref": {
+            "title": "Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "ref"
+        ],
+        "title": "GeometryIdentityOwnerRef",
+        "type": "object"
+      },
       "GeometryIn": {
         "additionalProperties": false,
         "description": "A geometry defined within this upload, with a local key for reuse.\n\n:param key: Globally unique local key for this geometry.\n:param xyz_text: Raw XYZ text block.\n:param isotopes: Optional atom-resolved isotope labelling, mapping a\n    1-based XYZ atom index to that atom's isotope mass number. See\n    :class:`tckdb_schemas.fragments.geometry.GeometryPayload`.",
@@ -16311,6 +16383,138 @@
           "geometry_ref"
         ],
         "title": "GeometryRef",
+        "type": "object"
+      },
+      "GeometrySpeciesIdentity": {
+        "description": "Identity of a species-owned geometry's owning entry.\n\n``formula`` is derived server-side (RDKit cartridge, Hill notation)\nfrom ``canonical_smiles`` and is ``null`` only if that SMILES fails\nto parse — see ``app.services.scientific_read.species._formula_expr``\nfor the same derivation used elsewhere on the read surface.\n``canonical_smiles`` / ``inchi_key`` / ``charge`` / ``multiplicity``\nbelong to the parent ``species`` row (shared by every entry under\nit); ``species_entry_label`` says *which* entry — two stereoisomers\nunder one species would otherwise report identical identity blocks.",
+        "properties": {
+          "canonical_smiles": {
+            "title": "Canonical Smiles",
+            "type": "string"
+          },
+          "charge": {
+            "title": "Charge",
+            "type": "integer"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
+          "inchi_key": {
+            "title": "Inchi Key",
+            "type": "string"
+          },
+          "multiplicity": {
+            "title": "Multiplicity",
+            "type": "integer"
+          },
+          "species_entry_id": {
+            "title": "Species Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "species_entry_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Species Entry Label"
+          },
+          "species_entry_ref": {
+            "title": "Species Entry Ref",
+            "type": "string"
+          },
+          "species_id": {
+            "title": "Species Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "species_ref": {
+            "title": "Species Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "species_ref",
+          "species_entry_ref",
+          "canonical_smiles",
+          "inchi_key",
+          "charge",
+          "multiplicity"
+        ],
+        "title": "GeometrySpeciesIdentity",
+        "type": "object"
+      },
+      "GeometryTransitionStateIdentity": {
+        "description": "Identity of a transition-state-owned geometry's owning entry.\n\nTransition states have no canonical SMILES the way species do:\n``unmapped_smiles`` is an optional, un-atom-mapped label a depositor\nmay have supplied, not a deduped identity key the way\n``species.smiles`` is. It is served honestly under its own name\nrather than folded into a ``canonical_smiles``-shaped field, which\nwould claim a precision this value does not have — so there is no\n``canonical_smiles`` or ``inchi_key`` on this block, ever.\n``formula`` is a best-effort RDKit parse of ``unmapped_smiles`` and\nis ``null`` whenever that label is absent or does not parse.",
+        "properties": {
+          "charge": {
+            "title": "Charge",
+            "type": "integer"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
+          },
+          "multiplicity": {
+            "title": "Multiplicity",
+            "type": "integer"
+          },
+          "transition_state_entry_id": {
+            "title": "Transition State Entry Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_entry_ref": {
+            "title": "Transition State Entry Ref",
+            "type": "string"
+          },
+          "transition_state_id": {
+            "title": "Transition State Id",
+            "type": "integer",
+            "x-tckdb-policy-hidden": true
+          },
+          "transition_state_ref": {
+            "title": "Transition State Ref",
+            "type": "string"
+          },
+          "unmapped_smiles": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unmapped Smiles"
+          }
+        },
+        "required": [
+          "transition_state_ref",
+          "transition_state_entry_ref",
+          "charge",
+          "multiplicity"
+        ],
+        "title": "GeometryTransitionStateIdentity",
         "type": "object"
       },
       "GroupAdditivityBlock": {
@@ -33081,7 +33285,7 @@
         "type": "object"
       },
       "ScientificGeometryResponse": {
-        "description": "Response envelope for ``/api/v1/scientific/geometries/{geometry_handle}``.\n\nPhase D: ``geometry_id`` is hidden in the default response (Phase D\ninternal-id visibility rules apply). ``geometry_ref`` is the\npublic stable handle.",
+        "description": "Response envelope for ``/api/v1/scientific/geometries/{geometry_handle}``.\n\nPhase D: ``geometry_id`` is hidden in the default response (Phase D\ninternal-id visibility rules apply). ``geometry_ref`` is the\npublic stable handle.\n\n``submission_ref`` — which upload produced this geometry, resolved\nvia the submission of its (single, unambiguous) producing\ncalculation — is served only to an authenticated caller; anonymous\ncallers do not receive the key at all (see\n``app.services.scientific_read.auth_visibility``). ``submission_id``\nfollows the separate Phase D internal-id policy on top of that.",
         "properties": {
           "atoms": {
             "items": {
@@ -33130,6 +33334,16 @@
             "title": "Geometry Ref",
             "type": "string"
           },
+          "identity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeometryIdentity"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "natoms": {
             "title": "Natoms",
             "type": "integer"
@@ -33139,6 +33353,29 @@
           },
           "request": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_geometry__RequestEcho"
+          },
+          "submission_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Id",
+            "x-tckdb-policy-hidden": true
+          },
+          "submission_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submission Ref"
           },
           "symbols": {
             "items": {
@@ -63597,7 +63834,7 @@
     },
     "/api/v1/scientific/calculations/{calculation_ref_or_id}": {
       "get": {
-        "description": "Return one calculation as a scientific/provenance record.\n\nPath handle accepts an integer ``calculation.id`` or a public ref\nof the form ``calc_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\nDefault response identifies the row by ``calculation_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\n*and* the deployment permits it.\n\nHeavy include sections (currently only ``include=results``) appear\nin ``record`` only when the caller opts in, so the default-shape\nresponse stays compact.\n\nSee ``docs/specs/public_identifier_policy.md`` and\n``docs/specs/internal_ids_visibility_policy.md``.",
+        "description": "Return one calculation as a scientific/provenance record.\n\nPath handle accepts an integer ``calculation.id`` or a public ref\nof the form ``calc_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs and unknown ids return 404.\nDefault response identifies the row by ``calculation_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\n*and* the deployment permits it.\n\nHeavy include sections (currently only ``include=results``) appear\nin ``record`` only when the caller opts in, so the default-shape\nresponse stays compact.\n\n``record.provenance.submission_ref`` — which upload created this\ncalculation — is served only to a caller that authenticates (an\n``X-API-Key`` header or a valid session cookie). Anonymous callers\ndo not get the field with a ``null`` value; the key is omitted from\nthe payload entirely. See ``app.services.scientific_read.auth_visibility``.\n\nSee ``docs/specs/public_identifier_policy.md`` and\n``docs/specs/internal_ids_visibility_policy.md``.",
         "operationId": "scientific_calculation_detail_api_v1_scientific_calculations__calculation_ref_or_id__get",
         "parameters": [
           {
@@ -63657,6 +63894,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -66631,7 +66900,7 @@
     },
     "/api/v1/scientific/geometries/{geometry_handle}": {
       "get": {
-        "description": "Return the full coordinate payload for a geometry handle.\n\nPath handle accepts an integer ``geometry.id`` or a public ref of\nthe form ``geom_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs return 404. Default\nresponse identifies the geometry by ``geometry_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\nand the deployment permits it.\n\nSee ``docs/specs/public_identifier_policy.md`` and\n``docs/specs/internal_ids_visibility_policy.md``.",
+        "description": "Return the full coordinate payload for a geometry handle.\n\nPath handle accepts an integer ``geometry.id`` or a public ref of\nthe form ``geom_…``. Wrong-prefix refs return 422\n``handle_type_mismatch``; unknown refs return 404. Default\nresponse identifies the geometry by ``geometry_ref`` only —\ninteger ids surface only when ``include=internal_ids`` is supplied\nand the deployment permits it.\n\n``identity`` (formula / canonical SMILES / InChI key / charge /\nmultiplicity of the owning species or transition-state entry) is\nalways served, unauthenticated included — it names the same\nmolecule the coordinates already describe, nothing more.\n\n``submission_ref`` — which upload produced this geometry — is\nserved only to a caller that authenticates (an ``X-API-Key``\nheader or a valid session cookie). Anonymous callers do not get\nthe field with a ``null`` value; the key is omitted from the\npayload entirely. See\n``app.services.scientific_read.auth_visibility``.\n\nSee ``docs/specs/public_identifier_policy.md`` and\n``docs/specs/internal_ids_visibility_policy.md``.",
         "operationId": "scientific_geometry_detail_api_v1_scientific_geometries__geometry_handle__get",
         "parameters": [
           {
@@ -66691,6 +66960,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],
@@ -71276,7 +71577,7 @@
     },
     "/api/v1/scientific/species-calculations/search": {
       "get": {
-        "description": "Chemistry-first species calculation/conformer search.\n\nCalculation-centered records that include resolved species identity,\nenergy or frequency results (whichever the calculation type\nproduces), level of theory, software, conformer context (when\npresent), geometry IDs, validation, review state, and provenance.\n``include=freq_modes`` adds the per-mode harmonic frequency array.\nSee ``docs/specs/species_calculation_search_api.md``.",
+        "description": "Chemistry-first species calculation/conformer search.\n\nCalculation-centered records that include resolved species identity,\nenergy or frequency results (whichever the calculation type\nproduces), level of theory, software, conformer context (when\npresent), geometry IDs, validation, review state, and provenance.\n``include=freq_modes`` adds the per-mode harmonic frequency array.\n\n``record.provenance.submission_ref`` on each result is served only\nto an authenticated caller — see\n``app.services.scientific_read.auth_visibility``.\n\nSee ``docs/specs/species_calculation_search_api.md``.",
         "operationId": "species_calculations_search_get_api_v1_scientific_species_calculations_search_get",
         "parameters": [
           {
@@ -71767,6 +72068,38 @@
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
             }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
+            }
           }
         ],
         "responses": {
@@ -71797,7 +72130,7 @@
         ]
       },
       "post": {
-        "description": "JSON-body variant for structured species-calculation queries.\n\nAll search fields, filters, includes, ranking, collapse, offset, and\nlimit live in the body. Query-string parameters are rejected\n(Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected\nby the service layer (v0 sort policy).",
+        "description": "JSON-body variant for structured species-calculation queries.\n\nAll search fields, filters, includes, ranking, collapse, offset, and\nlimit live in the body. Query-string parameters are rejected\n(Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected\nby the service layer (v0 sort policy).\n\n``record.provenance.submission_ref`` on each result is served only\nto an authenticated caller — see\n``app.services.scientific_read.auth_visibility``.",
         "operationId": "species_calculations_search_post_api_v1_scientific_species_calculations_search_post",
         "parameters": [
           {
@@ -71827,6 +72160,38 @@
               ],
               "description": "Reserved. Scoping a general read to one dataset release is not implemented and supplying this parameter is rejected (422) rather than silently ignored. To read exactly what a release selected, use GET /api/v1/scientific/releases/{tag}/selections or its selected_records.ndjson artifact.",
               "title": "Release"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-API-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Api-Key"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "tckdb_session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tckdb Session"
             }
           }
         ],

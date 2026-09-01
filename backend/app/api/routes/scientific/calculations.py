@@ -16,13 +16,14 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_optional_current_user
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
     omit_trust_unless_requested,
     omit_unrequested_calculation_sections,
 )
+from app.db.models.app_user import AppUser
 from app.db.models.common import (
     ArtifactKind,
     CalculationDependencyRole,
@@ -43,6 +44,9 @@ from app.schemas.reads.scientific_calculation_search import (
 from app.schemas.reads.scientific_common import (
     GeometryValidationStatus,
     SCFStabilityStatusValue,
+)
+from app.services.scientific_read.auth_visibility import (
+    apply_scientific_read_visibility,
 )
 from app.services.scientific_read.calculations import get_calculation
 from app.services.scientific_read.calculations_search import (
@@ -206,6 +210,7 @@ def scientific_calculation_detail(
     calculation_ref_or_id: str = Path(..., min_length=1, max_length=64),
     session: Session = Depends(get_db),
     include: list[str] | None = Query(None),
+    actor: AppUser | None = Depends(get_optional_current_user),
 ):
     """Return one calculation as a scientific/provenance record.
 
@@ -220,6 +225,12 @@ def scientific_calculation_detail(
     in ``record`` only when the caller opts in, so the default-shape
     response stays compact.
 
+    ``record.provenance.submission_ref`` — which upload created this
+    calculation — is served only to a caller that authenticates (an
+    ``X-API-Key`` header or a valid session cookie). Anonymous callers
+    do not get the field with a ``null`` value; the key is omitted from
+    the payload entirely. See ``app.services.scientific_read.auth_visibility``.
+
     See ``docs/specs/public_identifier_policy.md`` and
     ``docs/specs/internal_ids_visibility_policy.md``.
     """
@@ -229,6 +240,8 @@ def scientific_calculation_detail(
         calculation_handle=calculation_ref_or_id,
         request=request,
     )
-    visibility = apply_internal_ids_visibility(payload)
+    visibility = apply_scientific_read_visibility(
+        payload, authenticated=actor is not None
+    )
     visibility = omit_unrequested_calculation_sections(visibility, payload)
     return omit_trust_unless_requested(visibility, payload)

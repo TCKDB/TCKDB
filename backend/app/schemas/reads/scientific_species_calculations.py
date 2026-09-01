@@ -330,6 +330,12 @@ class CalculationProvenanceBlock(BaseModel):
     Phase B: ``supporting_calculations`` object array and ``submission_ref``
     carry the public stable handles alongside the legacy
     ``supporting_calculation_ids`` and ``submission_id`` fields.
+
+    ``submission_ref`` is served only to an authenticated caller — the
+    key is omitted from the payload entirely for an anonymous request,
+    the same gate applied to ``record.provenance.submission_ref`` on the
+    calculation-detail endpoint. See
+    ``app.services.scientific_read.auth_visibility``.
     """
 
     supporting_calculation_ids: list[int] = Field(default_factory=list)

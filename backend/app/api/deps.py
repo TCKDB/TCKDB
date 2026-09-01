@@ -179,6 +179,46 @@ def get_current_user(
     raise HTTPException(status_code=401, detail="Authentication required")
 
 
+def get_optional_current_user(
+    x_api_key: str | None = Header(None, alias=API_KEY_HEADER),
+    tckdb_session: str | None = Cookie(None, alias=SESSION_COOKIE_NAME),
+    session: Session = Depends(get_db),
+) -> AppUser | None:
+    """Resolve the request actor when a credential is present; ``None`` when absent.
+
+    For the public scientific read surface, which stays reachable by
+    anonymous callers but reveals a handful of fields — a submission
+    reference, so far — only to a caller who is logged in (see
+    ``app.services.scientific_read.auth_visibility``). This is
+    deliberately not :func:`get_current_user` with the final ``raise``
+    swallowed: the two credential branches are identical, including the
+    401s.
+
+    The one rule that matters: **missing** credentials resolve to
+    ``None``, but a credential that is *present and invalid or revoked*
+    still 401s, exactly as :func:`get_current_user` does. Treating an
+    invalid or revoked key as "anonymous" would let a caller whose access
+    was just revoked keep reading whatever the public already sees under
+    the cover of a key that was supposed to stop working — turning a
+    revocation into a silent downgrade instead of a refusal. So the
+    branch condition is "was a credential supplied", never "did it
+    resolve".
+    """
+    if x_api_key:
+        user = authenticate_api_key(session, x_api_key)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid API key")
+        return user
+
+    if tckdb_session:
+        user = resolve_session(session, tckdb_session)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        return user
+
+    return None
+
+
 def require_session_user(
     tckdb_session: str | None = Cookie(None, alias=SESSION_COOKIE_NAME),
     session: Session = Depends(get_db),

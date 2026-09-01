@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_db
+from app.api.deps import get_db, get_optional_current_user
 from app.api.routes.scientific._common import parse_include
 from app.api.routes.scientific._profile import PROFILE_QUERY_KEYS
 from app.api.routes.scientific._response import (
@@ -13,6 +13,7 @@ from app.api.routes.scientific._response import (
     SPECIES_CALCULATIONS_SEARCH_SECTIONS,
     omit_unrequested_sections,
 )
+from app.db.models.app_user import AppUser
 from app.db.models.common import (
     CalculationQuality,
     CalculationType,
@@ -27,8 +28,8 @@ from app.schemas.reads.scientific_species_calculations import (
     ScientificSpeciesCalculationsSearchResponse,
     SpeciesCalculationsSearchRequest,
 )
-from app.services.scientific_read.internal_ids import (
-    apply_internal_ids_visibility,
+from app.services.scientific_read.auth_visibility import (
+    apply_scientific_read_visibility,
 )
 from app.services.scientific_read.species_calculations_search import (
     search_species_calculations,
@@ -79,6 +80,7 @@ def species_calculations_search_get(
     include: list[str] | None = Query(None),
     offset: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=200),
+    actor: AppUser | None = Depends(get_optional_current_user),
 ) -> ScientificSpeciesCalculationsSearchResponse:
     """Chemistry-first species calculation/conformer search.
 
@@ -87,6 +89,11 @@ def species_calculations_search_get(
     produces), level of theory, software, conformer context (when
     present), geometry IDs, validation, review state, and provenance.
     ``include=freq_modes`` adds the per-mode harmonic frequency array.
+
+    ``record.provenance.submission_ref`` on each result is served only
+    to an authenticated caller — see
+    ``app.services.scientific_read.auth_visibility``.
+
     See ``docs/specs/species_calculation_search_api.md``.
     """
     request = SpeciesCalculationsSearchRequest(
@@ -124,7 +131,7 @@ def species_calculations_search_get(
     )
     payload = search_species_calculations(session, request)
     return omit_unrequested_sections(
-        apply_internal_ids_visibility(payload),
+        apply_scientific_read_visibility(payload, authenticated=actor is not None),
         payload,
         table=SPECIES_CALCULATIONS_SEARCH_SECTIONS,
         scope=SEARCH_SCOPE,
@@ -138,6 +145,7 @@ def species_calculations_search_post(
     request: Request,
     body: SpeciesCalculationsSearchRequest,
     session: Session = Depends(get_db),
+    actor: AppUser | None = Depends(get_optional_current_user),
 ) -> ScientificSpeciesCalculationsSearchResponse:
     """JSON-body variant for structured species-calculation queries.
 
@@ -145,6 +153,10 @@ def species_calculations_search_post(
     limit live in the body. Query-string parameters are rejected
     (Phase 4 / Phase 6 POST convention). Body field ``sort`` is rejected
     by the service layer (v0 sort policy).
+
+    ``record.provenance.submission_ref`` on each result is served only
+    to an authenticated caller — see
+    ``app.services.scientific_read.auth_visibility``.
     """
     forbidden = set(request.query_params.keys()) - _POST_ALLOWED_QS_KEYS
     if forbidden:
@@ -158,7 +170,7 @@ def species_calculations_search_post(
         )
     payload = search_species_calculations(session, body)
     return omit_unrequested_sections(
-        apply_internal_ids_visibility(payload),
+        apply_scientific_read_visibility(payload, authenticated=actor is not None),
         payload,
         table=SPECIES_CALCULATIONS_SEARCH_SECTIONS,
         scope=SEARCH_SCOPE,

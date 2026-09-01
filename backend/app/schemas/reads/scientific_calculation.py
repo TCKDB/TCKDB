@@ -214,10 +214,17 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
     - the matching geometry-validation outcome (or ``not_present``),
     - the matching SCF-stability outcome (or ``not_present``),
     - convergence flag for opt/scan/irc/path-search calculations,
-    - optional ``submission_ref``/``submission_id`` for traceability
-      back to the submission that created the calculation. The fields
-      are always present (possibly null) so callers can detect
-      "no submission link" without an extra include.
+    - ``submission_ref``/``submission_id`` for traceability back to the
+      submission that created the calculation.
+
+    ``submission_id`` follows the ordinary Phase D internal-id policy
+    (hidden unless ``include=internal_ids`` *and* the deployment
+    permits it). ``submission_ref`` is gated differently: it is present
+    (possibly ``null``, so an authenticated caller can detect "no
+    submission link") only for a caller that authenticates. An
+    anonymous caller does not receive the key at all — see
+    ``app.services.scientific_read.auth_visibility`` and
+    ``app.api.deps.get_optional_current_user``.
     """
 
     has_result: bool
