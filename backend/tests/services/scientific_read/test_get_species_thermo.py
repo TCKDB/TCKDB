@@ -5,7 +5,11 @@ from __future__ import annotations
 import pytest
 
 from app.api.errors import NotFoundError
-from app.db.models.common import RecordReviewStatus, SubmissionRecordType
+from app.db.models.common import (
+    RecordReviewStatus,
+    SubmissionRecordType,
+    ThermoModelKind,
+)
 from app.schemas.reads.scientific_common import CollapseMode
 from app.schemas.reads.scientific_thermo import (
     ThermoModelKindQuery,
@@ -122,6 +126,126 @@ def test_points_thermo_returns_points_array(db_session):
     assert record.model_kind == ThermoModelKindQuery.points
     assert record.points is not None
     assert [p.temperature_k for p in record.points] == [300.0, 400.0, 500.0]
+
+
+def test_nasa_and_points_both_served_when_both_exist(db_session):
+    """The live-archive shape: every one of the 65 thermo records on the
+    deployed DB has BOTH a ThermoNASA row AND ThermoPoint rows, and
+    ``thermo.model_kind`` is explicitly stored as ``nasa7`` (post the
+    #316 backfill) rather than left NULL for fallback classification.
+    Before the fix, ``points`` was gated on ``model_kind ==
+    ThermoModelKindQuery.points``, so the NASA classification made all
+    585 stored Cp points unreachable. Both must now come back together.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.model_kind = ThermoModelKind.nasa7
+    db_session.flush()
+    attach_thermo_nasa(db_session, thermo=thermo)
+    attach_thermo_points(
+        db_session, thermo=thermo, temperatures_k=[300.0, 400.0, 500.0]
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    record = response.records[0]
+    assert record.model_kind == ThermoModelKindQuery.nasa
+    assert record.nasa is not None
+    assert record.points is not None
+    assert len(record.points) == 3
+
+
+def test_fit_without_points_serves_points_as_null_not_empty_list(db_session):
+    """``points=null`` means "no measured points"; ``points=[]`` would mean
+    "measured, and there were none". A record with a fit and no
+    ThermoPoint rows must get the former, never the latter.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    attach_thermo_nasa(db_session, thermo=thermo)
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    record = response.records[0]
+    assert record.nasa is not None
+    assert record.points is None
+
+
+def test_points_served_verbatim_with_distinct_values(db_session):
+    """Assert every field on every point against a fixture with distinct
+    values per point. Uniform fixture values (e.g. every row sharing one
+    cp) cannot catch a builder that returns the same row repeatedly.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    attach_thermo_points(
+        db_session,
+        thermo=thermo,
+        temperatures_k=[300.0, 400.0, 500.0],
+        cp_j_mol_k=[41.1, 52.2, 63.3],
+        h_kj_mol=[-10.1, -8.2, -6.3],
+        s_j_mol_k=[210.1, 220.2, 230.3],
+        g_kj_mol=[-73.1, -96.2, -121.3],
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    points = response.records[0].points
+    assert points is not None
+    assert [p.temperature_k for p in points] == [300.0, 400.0, 500.0]
+    assert [p.cp_j_mol_k for p in points] == [41.1, 52.2, 63.3]
+    assert [p.h_kj_mol for p in points] == [-10.1, -8.2, -6.3]
+    assert [p.s_j_mol_k for p in points] == [210.1, 220.2, 230.3]
+    assert [p.g_kj_mol for p in points] == [-73.1, -96.2, -121.3]
+
+
+def test_points_returned_in_ascending_temperature_order(db_session):
+    """Points must come back temperature-ascending regardless of insertion
+    order — a graph plotting them in arbitrary order draws nonsense.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    # Inserted deliberately out of order.
+    attach_thermo_points(
+        db_session,
+        thermo=thermo,
+        temperatures_k=[500.0, 300.0, 1000.0, 400.0],
+        cp_j_mol_k=[63.3, 41.1, 88.8, 52.2],
+    )
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    points = response.records[0].points
+    assert points is not None
+    assert [p.temperature_k for p in points] == [300.0, 400.0, 500.0, 1000.0]
+    assert [p.cp_j_mol_k for p in points] == [41.1, 52.2, 63.3, 88.8]
+
+
+def test_nasa9_and_wilhoit_both_served_when_both_exist(db_session):
+    """Same one-line defect shape as ``points``: ``nasa9`` and ``wilhoit``
+    were each gated on ``model_kind == <that kind>``, so a record carrying
+    rows for both representations could only ever expose one. Both must
+    now be served independently of the classified ``model_kind``.
+    """
+    entry = _entry_with_smiles(db_session)
+    thermo = make_thermo_scalar(db_session, species_entry=entry)
+    thermo.model_kind = ThermoModelKind.wilhoit
+    db_session.flush()
+    attach_thermo_nasa9(db_session, thermo=thermo)
+    attach_thermo_wilhoit(db_session, thermo=thermo)
+
+    response = get_species_thermo(
+        db_session, species_entry_id=entry.id, request=ThermoReadRequest()
+    )
+    record = response.records[0]
+    assert record.model_kind == ThermoModelKindQuery.wilhoit
+    assert record.nasa9 is not None
+    assert len(record.nasa9) == 2
+    assert record.wilhoit is not None
 
 
 def test_model_kind_filter_excludes_other_shapes(db_session):

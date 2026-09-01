@@ -445,17 +445,23 @@ def get_species_thermo(
             s298_j_mol_k=t.s298_j_mol_k,
             h298_uncertainty_kj_mol=t.h298_uncertainty_kj_mol,
             s298_uncertainty_j_mol_k=t.s298_uncertainty_j_mol_k,
+            # nasa / nasa9 / wilhoit / points are four independent
+            # representations a single thermo record may carry at once
+            # (e.g. a NASA-7 fit derived from a stored Cp(T) point series).
+            # ``model_kind`` is a single-valued *label* — which fit
+            # classifies the record — and must not gate which *data* ships;
+            # each block is served whenever its own child rows exist,
+            # independently of what model_kind was classified as. See
+            # ``docs/decisions`` on key-on-what-exists over a declared label.
             nasa=_build_nasa_block(nasa_block) if nasa_block is not None else None,
             nasa9=(
                 _build_nasa9_blocks(nasa9_by_thermo[t.id])
-                if model_kind == ThermoModelKindQuery.nasa9
-                and nasa9_by_thermo.get(t.id)
+                if nasa9_by_thermo.get(t.id)
                 else None
             ),
             wilhoit=(
                 _build_wilhoit_block(wilhoit_by_thermo[t.id])
-                if model_kind == ThermoModelKindQuery.wilhoit
-                and t.id in wilhoit_by_thermo
+                if t.id in wilhoit_by_thermo
                 else None
             ),
             points=(
@@ -469,7 +475,7 @@ def get_species_thermo(
                     )
                     for p in points_by_thermo.get(t.id, [])
                 ]
-                if model_kind == ThermoModelKindQuery.points
+                if points_by_thermo.get(t.id)
                 else None
             ),
             temperature_coverage=coverage,
@@ -596,13 +602,21 @@ def _load_points(
 ) -> dict[int, list[ThermoPoint]]:
     if not thermo_ids:
         return {}
+    # Explicit ORDER BY: this is a bare ``select(ThermoPoint)``, not access
+    # through the ``Thermo.points`` relationship attribute, so the
+    # relationship's ``order_by="ThermoPoint.temperature_k"`` does NOT apply
+    # here — a query with no ORDER BY has unspecified row order. Points now
+    # ship on every record with data (not just ``model_kind == points``), so
+    # a graph plotting them needs a real, asserted-ascending order rather
+    # than an incidental one.
     rows = session.scalars(
-        select(ThermoPoint).where(ThermoPoint.thermo_id.in_(thermo_ids))
+        select(ThermoPoint)
+        .where(ThermoPoint.thermo_id.in_(thermo_ids))
+        .order_by(ThermoPoint.temperature_k)
     ).all()
     grouped: dict[int, list[ThermoPoint]] = {tid: [] for tid in thermo_ids}
     for p in rows:
         grouped[p.thermo_id].append(p)
-    # Already ordered by temperature_k via the ORM relationship default.
     return grouped
 
 

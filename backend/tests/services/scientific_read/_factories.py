@@ -877,10 +877,41 @@ def attach_thermo_points(
     *,
     thermo: Thermo,
     temperatures_k: list[float],
+    cp_j_mol_k: list[float | None] | None = None,
+    h_kj_mol: list[float | None] | None = None,
+    s_j_mol_k: list[float | None] | None = None,
+    g_kj_mol: list[float | None] | None = None,
 ) -> list[ThermoPoint]:
-    """Attach a list of ThermoPoint rows to an existing Thermo row."""
+    """Attach a list of ThermoPoint rows to an existing Thermo row.
+
+    The optional value lists are positional, parallel to ``temperatures_k``
+    (index *i* of each list belongs to ``temperatures_k[i]``). Omitted
+    lists leave the corresponding column ``NULL`` on every row, matching
+    the historical temperature-only behavior.
+    """
+    n = len(temperatures_k)
+
+    def _column(values: list[float | None] | None) -> list[float | None]:
+        if values is None:
+            return [None] * n
+        assert len(values) == n, "value list must be parallel to temperatures_k"
+        return values
+
+    cp_col = _column(cp_j_mol_k)
+    h_col = _column(h_kj_mol)
+    s_col = _column(s_j_mol_k)
+    g_col = _column(g_kj_mol)
+
     rows = [
-        ThermoPoint(thermo_id=thermo.id, temperature_k=t) for t in temperatures_k
+        ThermoPoint(
+            thermo_id=thermo.id,
+            temperature_k=temperatures_k[i],
+            cp_j_mol_k=cp_col[i],
+            h_kj_mol=h_col[i],
+            s_j_mol_k=s_col[i],
+            g_kj_mol=g_col[i],
+        )
+        for i in range(n)
     ]
     session.add_all(rows)
     session.flush()
