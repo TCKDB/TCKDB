@@ -32,7 +32,12 @@ function stateChip(kind: string, label?: string | null, termSymbol?: string | nu
     return extra ? `${base} · ${extra}` : base
 }
 
-function stereoChip(label: string): string {
+// Exported: reused by `SpeciesEntrySummary.tsx`'s `EntryIdentity` to print
+// a labelled "Stereochemistry" row (e.g. "E isomer", not a bare "E") now
+// that the pill row this text used to live in only is gone -- see that
+// component's own comment for the report this fixes ("why ... does it not
+// show ... E isomer like it does for Review etc.").
+export function stereoChip(label: string): string {
     if (label === "R" || label === "S") return `${label} enantiomer`
     if (label === "E" || label === "Z") return `${label} isomer`
     return label
@@ -68,12 +73,31 @@ function isotopeChip(key: string): string {
  * silently stand in for the whole classification. An axis that is unset
  * (no stereochemistry, no isotopologue) contributes no chip — never a
  * placeholder, never an empty pill.
+ *
+ * `includeState` (default `true`) exists for exactly one caller:
+ * `SpeciesOverviewPage.tsx`'s `EntryCard`, grouped under a heading that
+ * already names the shared electronic state for every card beneath it
+ * ("ground electronic state", "excited electronic state") — repeating
+ * "ground state" on every card in that group is redundant BY
+ * CONSTRUCTION, not a fact to keep re-stating. `includeState: false`
+ * drops the bare kind/state phrase but keeps any `electronic_state_label`
+ * / `term_symbol` EXTRA that would otherwise have been folded into it —
+ * those are not established by the group heading, so they must not
+ * disappear along with the redundant part. The default stays `true` so
+ * every other caller (and this function itself, if the grouping is ever
+ * removed) keeps showing the full classification with nothing to opt into.
  */
-export function facetChips(entry: EntryFacetAxes): string[] {
-    const chips = [
-        kindChip(entry.species_entry_kind),
-        stateChip(entry.electronic_state_kind, entry.electronic_state_label, entry.term_symbol),
-    ]
+export function facetChips(entry: EntryFacetAxes, options?: { includeState?: boolean }): string[] {
+    const includeState = options?.includeState ?? true
+    const chips = [kindChip(entry.species_entry_kind)]
+    if (includeState) {
+        chips.push(stateChip(entry.electronic_state_kind, entry.electronic_state_label, entry.term_symbol))
+    } else {
+        const extra = [entry.electronic_state_label, entry.term_symbol]
+            .filter((part): part is string => Boolean(part))
+            .join(" · ")
+        if (extra) chips.push(extra)
+    }
     if (entry.stereo_label) chips.push(stereoChip(entry.stereo_label))
     if (entry.isotope_key) chips.push(isotopeChip(entry.isotope_key))
     return chips

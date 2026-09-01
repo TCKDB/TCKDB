@@ -27,7 +27,6 @@ import { EnergyDisplay } from "../components/EnergyDisplay"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
-import { RecordFacetChips } from "../components/RecordFacetChips"
 import { RecordStatus } from "../components/RecordStatus"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
@@ -279,14 +278,14 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     own docstring. `OwnerCard` below is this page's identity
                     tier (kept as its own component rather than folded into
                     `RecordIdentityHeader` — it renders owner LINKS this
-                    endpoint has that the generic header does not model). */}
+                    endpoint does not model) and, since #322, is also where
+                    the classification facets live: an "Entry kind" row
+                    beside `OwnerCard`'s own "Electronic state" row, not a
+                    pill row repeating the same two facts a second time
+                    ("no pill boxes" — see `SpeciesEntrySummary.tsx`'s
+                    `EntryIdentity` for the report this fixes elsewhere on
+                    the same shared header pattern). */}
                 <OwnerCard ownerSpecies={ownerSpecies} ownerTS={ownerTS} />
-                {ownerSpecies && (
-                    <RecordFacetChips entry={{
-                        species_entry_kind: ownerSpecies.species_entry_kind,
-                        electronic_state_kind: ownerSpecies.electronic_state_kind,
-                    }} />
-                )}
 
                 <dl className="record-context">
                     <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
@@ -419,6 +418,7 @@ function OwnerCard({
                         <dt>Charge / multiplicity</dt>
                         <dd>{chargeDisplay(ownerSpecies.charge)} / {spinDisplay(ownerSpecies.multiplicity)}</dd>
                     </div>
+                    <div><dt>Entry kind</dt><dd>{statusLabel(ownerSpecies.species_entry_kind)}</dd></div>
                     <div><dt>Electronic state</dt><dd>{ownerSpecies.electronic_state_kind}</dd></div>
                 </dl>
             </section>

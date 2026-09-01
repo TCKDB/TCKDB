@@ -31,7 +31,25 @@
     flex: 1 1 0;
 }
 
+/*
+ * `.page-toc` is the RESERVED COLUMN, always present in `.page-shell-layout`
+ * regardless of how many sections are registered -- `TableOfContents.tsx`
+ * renders this element unconditionally and only puts a `<nav>` inside it
+ * once 2+ sections exist. That is what keeps a tab switch (Geometry, 1
+ * section -> Statistical Mechanics, usually 4+) from ever resizing
+ * `.page-shell-content`: the flex-basis below never changes, whether the
+ * column holds a real list or nothing at all.
+ *
+ * `order: 1` is the ONE line that puts this column on the right of
+ * `.page-shell-content` (which stays unordered, i.e. `order: 0`) --
+ * deliberately NOT achieved by DOM order (`PageShell.tsx` renders content
+ * first, ToC second, for keyboard/screen-reader order, which is a
+ * SEPARATE decision from where it sits visually). The owner hedged on the
+ * side ("I want ToC on the right I think"), so flipping it back to the
+ * left later is exactly one edit: `order: -1`.
+ */
 .page-toc {
+    order: 1;
     position: sticky;
     top: 1.5rem;
     flex: 0 0 14rem;
@@ -39,6 +57,17 @@
     overflow-y: auto;
     border-left: 2px solid var(--line);
     padding-left: 1rem;
+}
+
+/* No section list to show (fewer than `MIN_SECTIONS_FOR_LIST` registered)
+   -- `TableOfContents.tsx` renders this element with nothing inside it
+   rather than not rendering it at all, so the reserved width above never
+   changes. Visually silent when empty: no divider line, no padding
+   sitting next to the content for no reason. The reserved WIDTH stays
+   (nothing here touches `flex-basis`), which is the entire point. */
+.page-toc:empty {
+    border-left-color: transparent;
+    padding-left: 0;
 }
 
 .page-toc ul {
@@ -77,13 +106,23 @@
    column without squeezing it -- collapse to a horizontal, scrollable
    strip above the content instead of stacking vertically above it (which
    would push every page's content down by a whole ToC's height on every
-   load, the opposite of "find info quickly"). */
+   load, the opposite of "find info quickly"). Unlike the wide layout,
+   nothing is RESERVED here: a `.page-toc` with no list inside it collapses
+   out of the flow entirely (`display: none` below) rather than reserving
+   a blank strip's worth of vertical space above the content, since there
+   is no fixed-width column to protect a tab switch from resizing in a
+   column layout in the first place. */
 @media (max-width: 62rem) {
     .page-shell-layout {
         flex-direction: column;
     }
 
     .page-toc {
+        /* `order: 1` (set above, unchanged here) still applies in a column
+           layout: the ToC strip stacks BELOW the content, not above it --
+           matching the wide-viewport "content, then ToC" order rather than
+           the pre-fix behaviour of a nav strip pushing content down before
+           a reader sees any of it. */
         position: static;
         width: 100%;
         max-height: none;
@@ -92,6 +131,12 @@
         border-left: 0;
         border-bottom: 1px solid var(--line);
         padding: 0 0 .6rem;
+    }
+
+    .page-toc:empty {
+        display: none;
+        border-bottom: 0;
+        padding: 0;
     }
 
     .page-toc ul {

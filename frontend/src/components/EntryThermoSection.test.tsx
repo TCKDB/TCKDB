@@ -5,6 +5,8 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryThermoSection } from "./EntryThermoSection"
+import { PageSectionsProvider } from "./PageSections"
+import { TableOfContents } from "./TableOfContents"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -16,6 +18,20 @@ afterAll(() => server.close())
 
 const entryRef = "spe_test_ch3"
 const ENDPOINT = `/api/v1/scientific/species-entries/${entryRef}/thermo`
+
+/** Same as `page()` below, but with the real `TableOfContents` mounted
+ *  alongside -- for the tests that assert what actually shows up in the
+ *  page's jump list, not just what renders in the body. */
+function pageWithToc(conformer?: ConformerProjection, conformers?: ConformerProjection[]) {
+    return render(
+        <MemoryRouter>
+            <PageSectionsProvider>
+                <TableOfContents />
+                <EntryThermoSection entryRef={entryRef} conformer={conformer} conformers={conformers} />
+            </PageSectionsProvider>
+        </MemoryRouter>,
+    )
+}
 
 function page(conformer?: ConformerProjection, conformers?: ConformerProjection[]) {
     return render(
@@ -500,5 +516,88 @@ describe("EntryThermoSection", () => {
         const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 2" }).closest(".conformer-evidence-group") as HTMLElement
         expect(within(primaryGroup).getByText("thm_alpha")).toBeVisible()
         expect(document.querySelector(".conformer-attribution-other")).toBeNull()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// The owner: "in Thermochemistry tab, I expect the ToC to show NASA-7 Thermo
+// record (for example) if it exists as a point to go to." `thm_alpha` in
+// `mockRecords()` is nasa/NASA-7, `thm_beta` is nasa9/NASA-9, `thm_gamma` is
+// wilhoit -- a fixture already shaped so a "which model kind is present"
+// mistake (registering by `model_kind` alone rather than by whether the
+// matching data block is actually non-null) would be unobservable no
+// differently from a correct implementation, since every record here HAS
+// the data its own `model_kind` names. See `EntryThermoSection.tsx`'s
+// `hasModelKindData` for the case that isn't true of every record on the
+// live archive (a declared kind outliving its data).
+// ---------------------------------------------------------------------------
+describe("EntryThermoSection: thermo records register in the ToC", () => {
+    it("registers a NASA-7 thermo record as a ToC entry, linking to a real element id, when the record actually has NASA-7 data", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        pageWithToc()
+        await screen.findByText("thm_alpha")
+
+        const link = screen.getByRole("link", { name: "NASA-7 thermo record" })
+        expect(link).toHaveAttribute("href", "#thermo-heading-thm_alpha")
+        // The href doesn't merely look plausible -- the id it points to is
+        // a real element actually on the page.
+        expect(document.getElementById("thermo-heading-thm_alpha")).not.toBeNull()
+
+        // The two other present model kinds register too, each under its
+        // own label -- not just NASA-7.
+        expect(screen.getByRole("link", { name: "NASA-9 thermo record" }))
+            .toHaveAttribute("href", "#thermo-heading-thm_beta")
+        expect(screen.getByRole("link", { name: "Wilhoit thermo record" }))
+            .toHaveAttribute("href", "#thermo-heading-thm_gamma")
+    })
+
+    it("registers no NASA-7 ToC entry when no deposited record actually has NASA-7 data", async () => {
+        // thm_gamma alone: wilhoit only, no nasa/nasa9/points anywhere in
+        // this response.
+        const [, , gamma] = mockRecords()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [gamma] }))))
+        pageWithToc()
+        await screen.findByText("thm_gamma")
+
+        expect(screen.queryByRole("link", { name: /NASA-7/ })).not.toBeInTheDocument()
+        // Positive check alongside the absence: the ToC list itself did
+        // render (so this isn't "the whole nav failed to mount" passing
+        // for the wrong reason) and the ONE present model kind is in it.
+        expect(screen.getByRole("link", { name: "Wilhoit thermo record" })).toBeVisible()
+    })
+
+    it("does not register a ToC entry for a record whose declared model_kind has no matching data -- a claimed kind is not the same as data", async () => {
+        // A record that CLAIMS nasa but whose `nasa` field is null -- the
+        // defensive case `NasaBlock` already renders around ("No NASA-7
+        // polynomial recorded for this record."). Checking `model_kind`
+        // alone (ignoring whether the data is actually there) would
+        // register this as a ToC entry pointing at that exact empty
+        // message -- an empty destination, which the design brief
+        // explicitly forbids.
+        const [alpha] = mockRecords()
+        const claimsNasaButEmpty = { ...alpha, thermo_ref: "thm_empty_nasa", nasa: null }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [claimsNasaButEmpty] }))))
+        pageWithToc()
+        await screen.findByText("thm_empty_nasa")
+
+        expect(screen.queryByRole("link", { name: /NASA-7/ })).not.toBeInTheDocument()
+        // Positive: the record itself still rendered (its own defensive
+        // "No NASA-7 polynomial recorded" message), so this isn't "nothing
+        // rendered at all" passing for the wrong reason.
+        expect(screen.getByText("No NASA-7 polynomial recorded for this record.")).toBeVisible()
+    })
+
+    it("disambiguates two records of the same model kind rather than repeating one label", async () => {
+        const [alpha, beta, gamma] = mockRecords()
+        const secondNasa = { ...gamma, thermo_ref: "thm_delta", model_kind: "nasa", nasa: alpha.nasa, nasa9: null, wilhoit: null, points: null }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, beta, gamma, secondNasa] }))))
+        pageWithToc()
+        await screen.findByText("thm_delta")
+
+        expect(screen.queryByRole("link", { name: "NASA-7 thermo record" })).not.toBeInTheDocument()
+        const first = screen.getByRole("link", { name: "NASA-7 thermo record 1" })
+        const second = screen.getByRole("link", { name: "NASA-7 thermo record 2" })
+        expect(first).toHaveAttribute("href", "#thermo-heading-thm_alpha")
+        expect(second).toHaveAttribute("href", "#thermo-heading-thm_delta")
     })
 })

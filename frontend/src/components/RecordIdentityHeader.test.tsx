@@ -86,13 +86,13 @@ describe("RecordIdentityHeader", () => {
         expect(screen.getByText("sub_demo")).toBeVisible()
     })
 
-    it("renders facet chips only when facets are supplied", () => {
+    it("renders classification facets as a plain readable phrase, only when facets are supplied -- no pill row", () => {
         const { rerender } = render(
             <MemoryRouter>
                 <RecordIdentityHeader identity={speciesIdentity} />
             </MemoryRouter>,
         )
-        expect(document.querySelector(".record-facet-chips")).toBeNull()
+        expect(document.querySelector(".record-identity-facets")).toBeNull()
         rerender(
             <MemoryRouter>
                 <RecordIdentityHeader
@@ -101,6 +101,11 @@ describe("RecordIdentityHeader", () => {
                 />
             </MemoryRouter>,
         )
-        expect(document.querySelector(".record-facet-chips")).not.toBeNull()
+        const facets = document.querySelector(".record-identity-facets")
+        expect(facets).not.toBeNull()
+        expect(facets).toHaveTextContent("minimum · ground state")
+        // No pill boxes: never a `.record-facet-chips` / `.record-facet-chip`
+        // list, not even when facets are supplied.
+        expect(document.querySelector(".record-facet-chips")).toBeNull()
     })
 })

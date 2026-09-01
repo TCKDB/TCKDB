@@ -44,6 +44,12 @@
     word-break: break-word;
 }
 
+.record-identity-facets {
+    margin: 0;
+    color: var(--ink-2);
+    font: .82rem/1.4 var(--sans);
+}
+
 .record-identity-absent,
 .record-identity-absent-inline {
     color: var(--muted);

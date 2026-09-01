@@ -8,6 +8,7 @@ import { conformerLabel, partitionByConformerLink, thermoConformerGroupRef } fro
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
+import { useRegisteredSection } from "../hooks/usePageSections"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
 import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
@@ -106,12 +107,76 @@ function thermoRecordFallback(record: ThermoRecord) {
     )
 }
 
-function renderThermoRecord(record: ThermoRecord) {
-    return (
-        <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
-            <ThermoRecordCard record={record} />
-        </SectionErrorBoundary>
-    )
+/**
+ * Whether `record` actually carries the model-kind data its own
+ * `model_kind` names -- distinct from `model_kind` itself, which is a
+ * declared classification that can outlive the data (every one of
+ * `NasaBlock`/`Nasa9Block`/`WilhoitBlock`/`PointsBlock` below already
+ * renders defensively for exactly this case: a `model_kind` of `"nasa"`
+ * with a null `nasa` field). A ToC entry pointing at a record whose model
+ * block would just say "No NASA-7 polynomial recorded for this record" is
+ * an empty destination -- see `thermoSectionLabels` below, which only
+ * registers a record when this is true.
+ */
+function hasModelKindData(record: ThermoRecord): boolean {
+    if (record.model_kind === "nasa") return record.nasa != null
+    if (record.model_kind === "nasa9") return (record.nasa9?.length ?? 0) > 0
+    if (record.model_kind === "wilhoit") return record.wilhoit != null
+    if (record.model_kind === "points") return (record.points?.length ?? 0) > 0
+    // "scalar" and any other declared kind: no model block on this page to
+    // jump to at all.
+    return false
+}
+
+/**
+ * One ToC label per record that actually has model-kind data, computed
+ * once over the FULL, stable-ordered `records` list this entry-scoped
+ * list endpoint returned -- not recomputed per render call from whatever
+ * order a partitioned (`ConformerAttributionGroups`) or flat
+ * (`records.map`) render path happens to visit records in, so the
+ * disambiguating index below is deterministic regardless of which path
+ * rendered first. A record with no model-kind data maps to `null` (no ToC
+ * entry -- "never register a placeholder for an absent model kind").
+ *
+ * Two records of the SAME model kind get a disambiguating index appended
+ * ("NASA-7 thermo record 1" / "NASA-7 thermo record 2") -- a lone record
+ * of a kind keeps the plain label ("NASA-7 thermo record"), matching the
+ * design brief's own example.
+ */
+function thermoSectionLabels(records: ThermoRecord[]): Map<string, string> {
+    const withData = records.filter(hasModelKindData)
+    const countByBase = new Map<string, number>()
+    for (const record of withData) {
+        const base = `${modelKindLabel(record.model_kind)} thermo record`
+        countByBase.set(base, (countByBase.get(base) ?? 0) + 1)
+    }
+    const seenByBase = new Map<string, number>()
+    const labels = new Map<string, string>()
+    for (const record of withData) {
+        const base = `${modelKindLabel(record.model_kind)} thermo record`
+        if ((countByBase.get(base) ?? 0) <= 1) {
+            labels.set(record.thermo_ref, base)
+            continue
+        }
+        const index = (seenByBase.get(base) ?? 0) + 1
+        seenByBase.set(base, index)
+        labels.set(record.thermo_ref, `${base} ${index}`)
+    }
+    return labels
+}
+
+/** Binds `renderThermoRecord` to one entry's worth of ToC labels (see
+ *  `thermoSectionLabels`) so every render path below -- the flat list, and
+ *  each `ConformerAttributionGroups` bucket -- registers the same record
+ *  under the same label, computed once. */
+function makeThermoRecordRenderer(sectionLabels: Map<string, string>) {
+    return function renderThermoRecord(record: ThermoRecord) {
+        return (
+            <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
+                <ThermoRecordCard record={record} sectionLabel={sectionLabels.get(record.thermo_ref) ?? null} />
+            </SectionErrorBoundary>
+        )
+    }
 }
 
 function ThermoList({ response, conformer, conformers }: {
@@ -120,6 +185,11 @@ function ThermoList({ response, conformer, conformers }: {
     conformers: ConformerProjection[]
 }) {
     const { records, review_summary: reviewSummary, pagination } = response
+    // Computed once, over the full deposited list -- see
+    // `thermoSectionLabels`'s own docstring for why this must not be
+    // recomputed per render path.
+    const sectionLabels = thermoSectionLabels(records)
+    const renderThermoRecord = makeThermoRecordRenderer(sectionLabels)
     return (
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
@@ -182,7 +252,17 @@ function ThermoList({ response, conformer, conformers }: {
     )
 }
 
-function ThermoRecordCard({ record }: { record: ThermoRecord }) {
+/**
+ * `sectionLabel` is `null` for a record with no actual model-kind data
+ * (`hasModelKindData` false -- a `model_kind` that outlives its own data,
+ * or a kind this page has no ToC-worthy block for at all) and a string
+ * otherwise (see `thermoSectionLabels`). `useRegisteredSection` is called
+ * UNCONDITIONALLY regardless -- passing `id: null` through it is the
+ * sanctioned no-op (see that hook's own docstring) that keeps this a
+ * valid, always-in-the-same-order hook call rather than a conditional one.
+ */
+function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sectionLabel: string | null }) {
+    useRegisteredSection(sectionLabel ? `thermo-heading-${record.thermo_ref}` : null, sectionLabel ?? "")
     return (
         <article className="science-record" aria-labelledby={`thermo-heading-${record.thermo_ref}`}>
             <div className="science-record-heading">

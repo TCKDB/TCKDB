@@ -1,8 +1,8 @@
 import type { SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { words } from "../domain/provenanceFormat"
+import { stereoChip } from "../domain/recordFacets"
 import { Formula } from "./Formula"
-import { RecordFacetChips } from "./RecordFacetChips"
 import { CopyButton, RefsDisclosure } from "./RefsDisclosure"
 
 // `words` returns `null` for a missing/empty token (a case none of the
@@ -38,13 +38,27 @@ function availabilityText(entry: SpeciesEntryProjection) {
  * science for the reader's first look. See the design brief: "it shows the
  * public ref but that's terrible to show" was about equal billing, not
  * about hiding it.
+ *
+ * No pill boxes. The electronic state used to render three times on this
+ * page (a `.state-chip` beside the `<h1>`, the "Entry kind / state" row
+ * below, and a `RecordFacetChips` pill row) -- the owner's own complaint:
+ * "where do entry kind/state but then have pill boxes as well of the same
+ * info? no pill boxes." Every fact here now appears exactly once, as a
+ * labelled row in `entry-facts` -- including the three axes (label, term
+ * symbol, stereochemistry) that ONLY the pill row used to carry: dropping
+ * the pills without adding these back would have silently deleted facts a
+ * reader could see nowhere else (the owner caught this on
+ * `spe_n5nt4fz3ztsfh2otwlyyvvl2je`: "why ... does it not show ... E isomer
+ * like it does for Review etc."). Each of the three is rendered only when
+ * the entry actually carries it -- an absent stereo label means this entry
+ * is not stereochemically distinguished, not "unknown", so it gets no row
+ * at all rather than a "not recorded" placeholder.
  */
 export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
     return <header className="entry-hero">
         <p className="eyebrow">Species entry · deposited scientific record</p>
         <div className="entry-formula-row">
             <h1>{entry.formula ? <Formula value={entry.formula} /> : entry.canonicalSmiles}</h1>
-            <span className="state-chip">{displayToken(entry.electronic_state_kind)}</span>
         </div>
         <ul className="entry-identifiers" aria-label="Chemical identifiers">
             <IdentifierItem label="SMILES" value={entry.canonicalSmiles} />
@@ -55,13 +69,11 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
             <FactItem label="Charge / multiplicity" value={`${chargeDisplay(entry.charge)} / ${spinDisplay(entry.multiplicity)}`} />
             <FactItem label="Review" value={displayToken(entry.review.status)} />
             <FactItem label="Archive availability" value={availabilityText(entry)} />
+            {entry.electronic_state_label && <FactItem label="Electronic state label" value={entry.electronic_state_label} />}
+            {entry.term_symbol && <FactItem label="Term symbol" value={entry.term_symbol} />}
+            {entry.stereo_label && <FactItem label="Stereochemistry" value={stereoChip(entry.stereo_label)} />}
+            {entry.isotope_key && <FactItem label="Isotopologue" value={entry.isotope_key} />}
         </ul>
-        {/* Classification facets -- identity, then facets, then provenance
-            (the shared record-page header order; see the design brief).
-            `RecordFacetChips` reads the four raw axes directly rather than
-            the collapsed `species_entry_label` discriminator string --
-            see `domain/recordFacets.ts` for the bug this replaces. */}
-        <RecordFacetChips entry={entry} />
         {/* Collapsed by default (see `RefsDisclosure`) -- nothing else on
             this page needs to distinguish two species entries at rest; the
             formula/SMILES/InChIKey above already does that job, so every
