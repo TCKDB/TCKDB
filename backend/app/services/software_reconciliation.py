@@ -44,7 +44,13 @@ def parsed_dict_to_ref(parsed: dict) -> SoftwareReleaseRef:
     """
     name = parsed.get("name", "")
     version = parsed.get("version")
-    raw_build = parsed.get("build", "")
+    # ``.get("build", "")`` only uses the default when the key is absent --
+    # the ORCA parser's dict carries an explicit ``"build": None``, which
+    # ``.get`` returns unchanged, and ``re.search`` below then raised
+    # TypeError on it (silently swallowed by the caller's best-effort
+    # try/except, so reconciliation quietly no-opped for every ORCA
+    # -declared calculation until this was caught by a real ORCA fixture).
+    raw_build = parsed.get("build") or ""
 
     # Extract revision from Gaussian build strings like "EM64L-G09RevD.01"
     revision = None

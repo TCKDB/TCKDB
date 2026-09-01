@@ -65,9 +65,11 @@ from app.services.calculation_geometry_composition import (
 )
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.schemas.upload_warning import UploadWarning
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
+    parsed_dict_to_ref,
     reconcile_software_provenance,
 )
 from app.services.software_resolution import resolve_software_release_ref
@@ -427,7 +429,73 @@ def _format_observed_banner(parsed_software: dict | None) -> str | None:
     return banner or None
 
 
+def _format_declared_banner(declared_ref: SoftwareReleaseRef | None) -> str | None:
+    """Render a declared ref into the same compact shape as the observed
+    banner, for symmetric provenance. Only ever called on the correction
+    path (see :func:`record_software_reconciliation`), so it is the one
+    place ``calculation.declared_software_banner`` is written.
+    """
+
+    if declared_ref is None:
+        return None
+    tokens = [
+        v
+        for v in (declared_ref.name, declared_ref.version, declared_ref.build)
+        if v
+    ]
+    banner = " ".join(tokens)
+    return banner or None
+
+
+#: Fires only on the correction path inside :func:`record_software_reconciliation`
+#: -- a parsed artifact banner positively naming a different program than the
+#: declared one. Distinct from the schema-level
+#: ``software_release_name_looks_wrong`` warning (which fires with no
+#: artifact evidence, at upload time, and never touches the row): this one
+#: fires once an artifact actually settled the question and the row was
+#: corrected, so the message reports what was *done*, not just what looks
+#: suspicious.
+W_SOFTWARE_IDENTITY_CORRECTED_FROM_ARTIFACT = (
+    "software_release_identity_corrected_from_artifact"
+)
+
+
+def software_reconciliation_warning(
+    result: SoftwareReconciliationResult | None,
+) -> UploadWarning | None:
+    """Build the depositor-facing warning for a software-identity correction.
+
+    Pure function over :func:`record_software_reconciliation`'s return
+    value: produces a warning exactly when that call took the correction
+    branch (a *name* mismatch — not a version/revision/build-only
+    mismatch, which stays silent here; DR-0008's ordinary, much larger
+    warning-free case). Kept separate from ``record_software_reconciliation``
+    itself so callers that do not track an ``UploadWarning`` list (the
+    calculation-creation seam, which calls it with ``parsed_software=None``
+    and can never hit this branch) pay nothing for it.
+    """
+
+    if result is None or result.match_status != "mismatch":
+        return None
+    if "name" not in result.mismatches:
+        return None
+    declared_name, observed_name = result.mismatches["name"]
+    return UploadWarning(
+        field="software_release",
+        code=W_SOFTWARE_IDENTITY_CORRECTED_FROM_ARTIFACT,
+        message=(
+            f"The declared software name ({declared_name!r}) disagreed with "
+            f"the program identified in the uploaded artifact "
+            f"({observed_name!r}). The artifact is the observed fact, so "
+            f"this calculation's software_release now points at "
+            f"{observed_name!r}. The originally declared value is preserved "
+            "on declared_software_banner."
+        ),
+    )
+
+
 def record_software_reconciliation(
+    session: Session,
     calculation: Calculation,
     *,
     declared_ref: SoftwareReleaseRef | None = None,
@@ -439,12 +507,29 @@ def record_software_reconciliation(
     the ``calculation`` row (``software_reconciliation_status`` and, when a
     banner was observed, ``observed_software_banner``). See DR-0008.
 
-    This is **non-blocking provenance**, not a trust gate: a ``mismatch``
-    is recorded and the declared value still wins on ``software_release_id``
-    — the upload is never rejected. When ``declared_ref`` is omitted the
-    declared side is reconstructed from ``calculation.software_release``, so
-    the parser seam can call this with only ``parsed_software``.
+    This is **non-blocking provenance**, not a trust gate: nothing is ever
+    rejected. Where a *declared field* is disagreed with (``version``,
+    ``revision``, ``build``), the declared value still wins on
+    ``software_release_id`` — the parser may have mis-read a banner and
+    there is nothing else here to check it against.
 
+    **Narrowed for the software identity itself** (2026-09, issue #305's
+    ARC follow-up): when the parsed banner names a *different program*
+    than the declared ``name``, the observed program is what actually
+    ran — an artifact is real evidence; a declared name can be a stale
+    value that rode along from an unrelated job (ARC's own per-job-type
+    version map, not this database's business to fix). In that case
+    ``software_release_id`` is repointed at the observed release and the
+    declared string is preserved on ``calculation.declared_software_banner``
+    rather than discarded. Use :func:`software_reconciliation_warning` to
+    turn this into a depositor-facing warning.
+
+    When ``declared_ref`` is omitted the declared side is reconstructed
+    from ``calculation.software_release``, so the parser seam can call
+    this with only ``parsed_software``.
+
+    :param session: Active SQLAlchemy session, needed to resolve the
+        corrected release on the identity-mismatch path.
     :param calculation: The calculation row to annotate (already persisted).
     :param declared_ref: User-declared software ref; reconstructed from the
         persisted release when omitted.
@@ -471,6 +556,14 @@ def record_software_reconciliation(
     banner = _format_observed_banner(parsed_software)
     if banner is not None:
         calculation.observed_software_banner = banner
+
+    if result.match_status == "mismatch" and "name" in result.mismatches:
+        parsed_ref = parsed_dict_to_ref(parsed_software)
+        corrected_release = resolve_software_release_ref(session, parsed_ref)
+        calculation.declared_software_banner = _format_declared_banner(declared_ref)
+        calculation.software_release_id = corrected_release.id
+        calculation.software_release = corrected_release
+
     return result
 
 
@@ -1448,6 +1541,7 @@ def resolve_and_persist_calculation_with_results(
     # (extract_and_store_calculation_parameters) later upgrades the status
     # to matched/enriched/mismatch/parsed_only when a banner is observed.
     record_software_reconciliation(
+        session,
         calculation,
         declared_ref=calc_upload.software_release,
         parsed_software=None,

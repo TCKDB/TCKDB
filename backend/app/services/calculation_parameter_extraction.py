@@ -42,6 +42,7 @@ from app.db.models.common import (
 )
 from app.schemas.fragments.artifact import ArtifactIn
 from app.schemas.fragments.calculation import CalculationParameterObservation
+from app.schemas.upload_warning import UploadWarning
 from app.services import (
     gaussian_parameter_parser,
     molpro_parameter_parser,
@@ -57,6 +58,7 @@ from app.services.best_effort import isolated_best_effort
 from app.services.calculation_resolution import (
     persist_calculation_parameters,
     record_software_reconciliation,
+    software_reconciliation_warning,
     software_release_to_declared_ref,
 )
 from app.services.ess_software_detection import (
@@ -80,8 +82,18 @@ def _resolve_software(
 ) -> SoftwareName:
     """Resolve which parser to use for this artifact.
 
-    DB-linked software identity wins; text sniffing is the fallback for
-    calculations created without a ``software_release`` row.
+    Text-sniffed evidence wins when the banner unambiguously names a
+    program; the declared ``software_release`` name is the fallback for
+    artifacts that carry no recognisable banner. Inverted 2026-09 (issue
+    #305's ARC follow-up): the declared name used to win outright
+    whenever it was one of the three parsed programs, even when the
+    artifact's own banner named a different one. ARC's own per-job-type
+    version map can carry a stale/inherited software name into a
+    ``software_release`` that never ran the job in question — a real
+    banner is evidence; a declared label is not, when the two disagree.
+    ``detect_software_from_text`` already follows "reject, don't guess":
+    an inconclusive sniff returns ``None`` rather than a wrong guess, so
+    falling back to the declared name there loses nothing.
 
     Resolving a program is not a promise that a parser exists for it —
     ``_run_parser`` is the single place that decides that, and raises for a
@@ -90,15 +102,15 @@ def _resolve_software(
     ``software_release`` cannot override what the log itself says.
     """
 
+    sniffed = detect_software_from_text(artifact_text)
+    if sniffed is not None:
+        return sniffed
+
     release = calculation.software_release
     if release is not None and release.software is not None:
         name = (release.software.name or "").strip().lower()
         if name in ("gaussian", "orca", "molpro"):
             return name  # type: ignore[return-value]
-
-    sniffed = detect_software_from_text(artifact_text)
-    if sniffed is not None:
-        return sniffed
 
     raise ParameterExtractionError(
         "Cannot determine ESS software for parameter extraction: "
@@ -210,14 +222,15 @@ def extract_and_store_calculation_parameters(
     artifact_text: str,
     *,
     parser_version: str | None = None,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter]:
     """Parse calculation input text and persist normalized parameters.
 
     Pipeline:
 
-    1. Resolve which parser to use from
-       ``calculation.software_release.software.name`` (text-sniff
-       fallback).
+    1. Resolve which parser to use from the artifact's own banner
+       (``calculation.software_release.software.name`` is the fallback
+       for a banner sniffing cannot identify).
     2. Invoke that parser on ``artifact_text``.
     3. Replace every existing ``CalculationParameter`` row on this
        calculation with ``source='parser'`` (true replace-all, not
@@ -234,6 +247,12 @@ def extract_and_store_calculation_parameters(
     :param parser_version: Override for the parser version recorded on
         each row and on ``calculation.parameters_parser_version``.
         Defaults to whatever the parser self-reports.
+    :param warnings: Optional list to append a depositor-facing warning to
+        when DR-0008 reconciliation corrects the calculation's software
+        identity from this artifact (see
+        :func:`app.services.calculation_resolution.software_reconciliation_warning`).
+        Callers that do not track warnings (the backfill script) simply
+        omit it.
     :returns: Newly inserted parameter rows.
     :raises ParameterExtractionError: Software cannot be determined or
         the parser raises. Callers in opportunistic contexts must catch
@@ -248,13 +267,18 @@ def extract_and_store_calculation_parameters(
     # calculation. Non-blocking: a mismatch is recorded, never raised, and
     # any failure here must not abort parameter extraction / the upload.
     try:
-        record_software_reconciliation(
+        result = record_software_reconciliation(
+            session,
             calculation,
             declared_ref=software_release_to_declared_ref(
                 calculation.software_release
             ),
             parsed_software=parsed.get("software"),
         )
+        if warnings is not None:
+            warning = software_reconciliation_warning(result)
+            if warning is not None:
+                warnings.append(warning)
     except Exception as exc:  # pragma: no cover - defensive, never blocks
         logger.warning(
             "software provenance reconciliation skipped for calculation "
@@ -295,6 +319,8 @@ def try_extract_parameters_from_input_upload(
     session: Session,
     calculation: Calculation,
     artifact_in: ArtifactIn,
+    *,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter] | None:
     """Opportunistic upload-side hook: extract from an ArtifactIn.
 
@@ -306,6 +332,10 @@ def try_extract_parameters_from_input_upload(
     Returns ``None`` (and logs a warning) on any failure or when the
     artifact kind is not ``input``. Never raises — artifact upload is
     canonical and must not be aborted by parameter-extraction failure.
+
+    :param warnings: Optional list to append a depositor-facing warning to
+        when this artifact corrects the calculation's software identity
+        (DR-0008) — see :func:`extract_and_store_calculation_parameters`.
     """
 
     # ``artifact_in`` is a Pydantic model whose ``kind`` field is typed
@@ -328,13 +358,17 @@ def try_extract_parameters_from_input_upload(
         return None
 
     text = _decode_text(content)
-    return _extract_safe(session, calculation, text, source=artifact_in.filename)
+    return _extract_safe(
+        session, calculation, text, source=artifact_in.filename, warnings=warnings
+    )
 
 
 def try_extract_parameters_from_input_artifact_row(
     session: Session,
     calculation: Calculation,
     artifact: CalculationArtifact,
+    *,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter] | None:
     """Opportunistic backfill hook: extract from a stored artifact row.
 
@@ -384,7 +418,11 @@ def try_extract_parameters_from_input_artifact_row(
         return None
     text = _decode_text(content)
     return _extract_safe(
-        session, calculation, text, source=f"artifact id={artifact.id}"
+        session,
+        calculation,
+        text,
+        source=f"artifact id={artifact.id}",
+        warnings=warnings,
     )
 
 
@@ -394,6 +432,7 @@ def _extract_safe(
     text: str,
     *,
     source: str,
+    warnings: list[UploadWarning] | None = None,
 ) -> list[CalculationParameter] | None:
     """Run extraction as a genuinely best-effort operation.
 
@@ -419,7 +458,7 @@ def _extract_safe(
     def _run() -> list[CalculationParameter] | None:
         try:
             return extract_and_store_calculation_parameters(
-                session, calculation, text
+                session, calculation, text, warnings=warnings
             )
         except ParameterExtractionError as exc:
             # A parse-layer refusal is expected and unremarkable — an

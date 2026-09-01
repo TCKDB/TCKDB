@@ -556,10 +556,23 @@ class SoftwareReconciliationStatus(str, Enum):
 
     * ``matched`` — both sources agree.
     * ``enriched`` — user gave partial info, the parser filled the gaps.
-    * ``mismatch`` — the sources disagree on at least one field. The
-      declared value still takes precedence (this is provenance, not a
-      trust gate); the disagreement is recorded, never rejected.
+    * ``mismatch`` — the sources disagree on at least one field. This is
+      provenance, not a trust gate: nothing is rejected. Where a
+      *declared field* is disagreed with (``version``, ``revision``,
+      ``build``), the declared value still takes precedence — the parser
+      may have mis-read a banner and there is nothing on the calculation
+      to check it against. Narrowed 2026-09 for the *software identity*
+      itself: when the parsed banner names a **different program** than
+      the declared ``name``, the observed program wins on
+      ``software_release_id`` — an artifact that positively identifies
+      what actually ran outranks a declared label that, per issue #305's
+      ARC follow-up, can be a stale value that rode along from an
+      unrelated job. The declared string is never discarded even when
+      outranked: it survives on ``calculation.declared_software_banner``.
     * ``declared_only`` — user declared, no parseable banner was observed.
+      The overwhelming majority of live rows: no artifact was ever
+      uploaded for them, so there is nothing to reconcile against and the
+      declared value is simply what the calculation records.
     * ``parsed_only`` — no user declaration, only a parsed banner.
 
     A NULL value means reconciliation was never run for the calculation
