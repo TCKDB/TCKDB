@@ -64,15 +64,19 @@ describe("formatEnergyForDisplay always attaches the unit", () => {
         expect(formatEnergyForDisplay(-76.1234567, "hartree")).toBe("-76.123457 hartree")
     })
 
-    it("never derives a converted display from another converted value -- both paths from the same source agree", () => {
-        // Converting straight from hartree and converting the same
-        // stored number a second time must be bit-identical: there is
-        // no intermediate rounded value in this module's own state to
-        // accumulate drift from.
+    it("never derives a converted display from another converted value", () => {
+        // Calling the same pure function twice cannot check this: a
+        // chaining implementation would chain identically both times and
+        // still agree with itself. The property only has teeth against a
+        // value with more significant digits than any intermediate unit
+        // could carry -- each conversion must equal ONE multiplication
+        // from the stored hartree, so routing through a rounded
+        // intermediate (eV, say) perturbs the low-order bits and fails.
         const stored = -76.1234567891011
-        const first = convertEnergyForDisplay(stored, "ev")
-        const second = convertEnergyForDisplay(stored, "ev")
-        expect(first).toBe(second)
+        expect(convertEnergyForDisplay(stored, "kj_mol")).toBe(stored * KJ_MOL_PER_HARTREE)
+        expect(convertEnergyForDisplay(stored, "kcal_mol")).toBe(stored * KCAL_MOL_PER_HARTREE)
+        expect(convertEnergyForDisplay(stored, "ev")).toBe(stored * EV_PER_HARTREE)
+        expect(convertEnergyForDisplay(stored, "cm1")).toBe(stored * CM1_PER_HARTREE)
     })
 })
 
