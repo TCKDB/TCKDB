@@ -1,0 +1,106 @@
+import { describe, expect, it, afterEach } from "vitest"
+import { cleanup, render, screen } from "@testing-library/react"
+import { MemoryRouter } from "react-router-dom"
+import { RecordIdentityHeader } from "./RecordIdentityHeader"
+import type { RecordIdentity } from "../domain/recordIdentity"
+
+afterEach(cleanup)
+
+function renderHeader(props: Parameters<typeof RecordIdentityHeader>[0]) {
+    return render(<MemoryRouter><RecordIdentityHeader {...props} /></MemoryRouter>)
+}
+
+const speciesIdentity: RecordIdentity = {
+    kind: "species_entry",
+    formula: "CH3",
+    canonicalSmiles: "[CH3]",
+    inchiKey: "WCYWZMWISLQXQU-UHFFFAOYSA-N",
+    charge: 0,
+    multiplicity: 2,
+    speciesEntryRef: "spe_demo",
+}
+
+const tsIdentity: RecordIdentity = {
+    kind: "transition_state_entry",
+    formula: null,
+    unmappedSmiles: null,
+    charge: 0,
+    multiplicity: 2,
+    transitionStateEntryRef: "tse_demo",
+}
+
+describe("RecordIdentityHeader", () => {
+    it("renders a known species identity with SMILES and InChIKey", () => {
+        renderHeader({ identity: speciesIdentity })
+        expect(screen.getByText("[CH3]")).toBeVisible()
+        expect(screen.getByText("WCYWZMWISLQXQU-UHFFFAOYSA-N")).toBeVisible()
+    })
+
+    it("renders the ambiguous case distinctly from the unambiguous case -- no SMILES/InChIKey shown, owners listed instead", () => {
+        renderHeader({
+            identity: { kind: "ambiguous", owners: [{ kind: "species_entry", ref: "spe_a" }, { kind: "species_entry", ref: "spe_b" }] },
+        })
+        expect(screen.getByTestId("record-identity-ambiguous")).toHaveTextContent(/more than one distinct owner/)
+        expect(screen.getByText("spe_a")).toBeVisible()
+        expect(screen.getByText("spe_b")).toBeVisible()
+        expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
+        expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
+    })
+
+    it("renders the absent case distinctly from both known and ambiguous", () => {
+        renderHeader({ identity: { kind: "absent" } })
+        expect(screen.getByText(/No molecular identity is recorded/)).toBeVisible()
+        expect(screen.queryByTestId("record-identity-ambiguous")).not.toBeInTheDocument()
+    })
+
+    it("a transition-state identity never renders a SMILES or InChIKey field, even an empty one", () => {
+        renderHeader({ identity: tsIdentity })
+        // No "SMILES" or "InChIKey" label anywhere -- not present with an
+        // empty value, not present at all.
+        expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
+        expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
+        // Its own field, "Unmapped SMILES", is present and says plainly
+        // that nothing was deposited -- not a blank cell.
+        expect(screen.getByText("Unmapped SMILES")).toBeVisible()
+        expect(screen.getByText("not recorded")).toBeVisible()
+    })
+
+    it("renders a transition-state's unmapped SMILES when one was deposited", () => {
+        renderHeader({ identity: { ...tsIdentity, unmappedSmiles: "[CH2]OO[CH2]" } })
+        expect(screen.getByText("[CH2]OO[CH2]")).toBeVisible()
+    })
+
+    it("renders no submission row at all when the key is absent (anonymous caller)", () => {
+        renderHeader({ identity: speciesIdentity, submissionRef: undefined })
+        expect(screen.queryByText("Submission")).not.toBeInTheDocument()
+    })
+
+    it("renders 'not recorded' when the key is present but null (authenticated, no linked submission)", () => {
+        renderHeader({ identity: speciesIdentity, submissionRef: null })
+        expect(screen.getByText("Submission")).toBeVisible()
+        expect(screen.getByText("not recorded")).toBeVisible()
+    })
+
+    it("renders the submission ref when the key is present and populated", () => {
+        renderHeader({ identity: speciesIdentity, submissionRef: "sub_demo" })
+        expect(screen.getByText("sub_demo")).toBeVisible()
+    })
+
+    it("renders facet chips only when facets are supplied", () => {
+        const { rerender } = render(
+            <MemoryRouter>
+                <RecordIdentityHeader identity={speciesIdentity} />
+            </MemoryRouter>,
+        )
+        expect(document.querySelector(".record-facet-chips")).toBeNull()
+        rerender(
+            <MemoryRouter>
+                <RecordIdentityHeader
+                    identity={speciesIdentity}
+                    facets={{ species_entry_kind: "minimum", electronic_state_kind: "ground" }}
+                />
+            </MemoryRouter>,
+        )
+        expect(document.querySelector(".record-facet-chips")).not.toBeNull()
+    })
+})

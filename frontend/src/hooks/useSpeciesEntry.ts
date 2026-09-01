@@ -2,9 +2,11 @@ import { useEffect, useState } from "react"
 import { loadEntryConformers, loadSpeciesEntry } from "../api/speciesEntryApi"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
 import { ScientificApiError } from "../api/scientificTransport"
+import { loadSpeciesSinglePointEnergies } from "../api/speciesCalculationsApi"
+import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 
 export type SpeciesEntryState =
-    | { entryRef: string; entry: SpeciesEntryProjection; conformers: ConformerProjection[] }
+    | { entryRef: string; entry: SpeciesEntryProjection; conformers: ConformerProjection[]; spEnergies: SpeciesCalculationEnergyRecord[] }
     | { entryRef: string; status: "missing" | "malformed" | "http-error" }
 
 export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
@@ -15,9 +17,14 @@ export function useSpeciesEntry(entryRef: string): SpeciesEntryState | null {
         void Promise.all([
             loadSpeciesEntry(entryRef, controller.signal),
             loadEntryConformers(entryRef, controller.signal),
+            // Best-effort enrichment (see the module docstring on
+            // `loadSpeciesSinglePointEnergies`) -- it resolves to `[]`
+            // rather than rejecting, so a failure here never turns the
+            // whole entry page into an error state.
+            loadSpeciesSinglePointEnergies(entryRef, controller.signal),
         ])
-            .then(([entry, conformers]) => {
-                setState(entry ? { entryRef, entry, conformers } : { entryRef, status: "missing" })
+            .then(([entry, conformers, spEnergies]) => {
+                setState(entry ? { entryRef, entry, conformers, spEnergies } : { entryRef, status: "missing" })
             })
             .catch((error: unknown) => {
                 if (!(error instanceof DOMException && error.name === "AbortError")) {

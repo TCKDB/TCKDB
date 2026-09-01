@@ -43,6 +43,7 @@ type HandlerOptions = {
     // two indistinguishable -- this option is what lets a test tell them
     // apart.
     reversedOrder?: boolean
+    spEnergiesFail?: boolean
 }
 
 function conformerRecords() {
@@ -324,6 +325,23 @@ function handlers(options: HandlerOptions = {}) {
             records: [],
             pagination: { offset: 0, limit: 50, returned: 0, total: 0, post_collapse_total: 0 },
         })),
+        // Distinct energies per sp calculation ref -- a fixture where every
+        // row shares one value cannot prove this page joins by the row's
+        // OWN calculation_ref rather than always showing the first energy
+        // it fetched (see the design brief's recurring-defect list: "a
+        // fixture where every row was identical let a records[0] bug
+        // survive").
+        http.get("/api/v1/scientific/species-calculations/search", () => (
+            options.spEnergiesFail
+                ? HttpResponse.json({ detail: "archive unavailable" }, { status: 503 })
+                : HttpResponse.json({
+                    records: [
+                        { calculation: { calculation_ref: "calc_sp_1", calculation_type: "sp" }, energy: { energy_hartree: -76.111111, energy_kind: "electronic_energy" } },
+                        { calculation: { calculation_ref: "calc_sp_1b", calculation_type: "sp" }, energy: { energy_hartree: -76.222222, energy_kind: "electronic_energy" } },
+                        { calculation: { calculation_ref: "calc_sp_3", calculation_type: "sp" }, energy: { energy_hartree: -76.333333, energy_kind: "electronic_energy" } },
+                    ],
+                })
+        )),
     ]
 }
 
@@ -636,6 +654,26 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         expect(screen.getByRole("link", { name: "calc_sp_1" })).toBeVisible()
         expect(screen.getByRole("link", { name: "calc_sp_1b" })).toBeVisible()
         expect(screen.getByText("No single-point calculation recorded for this observation.")).toBeVisible()
+    })
+
+    it("surfaces the single-point energy VALUE on the entry page, not just a link to the calculation", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
+        render(<App />)
+        await screen.findByRole("link", { name: "calc_sp_1" })
+        // Two DIFFERENT calculations on the same observation must show
+        // their OWN energy, not one value copied onto both rows.
+        expect(screen.getByText(/-76\.111111 hartree/)).toBeVisible()
+        expect(screen.getByText(/-76\.222222 hartree/)).toBeVisible()
+    })
+
+    it("renders 'not recorded' for an sp calculation with no matching energy record, rather than dropping its row", async () => {
+        server.use(...handlers({ spEnergiesFail: true }))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
+        render(<App />)
+        expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        expect(screen.getAllByText("Electronic energy").length).toBeGreaterThan(0)
+        expect(screen.getAllByText("not recorded").length).toBeGreaterThan(0)
     })
 
     it("shows how many optimization calculations each observation has, on the Geometry tab", async () => {

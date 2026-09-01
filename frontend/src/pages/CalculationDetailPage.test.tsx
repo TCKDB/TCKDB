@@ -725,6 +725,154 @@ describe("CalculationDetailPage", () => {
         expect(screen.queryByRole("link", { name: "Species entry" })).not.toBeInTheDocument()
     })
 
+    it("gives the species-entry owner heading its own distinct id", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        const heading = await screen.findByRole("heading", { name: "Owner" })
+        expect(heading.id).toBe("owner-heading-species-entry")
+        expect(document.getElementById("owner-heading-transition-state-entry")).toBeNull()
+    })
+
+    it("gives the transition-state owner heading a DIFFERENT id from the species-entry one, on the same page component", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                owner: {
+                    kind: "transition_state_entry",
+                    species_entry: null,
+                    transition_state_entry: {
+                        transition_state_ref: "ts_demo", transition_state_entry_ref: "tse_demo",
+                        label: "saddle point", charge: 0, multiplicity: 1, status: "candidate", reaction_entry_ref: null,
+                    },
+                },
+            }),
+        })))
+        page()
+        const heading = await screen.findByRole("heading", { name: "Owner" })
+        expect(heading.id).toBe("owner-heading-transition-state-entry")
+        expect(document.getElementById("owner-heading-species-entry")).toBeNull()
+    })
+
+    it("renders classification facet chips for the owner species entry, in the shared identity->facets->provenance order", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const chips = document.querySelector(".record-facet-chips") as HTMLElement
+        expect(within(chips).getByText("minimum")).toBeVisible()
+        expect(within(chips).getByText("ground state")).toBeVisible()
+    })
+
+    it("renders no submission row at all when the key is absent (anonymous caller)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true, converged: null,
+                    geometry_validation_status: "not_present", scf_stability_status: "not_present",
+                    // No `submission_ref` key at all -- the anonymous shape.
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        expect(screen.queryByText("Submission ref")).not.toBeInTheDocument()
+    })
+
+    it("renders 'not recorded' (not an absent row) when the submission key is present but null (authenticated, no link)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true, converged: null,
+                    geometry_validation_status: "not_present", scf_stability_status: "not_present",
+                    submission_ref: null,
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const context = screen.getByText("Submission ref").closest("dl") as HTMLElement
+        expect(ddFor(context, "Submission ref")).toBe("not recorded")
+    })
+
+    describe("headline energy", () => {
+        function pageFor(ref: string) {
+            return render(
+                <MemoryRouter initialEntries={[`/calculations/${ref}`]}>
+                    <Routes>
+                        <Route path="/calculations/:calculationRef" element={<CalculationDetailPage />} />
+                    </Routes>
+                </MemoryRouter>,
+            )
+        }
+
+        function spRecord(ref: string, electronicEnergyHartree: number) {
+            return mockRecord({
+                calculation: { ...mockRecord().calculation, calculation_ref: ref, type: "sp" },
+                results: {
+                    kind: "sp",
+                    sp: { electronic_energy_hartree: electronicEnergyHartree, electronic_energy_uncertainty_hartree: null },
+                    opt: null, freq: null, scan: null, irc: null, path_search: null,
+                },
+            })
+        }
+
+        it("promotes the calculation's OWN sp energy to a headline figure -- not another calculation's", async () => {
+            // Two calculations, two DIFFERENT energies. A page reading the
+            // wrong one (a stale fetch, `records[0]`-style bug) is only
+            // observable because the two values differ.
+            server.use(
+                http.get("/api/v1/scientific/calculations/calc_sp_a", () => HttpResponse.json({ record: spRecord("calc_sp_a", -76.100000) })),
+                http.get("/api/v1/scientific/calculations/calc_sp_b", () => HttpResponse.json({ record: spRecord("calc_sp_b", -99.999999) })),
+            )
+            pageFor("calc_sp_b")
+            await screen.findByRole("heading", { name: "Single-point calculation" })
+            expect(screen.getByTestId("energy-display-value")).toHaveTextContent("-99.999999 hartree")
+        })
+
+        it("carries the unit on the headline energy, checked for two different units", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: spRecord("calc_freq_one", -76.123456) })))
+            page()
+            await screen.findByRole("heading", { name: "Single-point calculation" })
+            const value = screen.getByTestId("energy-display-value")
+            expect(value).toHaveTextContent("hartree")
+            fireEvent.click(screen.getByRole("button", { name: "kJ/mol" }))
+            expect(value).toHaveTextContent("kJ/mol")
+            fireEvent.click(screen.getByRole("button", { name: "eV" }))
+            expect(value).toHaveTextContent("eV")
+        })
+
+        it("round-trips the headline energy losslessly: switching away from hartree and back reproduces the exact original", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: spRecord("calc_freq_one", -76.1234567) })))
+            page()
+            await screen.findByRole("heading", { name: "Single-point calculation" })
+            const value = screen.getByTestId("energy-display-value")
+            const original = value.textContent
+            fireEvent.click(screen.getByRole("button", { name: "cm⁻¹" }))
+            expect(value.textContent).not.toBe(original)
+            fireEvent.click(screen.getByRole("button", { name: "hartree" }))
+            expect(value.textContent).toBe(original)
+        })
+
+        it("renders no headline energy for a calculation type with no single answer (freq)", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+            page()
+            await screen.findByRole("heading", { name: "Frequency calculation" })
+            expect(screen.queryByTestId("energy-display-value")).not.toBeInTheDocument()
+        })
+    })
+
+    it("demotes the dependency graph and review history below the evidence sections (results, geometries, on-demand)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const headingOrder = screen.getAllByRole("heading", { level: 2 }).map((el) => el.textContent)
+        const dependenciesIndex = headingOrder.indexOf("Dependency graph")
+        const reviewIndex = headingOrder.indexOf("Review history")
+        const resultsIndex = headingOrder.indexOf("Result")
+        const geometriesIndex = headingOrder.indexOf("Geometries")
+        expect(dependenciesIndex).toBeGreaterThan(resultsIndex)
+        expect(dependenciesIndex).toBeGreaterThan(geometriesIndex)
+        expect(reviewIndex).toBeGreaterThan(dependenciesIndex)
+    })
+
     it("shows a specific not-found state for a 404", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({}, { status: 404 })))
         page()

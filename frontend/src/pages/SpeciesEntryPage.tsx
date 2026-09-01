@@ -2,6 +2,7 @@ import { useEffect } from "react"
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom"
 import "../species-entry.css"
 import type { ConformerProjection, SpeciesEntryProjection } from "../api/speciesEntryApi"
+import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 import { ConformerEvidenceLinkage } from "../components/ConformerEvidenceLinkage"
 import { sortConformersForDisplay } from "../domain/conformerEvidence"
 import { ConformerGeometryTab } from "../components/ConformerGeometryTab"
@@ -43,7 +44,15 @@ export default function SpeciesEntryPage() {
     if ("status" in state) return <UnavailableEntry />
 
     const activeSection: EntrySection = isEntrySection(section) ? section : DEFAULT_SECTION
-    return <EntryDocument entry={state.entry} conformers={state.conformers} activeSection={activeSection} entryRef={entryRef} />
+    return (
+        <EntryDocument
+            entry={state.entry}
+            conformers={state.conformers}
+            spEnergies={state.spEnergies}
+            activeSection={activeSection}
+            entryRef={entryRef}
+        />
+    )
 }
 
 function LoadingEntry() {
@@ -82,9 +91,10 @@ function UnavailableEntry() {
 // carries the active tab; an unset or stale param self-heals to the first
 // conformer via `useEffect` below rather than erroring.
 // ---------------------------------------------------------------------------
-function EntryDocument({ entry, conformers, activeSection, entryRef }: {
+function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef }: {
     entry: SpeciesEntryProjection
     conformers: ConformerProjection[]
+    spEnergies: SpeciesCalculationEnergyRecord[]
     activeSection: EntrySection
     entryRef: string
 }) {
@@ -145,7 +155,13 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
         {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
 
         <EntryTabs entryRef={entryRef} activeSection={activeSection} conformerQuery={conformerQuery} />
-        <TabPanel section={activeSection} entryRef={entryRef} conformer={selectedConformer} conformers={conformers} />
+        <TabPanel
+            section={activeSection}
+            entryRef={entryRef}
+            conformer={selectedConformer}
+            conformers={conformers}
+            spEnergies={spEnergies}
+        />
         </PageShell>
     </section>
 }
@@ -156,24 +172,26 @@ function EntryDocument({ entry, conformers, activeSection, entryRef }: {
 // Each panel body supplies its own `<h2>` instead, matching the
 // `ledger-section` shape `EntryThermoSection`/`EntryStatmechSection`/
 // `EntryTransportSection` already use.
-function TabPanel({ section, entryRef, conformer, conformers }: {
+function TabPanel({ section, entryRef, conformer, conformers, spEnergies }: {
     section: EntrySection
     entryRef: string
     conformer: ConformerProjection | null
     conformers: ConformerProjection[]
+    spEnergies: SpeciesCalculationEnergyRecord[]
 }) {
     return (
         <div className="tab-panel" role="tabpanel" id={`panel-${section}`} aria-labelledby={`tab-${section}`} tabIndex={0}>
-            <TabPanelBody section={section} entryRef={entryRef} conformer={conformer} conformers={conformers} />
+            <TabPanelBody section={section} entryRef={entryRef} conformer={conformer} conformers={conformers} spEnergies={spEnergies} />
         </div>
     )
 }
 
-function TabPanelBody({ section, entryRef, conformer, conformers }: {
+function TabPanelBody({ section, entryRef, conformer, conformers, spEnergies }: {
     section: EntrySection
     entryRef: string
     conformer: ConformerProjection | null
     conformers: ConformerProjection[]
+    spEnergies: SpeciesCalculationEnergyRecord[]
 }) {
     if (section === "geometry") {
         return conformer
@@ -182,7 +200,7 @@ function TabPanelBody({ section, entryRef, conformer, conformers }: {
     }
     if (section === "sp") {
         return conformer
-            ? <ConformerSinglePointTab conformer={conformer} />
+            ? <ConformerSinglePointTab conformer={conformer} spEnergies={spEnergies} />
             : <p className="empty-projection">No conformer basins are projected for this entry, so there is no single-point evidence to show.</p>
     }
     if (section === "statmech") return <EntryStatmechSection entryRef={entryRef} conformer={conformer} conformers={conformers} />

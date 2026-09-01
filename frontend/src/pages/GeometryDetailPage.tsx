@@ -5,10 +5,12 @@ import "../geometry-detail.css"
 import { GeometryViewer } from "../components/GeometryViewer"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
+import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import { CopyButton } from "../components/RefsDisclosure"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
+import { identityFormula, identityFromGeometry } from "../domain/recordIdentity"
 import { useGeometry } from "../hooks/useGeometry"
 import {
     ANGSTROM_TO_BOHR,
@@ -91,6 +93,11 @@ const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_
  * already shown on this page (carbon first, hydrogen second, everything
  * else alphabetical) — a display convenience computed from data the reader
  * can already see in the coordinate table, not an inferred relationship.
+ *
+ * This is now a FALLBACK only, used when the archive's own `identity`
+ * block (#321) is absent or ambiguous — never the primary source when a
+ * served formula exists. See `GeometryDetail`'s `displayFormula` /
+ * `formulaIsFallback`.
  */
 function hillFormula(elements: string[]): string {
     if (elements.length === 0) return ""
@@ -127,7 +134,18 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     // `symbols`/`coords` are a parallel-array view of the same rows as
     // `atoms` (see the shape notes in api/geometryApi.ts) — this page reads
     // the richer `atoms` shape throughout rather than duplicating both.
-    const formula = hillFormula(atoms.map((atom) => atom.element))
+    const clientFormula = hillFormula(atoms.map((atom) => atom.element))
+
+    // The archive's own served identity (#321) wins whenever it has a
+    // formula to offer. Only when identity is absent/ambiguous (or the
+    // owning entry's formula itself failed to parse server-side) does
+    // this page fall back to the client-derived Hill formula above — and
+    // when it does, it says so, rather than presenting a computed value
+    // as if the archive had served it.
+    const identity = identityFromGeometry(geometry.identity)
+    const servedFormula = identityFormula(identity)
+    const displayFormula = servedFormula ?? clientFormula
+    const formulaIsFallback = servedFormula === null && clientFormula !== ""
 
     // Lifted out of `CoordinateTableSection` (where it lived alone until
     // now) so `GeometryViewer`'s atom-picking measurements can follow the
@@ -155,13 +173,24 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
             <header className="basin-header">
                 <p className="eyebrow">Geometry · deposited evidence</p>
                 <div className="basin-title">
-                    <h1>{formula ? `${formula} geometry` : "Geometry"}</h1>
+                    <h1>{displayFormula ? `${displayFormula} geometry` : "Geometry"}</h1>
                 </div>
                 <p className="basin-intro">
                     One stored set of atomic coordinates: the exact positions a calculation consumed or produced.
                     This is not a species or a calculation — the same coordinates can be reused across more than
                     one calculation, in either direction.
                 </p>
+                {formulaIsFallback && (
+                    // Only reachable when the archive's own identity is absent
+                    // or ambiguous — the honest label the brief asks for,
+                    // rather than presenting a client-computed value as if it
+                    // came from the archive.
+                    <p className="section-note">
+                        Formula computed on this page from atom symbols — the archive did not serve a formula
+                        for this geometry's owning entry.
+                    </p>
+                )}
+                <RecordIdentityHeader identity={identity} submissionRef={geometry.submission_ref} />
                 <dl className="basin-context">
                     <div><dt>Geometry ref</dt><dd>{geometry.geometry_ref}</dd></div>
                     <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
@@ -239,7 +268,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
             <ViewerSection
                 atoms={atoms}
                 atomsAvailability={atomsAvailability}
-                formula={formula}
+                formula={displayFormula}
                 xyzText={geometry.xyz_text ?? null}
                 coordinateUnit={coordinateUnit}
             />

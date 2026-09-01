@@ -1,0 +1,90 @@
+/*
+ * EnergyDisplay -- the hartree-with-a-unit-toggle value used for the
+ * calculation page's headline energy and any other displayed electronic
+ * energy on this app. Own stylesheet per this project's convention (see
+ * the header comment in `entry-science.css`): a component's styling
+ * should not depend on another file's stylesheet having loaded first.
+ */
+
+.energy-display {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .5rem 1rem;
+}
+
+.energy-display-label {
+    font: .74rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+}
+
+.energy-display-value {
+    font: 600 1.05rem/1.3 var(--mono);
+    color: var(--ink);
+}
+
+.energy-display--headline {
+    align-items: baseline;
+    margin: .75rem 0;
+}
+
+.energy-display-value--headline {
+    font-size: clamp(1.6rem, 3vw, 2.4rem);
+    font-weight: 700;
+}
+
+.energy-display-absent {
+    color: var(--muted);
+    font-style: italic;
+}
+
+.energy-toggle {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .35rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    flex-basis: 100%;
+}
+
+.energy-toggle legend {
+    padding: 0 .5rem 0 0;
+    font: .64rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--muted);
+}
+
+.energy-toggle button {
+    padding: .25rem .55rem;
+    border: 1px solid var(--control-border);
+    background: var(--surface);
+    color: var(--accent);
+    font: .68rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+
+.energy-toggle button:hover {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+.energy-toggle button[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--surface);
+}
+
+.energy-toggle-note {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--muted);
+    font-size: .66rem;
+    line-height: 1.5;
+}

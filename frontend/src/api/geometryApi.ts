@@ -47,6 +47,26 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
 //   input/output geometry refs), not here. The page below says this
 //   plainly and links to a producing calculation rather than fabricating
 //   a verdict.
+//
+// - `identity` (#321) is the molecular identity of whichever entry owns
+//   this geometry, resolved server-side from its producing/consuming
+//   calculations. `null` when no owning calculation names an owner.
+//   `kind: null` with a non-empty `ambiguous_owners` means the geometry
+//   (deduped by content hash, so it can be shared) is reachable from
+//   more than one distinct owner — every per-owner field is left null in
+//   that case rather than guessing which owner is "the" one. A
+//   transition-state owner never carries `canonical_smiles`/`inchi_key`
+//   — those are species-only fields — only `unmapped_smiles`, itself
+//   nullable. See `domain/recordIdentity.ts`, which normalizes this
+//   shape for `RecordIdentityHeader`.
+//
+// - `submission_ref`/`submission_id` — which upload produced this
+//   geometry — follow the same auth-gated shape as the calculation
+//   surface's `provenance.submission_ref`: present (string or `null`)
+//   only for an authenticated caller, the KEY ITSELF absent for an
+//   anonymous one. `.nullable().optional()` below parses an absent key
+//   as `undefined`, which is exactly the distinction the page needs to
+//   render (or not render) a submission row.
 // ---------------------------------------------------------------------------
 
 const geometryAtomSchema = z.object({
@@ -68,6 +88,38 @@ const geometryProvenanceSchema = z.object({
     used_as_input_by: z.array(geometryProvenanceCalcLinkSchema).nullable().optional(),
 }).passthrough()
 
+const geometrySpeciesIdentitySchema = z.object({
+    species_ref: z.string(),
+    species_entry_ref: z.string(),
+    species_entry_label: z.string().nullable().optional(),
+    formula: z.string().nullable().optional(),
+    canonical_smiles: z.string(),
+    inchi_key: z.string(),
+    charge: z.number(),
+    multiplicity: z.number(),
+}).passthrough()
+
+const geometryTransitionStateIdentitySchema = z.object({
+    transition_state_ref: z.string(),
+    transition_state_entry_ref: z.string(),
+    formula: z.string().nullable().optional(),
+    unmapped_smiles: z.string().nullable().optional(),
+    charge: z.number(),
+    multiplicity: z.number(),
+}).passthrough()
+
+const geometryIdentityOwnerRefSchema = z.object({
+    kind: z.string(),
+    ref: z.string(),
+}).passthrough()
+
+const geometryIdentitySchema = z.object({
+    kind: z.enum(["species_entry", "transition_state_entry"]).nullable().optional(),
+    species_entry: geometrySpeciesIdentitySchema.nullable().optional(),
+    transition_state_entry: geometryTransitionStateIdentitySchema.nullable().optional(),
+    ambiguous_owners: z.array(geometryIdentityOwnerRefSchema).optional(),
+}).passthrough()
+
 const geometryRecordSchema = z.object({
     geometry_ref: z.string(),
     natoms: z.number(),
@@ -80,11 +132,15 @@ const geometryRecordSchema = z.object({
     xyz_text: z.string().nullable().optional(),
     created_at: z.string(),
     provenance: geometryProvenanceSchema.nullable().optional(),
+    identity: geometryIdentitySchema.nullable().optional(),
+    submission_id: z.number().nullable().optional(),
+    submission_ref: z.string().nullable().optional(),
 }).passthrough()
 
 export type GeometryRecord = z.infer<typeof geometryRecordSchema>
 export type GeometryProvenanceCalcLink = z.infer<typeof geometryProvenanceCalcLinkSchema>
 export type GeometryAtom = z.infer<typeof geometryAtomSchema>
+export type GeometryIdentityWire = z.infer<typeof geometryIdentitySchema>
 
 /**
  * Load the geometry detail record. Requests `include=provenance` (see the
