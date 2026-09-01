@@ -17,10 +17,10 @@ export const MIN_SECTIONS_FOR_LIST = 2
 // in jsdom, which has no layout at all.
 const ACTIVE_OFFSET_PX = 160
 
-// How close the viewport's bottom edge must be to the document's own
-// bottom edge before "the reader is at the end of the page" overrides the
-// offset computation below. A few px of slack for sub-pixel scroll
-// rounding, not a meaningful distance.
+// Slack for sub-pixel scroll rounding, not a meaningful distance. Used
+// both to decide a document has essentially no scroll room left at all
+// (see `maxScrollY` below) and, historically, to decide "the reader is at
+// the end of the page" -- see the comment on `effectiveOffset`.
 const BOTTOM_EPSILON_PX = 2
 
 /**
@@ -53,36 +53,62 @@ export function TableOfContents() {
     // already resolved is not force-scrolled to again on every unrelated
     // re-render.
     const resolvedHash = useRef<string | null>(null)
+    // Set immediately before an explicit click or a resolved #fragment
+    // triggers the browser's own anchor-jump / `scrollIntoView`, both of
+    // which fire a "scroll" event of their own as a side effect. That ONE
+    // incidental scroll event must not immediately re-run the offset
+    // computation and stomp the selection the reader just made -- so it
+    // is consumed (reset to false) the very next time the scroll handler
+    // runs, not held indefinitely. Any REAL scrolling after that resumes
+    // normal scroll-spying.
+    const suppressNextScrollRef = useRef(false)
 
     useEffect(() => {
         if (!showList) return
         function computeActive() {
             const doc = document.documentElement
-            const atBottom = window.innerHeight + window.scrollY >= doc.scrollHeight - BOTTOM_EPSILON_PX
-            if (atBottom) {
-                // The page has run out of room to scroll further. A
-                // section's heading can be permanently unable to reach
-                // `ACTIVE_OFFSET_PX` from the top -- not because it isn't
-                // the current section, but because everything below it on
-                // the page is too short to push it that far up (the
-                // reported bug: "the page cannot move further down to make
-                // Torsions the top of the page"). At the bottom of the
-                // scrollable area the LAST section is always the answer,
-                // regardless of where its heading happens to sit.
-                setActiveId(sections[sections.length - 1]?.id ?? null)
+            const maxScrollY = Math.max(0, doc.scrollHeight - window.innerHeight)
+            if (maxScrollY <= BOTTOM_EPSILON_PX) {
+                // The whole page already fits in the viewport -- there is
+                // no scroll position to read the reader's attention from.
+                // Leave whatever is active (an explicit click, a resolved
+                // #fragment, or nothing yet) alone rather than guessing at
+                // it, so a page that never scrolls can't permanently pin
+                // the highlight on any one section regardless of what the
+                // reader clicked.
                 return
             }
+            // How much scroll room is left below the current position.
+            // Far from the bottom this leaves the fixed ACTIVE_OFFSET_PX
+            // line untouched. As the reader nears the end of a document
+            // that runs out of scroll room before its trailing headings
+            // can each individually cross that line -- the reported bug,
+            // "the page cannot move further down to make Torsions the top
+            // of the page" -- the line widens smoothly towards the full
+            // viewport height, so trailing headings become current one at
+            // a time as they enter view, rather than every one of them
+            // collapsing onto "the last section" only once scrolling
+            // stops completely.
+            const remainingScroll = Math.max(0, maxScrollY - window.scrollY)
+            const effectiveOffset = Math.max(ACTIVE_OFFSET_PX, window.innerHeight - remainingScroll)
             let current: string | null = null
             for (const section of sections) {
                 const heading = document.getElementById(section.id)
                 if (!heading) continue
-                if (heading.getBoundingClientRect().top <= ACTIVE_OFFSET_PX) current = section.id
+                if (heading.getBoundingClientRect().top <= effectiveOffset) current = section.id
             }
             setActiveId(current ?? sections[0]?.id ?? null)
         }
-        computeActive()
-        window.addEventListener("scroll", computeActive, { passive: true })
-        return () => window.removeEventListener("scroll", computeActive)
+        function handleScroll() {
+            if (suppressNextScrollRef.current) {
+                suppressNextScrollRef.current = false
+                return
+            }
+            computeActive()
+        }
+        handleScroll()
+        window.addEventListener("scroll", handleScroll, { passive: true })
+        return () => window.removeEventListener("scroll", handleScroll)
     }, [sections, showList])
 
     // Resolve a `#fragment` explicitly rather than relying on the
@@ -105,6 +131,7 @@ export function TableOfContents() {
         const target = document.getElementById(hash)
         if (!target) return
         target.scrollIntoView?.()
+        suppressNextScrollRef.current = true
         // This is the one case the design brief calls out by name ("make an
         // explicit click or a #fragment land on that section immediately
         // rather than waiting for a scroll event to correct it"). Deferring
@@ -148,6 +175,7 @@ export function TableOfContents() {
                                             // clicked one.
                                             setActiveId(section.id)
                                             resolvedHash.current = section.id
+                                            suppressNextScrollRef.current = true
                                         }}
                                     >
                                         {section.label}
