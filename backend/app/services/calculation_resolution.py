@@ -60,12 +60,12 @@ from app.schemas.fragments.refs import (
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
 )
+from app.schemas.upload_warning import UploadWarning
 from app.services.calculation_geometry_composition import (
     assert_calculation_geometry_composition,
 )
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
-from app.schemas.upload_warning import UploadWarning
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
