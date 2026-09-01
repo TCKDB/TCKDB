@@ -6,4 +6,5 @@ from tckdb_schemas.fragments.refs import (
     SoftwareRef,
     SoftwareReleaseRef,
     WorkflowToolReleaseRef,
+    collect_software_release_version_warnings,
 )
