@@ -25,6 +25,44 @@ function Harness({ count, initialEntries = ["/"] }: { count: number; initialEntr
     )
 }
 
+/** Reproduces the conformer-group-switch bug: a fixed "early" and "late"
+ *  section always mount first, and the slot between them holds whichever
+ *  evidence section is currently selected -- under a DIFFERENT id each
+ *  time, the way switching conformer group swaps in a differently-id'd
+ *  "Evidence for Conformer Group X" section. Its DOM position is always
+ *  the same physical slot; only ITS ID, and therefore its registration
+ *  time relative to "late" (already registered from the first render),
+ *  changes. */
+function ReorderHarness({ evidenceId }: { evidenceId: string | null }) {
+    return (
+        <MemoryRouter>
+            <PageSectionsProvider>
+                <TableOfContents />
+                <SectionHeading id="early">Early</SectionHeading>
+                {evidenceId && <SectionHeading id={evidenceId}>{`Evidence ${evidenceId}`}</SectionHeading>}
+                <SectionHeading id="late">Late</SectionHeading>
+            </PageSectionsProvider>
+        </MemoryRouter>
+    )
+}
+
+describe("TableOfContents: document order, not mount order", () => {
+    it("re-sorts the ToC after a conformer switch swaps one evidence section for a differently-id'd one in the same slot", () => {
+        const { rerender } = render(<ReorderHarness evidenceId="evidence-cg1" />)
+        expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Early", "Evidence evidence-cg1", "Late"])
+
+        // Conformer group switch: the old evidence section unmounts...
+        rerender(<ReorderHarness evidenceId={null} />)
+        // ...and a NEW one, under a different id, mounts into the same
+        // physical slot. Its registration happens strictly after "late"
+        // was already registered (from the very first render), so
+        // mount-order bookkeeping alone would append it at the end.
+        rerender(<ReorderHarness evidenceId="evidence-cg2" />)
+
+        expect(screen.getAllByRole("link").map((l) => l.textContent)).toEqual(["Early", "Evidence evidence-cg2", "Late"])
+    })
+})
+
 describe("TableOfContents: the reserved column", () => {
     it("always renders the column, even below the list threshold", () => {
         render(<Harness count={MIN_SECTIONS_FOR_LIST - 1} />)
@@ -193,5 +231,94 @@ describe("TableOfContents: active-section marking", () => {
     it("resolves a #fragment to the right section even with a query string present", () => {
         render(<Harness count={4} initialEntries={["/species-entries/spe_demo/statmech?conformer=cg_1#section-2"]} />)
         expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+    })
+
+    it("a click lands on that section immediately and survives the ONE scroll event the anchor-jump itself fires, then resumes normal scroll-spying on the next real scroll", () => {
+        render(<Harness count={4} />)
+        stubScrollRoom()
+        stubTop("section-0", 40)
+        stubTop("section-1", 900)
+        stubTop("section-2", 1200)
+        stubTop("section-3", 1500)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+
+        // Click "Section 2" -- not yet reachable by the offset computation.
+        fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+
+        // The incidental scroll event the browser's own anchor-jump fires
+        // right after the click, with the geometry unchanged -- this must
+        // NOT immediately recompute and revert to Section 0.
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+
+        // A REAL further scroll, under the reader's own control, must
+        // resume normal scroll-spying rather than staying pinned forever.
+        stubTop("section-0", -500)
+        stubTop("section-1", 100)
+        stubTop("section-2", 800)
+        stubTop("section-3", 1100)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
+    })
+
+    it("a page that is not scrollable at all keeps a clicked section active across a subsequent scroll event", () => {
+        render(<Harness count={4} />)
+        // A short page: little to no scroll room at all, so nothing below
+        // the fold ever needs "reaching" -- unlike the tall-page click
+        // test above, a genuinely non-scrollable document.
+        stubAtBottom(700)
+        fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+
+        // The first scroll event after the click is the incidental one
+        // the anchor-jump itself fires -- suppressed regardless of the
+        // page's scrollability. Fire a SECOND one, standing in for a real
+        // (if tiny/rubber-band) further scroll gesture on this short page,
+        // to actually exercise the "nothing to scroll-spy on this page"
+        // behaviour rather than only the one-event suppression.
+        fireEvent.scroll(window)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 0" })).not.toHaveAttribute("aria-current")
+        expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
+    })
+
+    it("two distinct trailing sections, neither of which can ever cross the activation offset, are independently selectable as the reader scrolls through the final screenful -- not collapsed onto a single 'last section'", () => {
+        render(<Harness count={4} />)
+        // A document only 2000px tall with an 800px viewport: max scroll is
+        // 1200px. Sections 2 and 3 sit close enough to the very end that
+        // even at max scroll their tops (250px and 300px past max scroll)
+        // never reach ACTIVE_OFFSET_PX (160px) -- both are "stuck" the way
+        // Torsions was in the original bug report.
+        Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 2000 })
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 })
+
+        // Partway into the final screenful (scrollY 950 of a 1200 max):
+        // section 2 has entered view enough to become current, section 3
+        // has not yet.
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 950, writable: true })
+        stubTop("section-0", 40 - 950)
+        stubTop("section-1", 900 - 950)
+        stubTop("section-2", 1450 - 950)
+        stubTop("section-3", 1600 - 950)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
+
+        // Scrolling further within that same final screenful (scrollY
+        // 1050) moves the highlight on to section 3 -- the two trailing
+        // sections are reached one at a time, not both collapsed onto
+        // whichever is literally last the instant scrolling stops.
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 1050, writable: true })
+        stubTop("section-0", 40 - 1050)
+        stubTop("section-1", 900 - 1050)
+        stubTop("section-2", 1450 - 1050)
+        stubTop("section-3", 1600 - 1050)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 3" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
     })
 })
