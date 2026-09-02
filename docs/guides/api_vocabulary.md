@@ -287,7 +287,7 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `polarizability_present` | `computed_transport` | optional | 1 | Polarizability evidence should be populated when this representation is present. |
 | `polarizability_source_present_if_polarizability_present` | `computed_transport` | optional | 1 | Computed polarizability transport evidence should link a polarizability source calculation. |
 | `product_energy_sources_present` | `computed_kinetics` | optional | 1 | Product energy source calculations should cover all loaded products. |
-| `quality_recorded` | `computed_calculation` | optional | 1 | CalculationQuality should be promoted past the default 'raw'. |
+| `quality_recorded` | `computed_calculation` | optional | 1 | An independent reviewer should have approved this calculation via record_review; self-declared CalculationQuality is not sufficient (decoupled from trust, see _check_quality_recorded). |
 | `reactant_energy_sources_present` | `computed_kinetics` | optional | 1 | Reactant energy source calculations should cover all loaded reactants. |
 | `reaction_coordinate_designated_for_ts` | `computed_transition_state` | required | 1 | Representative freq result must identify its reaction coordinate: one imaginary mode needs no designation, more than one does (ADR 0012). |
 | `reaction_entry_present` | `computed_kinetics` | required | 1 | Kinetics must be attached to a reaction_entry. |

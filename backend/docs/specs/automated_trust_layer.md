@@ -518,7 +518,7 @@ viewed as a primary record (e.g. via `/scientific/calculations/...`).
 | `input_geometry_present` | R | At least one input geometry linked. |
 | `output_geometry_present` | O | `applies_when` calc type produces a geometry (opt, ts, irc). |
 | `result_block_present` | R | The appropriate `calc_*_result` for the calculation type. |
-| `quality_recorded` | O | `CalculationQuality` set. |
+| `quality_recorded` | O | An independent, *approved* `record_review` row exists for this calculation. Decoupled from `CalculationQuality` (2026-09): a depositor's own `quality=curated` no longer earns this point on its own — see `_check_quality_recorded` in `app/services/trust/rubrics.py`. |
 | `geometry_validation_present` | O | `applies_when` calc type is opt or ts. |
 | `geometry_validation_passed_or_warning` | W | |
 | `scf_stability_present_if_claimed` | O | `applies_when` calc claims SCF stability checked in parameters. |

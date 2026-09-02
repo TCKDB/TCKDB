@@ -18,6 +18,7 @@ from sqlalchemy import (
     SmallInteger,
     Text,
     UniqueConstraint,
+    and_,
     text,
 )
 from sqlalchemy import Enum as SAEnum
@@ -44,8 +45,10 @@ from app.db.models.common import (
     ScanCoordinateKind,
     SCFStabilityStatus,
     SoftwareReconciliationStatus,
+    SubmissionRecordType,
     ValidationStatus,
 )
+from app.db.models.record_review import RecordReview
 
 if TYPE_CHECKING:
     from app.db.models.execution_environment import ExecutionEnvironmentManifest
@@ -309,6 +312,36 @@ class Calculation(Base, TimestampMixin, CreatedByMixin, PublicRefMixin):
     geometry_validation: Mapped[Optional["CalculationGeometryValidation"]] = relationship(
         back_populates="calculation",
         cascade="all, delete-orphan",
+        uselist=False,
+    )
+
+    #: The current curator-authored review/trust state for this calculation,
+    #: if one has been recorded.
+    #:
+    #: Joined on ``(record_type, record_id)``, not a foreign key, because
+    #: ``record_review`` is a generic polymorphic association shared by every
+    #: reviewable record type (species, reaction, thermo, kinetics, ...) —
+    #: see :class:`app.db.models.common.SubmissionRecordType`. A real FK
+    #: column on this table would have to be duplicated on every other
+    #: reviewable table for the same shape of relationship.
+    #:
+    #: ``viewonly=True`` and no ``lazy="selectin"``: unlike
+    #: :attr:`CalculationArtifact.integrity_events`, this relationship is not
+    #: needed on every calculation load — only where a trust evaluation is
+    #: being built (see ``app/services/trust/evaluator.py`` and
+    #: ``app/services/scientific_read/calculations.py``'s
+    #: ``_TRUST_EAGER_LOADS``), which must eager-load it explicitly with
+    #: ``selectinload(Calculation.record_review)``. The trust evaluator's
+    #: check runners are contractually pure and issue no queries of their
+    #: own (see ``app/services/trust/rubrics.py::_check_quality_recorded``),
+    #: so the caller loading a "pure" graph must supply this row already
+    #: attached rather than relying on a lazy load.
+    record_review: Mapped[Optional["RecordReview"]] = relationship(
+        primaryjoin=lambda: and_(
+            foreign(RecordReview.record_id) == Calculation.id,
+            RecordReview.record_type == SubmissionRecordType.calculation,
+        ),
+        viewonly=True,
         uselist=False,
     )
 
