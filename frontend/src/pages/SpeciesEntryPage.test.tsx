@@ -467,9 +467,9 @@ describe("species-entry page: conformer picker", () => {
         // DIFFERENT number) is how many OBSERVATIONS have that stage --
         // labeling both as "obs" makes the coverage line's unit explicit,
         // never letting a reader sum it against calculation rows.
-        expect(within(conformerOne).getByText("2 observations · 7 calculation rows (3 opt · 2 freq · 2 sp)")).toBeVisible()
+        expect(within(conformerOne).getByText("2 obs · 7 calcs (3 opt · 2 freq · 2 sp)")).toBeVisible()
         expect(within(conformerOne).getByText("opt 2/2 obs · freq 2/2 obs · sp 1/2 obs")).toBeVisible()
-        expect(within(conformerTwo).getByText("1 observation · 3 calculation rows (1 opt · 1 freq · 1 sp)")).toBeVisible()
+        expect(within(conformerTwo).getByText("1 obs · 3 calcs (1 opt · 1 freq · 1 sp)")).toBeVisible()
         expect(within(conformerTwo).getByText("opt 1/1 obs · freq 1/1 obs · sp 1/1 obs")).toBeVisible()
         // The URL becomes addressable for the default selection (reload
         // survives it). `waitFor`, not a bare expect: the self-heal runs in

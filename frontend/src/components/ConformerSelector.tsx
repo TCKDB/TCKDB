@@ -83,18 +83,17 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
     const fingerprint = conformer.conformer_group.fingerprint
     const rotors = fingerprint ? buildBasinRotors(fingerprint) : null
     // One line, no wrap, per card (`species-entry.css`'s `.conformer-card-
-    // meta`/`-coverage`) -- three fixed columns per row do not leave room
-    // for the longest real value to fit unwrapped (measured: a 69-character
-    // meta line exists in the live archive), so that CSS clips with an
-    // ellipsis rather than wrapping or silently truncating. Built as a
-    // plain string, once, here -- rather than as JSX with inline `{...}`
-    // expressions the way this used to render -- so the exact same text
-    // backs BOTH the visible (possibly clipped) line and its `title`
-    // tooltip, which is what keeps the full value reachable on hover/
-    // focus. The two can never drift apart because there is only one
-    // string, not a rendered version and a separately-composed summary.
-    const metaText = `${total} observation${total === 1 ? "" : "s"} · `
-        + `${conformer.evidence_summary.calculation_count} calculation row${conformer.evidence_summary.calculation_count === 1 ? "" : "s"}`
+    // meta`/`-coverage`). Abbreviated deliberately: the long form
+    // ("2 observations · 8 calculation rows (...)") measured 69 characters,
+    // which needs a 34rem card, which meant only two cards fit a 1920px
+    // screen -- so three-per-row and no-wrap could not both hold. Shortening
+    // the text was chosen over narrowing the cards (which reintroduces
+    // wrapping) or clipping (which the owner rejected outright). "obs" is
+    // already the unit the coverage line below uses, so the abbreviation is
+    // not introducing new vocabulary. Built as one plain string so the same
+    // text backs the visible line and its `title`; the two cannot drift.
+    const metaText = `${total} obs · ${conformer.evidence_summary.calculation_count} calc`
+        + `${conformer.evidence_summary.calculation_count === 1 ? "" : "s"}`
         + (typeCounts.length > 0 ? ` (${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")})` : "")
     const coverageText = `opt ${coverage.opt}/${total} obs · freq ${coverage.freq}/${total} obs · sp ${coverage.sp}/${total} obs`
     return (

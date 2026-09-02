@@ -65,14 +65,14 @@ describe("ConformerSelector ordering", () => {
 })
 
 describe("ConformerSelector card", () => {
-    it("uses singular wording for exactly ONE calculation row -- not '1 calculation rows'", () => {
+    it("uses singular wording for exactly ONE calc -- not '1 calcs'", () => {
         renderSelector([conformer()])
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        expect(within(card).getByText("1 observation · 1 calculation row (1 opt)")).toBeVisible()
-        expect(within(card).queryByText(/1 calculation rows\b/)).not.toBeInTheDocument()
+        expect(within(card).getByText("1 obs · 1 calc (1 opt)")).toBeVisible()
+        expect(within(card).queryByText(/1 calcs\b/)).not.toBeInTheDocument()
     })
 
-    it("uses plural wording for more than one calculation row", () => {
+    it("uses plural wording for more than one calc", () => {
         const many = conformer({
             evidence_summary: {
                 calculation_count: 2, optimization_chain_count: 1, geometry_count: 1,
@@ -82,13 +82,13 @@ describe("ConformerSelector card", () => {
         })
         renderSelector([many])
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        expect(within(card).getByText("1 observation · 2 calculation rows (1 opt · 1 freq)")).toBeVisible()
+        expect(within(card).getByText("1 obs · 2 calcs (1 opt · 1 freq)")).toBeVisible()
     })
 
     // `species-entry.css`'s `.conformer-list` column floor (34rem) is
     // sized to fit this EXACT string on one line, unclipped -- the
     // longest real meta line measured in the live archive, 69 characters
-    // ("4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4
+    // ("4 obs · 16 calcs (4 opt · 4 freq · 4 sp · 4
     // scan)"). A previous pass clipped this with an ellipsis at a
     // narrower column width; the owner rejected that ("do not do
     // ellipsis for texts that go longer than the boxes. the boxes need
@@ -98,7 +98,7 @@ describe("ConformerSelector card", () => {
     // itself: the full string renders as the visible text (not a
     // JS-side truncation), and the same string also backs the `title`
     // tooltip as a redundant, never-drifting affordance.
-    it("renders the full 69-character meta line as the visible text, not a truncated one, with the identical string on the title tooltip", () => {
+    it("renders the full meta line as visible text, never truncated, with the identical string on the title tooltip", () => {
         const many = conformer({
             evidence_summary: {
                 calculation_count: 16, optimization_chain_count: 4, geometry_count: 4,
@@ -118,8 +118,8 @@ describe("ConformerSelector card", () => {
         })
         renderSelector([many])
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        const meta = within(card).getByText("4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4 scan)")
-        expect(meta).toHaveAttribute("title", "4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4 scan)")
+        const meta = within(card).getByText("4 obs · 16 calcs (4 opt · 4 freq · 4 sp · 4 scan)")
+        expect(meta).toHaveAttribute("title", "4 obs · 16 calcs (4 opt · 4 freq · 4 sp · 4 scan)")
         const coverage = within(card).getByText("opt 4/4 obs · freq 4/4 obs · sp 4/4 obs")
         expect(coverage).toHaveAttribute("title", "opt 4/4 obs · freq 4/4 obs · sp 4/4 obs")
     })
