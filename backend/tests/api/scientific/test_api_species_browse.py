@@ -356,3 +356,115 @@ def test_record_envelope_matches_search_shape(client, db_session):
         "conformers_summary",
     ):
         assert gated not in entry_record
+
+
+# ---------------------------------------------------------------------------
+# Structure filter (query_smiles / query_smarts / mode / similarity_threshold)
+# ---------------------------------------------------------------------------
+
+
+def _real_inchi_key(smiles: str) -> str:
+    from rdkit import Chem
+    from rdkit.Chem import inchi as _inchi
+
+    mol = Chem.MolFromSmiles(smiles)
+    assert mol is not None, f"RDKit could not parse fixture SMILES {smiles!r}"
+    return _inchi.MolToInchiKey(mol)
+
+
+def _make_real_species(db_session, smiles: str):
+    species = make_species(db_session, smiles=smiles, inchi_key=_real_inchi_key(smiles))
+    entry = make_species_entry(db_session, species)
+    return species, entry
+
+
+def test_get_structure_filter_reaches_each_mode(client, db_session):
+    """Each of the three modes narrows the browse listing the way its own
+    standalone /structure-search endpoint would -- one assertion per
+    mode, since a dispatch bug (e.g. similarity silently running as
+    substructure) would only show up on the mode it mis-routed."""
+    ethanol, ethanol_entry = _make_real_species(db_session, "CCO")
+    methane, _ = _make_real_species(db_session, "C")
+
+    substructure_resp = client.get(
+        "/api/v1/scientific/species/browse?query_smiles=CCO&mode=substructure"
+    )
+    assert substructure_resp.status_code == 200, substructure_resp.text
+    refs = [r["species_ref"] for r in substructure_resp.json()["records"]]
+    assert ethanol.public_ref in refs
+    assert methane.public_ref not in refs
+
+    exact_resp = client.get(
+        "/api/v1/scientific/species/browse?query_smiles=CCO&mode=exact"
+    )
+    assert exact_resp.status_code == 200, exact_resp.text
+    refs = [r["species_ref"] for r in exact_resp.json()["records"]]
+    assert ethanol.public_ref in refs
+    assert methane.public_ref not in refs
+
+    similarity_resp = client.get(
+        "/api/v1/scientific/species/browse"
+        "?query_smiles=CCO&mode=similarity&similarity_threshold=0.95"
+    )
+    assert similarity_resp.status_code == 200, similarity_resp.text
+    refs = [r["species_ref"] for r in similarity_resp.json()["records"]]
+    assert ethanol.public_ref in refs
+    assert methane.public_ref not in refs
+
+
+def test_get_structure_filter_composes_with_charge(client, db_session):
+    both = make_species(
+        db_session, smiles="CCO", inchi_key=_real_inchi_key("CCO"), charge=1
+    )
+    make_species_entry(db_session, both)
+    structure_only = make_species(
+        db_session, smiles="CCCO", inchi_key=_real_inchi_key("CCCO"), charge=0
+    )
+    make_species_entry(db_session, structure_only)
+    charge_only = make_species(
+        db_session, smiles="CCN", inchi_key=_real_inchi_key("CCN"), charge=1
+    )
+    make_species_entry(db_session, charge_only)
+
+    resp = client.get(
+        "/api/v1/scientific/species/browse"
+        "?charge=1&query_smiles=CCO&mode=substructure"
+    )
+
+    assert resp.status_code == 200, resp.text
+    refs = [r["species_ref"] for r in resp.json()["records"]]
+    assert both.public_ref in refs
+    assert structure_only.public_ref not in refs
+    assert charge_only.public_ref not in refs
+
+
+def test_get_unparseable_structure_query_reports_invalid_not_empty(client, db_session):
+    """An unparseable SMARTS must 422 as invalid_structure_query -- never
+    silently resolve to a zero-record listing, which would read as "the
+    archive holds none of this" rather than "the query itself is bad"."""
+    resp = client.get(
+        "/api/v1/scientific/species/browse"
+        "?query_smarts=not+a+smarts(((&mode=substructure"
+    )
+    assert resp.status_code == 422, resp.text
+    assert "invalid_structure_query" in resp.text
+
+
+def test_get_both_structure_query_fields_returns_422(client, db_session):
+    resp = client.get(
+        "/api/v1/scientific/species/browse?query_smiles=CCO&query_smarts=%5B%236%5DO"
+    )
+    assert resp.status_code == 422, resp.text
+    assert "multiple_structure_queries" in resp.text
+
+
+def test_get_structure_filter_absent_by_default(client, db_session):
+    species, _ = _make_real_species(db_session, "CCO")
+
+    resp = client.get("/api/v1/scientific/species/browse")
+
+    assert resp.status_code == 200, resp.text
+    refs = [r["species_ref"] for r in resp.json()["records"]]
+    assert species.public_ref in refs
+    assert "query_smiles" not in resp.json()["request"]["filter"]
+    assert "query_smarts" not in resp.json()["request"]["filter"]

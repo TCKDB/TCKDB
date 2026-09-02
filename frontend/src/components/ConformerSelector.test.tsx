@@ -85,14 +85,20 @@ describe("ConformerSelector card", () => {
         expect(within(card).getByText("1 observation · 2 calculation rows (1 opt · 1 freq)")).toBeVisible()
     })
 
-    // `species-entry.css`'s `.conformer-card-meta`/`-coverage` clip long
-    // lines with an ellipsis at three-per-row width (measured: a
-    // 69-character real meta line exists in the live archive -- see that
-    // stylesheet's comment). The full value must stay reachable even when
-    // clipped -- "never silently truncate a scientific value" -- via the
-    // native `title` tooltip, built from the EXACT SAME string as what's
-    // rendered, so the two can never drift apart.
-    it("carries the full, un-clipped meta/coverage text in a title tooltip -- reachable even when the visible line is ellipsis-clipped", () => {
+    // `species-entry.css`'s `.conformer-list` column floor (34rem) is
+    // sized to fit this EXACT string on one line, unclipped -- the
+    // longest real meta line measured in the live archive, 69 characters
+    // ("4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4
+    // scan)"). A previous pass clipped this with an ellipsis at a
+    // narrower column width; the owner rejected that ("do not do
+    // ellipsis for texts that go longer than the boxes. the boxes need
+    // to be longer in width") and the fix widened the column instead --
+    // see `species-entry.css.test.ts` for the CSS-level assertions that
+    // `text-overflow: ellipsis` is gone. This test pins the DOM content
+    // itself: the full string renders as the visible text (not a
+    // JS-side truncation), and the same string also backs the `title`
+    // tooltip as a redundant, never-drifting affordance.
+    it("renders the full 69-character meta line as the visible text, not a truncated one, with the identical string on the title tooltip", () => {
         const many = conformer({
             evidence_summary: {
                 calculation_count: 16, optimization_chain_count: 4, geometry_count: 4,
@@ -160,10 +166,6 @@ describe("ConformerSelector basin identity (item 3)", () => {
         expect(basin.textContent).not.toMatch(/bin\s*\d/)
         expect(representative).toHaveTextContent("representative 360°")
         expect(basin).not.toBe(representative)
-
-        // A single-group entry has no sibling to differ from -- positively
-        // asserted: no comparison table is rendered at all.
-        expect(screen.queryByText("How these basins differ")).not.toBeInTheDocument()
     })
 
     it("renders two groups' basins with different numbers -- not the same row twice", () => {
@@ -182,18 +184,6 @@ describe("ConformerSelector basin identity (item 3)", () => {
         expect(within(rotor1).getByText(/^basin /)).toHaveTextContent("basin 345–360°")
         expect(within(rotor2).getByText(/^basin /)).toHaveTextContent("basin 210–225°")
         expect(rotor1.textContent).not.toBe(rotor2.textContent)
-
-        // Two groups sharing rotors that differ -- the differences table
-        // makes it legible in one place, keyed by group label per column,
-        // and never names a bin index either.
-        expect(screen.getByText("How these basins differ")).toBeVisible()
-        const table = screen.getByRole("table", { name: "Basin differences by rotor" })
-        const row = within(table).getByText("atoms 8–10").closest("tr") as HTMLElement
-        expect(row).toHaveAttribute("data-rotor-key", "R_8_10")
-        const cells = within(row).getAllByRole("cell")
-        expect(cells[0]).toHaveTextContent("345–360°")
-        expect(cells[1]).toHaveTextContent("210–225°")
-        expect(cells[0].textContent).not.toMatch(/bin\s*\d/)
     })
 
     it("preserves rotor/angle pairing when rotor keys are not in sorted order", () => {
@@ -279,15 +269,7 @@ describe("ConformerSelector basin identity (item 3)", () => {
         expect(card.querySelector(".conformer-basin-identity")).toBeNull()
     })
 
-    // `spe_pv7f7evlv422ab54ackh7m4qnq`: two groups, identical fingerprints
-    // (both zero-rotor, per the archive the same fingerprint_hash). The
-    // page must not imply a distinction the archive does not record.
-    // Chosen treatment: render both cards' own (identical) "no rotatable
-    // bonds" statement, and mount no differences table at all -- rather
-    // than inventing a "these groups are not distinguished" banner, the
-    // absence of a comparison plus the matching text on both cards already
-    // tells the honest story without new copy asserting equivalence.
-    it("renders no fabricated difference between two groups with identical fingerprints", () => {
+    it("each card shows its own (identical) 'no rotatable bonds' statement when two groups share a fingerprint", () => {
         const identicalFingerprint = { rotor_count: 0, bin_width_deg: 15, torsions: [] }
         const one = conformer({
             conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1", fingerprint: identicalFingerprint },
@@ -297,8 +279,6 @@ describe("ConformerSelector basin identity (item 3)", () => {
         })
         renderSelector([one, two])
         expect(screen.getAllByText(/No rotatable bonds recorded/)).toHaveLength(2)
-        expect(screen.queryByText("How these basins differ")).not.toBeInTheDocument()
-        expect(document.querySelector(".conformer-basin-differences")).toBeNull()
     })
 
     it("renders nothing extra for a group with no fingerprint on the wire", () => {
@@ -308,6 +288,42 @@ describe("ConformerSelector basin identity (item 3)", () => {
         renderSelector([noFingerprint])
         expect(document.querySelector(".conformer-basin-identity")).toBeNull()
         expect(screen.queryByText(/No rotatable bonds recorded/)).not.toBeInTheDocument()
+    })
+})
+
+// Item 5 of the design brief: "How these basins differ" (the cross-group
+// comparison table, `ConformerBasinDifferences` in a previous revision of
+// `ConformerSelector.tsx`) is gone -- redundant once each card shows its
+// own basin, per the owner. Asserted on a fixture that would have MOUNTED
+// the removed table under the old code (two groups sharing a rotor that
+// lands in different bins) so this can only pass because the feature is
+// actually gone, not because nothing would have rendered it anyway. The
+// second half asserts POSITIVELY what each card still shows -- a test that
+// only checked absence could pass equally well if the whole card failed
+// to render.
+describe("the basin differences comparison is removed (item 5)", () => {
+    it("no 'How these basins differ' text or .conformer-basin-differences element, even when two groups' basins genuinely differ", () => {
+        const one = conformer({
+            conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1", fingerprint: GROUP_1_FINGERPRINT },
+        })
+        const two = conformer({
+            conformer_group: { conformer_group_ref: "cg_two", label: "conformer_2", fingerprint: GROUP_2_FINGERPRINT },
+        })
+        renderSelector([one, two])
+
+        expect(screen.queryByText("How these basins differ")).not.toBeInTheDocument()
+        expect(screen.queryByRole("table", { name: "Basin differences by rotor" })).not.toBeInTheDocument()
+        expect(document.querySelector(".conformer-basin-differences")).toBeNull()
+
+        // Positive: each card still shows its OWN basin range, unaffected
+        // by the removal -- this is the per-card display the owner said
+        // made the comparison table redundant.
+        const card1 = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+        const card2 = screen.getByText("Conformer Group 2", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+        const rotor1 = within(card1).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        const rotor2 = within(card2).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        expect(within(rotor1).getByText(/^basin /)).toHaveTextContent("basin 345–360°")
+        expect(within(rotor2).getByText(/^basin /)).toHaveTextContent("basin 210–225°")
     })
 })
 

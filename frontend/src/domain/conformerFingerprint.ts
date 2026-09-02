@@ -1,5 +1,4 @@
-import type { ConformerGroupFingerprint, ConformerProjection } from "../api/speciesEntryApi"
-import { conformerLabel } from "./conformerEvidence"
+import type { ConformerGroupFingerprint } from "../api/speciesEntryApi"
 
 /**
  * Turns a conformer group's numeric fingerprint into what a reader on the
@@ -22,9 +21,7 @@ import { conformerLabel } from "./conformerEvidence"
  *   `(quantizedBin + 1) * binWidthDeg`), derived from `bin_width_deg`
  *   rather than a hardcoded width, since it is stored per fingerprint and
  *   a future assignment scheme may use a different one. `quantizedBin`
- *   itself is kept only internally (for the same-bin/different-bin
- *   comparison in `buildGroupDifferences`), never placed on a rendered
- *   view type.
+ *   itself is kept only internally, never placed on a rendered view type.
  * - **The bin is computed on the FOLDED angle** (see
  *   `backend/app/chemistry/torsion_fingerprint.py`'s `bin_idx = int(folded
  *   / bin_width_deg) % ...`), so `binRangeDeg` is a range in FOLDED
@@ -131,78 +128,3 @@ export function buildBasinRotors(fingerprint: ConformerGroupFingerprint): BasinR
     })
 }
 
-export type RotorDifferenceCell = {
-    conformerGroupRef: string
-    groupLabel: string
-    /** `null` when this particular group's fingerprint does not track
-     * this rotor at all -- absence, not a fabricated zero. Kept only for
-     * the same-bin/different-bin comparison below; never rendered. */
-    quantizedBin: number | null
-    binRangeDeg: [number, number] | null
-    isFolded: boolean
-}
-
-export type RotorDifferenceRow = {
-    rotorKey: string
-    bondLabel: string
-    cells: RotorDifferenceCell[]
-}
-
-/**
- * How this entry's conformer groups differ, rotor by rotor -- only for
- * rotors where at least two groups actually carry a fingerprint AND
- * disagree on the bin. Returns `null` when there is nothing to compare:
- *
- * - Fewer than two groups have a fingerprint at all (55 of 59 entries,
- *   per the live archive, have exactly one group).
- * - Every shared rotor happens to land in the same bin across every
- *   group -- including the important zero-rotor case: two groups with
- *   NO rotors at all share no rotor keys, so this returns `null` for
- *   them exactly as it would for any other pair with nothing to compare.
- *   `spe_pv7f7evlv422ab54ackh7m4qnq`'s two identical-fingerprint,
- *   zero-rotor groups fall out of this naturally, with no special case
- *   needed: two groups whose fingerprints record no distinguishing
- *   content produce no fabricated distinction. Never returns an empty,
- *   padded, or single-group "comparison" -- absence describes the
- *   request here, and *identical* describes the data; neither is
- *   silvered over with an invented difference.
- *
- * Groups are matched by `rotor_key` VALUE, not by array position --
- * different groups' fingerprints are independent rows and are never
- * assumed to list their rotors in the same order or count.
- */
-export function buildGroupDifferences(conformers: ConformerProjection[]): RotorDifferenceRow[] | null {
-    const withFingerprint = conformers.filter(
-        (c): c is ConformerProjection & { conformer_group: { fingerprint: ConformerGroupFingerprint } } =>
-            c.conformer_group.fingerprint != null,
-    )
-    if (withFingerprint.length < 2) return null
-
-    const rotorKeys = new Set<string>()
-    for (const c of withFingerprint) {
-        for (const t of c.conformer_group.fingerprint.torsions) rotorKeys.add(t.rotor_key)
-    }
-
-    const rows: RotorDifferenceRow[] = []
-    for (const rotorKey of rotorKeys) {
-        const cells: RotorDifferenceCell[] = withFingerprint.map((c) => {
-            const fp = c.conformer_group.fingerprint
-            const torsion = fp.torsions.find((t) => t.rotor_key === rotorKey)
-            return {
-                conformerGroupRef: c.conformer_group.conformer_group_ref,
-                groupLabel: conformerLabel(c),
-                quantizedBin: torsion ? torsion.quantized_bin : null,
-                binRangeDeg: torsion ? basinRangeDeg(torsion.quantized_bin, fp.bin_width_deg) : null,
-                isFolded: torsion ? torsion.folded_torsion_deg !== torsion.raw_torsion_deg : false,
-            }
-        })
-        const present = cells.filter((cell) => cell.quantizedBin !== null)
-        if (present.length < 2) continue
-        const distinctBins = new Set(present.map((cell) => cell.quantizedBin))
-        if (distinctBins.size < 2) continue
-        rows.push({ rotorKey, bondLabel: rotorBondLabel(rotorKey), cells })
-    }
-    if (rows.length === 0) return null
-    rows.sort((a, b) => a.rotorKey.localeCompare(b.rotorKey))
-    return rows
-}

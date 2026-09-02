@@ -24,9 +24,10 @@ has the measurement.
 from __future__ import annotations
 
 import re
+from typing import Any
 
 from rdkit import Chem, RDLogger
-from sqlalchemy import Text, and_, case, func, not_, or_, select
+from sqlalchemy import Text, and_, case, func, not_, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.api.error_contract import CodedValueError, reject_unsupported_filters
@@ -62,6 +63,11 @@ from app.schemas.reads.scientific_species import (
     SpeciesScientificRecord,
     SpeciesSearchRequest,
 )
+from app.schemas.reads.scientific_structure_search import (
+    DEFAULT_SIMILARITY_THRESHOLD,
+    StructureQueryKind,
+    StructureSearchMode,
+)
 from app.services.scientific_read.calculation_provenance_filters import (
     apply_calculation_provenance_filter,
 )
@@ -91,6 +97,12 @@ from app.services.scientific_read.sql_review import (
     review_status_expr,
     summary_from_sql,
     visible_review_filter,
+)
+from app.services.scientific_read.structure_query import (
+    enforce_mode_query_compatibility,
+    inchi_key_from_query,
+    parse_smarts,
+    parse_smiles_to_canonical,
 )
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {
@@ -375,6 +387,150 @@ def _parse_elements_filter(request: SpeciesBrowseRequest) -> list[str] | None:
     return _validate_element_symbols(raw_symbols)
 
 
+def _select_browse_structure_query(
+    request: SpeciesBrowseRequest,
+) -> tuple[StructureQueryKind, str] | None:
+    """Pick the browse structure-filter query field, or ``None`` if absent.
+
+    Narrower than ``structure_search.py``'s own ``_select_structure_query``:
+    :class:`SpeciesBrowseRequest` exposes only ``query_smiles`` /
+    ``query_smarts`` (see its docstring for why ``query_inchi`` /
+    ``query_inchi_key`` are not browse fields), and supplying NEITHER is
+    not an error here -- the structure filter is optional, unlike the
+    standalone endpoint's ``missing_structure_query`` requirement.
+    Supplying BOTH is still refused with the same
+    ``multiple_structure_queries`` code the standalone endpoint uses for
+    the identical ambiguity.
+    """
+    supplied: list[tuple[StructureQueryKind, str]] = []
+    if request.query_smiles is not None:
+        supplied.append((StructureQueryKind.smiles, request.query_smiles))
+    if request.query_smarts is not None:
+        supplied.append((StructureQueryKind.smarts, request.query_smarts))
+    if not supplied:
+        return None
+    if len(supplied) > 1:
+        names = sorted(k.value for k, _ in supplied)
+        raise CodedValueError(
+            "multiple_structure_queries",
+            f"exactly one structure query field is allowed; got {names!r}.",
+            context={"supplied": [f"query_{name}" for name in names]},
+        )
+    return supplied[0]
+
+
+def _validate_browse_structure_query(
+    request: SpeciesBrowseRequest,
+) -> tuple[StructureQueryKind, str] | None:
+    """Validate the browse structure filter up front, before any SQL runs.
+
+    Mirrors the other up-front validators called from :func:`browse_species`
+    (``_parse_elements_filter``, ``_validate_provenance_version_parents``):
+    a 422 must surface before the candidate statement is built, not
+    mid-query. Returns the selected ``(kind, value)`` pair (threaded into
+    :func:`_browse_candidate_species_stmt` and the request echo) so
+    validation happens exactly once.
+
+    :raises ValueError/CodedValueError: 422 ``multiple_structure_queries``
+        (both fields supplied), ``invalid_structure_query`` (mode does not
+        accept the supplied field, or the SMARTS itself does not parse --
+        checked eagerly here so a bad pattern 422s before any SQL runs;
+        SMILES is parsed lazily in :func:`_apply_structure_filter`, same
+        as ``elements``/``formula`` deferring their own SQL-facing work).
+    """
+    selected = _select_browse_structure_query(request)
+    if selected is None:
+        return None
+    kind, value = selected
+    enforce_mode_query_compatibility(request.mode, kind)
+    if kind is StructureQueryKind.smarts:
+        parse_smarts(value)
+    return kind, value
+
+
+def _apply_structure_filter(
+    stmt,
+    request: SpeciesBrowseRequest,
+    structure_query: tuple[StructureQueryKind, str] | None,
+):
+    """Narrow browse candidates to species matching a structure query.
+
+    Optional and additive -- a no-op when ``structure_query`` is ``None``,
+    same as every other optional filter in this module -- and composes
+    with every other browse filter in the SAME statement (AND-combined
+    via ``.where()`` on ``stmt`` like ``charge``/``formula``/the
+    provenance filters above), never a second query run separately and
+    intersected in Python.
+
+    Reuses the exact RDKit parsing (``structure_query.py``) and cartridge
+    operators/functions (``@>``, ``tanimoto_sml``, ``morganbv_fp``,
+    ``mol_from_smiles``, ``qmol_from_smarts``) that
+    ``/scientific/species/structure-search`` (``structure_search.py``)
+    uses -- expressed as SQLAlchemy here rather than raw parameterized SQL
+    because this predicate has to compose inside an ORM ``select()``
+    rather than drive its own standalone paginated response; see that
+    module's docstring for what each operator means.
+
+    ``exact`` mode needs no cartridge call at all: it matches the already-
+    indexed ``species.inchi_key`` column directly, same as
+    ``structure_search.py``'s own ``_run_exact_query``. ``substructure``
+    and ``similarity`` match against ``species_entry.mol`` via a
+    correlated ``EXISTS`` -- a species passes if *any* of its entries
+    matches, the same "OR-across-entry" reading
+    :func:`_apply_provenance_filters` already uses for calculations one
+    level down.
+    """
+    if structure_query is None:
+        return stmt
+    kind, value = structure_query
+
+    if request.mode is StructureSearchMode.exact:
+        target_key = inchi_key_from_query(kind, value)
+        return stmt.where(Species.inchi_key == target_key)
+
+    if kind is StructureQueryKind.smarts:
+        # The cartridge's ONLY qmol_from_smarts overload takes `cstring`
+        # (confirmed against the live schema: `\df qmol_from_smarts` --
+        # unlike mol_from_smiles below, which is also overloaded for
+        # `text`). Postgres allows an explicit `::cstring` cast on a
+        # regular bind parameter but not an implicit one, and
+        # `func.qmol_from_smarts(...)` has no way to express that cast
+        # (SQLAlchemy has no stock `cstring` type) -- so this one
+        # function call is built as a `text()` fragment with an explicit
+        # cast, then used as an ordinary ColumnElement via `.op("@>")`
+        # below, same as every other operand here.
+        query_mol_expr: Any = text(
+            "qmol_from_smarts(CAST(:structure_query AS cstring))"
+        ).bindparams(structure_query=value)
+    else:
+        query_mol_expr = func.mol_from_smiles(parse_smiles_to_canonical(value))
+
+    entry_select = (
+        select(SpeciesEntry.id)
+        .select_from(SpeciesEntry)
+        .where(SpeciesEntry.species_id == Species.id)
+        .where(SpeciesEntry.mol.is_not(None))
+    )
+    if request.mode is StructureSearchMode.substructure:
+        entry_select = entry_select.where(
+            SpeciesEntry.mol.op("@>")(query_mol_expr)
+        )
+    else:  # similarity
+        threshold = (
+            request.similarity_threshold
+            if request.similarity_threshold is not None
+            else DEFAULT_SIMILARITY_THRESHOLD
+        )
+        entry_select = entry_select.where(
+            func.tanimoto_sml(
+                func.morganbv_fp(SpeciesEntry.mol),
+                func.morganbv_fp(query_mol_expr),
+            )
+            >= threshold
+        )
+    return stmt.where(entry_select.exists())
+
+
 def search_species(
     session: Session, request: SpeciesSearchRequest
 ) -> ScientificSpeciesSearchResponse:
@@ -605,6 +761,7 @@ def browse_species(
     # / validate_includes fail closed before the candidate query is built.
     element_symbols = _parse_elements_filter(request)
     _validate_provenance_version_parents(request)
+    structure_query = _validate_browse_structure_query(request)
 
     visible = visible_statuses(
         min_review_status=request.min_review_status,
@@ -613,7 +770,7 @@ def browse_species(
     )
 
     candidates = _browse_candidate_species_stmt(
-        request, element_symbols
+        request, element_symbols, structure_query
     ).subquery("candidate_species")
 
     # #277 (see the docstring above): always drop a candidate species that
@@ -623,7 +780,9 @@ def browse_species(
         session, candidates, request, visible
     )
     if pre_collapse_total == 0:
-        return _empty_browse_response(request, includes, offset, limit, element_symbols)
+        return _empty_browse_response(
+            request, includes, offset, limit, element_symbols, structure_query
+        )
 
     summary = summary_from_sql(
         session,
@@ -663,7 +822,7 @@ def browse_species(
 
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
-            filter=_browse_filter_echo(request, element_symbols),
+            filter=_browse_filter_echo(request, element_symbols, structure_query),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),
@@ -724,7 +883,9 @@ def _candidate_species_stmt(
 
 
 def _browse_candidate_species_stmt(
-    request: SpeciesBrowseRequest, element_symbols: list[str] | None
+    request: SpeciesBrowseRequest,
+    element_symbols: list[str] | None,
+    structure_query: tuple[StructureQueryKind, str] | None = None,
 ):
     """The browse candidate set as a ``SELECT id, created_at`` over ``species``.
 
@@ -747,6 +908,12 @@ def _browse_candidate_species_stmt(
         (``None`` when the caller supplied none). Threaded in rather than
         re-parsed here so validation happens exactly once, before any SQL
         runs, in :func:`browse_species`.
+    :param structure_query: Already-validated ``(kind, value)`` pair from
+        :func:`_validate_browse_structure_query` (``None`` when neither
+        ``query_smiles`` nor ``query_smarts`` was supplied). Applied by
+        :func:`_apply_structure_filter` below, alongside every other
+        optional filter in this statement -- one candidate query, not a
+        second one intersected afterward.
     """
     stmt = select(Species.id, Species.created_at)
     if request.charge is not None:
@@ -773,6 +940,7 @@ def _browse_candidate_species_stmt(
         if request.min_heavy_atoms is not None:
             stmt = stmt.where(heavy_atoms >= request.min_heavy_atoms)
     stmt = _apply_provenance_filters(stmt, request)
+    stmt = _apply_structure_filter(stmt, request, structure_query)
     return stmt
 
 
@@ -1408,7 +1576,9 @@ def _empty_response(
 
 
 def _browse_filter_echo(
-    request: SpeciesBrowseRequest, element_symbols: list[str] | None
+    request: SpeciesBrowseRequest,
+    element_symbols: list[str] | None,
+    structure_query: tuple[StructureQueryKind, str] | None = None,
 ) -> dict[str, object]:
     """:func:`_filter_echo`'s counterpart for browse.
 
@@ -1457,6 +1627,19 @@ def _browse_filter_echo(
         value = getattr(request, field)
         if value is not None:
             echo[field] = value
+    if structure_query is not None:
+        kind, value = structure_query
+        echo[f"query_{kind.value}"] = value
+        echo["mode"] = request.mode.value
+        if request.mode is StructureSearchMode.similarity:
+            # Always echo the effective threshold, same as
+            # structure_search.py's own _request_filter_echo -- a caller
+            # who did not set one still sees the default they ran with.
+            echo["similarity_threshold"] = (
+                request.similarity_threshold
+                if request.similarity_threshold is not None
+                else DEFAULT_SIMILARITY_THRESHOLD
+            )
     if request.min_review_status is not None:
         echo["min_review_status"] = request.min_review_status.value
     if request.include_rejected:
@@ -1472,10 +1655,11 @@ def _empty_browse_response(
     offset: int,
     limit: int,
     element_symbols: list[str] | None = None,
+    structure_query: tuple[StructureQueryKind, str] | None = None,
 ) -> ScientificSpeciesBrowseResponse:
     return ScientificSpeciesBrowseResponse(
         request=RequestEcho(
-            filter=_browse_filter_echo(request, element_symbols),
+            filter=_browse_filter_echo(request, element_symbols, structure_query),
             sort=_DEFAULT_SORT_ECHO,
             collapse=request.collapse,
             include=sorted(includes),

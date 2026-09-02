@@ -1137,7 +1137,19 @@ CATALOGUE: tuple[ApiCode, ...] = (
             "backend/app/services/scientific_read/analytics.py",
             shape=Shape.relationship),
     ApiCode("invalid_structure_query", 422, Surface.message_prefix,
-            "backend/app/services/scientific_read/structure_search.py"),
+            "backend/app/services/scientific_read/structure_search.py",
+            note=(
+                "Most of the RDKit parsing/mode-compatibility raise sites "
+                "moved to structure_query.py so /species/browse's own "
+                "structure filter (species.py's _apply_structure_filter) "
+                "could reuse them rather than fork a second copy -- see "
+                "that module's docstring. structure_search.py keeps this "
+                "origin honest on its own regardless: its "
+                "_run_substructure_query / _run_similarity_query "
+                "pragma-guarded fallback branches still write the "
+                "literal directly. Same sharing pattern as "
+                "missing_version_parent below."
+            )),
     ApiCode("invalid_temperature_range", 422, Surface.coded_exception,
             "backend/app/services/scientific_read/common.py",
             shape=Shape.relationship,
@@ -1266,7 +1278,14 @@ CATALOGUE: tuple[ApiCode, ...] = (
                 "ambiguous between; context['supplied'] now does. Its "
                 "neighbour missing_structure_query stays message_prefix "
                 "and stays empty on purpose: it names a thing (no query "
-                "was supplied) and the code is the whole message."
+                "was supplied) and the code is the whole message. Also "
+                "raised by species.py's _select_browse_structure_query "
+                "for /species/browse's own (narrower, two-field) "
+                "query_smiles/query_smarts ambiguity -- same context "
+                "shape, same repair (supply one, not both). "
+                "missing_structure_query is NOT similarly shared: the "
+                "browse structure filter is optional, so supplying "
+                "neither field is not an error there."
             )),
     ApiCode("n_imag_contradicts_minimum", 422, Surface.coded_exception,
             "schemas/python/tckdb-schemas/tckdb_schemas/stationary_point.py",
