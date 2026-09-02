@@ -561,17 +561,17 @@ describe("structure search fields render on species/vdw, not on transition_state
 // ---------------------------------------------------------------------------
 
 describe("structure and formula controls lead the filter grid", () => {
-    it('kind="species": Formula and the structure controls render before Charge, review status and the provenance selects', async () => {
+    it('kind="species": the structure controls lead, then Formula, then Charge, review status and the provenance selects', async () => {
         server.use(...metaHandlers())
         const { container } = render(<Wrapper kind="species" />)
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
 
         const labels = [...container.querySelectorAll("label")].map((el) => el.textContent)
         expect(labels).toEqual([
-            "Formula",
             "Structure (SMILES)",
             "Treat structure as SMARTS",
             "Structure search mode",
+            "Formula",
             "Elements",
             "Element match",
             "Min heavy atoms",

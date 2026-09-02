@@ -65,8 +65,13 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
 
 function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     return <>
-        <TextField label="Formula" onChange={(value) => onChange({ formula: value })} value={filters.formula} />
+        {/* Structure leads Formula: a SMILES is what a chemist reaches for
+            first, and this archive is searched by structure far more often
+            than by atom count. Asked for explicitly ("I prefer SMILES before
+            Formula"); the same order is already applied to the exact-
+            identifier search on the home page. */}
         <StructureField filters={filters} onChange={onChange} />
+        <TextField label="Formula" onChange={(value) => onChange({ formula: value })} value={filters.formula} />
         <TextField label="Elements" onChange={(value) => onChange({ elements: value })} placeholder="C,N,S" value={filters.elements} />
         <SelectField
             label="Element match"
