@@ -1,10 +1,17 @@
-import { afterEach, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { PageSectionsProvider, SectionHeading } from "./PageSections"
-import { TableOfContents, MIN_SECTIONS_FOR_LIST } from "./TableOfContents"
+import { TableOfContents, MIN_SECTIONS_FOR_LIST, SCROLL_SETTLE_MS } from "./TableOfContents"
 
-afterEach(cleanup)
+afterEach(() => {
+    cleanup()
+    // Safety net: any test that reaches for `vi.useFakeTimers()` to
+    // exercise the scroll-settle window must restore real timers itself,
+    // but this catches a test that fails before it gets that far so a
+    // stray fake-timers state can't leak into an unrelated later test.
+    vi.useRealTimers()
+})
 
 /** A tiny page-shaped harness: `count` real `<h2>` sections, each
  *  registering itself the same way a real page's `SectionHeading` call
@@ -233,37 +240,61 @@ describe("TableOfContents: active-section marking", () => {
         expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
     })
 
-    it("a click lands on that section immediately and survives the ONE scroll event the anchor-jump itself fires, then resumes normal scroll-spying on the next real scroll", () => {
-        render(<Harness count={4} />)
-        stubScrollRoom()
-        stubTop("section-0", 40)
-        stubTop("section-1", 900)
-        stubTop("section-2", 1200)
-        stubTop("section-3", 1500)
-        fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+    it("a click lands on that section immediately, survives the WHOLE burst of scroll events the anchor-jump fires, and only resumes normal scroll-spying once that burst has settled", () => {
+        // Suppression is now a timed window (see SCROLL_SETTLE_MS), re-armed
+        // by every scroll event received while it is active, rather than a
+        // one-shot "ignore the very next event" flag -- so telling apart
+        // "still mid-burst" from "a genuine further scroll" requires
+        // actually advancing time, not just firing more events.
+        vi.useFakeTimers()
+        try {
+            render(<Harness count={4} />)
+            stubScrollRoom()
+            stubTop("section-0", 40)
+            stubTop("section-1", 900)
+            stubTop("section-2", 1200)
+            stubTop("section-3", 1500)
+            fireEvent.scroll(window)
+            expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
 
-        // Click "Section 2" -- not yet reachable by the offset computation.
-        fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            // Click "Section 2" -- not yet reachable by the offset computation.
+            fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
 
-        // The incidental scroll event the browser's own anchor-jump fires
-        // right after the click, with the geometry unchanged -- this must
-        // NOT immediately recompute and revert to Section 0.
-        fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            // The incidental scroll event the browser's own anchor-jump fires
+            // right after the click, with the geometry unchanged -- this must
+            // NOT immediately recompute and revert to Section 0.
+            fireEvent.scroll(window)
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
 
-        // A REAL further scroll, under the reader's own control, must
-        // resume normal scroll-spying rather than staying pinned forever.
-        stubTop("section-0", -500)
-        stubTop("section-1", 100)
-        stubTop("section-2", 800)
-        stubTop("section-3", 1100)
-        fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "true")
-        expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
+            // Let the settle window elapse with no further scroll event --
+            // suppression lifts, but WITHOUT recomputing (see
+            // beginScrollSuppression), so the clicked section is still the
+            // one active.
+            act(() => {
+                vi.advanceTimersByTime(SCROLL_SETTLE_MS)
+            })
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+
+            // A REAL further scroll, under the reader's own control, must
+            // resume normal scroll-spying rather than staying pinned forever.
+            stubTop("section-0", -500)
+            stubTop("section-1", 100)
+            stubTop("section-2", 800)
+            stubTop("section-3", 1100)
+            fireEvent.scroll(window)
+            expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
+        } finally {
+            vi.useRealTimers()
+        }
     })
 
+    // Covers ONLY the non-scrollable case -- `computeActive` bails out at
+    // its `maxScrollY <= BOTTOM_EPSILON_PX` guard before the suppression
+    // window is ever consulted, so this cannot exercise (and is not
+    // evidence for) whether a click survives scrolling on a page that
+    // actually scrolls. See the tests below for that.
     it("a page that is not scrollable at all keeps a clicked section active across a subsequent scroll event", () => {
         render(<Harness count={4} />)
         // A short page: little to no scroll room at all, so nothing below
@@ -290,20 +321,21 @@ describe("TableOfContents: active-section marking", () => {
         render(<Harness count={4} />)
         // A document only 2000px tall with an 800px viewport: max scroll is
         // 1200px. Sections 2 and 3 sit close enough to the very end that
-        // even at max scroll their tops (250px and 300px past max scroll)
-        // never reach ACTIVE_OFFSET_PX (160px) -- both are "stuck" the way
-        // Torsions was in the original bug report.
+        // at the FIXED ACTIVE_OFFSET_PX (160px) alone, neither would ever
+        // reach it -- both are "stuck" the way Torsions was in the
+        // original bug report, which is exactly why the offset has to
+        // widen at all as the reader nears the bottom.
         Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 2000 })
         Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 })
 
-        // Partway into the final screenful (scrollY 950 of a 1200 max):
+        // Partway into the final screenful (scrollY 900 of a 1200 max):
         // section 2 has entered view enough to become current, section 3
         // has not yet.
-        Object.defineProperty(window, "scrollY", { configurable: true, value: 950, writable: true })
-        stubTop("section-0", 40 - 950)
-        stubTop("section-1", 900 - 950)
-        stubTop("section-2", 1450 - 950)
-        stubTop("section-3", 1600 - 950)
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 900, writable: true })
+        stubTop("section-0", 40 - 900)
+        stubTop("section-1", 900 - 900)
+        stubTop("section-2", 1450 - 900)
+        stubTop("section-3", 1600 - 900)
         fireEvent.scroll(window)
         expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
         expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
@@ -320,5 +352,175 @@ describe("TableOfContents: active-section marking", () => {
         fireEvent.scroll(window)
         expect(screen.getByRole("link", { name: "Section 3" })).toHaveAttribute("aria-current", "true")
         expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
+    })
+
+    // The gap that let all three previous rounds through: every fixture
+    // above varies SCROLL POSITION on a page of one fixed height. None of
+    // them compares two pages of DIFFERENT heights at the SAME scroll
+    // position -- which is exactly the shape of the reported bug (a short
+    // tab and a tall tab disagree about what "freshly loaded" means) and
+    // exactly what the old `innerHeight - remainingScroll` formula got
+    // wrong: at `scrollY === 0`, "remaining scroll room" IS the page's
+    // total scroll range, so a short page reads as "nearly at the bottom"
+    // from its very first frame while a tall one does not. Keying the
+    // widening on scroll PROGRESS (0 at the top, 1 at the bottom) instead
+    // of remaining room fixes that, because progress is 0 at the top on
+    // every page regardless of height.
+    it.each([
+        ["a page that barely scrolls", 820],
+        ["a page much taller than the viewport", 4800],
+    ])("activates the FIRST section at scrollY 0 on %s", (_label, scrollHeight) => {
+        render(<Harness count={4} />)
+        // innerHeight fixed at 800 in both cases; only the document's
+        // total height (and therefore maxScrollY) differs between rows.
+        Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: scrollHeight })
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 })
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 0, writable: true })
+        // The same heading geometry in both rows: only section-0 is above
+        // ACTIVE_OFFSET_PX (160); sections 1-3 sit well below it. Under
+        // the old `remainingScroll`-keyed formula, the "barely scrolls"
+        // row (maxScrollY = 20) widened effectiveOffset to 780 even at
+        // scrollY 0, which wrongly reached section-1 (top 500) too -- and
+        // section-1, being later in iteration order, would have won.
+        stubTop("section-0", 40)
+        stubTop("section-1", 500)
+        stubTop("section-2", 900)
+        stubTop("section-3", 1300)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 1" })).not.toHaveAttribute("aria-current")
+        expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
+        expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
+    })
+
+    it("moves the active marker forward, and never backward, as the reader scrolls from top to bottom of one tall page", () => {
+        render(<Harness count={4} />)
+        // A single fixed page: scrollHeight 4000, innerHeight 800, so
+        // maxScrollY = 3200. Sections sit at fixed document positions
+        // 40 / 1000 / 2000 / 3000; only scrollY varies between samples.
+        Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 4000 })
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 })
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 0, writable: true })
+
+        const docPositions = [40, 1000, 2000, 3000]
+        const order = [0, 1, 2, 3, 4].map((i) => (3200 * i) / 4) // 0, 800, 1600, 2400, 3200
+        const activeIndices: number[] = []
+        for (const scrollY of order) {
+            Object.defineProperty(window, "scrollY", { configurable: true, value: scrollY, writable: true })
+            docPositions.forEach((pos, i) => stubTop(`section-${i}`, pos - scrollY))
+            fireEvent.scroll(window)
+            const activeIndex = docPositions.findIndex(
+                (_, i) => screen.getByRole("link", { name: `Section ${i}` }).getAttribute("aria-current") === "true",
+            )
+            activeIndices.push(activeIndex)
+        }
+
+        expect(activeIndices[0]).toBe(0)
+        expect(activeIndices[activeIndices.length - 1]).toBe(3)
+        for (let i = 1; i < activeIndices.length; i++) {
+            expect(activeIndices[i]).toBeGreaterThanOrEqual(activeIndices[i - 1])
+        }
+    })
+
+    // The gap the #328 "not scrollable at all" test left open: it clicks,
+    // then fires scroll events on a page where `computeActive` bails out
+    // early at the `maxScrollY <= BOTTOM_EPSILON_PX` guard, so the second
+    // event is a no-op BY CONSTRUCTION and cannot fail regardless of the
+    // suppression logic. This test instead uses a genuinely scrollable
+    // page (maxScrollY = 3200, well past that guard), so `computeActive`
+    // runs in full on every one of the several scroll events fired below.
+    it("a click on a mid-list entry of a genuinely scrollable tall page survives several scroll events at differing positions on the way to its target, including the target's own resting position", () => {
+        render(<Harness count={4} />)
+        Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 4000 })
+        Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 })
+        Object.defineProperty(window, "scrollY", { configurable: true, value: 0, writable: true })
+        // Document positions: section-0 @ 40, section-1 @ 900, section-2 @
+        // 1800, section-3 @ 2700. maxScrollY = 3200.
+        stubTop("section-0", 40)
+        stubTop("section-1", 900)
+        stubTop("section-2", 1800)
+        stubTop("section-3", 2700)
+        fireEvent.scroll(window)
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+
+        // Click "Section 2", roughly two-thirds down a page that is
+        // genuinely scrollable -- unlike the non-scrollable-page test
+        // above, `computeActive` is fully exercised by every event below.
+        fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+
+        // The animated scrollIntoView a real browser performs does not
+        // jump straight to its resting position -- it fires a scroll
+        // event at each position along the way. Three are simulated here,
+        // ending at the target's own resting position (its top at 0). At
+        // scrollY 600 and 1300, computeActive -- if it ran -- would read
+        // Section 0 and Section 1 respectively (verified by hand against
+        // the progress-based formula), NEITHER of which is the section
+        // that was clicked; only at 1800 does the geometry happen to also
+        // read Section 2. A one-shot suppression swallows only the first
+        // of these and lets the second recompute and revert the marker --
+        // this must not happen for any of them.
+        for (const scrollY of [600, 1300, 1800]) {
+            Object.defineProperty(window, "scrollY", { configurable: true, value: scrollY, writable: true })
+            stubTop("section-0", 40 - scrollY)
+            stubTop("section-1", 900 - scrollY)
+            stubTop("section-2", 1800 - scrollY)
+            stubTop("section-3", 2700 - scrollY)
+            fireEvent.scroll(window)
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        }
+    })
+
+    // The owner's exact report: "click Statistical Mechanics, it lands
+    // there, then the highlight jumps to Review History [the LAST
+    // section]." Reproduces it by clicking a section near the bottom of a
+    // tall page whose resting-position geometry, if recomputed, would
+    // read the true LAST section instead of the one actually clicked.
+    it("clicking a section near the bottom of a tall page keeps THAT section active once the scroll settles, not the true last section its resting geometry would otherwise read", () => {
+        vi.useFakeTimers()
+        try {
+            render(<Harness count={4} />)
+            Object.defineProperty(document.documentElement, "scrollHeight", { configurable: true, value: 4000 })
+            Object.defineProperty(window, "innerHeight", { configurable: true, value: 800 })
+            Object.defineProperty(window, "scrollY", { configurable: true, value: 0, writable: true })
+            // Document positions: section-2 (clicked) @ 2600, section-3
+            // (true last) @ 2900 -- close enough together that at the
+            // resting scroll position (2600, where section-2's top is 0),
+            // the widened activation line (effectiveOffset ~680 at that
+            // progress) ALSO reaches section-3's top (300), which would
+            // win under plain last-one-wins recomputation.
+            stubTop("section-0", 40)
+            stubTop("section-1", 900)
+            stubTop("section-2", 2600)
+            stubTop("section-3", 2900)
+            fireEvent.scroll(window)
+            expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+
+            fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+
+            // Two events landing at the scroll's resting position -- the
+            // shape a real anchor-jump's last events take as it arrives.
+            Object.defineProperty(window, "scrollY", { configurable: true, value: 2600, writable: true })
+            stubTop("section-0", 40 - 2600)
+            stubTop("section-1", 900 - 2600)
+            stubTop("section-2", 0)
+            stubTop("section-3", 300)
+            fireEvent.scroll(window)
+            fireEvent.scroll(window)
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
+
+            // Let the scroll settle fully -- the clicked section must
+            // still be the one active, not whatever the resting geometry
+            // alone would read.
+            act(() => {
+                vi.advanceTimersByTime(SCROLL_SETTLE_MS)
+            })
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
+        } finally {
+            vi.useRealTimers()
+        }
     })
 })
