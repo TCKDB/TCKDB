@@ -26,6 +26,14 @@ import { SectionHeading } from "./PageSections"
  * no matching energy record (the enrichment fetch failed, or genuinely has
  * no parsed energy) still renders its row — the value cell alone says "not
  * recorded", never a silently dropped row.
+ *
+ * `calculation.type` renders as a pill (categorical, bounded-vocabulary --
+ * `opt`/`freq`/`sp`/…), matching the convention set on the statmech record
+ * card (`EntryStatmechSection.tsx`'s `FrequencyScaleFactorDetail`): a pill
+ * REPLACES a value's plain-text form and is never shown alongside it. The
+ * energy value itself is never a pill -- a quantity, not a category -- and
+ * the calculation ref stays plain monospace, same as every identifier on
+ * this app.
  */
 export function ConformerSinglePointTab({ conformer, spEnergies }: {
     conformer: ConformerProjection
@@ -72,6 +80,10 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                             <div>
                                                 <dt>Calculation</dt>
                                                 <dd><Link to={`/calculations/${calculation.calculation_ref}`}>{calculation.calculation_ref}</Link></dd>
+                                            </div>
+                                            <div>
+                                                <dt>Type</dt>
+                                                <dd><span className="value-pill">{calculation.type}</span></dd>
                                             </div>
                                             <div>
                                                 <dt>Level of theory</dt>

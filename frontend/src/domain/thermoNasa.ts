@@ -17,15 +17,25 @@ import type { ThermoRecord } from "../api/thermoApi"
 // split into a LOW range (`t_low` <= T < `t_mid`) and a HIGH range
 // (`t_mid` <= T <= `t_high`), each with its own five (of seven) a-values.
 // The CHEMKIN convention this file follows puts T == t_mid on the HIGH
-// branch -- `nasaBranchForTemperature` picks "low" only for T STRICTLY
-// below t_mid. Getting that comparison backwards is exactly the bug class
+// branch -- `nasaCpCurve`/`sampleBranch` below sample each branch over its
+// own [from, to) range so the split is never ambiguous at the boundary.
+// Getting that split backwards is exactly the bug class
 // `thermoNasa.test.ts` is built to catch: with two coefficient sets that
 // actually differ, a wrong branch produces a visibly wrong Cp at a given
 // T, not a silently-close one.
+//
+// This file used to also carry `nasaCpAtTemperature`/`cpResiduals` --
+// single-temperature evaluation feeding a residual (measured-minus-fitted)
+// chart panel. Removed together with that panel (see the comment on
+// `ThermoCpChart.tsx` for why): every stored "measured" point in this
+// archive was evaluated FROM the NASA-7 polynomial itself, so a residual
+// compared a curve with itself and was flat by construction, at the
+// 0.0001-0.0004 level, everywhere it was checked. Nothing here computes a
+// residual any more; re-add it only once a record exists whose measured
+// points are independent of its own fit.
 // ---------------------------------------------------------------------------
 
 export type NasaBlock = NonNullable<ThermoRecord["nasa"]>
-export type ThermoPoint = NonNullable<ThermoRecord["points"]>[number]
 
 /** CODATA 2018 molar gas constant, J/(mol·K) -- the one place this value is
  * spelled out. Every Cp/R -> Cp conversion in this file multiplies by this
@@ -77,16 +87,6 @@ export function isNasaFitUsable(nasa: NasaBlock | null | undefined): nasa is Usa
 }
 
 /**
- * Which coefficient set governs `temperatureK` -- the low set for
- * T < t_mid, the high set for T >= t_mid (CHEMKIN convention). Only
- * meaningful once `isNasaFitUsable` has already confirmed a usable fit;
- * every call site below checks that first.
- */
-export function nasaBranchForTemperature(nasa: UsableNasaBlock, temperatureK: number): "low" | "high" {
-    return temperatureK < nasa.t_mid ? "low" : "high"
-}
-
-/**
  * Cp (J/mol/K) from five NASA-7 a-coefficients at one temperature -- the
  * bare polynomial, no branch selection and no validity-range check.
  * Exported on its own so the hand-checked arithmetic in
@@ -96,21 +96,6 @@ export function evaluateNasaCpJMolK(coefficients: readonly number[], temperature
     const [a1, a2, a3, a4, a5] = coefficients
     const cpOverR = a1 + a2 * temperatureK + a3 * temperatureK ** 2 + a4 * temperatureK ** 3 + a5 * temperatureK ** 4
     return cpOverR * GAS_CONSTANT_J_MOL_K
-}
-
-/**
- * Fitted Cp (J/mol/K) at `temperatureK`, or `null` when the fit isn't
- * usable (`isNasaFitUsable`) or `temperatureK` falls outside
- * [`t_low`, `t_high`]. This function never extrapolates past the fit's own
- * stated validity range -- see `temperature_coverage` on the wire, which
- * names the same boundary this respects.
- */
-export function nasaCpAtTemperature(nasa: NasaBlock | null | undefined, temperatureK: number): number | null {
-    if (!isNasaFitUsable(nasa)) return null
-    if (temperatureK < nasa.t_low || temperatureK > nasa.t_high) return null
-    const branch = nasaBranchForTemperature(nasa, temperatureK)
-    const coefficients = branch === "low" ? nasa.low_temperature_coefficients : nasa.high_temperature_coefficients
-    return evaluateNasaCpJMolK(coefficients as number[], temperatureK)
 }
 
 export type CpCurvePoint = { temperatureK: number; cpJMolK: number }
@@ -149,48 +134,4 @@ function sampleBranch(coefficients: number[], fromK: number, toK: number, pointC
         points.push({ temperatureK, cpJMolK: evaluateNasaCpJMolK(coefficients, temperatureK) })
     }
     return points
-}
-
-export type CpResidualPoint = {
-    temperatureK: number
-    measuredCpJMolK: number
-    fittedCpJMolK: number
-    residualJMolK: number
-    /** (measured - fitted) / fitted * 100 -- a percentage OF THE FIT, so a
-     * fit that goes bad near an interval boundary is visible as a real
-     * percentage rather than vanishing into the noise floor on a linear
-     * J/mol/K scale (see the module docstring on `ThermoCpChart.tsx`). */
-    residualPercent: number
-}
-
-/**
- * Measured-minus-fitted at each of the record's OWN stored temperatures --
- * never a resampled or interpolated set; nine stored points in, at most
- * nine residuals out. Skips a point when its measured Cp is absent, when
- * the fit can't be evaluated there at all (unusable fit, or the point
- * falls outside [t_low, t_high] -- never extrapolated), or when the fitted
- * value is exactly zero (a percentage would divide by zero). Returned
- * sorted by temperature, independent of the order `points` happened to
- * arrive in on the wire.
- */
-export function cpResiduals(
-    nasa: NasaBlock | null | undefined,
-    points: readonly ThermoPoint[] | null | undefined,
-): CpResidualPoint[] {
-    if (!points) return []
-    const residuals: CpResidualPoint[] = []
-    for (const point of points) {
-        if (point.cp_j_mol_k == null) continue
-        const fitted = nasaCpAtTemperature(nasa, point.temperature_k)
-        if (fitted == null || fitted === 0) continue
-        const residualJMolK = point.cp_j_mol_k - fitted
-        residuals.push({
-            temperatureK: point.temperature_k,
-            measuredCpJMolK: point.cp_j_mol_k,
-            fittedCpJMolK: fitted,
-            residualJMolK,
-            residualPercent: (residualJMolK / fitted) * 100,
-        })
-    }
-    return residuals.sort((a, b) => a.temperatureK - b.temperatureK)
 }

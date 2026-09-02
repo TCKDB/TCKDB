@@ -24,6 +24,16 @@ import {
  * is for the calculation page's promoted answer (largest weight on the
  * page); "inline" is for a value shown alongside other evidence (e.g.
  * a per-observation single-point row on the species entry page).
+ *
+ * This used to end with a fixed sentence ("Always stored in hartree; the
+ * other units here are display conversions only, computed directly from
+ * that stored value and never from one another.") on the SP tab -- removed
+ * because the interface already demonstrates it: every displayed value
+ * carries its unit (`formatEnergyForDisplay` has no value-only mode, see
+ * `energyUnits.ts`/`energyUnits.test.ts`, which this component still
+ * relies on unchanged), and the toggle's `aria-pressed` state names which
+ * unit is active. The GUARANTEE the sentence described is unchanged, only
+ * the restating of it in prose is gone.
  */
 export function EnergyDisplay({ valueHartree, label, size = "inline" }: {
     valueHartree: number | null | undefined
@@ -63,10 +73,6 @@ export function EnergyDisplay({ valueHartree, label, size = "inline" }: {
                     </button>
                 ))}
             </fieldset>
-            <p className="energy-toggle-note">
-                Always stored in hartree; the other units here are display conversions only, computed directly
-                from that stored value and never from one another.
-            </p>
         </div>
     )
 }

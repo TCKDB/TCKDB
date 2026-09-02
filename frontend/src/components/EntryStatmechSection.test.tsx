@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryStatmechSection } from "./EntryStatmechSection"
@@ -39,6 +39,38 @@ function conformerGroup(ref: string, label: string): ConformerProjection {
     } as unknown as ConformerProjection
 }
 const conformerGroups = [conformerGroup("cg_one", "conformer_1"), conformerGroup("cg_two", "conformer_2"), conformerGroup("cg_three", "conformer_3")]
+
+/**
+ * A conformer group whose ONE observation actually carries calculation
+ * rows -- unlike the bare `conformerGroup()` fixture above (empty
+ * `observations`), this is what `deriveStatmechConformer`
+ * (`domain/statmechConformerDerivation.ts`) needs to resolve a statmech
+ * record's source-calculation refs to a conformer.
+ */
+function conformerGroupWithCalcs(ref: string, label: string, observationRef: string, calculationRefs: string[]): ConformerProjection {
+    return {
+        conformer_group: { conformer_group_ref: ref, label },
+        observations_summary: { total: 1 },
+        evidence_summary: {
+            calculation_count: calculationRefs.length, optimization_chain_count: 1, geometry_count: 1,
+            evidence_coverage: { opt: 1, freq: 1, sp: 1 }, levels_of_theory: {},
+        },
+        observations: [{
+            conformer_observation: { conformer_observation_ref: observationRef },
+            calculations: calculationRefs.map((calcRef) => ({ calculation_ref: calcRef, type: "opt" })),
+        }],
+        calculations: [], geometries: [],
+    } as unknown as ConformerProjection
+}
+
+function sourceCalc(role: string, calculationRef: string) {
+    return {
+        role, calculation_id: null, calculation_ref: calculationRef, calculation_type: role,
+        quality: "raw", created_at: "2026-07-21T12:14:32.845900",
+        review: { status: "not_reviewed", reviewed_at: null, reviewer_kind: null },
+        level_of_theory: null, software_release: null, workflow_tool_release: null,
+    }
+}
 
 function baseRecord(overrides: Record<string, unknown> = {}) {
     return {
@@ -158,21 +190,6 @@ function cellAt(row: HTMLElement, label: string): string {
     return cell.textContent ?? ""
 }
 
-/**
- * Finds the `<p class="section-note">` whose text starts with `prefix`.
- * `getByText(/^Frequency scale factor/)` alone is ambiguous here -- the
- * `<dt>Frequency scale factor</dt>` label in the `<dl>` above matches the
- * same regex, so a plain text query throws "multiple elements found"
- * rather than silently picking the wrong one. Scoping to `p.section-note`
- * disambiguates without weakening the prefix match.
- */
-function sectionNoteStartingWith(container: HTMLElement, prefix: string): string {
-    const paragraphs = Array.from(container.querySelectorAll("p.section-note"))
-    const match = paragraphs.find((el) => (el.textContent ?? "").startsWith(prefix))
-    if (!match) throw new Error(`No <p class="section-note"> starting with "${prefix}" found`)
-    return match.textContent ?? ""
-}
-
 function mockResponse(records = mockRecords()) {
     return {
         review_summary: { approved: 0, under_review: 0, not_reviewed: 1, deprecated: 0, rejected: 0, total: 2 },
@@ -277,13 +294,16 @@ describe("EntryStatmechSection", () => {
         ]))))
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
-        const fsfLineText = sectionNoteStartingWith(card, "Frequency scale factor")
-        expect(fsfLineText).toContain("derived for ORCA 5.0.4")
+        // "Scale factor software" (this block) vs. "Record software" (the
+        // separate line below it) are the two genuinely different softwares
+        // this card carries -- distinguished by row LABEL, not merely by
+        // both values appearing somewhere on the card.
+        expect(ddFor(card, "Scale factor software")).toBe("ORCA 5.0.4")
 
         const recordSoftwareLine = within(card).getByText(/^Record software:/).closest("p") as HTMLElement
         expect(recordSoftwareLine.textContent).toContain("Arkane")
         expect(recordSoftwareLine.textContent).not.toContain("ORCA")
-        expect(fsfLineText).not.toContain("Arkane")
+        expect(ddFor(card, "Scale factor software")).not.toContain("Arkane")
     })
 
     it("renders no software placeholder on the scale factor line when the archive recorded none", async () => {
@@ -304,12 +324,43 @@ describe("EntryStatmechSection", () => {
         ]))))
         page()
         const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
-        const fsfLineText = sectionNoteStartingWith(card, "Frequency scale factor")
-        expect(fsfLineText).not.toContain("derived for")
-        expect(fsfLineText).not.toContain("not recorded")
+        // No "Scale factor software" row at all -- absence describes the
+        // request/data shape here, not "unknown software", so there must be
+        // no row (not even a "not recorded" placeholder row) when the
+        // archive recorded none.
+        expect(within(card).queryByText("Scale factor software")).not.toBeInTheDocument()
     })
 
-    it("renders an available on-demand section as idle until opened, and fetches exactly its own token once", async () => {
+    it("renders a categorical value (scale kind) as a pill, and an identifier (the scale factor's own ref) as plain text, never the reverse", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({
+                frequency_scale_factor: {
+                    frequency_scale_factor_ref: "fsf_pill_check",
+                    value: 0.995,
+                    scale_kind: "fundamental",
+                    level_of_theory: null,
+                    software: null,
+                    source_literature: null,
+                },
+            }),
+        ]))))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+
+        // The categorical scale-kind value renders INSIDE a `.value-pill`.
+        const scaleKindPill = within(card).getByText("fundamental")
+        expect(scaleKindPill).toHaveClass("value-pill")
+
+        // The identifier (the scale factor's own ref) renders as plain
+        // monospace text, on its own row -- never inside a `.value-pill`.
+        const refDd = ddFor(card, "Frequency scale factor ref")
+        expect(refDd).toBe("fsf_pill_check")
+        const refElement = within(card).getByText("fsf_pill_check")
+        expect(refElement.tagName).toBe("CODE")
+        expect(refElement).not.toHaveClass("value-pill")
+    })
+
+    it("renders an available on-demand section as idle until opened, and fetches exactly its own token once -- unlike source_calculations, which now loads eagerly for the conformer derivation", async () => {
         const requestedIncludeSets: string[][] = []
         server.use(http.get(ENDPOINT, ({ request }) => {
             requestedIncludeSets.push(new URL(request.url).searchParams.getAll("include"))
@@ -317,7 +368,10 @@ describe("EntryStatmechSection", () => {
         }))
         page()
         await screen.findByText("sm_one")
-        expect(requestedIncludeSets).toEqual([[]])
+        // `source_calculations` is fetched eagerly (every record card
+        // derives its conformer from it by default) -- `torsions` is not,
+        // it still waits for its own disclosure to be opened.
+        await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"]]))
 
         const section = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLDetailsElement
         expect(section.open).toBe(false)
@@ -325,7 +379,7 @@ describe("EntryStatmechSection", () => {
 
         fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
         await within(section).findByText("Torsions loaded.")
-        expect(requestedIncludeSets).toEqual([[], ["torsions"]])
+        expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["torsions"]])
     })
 
     it("shares one fetch across every record's disclosure for the same token, and never merges one record's rows into another's", async () => {
@@ -430,7 +484,11 @@ describe("EntryStatmechSection", () => {
         const heading = screen.getByRole("heading", { name: "Electronic levels" })
         expect(heading.closest("details")).toBeNull()
         expect(screen.getByText("No electronic levels are recorded for any statmech record on this entry.")).toBeVisible()
-        expect(requestCount).toBe(1)
+        // Two requests, never a third for "Electronic levels" (which stays
+        // request-free): the base list load, plus the ONE eager
+        // `source_calculations` fetch every record card's conformer
+        // derivation needs (see the eager-load test above).
+        await waitFor(() => expect(requestCount).toBe(2))
     })
 
     it("states honestly when no statmech records are deposited for this entry, without noise from six separate empty lazy sections", async () => {
@@ -530,5 +588,90 @@ describe("EntryStatmechSection conformer-scoped attribution", () => {
         const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
         expect(otherDetails.open).toBe(false)
         expect(within(otherDetails).getByText("sm_one")).toBeInTheDocument()
+    })
+})
+
+// `statmech` has no conformer column at all (entry-scoped, never
+// conformer-scoped) -- these prove the READ-TIME DERIVATION from source
+// calculations (`domain/statmechConformerDerivation.ts`), cross-referenced
+// against the already-loaded conformer projections, and specifically the
+// disagreement case: measured live against the archive (2026-09-02), 0 of
+// 101 statmech records with source calculations actually disagree today,
+// which is exactly why this must be tested with a constructed fixture
+// rather than found live.
+describe("EntryStatmechSection -- conformer derived from source calculations", () => {
+    it("shows the single conformer every source calculation agrees on, labelled as derived", async () => {
+        const conformers = [conformerGroupWithCalcs("cg_one", "conformer_1", "co_1", ["calc_opt_1", "calc_freq_1", "calc_sp_1"])]
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("source_calculations") ? {
+                    source_calculations: [
+                        sourceCalc("opt", "calc_opt_1"),
+                        sourceCalc("freq", "calc_freq_1"),
+                        sourceCalc("sp", "calc_sp_1"),
+                    ],
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page(undefined, conformers)
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        const note = (await within(card).findByText(/Conformer \(derived from source calculations\)/)).closest("p") as HTMLElement
+        expect(within(note).getByRole("link", { name: "Conformer Group 1" })).toHaveAttribute("href", "/conformer-groups/cg_one")
+    })
+
+    it("names every conformer involved -- never picks one -- when source calculations disagree", async () => {
+        // opt traces to cg_one; freq and sp both trace to cg_two -- a real,
+        // constructed disagreement (the live archive has none today).
+        const conformers = [
+            conformerGroupWithCalcs("cg_one", "conformer_1", "co_1", ["calc_opt_1"]),
+            conformerGroupWithCalcs("cg_two", "conformer_2", "co_2", ["calc_freq_1", "calc_sp_1"]),
+        ]
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("source_calculations") ? {
+                    source_calculations: [
+                        sourceCalc("opt", "calc_opt_1"),
+                        sourceCalc("freq", "calc_freq_1"),
+                        sourceCalc("sp", "calc_sp_1"),
+                    ],
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page(undefined, conformers)
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        const note = (await within(card).findByText(/span more than one conformer/)).closest("p") as HTMLElement
+        expect(note).toHaveAttribute("role", "alert")
+        expect(within(note).getByRole("link", { name: "Conformer Group 1" })).toBeInTheDocument()
+        expect(within(note).getByRole("link", { name: "Conformer Group 2" })).toBeInTheDocument()
+        // Never silently collapses to the single-conformer phrasing.
+        expect(within(card).queryByText(/Conformer \(derived from source calculations\)/)).not.toBeInTheDocument()
+    })
+
+    it("says the derivation could not resolve when source calculations exist but none trace to a loaded conformer observation", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("source_calculations") ? { source_calculations: [sourceCalc("opt", "calc_unlinked")] } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page(undefined, [])
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByText(/do not trace to any conformer observation loaded/)
+    })
+
+    it("shows no derivation note when the record has zero source calculations -- already stated by the evidence-summary count", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({ evidence_summary: { ...baseRecord().evidence_summary, source_calculation_count: 0 } }),
+        ]))))
+        page(undefined, conformerGroups)
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        expect(within(card).queryByText(/Conformer \(derived/)).not.toBeInTheDocument()
+        expect(within(card).queryByText(/do not trace to any conformer/)).not.toBeInTheDocument()
+        expect(within(card).queryByText(/span more than one conformer/)).not.toBeInTheDocument()
     })
 })

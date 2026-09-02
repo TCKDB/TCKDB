@@ -7,10 +7,8 @@ import {
     CHART_MARGIN,
     CP_CHART_HEIGHT,
     CP_CHART_WIDTH,
-    RESIDUAL_CHART_HEIGHT,
     type CpChartMode,
     computeCpValueDomain,
-    computeResidualPercentDomain,
     computeTemperatureDomain,
     seriesAbsenceNote,
     seriesColor,
@@ -48,13 +46,21 @@ import { SectionHeading } from "./PageSections"
 // the archive's own numbers — same rule `GeometryDetailPage.tsx`'s Å/bohr
 // toggle follows for coordinates.
 //
-// The residual panel plots on its OWN scale (`computeResidualPercentDomain`
-// below, an entirely separate function from `computeCpValueDomain`) — a
-// good NASA-7 fit's residuals sit near the numerical noise floor, and on
-// the Cp axis they render as a flat line at zero, showing nothing. Residuals
-// are plotted as a PERCENTAGE of the fitted value (not raw J/mol/K) so a
-// bad fit near an interval boundary stays visible regardless of the
-// species' absolute Cp scale.
+// There used to be a second panel here plotting residuals (measured minus
+// NASA-7 fit, as a percentage of the fit) on its own scale, underneath this
+// one. It was removed: checked against a real record
+// (`thm_5dzg66kvcuslgw6swkuc7gduiu`), the archive's stored "measured"
+// points reproduce the NASA-7 fit to four decimal places at every checked
+// temperature (300 K: 122.212 vs 122.212, residual 0.0001; 1000 K: 306.454
+// vs 306.453, residual 0.0003; 2400 K: 381.075 vs 381.074, residual
+// 0.0004) — 0.000% of Cp across the range, on all 65 thermo records this
+// archive holds. The stored "raw" points were evidently evaluated FROM the
+// polynomial in the first place, so a residual plot compared a curve with
+// itself and was flat by construction, not because the fit was good. A
+// residual chart needs measured points genuinely INDEPENDENT of the fit --
+// no record in this archive has that today. Re-add the panel only once one
+// does; see `domain/thermoNasa.ts`'s own module comment for where the
+// removed computation lived.
 // ---------------------------------------------------------------------------
 
 export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }: {
@@ -71,7 +77,6 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
     )
 
     const plottable = series.filter((item) => item.hasUsableFit || item.hasMeasuredPoints)
-    const hasAnyResiduals = series.some((item) => item.residuals.length > 0)
     const anySelected = series.some((item) => item.isSelected)
 
     return (
@@ -95,7 +100,6 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
                     <ChartControls mode={mode} unit={unit} onModeChange={setMode} onUnitChange={setUnit} />
                     <ChartLegend series={series} />
                     <CpPanel series={series} mode={mode} unit={unit} anySelected={anySelected} />
-                    {hasAnyResiduals && <ResidualPanel series={series} anySelected={anySelected} />}
                     <AbsenceNotes series={series} />
                 </>
             )}
@@ -277,72 +281,3 @@ function CpPanel({ series, mode, unit, anySelected }: {
     )
 }
 
-function ResidualPanel({ series, anySelected }: { series: CpChartSeries[]; anySelected: boolean }) {
-    const temperatureDomain = computeTemperatureDomain(series)
-    const residualDomain = computeResidualPercentDomain(series)
-    const { top, right, bottom, left } = CHART_MARGIN
-    const plotWidth = CP_CHART_WIDTH - left - right
-    const plotHeight = RESIDUAL_CHART_HEIGHT - top - bottom
-    const xScale = linearScale(temperatureDomain, [left, left + plotWidth])
-    const yScale = linearScale(residualDomain, [top + plotHeight, top])
-
-    return (
-        <div className="cp-chart-panel cp-chart-panel--residual">
-            <svg
-                viewBox={`0 0 ${CP_CHART_WIDTH} ${RESIDUAL_CHART_HEIGHT}`}
-                role="img"
-                aria-label="Residuals: measured minus NASA-7 fit, as a percentage of the fit, at each stored temperature"
-                className="cp-chart-svg"
-            >
-                <ChartAxes
-                    xTicks={evenTicks(temperatureDomain, 5)}
-                    yTicks={evenTicks(residualDomain, 5)}
-                    xScale={xScale}
-                    yScale={yScale}
-                    plotHeight={plotHeight}
-                    plotWidth={plotWidth}
-                    yTickSuffix="%"
-                />
-                <line
-                    data-testid="residual-zero-line"
-                    x1={left} x2={left + plotWidth} y1={yScale(0)} y2={yScale(0)}
-                    className="cp-chart-zero-line"
-                />
-                {series.map((item, index) => {
-                    if (item.residuals.length === 0) return null
-                    const color = seriesColor(index)
-                    const dimmed = anySelected && !item.isSelected
-                    const groupClassName = dimmed ? "cp-chart-series cp-chart-series--dimmed" : "cp-chart-series"
-                    return (
-                        <g key={item.thermoRef} data-testid={`residuals-${item.thermoRef}`} className={groupClassName}>
-                            <polyline
-                                points={item.residuals.map((residual) => `${xScale(residual.temperatureK)},${yScale(residual.residualPercent)}`).join(" ")}
-                                fill="none"
-                                stroke={color}
-                                strokeWidth={1}
-                                className="cp-chart-residual-line"
-                            />
-                            {item.residuals.map((residual, residualIndex) => (
-                                <circle
-                                    key={`r-${residualIndex}`}
-                                    data-testid={`residual-point-${item.thermoRef}-${residualIndex}`}
-                                    cx={xScale(residual.temperatureK)}
-                                    cy={yScale(residual.residualPercent)}
-                                    r={item.isSelected ? 4 : 3}
-                                    fill={color}
-                                />
-                            ))}
-                        </g>
-                    )
-                })}
-            </svg>
-            <p className="cp-chart-axis-title cp-chart-axis-title--y">Residual (% of fit)</p>
-            <p className="cp-chart-axis-title cp-chart-axis-title--x">Temperature (K)</p>
-            <p className="section-note">
-                Measured minus NASA-7 fit at each stored temperature, as a percentage of the fitted value —
-                plotted on its own scale, not the Cp axis above, so a fit that is off by a real amount stays
-                visible instead of flattening into the noise floor.
-            </p>
-        </div>
-    )
-}

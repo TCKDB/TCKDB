@@ -3,9 +3,6 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach } from "vitest"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoRecord } from "../api/thermoApi"
-import { linearScale } from "../domain/chartScale"
-import { CHART_MARGIN, RESIDUAL_CHART_HEIGHT, computeCpValueDomain, computeResidualPercentDomain, computeTemperatureDomain } from "../domain/thermoCpChartLayout"
-import { buildCpChartSeries } from "../domain/thermoCpSeries"
 import { ThermoCpChart } from "./ThermoCpChart"
 
 afterEach(() => cleanup())
@@ -179,20 +176,18 @@ describe("ThermoCpChart — unit toggle", () => {
 })
 
 describe("ThermoCpChart — the three honest-absence cases", () => {
-    it("a fit-only record: draws the curve, says plainly there are no measured points, and the residual panel is omitted", () => {
+    it("a fit-only record: draws the curve and says plainly there are no measured points", () => {
         renderChart([fitOnlyRecord()])
         expect(screen.getByTestId("fit-low-thm_fit_only")).toBeInTheDocument()
         expect(screen.queryByTestId("measured-point-thm_fit_only-0")).not.toBeInTheDocument()
         expect(screen.getByText(/no measured points on file for this record/)).toBeInTheDocument()
-        expect(screen.queryByTestId("residual-zero-line")).not.toBeInTheDocument()
     })
 
-    it("a points-only record: draws markers, no curve, no residuals", () => {
+    it("a points-only record: draws markers, no curve", () => {
         renderChart([pointsOnlyRecord()])
         expect(screen.queryByTestId("fit-low-thm_points_only")).not.toBeInTheDocument()
         expect(screen.getByTestId("measured-point-thm_points_only-0")).toBeInTheDocument()
         expect(screen.getByText(/no usable NASA-7 fit on file for this record/)).toBeInTheDocument()
-        expect(screen.queryByTestId("residual-zero-line")).not.toBeInTheDocument()
     })
 
     it("a record with neither, alongside one that has data: nothing is plotted for it, and it is named explicitly rather than silently dropped", () => {
@@ -210,55 +205,28 @@ describe("ThermoCpChart — the three honest-absence cases", () => {
         expect(screen.queryByTestId("measured-point-thm_neither-0")).not.toBeInTheDocument()
         expect(screen.getByText(/no measured points or usable NASA-7 fit on file for this record — nothing plotted/)).toBeInTheDocument()
     })
-
-    it("shows the residual panel once at least one record has BOTH a fit and points, even alongside absence cases", () => {
-        renderChart([recordAlpha(), fitOnlyRecord()])
-        expect(screen.getByTestId("residual-zero-line")).toBeInTheDocument()
-        expect(screen.getByTestId("residuals-thm_alpha")).toBeInTheDocument()
-        expect(screen.queryByTestId("residuals-thm_fit_only")).not.toBeInTheDocument()
-    })
 })
 
-describe("ThermoCpChart — residual panel is on its OWN scale, not the Cp axis", () => {
-    it("places a residual marker at the pixel position its OWN residual-percent domain implies, not the Cp domain's", () => {
-        const records = [recordAlpha(), recordBeta()]
-        renderChart(records)
+// The residual (measured-minus-fitted) panel that used to render beneath
+// the Cp-vs-T panel was REMOVED -- checked against a real record
+// (`thm_5dzg66kvcuslgw6swkuc7gduiu`), this archive's stored "measured"
+// points reproduce the NASA-7 fit to four decimal places everywhere
+// checked (0.000% of Cp), because they were evidently evaluated FROM the
+// fit in the first place -- a residual plot compared a curve with itself
+// and was flat by construction. See `ThermoCpChart.tsx`'s own module
+// comment for the full measurement. This positively asserts the Cp-vs-T
+// chart itself is still here, and that no residual-panel DOM survives.
+describe("ThermoCpChart — the residual panel is gone; the Cp-vs-T chart is not", () => {
+    it("still renders the Cp-vs-T chart (axes, fitted curve, measured markers) with no residual panel alongside it", () => {
+        renderChart([recordAlpha(), recordBeta()])
+        expect(screen.getByRole("img", { name: /Heat capacity versus temperature/ })).toBeVisible()
+        expect(screen.getByTestId("fit-low-thm_alpha")).toBeInTheDocument()
+        expect(screen.getByTestId("measured-point-thm_alpha-0")).toBeInTheDocument()
 
-        const series = buildCpChartSeries(records, conformers, null, "j_mol_k")
-        const residualDomain = computeResidualPercentDomain(series)
-        const cpDomain = computeCpValueDomain(series)
-        // A meaningfully different domain is the whole precondition for this
-        // test to be able to tell the two scales apart at all.
-        expect(residualDomain).not.toEqual(cpDomain)
-
-        const { top, bottom } = CHART_MARGIN
-        const plotHeight = RESIDUAL_CHART_HEIGHT - top - bottom
-        const residualYScale = linearScale(residualDomain, [top + plotHeight, top])
-
-        const alphaResiduals = series.find((item) => item.thermoRef === "thm_alpha")!.residuals
-        expect(alphaResiduals.length).toBeGreaterThan(0)
-        const expectedCy = residualYScale(alphaResiduals[0].residualPercent)
-
-        const rendered = screen.getByTestId("residual-point-thm_alpha-0")
-        expect(Number(rendered.getAttribute("cy"))).toBeCloseTo(expectedCy, 6)
-    })
-
-    it("the residual panel's temperature axis matches the same shared temperature domain the Cp panel uses", () => {
-        const records = [recordAlpha(), recordBeta()]
-        renderChart(records)
-        const series = buildCpChartSeries(records, conformers, null, "j_mol_k")
-        const temperatureDomain = computeTemperatureDomain(series)
-        const { left, right, top, bottom } = CHART_MARGIN
-        const plotWidth = 720 - left - right
-        const plotHeight = RESIDUAL_CHART_HEIGHT - top - bottom
-        const xScale = linearScale(temperatureDomain, [left, left + plotWidth])
-        const residualDomain = computeResidualPercentDomain(series)
-        const yScale = linearScale(residualDomain, [top + plotHeight, top])
-
-        const alphaResiduals = series.find((item) => item.thermoRef === "thm_alpha")!.residuals
-        const rendered = screen.getByTestId("residual-point-thm_alpha-0")
-        expect(Number(rendered.getAttribute("cx"))).toBeCloseTo(xScale(alphaResiduals[0].temperatureK), 6)
-        expect(Number(rendered.getAttribute("cy"))).toBeCloseTo(yScale(alphaResiduals[0].residualPercent), 6)
+        expect(screen.queryByTestId("residual-zero-line")).not.toBeInTheDocument()
+        expect(screen.queryByTestId("residuals-thm_alpha")).not.toBeInTheDocument()
+        expect(screen.queryByText(/Residual \(% of fit\)/)).not.toBeInTheDocument()
+        expect(document.querySelector(".cp-chart-panel--residual")).toBeNull()
     })
 })
 

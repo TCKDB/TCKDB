@@ -29,11 +29,19 @@ export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
             {record.formula && <p className="browse-row-smiles">{record.canonical_smiles}</p>}
             <ul className="browse-row-entries">
                 {record.entries.map((entry) => (
+                    // Two SEPARATE pills, not one shared box -- classification
+                    // (kind · state) and review status are different axes (the
+                    // former is what the entry IS, the latter is curation
+                    // status), and putting both inside one bordered chip made
+                    // them read as a single fact ("NOT REVIEWED is part of the
+                    // same pill as minimum · ground which should not be so").
                     <li className="browse-entry-chip" key={entry.species_entry_ref}>
-                        <Link to={`/species-entries/${entry.species_entry_ref}`}>
-                            {token(entry.species_entry_kind)} · {token(entry.electronic_state_kind)}
-                        </Link>
-                        <span className="browse-entry-review">{token(entry.review.status)}</span>
+                        <span className="value-pill browse-entry-kind-pill">
+                            <Link to={`/species-entries/${entry.species_entry_ref}`}>
+                                {token(entry.species_entry_kind)} · {token(entry.electronic_state_kind)}
+                            </Link>
+                        </span>
+                        <span className="value-pill value-pill--muted browse-entry-review">{token(entry.review.status)}</span>
                     </li>
                 ))}
             </ul>
