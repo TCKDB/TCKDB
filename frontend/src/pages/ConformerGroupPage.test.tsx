@@ -168,7 +168,7 @@ describe("ConformerGroupPage", () => {
         // The disclosure starts collapsed (see the test above) -- the ToC
         // entry must still be there, because SectionHeading lives inside
         // <summary> and <details> never unmounts its children.
-        const toc = screen.getByRole("navigation", { name: "Sections on this page" })
+        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
         expect(within(toc).getByRole("link", { name: "Observation-scoped evidence (1 deposited observation)" }))
             .toBeVisible()
     })
@@ -220,8 +220,8 @@ describe("ConformerGroupPage", () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
         await screen.findByRole("heading", { name: "conformer_1" })
-        const toc = screen.getByRole("navigation", { name: "Sections on this page" })
-        expect(within(toc).getAllByRole("link")).toHaveLength(2)
+        const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
+        await waitFor(() => expect(within(toc).getAllByRole("link")).toHaveLength(2))
     })
 
     it("shows a specific not-found state", async () => {

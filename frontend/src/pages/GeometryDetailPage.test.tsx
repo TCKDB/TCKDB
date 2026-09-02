@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within , waitFor} from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import GeometryDetailPage from "./GeometryDetailPage"
 import { ANGSTROM_TO_BOHR } from "../domain/geometryXyz"
@@ -823,7 +823,7 @@ describe("GeometryDetailPage", () => {
             page()
             await screen.findByRole("heading", { name: "CH4 geometry" })
 
-            const toc = screen.getByRole("navigation", { name: "Sections on this page" })
+            const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
             const links = within(toc).getAllByRole("link")
             expect(links.map((link) => link.textContent)).toEqual([
                 "Structure view", "Coordinate table", "Raw XYZ", "Produced by", "Used as input by",
