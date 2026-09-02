@@ -95,6 +95,63 @@
 
 .owner-card a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
 
+/* Categorical, bounded-vocabulary values (entry kind, electronic state,
+   charge, multiplicity, transition-state status) render as a rounded
+   pill -- the owner: "rather than the text we would use pills for the
+   values? makes it pop more". Reuses the visual recipe of the deleted
+   `RecordFacetChips`/`.record-facet-chip` (PR 325: border, radius, colour)
+   but as an inline `<span>` REPLACING a value's plain-text form inside an
+   EXISTING labelled `<dd>` -- never a second row alongside it. That
+   earlier component was removed specifically because it repeated a fact
+   already shown as labelled text elsewhere on the page (the owner then:
+   "no pill boxes... ffs" -- see `OwnerCard`'s own docstring above).
+   Identifiers -- refs, SMILES, InChIKey -- are never pills: a 30-char
+   base32 ref inside a rounded chip is worse to read and select than
+   plain monospace, not better. */
+.value-pill {
+    display: inline-block;
+    padding: .2rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font: 600 .72rem/1.3 var(--sans);
+    white-space: nowrap;
+}
+
+/* A vertical checklist, one row per evidence check, "label: value" —
+   replacing a single wrapping `<strong>` (the owner: "this should be a
+   going down list, not a wrap around text"). Stays legible at the
+   content column's narrower width beside the reserved ToC rail. */
+.coverage-checklist {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    margin: .55rem 0 0;
+    font: .72rem/1.5 var(--mono);
+}
+
+.coverage-checklist > div {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+}
+
+.coverage-checklist dt {
+    color: var(--ink-2);
+}
+
+.coverage-checklist dt::after {
+    content: ":";
+}
+
+.coverage-checklist dd {
+    margin: 0;
+    color: var(--accent-700);
+    font-weight: 600;
+    text-align: right;
+}
+
 /* On-demand ("behind a disclosure") sections. A section
    `available_sections` already reports empty renders as a plain
    `.ledger-section` with `.empty-projection` text and no `<details>` at

@@ -117,7 +117,14 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     </Link>
                                 </dd>
                             </div>
-                            <div><dt>Group ref</dt><dd>{group.conformer_group_ref}</dd></div>
+                            {/* Separate ref row only when the link above is showing
+                                something OTHER than the ref -- see
+                                `CalculationDetailPage.tsx`'s `OwnerCard` for the
+                                measured defect (species_entry_label null on every
+                                sampled entry) this same shape was fixed for. */}
+                            {group.label && (
+                                <div><dt>Group ref</dt><dd>{group.conformer_group_ref}</dd></div>
+                            )}
                             <div>
                                 <dt>Species entry</dt>
                                 <dd>

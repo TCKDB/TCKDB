@@ -216,6 +216,7 @@ class ConformerGroupCoreBlock(BaseModel):
     note: str | None = None
     created_at: datetime
     review: RecordReviewBadge   # always-present compact badge
+    fingerprint: ConformerGroupFingerprint | None = None   # include=fingerprints only
 
 
 class ConformerObservationCoreBlock(BaseModel):
@@ -231,8 +232,33 @@ class ConformerObservationCoreBlock(BaseModel):
 
 Neither block exposes `representative_coords_json` or
 `torsion_fingerprint_json` by default — those JSON blobs can be large
-and are not part of the bounded summary. A future
-`include=fingerprints` token could surface them; deferred for v0.
+and are not part of the bounded summary. `ConformerGroupCoreBlock.fingerprint`
+(populated only under `include=fingerprints`) surfaces
+`representative_fingerprint_json` in typed form:
+
+```python
+class ConformerRotorTorsion(BaseModel):
+    rotor_key: str              # e.g. "R_8_10" -- rotatable bond, atom indices 8 and 10
+    quantized_bin: int          # basin membership, WITH bin_width_deg below
+    raw_torsion_deg: float      # representative conformer's own measured angle
+    folded_torsion_deg: float   # same, after symmetry folding
+
+
+class ConformerGroupFingerprint(BaseModel):
+    rotor_count: int
+    bin_width_deg: float
+    torsions: list[ConformerRotorTorsion]   # zipped positionally, once, at the service boundary
+```
+
+`quantized_bin` + `bin_width_deg` together are the basin's actual
+*definition*; `raw_torsion_deg` / `folded_torsion_deg` are what the
+*representative* conformer happens to measure there — a member of the
+basin, not the basin's boundary. The two must stay visually distinct
+wherever this is rendered. `fingerprint_hash` (present on the underlying
+row) is deliberately never reproduced on this shape — it is an internal
+basin key, not reader content. `representative_coords_json` and
+`torsion_fingerprint_json` remain unsurfaced; no reader-facing need for
+either has been requested.
 
 ### 4.2 Selection summary
 
@@ -536,8 +562,13 @@ include=calculations    — compact calc summaries for every calc whose
                           conformer_observation belongs to this group
 include=geometries      — output-geometry links from those calcs
 include=review          — record_review row history for the group
+include=fingerprints    — populates conformer_group.fingerprint (numeric
+                          basin identity: quantized torsion bins +
+                          representative angles, positionally paired by
+                          rotor)
 include=all             — observations + selections + calculations +
-                          geometries + review (never internal_ids)
+                          geometries + review + fingerprints (never
+                          internal_ids)
 include=internal_ids    — Phase D policy gate
 ```
 
@@ -553,8 +584,11 @@ include=observations    — the sibling observations in this record's
                           list the group surface returns under the same
                           token. Was a documented no-op until PR 2.
 include=selections      — the parent group's selections
+include=fingerprints    — populates the embedded conformer_group's
+                          fingerprint (same shape as group detail)
 include=all             — observations + selections + calculations +
-                          geometries + review (never internal_ids)
+                          geometries + review + fingerprints (never
+                          internal_ids)
 include=internal_ids    — Phase D policy gate
 ```
 
@@ -567,7 +601,8 @@ include=selections      — extra per-row selection detail beyond the
 include=calculations    — embed calc summaries on each record
 include=geometries      — embed geometry links on each record
 include=review          — embed review history on each record
-include=all             — five public tokens above (never internal_ids)
+include=fingerprints    — populates each record's conformer_group.fingerprint
+include=all             — six public tokens above (never internal_ids)
 include=internal_ids    — Phase D policy gate
 ```
 
@@ -764,13 +799,21 @@ TS surface should be applied here too. Forbidden keys at any depth:
 ```text
 xyz_text, atoms, coords, symbols,
 body, content, data, presigned_url, download_url,
-representative_coords_json     (JSONB blob — keep out of v0 surface)
+representative_coords_json,    (JSONB blob — no surface need requested)
+representative_fingerprint_json, quantized_bins, raw_torsions_deg,
+folded_torsions_deg, canonical_rotor_keys, fingerprint_hash
+                                (raw blob keys — the typed
+                                 ConformerGroupFingerprint under
+                                 include=fingerprints is the only
+                                 sanctioned surface for this data, and
+                                 it never reproduces fingerprint_hash)
 ```
 
-`torsion_fingerprint_json` is similarly excluded from the default
-projection. If a fingerprints view is wanted, ship a separate
-`include=fingerprints` token in a later slice with explicit size
-bounds.
+`torsion_fingerprint_json` remains excluded from the default
+projection, with no `include=` token surfacing it — no reader-facing
+need has been requested for the observation-level blob.
+`representative_fingerprint_json` (the group-level blob) **is** now
+surfaced, in typed form, under `include=fingerprints` — see §4.1.
 
 ---
 

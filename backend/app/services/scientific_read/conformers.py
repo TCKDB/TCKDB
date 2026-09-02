@@ -63,10 +63,12 @@ from app.schemas.reads.scientific_conformer import (
     ConformerGeometryLink,
     ConformerGroupCoreBlock,
     ConformerGroupEvidenceSummary,
+    ConformerGroupFingerprint,
     ConformerObservationCoreBlock,
     ConformerObservationEvidenceSummary,
     ConformerObservationsSummary,
     ConformerReviewEntry,
+    ConformerRotorTorsion,
     ConformerSelectionSummary,
     ConformerSpeciesContext,
     RequestEcho,
@@ -104,12 +106,21 @@ from app.services.scientific_read.species_identity import (
 # conformer group there, which is the one thing an observation-grained
 # record cannot say about itself. ``selections`` belong to the parent
 # group and are exposed from it on both surfaces.
+#
+# ``fingerprints`` populates ``conformer_group.fingerprint`` (the group's
+# ``representative_fingerprint_json``, typed) on both surfaces' embedded
+# ``ConformerGroupCoreBlock``. It is a normal, ``all``-eligible token like
+# ``calculations`` / ``geometries`` -- opted out of the *default*
+# projection (nothing here is default), not marked ``internal`` like
+# ``internal_ids`` (which is policy-gated ID visibility, a different
+# concern from "this blob is heavy, ask for it explicitly").
 _LEGAL_INCLUDE_TOKENS: set[str] = {
     "observations",
     "selections",
     "calculations",
     "geometries",
     "review",
+    "fingerprints",
     "internal_ids",
     "all",
 }
@@ -141,7 +152,10 @@ def get_conformer_group(
     bounded observations / evidence / available_sections summaries.
     Heavy include blocks (``observations`` / ``selections`` /
     ``calculations`` / ``geometries`` / ``review``) expand the response
-    without paginating.
+    without paginating. ``fingerprints`` populates
+    ``conformer_group.fingerprint`` with the group's numeric basin
+    identity (quantized torsion bins + representative angles) instead of
+    expanding the response with a new list.
     """
     includes = validate_includes(
         include or [],
@@ -217,7 +231,9 @@ def build_group_record(
         selection_count=len(selection_rows),
     )
 
-    cg_core = _build_group_core_block(cg, cg_badge)
+    cg_core = _build_group_core_block(
+        cg, cg_badge, include_fingerprint="fingerprints" in includes
+    )
 
     observations_block: list[ScientificConformerObservationRecord] | None = None
     if "observations" in includes:
@@ -336,7 +352,9 @@ def get_conformer_observation(
         session, SubmissionRecordType.conformer_observation, obs.id
     )
     species_context = _build_species_context(session, cg.species_entry_id)
-    cg_core = _build_group_core_block(cg, cg_badge)
+    cg_core = _build_group_core_block(
+        cg, cg_badge, include_fingerprint="fingerprints" in includes
+    )
 
     record = _build_observation_record(
         session,
@@ -523,7 +541,10 @@ def _build_sibling_observation_records(
 
 
 def _build_group_core_block(
-    cg: ConformerGroup, badge: RecordReviewBadge
+    cg: ConformerGroup,
+    badge: RecordReviewBadge,
+    *,
+    include_fingerprint: bool = False,
 ) -> ConformerGroupCoreBlock:
     return ConformerGroupCoreBlock(
         conformer_group_id=cg.id,
@@ -532,6 +553,65 @@ def _build_group_core_block(
         note=cg.note,
         created_at=cg.created_at,
         review=badge,
+        fingerprint=(
+            _build_group_fingerprint(cg) if include_fingerprint else None
+        ),
+    )
+
+
+def _build_group_fingerprint(
+    cg: ConformerGroup,
+) -> ConformerGroupFingerprint | None:
+    """Parse ``representative_fingerprint_json`` into the public shape.
+
+    The row's four parallel arrays (``canonical_rotor_keys`` /
+    ``quantized_bins`` / ``raw_torsions_deg`` / ``folded_torsions_deg``)
+    are positionally aligned by the row's own contract -- index *i* in
+    every array describes the same rotor. This zips them once, here, so
+    every caller reads an already-paired ``ConformerRotorTorsion`` list
+    instead of re-zipping (and re-risking) the pairing itself.
+
+    ``fingerprint_hash`` is read off the blob but never placed on the
+    returned shape -- see :class:`ConformerGroupFingerprint`.
+
+    Returns ``None`` when the row carries no fingerprint blob, or when
+    the blob is malformed (not all four arrays present, non-list, or not
+    all the same length). A malformed/partial blob must never manufacture
+    a specious pairing -- absence is the honest response.
+    """
+    blob = cg.representative_fingerprint_json
+    if not blob:
+        return None
+
+    rotor_keys = blob.get("canonical_rotor_keys")
+    quantized_bins = blob.get("quantized_bins")
+    raw_torsions = blob.get("raw_torsions_deg")
+    folded_torsions = blob.get("folded_torsions_deg")
+    bin_width_deg = blob.get("bin_width_deg")
+    rotor_count = blob.get("rotor_count")
+
+    arrays = (rotor_keys, quantized_bins, raw_torsions, folded_torsions)
+    if any(not isinstance(a, list) for a in arrays) or bin_width_deg is None:
+        return None
+    if not rotor_keys:
+        return None
+    lengths = {len(a) for a in arrays}
+    if len(lengths) != 1:
+        return None
+
+    torsions = [
+        ConformerRotorTorsion(
+            rotor_key=rotor_keys[i],
+            quantized_bin=quantized_bins[i],
+            raw_torsion_deg=raw_torsions[i],
+            folded_torsion_deg=folded_torsions[i],
+        )
+        for i in range(len(rotor_keys))
+    ]
+    return ConformerGroupFingerprint(
+        rotor_count=rotor_count if isinstance(rotor_count, int) else len(rotor_keys),
+        bin_width_deg=bin_width_deg,
+        torsions=torsions,
     )
 
 

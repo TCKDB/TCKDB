@@ -17,10 +17,13 @@ Conformer concepts split three ways (per
   that is policy-gated by the Phase D internal-ID visibility helper.
 
 Large JSON blobs (``representative_fingerprint_json``,
-``representative_coords_json`` on the group;
-``torsion_fingerprint_json`` on the observation) are deliberately NOT
-surfaced by the default projection. A future ``include=fingerprints``
-token could carry them under explicit size bounds.
+``representative_coords_json`` on the group; ``torsion_fingerprint_json``
+on the observation) are deliberately NOT surfaced by the default
+projection. ``include=fingerprints`` now carries the group's
+``representative_fingerprint_json`` (as the typed
+:class:`ConformerGroupFingerprint`, on ``ConformerGroupCoreBlock``);
+``representative_coords_json`` and ``torsion_fingerprint_json`` remain
+unsurfaced -- no reader-facing need for either has been requested yet.
 """
 
 from __future__ import annotations
@@ -74,15 +77,70 @@ class RequestEcho(ProfiledRequestEcho):
 # ---------------------------------------------------------------------------
 
 
+class ConformerRotorTorsion(BaseModel):
+    """One rotor's torsion angle within a group's representative fingerprint.
+
+    Pairs a rotor (``rotor_key``, e.g. ``"R_8_10"`` — a canonical
+    ``R_<atom index>_<atom index>`` label for the rotatable bond) with the
+    quantized bin it falls in and the representative conformer's measured
+    angle at that rotor. ``quantized_bin`` — read together with the parent
+    :class:`ConformerGroupFingerprint`'s ``bin_width_deg`` — is what
+    *defines* basin membership for this rotor; ``raw_torsion_deg`` /
+    ``folded_torsion_deg`` are what the *representative* conformer happens
+    to measure there, which is a member of the basin, not the basin
+    itself. Never render one as a stand-in for the other.
+
+    Built by zipping the row's parallel ``canonical_rotor_keys`` /
+    ``quantized_bins`` / ``raw_torsions_deg`` / ``folded_torsions_deg``
+    arrays positionally (see
+    ``app.services.scientific_read.conformers._build_group_fingerprint``);
+    this type exists so that positional pairing is fixed once, at the
+    service boundary, rather than re-done — and re-riskable — by every
+    caller that wants to know which angle belongs to which rotor.
+    """
+
+    rotor_key: str
+    quantized_bin: int
+    raw_torsion_deg: float
+    folded_torsion_deg: float
+
+
+class ConformerGroupFingerprint(BaseModel):
+    """Numeric basin identity for one conformer group.
+
+    Surfaced only under ``include=fingerprints`` — see
+    ``ConformerGroupCoreBlock.fingerprint``. ``bin_width_deg`` plus each
+    entry's ``quantized_bin`` together define the torsional-basin
+    membership test that groups conformers into this basin; that is the
+    group's actual *definition*. The per-rotor ``raw_torsion_deg`` /
+    ``folded_torsion_deg`` values on each :class:`ConformerRotorTorsion`
+    are the *representative* conformer's own measured angles — a single
+    member of the basin, not the basin's boundary. Two representatives can
+    sit tens of degrees apart while sharing the same bin; that is normal
+    and expected, not a data error.
+
+    ``fingerprint_hash`` from the underlying
+    ``representative_fingerprint_json`` blob is deliberately never
+    reproduced here. It identifies the basin bin internally
+    (deduplication key) and carries no meaning for a reader.
+    """
+
+    rotor_count: int
+    bin_width_deg: float
+    torsions: list[ConformerRotorTorsion]
+
+
 class ConformerGroupCoreBlock(BaseModel):
     """Direct conformer-group-row metadata.
 
     Carries the public ref (``cg_…``) plus the curator-facing label /
-    note pair. The two JSONB blobs on the row
-    (``representative_fingerprint_json``, ``representative_coords_json``)
-    are intentionally absent — they can be large and are out of the
-    default surface. A future ``include=fingerprints`` token could
-    surface them with explicit size bounds.
+    note pair. Of the two JSONB blobs on the row,
+    ``representative_coords_json`` is intentionally absent — no surface
+    need for it has been requested. ``representative_fingerprint_json``
+    is surfaced as ``fingerprint``, populated only under
+    ``include=fingerprints`` (``None`` otherwise, and ``None`` when the
+    row itself carries no fingerprint blob or an internally inconsistent
+    one — see ``_build_group_fingerprint``).
     """
 
     conformer_group_id: int | None = None
@@ -91,6 +149,7 @@ class ConformerGroupCoreBlock(BaseModel):
     note: str | None = None
     created_at: datetime
     review: RecordReviewBadge
+    fingerprint: ConformerGroupFingerprint | None = None
 
 
 class ConformerObservationCoreBlock(BaseModel):
@@ -516,11 +575,13 @@ __all__ = [
     "ConformerGroupCoreBlock",
     "ConformerGroupDetailRequest",
     "ConformerGroupEvidenceSummary",
+    "ConformerGroupFingerprint",
     "ConformerObservationCoreBlock",
     "ConformerObservationDetailRequest",
     "ConformerObservationEvidenceSummary",
     "ConformerObservationsSummary",
     "ConformerReviewEntry",
+    "ConformerRotorTorsion",
     "ConformerSelectionSummary",
     "ConformerSpeciesContext",
     "RequestEcho",

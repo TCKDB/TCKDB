@@ -1,5 +1,12 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { calculationTypeCounts, conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
+import {
+    buildBasinRotors,
+    buildGroupDifferences,
+    formatDeg,
+    formatRangeDeg,
+    type RotorDifferenceRow,
+} from "../domain/conformerFingerprint"
 import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
 
@@ -28,6 +35,10 @@ export function ConformerSelector({ conformers, selectedRef, onSelect }: {
     selectedRef: string | null
     onSelect: (conformerGroupRef: string) => void
 }) {
+    // `null` for the 55-of-59-entries case (one group, or no group carries a
+    // fingerprint) -- there is nothing to compare, and this renders nothing
+    // rather than an empty or single-column "comparison".
+    const differences = buildGroupDifferences(conformers)
     return (
         <section className="conformer-picker" aria-labelledby="conformer-picker-title">
             <p className="eyebrow">Conformers</p>
@@ -58,6 +69,7 @@ export function ConformerSelector({ conformers, selectedRef, onSelect }: {
                             />
                         ))}
                     </div>
+                    {differences && <ConformerBasinDifferences rows={differences} />}
                 </>
             )}
         </section>
@@ -79,6 +91,8 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
     const total = conformer.observations_summary.total
     const coverage = conformer.evidence_summary.evidence_coverage
     const typeCounts = calculationTypeCounts(conformer)
+    const fingerprint = conformer.conformer_group.fingerprint
+    const rotors = fingerprint ? buildBasinRotors(fingerprint) : null
     return (
         <div className="conformer-card" data-selected={isSelected}>
             <button
@@ -96,7 +110,105 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
                     opt {coverage.opt}/{total} obs · freq {coverage.freq}/{total} obs · sp {coverage.sp}/{total} obs
                 </span>
             </button>
+            {/* `rotors` is `null` when the archive returned no fingerprint at
+                all for this group (not requested, or the row itself is
+                malformed) -- rendered as nothing extra, same as before. Once
+                a fingerprint IS present, an empty `rotors` array (37 of 66
+                groups measured -- the MAJORITY, not an edge case) is a
+                positive fact -- a rigid molecule with no rotatable bonds --
+                and gets its own sentence rather than silently rendering
+                nothing, which would read as missing data instead of "there
+                is nothing here to show". */}
+            {rotors && (
+                rotors.length > 0 ? (
+                    <dl
+                        className="conformer-basin-identity"
+                        aria-label={`Numeric basin identity for ${conformerLabel(conformer)}`}
+                    >
+                        {rotors.map((rotor) => (
+                            <div className="conformer-basin-rotor" key={rotor.rotorKey} data-rotor-key={rotor.rotorKey}>
+                                <dt>{rotor.bondLabel}</dt>
+                                <dd>
+                                    {/* The basin (what DEFINES this group -- a degree RANGE,
+                                        never the internal bin index a reader has no use for)
+                                        and the representative (one member's own measured
+                                        angle) are separately labelled -- never collapsed into
+                                        a single number. See `domain/conformerFingerprint.ts`. */}
+                                    <span className="basin-range">
+                                        basin {formatRangeDeg(rotor.binRangeDeg)}
+                                        {rotor.isFolded ? " (folded coordinates)" : ""}
+                                    </span>
+                                    <span className="basin-representative">
+                                        representative {formatDeg(rotor.representativeRawDeg)}
+                                        {rotor.representativeFoldedDeg !== null
+                                            ? ` (folds to ${formatDeg(rotor.representativeFoldedDeg)})`
+                                            : ""}
+                                    </span>
+                                </dd>
+                            </div>
+                        ))}
+                    </dl>
+                ) : (
+                    <p className="conformer-basin-rigid">
+                        No rotatable bonds recorded for this basin — a single rigid conformer, not one of
+                        several possible torsional arrangements.
+                    </p>
+                )
+            )}
             <RefsDisclosure refs={[{ label: "Conformer group", value: ref, to: `/conformer-groups/${ref}` }]} />
+        </div>
+    )
+}
+
+/**
+ * How this entry's groups differ, rotor by rotor -- rendered once for the
+ * whole picker (not per card), since a difference is a relationship
+ * between two-or-more groups, not a property of any one of them. Only
+ * ever rendered when `buildGroupDifferences` found something real to
+ * compare; the caller (`ConformerSelector`) never mounts this component
+ * for a single-group entry or when nothing differs.
+ */
+function ConformerBasinDifferences({ rows }: { rows: RotorDifferenceRow[] }) {
+    const groupColumns = rows[0].cells
+    return (
+        <div className="conformer-basin-differences">
+            <p className="conformer-basin-differences-heading">How these basins differ</p>
+            <p className="conformer-basin-differences-note">
+                Only rotors where these groups land in different torsional bins are listed -- a shared rotor
+                landing in the same bin across every group is not a difference and is left out.
+            </p>
+            <div className="conformer-basin-differences-scroll">
+                <table className="conformer-basin-differences-table" aria-label="Basin differences by rotor">
+                    <thead>
+                        <tr>
+                            <th scope="col">Rotor</th>
+                            {groupColumns.map((cell) => (
+                                <th scope="col" key={cell.conformerGroupRef}>{cell.groupLabel}</th>
+                            ))}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {rows.map((row) => (
+                            <tr key={row.rotorKey} data-rotor-key={row.rotorKey}>
+                                <th scope="row">{row.bondLabel}</th>
+                                {row.cells.map((cell) => (
+                                    <td key={cell.conformerGroupRef} data-label={cell.groupLabel}>
+                                        {cell.binRangeDeg === null
+                                            ? "not tracked"
+                                            : `${formatRangeDeg(cell.binRangeDeg)}${cell.isFolded ? " †" : ""}`}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {rows.some((row) => row.cells.some((cell) => cell.isFolded)) && (
+                <p className="conformer-basin-differences-footnote">
+                    † this basin's range is in symmetry-folded coordinates; the representative conformer's raw
+                    measured angle differs from its folded angle.
+                </p>
+            )}
         </div>
     )
 }

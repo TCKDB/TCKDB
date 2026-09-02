@@ -298,10 +298,29 @@
    (~352px) -- but it keeps every card within one comfortable, capped range
    at any count and lets `auto-fit` collapse only the truly empty tracks,
    left-aligned with real whitespace after the last card rather than a
-   bordered card floating in front of invisible ones. */
+   bordered card floating in front of invisible ones.
+
+   Widened from `minmax(15rem, 22rem)`: the owner reported meta/coverage
+   text ("4 observations · 6 calculation rows (3 optimization · 2
+   frequency · 1 single_point)") wrapping awkwardly inside the card, and
+   this page's content column got narrower since that measurement was
+   taken -- the identity/header block (and everything below it, this grid
+   included) now sits inside `PageShell`'s content column beside a
+   RESERVED 14rem table-of-contents rail (`.page-toc`, `page-shell.css`),
+   which was itself a fix for a different complaint from the same owner
+   (a tab switch shifting the page sideways) and stays reserved rather
+   than being removed to claw the width back. The MINIMUM is what really
+   controls per-card width once there are enough cards to fill a row --
+   the comment above already measured that the track count locks to the
+   minimum, not the maximum -- so both bounds move together here, not
+   just the cap: a card can no longer be forced narrower than 17rem
+   regardless of how many siblings share the row, and still won't stretch
+   past 26rem when there's room. The 680px single-column breakpoint below
+   keeps this from ever overflowing a narrow viewport; nothing here
+   changes that floor. */
 .conformer-list {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(15rem, 22rem));
+    grid-template-columns: repeat(auto-fit, minmax(17rem, 26rem));
     gap: 1rem;
     margin-top: 1.3rem;
 }
@@ -353,6 +372,145 @@
 }
 
 .conformer-card-coverage { color: var(--muted-2); }
+
+/* ---------------------------------------------------------------------
+   Basin identity — the group's own numeric fingerprint (item 3 of the
+   design brief): what distinguishes THIS group from another one under the
+   same entry, not just what a group is in general. Sits inside the card,
+   below the selectable button, above the References disclosure -- a
+   `<dl>` rather than another `<button>` region, since none of it is
+   interactive.
+
+   `.basin-range` (the quantized bin -- what DEFINES the basin) and
+   `.basin-representative` (one member conformer's own measured angle)
+   are two separate lines, not two halves of one sentence: the owner's
+   own report was about NOT knowing what a group is numerically, and
+   collapsing the basin's definition into its representative's angle
+   would answer that with something the archive does not actually claim.
+   `.basin-range` gets the stronger (`--ink`) colour precisely because it
+   is the definition; the representative is real but secondary context,
+   in `--muted-2`.
+   --------------------------------------------------------------------- */
+
+.conformer-basin-identity {
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin: 0;
+    padding: .85rem 1.25rem;
+    border-top: 1px solid var(--line-2);
+}
+
+.conformer-basin-rotor {
+    display: flex;
+    flex-direction: column;
+    gap: .15rem;
+}
+
+.conformer-basin-rotor dt {
+    color: var(--muted);
+    font: 600 .64rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.conformer-basin-rotor dd {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    font: .72rem/1.5 var(--mono);
+}
+
+.conformer-basin-rotor .basin-range { color: var(--ink); }
+.conformer-basin-rotor .basin-representative { color: var(--muted-2); }
+
+/* The majority-case statement (37 of 66 groups measured, rigid molecules
+   with no rotatable bonds) -- a positive sentence, not an empty section,
+   so it reads as "nothing to show here BECAUSE there is nothing to
+   rotate" rather than as missing data. Same slot `.conformer-basin-
+   identity` would occupy for a group that does have rotors. */
+.conformer-basin-rigid {
+    margin: 0;
+    padding: .85rem 1.25rem;
+    border-top: 1px solid var(--line-2);
+    color: var(--muted-2);
+    font: .72rem/1.5 var(--mono);
+}
+
+/* ---------------------------------------------------------------------
+   Basin differences — how two-or-more of this entry's groups differ on
+   the rotors they share, rendered once for the whole picker (a
+   relationship between groups, not a property of any one card). Only
+   ever mounted when `buildGroupDifferences` found a real difference
+   (`domain/conformerFingerprint.ts`); the 55-of-59-entries single-group
+   case never renders this at all. Wide content (one column per group)
+   scrolls inside its own container rather than the page body, per house
+   rule -- `.conformer-basin-differences-scroll` is the `overflow-x: auto`
+   boundary, not `body`.
+   --------------------------------------------------------------------- */
+
+.conformer-basin-differences {
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+}
+
+.conformer-basin-differences-heading {
+    margin: 0;
+    color: var(--ink);
+    font: 600 1.1rem var(--serif);
+}
+
+.conformer-basin-differences-note {
+    max-width: 42rem;
+    margin: .4rem 0 1rem;
+    color: var(--ink-2);
+    font-size: .85rem;
+    line-height: 1.6;
+}
+
+/* Only rendered when at least one cell in the table is in folded
+   coordinates (`isFolded` -- see `domain/conformerFingerprint.ts`'s own
+   note on why the bin is always computed on the FOLDED angle). */
+.conformer-basin-differences-footnote {
+    max-width: 42rem;
+    margin: .75rem 0 0;
+    color: var(--muted-2);
+    font-size: .72rem;
+    line-height: 1.5;
+}
+
+.conformer-basin-differences-scroll {
+    overflow-x: auto;
+}
+
+.conformer-basin-differences-table {
+    width: 100%;
+    min-width: 32rem;
+    border-collapse: collapse;
+    font: .72rem/1.4 var(--mono);
+}
+
+.conformer-basin-differences-table th,
+.conformer-basin-differences-table td {
+    padding: .6rem .9rem .6rem 0;
+    border-bottom: 1px solid var(--line-2);
+    text-align: left;
+    vertical-align: top;
+    white-space: nowrap;
+}
+
+.conformer-basin-differences-table thead th {
+    color: var(--muted);
+    font-size: .64rem;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+}
+
+.conformer-basin-differences-table tbody th {
+    color: var(--ink);
+    font-weight: 600;
+}
 
 /* ---------------------------------------------------------------------
    Evidence linkage — the shape behind the conformer card's own numbers:

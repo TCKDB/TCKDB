@@ -1,3 +1,4 @@
+import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import type { ConformerGroup } from "../api/conformerGroupApi"
@@ -51,7 +52,14 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             are evidence attached to those observations; they are not separate conformers.
                         </p>
                         <dl className="basin-context">
-                            <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
+                            {/* Separate ref row only when the heading above shows the
+                                label, not the ref itself -- see
+                                `CalculationDetailPage.tsx`'s `OwnerCard` for the
+                                measured defect (a null label duplicating the ref)
+                                this same shape was fixed for. */}
+                            {basin.label && (
+                                <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
+                            )}
                             <div>
                                 <dt>Species entry</dt>
                                 <dd>
@@ -90,27 +98,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                     <p>Coverage says which observations have a stage, not whether methods are comparable.</p>
                 </div>
             </section>
-            <section className="ledger-section" aria-labelledby="observation-ledger">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Deposited provenance</p>
-                    <SectionHeading id="observation-ledger">Observation-scoped evidence</SectionHeading>
-                    <p>Methods remain on their actual calculation rows so differing levels stay visible.</p>
-                </div>
-                {observations.length ? (
-                    <div className="observation-list">
-                        {observations.map((observation) => (
-                            <ObservationCard
-                                key={observation.conformer_observation.conformer_observation_ref}
-                                observation={observation}
-                            />
-                        ))}
-                    </div>
-                ) : (
-                    <p className="empty-projection">
-                        No deposited observations were returned for this conformer basin.
-                    </p>
-                )}
-            </section>
+            <EvidenceDisclosure observations={observations} />
             <section className="ledger-section geometry-ledger" aria-labelledby="geometry-ledger">
                 <p className="eyebrow">Stored coordinates</p>
                 <SectionHeading id="geometry-ledger">Geometry records</SectionHeading>
@@ -140,6 +128,97 @@ function Ledger({ group }: { group: ConformerGroup }) {
             </section>
             </PageShell>
         </section>
+    )
+}
+
+/**
+ * The observation-scoped evidence ledger, made collapsible. Previously an
+ * always-open `<section>` -- with one `ObservationCard` per deposited
+ * observation, each carrying its own `CalculationTable`, this was the
+ * single largest block on the page and the owner's own "big box"
+ * complaint. Follows the same `<details className="ledger-section">` +
+ * `<summary><SectionHeading .../></summary>` shape every other collapsible
+ * ledger section in this app already uses (the "Curation selections"
+ * disclosure on `ConformerObservationPage`, every `LazySection` on
+ * `CalculationDetailPage`) -- `conformer-group.css`'s
+ * `details.ledger-section summary` / `summary h2` / `summary:focus-visible`
+ * rules already style exactly this shape.
+ *
+ * Default CLOSED, matching every one of those existing disclosures. The
+ * `.ledger-summary` metrics strip above this section already answers "a
+ * number" (observation count, calculation-row count, coverage) without
+ * requiring this box open at all; a reader who wants the underlying
+ * per-observation provenance opens it deliberately. The `<summary>` names
+ * what is inside, WITH the count, so that decision can be made without
+ * opening it first.
+ *
+ * `open` is controlled (not left to the browser) so `aria-expanded` can be
+ * set explicitly alongside it -- the native `<details>`/`<summary>` pair
+ * communicates its expanded state to real assistive-tech accessibility
+ * trees on its own, but that mapping is invisible to jsdom-based tests
+ * (MEASURED: `getByRole("button")` finds nothing and `aria-expanded` is
+ * absent from the DOM without this), so it is stated on the element too.
+ * Keyboard operability (Enter/Space toggles a focused `<summary>`) and
+ * focus-visible styling both come for free from `<summary>` being a real
+ * native interactive element -- no key handler needed here.
+ *
+ * SectionHeading lives INSIDE <summary>, so it stays mounted -- and
+ * therefore stays registered in the page's table of contents -- whether
+ * the disclosure is open or closed. Only its own `open`/`hidden` styling
+ * changes; React never unmounts it (`<details>` isn't conditional
+ * rendering). That is a deliberate choice, not an accident of reusing the
+ * pattern: collapsing this section is a reader's OWN choice to declutter
+ * the page, not a decision that the section doesn't exist -- it should
+ * stay one click away from the ToC exactly as before, not vanish from it.
+ *
+ * When there is nothing behind it (zero deposited observations), this
+ * renders a plain, always-open `<section>` instead -- the same "nothing
+ * to disclose" convention `CalculationDetailPage`'s `LazySection` uses for
+ * an unavailable section. Offering a "click to expand" control over an
+ * empty result would tell a reader there might be something to find.
+ */
+function EvidenceDisclosure({ observations }: { observations: Observation[] }) {
+    const [open, setOpen] = useState(false)
+    const count = observations.length
+
+    if (count === 0) {
+        return (
+            <section className="ledger-section" aria-labelledby="observation-ledger">
+                <div className="ledger-heading">
+                    <p className="eyebrow">Deposited provenance</p>
+                    <SectionHeading id="observation-ledger">Observation-scoped evidence</SectionHeading>
+                    <p>Methods remain on their actual calculation rows so differing levels stay visible.</p>
+                </div>
+                <p className="empty-projection">
+                    No deposited observations were returned for this conformer basin.
+                </p>
+            </section>
+        )
+    }
+
+    const summaryLabel = `Observation-scoped evidence (${count} deposited observation${count === 1 ? "" : "s"})`
+    return (
+        <details
+            className="ledger-section"
+            open={open}
+            onToggle={(event) => setOpen((event.target as HTMLDetailsElement).open)}
+        >
+            <summary aria-expanded={open}>
+                <SectionHeading id="observation-ledger" label={summaryLabel}>{summaryLabel}</SectionHeading>
+            </summary>
+            <div className="ledger-heading">
+                <p className="eyebrow">Deposited provenance</p>
+                <p>Methods remain on their actual calculation rows so differing levels stay visible.</p>
+            </div>
+            <div className="observation-list">
+                {observations.map((observation) => (
+                    <ObservationCard
+                        key={observation.conformer_observation.conformer_observation_ref}
+                        observation={observation}
+                    />
+                ))}
+            </div>
+        </details>
     )
 }
 

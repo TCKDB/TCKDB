@@ -770,6 +770,115 @@ def test_cg_detail_include_review(client, db_session):
     assert rh[0]["status"] == "approved"
 
 
+def test_cg_detail_fingerprint_absent_by_default(client, db_session):
+    """The default projection must never carry the fingerprint blob, even
+    when the underlying row has one -- ``include=fingerprints`` is the
+    only door in."""
+    _, cg = _make_group(db_session, label="conformer_1")
+    cg.representative_fingerprint_json = {
+        "rotor_count": 2,
+        "bin_width_deg": 15,
+        "quantized_bins": [23, 3],
+        "raw_torsions_deg": [359.9994, 59.8254],
+        "folded_torsions_deg": [359.9994, 59.8254],
+        "canonical_rotor_keys": ["R_8_10", "R_9_10"],
+        "fingerprint_hash": "5453bcc5",
+    }
+    db_session.flush()
+    body = client.get(_cg_url(cg.public_ref)).json()
+    assert body["record"]["conformer_group"]["fingerprint"] is None
+    assert "fingerprint_hash" not in body["record"]["conformer_group"]
+
+
+def test_cg_detail_include_fingerprints_returns_typed_basin_shape(
+    client, db_session
+):
+    """The measured 3-group species' first group, verbatim. Asserts the
+    basin definition (bin + bin width) and the representative's own angle
+    are both present, each rotor keeps its own key, and
+    ``fingerprint_hash`` never reaches the response."""
+    _, cg = _make_group(db_session, label="conformer_1")
+    cg.representative_fingerprint_json = {
+        "rotor_count": 2,
+        "bin_width_deg": 15,
+        "quantized_bins": [23, 3],
+        "raw_torsions_deg": [359.9994, 59.8254],
+        "folded_torsions_deg": [359.9994, 59.8254],
+        "canonical_rotor_keys": ["R_8_10", "R_9_10"],
+        "fingerprint_hash": "5453bcc5",
+    }
+    db_session.flush()
+    body = client.get(_cg_url(cg.public_ref, include="fingerprints")).json()
+    fp = body["record"]["conformer_group"]["fingerprint"]
+    assert fp is not None
+    assert fp["rotor_count"] == 2
+    assert fp["bin_width_deg"] == 15
+    assert fp["torsions"] == [
+        {
+            "rotor_key": "R_8_10",
+            "quantized_bin": 23,
+            "raw_torsion_deg": 359.9994,
+            "folded_torsion_deg": 359.9994,
+        },
+        {
+            "rotor_key": "R_9_10",
+            "quantized_bin": 3,
+            "raw_torsion_deg": 59.8254,
+            "folded_torsion_deg": 59.8254,
+        },
+    ]
+    assert "fingerprint_hash" not in fp
+
+
+def test_cg_detail_fingerprints_differ_between_sibling_groups(
+    client, db_session
+):
+    """Two groups under the same species entry, same rotor keys, different
+    bins -- the prompt's own sibling-group example. Each group's own
+    detail read must return ITS OWN numbers, not the other's."""
+    species = make_species(db_session, inchi_key=next_inchi_key("CONFSIB"))
+    entry = make_species_entry(db_session, species)
+    group_1 = make_conformer_group(
+        db_session,
+        entry,
+        label="conformer_1",
+        representative_fingerprint_json={
+            "rotor_count": 2,
+            "bin_width_deg": 15,
+            "quantized_bins": [23, 3],
+            "raw_torsions_deg": [359.9994, 59.8254],
+            "folded_torsions_deg": [359.9994, 59.8254],
+            "canonical_rotor_keys": ["R_8_10", "R_9_10"],
+            "fingerprint_hash": "hash-1",
+        },
+    )
+    group_2 = make_conformer_group(
+        db_session,
+        entry,
+        label="conformer_2",
+        representative_fingerprint_json={
+            "rotor_count": 2,
+            "bin_width_deg": 15,
+            "quantized_bins": [14, 4],
+            "raw_torsions_deg": [224.1937, 60.4643],
+            "folded_torsions_deg": [224.1937, 60.4643],
+            "canonical_rotor_keys": ["R_8_10", "R_9_10"],
+            "fingerprint_hash": "hash-2",
+        },
+    )
+    fp_1 = client.get(
+        _cg_url(group_1.public_ref, include="fingerprints")
+    ).json()["record"]["conformer_group"]["fingerprint"]
+    fp_2 = client.get(
+        _cg_url(group_2.public_ref, include="fingerprints")
+    ).json()["record"]["conformer_group"]["fingerprint"]
+    assert fp_1["torsions"] != fp_2["torsions"]
+    assert fp_1["torsions"][0]["quantized_bin"] == 23
+    assert fp_2["torsions"][0]["quantized_bin"] == 14
+    assert fp_1["torsions"][1]["raw_torsion_deg"] == 59.8254
+    assert fp_2["torsions"][1]["raw_torsion_deg"] == 60.4643
+
+
 def test_cg_detail_include_all_expands_all_public_tokens(client, db_session):
     _, cg, _ = _make_group_with_obs(db_session)
     body = client.get(_cg_url(cg.public_ref, include="all")).json()
@@ -779,6 +888,7 @@ def test_cg_detail_include_all_expands_all_public_tokens(client, db_session):
     assert "calculations" in inc
     assert "geometries" in inc
     assert "review" in inc
+    assert "fingerprints" in inc
     assert "internal_ids" not in inc
 
 
@@ -1006,6 +1116,37 @@ def test_co_detail_include_review(client, db_session):
     rh = body["record"]["review_history"]
     assert rh is not None
     assert rh[0]["status"] == "under_review"
+
+
+def test_co_detail_include_fingerprints_populates_parent_group(
+    client, db_session
+):
+    """The observation surface embeds the parent group's core block
+    (``record.conformer_group``) -- ``include=fingerprints`` must populate
+    its ``fingerprint`` there too, same as on the group detail surface,
+    since it is the same ``ConformerGroupCoreBlock`` shape."""
+    _, cg = _make_group(db_session, label="conformer_1")
+    cg.representative_fingerprint_json = {
+        "rotor_count": 2,
+        "bin_width_deg": 15,
+        "quantized_bins": [23, 3],
+        "raw_torsions_deg": [359.9994, 59.8254],
+        "folded_torsions_deg": [359.9994, 59.8254],
+        "canonical_rotor_keys": ["R_8_10", "R_9_10"],
+        "fingerprint_hash": "5453bcc5",
+    }
+    obs = make_conformer_observation(db_session, conformer_group=cg)
+    body = client.get(
+        _co_url(obs.public_ref, include="fingerprints")
+    ).json()
+    fp = body["record"]["conformer_group"]["fingerprint"]
+    assert fp is not None
+    assert fp["torsions"][0]["rotor_key"] == "R_8_10"
+    assert fp["torsions"][0]["quantized_bin"] == 23
+    assert "fingerprint_hash" not in fp
+    # Default (no include) still omits it on this surface too.
+    default_body = client.get(_co_url(obs.public_ref)).json()
+    assert default_body["record"]["conformer_group"]["fingerprint"] is None
 
 
 def test_co_detail_include_observations_returns_the_basin(client, db_session):
@@ -1950,7 +2091,36 @@ def test_search_include_all_on_records(client, db_session):
     assert "calculations" in inc
     assert "geometries" in inc
     assert "review" in inc
+    assert "fingerprints" in inc
     assert "internal_ids" not in inc
+
+
+def test_search_include_fingerprints_on_records(client, db_session):
+    """Search shares ``build_group_record`` with the detail endpoint, so
+    ``include=fingerprints`` must populate the same typed shape there too."""
+    _, cg = _make_group(db_session, label="conformer_1")
+    cg.representative_fingerprint_json = {
+        "rotor_count": 2,
+        "bin_width_deg": 15,
+        "quantized_bins": [23, 3],
+        "raw_torsions_deg": [359.9994, 59.8254],
+        "folded_torsions_deg": [359.9994, 59.8254],
+        "canonical_rotor_keys": ["R_8_10", "R_9_10"],
+        "fingerprint_hash": "5453bcc5",
+    }
+    db_session.flush()
+    body = client.get(
+        _search_url(conformer_group_ref=cg.public_ref, include="fingerprints")
+    ).json()
+    fp = body["records"][0]["conformer_group"]["fingerprint"]
+    assert fp is not None
+    assert fp["torsions"][0]["rotor_key"] == "R_8_10"
+    assert fp["torsions"][0]["quantized_bin"] == 23
+    assert "fingerprint_hash" not in fp
+    default_body = client.get(
+        _search_url(conformer_group_ref=cg.public_ref)
+    ).json()
+    assert default_body["records"][0]["conformer_group"]["fingerprint"] is None
 
 
 def test_search_include_all_does_not_restore_internal_ids(client, db_session):

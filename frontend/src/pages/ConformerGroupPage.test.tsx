@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerGroupPage from "./ConformerGroupPage"
 
@@ -105,6 +105,11 @@ describe("ConformerGroupPage", () => {
             .toBeVisible()
         expect(screen.getByText("3")).toBeVisible()
         expect(screen.getByText("1 optimisation chains")).toBeVisible()
+
+        // The observation-scoped evidence ledger is now a collapsed-by-default
+        // disclosure -- open it before asserting on anything inside it.
+        fireEvent.click(screen.getByRole("heading", { name: "Observation-scoped evidence (1 deposited observation)" }))
+
         expect(screen.getByText("b3lyp/def2tzvp")).toBeVisible()
         expect(screen.getByText("wb97xd/def2tzvp")).toBeVisible()
         expect(screen.getByText("reviewed", { selector: "td" })).toBeVisible()
@@ -117,6 +122,92 @@ describe("ConformerGroupPage", () => {
             "/geometries/geo_one",
         )
         expect(screen.getByText(/Their count is not a conformer count/)).toBeVisible()
+    })
+
+    it("collapses the observation-scoped evidence ledger by default, naming its count, and expands it via the keyboard", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "conformer_1" })
+
+        const heading = screen.getByRole("heading", { name: "Observation-scoped evidence (1 deposited observation)" })
+        const details = heading.closest("details")
+        const summary = heading.closest("summary")
+        expect(details).not.toBeNull()
+        expect(summary).not.toBeNull()
+
+        // Collapsed by default: the heading itself is visible (it says what
+        // is inside, with the count), but the observation card behind it is
+        // not -- jest-dom's `toBeVisible` treats non-summary content of a
+        // closed <details> as not visible, mirroring what a sighted reader
+        // sees before clicking.
+        expect(heading).toBeVisible()
+        expect(details).not.toHaveAttribute("open")
+        expect(summary).toHaveAttribute("aria-expanded", "false")
+        expect(screen.getByText("b3lyp/def2tzvp")).not.toBeVisible()
+
+        // <summary> is a real, native, keyboard-operable disclosure control
+        // -- Enter toggles a focused summary in every real browser, the
+        // same underlying activation a click triggers. The native `open`
+        // DOM attribute flips synchronously on click (content visibility
+        // depends only on that, so it's already asserted below without
+        // waiting); the `toggle` EVENT that drives this component's
+        // controlled `aria-expanded` — via `onToggle` -> `setOpen` — fires
+        // as its own task per spec (MEASURED in jsdom too), landing one
+        // tick after the click returns, hence the `waitFor`.
+        fireEvent.click(heading)
+
+        expect(details).toHaveAttribute("open")
+        expect(screen.getByText("b3lyp/def2tzvp")).toBeVisible()
+        await waitFor(() => expect(summary).toHaveAttribute("aria-expanded", "true"))
+    })
+
+    it("keeps the evidence-ledger heading registered in the table of contents while collapsed", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "conformer_1" })
+        // The disclosure starts collapsed (see the test above) -- the ToC
+        // entry must still be there, because SectionHeading lives inside
+        // <summary> and <details> never unmounts its children.
+        const toc = screen.getByRole("navigation", { name: "Sections on this page" })
+        expect(within(toc).getByRole("link", { name: "Observation-scoped evidence (1 deposited observation)" }))
+            .toBeVisible()
+    })
+
+    // Same shape as the fix on `CalculationDetailPage.tsx`'s `OwnerCard`: a
+    // separate "Group ref" row is only needed when the heading above shows
+    // a LABEL, not the ref itself. Without a label, the heading already
+    // shows the ref (`basin.label ?? basin.conformer_group_ref`), and a
+    // second row would repeat it.
+    it("omits the duplicate 'Group ref' row when the group has no label (the heading already shows the ref)", async () => {
+        const noLabelPayload = {
+            record: {
+                ...payload.record,
+                conformer_group: { ...payload.record.conformer_group, label: null },
+            },
+        }
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noLabelPayload)))
+        page()
+        // The h1 falls back to the ref, since there is no label to prefer.
+        await screen.findByRole("heading", { name: "cg_demo" })
+        expect(screen.queryByText("Group ref")).not.toBeInTheDocument()
+    })
+
+    it("shows a plain, always-open empty state when the group has no deposited observations (nothing to disclose)", async () => {
+        const emptyPayload = {
+            record: {
+                ...payload.record,
+                observations_summary: { total: 0, by_scientific_origin: {} },
+                observations: [],
+            },
+        }
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(emptyPayload)))
+        page()
+        await screen.findByRole("heading", { name: "conformer_1" })
+        expect(screen.getByRole("heading", { name: "Observation-scoped evidence" })).toBeVisible()
+        expect(screen.getByText("No deposited observations were returned for this conformer basin."))
+            .toBeVisible()
+        // No disclosure control offered over an empty section.
+        expect(document.querySelector("details.ledger-section")).toBeNull()
     })
 
     // This page renders exactly 2 sections at runtime (observation-scoped

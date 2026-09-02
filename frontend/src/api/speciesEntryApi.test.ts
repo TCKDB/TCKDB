@@ -69,7 +69,7 @@ describe("species-entry API", () => {
             http.get("/api/v1/scientific/conformers/search", ({ request }) => {
                 const query = new URL(request.url).searchParams
                 expect(query.get("species_entry_ref")).toBe(entryRef); expect(query.get("limit")).toBe("50")
-                expect(query.getAll("include")).toEqual(["observations", "calculations", "geometries"])
+                expect(query.getAll("include")).toEqual(["observations", "calculations", "geometries", "fingerprints"])
                 return HttpResponse.json(conformerPayload)
             }),
         )
@@ -78,6 +78,43 @@ describe("species-entry API", () => {
             multiplicity: 2,
         })
         await expect(loadEntryConformers(entryRef)).resolves.toHaveLength(1)
+    })
+
+    it("parses a conformer group's fingerprint when the archive includes one", async () => {
+        server.use(http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({
+            records: [{
+                ...conformerPayload.records[0],
+                conformer_group: {
+                    ...conformerPayload.records[0].conformer_group,
+                    fingerprint: {
+                        rotor_count: 2,
+                        bin_width_deg: 15,
+                        torsions: [
+                            { rotor_key: "R_8_10", quantized_bin: 23, raw_torsion_deg: 359.9994, folded_torsion_deg: 359.9994 },
+                            { rotor_key: "R_9_10", quantized_bin: 3, raw_torsion_deg: 59.8254, folded_torsion_deg: 59.8254 },
+                        ],
+                    },
+                },
+            }],
+        })))
+        const [conformer] = await loadEntryConformers(entryRef)
+        expect(conformer.conformer_group.fingerprint).toEqual({
+            rotor_count: 2,
+            bin_width_deg: 15,
+            torsions: [
+                { rotor_key: "R_8_10", quantized_bin: 23, raw_torsion_deg: 359.9994, folded_torsion_deg: 359.9994 },
+                { rotor_key: "R_9_10", quantized_bin: 3, raw_torsion_deg: 59.8254, folded_torsion_deg: 59.8254 },
+            ],
+        })
+    })
+
+    it("leaves fingerprint undefined/null when the archive omits it (default projection)", async () => {
+        // `conformerPayload` (used by the ordered-includes test above) never
+        // sets `fingerprint` -- this pins that the schema does not require
+        // or fabricate one when the archive's default projection omits it.
+        server.use(http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json(conformerPayload)))
+        const [conformer] = await loadEntryConformers(entryRef)
+        expect(conformer.conformer_group.fingerprint ?? null).toBeNull()
     })
 
     it("returns null when a valid entry search is empty", async () => {
