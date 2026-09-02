@@ -157,10 +157,10 @@
        hand-picked hues, chosen to stay visually distinct from each other
        AND from --accent/--warning/--notice-* (so a selected-series
        highlight or an error state never gets mistaken for "just another
-       series"). Grid lines, axis text, and the residual zero-baseline
-       reuse existing structural tokens (--line-2, --muted, --divider) —
-       deliberately not new tokens, so the chart still retints correctly
-       from a single theme.css edit like everything else. */
+       series"). Grid lines and axis text reuse existing structural
+       tokens (--line-2, --muted, --divider) — deliberately not new
+       tokens, so the chart still retints correctly from a single
+       theme.css edit like everything else. */
     --chart-series-1: #1b6ec2;
     --chart-series-2: #d9730d;
     --chart-series-3: #1a7f5a;

@@ -15,6 +15,42 @@
     --measure-prose: 64rem; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: var(--page-bg); } a { color: inherit; text-decoration: none; } button, input { font: inherit; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
+
+/* `.value-pill` -- the site-wide convention for a categorical, bounded-
+   vocabulary value (entry kind, electronic state, review status, scale
+   kind): a rounded pill REPLACING a value's plain-text form, never sitting
+   alongside it. Originated in `calculation-detail.css` for
+   `CalculationDetailPage.tsx` (see that file's own comment for the fuller
+   history: "rather than the text we would use pills for the values? makes
+   it pop more") and moved here, into the ONE stylesheet every route loads
+   (`main.tsx`), once a second page (`SpeciesBrowseRow.tsx`) needed the same
+   pill without importing that page's whole stylesheet. Identifiers -- refs,
+   SMILES, InChIKey -- are never pills; a quantity with a unit (an energy, a
+   frequency scale factor) is never a pill either -- both stay plain text so
+   they read and select cleanly.
+   `--muted` is for a DIFFERENT axis shown as its own, visually distinct
+   pill next to a `.value-pill` -- e.g. curation/review status beside
+   classification -- so two pills that are deliberately not the same kind of
+   fact do not also look like the same kind of fact. */
+.value-pill {
+    display: inline-block;
+    padding: .2rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font: 600 .72rem/1.3 var(--sans);
+    white-space: nowrap;
+}
+
+.value-pill--muted {
+    border-color: var(--line-2);
+    background: var(--surface-sunken);
+    color: var(--muted);
+    font: .62rem var(--mono);
+    text-transform: uppercase;
+}
+
 /*
  * `.archive-shell` is the top-level wrapper in `AppShell.tsx` around
  * header / `<main>` / footer. Without an explicit height it was a plain

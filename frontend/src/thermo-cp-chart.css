@@ -1,6 +1,6 @@
 /*
- * `ThermoCpChart.tsx` — Cp-vs-T panel, residual panel, and their controls.
- * Its own stylesheet per this project's convention (see the header comment
+ * `ThermoCpChart.tsx` — Cp-vs-T panel and its controls. Its own stylesheet
+ * per this project's convention (see the header comment
  * in `entry-science.css`): a page/section's styling should not depend on
  * another file's stylesheet having loaded first, and Vite never unloads a
  * route chunk's CSS once injected. Every colour below is `var(--token)` —
@@ -113,10 +113,6 @@
     margin: 0 0 1.5rem;
 }
 
-.cp-chart-panel--residual {
-    margin-top: 1.75rem;
-}
-
 .cp-chart-svg {
     display: block;
     width: 100%;
@@ -132,15 +128,6 @@
 .cp-chart-axis-line {
     stroke: var(--line);
     stroke-width: 1.25;
-}
-
-/* The residual panel's own zero baseline — deliberately a stronger line
-   than the plain gridlines above it, since "does this cross zero" is the
-   one thing a reader scans this panel for first. */
-.cp-chart-zero-line {
-    stroke: var(--divider-strong);
-    stroke-width: 1.5;
-    stroke-dasharray: 4 3;
 }
 
 .cp-chart-tick-label {
@@ -177,11 +164,6 @@
     transform-origin: left center;
     transform: rotate(-90deg) translateX(-50%);
     white-space: nowrap;
-}
-
-.cp-chart-residual-line {
-    stroke-dasharray: 3 2;
-    opacity: .7;
 }
 
 /* A non-selected series dims once ANY series is selected, so the

@@ -5,13 +5,11 @@ import {
     type CpUnit,
     type NasaBlock,
     convertCpForDisplay,
-    cpResiduals,
     isNasaFitUsable,
     nasaCpCurve,
 } from "./thermoNasa"
 
 export type CpDisplayPoint = { temperatureK: number; cpDisplay: number }
-export type CpResidualDisplayPoint = { temperatureK: number; residualPercent: number; residualDisplay: number }
 
 export type CpChartSeries = {
     thermoRef: string
@@ -28,10 +26,6 @@ export type CpChartSeries = {
     hasMeasuredPoints: boolean
     measured: CpDisplayPoint[]
     fitted: { low: CpDisplayPoint[]; high: CpDisplayPoint[] } | null
-    /** Empty unless this record has BOTH a usable fit AND at least one
-     * measured point -- residuals compare the two and cannot exist with
-     * only one side. */
-    residuals: CpResidualDisplayPoint[]
 }
 
 /**
@@ -88,14 +82,6 @@ function buildOneSeries(
         high: curve.high.map((pt) => ({ temperatureK: pt.temperatureK, cpDisplay: convertCpForDisplay(pt.cpJMolK, unit) })),
     }
 
-    const residuals: CpResidualDisplayPoint[] = hasUsableFit && hasMeasuredPoints
-        ? cpResiduals(nasa, points).map((residual) => ({
-            temperatureK: residual.temperatureK,
-            residualPercent: residual.residualPercent,
-            residualDisplay: convertCpForDisplay(residual.residualJMolK, unit),
-        }))
-        : []
-
     const linkedRef = thermoConformerGroupRef(record)
     return {
         thermoRef: record.thermo_ref,
@@ -105,6 +91,5 @@ function buildOneSeries(
         hasMeasuredPoints,
         measured,
         fitted,
-        residuals,
     }
 }

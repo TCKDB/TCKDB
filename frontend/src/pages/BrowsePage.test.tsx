@@ -573,6 +573,34 @@ describe("browse page: a species row and a TS row each render their OWN fields",
         expect(within(rowTwo).queryByText("c1ccccc1")).not.toBeInTheDocument()
     })
 
+    it("renders review status in a SEPARATE pill from the kind/state classification, never sharing one box", async () => {
+        // The owner's report, reproduced: "NOT REVIEWED is part of the same
+        // pill as minimum.ground which should not be so." Both facts must
+        // still appear exactly once each, but the review-status pill must
+        // NOT be a descendant of the same `.value-pill` element the
+        // kind/state pill is.
+        server.use(...handlers())
+        renderAt("/species")
+        await screen.findByText(/records · showing/)
+        const rowOne = document.querySelectorAll(".species-browse-row")[0] as HTMLElement
+
+        const kindStatePill = within(rowOne).getByText("minimum · ground").closest(".value-pill") as HTMLElement
+        expect(kindStatePill).toBeTruthy()
+        const reviewPill = within(rowOne).getByText("not reviewed").closest(".value-pill") as HTMLElement
+        expect(reviewPill).toBeTruthy()
+
+        // The DOM relationship under test: review status's own pill is not
+        // an ancestor OR descendant of the kind/state pill -- two sibling
+        // elements, not one shared box.
+        expect(kindStatePill).not.toBe(reviewPill)
+        expect(kindStatePill.contains(reviewPill)).toBe(false)
+        expect(reviewPill.contains(kindStatePill)).toBe(false)
+
+        // Both values still appear EXACTLY once on this chip.
+        expect(within(rowOne).getAllByText("minimum · ground")).toHaveLength(1)
+        expect(within(rowOne).getAllByText("not reviewed")).toHaveLength(1)
+    })
+
     it("falls back to the canonical SMILES headline, never the public ref, when a species has no computed formula", async () => {
         server.use(...handlers({
             speciesRecords: [speciesRecord({

@@ -119,24 +119,18 @@ describe("buildCpChartSeries", () => {
         expect(series[0].label).toBe("Unlinked record thm_unlinked")
     })
 
-    it("computes residuals only when a record has BOTH a usable fit and measured points", () => {
+    it("reports hasUsableFit/hasMeasuredPoints independently -- a record can have either, both, or neither", () => {
         const fitOnly = { ...recordA(), points: null } as ThermoRecord
         const pointsOnly = { ...recordA(), nasa: null } as ThermoRecord
-        const both = recordA()
 
-        expect(buildCpChartSeries([fitOnly], conformers, null, "j_mol_k")[0].residuals).toEqual([])
         expect(buildCpChartSeries([fitOnly], conformers, null, "j_mol_k")[0].hasUsableFit).toBe(true)
         expect(buildCpChartSeries([fitOnly], conformers, null, "j_mol_k")[0].hasMeasuredPoints).toBe(false)
 
-        expect(buildCpChartSeries([pointsOnly], conformers, null, "j_mol_k")[0].residuals).toEqual([])
         expect(buildCpChartSeries([pointsOnly], conformers, null, "j_mol_k")[0].hasUsableFit).toBe(false)
         expect(buildCpChartSeries([pointsOnly], conformers, null, "j_mol_k")[0].hasMeasuredPoints).toBe(true)
-
-        const bothSeries = buildCpChartSeries([both], conformers, null, "j_mol_k")[0]
-        expect(bothSeries.residuals.length).toBeGreaterThan(0)
     })
 
-    it("converts measured, fitted, and residual values for display without touching the underlying arithmetic", () => {
+    it("converts measured and fitted values for display without touching the underlying arithmetic", () => {
         const jSeries = buildCpChartSeries([recordA()], conformers, null, "j_mol_k")[0]
         const calSeries = buildCpChartSeries([recordA()], conformers, null, "cal_mol_k")[0]
         expect(jSeries.measured[0].cpDisplay).toBe(10)

@@ -433,8 +433,14 @@ describe("species-entry page: conformer picker", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         await screen.findByText("Choose a conformer")
+        // The heading renders before the cards do, and the selection self-heal
+        // writes the URL a tick after that -- so both must be waited for, not
+        // sampled once. This raced in CI roughly one run in six.
+        await waitFor(() => expect(document.querySelectorAll(".conformer-card")).toHaveLength(2))
         const cards = document.querySelectorAll(".conformer-card")
-        expect(within(cards[0] as HTMLElement).getByRole("button", { name: /Conformer Group 1/ })).toHaveAttribute("aria-pressed", "true")
+        await waitFor(() => expect(
+            within(cards[0] as HTMLElement).getByRole("button", { name: /Conformer Group 1/ }),
+        ).toHaveAttribute("aria-pressed", "true"))
         expect(within(cards[1] as HTMLElement).getByRole("button", { name: /Conformer Group 2/ })).toHaveAttribute("aria-pressed", "false")
         // The self-heal must be bound to DISPLAY order too, not just the
         // highlighted card: a default that highlighted the first card but
@@ -442,7 +448,7 @@ describe("species-entry page: conformer picker", () => {
         // into the URL would pass the two assertions above while still
         // being wrong -- the address bar would name a different conformer
         // than the one visibly selected.
-        expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef)
+        await waitFor(() => expect(new URLSearchParams(window.location.search).get("conformer")).toBe(groupOneRef))
     })
 
     it("shows one basin card per conformer, each with its own distinct counts, and defaults to selecting the first", async () => {

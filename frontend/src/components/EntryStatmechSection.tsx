@@ -15,6 +15,7 @@ import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, partitionByConformerLink, statmechConformerGroupRefs } from "../domain/conformerEvidence"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
+import { deriveStatmechConformer } from "../domain/statmechConformerDerivation"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
@@ -123,6 +124,17 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
         if (conformer) openConformers()
     }, [conformer, openConformers])
 
+    // `source_calculations` is fetched eagerly too (not only when the
+    // "Source calculations" disclosure is opened) -- every record card now
+    // derives its own conformer from this data
+    // (`domain/statmechConformerDerivation.ts`), which the card shows by
+    // default, not behind a click. One request, shared across every record
+    // on the entry, the same tradeoff the `conformers` effect above already
+    // makes.
+    useEffect(() => {
+        openSourceCalcs()
+    }, [openSourceCalcs])
+
     return (
         <>
             <section className="ledger-section" aria-labelledby="statmech-heading">
@@ -147,9 +159,10 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                         conformers={conformers}
                         records={records}
                         conformersState={conformersState}
+                        sourceCalcsState={sourceCalcsState}
                     />
                 ) : (
-                    records.map(renderStatmechRecord)
+                    records.map((record) => renderStatmechRecord(record, conformers, sourceCalcsState))
                 )}
             </section>
 
@@ -295,10 +308,14 @@ function statmechRecordFallback(record: StatmechRecord) {
     )
 }
 
-function renderStatmechRecord(record: StatmechRecord) {
+function renderStatmechRecord(
+    record: StatmechRecord,
+    conformers: ConformerProjection[],
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>,
+) {
     return (
         <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
-            <StatmechRecordCard record={record} />
+            <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} />
         </SectionErrorBoundary>
     )
 }
@@ -312,11 +329,12 @@ function renderStatmechRecord(record: StatmechRecord) {
  * (identical to having no conformer selected) with a short status line
  * above it -- never zero records for a count line that says otherwise.
  */
-function ConformerScopedStatmechRecords({ conformer, conformers, records, conformersState }: {
+function ConformerScopedStatmechRecords({ conformer, conformers, records, conformersState, sourceCalcsState }: {
     conformer: ConformerProjection
     conformers: ConformerProjection[]
     records: StatmechRecord[]
     conformersState: EntryListSectionState<StatmechRecord["conformers"]>
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
 }) {
     if (conformersState.status !== "ready") {
         return (
@@ -326,7 +344,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
                         ? `${conformersState.message} Showing every record for this entry, ungrouped, until the conformer link resolves.`
                         : "Resolving conformer links… showing every record for this entry, ungrouped, in the meantime."}
                 </p>
-                {records.map(renderStatmechRecord)}
+                {records.map((record) => renderStatmechRecord(record, conformers, sourceCalcsState))}
             </>
         )
     }
@@ -339,7 +357,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
                 (record) => statmechConformerGroupRefs(conformersState.dataByRef.get(record.statmech.statmech_ref)),
             )}
             selectedLabel={conformerLabel(conformer)}
-            renderRecord={renderStatmechRecord}
+            renderRecord={(record) => renderStatmechRecord(record, conformers, sourceCalcsState)}
             thisConformerNote="Computed against this conformer's own basin, per the archive's own conformer link."
             thisConformerEmptyText="No statmech record is linked to this conformer yet."
             otherConformerNote="Computed against a different conformer's basin than the one selected above."
@@ -349,22 +367,12 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
     )
 }
 
-function StatmechRecordCard({ record }: { record: StatmechRecord }) {
+function StatmechRecordCard({ record, conformers, sourceCalcsState }: {
+    record: StatmechRecord
+    conformers: ConformerProjection[]
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+}) {
     const core = record.statmech
-    // The software the scale factor was DERIVED FOR -- a harmonic scale
-    // factor is specific to level of theory AND to the electronic-structure
-    // code that produced the frequencies it was fit against (same LOT,
-    // different program, different factor). This is distinct from
-    // `record.software_release` below, which is the software attached to
-    // the statmech RECORD itself (often the analysis tool, e.g. Arkane) --
-    // the two happen to agree on every row in the archive today, so
-    // stacking them undifferentiated would read as one fact where the
-    // schema actually carries two. Rendered only when the archive recorded
-    // it: absence here describes "not requested/not on the wire", not "no
-    // software" -- no placeholder stands in for it.
-    const fsfSoftwareLabel = record.frequency_scale_factor?.software
-        ? softwareLabel(record.frequency_scale_factor.software)
-        : null
     return (
         <article className="science-record" aria-labelledby={`statmech-heading-${core.statmech_ref}`}>
             <div className="science-record-heading">
@@ -376,20 +384,23 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
 
             <dl className="kv-list">
-                <div><dt>Statmech treatment</dt><dd>{core.statmech_treatment ? statusLabel(core.statmech_treatment) : "not recorded"}</dd></div>
-                <div><dt>Rigid-rotor kind</dt><dd>{core.rigid_rotor_kind ? statusLabel(core.rigid_rotor_kind) : "not recorded"}</dd></div>
+                <div>
+                    <dt>Statmech treatment</dt>
+                    <dd>{core.statmech_treatment ? <span className="value-pill">{statusLabel(core.statmech_treatment)}</span> : "not recorded"}</dd>
+                </div>
+                <div>
+                    <dt>Rigid-rotor kind</dt>
+                    <dd>{core.rigid_rotor_kind ? <span className="value-pill">{statusLabel(core.rigid_rotor_kind)}</span> : "not recorded"}</dd>
+                </div>
                 <div><dt>Point group</dt><dd>{core.point_group ?? "not recorded"}</dd></div>
                 <div><dt>External symmetry</dt><dd>{core.external_symmetry ?? "not recorded"}</dd></div>
                 <div><dt>Linear molecule</dt><dd>{boolLabel(core.is_linear)}</dd></div>
                 <div><dt>Optical isomers</dt><dd>{core.optical_isomers ?? "not recorded"}</dd></div>
-                <div>
-                    <dt>Frequency scale factor</dt>
-                    <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", core.frequency_scale_factor_value)} /></dd>
-                </div>
                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
             </dl>
 
             <SubjectLine record={record} />
+            <DerivedConformerNote record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} />
 
             <dl className="kv-list">
                 <div><dt>Source calculations</dt><dd>{record.evidence_summary.source_calculation_count}</dd></div>
@@ -404,20 +415,7 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
                 <div><dt>Rotor scans</dt><dd>{boolLabel(record.evidence_summary.has_rotor_scans)} ({record.evidence_summary.torsion_count} torsions)</dd></div>
             </dl>
 
-            {record.frequency_scale_factor && (
-                <p className="section-note">
-                    Frequency scale factor <code>{record.frequency_scale_factor.frequency_scale_factor_ref}</code>:
-                    {/* `record.frequency_scale_factor.value` is a non-nullable `z.number()`
-                        (`api/statmechApi.ts:120`), so `formatQuantity` can never return `null`
-                        here -- a `?? record.frequency_scale_factor.value` fallback would be
-                        dead code that, if it ever DID fire, would silently reprint the exact
-                        unrounded-double defect this file exists to fix. The `!` documents the
-                        invariant instead of hiding a false safety net behind it. */}
-                    {` ${formatQuantity("statmech_frequency_scale_factor", record.frequency_scale_factor.value)!.value} (${statusLabel(record.frequency_scale_factor.scale_kind)})`}
-                    {record.frequency_scale_factor.level_of_theory ? ` · ${lotLabel(record.frequency_scale_factor.level_of_theory)}` : ""}
-                    {fsfSoftwareLabel ? ` · derived for ${fsfSoftwareLabel}` : ""}
-                </p>
-            )}
+            <FrequencyScaleFactorDetail core={core} fsf={record.frequency_scale_factor} />
 
             <p className="section-note">
                 Record software:{" "}
@@ -426,6 +424,133 @@ function StatmechRecordCard({ record }: { record: StatmechRecord }) {
                 {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
             </p>
         </article>
+    )
+}
+
+/**
+ * The frequency scale factor together with its OWN provenance -- LoT and
+ * software (with version), plus the scale kind as a pill and the factor's
+ * own ref on its own row. Previously one run-on sentence
+ * ("Frequency scale factor <ref>: <value> (<kind>) · <lot> · derived for
+ * <software>") that put an identifier inline with everything else -- the
+ * owner: "needs to better show the freq scale with the LoT and software
+ * (with version) and its weird having the ref on the same line".
+ *
+ * `fsf.software` is the software the scale factor was DERIVED FOR -- a
+ * harmonic scale factor is specific to level of theory AND to the
+ * electronic-structure code that produced the frequencies it was fit
+ * against (same LOT, different program, different factor). This is
+ * distinct from `record.software_release` (the "Record software:" line
+ * below this block), which is the software attached to the statmech
+ * RECORD itself (often the analysis tool, e.g. Arkane) -- the two happen
+ * to agree on every row in the archive today, so stacking them
+ * undifferentiated would read as one fact where the schema actually
+ * carries two. Labelled "Scale factor software" here, opposite "Record
+ * software" below, so the two stay visually and textually distinguishable
+ * rather than reading as the same fact repeated.
+ *
+ * The backend keeps `statmech.frequency_scale_factor_value` (the core
+ * scalar) and this `frequency_scale_factor` provenance block in sync --
+ * "always present when the row has a scale factor" per
+ * `ScientificStatmechRecord`'s own docstring -- so this never shows the
+ * bare scalar in one place and its LoT/software/kind in another; there is
+ * exactly one "Frequency scale factor" row on this card. The `!fsf` branch
+ * exists only as a defensive fallback should that invariant ever not hold,
+ * not as a second normal path.
+ */
+function FrequencyScaleFactorDetail({ core, fsf }: {
+    core: StatmechRecord["statmech"]
+    fsf: StatmechRecord["frequency_scale_factor"]
+}) {
+    if (!fsf) {
+        return (
+            <dl className="kv-list">
+                <div>
+                    <dt>Frequency scale factor</dt>
+                    <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", core.frequency_scale_factor_value)} /></dd>
+                </div>
+            </dl>
+        )
+    }
+    const lot = fsf.level_of_theory ? lotLabel(fsf.level_of_theory) : null
+    const fsfSoftwareLabel = fsf.software ? softwareLabel(fsf.software) : null
+    return (
+        <dl className="kv-list">
+            <div>
+                <dt>Frequency scale factor</dt>
+                <dd>
+                    <QuantityValue value={formatQuantity("statmech_frequency_scale_factor", fsf.value)} />{" "}
+                    <span className="value-pill">{statusLabel(fsf.scale_kind)}</span>
+                </dd>
+            </div>
+            {lot && <div><dt>Scale factor level of theory</dt><dd>{lot}</dd></div>}
+            {fsfSoftwareLabel && <div><dt>Scale factor software</dt><dd>{fsfSoftwareLabel}</dd></div>}
+            <div><dt>Frequency scale factor ref</dt><dd><code>{fsf.frequency_scale_factor_ref}</code></dd></div>
+        </dl>
+    )
+}
+
+/**
+ * `statmech` carries no conformer column (entry-scoped, never
+ * conformer-scoped) -- this is a READ-TIME DERIVATION from the record's own
+ * source calculations, cross-referenced against the entry's loaded
+ * conformer projections (`domain/statmechConformerDerivation.ts`), and is
+ * labelled as derived rather than as a stored fact for exactly that reason.
+ *
+ * Answers the owner's own confusion directly: "it shows no conformer link -
+ * so that means there is no conformer observation or something? kinda
+ * confusing where there are source calcs." There IS one, knowable from
+ * those very source calculations; it was just never surfaced. Measured
+ * live (2026-09-02): all 101 archive statmech records with source
+ * calculations resolve to exactly one conformer -- disagreement has never
+ * happened here yet, but this still renders that case honestly (naming
+ * every conformer involved) rather than picking one, since a silent first-
+ * match here would be wrong the moment a real archive disagrees.
+ */
+function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
+    record: StatmechRecord
+    conformers: ConformerProjection[]
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+}) {
+    // Nothing to derive from -- already stated plainly by the evidence
+    // summary's own "Source calculations: 0" row below; no note needed.
+    if (record.evidence_summary.source_calculation_count === 0) return null
+    if (sourceCalcsState.status === "idle" || sourceCalcsState.status === "loading") {
+        return <p className="section-note" role="status">Deriving the conformer from this record's source calculations…</p>
+    }
+    if (sourceCalcsState.status === "error") return null
+
+    const sourceCalcs = sourceCalcsState.dataByRef.get(record.statmech.statmech_ref)
+    const derived = deriveStatmechConformer(sourceCalcs?.map((calc) => calc.calculation_ref), conformers)
+
+    if (derived.kind === "unresolved") {
+        return (
+            <p className="section-note">
+                Conformer: this record's source calculations do not trace to any conformer observation loaded for
+                this entry.
+            </p>
+        )
+    }
+    if (derived.kind === "single") {
+        return (
+            <p className="section-note">
+                Conformer (derived from source calculations):{" "}
+                <Link to={`/conformer-groups/${derived.conformerGroupRef}`}>{derived.label}</Link>
+            </p>
+        )
+    }
+    // Disagreement: named individually, never collapsed to "the first one".
+    return (
+        <p className="section-note" role="alert">
+            Conformer: this record's source calculations span more than one conformer --{" "}
+            {derived.conformers.map((entry, index) => (
+                <span key={entry.conformerGroupRef}>
+                    {index > 0 && ", "}
+                    <Link to={`/conformer-groups/${entry.conformerGroupRef}`}>{entry.label}</Link>
+                </span>
+            ))}
+            {" "}-- so no single conformer is shown here.
+        </p>
     )
 }
 

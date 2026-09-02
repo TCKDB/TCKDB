@@ -29,10 +29,20 @@ describe("EnergyDisplay", () => {
         expect(screen.getByTestId("energy-display-value").textContent).toBe(original)
     })
 
-    it("states plainly that the non-hartree units are display conversions only", () => {
+    it("no longer states the hartree/conversion rule in prose, but every displayed value still carries a unit", () => {
+        // The sentence used to say this in words; removed because the
+        // interface already demonstrates it (see `EnergyDisplay.tsx`'s own
+        // comment) -- a test that only checked the sentence was gone would
+        // pass even if the whole guarantee vanished with it, so this also
+        // re-asserts the unit is still present on the default AND a
+        // switched-to unit.
         render(<EnergyDisplay valueHartree={-76.1234567} />)
-        expect(screen.getByText(/display conversions only/)).toBeVisible()
-        expect(screen.getByText(/Always stored in hartree/)).toBeVisible()
+        expect(screen.queryByText(/display conversions only/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Always stored in hartree/)).not.toBeInTheDocument()
+        expect(screen.getByTestId("energy-display-value")).toHaveTextContent("hartree")
+
+        fireEvent.click(screen.getByRole("button", { name: "kJ/mol" }))
+        expect(screen.getByTestId("energy-display-value")).toHaveTextContent("kJ/mol")
     })
 
     it("renders an absent value distinctly, never as a bare toggle over nothing", () => {
