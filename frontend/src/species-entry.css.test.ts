@@ -64,16 +64,16 @@ function extractBlock(source: string, startPattern: RegExp): string {
 }
 
 describe("conformer card grid: three per row, degrading at narrower widths", () => {
-    it("declares three fixed columns by default, floored at 34rem -- not auto-fit, which let the count float, and not the earlier 17rem floor that forced an ellipsis clip", () => {
+    it("declares three fixed columns by default, floored at 22rem -- not auto-fit (which let the count float), and low enough that three columns actually hold on a 1920px screen", () => {
         const rule = extractRule(css, ".conformer-list")
-        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(34rem,\s*1fr\)\)/)
+        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(22rem,\s*1fr\)\)/)
         expect(rule).not.toMatch(/auto-fit/)
         expect(rule).not.toMatch(/17rem/)
     })
 
-    it("steps down to two columns at the widened breakpoint (2000px, moved from 1180px to match the 34rem floor)", () => {
-        const block = extractBlock(css, /@media \(max-width: 2000px\) \{/)
-        expect(block).toMatch(/\.conformer-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(34rem,\s*1fr\)\)/)
+    it("steps down to two columns at 1500px -- below that three 22rem columns no longer fit", () => {
+        const block = extractBlock(css, /@media \(max-width: 1500px\) \{/)
+        expect(block).toMatch(/\.conformer-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(22rem,\s*1fr\)\)/)
     })
 
     it("collapses to a single column at the existing narrow breakpoint", () => {
@@ -83,7 +83,7 @@ describe("conformer card grid: three per row, degrading at narrower widths", () 
 })
 
 describe("entry page cap widened to fit three full-width cards (item 2)", () => {
-    it(".entry-page's max-width is at least 123.5rem -- 3 * 34rem cards + 2 * 1rem gaps + 14rem ToC rail + 3rem ToC gap + 2.5rem page padding, the exact budget three unclipped cards need", () => {
+    it(".entry-page's max-width is at least 123.5rem -- 3 * 22rem cards + 2 * 1rem gaps + 14rem ToC rail + 3rem ToC gap + 2.5rem page padding, the exact budget three unclipped cards need", () => {
         const rule = extractRule(css, ".entry-page")
         const match = /max-width:\s*([\d.]+)rem/.exec(rule)
         expect(match, "no max-width declared on .entry-page").not.toBeNull()
@@ -94,7 +94,7 @@ describe("entry page cap widened to fit three full-width cards (item 2)", () => 
 describe("conformer card meta/coverage: one line, no ellipsis or silent clip (item 2)", () => {
     // "when I said do not wrap I did not say do ellipsis for texts that
     // go[es] longer than the boxes. the boxes need to be longer in
-    // width" -- the fix is `.conformer-list`'s 34rem floor above, sized
+    // width" -- the fix is `.conformer-list`'s 22rem floor above, sized
     // to the longest measured real line (69 characters); this rule must
     // never clip again, silently or with an ellipsis.
     const rule = extractRule(css, ".conformer-card-meta, .conformer-card-coverage")

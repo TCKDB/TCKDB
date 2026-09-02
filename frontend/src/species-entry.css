@@ -321,7 +321,7 @@
 }
 
 .conformer-picker-note {
-    max-width: 42rem;
+    max-width: var(--measure-note);
     margin: .6rem 0 0;
     color: var(--ink-2);
     line-height: 1.6;
@@ -336,7 +336,7 @@
    (`.page-toc`, `page-shell.css`, itself a fix for a different complaint
    from the same owner -- a tab switch shifting the page sideways) that
    stays reserved rather than being shrunk to claw width back for this
-   grid. `repeat(3, minmax(34rem, 1fr))` is a FLOOR, not a collapsing-
+   grid. `repeat(3, minmax(22rem, 1fr))` is a FLOOR, not a collapsing-
    track cap: a fixed track count leaves an unfilled column as real blank
    space in a partial last row (an entry with one or two conformers)
    rather than stretching the lone card across it.
@@ -367,14 +367,18 @@
    viewports, comfortably inside either budget. */
 .conformer-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(34rem, 1fr));
+    grid-template-columns: repeat(3, minmax(22rem, 1fr));
     gap: 1rem;
     margin-top: 1.3rem;
     overflow-x: auto;
 }
 
-@media (max-width: 2000px) {
-    .conformer-list { grid-template-columns: repeat(2, minmax(34rem, 1fr)); }
+/* Was `max-width: 2000px` with a 34rem floor -- that dropped a 1920px
+   screen to two columns, which is not what "three per row" means on the
+   display this is actually read on. The floor is 22rem now (the meta line
+   was shortened to fit), so three columns hold down to ~1500px. */
+@media (max-width: 1500px) {
+    .conformer-list { grid-template-columns: repeat(2, minmax(22rem, 1fr)); }
 }
 
 /* The card itself is a plain, non-interactive wrapper: a <details>
@@ -636,14 +640,14 @@
    a click. Set a size and two-line max-width so it reads as the panel's
    thesis, not as another `.section-note`-weight caption. */
 .evidence-linkage-story {
-    max-width: 46rem;
+    max-width: var(--measure-prose);
     margin: .6rem 0 0;
     color: var(--ink);
     font: 1rem/1.6 var(--serif);
 }
 
 .evidence-linkage-note {
-    max-width: 46rem;
+    max-width: var(--measure-prose);
     margin: .5rem 0 0;
     color: var(--ink-2);
     font: .82rem/1.55 var(--sans);
@@ -720,7 +724,7 @@
 }
 
 .linkage-coverage {
-    max-width: 52rem;
+    max-width: var(--measure-note);
     margin: 1.4rem 0 0;
     padding-top: 1.1rem;
     border-top: 1px solid var(--line-2);
@@ -772,7 +776,7 @@
    Section heading rhythm, shared by the geometry/single-point panels.
    --------------------------------------------------------------------- */
 
-.section-heading { max-width: 44rem; }
+.section-heading { max-width: var(--measure-note); }
 
 .section-heading h2 {
     margin: 0;
@@ -782,7 +786,7 @@
 }
 
 .section-heading > p:last-child {
-    max-width: 42rem;
+    max-width: var(--measure-note);
     color: var(--ink-2);
     line-height: 1.6;
 }
