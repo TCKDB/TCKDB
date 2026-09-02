@@ -725,6 +725,10 @@ def _build_literature_summary(
 
 # Calc-type → primary result table. Used both by ``has_result`` (in the
 # evidence provenance summary) and by ``available_sections.has_results``.
+# ``conf`` has no entry — it has no dedicated result block — so
+# ``result_applicable`` is the one ``*_applicable`` field that is ``True``
+# for every type actually seen in the archive today and only ``False``
+# for the not-yet-populated ``conf`` type.
 _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
     CalculationType.sp: CalculationSPResult,
     CalculationType.opt: CalculationOptResult,
@@ -733,6 +737,63 @@ _PRIMARY_RESULT_TABLE: dict[CalculationType, type] = {
     CalculationType.irc: CalculationIRCResult,
     CalculationType.path_search: CalculationPathSearchResult,
 }
+
+# ---------------------------------------------------------------------------
+# Per-type evidence applicability
+#
+# These four sets/checks are the backend's one, and only, encoding of
+# "which calculation types can structurally carry this evidence" for the
+# calculation-detail read path. They exist so the read API can tell a
+# caller "not applicable" (this type cannot have this concept) apart from
+# "absent" (this type can, and does not) instead of collapsing both into
+# a bare boolean or null — see ``CalculationEvidenceProvenanceSummary``'s
+# and ``AvailableCalculationSections``'s own docstrings for the contract
+# this feeds. Frontend code (``CalculationDetailPage.tsx``) reads the
+# computed ``*_applicable`` fields rather than re-deriving these sets
+# from ``calculation.type``, so this module stays the single place that
+# knows the rule.
+# ---------------------------------------------------------------------------
+
+# Calc types whose primary result row models a ``converged`` boolean.
+# Mirrors ``_load_converged_flag`` below exactly — only
+# ``CalculationOptResult`` and ``CalculationPathSearchResult`` carry a
+# ``converged`` column (see ``app/db/models/calculation.py``); ``irc`` and
+# ``scan`` do not store one despite modelling a related physical concept.
+_TYPES_WITH_CONVERGENCE_FLAG: frozenset[CalculationType] = frozenset(
+    {CalculationType.opt, CalculationType.path_search}
+)
+
+# Calc types where geometry-validation evidence is structurally expected.
+# Mirrors ``app.services.trust.rubrics._TYPES_REQUIRING_GEOMETRY_VALIDATION``:
+# only ``opt`` calculations validate an output geometry against the
+# declared formula/isomorphism. TS-ness is encoded via ownership, not a
+# separate ``CalculationType``, so this applies to any ``opt`` regardless
+# of whether the owner is a species or a transition state.
+_TYPES_REQUIRING_GEOMETRY_VALIDATION: frozenset[CalculationType] = frozenset(
+    {CalculationType.opt}
+)
+
+# Calc types where a stored ``calculation_constraint`` row is structurally
+# possible. See ``CalculationConstraint``'s own docstring: "constrained
+# optimizations, TS searches, scans, and IRC setups". ``sp`` and ``freq``
+# evaluate at (or read back) a fixed geometry — nothing is being
+# constrained during the calculation itself, so a constraint row on
+# either type would not describe anything the calculation actually did.
+_TYPES_WITH_GEOMETRY_CONSTRAINTS: frozenset[CalculationType] = frozenset(
+    {
+        CalculationType.opt,
+        CalculationType.scan,
+        CalculationType.irc,
+        CalculationType.path_search,
+    }
+)
+
+# Only ``freq`` calculations diagonalize a Hessian into a per-mode
+# ``calc_freq_mode`` breakdown — see ``CalculationFreqMode``'s own
+# docstring ("One vibrational mode parsed from a frequency calculation")
+# and the measured, exclusive per-type result-block diagonal (freq_result
+# present for 132/132 freq calcs, 0 of the other 440 measured 2026-08-22).
+_TYPES_WITH_FREQ_MODES: frozenset[CalculationType] = frozenset({CalculationType.freq})
 
 
 def _exists_for_calc(model_cls, calculation_id: int):
@@ -876,10 +937,27 @@ def _build_provenance_and_sections(
         session, calculation_id
     )
 
+    # Per-type applicability — see the module-level "Per-type evidence
+    # applicability" block above for what each set means and why it is
+    # the one place this rule is encoded.
+    result_applicable = calc.type in _PRIMARY_RESULT_TABLE
+    convergence_applicable = calc.type in _TYPES_WITH_CONVERGENCE_FLAG
+    geometry_validation_applicable = (
+        calc.type in _TYPES_REQUIRING_GEOMETRY_VALIDATION
+    )
+    constraints_applicable = calc.type in _TYPES_WITH_GEOMETRY_CONSTRAINTS
+    freq_modes_applicable = calc.type in _TYPES_WITH_FREQ_MODES
+    scan_applicable = calc.type is CalculationType.scan
+    irc_applicable = calc.type is CalculationType.irc
+    path_search_applicable = calc.type is CalculationType.path_search
+
     provenance = CalculationEvidenceProvenanceSummary(
         has_result=has_results,
+        result_applicable=result_applicable,
         converged=converged,
+        convergence_applicable=convergence_applicable,
         geometry_validation_status=validation_status,
+        geometry_validation_applicable=geometry_validation_applicable,
         scf_stability_status=scf_stability_status,
         submission_id=submission_id,
         submission_ref=submission_ref,
@@ -889,18 +967,24 @@ def _build_provenance_and_sections(
         has_dependencies=has_dependencies,
         has_parameters=has_parameters,
         has_constraints=has_constraints,
+        constraints_applicable=constraints_applicable,
         has_artifacts=has_artifacts,
         has_input_geometries=has_input_geometries,
         has_output_geometries=has_output_geometries,
         has_geometry_validation=has_geometry_validation,
+        geometry_validation_applicable=geometry_validation_applicable,
         has_scf_stability=has_scf_stability,
         has_wavefunction_diagnostic=has_wavefunction_diagnostic,
         has_spin_diagnostic=has_spin_diagnostic,
         has_freq_modes=has_freq_modes,
+        freq_modes_applicable=freq_modes_applicable,
         has_hessian=has_hessian,
         has_scan=has_scan,
+        scan_applicable=scan_applicable,
         has_irc=has_irc,
+        irc_applicable=irc_applicable,
         has_path_search=has_path_search,
+        path_search_applicable=path_search_applicable,
         has_execution_environment=has_execution_environment,
         has_energy_corrections=has_energy_corrections,
     )
@@ -937,26 +1021,30 @@ def _load_converged_flag(
 ) -> bool | None:
     """Return the convergence flag for calc types that carry one.
 
-    Only ``opt``, ``irc``, ``scan``, and ``path_search`` results model a
-    convergence boolean today; for other calculation types the response
-    surfaces ``null`` (never fabricates a flag).
+    Gated on ``_TYPES_WITH_CONVERGENCE_FLAG`` ({``opt``, ``path_search``})
+    — the same set ``convergence_applicable`` is computed from in
+    :func:`_build_provenance_and_sections`, so the two can never disagree
+    about which types this covers. ``irc`` and ``scan`` results do not
+    store a ``converged`` column today, and every other type has no
+    result row to read one from; those all fall through to ``None``.
+    ``None`` here is deliberately overloaded at this layer (it means both
+    "not applicable" and "applicable, not recorded") — callers that need
+    to tell those apart read ``convergence_applicable`` alongside this
+    value rather than trying to infer it from ``None`` alone.
     """
+    if calc.type not in _TYPES_WITH_CONVERGENCE_FLAG:
+        return None
     if calc.type is CalculationType.opt:
         return session.scalar(
             select(CalculationOptResult.converged).where(
                 CalculationOptResult.calculation_id == calculation_id
             )
         )
-    # Note: ``calc_irc_result`` and ``calc_scan_result`` do not store a
-    # ``converged`` flag today — return None for those types so the
-    # provenance summary surfaces "unknown" rather than fabricating one.
-    if calc.type is CalculationType.path_search:
-        return session.scalar(
-            select(CalculationPathSearchResult.converged).where(
-                CalculationPathSearchResult.calculation_id == calculation_id
-            )
+    return session.scalar(
+        select(CalculationPathSearchResult.converged).where(
+            CalculationPathSearchResult.calculation_id == calculation_id
         )
-    return None
+    )
 
 
 def _load_submission_link(

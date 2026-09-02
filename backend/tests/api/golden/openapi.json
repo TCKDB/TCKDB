@@ -1825,8 +1825,20 @@
         "type": "object"
       },
       "AvailableCalculationSections": {
-        "description": "Boolean map describing which heavy include sections have data.\n\nComputed from cheap EXISTS-style queries in the service layer so\ncallers can avoid issuing follow-up requests for empty sections.\nAll fields are always present; values reflect what an\n``include=<token>`` would expand to.",
+        "description": "Boolean map describing which heavy include sections have data.\n\nComputed from cheap EXISTS-style queries in the service layer so\ncallers can avoid issuing follow-up requests for empty sections.\nAll fields are always present; values reflect what an\n``include=<token>`` would expand to.\n\n**``has_*`` vs ``*_applicable``.** ``has_*`` is a DATA fact — a\nmatching row happens to exist (or not) on this record. The six\n``*_applicable`` fields below are a TYPE fact — could a row of this\nkind ever exist for a calculation of this ``type`` at all,\nindependent of whether one does. A caller such as the calculation\ndetail page's table of contents needs both: a section whose\n``*_applicable`` is ``False`` is not merely empty, it is not a\nconcept this calculation's type has (an ``irc`` trajectory on a\nsingle-point calculation), and should not be offered as something\nto expand — whereas ``*_applicable=True, has_*=False`` is a section\nthat could have data and does not, which is worth surfacing with\nits reason. Only sections whose applicability genuinely varies by\n``type`` get a matching field; the rest (``scf_stability``,\n``wavefunction_diagnostic``, ``spin_diagnostic``, ``parameters``,\n``artifacts``, ``execution_environment``, ``energy_corrections``,\nand the Hessian-gated imaginary-mode projections, which key off\n``has_hessian`` instead) are not type-gated per their own model\ndocstrings — any calculation type may or may not carry them, so\ntheir absence is always a genuine \"not recorded\", never \"not\napplicable\", and they get no ``*_applicable`` field.",
         "properties": {
+          "constraints_applicable": {
+            "title": "Constraints Applicable",
+            "type": "boolean"
+          },
+          "freq_modes_applicable": {
+            "title": "Freq Modes Applicable",
+            "type": "boolean"
+          },
+          "geometry_validation_applicable": {
+            "title": "Geometry Validation Applicable",
+            "type": "boolean"
+          },
           "has_artifacts": {
             "title": "Has Artifacts",
             "type": "boolean"
@@ -1898,6 +1910,18 @@
           "has_wavefunction_diagnostic": {
             "title": "Has Wavefunction Diagnostic",
             "type": "boolean"
+          },
+          "irc_applicable": {
+            "title": "Irc Applicable",
+            "type": "boolean"
+          },
+          "path_search_applicable": {
+            "title": "Path Search Applicable",
+            "type": "boolean"
+          },
+          "scan_applicable": {
+            "title": "Scan Applicable",
+            "type": "boolean"
           }
         },
         "required": [
@@ -1905,18 +1929,24 @@
           "has_dependencies",
           "has_parameters",
           "has_constraints",
+          "constraints_applicable",
           "has_artifacts",
           "has_input_geometries",
           "has_output_geometries",
           "has_geometry_validation",
+          "geometry_validation_applicable",
           "has_scf_stability",
           "has_wavefunction_diagnostic",
           "has_spin_diagnostic",
           "has_freq_modes",
+          "freq_modes_applicable",
           "has_hessian",
           "has_scan",
+          "scan_applicable",
           "has_irc",
+          "irc_applicable",
           "has_path_search",
+          "path_search_applicable",
           "has_execution_environment",
           "has_energy_corrections"
         ],
@@ -4201,7 +4231,7 @@
         "type": "object"
       },
       "CalculationEvidenceProvenanceSummary": {
-        "description": "Lightweight provenance/evidence summary for the detail endpoint.\n\nCheap projection that surfaces:\n\n- whether the calculation has a primary result row (``has_result``),\n- the matching geometry-validation outcome (or ``not_present``),\n- the matching SCF-stability outcome (or ``not_present``),\n- convergence flag for opt/scan/irc/path-search calculations,\n- ``submission_ref``/``submission_id`` for traceability back to the\n  submission that created the calculation.\n\n``submission_id`` follows the ordinary Phase D internal-id policy\n(hidden unless ``include=internal_ids`` *and* the deployment\npermits it). ``submission_ref`` is gated differently: it is present\n(possibly ``null``, so an authenticated caller can detect \"no\nsubmission link\") only for a caller that authenticates. An\nanonymous caller does not receive the key at all — see\n``app.services.scientific_read.auth_visibility`` and\n``app.api.deps.get_optional_current_user``.",
+        "description": "Lightweight provenance/evidence summary for the detail endpoint.\n\nCheap projection that surfaces:\n\n- whether the calculation has a primary result row (``has_result``),\n- the matching geometry-validation outcome (or ``not_present``),\n- the matching SCF-stability outcome (or ``not_present``),\n- convergence flag for calculation types that model one,\n- ``submission_ref``/``submission_id`` for traceability back to the\n  submission that created the calculation.\n\n``submission_id`` follows the ordinary Phase D internal-id policy\n(hidden unless ``include=internal_ids`` *and* the deployment\npermits it). ``submission_ref`` is gated differently: it is present\n(possibly ``null``, so an authenticated caller can detect \"no\nsubmission link\") only for a caller that authenticates. An\nanonymous caller does not receive the key at all — see\n``app.services.scientific_read.auth_visibility`` and\n``app.api.deps.get_optional_current_user``.\n\n**``*_applicable`` vs the checks themselves.** ``has_result``,\n``geometry_validation_status`` and ``converged`` each answer \"is\nthere a recorded value\" — they say nothing about whether this\ncalculation's *type* could ever have carried one. A caller that\nonly reads those three fields cannot tell \"this opt calculation\nhas not been convergence-checked yet\" (an absence — the archive is\ngenuinely missing something) apart from \"this sp calculation has\nno convergence flag because sp calculations do not converge a\ngeometry\" (not applicable — nothing is missing, the concept does\nnot apply). ``result_applicable``, ``geometry_validation_applicable``\nand ``convergence_applicable`` close that gap: each is ``True``\nexactly when this calculation's ``type`` is one that structurally\ncarries the matching evidence, computed once, server-side, from\nthe same per-type facts already encoded in\n``app.services.scientific_read.calculations`` (result-block\ndispatch, ``_TYPES_REQUIRING_GEOMETRY_VALIDATION``-equivalent\ngating, and ``_load_converged_flag``'s own type branch) so this is\nthe one place that knows the rule rather than a second copy of it\nliving in a client. ``scf_stability_status`` has no matching\n``_applicable`` field: per\n:class:`~app.db.models.calculation.CalculationSCFStability`'s own\ndocstring, an absent row means \"not checked\" for *any* calculation\ntype — it is never structurally inapplicable, only genuinely\nunchecked, so ``not_present`` there always means the same \"absent\"\nthe field already says.",
         "properties": {
           "converged": {
             "anyOf": [
@@ -4213,6 +4243,16 @@
               }
             ],
             "title": "Converged"
+          },
+          "convergence_applicable": {
+            "default": false,
+            "title": "Convergence Applicable",
+            "type": "boolean"
+          },
+          "geometry_validation_applicable": {
+            "default": false,
+            "title": "Geometry Validation Applicable",
+            "type": "boolean"
           },
           "geometry_validation_status": {
             "enum": [
@@ -4226,6 +4266,11 @@
           },
           "has_result": {
             "title": "Has Result",
+            "type": "boolean"
+          },
+          "result_applicable": {
+            "default": true,
+            "title": "Result Applicable",
             "type": "boolean"
           },
           "scf_stability_status": {

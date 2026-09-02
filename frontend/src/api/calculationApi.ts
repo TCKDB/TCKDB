@@ -108,10 +108,25 @@ const literatureSchema = z.object({
     doi: z.string().nullable().optional(),
 }).passthrough()
 
+// `*_applicable` fields answer "can this calculation's TYPE structurally
+// carry this evidence at all" -- independent of `has_result` /
+// `converged` / `geometry_validation_status`, which answer "is a value
+// actually recorded". The backend (`CalculationEvidenceProvenanceSummary`,
+// `backend/app/schemas/reads/scientific_calculation.py`) is the one place
+// that computes this from `calculation.type`; this schema only carries
+// the computed booleans through, never re-derives them from `type`
+// itself, so this client never grows a second, driftable copy of that
+// chemistry knowledge. Defaulted to their most permissive reading
+// (`true`) via `.default(true)` so an older server response missing the
+// key still renders as "ask the archive" rather than silently hiding a
+// section that might have data.
 const provenanceSchema = z.object({
     has_result: z.boolean(),
+    result_applicable: z.boolean().default(true),
     converged: z.boolean().nullable().optional(),
+    convergence_applicable: z.boolean().default(true),
     geometry_validation_status: z.string(),
+    geometry_validation_applicable: z.boolean().default(true),
     scf_stability_status: z.string(),
     submission_ref: z.string().nullable().optional(),
 }).passthrough()
@@ -121,18 +136,24 @@ const availableSectionsSchema = z.object({
     has_dependencies: z.boolean(),
     has_parameters: z.boolean(),
     has_constraints: z.boolean(),
+    constraints_applicable: z.boolean().default(true),
     has_artifacts: z.boolean(),
     has_input_geometries: z.boolean(),
     has_output_geometries: z.boolean(),
     has_geometry_validation: z.boolean(),
+    geometry_validation_applicable: z.boolean().default(true),
     has_scf_stability: z.boolean(),
     has_wavefunction_diagnostic: z.boolean(),
     has_spin_diagnostic: z.boolean(),
     has_freq_modes: z.boolean(),
+    freq_modes_applicable: z.boolean().default(true),
     has_hessian: z.boolean(),
     has_scan: z.boolean(),
+    scan_applicable: z.boolean().default(true),
     has_irc: z.boolean(),
+    irc_applicable: z.boolean().default(true),
     has_path_search: z.boolean(),
+    path_search_applicable: z.boolean().default(true),
     has_execution_environment: z.boolean(),
     has_energy_corrections: z.boolean(),
 }).passthrough()

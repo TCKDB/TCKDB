@@ -213,7 +213,7 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
     - whether the calculation has a primary result row (``has_result``),
     - the matching geometry-validation outcome (or ``not_present``),
     - the matching SCF-stability outcome (or ``not_present``),
-    - convergence flag for opt/scan/irc/path-search calculations,
+    - convergence flag for calculation types that model one,
     - ``submission_ref``/``submission_id`` for traceability back to the
       submission that created the calculation.
 
@@ -225,11 +225,40 @@ class CalculationEvidenceProvenanceSummary(BaseModel):
     anonymous caller does not receive the key at all — see
     ``app.services.scientific_read.auth_visibility`` and
     ``app.api.deps.get_optional_current_user``.
+
+    **``*_applicable`` vs the checks themselves.** ``has_result``,
+    ``geometry_validation_status`` and ``converged`` each answer "is
+    there a recorded value" — they say nothing about whether this
+    calculation's *type* could ever have carried one. A caller that
+    only reads those three fields cannot tell "this opt calculation
+    has not been convergence-checked yet" (an absence — the archive is
+    genuinely missing something) apart from "this sp calculation has
+    no convergence flag because sp calculations do not converge a
+    geometry" (not applicable — nothing is missing, the concept does
+    not apply). ``result_applicable``, ``geometry_validation_applicable``
+    and ``convergence_applicable`` close that gap: each is ``True``
+    exactly when this calculation's ``type`` is one that structurally
+    carries the matching evidence, computed once, server-side, from
+    the same per-type facts already encoded in
+    ``app.services.scientific_read.calculations`` (result-block
+    dispatch, ``_TYPES_REQUIRING_GEOMETRY_VALIDATION``-equivalent
+    gating, and ``_load_converged_flag``'s own type branch) so this is
+    the one place that knows the rule rather than a second copy of it
+    living in a client. ``scf_stability_status`` has no matching
+    ``_applicable`` field: per
+    :class:`~app.db.models.calculation.CalculationSCFStability`'s own
+    docstring, an absent row means "not checked" for *any* calculation
+    type — it is never structurally inapplicable, only genuinely
+    unchecked, so ``not_present`` there always means the same "absent"
+    the field already says.
     """
 
     has_result: bool
+    result_applicable: bool = True
     converged: bool | None = None
+    convergence_applicable: bool = False
     geometry_validation_status: GeometryValidationStatus
+    geometry_validation_applicable: bool = False
     scf_stability_status: SCFStabilityStatusValue
     submission_id: int | None = None
     submission_ref: str | None = None
@@ -1220,20 +1249,62 @@ class AvailableCalculationSections(BaseModel):
     callers can avoid issuing follow-up requests for empty sections.
     All fields are always present; values reflect what an
     ``include=<token>`` would expand to.
+
+    **``has_*`` vs ``*_applicable``.** ``has_*`` is a DATA fact — a
+    matching row happens to exist (or not) on this record. The six
+    ``*_applicable`` fields below are a TYPE fact — could a row of this
+    kind ever exist for a calculation of this ``type`` at all,
+    independent of whether one does. A caller such as the calculation
+    detail page's table of contents needs both: a section whose
+    ``*_applicable`` is ``False`` is not merely empty, it is not a
+    concept this calculation's type has (an ``irc`` trajectory on a
+    single-point calculation), and should not be offered as something
+    to expand — whereas ``*_applicable=True, has_*=False`` is a section
+    that could have data and does not, which is worth surfacing with
+    its reason. Only sections whose applicability genuinely varies by
+    ``type`` get a matching field; the rest (``scf_stability``,
+    ``wavefunction_diagnostic``, ``spin_diagnostic``, ``parameters``,
+    ``artifacts``, ``execution_environment``, ``energy_corrections``,
+    and the Hessian-gated imaginary-mode projections, which key off
+    ``has_hessian`` instead) are not type-gated per their own model
+    docstrings — any calculation type may or may not carry them, so
+    their absence is always a genuine "not recorded", never "not
+    applicable", and they get no ``*_applicable`` field.
     """
 
     has_results: bool
     has_dependencies: bool
     has_parameters: bool
     has_constraints: bool
+    #: Whether a ``calculation_constraint`` row is structurally possible
+    #: for this calculation's type — ``opt``, ``scan``, ``irc`` and
+    #: ``path_search`` are the types that manipulate or fix geometric
+    #: coordinates during the run (see
+    #: :class:`~app.db.models.calculation.CalculationConstraint`'s own
+    #: docstring: "constrained optimizations, TS searches, scans, and
+    #: IRC setups"); ``sp`` and ``freq`` evaluate at a fixed geometry, so
+    #: nothing is being constrained.
+    constraints_applicable: bool
     has_artifacts: bool
     has_input_geometries: bool
     has_output_geometries: bool
     has_geometry_validation: bool
+    #: Whether geometry-validation evidence is structurally expected for
+    #: this calculation's type — ``opt`` only, mirroring
+    #: ``app.services.trust.rubrics._TYPES_REQUIRING_GEOMETRY_VALIDATION``.
+    geometry_validation_applicable: bool
     has_scf_stability: bool
     has_wavefunction_diagnostic: bool
     has_spin_diagnostic: bool
     has_freq_modes: bool
+    #: Whether a per-mode ``calc_freq_mode`` breakdown is structurally
+    #: possible for this calculation's type — ``freq`` only; see
+    #: :class:`~app.db.models.calculation.CalculationFreqMode`'s own
+    #: docstring ("One vibrational mode parsed from a frequency
+    #: calculation") and the measured, exclusive per-type result-block
+    #: diagonal (``freq_result`` present for 132/132 ``freq`` calcs, 0
+    #: of the other 440).
+    freq_modes_applicable: bool
     #: Whether a ``calc_hessian`` row exists. Load-bearing for the
     #: imaginary-mode projections: without a matrix they are not
     #: unavailable, they are *not determinable*, and a caller can see
@@ -1241,8 +1312,20 @@ class AvailableCalculationSections(BaseModel):
     #: include and reading a status.
     has_hessian: bool
     has_scan: bool
+    #: Whether a ``calc_scan_result`` row is structurally possible for
+    #: this calculation's type — ``scan`` only, per the exclusive
+    #: per-type result-block dispatch (``_PRIMARY_RESULT_TABLE``).
+    scan_applicable: bool
     has_irc: bool
+    #: Whether a ``calc_irc_result`` row is structurally possible for
+    #: this calculation's type — ``irc`` only. Same reasoning as
+    #: ``scan_applicable``.
+    irc_applicable: bool
     has_path_search: bool
+    #: Whether a ``calc_path_search_result`` row is structurally
+    #: possible for this calculation's type — ``path_search`` only. Same
+    #: reasoning as ``scan_applicable``.
+    path_search_applicable: bool
     has_execution_environment: bool
     #: Whether any ``applied_energy_correction`` row cites this calculation
     #: as the source of the energy it corrects. On the *default* projection

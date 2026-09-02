@@ -112,17 +112,52 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 const EVIDENCE_ABSENT_LABEL = "absent"
 
 /**
- * `provenance.converged` genuinely has THREE states, and they must never
- * collapse to two: `null`/`undefined` is an ABSENCE of data (no
- * convergence check was ever recorded), while `false` is a SCIENTIFIC
- * OUTCOME (the optimisation ran and failed to converge). Reusing the
- * presence-only "absent" wording for `false` -- or rendering `null` and
- * `false` as the same string -- would turn a missing record into a claim
- * of failure, which is the worst error this block could make. `true` and
- * `false` get their own outcome words; only the missing-data case uses
- * the shared `EVIDENCE_ABSENT_LABEL`.
+ * The THIRD state, distinct from both "recorded" and `EVIDENCE_ABSENT_LABEL`
+ * -- see the module-level design note above this checklist's own JSX for
+ * the full three-state contract. Never say this for a check that could
+ * apply to this calculation's type and simply hasn't been done; that is
+ * still `EVIDENCE_ABSENT_LABEL`, and collapsing the two back together is
+ * the exact bug this wording exists to keep fixed.
  */
-function convergenceLabel(converged: boolean | null | undefined): string {
+const EVIDENCE_NOT_APPLICABLE_LABEL = "not applicable"
+
+/**
+ * Shared recorded/absent/not-applicable read for a checklist row whose
+ * applicability is backend-computed (`provenance.*_applicable` -- see
+ * `CalculationEvidenceProvenanceSummary`'s own docstring in
+ * `scientific_calculation.py` for why the server, not this client, is
+ * the one place that knows which calculation types can carry which
+ * evidence). `applicable` is checked FIRST and short-circuits `recorded`
+ * -- a type that cannot have this evidence is never described as
+ * "absent" no matter what `recorded` says.
+ */
+function applicabilityLabel(applicable: boolean, recorded: boolean): string {
+    if (!applicable) return EVIDENCE_NOT_APPLICABLE_LABEL
+    return recorded ? "recorded" : EVIDENCE_ABSENT_LABEL
+}
+
+/**
+ * `provenance.converged` genuinely has THREE presence states, and a
+ * fourth axis (`convergence_applicable`) on top of them, and none of the
+ * four may collapse into another:
+ *
+ * - `convergence_applicable === false` -- NOT APPLICABLE: this
+ *   calculation's type (`sp`, `freq`, `scan`, `irc`, `conf`) does not
+ *   model a convergence flag at all; only `opt` and `path_search` do
+ *   (see `_TYPES_WITH_CONVERGENCE_FLAG` server-side). Checked first, and
+ *   short-circuits everything below -- a non-opt/path_search calculation
+ *   is never told it is "absent" a concept it cannot have.
+ * - `converged === null`/`undefined` (with `convergence_applicable` true)
+ *   -- ABSENT: the check could apply here and nobody has recorded a
+ *   result yet.
+ * - `converged === false` -- a SCIENTIFIC OUTCOME: the optimisation ran
+ *   and failed to converge. Never rendered as "absent" or "not
+ *   applicable" -- both would turn a real negative result into a missing
+ *   record.
+ * - `converged === true` -- converged.
+ */
+function convergenceLabel(converged: boolean | null | undefined, applicable: boolean): string {
+    if (!applicable) return EVIDENCE_NOT_APPLICABLE_LABEL
     if (converged === true) return "converged"
     if (converged === false) return "not converged"
     return EVIDENCE_ABSENT_LABEL
@@ -384,22 +419,28 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     <dl className="coverage-checklist">
                         <div>
                             <dt>Result</dt>
-                            <dd>{provenance.has_result ? "recorded" : EVIDENCE_ABSENT_LABEL}</dd>
+                            <dd>{applicabilityLabel(provenance.result_applicable, provenance.has_result)}</dd>
                         </div>
                         <div>
                             <dt>Geometry validation</dt>
-                            <dd>{provenance.geometry_validation_status === "not_present" ? EVIDENCE_ABSENT_LABEL : "recorded"}</dd>
+                            <dd>{applicabilityLabel(provenance.geometry_validation_applicable, provenance.geometry_validation_status !== "not_present")}</dd>
                         </div>
+                        {/* SCF stability has no `*_applicable` flag on purpose -- per
+                            `CalculationSCFStability`'s own model docstring an absent row
+                            means "not checked" for ANY calculation type, never
+                            "cannot apply to this type". See `provenanceSchema`'s comment
+                            in `calculationApi.ts`. */}
                         <div>
                             <dt>SCF stability</dt>
                             <dd>{provenance.scf_stability_status === "not_present" ? EVIDENCE_ABSENT_LABEL : "recorded"}</dd>
                         </div>
-                        {/* Convergence keeps all three states distinct -- see
-                            `convergenceLabel`'s own docstring for why "not recorded"
-                            and "not converged" must never render the same text. */}
+                        {/* Convergence keeps all four states distinct -- see
+                            `convergenceLabel`'s own docstring for why "not applicable",
+                            "absent" and "not converged" must never render the same
+                            text. */}
                         <div>
                             <dt>Convergence</dt>
-                            <dd>{convergenceLabel(provenance.converged)}</dd>
+                            <dd>{convergenceLabel(provenance.converged, provenance.convergence_applicable)}</dd>
                         </div>
                     </dl>
                     <p>
@@ -830,9 +871,27 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
  * assistive technologies and double-announcement is a common outcome —
  * and an assertive interrupt is not warranted here anyway, since the user
  * just requested this section and is already attending to it.
+ *
+ * `applicable` (default `true`) is a SEPARATE axis from `available`, and
+ * checked first: `available` says "does this record have data for a
+ * section its type COULD have"; `applicable` says "can a calculation of
+ * this type have this section AT ALL". `applicable === false` renders
+ * NOTHING — not the section, not its heading, not a "not present" line —
+ * because a heading is what registers a table-of-contents entry
+ * (`SectionHeading`'s own docstring in `PageSections.tsx`), and a ToC
+ * entry for a concept this calculation's type structurally cannot have
+ * (an IRC trajectory on a single-point calculation) is exactly the bug
+ * this prop exists to fix: the calculation's type is already stated at
+ * the top of the page and fully explains the absence, so a dozen
+ * per-section "not applicable" rows would be noise the reader has to
+ * read past, not information. A section that IS applicable but has no
+ * data for THIS record (`applicable=true, available=false` — e.g.
+ * imaginary-mode projections with no stored Hessian) still renders its
+ * heading and explanation exactly as before: that absence is not
+ * explained by the type, and a reader deserves the reason.
  */
 function LazySection<T>({
-    heading, available, notAvailableText, state, onOpen, children,
+    heading, available, notAvailableText, state, onOpen, children, applicable = true,
 }: {
     heading: string
     available: boolean
@@ -840,8 +899,10 @@ function LazySection<T>({
     state: CalculationSectionState<T>
     onOpen: () => void
     children: (data: T) => ReactNode
+    applicable?: boolean
 }) {
     const headingId = `section-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
+    if (!applicable) return null
     if (!available) {
         return (
             <section className="ledger-section" aria-labelledby={headingId}>
@@ -882,17 +943,17 @@ function OnDemandSections({ calculation, available }: {
     return (
         <>
             <EnergyCorrectionsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_energy_corrections} />
-            <GeometryValidationSection calculationRef={calculation.calculation.calculation_ref} available={available.has_geometry_validation} />
+            <GeometryValidationSection calculationRef={calculation.calculation.calculation_ref} available={available.has_geometry_validation} applicable={available.geometry_validation_applicable} />
             <SCFStabilitySection calculationRef={calculation.calculation.calculation_ref} available={available.has_scf_stability} />
             <WavefunctionDiagnosticSection calculationRef={calculation.calculation.calculation_ref} available={available.has_wavefunction_diagnostic} />
             <SpinDiagnosticSection calculationRef={calculation.calculation.calculation_ref} available={available.has_spin_diagnostic} />
             <ParametersSection calculationRef={calculation.calculation.calculation_ref} available={available.has_parameters} />
-            <ConstraintsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_constraints} />
-            <FreqModesSection calculationRef={calculation.calculation.calculation_ref} available={available.has_freq_modes} />
+            <ConstraintsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_constraints} applicable={available.constraints_applicable} />
+            <FreqModesSection calculationRef={calculation.calculation.calculation_ref} available={available.has_freq_modes} applicable={available.freq_modes_applicable} />
             <ImaginaryModeProjectionsSection calculationRef={calculation.calculation.calculation_ref} hessianAvailable={available.has_hessian} />
-            <ScanSection calculationRef={calculation.calculation.calculation_ref} available={available.has_scan} />
-            <IRCSection calculationRef={calculation.calculation.calculation_ref} available={available.has_irc} />
-            <PathSearchSection calculationRef={calculation.calculation.calculation_ref} available={available.has_path_search} />
+            <ScanSection calculationRef={calculation.calculation.calculation_ref} available={available.has_scan} applicable={available.scan_applicable} />
+            <IRCSection calculationRef={calculation.calculation.calculation_ref} available={available.has_irc} applicable={available.irc_applicable} />
+            <PathSearchSection calculationRef={calculation.calculation.calculation_ref} available={available.has_path_search} applicable={available.path_search_applicable} />
             <ArtifactsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_artifacts} />
             <ExecutionEnvironmentSection calculationRef={calculation.calculation.calculation_ref} available={available.has_execution_environment} />
         </>
@@ -943,12 +1004,13 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
     )
 }
 
-function GeometryValidationSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
+function GeometryValidationSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationGeometryValidation[] | null>(calculationRef, "geometry_validation")
     return (
         <LazySection
             heading="Geometry validation"
             available={available}
+            applicable={applicable}
             notAvailableText="No geometry-validation check is recorded for this calculation."
             state={state}
             onOpen={open}
@@ -1106,12 +1168,13 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
     )
 }
 
-function ConstraintsSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
+function ConstraintsSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationConstraint[] | null>(calculationRef, "constraints")
     return (
         <LazySection
             heading="Constraints"
             available={available}
+            applicable={applicable}
             notAvailableText="No geometry constraints are recorded for this calculation."
             state={state}
             onOpen={open}
@@ -1134,12 +1197,13 @@ function ConstraintsSection({ calculationRef, available }: { calculationRef: str
     )
 }
 
-function FreqModesSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
+function FreqModesSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationFreqMode[] | null>(calculationRef, "freq_modes")
     return (
         <LazySection
             heading="Vibrational modes"
             available={available}
+            applicable={applicable}
             notAvailableText="No per-mode vibrational frequencies are recorded for this calculation."
             state={state}
             onOpen={open}
@@ -1213,12 +1277,13 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable }: {
     )
 }
 
-function ScanSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
+function ScanSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationScan | null>(calculationRef, "scan")
     return (
         <LazySection
             heading="Scan trajectory"
             available={available}
+            applicable={applicable}
             notAvailableText="This calculation has no scan result."
             state={state}
             onOpen={open}
@@ -1237,12 +1302,13 @@ function ScanSection({ calculationRef, available }: { calculationRef: string; av
     )
 }
 
-function IRCSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
+function IRCSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationIRC | null>(calculationRef, "irc")
     return (
         <LazySection
             heading="IRC trajectory"
             available={available}
+            applicable={applicable}
             notAvailableText="This calculation has no IRC result."
             state={state}
             onOpen={open}
@@ -1261,12 +1327,13 @@ function IRCSection({ calculationRef, available }: { calculationRef: string; ava
     )
 }
 
-function PathSearchSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
+function PathSearchSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationPathSearch | null>(calculationRef, "path_search")
     return (
         <LazySection
             heading="Path-search trajectory"
             available={available}
+            applicable={applicable}
             notAvailableText="This calculation has no path-search result."
             state={state}
             onOpen={open}

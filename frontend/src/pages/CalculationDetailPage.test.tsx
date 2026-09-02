@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CalculationDetailPage from "./CalculationDetailPage"
 
@@ -570,6 +570,115 @@ describe("CalculationDetailPage", () => {
         expect(notConvergedText).not.toBe(absentText)
     })
 
+    // Fix under test: "not applicable" (this calculation's TYPE cannot
+    // have the check) must never collapse onto "absent" (this type can
+    // have it, and doesn't). A single-type fixture cannot catch that
+    // collapse -- an `sp` calculation and an `opt` calculation are
+    // rendered from two independent fixtures and asserted to differ, the
+    // same house-defect-avoidance shape as the "not converged" test
+    // above.
+    it("reads convergence and geometry validation as 'not applicable' for an sp calculation, not 'absent'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "sp" },
+                provenance: {
+                    has_result: true,
+                    result_applicable: true,
+                    converged: null,
+                    convergence_applicable: false,
+                    geometry_validation_status: "not_present",
+                    geometry_validation_applicable: false,
+                    scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Single-point calculation" })
+        const checklist = document.querySelector(".coverage-checklist") as HTMLElement
+        expect(ddFor(checklist, "Convergence")).toBe("not applicable")
+        expect(ddFor(checklist, "Geometry validation")).toBe("not applicable")
+    })
+
+    it("reads convergence and geometry validation as 'absent'/'recorded' for an opt calculation -- the sp reading above must differ", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "opt" },
+                provenance: {
+                    has_result: true,
+                    result_applicable: true,
+                    converged: null,
+                    convergence_applicable: true,
+                    geometry_validation_status: "passed",
+                    geometry_validation_applicable: true,
+                    scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Optimisation calculation" })
+        const checklist = document.querySelector(".coverage-checklist") as HTMLElement
+        // Same two rows the sp fixture above reads as "not applicable" --
+        // an opt calculation genuinely can have this evidence, so an
+        // unrecorded convergence check is "absent", not "not applicable".
+        expect(ddFor(checklist, "Convergence")).toBe("absent")
+        expect(ddFor(checklist, "Geometry validation")).toBe("recorded")
+    })
+
+    it("keeps not-applicable, absent, and 'not converged' three-way distinct for Convergence", async () => {
+        // sp: cannot have a convergence flag at all.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "sp" },
+                provenance: {
+                    has_result: true, converged: null, convergence_applicable: false,
+                    geometry_validation_status: "not_present", scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        const notApplicableRender = page()
+        await screen.findByRole("heading", { name: "Single-point calculation" })
+        const notApplicableText = ddFor(document.querySelector(".coverage-checklist") as HTMLElement, "Convergence")
+        notApplicableRender.unmount()
+        cleanup()
+
+        // opt, no result row: applicable, nothing recorded yet.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "opt" },
+                provenance: {
+                    has_result: false, converged: null, convergence_applicable: true,
+                    geometry_validation_status: "not_present", scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        const absentRender = page()
+        await screen.findByRole("heading", { name: "Optimisation calculation" })
+        const absentText = ddFor(document.querySelector(".coverage-checklist") as HTMLElement, "Convergence")
+        absentRender.unmount()
+        cleanup()
+
+        // opt, result row present, the optimisation ran and failed.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "opt" },
+                provenance: {
+                    has_result: true, converged: false, convergence_applicable: true,
+                    geometry_validation_status: "not_present", scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Optimisation calculation" })
+        const notConvergedText = ddFor(document.querySelector(".coverage-checklist") as HTMLElement, "Convergence")
+
+        expect(notApplicableText).toBe("not applicable")
+        expect(absentText).toBe("absent")
+        expect(notConvergedText).toBe("not converged")
+        // Pairwise distinct -- three different readings, not just three
+        // different code paths that happen to print the same string.
+        expect(new Set([notApplicableText, absentText, notConvergedText]).size).toBe(3)
+    })
+
     it("renders an available on-demand section as idle (not fetched, not empty) until it is opened", async () => {
         let requestCount = 0
         server.use(http.get(ENDPOINT, ({ request }) => {
@@ -1085,5 +1194,119 @@ describe("CalculationDetailPage", () => {
         expect(await screen.findByRole("heading", { name: "Not a calculation reference" })).toBeVisible()
         expect(screen.getByText(/not a recognised calculation handle/)).toBeVisible()
         expect(screen.getByRole("alert")).toBeVisible()
+    })
+
+    describe("table of contents applicability", () => {
+        // Structurally inapplicable sections (per the calculation's TYPE)
+        // must not register a table-of-contents entry at all -- not even
+        // a "not applicable" one -- while a section that IS applicable to
+        // the type but merely has no data for this record keeps its
+        // entry and its explanation. See `LazySection`'s own docstring
+        // for the `applicable` vs `available` distinction this covers.
+
+        it("omits IRC, scan, path-search, vibrational-mode and geometry-validation entries for an sp calculation", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    calculation: { ...mockRecord().calculation, type: "sp" },
+                    results: {
+                        kind: "sp",
+                        sp: { electronic_energy_hartree: -76.1, electronic_energy_uncertainty_hartree: null },
+                        opt: null, freq: null, scan: null, irc: null, path_search: null,
+                    },
+                    provenance: {
+                        has_result: true, result_applicable: true,
+                        converged: null, convergence_applicable: false,
+                        geometry_validation_status: "not_present", geometry_validation_applicable: false,
+                        scf_stability_status: "not_present",
+                    },
+                    available_sections: {
+                        ...mockRecord().available_sections,
+                        has_geometry_validation: false, geometry_validation_applicable: false,
+                        has_constraints: false, constraints_applicable: false,
+                        has_freq_modes: false, freq_modes_applicable: false,
+                        has_scan: false, scan_applicable: false,
+                        has_irc: false, irc_applicable: false,
+                        has_path_search: false, path_search_applicable: false,
+                    },
+                }),
+            })))
+            page()
+            await screen.findByRole("heading", { name: "Single-point calculation" })
+
+            const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
+            await waitFor(() => expect(within(toc).getAllByRole("link").length).toBeGreaterThan(5))
+            const labels = within(toc).getAllByRole("link").map((link) => link.textContent)
+
+            for (const inapplicable of [
+                "Geometry validation", "Constraints", "Vibrational modes",
+                "Scan trajectory", "IRC trajectory", "Path-search trajectory",
+            ]) {
+                expect(labels).not.toContain(inapplicable)
+            }
+            // Sections an sp calculation CAN have are unaffected.
+            for (const applicable of ["Result", "SCF stability", "Artifacts", "Imaginary-mode projections"]) {
+                expect(labels).toContain(applicable)
+            }
+        })
+
+        it("includes IRC trajectory (and excludes scan/path-search/vibrational-mode/geometry-validation) for an irc calculation", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    calculation: { ...mockRecord().calculation, type: "irc" },
+                    results: {
+                        kind: "irc",
+                        irc: { direction: "forward", has_forward: true, has_reverse: false },
+                        sp: null, opt: null, freq: null, scan: null, path_search: null,
+                    },
+                    provenance: {
+                        has_result: true, result_applicable: true,
+                        converged: null, convergence_applicable: false,
+                        geometry_validation_status: "not_present", geometry_validation_applicable: false,
+                        scf_stability_status: "not_present",
+                    },
+                    available_sections: {
+                        ...mockRecord().available_sections,
+                        has_geometry_validation: false, geometry_validation_applicable: false,
+                        has_constraints: true, constraints_applicable: true,
+                        has_freq_modes: false, freq_modes_applicable: false,
+                        has_scan: false, scan_applicable: false,
+                        has_irc: true, irc_applicable: true,
+                        has_path_search: false, path_search_applicable: false,
+                    },
+                }),
+            })))
+            page()
+            await screen.findByRole("heading", { name: "IRC calculation" })
+
+            const toc = await screen.findByRole("navigation", { name: "Sections on this page" })
+            await waitFor(() => expect(within(toc).getAllByRole("link").length).toBeGreaterThan(5))
+            const labels = within(toc).getAllByRole("link").map((link) => link.textContent)
+
+            expect(labels).toContain("IRC trajectory")
+            // `irc` structurally allows constraints (a constrained IRC
+            // setup) -- unlike the sp fixture above, this entry stays.
+            expect(labels).toContain("Constraints")
+            for (const inapplicable of ["Geometry validation", "Vibrational modes", "Scan trajectory", "Path-search trajectory"]) {
+                expect(labels).not.toContain(inapplicable)
+            }
+        })
+
+        it("still renders imaginary-mode projections with its real content when a Hessian IS stored, so the omission rule cannot swallow the data-dependent case", async () => {
+            // Base fixture: `freq` type, `has_hessian: true`, a populated
+            // `imaginary_mode_projections` payload. Applicability here is
+            // keyed on `has_hessian`, not on calculation type (see
+            // `ImaginaryModeProjectionsSection`), so this section is
+            // exactly the "applicable to the type, data-dependent" case
+            // the brief distinguishes from structural inapplicability --
+            // asserted positively, not just "it did not disappear".
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+            page()
+            await screen.findByRole("heading", { name: "Frequency calculation" })
+
+            fireEvent.click(screen.getByRole("heading", { name: "Imaginary-mode projections" }))
+            const section = screen.getByRole("heading", { name: "Imaginary-mode projections" }).closest("details") as HTMLElement
+            await within(section).findByText("Imaginary-mode projections loaded.")
+            expect(ddFor(section, "Status")).toBe("determined")
+        })
     })
 })
