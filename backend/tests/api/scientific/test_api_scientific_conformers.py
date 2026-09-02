@@ -830,6 +830,43 @@ def test_cg_detail_include_fingerprints_returns_typed_basin_shape(
     assert "fingerprint_hash" not in fp
 
 
+def test_cg_detail_include_fingerprints_zero_rotor_group_serves_object_not_null(
+    client, db_session
+):
+    """Round-trip anchor for ``ConformerSelector.tsx``'s rigid-conformer
+    branch (frontend/src/components/ConformerSelector.tsx,
+    ``.conformer-basin-rigid``): a group whose stored blob has a real
+    ``bin_width_deg`` but an EMPTY ``canonical_rotor_keys`` -- exactly
+    what ``TorsionFingerprint.to_dict()`` writes for any molecule
+    ``resolve_atom_mapping`` mapped and found zero rotatable bonds in
+    (37 of 66 measured groups in the live archive) -- must serve
+    ``fingerprint`` as a real object (``rotor_count: 0``, ``torsions: []``),
+    never ``null``. Before the fix this endpoint answered ``null`` here,
+    indistinguishable on the wire from a group that never got a
+    fingerprint computed at all, which is what silently kept the
+    frontend's positive "no rotatable bonds" statement from ever
+    rendering against real data. The frontend's own test fixtures
+    (``ConformerSelector.test.tsx``, ``conformerFingerprint.test.ts``)
+    use this exact literal shape -- ``{rotor_count: 0, bin_width_deg: 15,
+    torsions: []}`` -- so this is the assertion that keeps the two ends
+    from drifting apart again."""
+    _, cg = _make_group(db_session, label="conformer_1")
+    cg.representative_fingerprint_json = {
+        "rotor_count": 0,
+        "bin_width_deg": 15,
+        "quantized_bins": [],
+        "raw_torsions_deg": [],
+        "folded_torsions_deg": [],
+        "canonical_rotor_keys": [],
+        "fingerprint_hash": "rigid-hash",
+    }
+    db_session.flush()
+    body = client.get(_cg_url(cg.public_ref, include="fingerprints")).json()
+    fp = body["record"]["conformer_group"]["fingerprint"]
+    assert fp is not None
+    assert fp == {"rotor_count": 0, "bin_width_deg": 15, "torsions": []}
+
+
 def test_cg_detail_fingerprints_differ_between_sibling_groups(
     client, db_session
 ):

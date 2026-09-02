@@ -156,7 +156,18 @@ def test_returns_none_when_bin_width_deg_missing():
     assert _build_group_fingerprint(cg) is None
 
 
-def test_returns_none_when_rotor_keys_array_is_empty():
+def test_returns_a_zero_rotor_fingerprint_not_none_when_rotor_keys_array_is_empty():
+    """The bug this test used to encode: an empty ``canonical_rotor_keys``
+    was treated the same as no blob at all, both collapsing to ``None``.
+    But ``TorsionFingerprint.to_dict()`` writes exactly this shape --
+    real, well-formed, all four arrays empty, a real ``bin_width_deg`` --
+    for any molecule ``resolve_atom_mapping`` successfully mapped and
+    found zero rotatable bonds in. That is DATA (a rigid molecule, a
+    positive fact worth stating), not absence, and must not read as
+    absence to a caller. Explicitly asserted against ``None`` per the
+    review that caught this: a fixture-shape regression here is exactly
+    what silently disabled the frontend's rigid-conformer statement
+    against every real zero-rotor group."""
     cg = _cg({
         "rotor_count": 0,
         "bin_width_deg": 15,
@@ -164,6 +175,37 @@ def test_returns_none_when_rotor_keys_array_is_empty():
         "raw_torsions_deg": [],
         "folded_torsions_deg": [],
         "canonical_rotor_keys": [],
+        "fingerprint_hash": "rigid-hash",
+    })
+    fp = _build_group_fingerprint(cg)
+    assert fp is not None
+    assert fp.rotor_count == 0
+    assert fp.bin_width_deg == 15
+    assert fp.torsions == []
+
+
+def test_still_returns_none_when_blob_is_genuinely_absent():
+    """The zero-rotor case above must stay distinguishable in BEHAVIOUR
+    from true absence -- a row that never got a fingerprint blob at all
+    (``representative_fingerprint_json is None``, e.g. a single-atom
+    species or a failed atom-mapping -- see ``resolve_conformer_group``)
+    still answers ``None``, not a manufactured zero-rotor shape."""
+    assert _build_group_fingerprint(_cg(None)) is None
+
+
+def test_still_returns_none_when_arrays_have_mismatched_lengths_even_with_short_rotor_keys():
+    """And a malformed blob -- arrays that disagree on length -- must stay
+    distinguishable from the zero-rotor case too, including when the
+    disagreement involves a short (not merely empty) ``canonical_rotor_keys``
+    array: this is still an internally inconsistent blob, never a rigid
+    molecule's real shape, and must never zip a partial pairing."""
+    cg = _cg({
+        "rotor_count": 1,
+        "bin_width_deg": 15,
+        "quantized_bins": [],
+        "raw_torsions_deg": [],
+        "folded_torsions_deg": [],
+        "canonical_rotor_keys": ["R_1_2"],  # one key, but the other three arrays are empty
     })
     assert _build_group_fingerprint(cg) is None
 

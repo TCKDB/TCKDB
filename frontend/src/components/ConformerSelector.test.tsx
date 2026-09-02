@@ -247,6 +247,24 @@ describe("ConformerSelector basin identity (item 3)", () => {
     // The majority case, measured: 37 of 66 groups have no rotors at all.
     // Must render as a POSITIVE statement, not an empty section or a bare
     // dash that reads as missing data.
+    // ROUND-TRIP ANCHOR: `{ rotor_count: 0, bin_width_deg: 15, torsions: [] }`
+    // is not an invented shape -- it is the LITERAL fingerprint object the
+    // fixed backend endpoint now serves for a real zero-rotor group
+    // (`backend/tests/api/scientific/test_api_scientific_conformers.py::
+    // test_cg_detail_include_fingerprints_zero_rotor_group_serves_object_not_null`
+    // asserts the exact same JSON off a real HTTP response). Before that
+    // backend fix (`_build_group_fingerprint`,
+    // `backend/app/services/scientific_read/conformers.py`), this endpoint
+    // answered `fingerprint: null` for every one of the archive's 37 (of
+    // 66 measured) rigid groups -- indistinguishable on the wire from a
+    // group that never had a fingerprint computed at all -- so this
+    // component's "no rotatable bonds" branch, though correctly written
+    // and covered right here, could never fire against real production
+    // data. A true single cross-language test isn't practical (separate
+    // pytest/vitest runners, no shared fixture file) -- this comment plus
+    // the identical literal object on both ends is the closest available
+    // substitute, and it is what would go stale first if either side's
+    // shape ever drifted.
     it("renders a rigid-conformer statement -- not an empty section -- for a group with a fingerprint but zero rotors", () => {
         const rigid = conformer({
             conformer_group: {
