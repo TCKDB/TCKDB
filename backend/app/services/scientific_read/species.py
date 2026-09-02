@@ -703,8 +703,14 @@ def browse_species(
     (:func:`app.services.scientific_read.common.visible_statuses`), the
     same ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``
     order (:func:`_rank_and_slice_species`, whose ``id DESC`` tiebreak is
-    what keeps pagination stable — see its docstring), the same bounded
-    page size (:func:`app.services.scientific_read.common.validate_pagination`,
+    what keeps pagination stable — see its docstring) *unless* a
+    substructure/similarity structure filter is active, in which case
+    ``heavy_atom_count ASC`` (smallest match first) leads that same order
+    — see the ``order_by_size`` derivation a few lines below and
+    :func:`_rank_and_slice_species`'s own ``order_by_size`` parameter doc
+    for the full reasoning, including why ``exact`` mode is excluded and
+    what happens to a species whose SMILES the cartridge can't parse — the
+    same bounded page size (:func:`app.services.scientific_read.common.validate_pagination`,
     default 50 / hard cap 200), and the same per-page record builder
     (:func:`_build_page_records`) — so a browse record and a search record
     are the same shape, metadata only: identity, refs, per-entry
@@ -763,6 +769,18 @@ def browse_species(
     _validate_provenance_version_parents(request)
     structure_query = _validate_browse_structure_query(request)
 
+    # Smallest-first sizing only makes sense when the candidate set is
+    # actually a structure match, and only under the two modes where more
+    # than one *size* of match is expected -- substructure ("contains this
+    # fragment") and similarity ("close to this") both routinely return
+    # molecules of different sizes, which is exactly the incremental-typing
+    # case the owner described (see _rank_and_slice_species's
+    # ``order_by_size`` docstring for why ``exact`` is excluded).
+    order_by_size = structure_query is not None and request.mode in (
+        StructureSearchMode.substructure,
+        StructureSearchMode.similarity,
+    )
+
     visible = visible_statuses(
         min_review_status=request.min_review_status,
         include_rejected=request.include_rejected,
@@ -770,7 +788,10 @@ def browse_species(
     )
 
     candidates = _browse_candidate_species_stmt(
-        request, element_symbols, structure_query
+        request,
+        element_symbols,
+        structure_query,
+        include_heavy_atom_count=order_by_size,
     ).subquery("candidate_species")
 
     # #277 (see the docstring above): always drop a candidate species that
@@ -799,6 +820,7 @@ def browse_species(
         offset=0 if collapse_first else offset,
         limit=1 if collapse_first else limit,
         require_visible_entries=True,
+        order_by_size=order_by_size,
     )
     if collapse_first:
         page_species_ids = page_species_ids[offset : offset + limit]
@@ -886,6 +908,8 @@ def _browse_candidate_species_stmt(
     request: SpeciesBrowseRequest,
     element_symbols: list[str] | None,
     structure_query: tuple[StructureQueryKind, str] | None = None,
+    *,
+    include_heavy_atom_count: bool = False,
 ):
     """The browse candidate set as a ``SELECT id, created_at`` over ``species``.
 
@@ -914,8 +938,19 @@ def _browse_candidate_species_stmt(
         :func:`_apply_structure_filter` below, alongside every other
         optional filter in this statement -- one candidate query, not a
         second one intersected afterward.
+    :param include_heavy_atom_count: Adds a third selected column,
+        :func:`_heavy_atom_count_expr` labelled ``heavy_atom_count``, so
+        :func:`_rank_and_slice_species` can order by it (the smallest-
+        match-first sort, see :func:`browse_species`'s ``order_by_size``).
+        ``False`` by default and for every filter that is not a
+        substructure/similarity structure search -- the cartridge call is
+        not free, and an ordinary browse with no structure filter should
+        not pay for a sort key it never uses.
     """
-    stmt = select(Species.id, Species.created_at)
+    columns: list[Any] = [Species.id, Species.created_at]
+    if include_heavy_atom_count:
+        columns.append(_heavy_atom_count_expr().label("heavy_atom_count"))
+    stmt = select(*columns)
     if request.charge is not None:
         stmt = stmt.where(Species.charge == request.charge)
     if request.multiplicity is not None:
@@ -1141,12 +1176,54 @@ def _rank_and_slice_species(
     offset: int,
     limit: int,
     require_visible_entries: bool = False,
+    order_by_size: bool = False,
 ) -> list[int]:
     """Order the candidate species and return one page of ids.
 
     ``review_rank ASC, has_entries DESC, created_at DESC, id DESC``, where
     ``review_rank`` is the best rank among a species' *visible* entries and
     :data:`_NO_VISIBLE_ENTRY_RANK` when it has none.
+
+    :param order_by_size: When ``True``, ``heavy_atom_count ASC`` (NULLS
+        LAST) leads every other key -- smallest match first, largest last,
+        the behaviour :func:`browse_species` turns on for a substructure
+        or similarity structure search (see its own ``order_by_size``
+        derivation). ``candidates`` must have been built by
+        :func:`_browse_candidate_species_stmt` with
+        ``include_heavy_atom_count=True`` so ``candidates.c.heavy_atom_count``
+        exists -- the two flags are set from the same condition in
+        :func:`browse_species`, so they can't disagree.
+
+        Size leads; review status does not disappear, it becomes the
+        tiebreak among same-sized species (still ``best_rank ASC`` next in
+        line) rather than the other way around. The owner's request was
+        explicit -- "smallest first ... ending with the largest at the
+        end" -- and putting ``best_rank`` ahead of size would not deliver
+        that: a large *approved* species would still sort before a small
+        *unreviewed* one. Demoting review status to a tiebreak keeps it
+        meaningful (it still decides ties) without breaking the ordering
+        the owner asked for.
+
+        A species whose SMILES the cartridge cannot parse gets a NULL
+        ``heavy_atom_count`` (:func:`_heavy_atom_count_expr`'s documented
+        behaviour) rather than being dropped -- ``NULLS LAST`` sorts it
+        after every species with a known size, not out of the listing, and
+        the remaining keys (``best_rank``, ``has_entries``, ``created_at``,
+        ``id``) still total-order the unparseable rows among themselves.
+
+        ``exact`` mode never sets this: :func:`_apply_structure_filter`
+        matches ``exact`` on ``species.inchi_key`` alone, and that column
+        is deliberately non-unique (``uq_species_identity`` is
+        ``(smiles, charge, multiplicity)``, not ``inchi_key`` --
+        see ``Species.__table_args__``), so an exact match CAN return more
+        than one species row (distinct tautomers/charge/multiplicity/spin
+        states that collapse to the same InChIKey). That is handled --
+        those rows still page under the existing
+        ``best_rank/has_entries/created_at/id`` order -- but a size sort
+        was not added for them: rows sharing one InChIKey are, chemically,
+        the same skeleton, so they are the same heavy-atom count in every
+        case this schema can produce, and a sort key that can only ever
+        compare equal is not a sort a reader asked for.
 
     Visibility is a ``CASE`` inside the aggregate (:func:`_visible_rank_expr`)
     rather than a ``WHERE``. A ``WHERE`` would drop species whose every entry
@@ -1188,19 +1265,29 @@ def _rank_and_slice_species(
     visible_rank = _visible_rank_expr(review, visible)
     best_rank = func.coalesce(func.min(visible_rank), _NO_VISIBLE_ENTRY_RANK)
     has_entries = func.count(visible_rank) > 0
-    stmt = stmt.group_by(candidates.c.id, candidates.c.created_at)
+    group_by_cols = [candidates.c.id, candidates.c.created_at]
+    order_by_cols = []
+    if order_by_size:
+        # heavy_atom_count is functionally dependent on candidates.c.id
+        # (one row per candidate species), but Postgres doesn't infer that
+        # dependency through a derived subquery the way it does for a real
+        # table's primary key -- candidates.c.created_at is already
+        # grouped explicitly for the same reason (see the module-level
+        # note above), so heavy_atom_count follows the same pattern.
+        group_by_cols.append(candidates.c.heavy_atom_count)
+        order_by_cols.append(candidates.c.heavy_atom_count.asc().nulls_last())
+    stmt = stmt.group_by(*group_by_cols)
     if require_visible_entries:
         stmt = stmt.having(or_(not_(_has_any_entry_expr(candidates)), has_entries))
-    stmt = (
-        stmt.order_by(
+    order_by_cols.extend(
+        [
             best_rank.asc(),
             has_entries.desc(),
             candidates.c.created_at.desc(),
             candidates.c.id.desc(),
-        )
-        .offset(offset)
-        .limit(limit)
+        ]
     )
+    stmt = stmt.order_by(*order_by_cols).offset(offset).limit(limit)
     return list(session.scalars(stmt))
 
 

@@ -541,6 +541,54 @@ describe("structure search fields render on species/vdw, not on transition_state
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
         expect(screen.queryByLabelText("Structure (SMILES)")).not.toBeInTheDocument()
         expect(screen.queryByLabelText("Structure search mode")).not.toBeInTheDocument()
+        // The rest of CompositionFields (Formula, Elements, ...) is gated on
+        // the SAME `kind !== "transition_state"` conditional as the
+        // structure controls -- a transition state has no stored species
+        // SMILES to match against, so neither section should render.
+        expect(screen.queryByLabelText("Formula")).not.toBeInTheDocument()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Field order: structure and formula lead the grid, per the owner's
+// correction ("why isn't smiles and formula the first in the filter?").
+// CompositionFields (Formula, Structure, Elements, Element match, Min/Max
+// heavy atoms, Electronic state) now renders FIRST, ahead of Charge,
+// Multiplicity, review status, and the two include-* checkboxes, which in
+// turn precede the six provenance selects. A membership check (every field
+// is present) cannot catch a reordering -- only asserting the actual
+// sequence can.
+// ---------------------------------------------------------------------------
+
+describe("structure and formula controls lead the filter grid", () => {
+    it('kind="species": Formula and the structure controls render before Charge, review status and the provenance selects', async () => {
+        server.use(...metaHandlers())
+        const { container } = render(<Wrapper kind="species" />)
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+
+        const labels = [...container.querySelectorAll("label")].map((el) => el.textContent)
+        expect(labels).toEqual([
+            "Formula",
+            "Structure (SMILES)",
+            "Treat structure as SMARTS",
+            "Structure search mode",
+            "Elements",
+            "Element match",
+            "Min heavy atoms",
+            "Max heavy atoms",
+            "Electronic state",
+            "Charge",
+            "Multiplicity",
+            "Minimum review status",
+            "Include rejected",
+            "Include deprecated",
+            "Method",
+            "Basis",
+            "Software",
+            "Software version",
+            "Workflow tool",
+            "Workflow tool version",
+        ])
     })
 })
 
