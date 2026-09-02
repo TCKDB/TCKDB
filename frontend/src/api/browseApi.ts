@@ -73,6 +73,20 @@ export type BrowseFilters = {
     maxHeavyAtoms: string
     electronicStateKind: string
 
+    // Species / vdW structure filter only -- the /species/browse-side
+    // counterpart of /scientific/species/structure-search's own
+    // vocabulary (query_smiles/query_smarts/mode/similarity_threshold;
+    // see BrowseFilterForm.tsx's `StructureField`). `queryStructure` is
+    // ONE text field that routes to `query_smarts` when `queryIsSmarts`
+    // is checked and to `query_smiles` otherwise -- never both.
+    // `similarityThreshold` is free-text (like charge/heavy-atom fields)
+    // so a half-typed value never reaches the wire mid-keystroke; only
+    // read when `structureMode === "similarity"`.
+    queryStructure: string
+    queryIsSmarts: boolean
+    structureMode: "exact" | "substructure" | "similarity"
+    similarityThreshold: string
+
     // Transition-state filters only.
     status: string
     method: string
@@ -93,12 +107,14 @@ export type BrowseFilters = {
 export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
     charge: "", multiplicity: "", minReviewStatus: "", includeRejected: false, includeDeprecated: false,
     formula: "", elements: "", elemMode: "all", minHeavyAtoms: "", maxHeavyAtoms: "", electronicStateKind: "",
+    queryStructure: "", queryIsSmarts: false, structureMode: "substructure", similarityThreshold: "",
     status: "", method: "", basis: "", software: "", softwareVersion: "", workflowTool: "", workflowToolVersion: "",
     hasOpt: "", hasFreq: "", hasSp: "", hasIrc: "", hasPathSearch: "", hasGeometryValidation: "", hasScfStability: "",
 }
 
 const COMPOSITION_DEFAULTS = {
     formula: "", elements: "", elemMode: "all" as const, minHeavyAtoms: "", maxHeavyAtoms: "", electronicStateKind: "",
+    queryStructure: "", queryIsSmarts: false, structureMode: "substructure" as const, similarityThreshold: "",
 }
 /**
  * `status` and the seven `has_*` evidence flags -- transition-state only;
@@ -161,7 +177,7 @@ export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): bool
         ].some((value) => value !== "")
     }
     return filters.formula !== "" || filters.elements !== "" || filters.minHeavyAtoms !== ""
-        || filters.maxHeavyAtoms !== "" || filters.electronicStateKind !== ""
+        || filters.maxHeavyAtoms !== "" || filters.electronicStateKind !== "" || filters.queryStructure !== ""
 }
 
 // ---------------------------------------------------------------------------
@@ -180,6 +196,16 @@ export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): bool
  */
 function isCompleteInteger(value: string): boolean {
     return /^-?\d+$/.test(value)
+}
+
+/**
+ * Same "don't send a half-typed value" reasoning as `isCompleteInteger`,
+ * for `similarityThreshold` (a decimal 0.0-1.0, e.g. a lone trailing
+ * `.` mid-keystroke is not yet a valid number). Never signed -- a
+ * Tanimoto similarity is never negative.
+ */
+function isCompleteNumber(value: string): boolean {
+    return /^\d+(\.\d+)?$/.test(value)
 }
 
 /**
@@ -233,6 +259,19 @@ export function buildSpeciesBrowseQuery(
     if (filters.minHeavyAtoms !== "" && isCompleteInteger(filters.minHeavyAtoms)) query.set("min_heavy_atoms", filters.minHeavyAtoms)
     if (filters.maxHeavyAtoms !== "" && isCompleteInteger(filters.maxHeavyAtoms)) query.set("max_heavy_atoms", filters.maxHeavyAtoms)
     if (filters.electronicStateKind !== "") query.set("electronic_state_kind", filters.electronicStateKind)
+    // Structure filter -- all four params travel together, and ONLY
+    // together: an empty `queryStructure` means no structure filter at
+    // all, so `mode`/`similarity_threshold` (meaningless without a
+    // query) are never sent on their own. `queryIsSmarts` routes the
+    // SAME typed value into query_smarts instead of query_smiles --
+    // never both.
+    if (filters.queryStructure !== "") {
+        query.set(filters.queryIsSmarts ? "query_smarts" : "query_smiles", filters.queryStructure)
+        query.set("mode", filters.structureMode)
+        if (filters.structureMode === "similarity" && filters.similarityThreshold !== "" && isCompleteNumber(filters.similarityThreshold)) {
+            query.set("similarity_threshold", filters.similarityThreshold)
+        }
+    }
     return query
 }
 

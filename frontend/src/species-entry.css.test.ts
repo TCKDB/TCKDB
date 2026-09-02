@@ -64,15 +64,16 @@ function extractBlock(source: string, startPattern: RegExp): string {
 }
 
 describe("conformer card grid: three per row, degrading at narrower widths", () => {
-    it("declares three fixed columns by default -- not auto-fit, which let the count float", () => {
+    it("declares three fixed columns by default, floored at 34rem -- not auto-fit, which let the count float, and not the earlier 17rem floor that forced an ellipsis clip", () => {
         const rule = extractRule(css, ".conformer-list")
-        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(17rem,\s*1fr\)\)/)
+        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,\s*minmax\(34rem,\s*1fr\)\)/)
         expect(rule).not.toMatch(/auto-fit/)
+        expect(rule).not.toMatch(/17rem/)
     })
 
-    it("steps down to two columns at a narrower breakpoint", () => {
-        const block = extractBlock(css, /@media \(max-width: 1180px\) \{/)
-        expect(block).toMatch(/\.conformer-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(17rem,\s*1fr\)\)/)
+    it("steps down to two columns at the widened breakpoint (2000px, moved from 1180px to match the 34rem floor)", () => {
+        const block = extractBlock(css, /@media \(max-width: 2000px\) \{/)
+        expect(block).toMatch(/\.conformer-list\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(34rem,\s*1fr\)\)/)
     })
 
     it("collapses to a single column at the existing narrow breakpoint", () => {
@@ -81,38 +82,72 @@ describe("conformer card grid: three per row, degrading at narrower widths", () 
     })
 })
 
-describe("conformer card meta/coverage: one line, ellipsis rather than wrap or silent truncation", () => {
-    const rule = extractRule(css, ".conformer-card-meta, .conformer-card-coverage")
-
-    it("never wraps", () => {
-        expect(rule).toMatch(/white-space:\s*nowrap/)
-    })
-
-    it("clips visibly (ellipsis), rather than silently, when it cannot fit", () => {
-        expect(rule).toMatch(/overflow:\s*hidden/)
-        expect(rule).toMatch(/text-overflow:\s*ellipsis/)
-    })
-
-    it("allows the ellipsis to actually apply by zeroing the grid/flex item's implied minimum width", () => {
-        // Without this, a grid/flex item's automatic minimum width is its
-        // content's width, which would push the card wider instead of
-        // clipping -- the ellipsis rule above would be dead code without it.
-        expect(rule).toMatch(/min-width:\s*0/)
+describe("entry page cap widened to fit three full-width cards (item 2)", () => {
+    it(".entry-page's max-width is at least 123.5rem -- 3 * 34rem cards + 2 * 1rem gaps + 14rem ToC rail + 3rem ToC gap + 2.5rem page padding, the exact budget three unclipped cards need", () => {
+        const rule = extractRule(css, ".entry-page")
+        const match = /max-width:\s*([\d.]+)rem/.exec(rule)
+        expect(match, "no max-width declared on .entry-page").not.toBeNull()
+        expect(Number(match![1])).toBeGreaterThanOrEqual(123.5)
     })
 })
 
-describe("conformer basin identity: bordered box, top and bottom, same shape whichever variant renders", () => {
-    it(".conformer-basin-identity has a rule above AND below", () => {
-        const rule = extractRule(css, ".conformer-basin-identity")
-        expect(rule).toMatch(/border-top:\s*1px solid var\(--line-2\)/)
-        expect(rule).toMatch(/border-bottom:\s*1px solid var\(--line-2\)/)
+describe("conformer card meta/coverage: one line, no ellipsis or silent clip (item 2)", () => {
+    // "when I said do not wrap I did not say do ellipsis for texts that
+    // go[es] longer than the boxes. the boxes need to be longer in
+    // width" -- the fix is `.conformer-list`'s 34rem floor above, sized
+    // to the longest measured real line (69 characters); this rule must
+    // never clip again, silently or with an ellipsis.
+    const rule = extractRule(css, ".conformer-card-meta, .conformer-card-coverage")
+
+    it("never sets text-overflow: ellipsis", () => {
+        expect(rule).not.toMatch(/text-overflow/)
     })
 
-    it(".conformer-basin-rigid (the sibling \"no rotatable bonds\" variant) gets the identical treatment", () => {
+    it("never combines overflow: hidden with white-space: nowrap -- the pairing that produces a silent or visible clip", () => {
+        const hidesOverflow = /overflow:\s*hidden/.test(rule)
+        const forcesNoWrap = /white-space:\s*nowrap/.test(rule)
+        expect(hidesOverflow && forcesNoWrap).toBe(false)
+    })
+})
+
+describe("conformer basin identity: exactly ONE separator per boundary, not two (item 4)", () => {
+    // The owner: "I am seeing two faint grey line breaks before the
+    // REFERENCE section... and no faint grey line above the basins
+    // section". Cause: `.conformer-basin-identity`/`-rigid` used to carry
+    // BOTH border-top and border-bottom, so the basin's own border-bottom
+    // stacked directly against `.refs-disclosure`'s border-top -- two
+    // lines. Fix: the basin box keeps ONLY its border-top (the boundary
+    // with the card-select button above it); the boundary with
+    // References below is `.refs-disclosure`'s own border-top alone, one
+    // rule, not two -- checked below on both the identity and rigid
+    // variants, since either can render into the same slot.
+    it(".conformer-basin-identity has a border ABOVE only, never below", () => {
+        const rule = extractRule(css, ".conformer-basin-identity")
+        expect(rule).toMatch(/border-top:\s*1px solid var\(--line-2\)/)
+        expect(rule).not.toMatch(/border-bottom/)
+    })
+
+    it(".conformer-basin-rigid (the sibling \"no rotatable bonds\" variant) gets the identical top-only treatment", () => {
         const rule = extractRule(css, ".conformer-basin-rigid")
         expect(rule).toMatch(/border-top:\s*1px solid var\(--line-2\)/)
-        expect(rule).toMatch(/border-bottom:\s*1px solid var\(--line-2\)/)
+        expect(rule).not.toMatch(/border-bottom/)
     })
+
+    it(".conformer-card .refs-disclosure supplies the ONE separator before References, using the SAME token as the basin box (--line-2, not --line) -- deliberately one shade, not two", () => {
+        const rule = extractRule(css, ".conformer-card .refs-disclosure")
+        expect(rule).toMatch(/border-top:\s*1px solid var\(--line-2\)/)
+        expect(rule).not.toMatch(/border-bottom/)
+    })
+
+    // The third card shape (neither basin variant renders -- the
+    // archive's own majority case, a null fingerprint) needs no CSS rule
+    // of its own: `.conformer-card .refs-disclosure`'s border-top above
+    // is unconditional on the CSS side (it does not depend on a basin
+    // element existing), so the same single rule is what separates
+    // References from the card-select button directly when nothing else
+    // sits between them. `ConformerSelector.test.tsx`'s DOM-structure
+    // tests pin the three actual DOM shapes (basin-identity, basin-rigid,
+    // neither) this reasoning depends on.
 })
 
 describe("conformer card row-track sharing (subgrid, with a fallback)", () => {

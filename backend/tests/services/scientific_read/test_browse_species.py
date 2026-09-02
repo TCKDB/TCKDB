@@ -10,6 +10,8 @@ deterministic multi-page coverage over a tied candidate set, an honest
 from __future__ import annotations
 
 import pytest
+from rdkit import Chem
+from rdkit.Chem import inchi as _inchi
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -1249,3 +1251,200 @@ def test_species_entry_section_ids_exposes_only_ids(db_session):
     assert set(SpeciesEntrySectionIds.model_fields.keys()) == {"ids"}
 
 
+
+
+# ---------------------------------------------------------------------------
+# Structure filter (query_smiles / query_smarts / mode / similarity_threshold)
+#
+# The browse-page counterpart of /species/structure-search's own three
+# modes, added so a catalogue reader can narrow by chemical structure in
+# the SAME request as every other browse filter. See
+# SpeciesBrowseRequest's own docstring and species.py's
+# _apply_structure_filter for the contract; these tests exercise it as a
+# filter that composes with the rest of the candidate query, not as a
+# second standalone search.
+# ---------------------------------------------------------------------------
+
+
+def _real_inchi_key(smiles: str) -> str:
+    mol = Chem.MolFromSmiles(smiles)
+    assert mol is not None, f"RDKit could not parse fixture SMILES {smiles!r}"
+    return _inchi.MolToInchiKey(mol)
+
+
+def _make_real_species(db_session, smiles: str, **species_kwargs):
+    """A Species + SpeciesEntry pair whose ``mol``/``inchi_key`` are real
+    RDKit values, not test placeholders -- required for the cartridge
+    operators (``@>``, ``tanimoto_sml``) and the exact-mode InChIKey
+    comparison to mean anything."""
+    species = make_species(
+        db_session,
+        smiles=smiles,
+        inchi_key=_real_inchi_key(smiles),
+        **species_kwargs,
+    )
+    entry = make_species_entry(db_session, species)
+    return species, entry
+
+
+def test_structure_filter_absent_by_default(db_session):
+    """Neither query_smiles nor query_smarts supplied: no filter applied,
+    same as every other optional field -- the mirror-image of
+    test_browse_with_no_filters_lists_every_created_species, pinned here
+    because a mode default that accidentally required a query would be
+    invisible to that test (it never sets mode at all)."""
+    _, entry = _make_real_species(db_session, "CCO")
+
+    response = browse_species(db_session, SpeciesBrowseRequest())
+
+    returned_ids = {r.species_id for r in response.records}
+    assert entry.species_id in returned_ids
+
+
+def test_structure_filter_substructure_by_smiles_narrows(db_session):
+    _, propanol_entry = _make_real_species(db_session, "CCCO")
+    methane, _ = _make_real_species(db_session, "C")
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CCO", mode="substructure"),
+    )
+
+    returned_ids = {r.species_id for r in response.records}
+    assert propanol_entry.species_id in returned_ids
+    assert methane.id not in returned_ids
+
+
+def test_structure_filter_substructure_by_smarts_narrows(db_session):
+    _, ethanol_entry = _make_real_species(db_session, "CCO")
+    methane, _ = _make_real_species(db_session, "C")
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smarts="[#6]O", mode="substructure"),
+    )
+
+    returned_ids = {r.species_id for r in response.records}
+    assert ethanol_entry.species_id in returned_ids
+    assert methane.id not in returned_ids
+
+
+def test_structure_filter_similarity_self_match(db_session):
+    _, ethanol_entry = _make_real_species(db_session, "CCO")
+    benzene, _ = _make_real_species(db_session, "c1ccccc1")
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(
+            query_smiles="CCO", mode="similarity", similarity_threshold=0.95
+        ),
+    )
+
+    returned_ids = {r.species_id for r in response.records}
+    assert ethanol_entry.species_id in returned_ids
+    assert benzene.id not in returned_ids
+
+
+def test_structure_filter_exact_by_smiles_matches_inchi_key(db_session):
+    _, ethanol_entry = _make_real_species(db_session, "CCO")
+    ethylamine, _ = _make_real_species(db_session, "CCN")
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CCO", mode="exact"),
+    )
+
+    returned_ids = {r.species_id for r in response.records}
+    assert ethanol_entry.species_id in returned_ids
+    assert ethylamine.id not in returned_ids
+
+
+def test_structure_filter_composes_with_charge_in_one_query(db_session):
+    """The composition guarantee the design brief calls out by name:
+    setting charge= AND a structure query must AND-combine, not silently
+    drop one of the two. Four species cover every quadrant (matches
+    structure only / charge only / both / neither) so a filter silently
+    ignored in either direction is caught -- a fixture with only the
+    "both" case could pass even if the structure filter were a no-op."""
+    both, _ = _make_real_species(db_session, "CCO", charge=1)
+    structure_only, _ = _make_real_species(db_session, "CCCO", charge=0)
+    charge_only, _ = _make_real_species(db_session, "CCN", charge=1)
+    neither, _ = _make_real_species(db_session, "CCS", charge=0)
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(
+            charge=1, query_smiles="CCO", mode="substructure"
+        ),
+    )
+
+    returned_ids = {r.species_id for r in response.records}
+    assert both.id in returned_ids
+    assert structure_only.id not in returned_ids
+    assert charge_only.id not in returned_ids
+    assert neither.id not in returned_ids
+
+
+def test_structure_filter_both_query_fields_raises_multiple_structure_queries(
+    db_session,
+):
+    with pytest.raises(Exception) as excinfo:
+        browse_species(
+            db_session,
+            SpeciesBrowseRequest(query_smiles="CCO", query_smarts="[#6]O"),
+        )
+    assert "multiple_structure_queries" in str(excinfo.value)
+
+
+def test_structure_filter_smarts_under_similarity_is_invalid(db_session):
+    with pytest.raises(Exception) as excinfo:
+        browse_species(
+            db_session,
+            SpeciesBrowseRequest(query_smarts="[#6]O", mode="similarity"),
+        )
+    assert "invalid_structure_query" in str(excinfo.value)
+
+
+def test_structure_filter_unparseable_smarts_is_invalid(db_session):
+    with pytest.raises(Exception) as excinfo:
+        browse_species(
+            db_session,
+            SpeciesBrowseRequest(query_smarts="not a smarts(((", mode="substructure"),
+        )
+    assert "invalid_structure_query" in str(excinfo.value)
+
+
+def test_structure_filter_unparseable_smiles_is_invalid(db_session):
+    with pytest.raises(Exception) as excinfo:
+        browse_species(
+            db_session,
+            SpeciesBrowseRequest(query_smiles="not-a-smiles(((", mode="substructure"),
+        )
+    assert "invalid_structure_query" in str(excinfo.value)
+
+
+def test_structure_filter_echoed_in_request_filter(db_session):
+    _make_real_species(db_session, "CCO")
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CCO", mode="substructure"),
+    )
+
+    assert response.request.filter["query_smiles"] == "CCO"
+    assert response.request.filter["mode"] == "substructure"
+    assert "similarity_threshold" not in response.request.filter
+
+
+def test_structure_filter_similarity_threshold_echoed_only_in_similarity_mode(
+    db_session,
+):
+    _make_real_species(db_session, "CCO")
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CCO", mode="similarity"),
+    )
+
+    # Omitted similarity_threshold still echoes the effective default.
+    assert response.request.filter["similarity_threshold"] == pytest.approx(0.5)

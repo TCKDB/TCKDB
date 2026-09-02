@@ -48,18 +48,33 @@
  * Plex Sans for UI chrome and prose; IBM Plex Mono for every reference,
  * unit and coefficient — unchanged, already the house pairing.
  *
- * Width, revised ("we need to use more of the space on the webpage"):
- *   `.entry-page` was 74rem (1184px) -- at a 1440px viewport that leaves
- *   ~128px of empty margin per side; at 1920px, ~368px per side. Widened
- *   to 100rem (1600px): full-bleed (minus the 1.25rem side padding) up to
- *   about a 1640px viewport, then a real cap so a 2560px+ monitor doesn't
- *   stretch a table row edge-to-edge. This is a deliberate widen, not a
- *   removal of the constraint -- prose stays narrow on its OWN max-widths
- *   (`.entry-hero` 56rem, `.conformer-picker-note`/`.section-heading`
- *   42-44rem, all unchanged below), so only the elements that actually
- *   benefit from more room -- the conformer card grid, the evidence
- *   linkage flow, and every wide `.stage-table` in the tab panels -- pick
- *   up the extra width.
+ * Width, revised AGAIN ("the boxes need to be longer in width dammit. We
+ *   have so much space on the screen"):
+ *   The 100rem cap from the first widening pass was still too narrow for
+ *   its own stated goal -- three conformer cards at their FULL,
+ *   unclipped content need more room than that cap had to give, which is
+ *   why that pass shipped an `overflow: hidden` + `text-overflow:
+ *   ellipsis` clip on the card meta/coverage lines despite an explicit
+ *   "no wrap" instruction never having asked for a clip either. MEASURED
+ *   against the live archive (`conformers/search?include=calculations`,
+ *   66 conformer groups): the longest real meta line is 69 characters
+ *   ("4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4
+ *   scan)"), which at this line's `.72rem` monospace needs roughly 34rem
+ *   of card width to render on one line unclipped. Three of those cards
+ *   plus their `1rem` inter-card gaps plus the reserved 14rem
+ *   `.page-toc` rail (`page-shell.css`) plus that rail's own up-to-3rem
+ *   gap plus this page's `2.5rem` of horizontal padding is ~123.5rem --
+ *   `.entry-page` is widened to 126rem (2016px) to clear that with a
+ *   little room to spare, and `.conformer-list`'s column floor moves
+ *   from 17rem to 34rem to match (see that rule for the ellipsis
+ *   removal this enabled). This is still a genuine CAP, not its
+ *   removal -- prose that is actually a paragraph someone reads left-to-
+ *   right at length keeps its own narrower max-width
+ *   (`.conformer-picker-note`, `.evidence-linkage-story`/`-note`, all
+ *   unchanged below, ~42-46rem); what changed is that a cap tuned for
+ *   "long running prose" no longer also applies to `.entry-hero` (was
+ *   56rem, now unconstrained -- see that rule), which holds short
+ *   labelled chips and facts, not a paragraph.
  */
 
 /* Colour custom properties formerly declared here (--ink, --ink-2,
@@ -71,7 +86,7 @@
    .entry-page wins the cascade over :root's dark-mode redefinition for
    every element below it -- the one thing this page must not do. */
 .entry-page {
-    max-width: 100rem;
+    max-width: 126rem;
     margin: 0 auto;
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 6rem;
 }
@@ -80,9 +95,17 @@
    Hero: chemistry leads. The formula is the largest thing on the page;
    stable refs are demoted to a quiet strip beneath the facts, present and
    copyable but never competing with the science for attention.
-   --------------------------------------------------------------------- */
 
-.entry-hero { max-width: 56rem; }
+   No max-width here (was 56rem) -- this block holds the formula heading,
+   the SMILES/InChIKey identifier chips and the entry-facts list, none of
+   which is a paragraph anyone reads left-to-right at length. The 56rem
+   cap was inherited from a "prose stays readable" rule meant for actual
+   running text; applied here it just wrapped the identifier-chip and
+   facts rows into extra lines with empty page width beside them. The
+   formula heading's own responsive clamp() and the chip/fact flex-wrap
+   layout already bound how wide any single element gets -- this rule
+   never needed its own cap, only `.entry-page`'s outer one.
+   --------------------------------------------------------------------- */
 
 .entry-formula-row {
     display: flex;
@@ -200,10 +223,21 @@
     padding: .8rem 1rem;
 }
 
+/* `border-top` here is the ONE separator between this card's previous
+   block (the basin box when it renders, otherwise the card-select
+   button directly) and References -- `--line-2`, the same token every
+   other separator inside a conformer card uses (`.conformer-basin-
+   identity`/`-rigid`'s own `border-top` below), a deliberate choice so
+   two adjacent card blocks are never divided by two DIFFERENT shades of
+   rule ("the two borders use different tokens... they may also differ
+   in shade" -- exactly the two-lines defect this reconciles). Previously
+   `var(--line)` -- see the git history for why that, paired with the
+   basin box's OWN `border-bottom` immediately above it, produced the
+   double line the owner reported before REFERENCES. */
 .conformer-card .refs-disclosure {
     margin-top: 0;
     border: 0;
-    border-top: 1px solid var(--line);
+    border-top: 1px solid var(--line-2);
     border-radius: 0;
     background: none;
 }
@@ -302,37 +336,45 @@
    (`.page-toc`, `page-shell.css`, itself a fix for a different complaint
    from the same owner -- a tab switch shifting the page sideways) that
    stays reserved rather than being shrunk to claw width back for this
-   grid. `repeat(3, minmax(17rem, 1fr))` is a FLOOR, not the old scheme's
-   collapsing-track cap: a fixed track count leaves an unfilled column as
-   real blank space in a partial last row (an entry with one or two
-   conformers) rather than stretching the lone card across it. `1180px`
-   and the existing `680px` single-column breakpoint below step the count
-   down to two, then one, BEFORE three 17rem-floor columns plus this
-   page's own padding and the reserved ToC rail would force a card
-   narrower than that floor and overflow `.page-shell-content` sideways
-   (measured against `page-shell.css`'s layout: at the 1180px threshold
-   the content column still has roughly a 5-6rem margin over the 53rem
-   three 17rem-cards-plus-gaps need; comfortable, not exact, so
-   `overflow-x: auto` below is the safety net for whatever this arithmetic
-   doesn't cover at some untested viewport -- never a sideways-scrolling
-   page BODY, per house rule).
+   grid. `repeat(3, minmax(34rem, 1fr))` is a FLOOR, not a collapsing-
+   track cap: a fixed track count leaves an unfilled column as real blank
+   space in a partial last row (an entry with one or two conformers)
+   rather than stretching the lone card across it.
 
-   Meta/coverage text no longer drives the column width the way it used
-   to: three cards to a row leaves too little width for the longest real
-   line to fit unwrapped even at this grid's widest (measured, see
-   `.conformer-card-meta` below) -- that tension is resolved THERE, not by
-   widening columns to chase content that three-per-row structurally
-   cannot fit. */
+   The floor moved from 17rem to 34rem, and `.entry-page`'s own cap from
+   100rem to 126rem, together (see that rule's own comment for the
+   arithmetic): the previous 17rem floor was never wide enough to hold
+   the longest real card content on one line, which is what forced this
+   grid's earlier `text-overflow: ellipsis` clip on `.conformer-card-
+   meta`/`-coverage` below. 34rem is that content's actual measured need,
+   so meta/coverage render in full now -- see those rules for the
+   ellipsis removal this enabled.
+
+   `2000px` (was `1180px`, before the floor widened) and the existing
+   `680px` single-column breakpoint below step the column count down to
+   two, then one, BEFORE three 34rem-floor columns plus this page's own
+   padding and the reserved ToC rail would force a card narrower than
+   that floor and overflow `.page-shell-content` sideways (three 34rem
+   cards plus two 1rem gaps plus the 14rem ToC rail plus its own up-to-
+   3rem gap plus this page's 2.5rem padding is ~123.5rem / 1976px;
+   comfortable, not exact, so `overflow-x: auto` below is the safety net
+   for whatever this arithmetic doesn't cover at some untested viewport --
+   never a sideways-scrolling page BODY, per house rule). The same
+   arithmetic one column down (two 34rem cards) crosses zero around
+   1416px, so `2000px`, chosen with headroom above both thresholds, is
+   the one breakpoint this grid needs between the three- and two-column
+   layouts; `680px` below still steps two down to one for narrow/mobile
+   viewports, comfortably inside either budget. */
 .conformer-list {
     display: grid;
-    grid-template-columns: repeat(3, minmax(17rem, 1fr));
+    grid-template-columns: repeat(3, minmax(34rem, 1fr));
     gap: 1rem;
     margin-top: 1.3rem;
     overflow-x: auto;
 }
 
-@media (max-width: 1180px) {
-    .conformer-list { grid-template-columns: repeat(2, minmax(17rem, 1fr)); }
+@media (max-width: 2000px) {
+    .conformer-list { grid-template-columns: repeat(2, minmax(34rem, 1fr)); }
 }
 
 /* The card itself is a plain, non-interactive wrapper: a <details>
@@ -384,40 +426,36 @@
 
 .conformer-card[data-selected="true"] .conformer-card-label { color: var(--accent-700); }
 
-/* One line, no wrap, aligned across cards ("I expect the conformer card
-   meta to be one line, no wrap around and that each conformer card meta
-   aligns horizontally. Same for conformer card coverage.") -- but three
-   fixed columns per row (above) leaves too little width for every real
-   value to honour that at once. MEASURED against the live archive (66
+/* One line, aligned across cards ("I expect the conformer card meta to
+   be one line, no wrap around" -- the owner's own words) -- with NO
+   ellipsis or other clip, however long the real value gets ("when I
+   said do not wrap I did not say do [ellipsis] for texts that go[es]
+   longer than the boxes. the boxes need to be longer in width"). The
+   previous pass's `overflow: hidden` + `text-overflow: ellipsis` here
+   was the forced compromise of a 17rem column floor that could not fit
+   the longest real content; it is gone along with that floor, not
+   narrowed to "usually fits". MEASURED against the live archive (66
    conformer groups, `conformers/search?include=calculations`): the
-   longest real meta line is 69 characters --
-   "4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4 scan)"
-   -- which at this line's `.72rem` monospace does not fit a ~17-26rem
-   card column on one line at any width this grid produces; the longest
-   coverage line measured is 43 characters ("opt 11/11 obs · freq 7/11
-   obs · sp 7/11 obs"), which is closer but not guaranteed either once a
-   count reaches double digits. Three-per-row and true no-wrap cannot both
-   hold for that longest content -- this is `overflow: hidden` +
-   `text-overflow: ellipsis`, an OBVIOUS visual clip, never a silent one:
-   a scientific count that has been cut off must look cut off, not read as
-   a complete (and wrong) number. The full, un-clipped string stays
-   reachable via the native `title` tooltip `ConformerSelector.tsx` sets
-   on both spans from the exact same source text the visible line is
-   built from -- one render, two representations, never a second summary
-   that could drift from the first. (`title` is a mouse/long-press
-   affordance, not a full keyboard-reachable one; see the worktree report
-   for that caveat.) `min-width: 0` is required for the ellipsis to ever
-   apply at all -- a grid/flex item's implied minimum width is its content
-   size unless overridden, which would otherwise let the line push the
-   card wider rather than clip. */
+   longest real meta line is 69 characters -- "4 observations · 16
+   calculation rows (4 opt · 4 freq · 4 sp · 4 scan)" -- and the longest
+   coverage line is 43 characters ("opt 11/11 obs · freq 7/11 obs · sp
+   7/11 obs"). `.conformer-list`'s 34rem column floor (above) is sized to
+   that 69-character line at this rule's `.72rem` monospace, so both
+   render on one line, in full, at every width this grid produces; if a
+   future value ever exceeds what 34rem holds, this renders that excess
+   as a normal wrap (never a silent overflow past the card edge and never
+   a clip) -- `white-space` is intentionally left at its default rather
+   than forced to `nowrap`, so that degrade stays visible instead of
+   requiring a return trip to re-measure and re-widen everything above.
+   The full string is still ALSO available via the native `title`
+   tooltip `ConformerSelector.tsx` sets on both spans from the exact same
+   source text the visible line is built from -- one render, two
+   representations, kept for the mouse/long-press affordance it already
+   gave, not because the visible line still needs a fallback. */
 .conformer-card-meta,
 .conformer-card-coverage {
-    min-width: 0;
-    overflow: hidden;
     color: var(--ink-2);
     font: .72rem var(--mono);
-    white-space: nowrap;
-    text-overflow: ellipsis;
 }
 
 .conformer-card-coverage { color: var(--muted-2); }
@@ -441,15 +479,21 @@
    in `--muted-2`.
    --------------------------------------------------------------------- */
 
-/* Faint grey rules above AND below ("have those faint grey lines above
-   and below to show like separation") -- the existing `border-top` was
-   already there for the boundary with the card-select button; the
-   `border-bottom` is new, closing the box off from `.refs-disclosure`
-   below it the same way. `.conformer-basin-rigid` (the sibling "no
-   rotatable bonds" paragraph two rules down, rendered instead of this
-   `<dl>` for a rigid group) gets the identical top+bottom treatment so
-   the shared row looks like the same box shape regardless of which of
-   the two ever renders into it. */
+/* ONE faint grey rule above this box, none below (was above AND below --
+   see the design note below for why that produced a double line before
+   REFERENCES). `border-top` is the separator from the card-select button
+   above it; `.refs-disclosure`'s OWN `border-top` (right above, in
+   `.conformer-card .refs-disclosure`) is what separates this box from
+   References below -- adjacent blocks own exactly one shared boundary,
+   never a border-bottom on one AND a border-top on the next stacked
+   together. `.conformer-basin-rigid` (the sibling "no rotatable bonds"
+   paragraph two rules down, rendered instead of this `<dl>` for a rigid
+   group) gets the identical top-only treatment so the shared row looks
+   like the same box shape regardless of which of the two ever renders
+   into it -- and a card with NEITHER (no fingerprint at all, the
+   majority case) skips straight from the card-select button to
+   References' own single top border, never a stray line floating with
+   nothing above it. */
 .conformer-basin-identity {
     display: flex;
     flex-direction: column;
@@ -457,7 +501,6 @@
     margin: 0;
     padding: .85rem 1.25rem;
     border-top: 1px solid var(--line-2);
-    border-bottom: 1px solid var(--line-2);
 }
 
 .conformer-basin-rotor {
@@ -492,7 +535,6 @@
     margin: 0;
     padding: .85rem 1.25rem;
     border-top: 1px solid var(--line-2);
-    border-bottom: 1px solid var(--line-2);
     color: var(--muted-2);
     font: .72rem/1.5 var(--mono);
 }
@@ -564,81 +606,6 @@
     .conformer-card > .refs-disclosure {
         grid-row: 5;
     }
-}
-
-/* ---------------------------------------------------------------------
-   Basin differences — how two-or-more of this entry's groups differ on
-   the rotors they share, rendered once for the whole picker (a
-   relationship between groups, not a property of any one card). Only
-   ever mounted when `buildGroupDifferences` found a real difference
-   (`domain/conformerFingerprint.ts`); the 55-of-59-entries single-group
-   case never renders this at all. Wide content (one column per group)
-   scrolls inside its own container rather than the page body, per house
-   rule -- `.conformer-basin-differences-scroll` is the `overflow-x: auto`
-   boundary, not `body`.
-   --------------------------------------------------------------------- */
-
-.conformer-basin-differences {
-    margin-top: 1.75rem;
-    padding-top: 1.5rem;
-    border-top: 1px solid var(--line);
-}
-
-.conformer-basin-differences-heading {
-    margin: 0;
-    color: var(--ink);
-    font: 600 1.1rem var(--serif);
-}
-
-.conformer-basin-differences-note {
-    max-width: 42rem;
-    margin: .4rem 0 1rem;
-    color: var(--ink-2);
-    font-size: .85rem;
-    line-height: 1.6;
-}
-
-/* Only rendered when at least one cell in the table is in folded
-   coordinates (`isFolded` -- see `domain/conformerFingerprint.ts`'s own
-   note on why the bin is always computed on the FOLDED angle). */
-.conformer-basin-differences-footnote {
-    max-width: 42rem;
-    margin: .75rem 0 0;
-    color: var(--muted-2);
-    font-size: .72rem;
-    line-height: 1.5;
-}
-
-.conformer-basin-differences-scroll {
-    overflow-x: auto;
-}
-
-.conformer-basin-differences-table {
-    width: 100%;
-    min-width: 32rem;
-    border-collapse: collapse;
-    font: .72rem/1.4 var(--mono);
-}
-
-.conformer-basin-differences-table th,
-.conformer-basin-differences-table td {
-    padding: .6rem .9rem .6rem 0;
-    border-bottom: 1px solid var(--line-2);
-    text-align: left;
-    vertical-align: top;
-    white-space: nowrap;
-}
-
-.conformer-basin-differences-table thead th {
-    color: var(--muted);
-    font-size: .64rem;
-    text-transform: uppercase;
-    letter-spacing: .05em;
-}
-
-.conformer-basin-differences-table tbody th {
-    color: var(--ink);
-    font-weight: 600;
 }
 
 /* ---------------------------------------------------------------------

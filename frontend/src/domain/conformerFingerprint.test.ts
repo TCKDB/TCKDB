@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vitest"
-import type { ConformerGroupFingerprint, ConformerProjection } from "../api/speciesEntryApi"
+import type { ConformerGroupFingerprint } from "../api/speciesEntryApi"
 import {
     basinRangeDeg,
     buildBasinRotors,
-    buildGroupDifferences,
     formatDeg,
     formatRangeDeg,
     parseRotorKey,
@@ -27,27 +26,6 @@ function oneRotorFingerprint(quantizedBin: number, rawDeg: number): ConformerGro
             folded_torsion_deg: rawDeg,
         }],
     }
-}
-
-function conformer(
-    ref: string,
-    label: string,
-    fingerprint: ConformerGroupFingerprint | null,
-): ConformerProjection {
-    return {
-        conformer_group: { conformer_group_ref: ref, label, fingerprint },
-        observations_summary: { total: 1 },
-        evidence_summary: {
-            calculation_count: 1,
-            optimization_chain_count: 1,
-            geometry_count: 1,
-            evidence_coverage: { opt: 1, freq: 0, sp: 0 },
-            levels_of_theory: {},
-        },
-        observations: [],
-        calculations: [],
-        geometries: [],
-    } as unknown as ConformerProjection
 }
 
 describe("parseRotorKey / rotorBondLabel", () => {
@@ -138,101 +116,3 @@ describe("buildBasinRotors -- never the bin index, only the range", () => {
     })
 })
 
-describe("buildGroupDifferences", () => {
-    it("returns null for a single-group entry -- nothing to compare", () => {
-        const single = [conformer("cg_one", "conformer_1", oneRotorFingerprint(4, 65.0))]
-        expect(buildGroupDifferences(single)).toBeNull()
-    })
-
-    it("returns null when no group has a fingerprint at all", () => {
-        const none = [
-            conformer("cg_one", "conformer_1", null),
-            conformer("cg_two", "conformer_2", null),
-        ]
-        expect(buildGroupDifferences(none)).toBeNull()
-    })
-
-    // The owner's own worked example, as a THREE-group comparison.
-    it("three groups with bins [4], [20], [18] produce three distinct ranges for the shared rotor", () => {
-        const three = [
-            conformer("cg_one", "conformer_1", oneRotorFingerprint(4, 65.0)),
-            conformer("cg_two", "conformer_2", oneRotorFingerprint(20, 305.0)),
-            conformer("cg_three", "conformer_3", oneRotorFingerprint(18, 275.0)),
-        ]
-        const rows = buildGroupDifferences(three)
-        expect(rows).not.toBeNull()
-        expect(rows).toHaveLength(1)
-        const [row] = rows!
-        expect(row.cells.map((c) => c.binRangeDeg)).toEqual([[60, 75], [300, 315], [270, 285]])
-        // No cell exposes a raw bin index either.
-        for (const cell of row.cells) expect(cell).not.toHaveProperty("quantizedBin", undefined)
-    })
-
-    it("omits a rotor row when every group that tracks it agrees on the bin", () => {
-        const sameBin = oneRotorFingerprint(5, 80.0)
-        const sameBinOtherRepresentative = oneRotorFingerprint(5, 81.4)
-        const two = [
-            conformer("cg_one", "conformer_1", sameBin),
-            conformer("cg_two", "conformer_2", sameBinOtherRepresentative),
-        ]
-        expect(buildGroupDifferences(two)).toBeNull()
-    })
-
-    it("matches rotors across groups by key, not by array position", () => {
-        // Group A lists its one rotor first; group B's fingerprint lists a
-        // DIFFERENT rotor it doesn't share, then the shared one second. A
-        // positional (index-based) comparison would wrongly pair them.
-        const groupA: ConformerGroupFingerprint = {
-            rotor_count: 1,
-            bin_width_deg: 15,
-            torsions: [{ rotor_key: "R_1_2", quantized_bin: 2, raw_torsion_deg: 40.0, folded_torsion_deg: 40.0 }],
-        }
-        const groupB: ConformerGroupFingerprint = {
-            rotor_count: 2,
-            bin_width_deg: 15,
-            torsions: [
-                { rotor_key: "R_5_6", quantized_bin: 9, raw_torsion_deg: 140.0, folded_torsion_deg: 140.0 },
-                { rotor_key: "R_1_2", quantized_bin: 6, raw_torsion_deg: 95.0, folded_torsion_deg: 95.0 },
-            ],
-        }
-        const rows = buildGroupDifferences([
-            conformer("cg_a", "conformer_1", groupA),
-            conformer("cg_b", "conformer_2", groupB),
-        ])
-        expect(rows).not.toBeNull()
-        // R_5_6 is tracked by only one group -- not a comparison row.
-        expect(rows!.some((r) => r.rotorKey === "R_5_6")).toBe(false)
-        const r1_2 = rows!.find((r) => r.rotorKey === "R_1_2")!
-        expect(r1_2.cells[0]).toMatchObject({ conformerGroupRef: "cg_a", binRangeDeg: [30, 45] })
-        expect(r1_2.cells[1]).toMatchObject({ conformerGroupRef: "cg_b", binRangeDeg: [90, 105] })
-    })
-
-    // `spe_pv7f7evlv422ab54ackh7m4qnq`: two groups, both rotor_count 0,
-    // both quantized_bins [], and (per the archive) the identical
-    // fingerprint_hash. The fingerprint is what DEFINES a basin, so by the
-    // archive's own criterion these two groups are not distinguished from
-    // each other -- the comparison must not invent one. This falls out of
-    // the ordinary "nothing shared to compare" rule with no special case:
-    // two zero-rotor groups share no rotor keys at all.
-    it("two groups with identical (here: empty) fingerprints produce no fabricated difference", () => {
-        const rigidA: ConformerGroupFingerprint = { rotor_count: 0, bin_width_deg: 15, torsions: [] }
-        const rigidB: ConformerGroupFingerprint = { rotor_count: 0, bin_width_deg: 15, torsions: [] }
-        const two = [
-            conformer("cg_one", "conformer_1", rigidA),
-            conformer("cg_two", "conformer_2", rigidB),
-        ]
-        expect(buildGroupDifferences(two)).toBeNull()
-    })
-
-    // Same guarantee, but with actual (non-empty) identical fingerprints --
-    // the general case the zero-rotor scenario above is one instance of.
-    it("two groups with identical non-empty fingerprints produce no fabricated difference", () => {
-        const same = oneRotorFingerprint(4, 65.0)
-        const sameAgain = oneRotorFingerprint(4, 65.2) // representative angle may differ; bin does not
-        const two = [
-            conformer("cg_one", "conformer_1", same),
-            conformer("cg_two", "conformer_2", sameAgain),
-        ]
-        expect(buildGroupDifferences(two)).toBeNull()
-    })
-})

@@ -210,3 +210,100 @@ describe("buildTransitionStateBrowseQuery: the six provenance params still reach
         expect(query.get("workflow_tool_version")).toBe("1.2.0")
     })
 })
+
+// ---------------------------------------------------------------------------
+// Structure filter (query_smiles / query_smarts / mode / similarity_threshold)
+//
+// "just make the struct and smiles search part of the browser-filters
+// class" -- folded into BrowseFilterForm.tsx's composition fields, wired
+// through here into the SAME /species/browse request every other filter
+// on the page reaches. See species_browse.py / SpeciesBrowseRequest for
+// the backend side of this contract.
+// ---------------------------------------------------------------------------
+
+describe("buildSpeciesBrowseQuery: structure filter params travel together, and ONLY together", () => {
+    it("omits query_smiles/query_smarts/mode/similarity_threshold entirely when queryStructure is empty", () => {
+        const query = buildSpeciesBrowseQuery("species", EMPTY_BROWSE_FILTERS, 0, 20)
+        expect(query.has("query_smiles")).toBe(false)
+        expect(query.has("query_smarts")).toBe(false)
+        expect(query.has("mode")).toBe(false)
+        expect(query.has("similarity_threshold")).toBe(false)
+    })
+
+    it("sends query_smiles (not query_smarts) when queryIsSmarts is false", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, queryStructure: "CCO" }
+        const query = buildSpeciesBrowseQuery("species", filters, 0, 20)
+        expect(query.get("query_smiles")).toBe("CCO")
+        expect(query.has("query_smarts")).toBe(false)
+        expect(query.get("mode")).toBe("substructure")
+    })
+
+    it("sends query_smarts (not query_smiles) when queryIsSmarts is true -- the SAME typed value, routed, never both", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, queryStructure: "[#6]-[#8]", queryIsSmarts: true }
+        const query = buildSpeciesBrowseQuery("species", filters, 0, 20)
+        expect(query.get("query_smarts")).toBe("[#6]-[#8]")
+        expect(query.has("query_smiles")).toBe(false)
+    })
+
+    it("sends the chosen mode explicitly", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, queryStructure: "CCO", structureMode: "exact" }
+        const query = buildSpeciesBrowseQuery("species", filters, 0, 20)
+        expect(query.get("mode")).toBe("exact")
+    })
+
+    it("sends similarity_threshold only under mode=similarity, never under substructure/exact even if a value is set", () => {
+        const base: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, queryStructure: "CCO", similarityThreshold: "0.8" }
+        const substructure = buildSpeciesBrowseQuery("species", { ...base, structureMode: "substructure" }, 0, 20)
+        const exact = buildSpeciesBrowseQuery("species", { ...base, structureMode: "exact" }, 0, 20)
+        const similarity = buildSpeciesBrowseQuery("species", { ...base, structureMode: "similarity" }, 0, 20)
+        expect(substructure.has("similarity_threshold")).toBe(false)
+        expect(exact.has("similarity_threshold")).toBe(false)
+        expect(similarity.get("similarity_threshold")).toBe("0.8")
+    })
+
+    it("a half-typed similarity_threshold (e.g. a trailing '.') is not sent", () => {
+        const filters: BrowseFilters = {
+            ...EMPTY_BROWSE_FILTERS, queryStructure: "CCO", structureMode: "similarity", similarityThreshold: "0.",
+        }
+        const query = buildSpeciesBrowseQuery("species", filters, 0, 20)
+        expect(query.has("similarity_threshold")).toBe(false)
+    })
+
+    // The composition guarantee, at the query-string layer: an existing
+    // filter (charge) and the new structure filter must BOTH reach the
+    // request when both are set -- the assertion that catches a filter
+    // silently dropped on the way to the wire.
+    it("composes with an existing filter (charge): both reach the query string", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, charge: "1", queryStructure: "CCO" }
+        const query = buildSpeciesBrowseQuery("species", filters, 0, 20)
+        expect(query.get("charge")).toBe("1")
+        expect(query.get("query_smiles")).toBe("CCO")
+    })
+
+    it("kind=vdw ALSO carries the structure filter -- the same builder as species", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, queryStructure: "CCO" }
+        const query = buildSpeciesBrowseQuery("vdw", filters, 0, 20)
+        expect(query.get("query_smiles")).toBe("CCO")
+    })
+})
+
+describe("hasActiveFilters: a structure query counts as an active (narrowing) filter", () => {
+    it("species with only queryStructure set is active", () => {
+        const filters: BrowseFilters = { ...EMPTY_BROWSE_FILTERS, queryStructure: "CCO" }
+        expect(hasActiveFilters("species", filters)).toBe(true)
+    })
+})
+
+describe("clearInapplicableFilters: the structure filter is species/vdw-only composition, cleared entering transition_state", () => {
+    it("entering transition_state clears queryStructure/queryIsSmarts/structureMode/similarityThreshold", () => {
+        const filters: BrowseFilters = {
+            ...EMPTY_BROWSE_FILTERS,
+            queryStructure: "CCO", queryIsSmarts: true, structureMode: "similarity", similarityThreshold: "0.8",
+        }
+        const cleared = clearInapplicableFilters("transition_state", filters)
+        expect(cleared.queryStructure).toBe("")
+        expect(cleared.queryIsSmarts).toBe(false)
+        expect(cleared.structureMode).toBe("substructure")
+        expect(cleared.similarityThreshold).toBe("")
+    })
+})

@@ -39,8 +39,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from rdkit import Chem
-from rdkit.Chem import inchi as _inchi
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -78,6 +76,13 @@ from app.services.scientific_read.internal_ids import (
 from app.services.scientific_read.species_identity import (
     species_entry_label_for,
 )
+from app.services.scientific_read.structure_query import (
+    enforce_mode_query_compatibility,
+    inchi_key_from_query,
+    parse_inchi_to_canonical_smiles,
+    parse_smarts,
+    parse_smiles_to_canonical,
+)
 
 _LEGAL_INCLUDE_TOKENS: set[str] = {"review", "internal_ids", "all"}
 _INTERNAL_INCLUDE_TOKENS: set[str] = {"internal_ids"}
@@ -89,24 +94,6 @@ _DEFAULT_SORT_BY_MODE: dict[StructureSearchMode, str] = {
         "similarity_score_desc,review_rank,species_entry_id"
     ),
     StructureSearchMode.exact: "review_rank,species_entry_id",
-}
-
-
-# Mode → which query fields are accepted.
-_MODE_QUERY_KIND_RULES: dict[StructureSearchMode, set[StructureQueryKind]] = {
-    StructureSearchMode.substructure: {
-        StructureQueryKind.smiles,
-        StructureQueryKind.smarts,
-    },
-    StructureSearchMode.similarity: {
-        StructureQueryKind.smiles,
-        StructureQueryKind.inchi,
-    },
-    StructureSearchMode.exact: {
-        StructureQueryKind.smiles,
-        StructureQueryKind.inchi,
-        StructureQueryKind.inchi_key,
-    },
 }
 
 
@@ -136,7 +123,7 @@ def search_species_by_structure(
     includes = filter_internal_ids_from_resolved(includes)
 
     query_kind, query_value = _select_structure_query(request)
-    _enforce_mode_query_compatibility(request.mode, query_kind)
+    enforce_mode_query_compatibility(request.mode, query_kind)
     threshold = _resolve_similarity_threshold(request)
 
     visible = visible_statuses(
@@ -299,20 +286,6 @@ def _select_structure_query(
     return supplied[0]
 
 
-def _enforce_mode_query_compatibility(
-    mode: StructureSearchMode, kind: StructureQueryKind
-) -> None:
-    """Reject mode/query-field combinations that the cartridge does not
-    support cleanly (e.g. similarity-by-InChIKey)."""
-    allowed = _MODE_QUERY_KIND_RULES[mode]
-    if kind not in allowed:
-        raise ValueError(
-            f"invalid_structure_query: mode={mode.value!r} does not "
-            f"accept query_{kind.value}; supported query kinds for this "
-            f"mode are {sorted(k.value for k in allowed)!r}."
-        )
-
-
 def _resolve_similarity_threshold(
     request: ScientificSpeciesStructureSearchRequest,
 ) -> float:
@@ -324,80 +297,6 @@ def _resolve_similarity_threshold(
     if request.similarity_threshold is not None:
         return request.similarity_threshold
     return DEFAULT_SIMILARITY_THRESHOLD
-
-
-# ---------------------------------------------------------------------------
-# RDKit parsing helpers
-# ---------------------------------------------------------------------------
-
-
-def _parse_smiles_to_canonical(smiles: str) -> str:
-    """Parse a SMILES via RDKit and return its canonical SMILES.
-
-    Used to normalize callers' inputs before binding into SQL so the
-    cartridge sees a parseable molecule we already validated client-side.
-    """
-    mol = Chem.MolFromSmiles(smiles)
-    if mol is None:
-        raise ValueError(
-            "invalid_structure_query: RDKit could not parse the SMILES "
-            "supplied as query_smiles."
-        )
-    canonical = Chem.MolToSmiles(mol, canonical=True)
-    if not canonical:
-        raise ValueError(
-            "invalid_structure_query: RDKit produced an empty canonical "
-            "SMILES from query_smiles."
-        )
-    return canonical
-
-
-def _parse_smarts(smarts: str) -> Chem.Mol:
-    mol = Chem.MolFromSmarts(smarts)
-    if mol is None:
-        raise ValueError(
-            "invalid_structure_query: RDKit could not parse the SMARTS "
-            "supplied as query_smarts."
-        )
-    return mol
-
-
-def _parse_inchi_to_canonical_smiles(inchi_str: str) -> str:
-    mol = Chem.MolFromInchi(inchi_str)
-    if mol is None:
-        raise ValueError(
-            "invalid_structure_query: RDKit could not parse the InChI "
-            "supplied as query_inchi."
-        )
-    return Chem.MolToSmiles(mol, canonical=True)
-
-
-def _inchi_key_from_query(
-    kind: StructureQueryKind, value: str
-) -> str:
-    """Compute the canonical InChIKey for an exact-mode query."""
-    if kind is StructureQueryKind.inchi_key:
-        return value
-    if kind is StructureQueryKind.smiles:
-        mol = Chem.MolFromSmiles(value)
-        if mol is None:
-            raise ValueError(
-                "invalid_structure_query: RDKit could not parse the "
-                "SMILES supplied as query_smiles."
-            )
-        return _inchi.MolToInchiKey(mol)
-    if kind is StructureQueryKind.inchi:
-        mol = Chem.MolFromInchi(value)
-        if mol is None:
-            raise ValueError(
-                "invalid_structure_query: RDKit could not parse the "
-                "InChI supplied as query_inchi."
-            )
-        return _inchi.MolToInchiKey(mol)
-    raise ValueError(
-        "invalid_structure_query: exact mode does not accept this "
-        "query kind."
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -523,13 +422,13 @@ def _run_substructure_query(
     """
     if query_kind is StructureQueryKind.smarts:
         # Parse client-side to surface a 422 before issuing SQL.
-        _parse_smarts(query_value)
+        parse_smarts(query_value)
         query_expr = "qmol_from_smarts(:query_text)"
         bound_value = query_value
     elif query_kind is StructureQueryKind.smiles:
-        bound_value = _parse_smiles_to_canonical(query_value)
+        bound_value = parse_smiles_to_canonical(query_value)
         query_expr = "mol_from_smiles(:query_text)"
-    else:  # pragma: no cover — guarded by _enforce_mode_query_compatibility
+    else:  # pragma: no cover — guarded by enforce_mode_query_compatibility
         raise ValueError(
             "invalid_structure_query: substructure mode requires "
             "query_smiles or query_smarts."
@@ -591,10 +490,10 @@ def _run_similarity_query(
     the threshold filter is applied database-side via ``>= :threshold``.
     """
     if query_kind is StructureQueryKind.smiles:
-        canonical_smiles = _parse_smiles_to_canonical(query_value)
+        canonical_smiles = parse_smiles_to_canonical(query_value)
     elif query_kind is StructureQueryKind.inchi:
-        canonical_smiles = _parse_inchi_to_canonical_smiles(query_value)
-    else:  # pragma: no cover — guarded by _enforce_mode_query_compatibility
+        canonical_smiles = parse_inchi_to_canonical_smiles(query_value)
+    else:  # pragma: no cover — guarded by enforce_mode_query_compatibility
         raise ValueError(
             "invalid_structure_query: similarity mode requires "
             "query_smiles or query_inchi."
@@ -667,7 +566,7 @@ def _run_exact_query(
     for the actual lookup. SMARTS is rejected upstream by the mode/query
     compatibility check.
     """
-    target_key = _inchi_key_from_query(query_kind, query_value)
+    target_key = inchi_key_from_query(query_kind, query_value)
     match_expr = "sp.inchi_key = :inchi_key"
     params: dict[str, Any] = {
         "inchi_key": target_key,

@@ -1,11 +1,12 @@
 /*
  * PageShell / TableOfContents — the layout every record page's content
  * now renders through (`components/PageShell.tsx`). Page-root width caps
- * (`.species-overview`, `.entry-page`, `.calc-page`, `.conformer-page`,
- * `.geometry-page`, `.browse-page`, all `max-width: 100rem`) stay in each
- * page's own stylesheet, unchanged in spirit from before this file
- * existed -- this one only lays out what sits INSIDE that width: an
- * optional sticky side rail next to the content column.
+ * (`.species-overview`, `.calc-page`, `.conformer-page`, `.geometry-page`,
+ * `.browse-page`, all `max-width: 100rem`; `.entry-page` widened
+ * separately to 126rem -- see `species-entry.css`'s own comment for why)
+ * stay in each page's own stylesheet, unchanged in spirit from before
+ * this file existed -- this one only lays out what sits INSIDE that
+ * width: an optional sticky side rail next to the content column.
  *
  * Smooth anchor scrolling is opted into globally here (`:root`) rather
  * than only for ToC links, since it is the right default for any

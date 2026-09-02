@@ -11,6 +11,13 @@ Deliberately does **not** accept ``smiles``, ``inchi``, ``inchi_key``,
 ``species_ref`` or ``species_entry_ref`` as query parameters. A caller
 who has one of those wants ``/species/search``; this route is for the
 caller who does not.
+
+``query_smiles`` / ``query_smarts`` / ``mode`` / ``similarity_threshold``
+are a bounded, additive structure filter -- the browse-page counterpart
+of ``/species/structure-search``'s own vocabulary, composed with every
+other filter here in one query rather than run as a second, separate
+search. See :class:`~app.schemas.reads.scientific_species.SpeciesBrowseRequest`
+for the full contract.
 """
 
 from __future__ import annotations
@@ -36,6 +43,7 @@ from app.schemas.reads.scientific_species import (
     ScientificSpeciesBrowseResponse,
     SpeciesBrowseRequest,
 )
+from app.schemas.reads.scientific_structure_search import StructureSearchMode
 from app.services.scientific_read.internal_ids import (
     apply_internal_ids_visibility,
 )
@@ -110,6 +118,49 @@ def species_browse(
             "/meta/workflow-tool-versions."
         ),
     ),
+    query_smiles: str | None = Query(
+        None,
+        description=(
+            "Structure filter: species with >=1 entry whose stored "
+            "molecule matches this SMILES under mode=. Browse-only, a "
+            "bounded projection of /species/structure-search's own "
+            "vocabulary -- see SpeciesBrowseRequest for the full "
+            "rationale. Mutually exclusive with query_smarts "
+            "(422 multiple_structure_queries if both are supplied)."
+        ),
+    ),
+    query_smarts: str | None = Query(
+        None,
+        description=(
+            "Structure filter: species with >=1 entry whose stored "
+            "molecule contains this SMARTS pattern as a substructure. "
+            "Only valid under mode=substructure -- 422 "
+            "invalid_structure_query otherwise. Mutually exclusive with "
+            "query_smiles."
+        ),
+    ),
+    mode: StructureSearchMode = Query(
+        StructureSearchMode.substructure,
+        description=(
+            "Structure-filter algorithm: substructure (RDKit cartridge "
+            "'@>', SMILES or SMARTS), similarity (Tanimoto over Morgan "
+            "fingerprints, SMILES only), or exact (canonical InChIKey, "
+            "SMILES only). Unused unless query_smiles/query_smarts is "
+            "also supplied."
+        ),
+    ),
+    similarity_threshold: float | None = Query(
+        None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Tanimoto similarity floor, 0.0-1.0. Read only when "
+            "mode=similarity; ignored otherwise. Defaults to "
+            "DEFAULT_SIMILARITY_THRESHOLD (see "
+            "scientific_structure_search.py) when mode=similarity and "
+            "this is omitted."
+        ),
+    ),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -159,6 +210,10 @@ def species_browse(
         software_version=software_version,
         workflow_tool=workflow_tool,
         workflow_tool_version=workflow_tool_version,
+        query_smiles=query_smiles,
+        query_smarts=query_smarts,
+        mode=mode,
+        similarity_threshold=similarity_threshold,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,

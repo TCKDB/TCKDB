@@ -55,6 +55,7 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
 function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     return <>
         <TextField label="Formula" onChange={(value) => onChange({ formula: value })} value={filters.formula} />
+        <StructureField filters={filters} onChange={onChange} />
         <TextField label="Elements" onChange={(value) => onChange({ elements: value })} placeholder="C,N,S" value={filters.elements} />
         <SelectField
             label="Element match"
@@ -70,6 +71,69 @@ function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onCh
             options={[["", "Any"], ...ELECTRONIC_STATES.map((state): [string, string] => [state, token(state)])]}
             value={filters.electronicStateKind}
         />
+    </>
+}
+
+const STRUCTURE_MODES: [string, string][] = [
+    ["substructure", "Substructure"],
+    ["similarity", "Similarity"],
+    ["exact", "Exact"],
+]
+
+/**
+ * The browse-page home for structure search ("just make the struct and
+ * smiles search part of the browser-filters class" -- the owner, after
+ * an earlier pass put it on the front page instead). Reuses
+ * `/scientific/species/structure-search`'s own vocabulary
+ * (`query_smiles` / `query_smarts` / `mode` / `similarity_threshold`,
+ * now also accepted by `/species/browse` -- see `browseApi.ts`'s
+ * `buildSpeciesBrowseQuery`), composed with every other field in this
+ * grid rather than a second, separate search box: one text input plus a
+ * "treat as SMARTS" checkbox (never both a SMILES box and a SMARTS box
+ * at once), a mode select, and a similarity threshold that appears ONLY
+ * under mode=similarity -- a control with no effect in the other two
+ * modes would be a dead one left on screen, and a value typed into it
+ * while on `substructure`/`exact` must never travel silently as if it
+ * applied.
+ */
+function StructureField({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    const structureLabel = filters.queryIsSmarts && filters.structureMode === "substructure" ? "Structure (SMARTS)" : "Structure (SMILES)"
+    return <>
+        <TextField
+            label={structureLabel}
+            onChange={(value) => onChange({ queryStructure: value })}
+            placeholder={filters.queryIsSmarts && filters.structureMode === "substructure" ? "[#6]-[#8]" : "CCO"}
+            value={filters.queryStructure}
+        />
+        {filters.structureMode === "substructure" && (
+            <CheckField
+                label="Treat structure as SMARTS"
+                checked={filters.queryIsSmarts}
+                onChange={(checked) => onChange({ queryIsSmarts: checked })}
+            />
+        )}
+        <SelectField
+            label="Structure search mode"
+            onChange={(value) => {
+                const nextMode = value as BrowseFilters["structureMode"]
+                // SMARTS is only valid under substructure (the backend
+                // 422s otherwise, invalid_structure_query) -- clearing
+                // the toggle on the way out is what keeps a reader from
+                // switching to similarity/exact with a SMARTS pattern
+                // still typed and getting an inexplicable refusal.
+                onChange(nextMode === "substructure" ? { structureMode: nextMode } : { structureMode: nextMode, queryIsSmarts: false })
+            }}
+            options={STRUCTURE_MODES}
+            value={filters.structureMode}
+        />
+        {filters.structureMode === "similarity" && (
+            <TextField
+                label="Similarity threshold"
+                onChange={(value) => onChange({ similarityThreshold: value })}
+                placeholder="0.5"
+                value={filters.similarityThreshold}
+            />
+        )}
     </>
 }
 

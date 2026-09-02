@@ -73208,6 +73208,73 @@
             }
           },
           {
+            "description": "Structure filter: species with >=1 entry whose stored molecule matches this SMILES under mode=. Browse-only, a bounded projection of /species/structure-search's own vocabulary -- see SpeciesBrowseRequest for the full rationale. Mutually exclusive with query_smarts (422 multiple_structure_queries if both are supplied).",
+            "in": "query",
+            "name": "query_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Structure filter: species with >=1 entry whose stored molecule matches this SMILES under mode=. Browse-only, a bounded projection of /species/structure-search's own vocabulary -- see SpeciesBrowseRequest for the full rationale. Mutually exclusive with query_smarts (422 multiple_structure_queries if both are supplied).",
+              "title": "Query Smiles"
+            }
+          },
+          {
+            "description": "Structure filter: species with >=1 entry whose stored molecule contains this SMARTS pattern as a substructure. Only valid under mode=substructure -- 422 invalid_structure_query otherwise. Mutually exclusive with query_smiles.",
+            "in": "query",
+            "name": "query_smarts",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Structure filter: species with >=1 entry whose stored molecule contains this SMARTS pattern as a substructure. Only valid under mode=substructure -- 422 invalid_structure_query otherwise. Mutually exclusive with query_smiles.",
+              "title": "Query Smarts"
+            }
+          },
+          {
+            "description": "Structure-filter algorithm: substructure (RDKit cartridge '@>', SMILES or SMARTS), similarity (Tanimoto over Morgan fingerprints, SMILES only), or exact (canonical InChIKey, SMILES only). Unused unless query_smiles/query_smarts is also supplied.",
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/StructureSearchMode",
+              "default": "substructure",
+              "description": "Structure-filter algorithm: substructure (RDKit cartridge '@>', SMILES or SMARTS), similarity (Tanimoto over Morgan fingerprints, SMILES only), or exact (canonical InChIKey, SMILES only). Unused unless query_smiles/query_smarts is also supplied."
+            }
+          },
+          {
+            "description": "Tanimoto similarity floor, 0.0-1.0. Read only when mode=similarity; ignored otherwise. Defaults to DEFAULT_SIMILARITY_THRESHOLD (see scientific_structure_search.py) when mode=similarity and this is omitted.",
+            "in": "query",
+            "name": "similarity_threshold",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 1.0,
+                  "minimum": 0.0,
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Tanimoto similarity floor, 0.0-1.0. Read only when mode=similarity; ignored otherwise. Defaults to DEFAULT_SIMILARITY_THRESHOLD (see scientific_structure_search.py) when mode=similarity and this is omitted.",
+              "title": "Similarity Threshold"
+            }
+          },
+          {
             "in": "query",
             "name": "min_review_status",
             "required": false,

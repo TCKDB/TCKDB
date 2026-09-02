@@ -511,3 +511,82 @@ describe("Software/Workflow tool scope their vocabulary fetch by record_kind; Me
         expect(softwareUrls[1]?.searchParams.get("record_kind")).toBe("transition_state")
     })
 })
+
+// ---------------------------------------------------------------------------
+// Structure filter fields (query_smiles / query_smarts / mode /
+// similarity_threshold), folded into the composition section per the
+// owner's correction: "just make the struct and smiles search part of
+// the browser-filters class". Species/vdW only, mirroring the rest of
+// CompositionFields.
+// ---------------------------------------------------------------------------
+
+describe("structure search fields render on species/vdw, not on transition_state", () => {
+    it('kind="species": Structure field, mode select and SMARTS checkbox are present', async () => {
+        server.use(...metaHandlers())
+        renderForm("species")
+        expect(await screen.findByLabelText("Structure (SMILES)")).toBeInTheDocument()
+        expect(screen.getByLabelText("Structure search mode")).toBeInTheDocument()
+        expect(screen.getByLabelText("Treat structure as SMARTS")).toBeInTheDocument()
+    })
+
+    it('kind="vdw": also present -- the same composition section as species', async () => {
+        server.use(...metaHandlers())
+        renderForm("vdw")
+        expect(await screen.findByLabelText("Structure (SMILES)")).toBeInTheDocument()
+    })
+
+    it('kind="transition_state": absent -- /transition-states/browse accepts no structure filter', async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        expect(screen.queryByLabelText("Structure (SMILES)")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Structure search mode")).not.toBeInTheDocument()
+    })
+})
+
+describe("structure search mode gates its dependent controls", () => {
+    it("the SMARTS checkbox is present only under mode=substructure; similarity threshold only under mode=similarity", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        renderForm("species")
+        await screen.findByLabelText("Structure (SMILES)")
+
+        // Default mode is substructure: SMARTS toggle present, threshold absent.
+        expect(screen.getByLabelText("Treat structure as SMARTS")).toBeInTheDocument()
+        expect(screen.queryByLabelText("Similarity threshold")).not.toBeInTheDocument()
+
+        await user.selectOptions(screen.getByLabelText("Structure search mode"), "similarity")
+        expect(screen.queryByLabelText("Treat structure as SMARTS")).not.toBeInTheDocument()
+        expect(screen.getByLabelText("Similarity threshold")).toBeInTheDocument()
+
+        await user.selectOptions(screen.getByLabelText("Structure search mode"), "exact")
+        expect(screen.queryByLabelText("Treat structure as SMARTS")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Similarity threshold")).not.toBeInTheDocument()
+    })
+
+    it("checking SMARTS then switching away from substructure clears the toggle -- never carries a SMARTS query into a mode that rejects it", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="species" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-query-is-smarts={String(filters.queryIsSmarts)} data-testid="debug-structure" />
+            </>
+        }
+        render(<Wrapper />)
+        await screen.findByLabelText("Structure (SMILES)")
+
+        await user.click(screen.getByLabelText("Treat structure as SMARTS"))
+        expect(screen.getByTestId("debug-structure")).toHaveAttribute("data-query-is-smarts", "true")
+
+        await user.selectOptions(screen.getByLabelText("Structure search mode"), "similarity")
+        expect(screen.getByTestId("debug-structure")).toHaveAttribute("data-query-is-smarts", "false")
+
+        // Switching back to substructure shows an UNCHECKED toggle -- the
+        // clear was real state, not just a hidden control remembering a
+        // stale checked value.
+        await user.selectOptions(screen.getByLabelText("Structure search mode"), "substructure")
+        expect(screen.getByLabelText("Treat structure as SMARTS")).not.toBeChecked()
+    })
+})

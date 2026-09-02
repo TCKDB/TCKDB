@@ -52,6 +52,7 @@ from app.schemas.reads.scientific_common import (
     RecordReviewBadge,
     ReviewStatusSummary,
 )
+from app.schemas.reads.scientific_structure_search import StructureSearchMode
 
 # ---------------------------------------------------------------------------
 # Request
@@ -223,6 +224,43 @@ class SpeciesBrowseRequest(SpeciesFilterRequest):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+
+    # Structure filter -- **browse-only**, added alongside the browse-page
+    # structure search UI (frontend/src/components/BrowseFilterForm.tsx).
+    # A bounded, additive projection of
+    # /scientific/species/structure-search's own vocabulary
+    # (query_smiles / query_smarts / mode / similarity_threshold -- see
+    # app.schemas.reads.scientific_structure_search) onto the browse
+    # candidate set, so a catalogue reader can narrow by chemical
+    # structure the same way they narrow by formula/elements, in the SAME
+    # request as every other filter here -- not a second, standalone
+    # search that a caller has to run separately and intersect by hand.
+    #
+    # Only two of the standalone endpoint's four query fields are exposed
+    # (no query_inchi / query_inchi_key): a browse reader is narrowing a
+    # listing they are already looking at, not arriving with a foreign
+    # identifier, and InChI/InChIKey narrowing is exactly what
+    # /species/search already does. Supplying neither field is not an
+    # error -- unlike the standalone endpoint's missing_structure_query
+    # requirement, the structure filter is optional here, same as every
+    # other field on this class. Supplying BOTH is still refused
+    # (multiple_structure_queries), and a query_smarts under
+    # mode=similarity/exact, or any query under a mode the cartridge does
+    # not support for it, is refused (invalid_structure_query) -- see
+    # app.services.scientific_read.structure_query, whose parsing and
+    # mode/query-kind rules this filter reuses verbatim rather than
+    # forking a second copy (see that module's docstring).
+    #
+    # similarity_threshold is read only when mode=similarity; a value
+    # supplied under another mode is accepted but has no effect, the same
+    # as the standalone endpoint's own handling (see
+    # ScientificSpeciesStructureSearchRequest).
+    query_smiles: str | None = Field(default=None, max_length=4096)
+    query_smarts: str | None = Field(default=None, max_length=4096)
+    mode: StructureSearchMode = StructureSearchMode.substructure
+    similarity_threshold: float | None = Field(
+        default=None, ge=0.0, le=1.0
+    )
 
 
 # ---------------------------------------------------------------------------
