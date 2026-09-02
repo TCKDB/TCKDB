@@ -80,15 +80,21 @@ export function IdentifierSearch() {
             <input id="identifier" value={query} onChange={(event) => {
                 setQuery(event.target.value); setMessage(null); setAmbiguousInput(null)
             }}
-                placeholder="Formula, spc_/spe_ ref, SMILES, InChI, or InChIKey" autoComplete="off" />
+                placeholder="SMILES, formula, spc_/spe_ ref, InChI, or InChIKey" autoComplete="off" />
             <button type="submit" aria-busy={isSearching}>Search</button>
         </div>
         <p className="search-help">Exact only · no common-name or external resolver lookup</p>
         {message && <p className="search-message" role="status">{message}</p>}
         {ambiguousInput && <fieldset className="identifier-choice">
             <legend>Search “{ambiguousInput}” as</legend>
-            <button type="button" onClick={() => chooseAmbiguous("formula")}>Formula</button>
+            {/* SMILES leads: a structure string is the identifier a chemist
+                reaches for first, and this archive is searched by structure far
+                more often than by formula. Order is presentation only -- an
+                ambiguous value is still ASKED about rather than resolved to
+                either kind, because guessing would silently search for the
+                wrong thing. */}
             <button type="button" onClick={() => chooseAmbiguous("smiles")}>SMILES</button>
+            <button type="button" onClick={() => chooseAmbiguous("formula")}>Formula</button>
         </fieldset>}
         {matches.length > 0 && <section className="search-results" aria-label="Exact search results">
             <h2>Exact matches</h2>

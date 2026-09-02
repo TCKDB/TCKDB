@@ -41,7 +41,7 @@ function isPlausiblyBareSmiles(value: string): boolean {
 
 export function classifyIdentifier(input: string): IdentifierClassification {
     const value = input.trim()
-    if (!value) return { valid: false, message: "Enter a formula, public reference, SMILES, InChI, or InChIKey." }
+    if (!value) return { valid: false, message: "Enter a SMILES, formula, public reference, InChI, or InChIKey." }
     if (/^(formula|smiles):/i.test(value)) {
         const [, kind, supplied] = /^([^:]+):(.*)$/s.exec(value) ?? []
         const body = supplied?.trim() ?? ""
@@ -65,7 +65,7 @@ export function classifyIdentifier(input: string): IdentifierClassification {
     }
     if (isFormula(value)) {
         if (isPlausiblyBareSmiles(value)) {
-            return { valid: false, message: `“${value}” could be a formula or SMILES. Choose how to search it.`, ambiguousValue: value }
+            return { valid: false, message: `“${value}” could be a SMILES or a formula. Choose how to search it.`, ambiguousValue: value }
         }
         return { valid: true, identifier: { kind: "formula", value }, label: "formula" }
     }
