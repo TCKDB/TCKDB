@@ -239,3 +239,24 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         expect(screen.queryByText(/could not be parsed/i)).not.toBeInTheDocument()
     })
 })
+
+describe("identifier option ordering", () => {
+    it("offers SMILES before Formula when a value is ambiguous", async () => {
+        const user = userEvent.setup(); page()
+        // `CCO` parses as both an elemental formula and a structure string,
+        // so the component asks rather than guessing.
+        await searchFormula(user, "CCO")
+        const choices = await screen.findAllByRole("button", { name: /^(SMILES|Formula)$/ })
+        // Order IS the assertion. A set-membership check would pass with the
+        // buttons in either order, which is exactly the regression this guards.
+        expect(choices.map((button) => button.textContent)).toEqual(["SMILES", "Formula"])
+    })
+
+    it("names SMILES ahead of formula in the input placeholder", async () => {
+        page()
+        const placeholder = (await screen.findByLabelText("Exact species identifier"))
+            .getAttribute("placeholder") ?? ""
+        expect(placeholder).toContain("SMILES")
+        expect(placeholder.indexOf("SMILES")).toBeLessThan(placeholder.indexOf("formula"))
+    })
+})
