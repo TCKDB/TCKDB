@@ -22,8 +22,9 @@ import json
 
 import pytest
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
+from app.db.models.app_user import AppUser
 from app.db.models.calculation import (
     ArtifactIntegrityEvent,
     Calculation,
@@ -37,6 +38,7 @@ from app.db.models.calculation import (
     CalculationSPResult,
 )
 from app.db.models.common import (
+    AppUserRole,
     ArrheniusAUnits,
     ArtifactIntegrityDetectionContext,
     ArtifactIntegrityFinding,
@@ -57,6 +59,7 @@ from app.db.models.common import (
     StatmechCalculationRole,
     StatmechTreatmentKind,
     StereoKind,
+    SubmissionRecordType,
     ThermoCalculationRole,
     TorsionTreatmentKind,
     TransportCalculationRole,
@@ -88,6 +91,7 @@ from app.db.models.thermo import (
     ThermoWilhoit,
 )
 from app.db.models.transport import Transport, TransportSourceCalculation
+from app.services.record_review import set_record_review_status
 from app.services.trust import (
     COMPUTED_CALCULATION_V1,
     COMPUTED_KINETICS_V1,
@@ -1111,6 +1115,197 @@ class TestRejectedQuality:
         result = evaluate_computed_calculation(db_session, calc.id)
         assert result.label is EvidenceBadge.hard_failed
         assert result.hard_fail_reason is HardFailReason.calculation_rejected
+
+
+# ---------------------------------------------------------------------------
+# 6b. ``quality_recorded`` requires an independent review, not self-declaration
+# ---------------------------------------------------------------------------
+
+
+def _curator(db_session: Session, username: str) -> AppUser:
+    user = AppUser(username=username, role=AppUserRole.curator)
+    db_session.add(user)
+    db_session.flush()
+    return user
+
+
+def _set_calc_review(
+    db_session: Session,
+    *,
+    calc: Calculation,
+    status: RecordReviewStatus,
+    actor: AppUser,
+) -> None:
+    set_record_review_status(
+        db_session,
+        record_type=SubmissionRecordType.calculation,
+        record_id=calc.id,
+        status=status,
+        actor=actor,
+    )
+
+
+def _record_review_of(db_session: Session, calc_id: int):
+    """Reload a calc with ``record_review`` eager-loaded, mirroring the
+    evaluator's own eager-load contract, and return the relationship value.
+    """
+    loaded = db_session.get(
+        Calculation,
+        calc_id,
+        options=(selectinload(Calculation.record_review),),
+    )
+    assert loaded is not None
+    return loaded.record_review
+
+
+class TestQualityRecordedRequiresIndependentReview:
+    """Closes the self-promotion hole: a depositor's own
+    ``CalculationQuality.curated`` must never earn the ``quality_recorded``
+    evidence point on its own. Only an *approved* ``record_review`` row,
+    written by a curator through ``set_record_review_status`` rather than
+    by the depositor, may earn it.
+    """
+
+    def test_self_declared_curated_with_no_review_row_does_not_pass(
+        self, db_session
+    ):
+        """The hole itself: curated + nobody reviewed it must not pass."""
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.curated)
+
+        # Confirm the premise directly: no record_review row exists at all.
+        assert _record_review_of(db_session, calc.id) is None
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.checks["quality_recorded"] is EvidenceOutcome.missing
+        assert result.checks["quality_recorded"] is not EvidenceOutcome.passed
+
+    def test_curated_with_approved_review_passes(self, db_session):
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.curated)
+        curator = _curator(db_session, "trust-eval-curator-approves")
+        _set_calc_review(
+            db_session,
+            calc=calc,
+            status=RecordReviewStatus.approved,
+            actor=curator,
+        )
+
+        review = _record_review_of(db_session, calc.id)
+        assert review is not None
+        assert review.status is RecordReviewStatus.approved
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.checks["quality_recorded"] is EvidenceOutcome.passed
+
+    def test_raw_with_approved_review_also_passes(self, db_session):
+        """Trust is decoupled from ``quality`` entirely: a real review is
+        what matters, not the depositor's self-declared bucket. A ``raw``
+        calculation that a curator actually approved earns the same point
+        a ``curated`` one would — and, symmetrically, ``curated`` earns
+        nothing without one (see the sibling tests in this class).
+        """
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.raw)
+        curator = _curator(db_session, "trust-eval-curator-approves-raw")
+        _set_calc_review(
+            db_session,
+            calc=calc,
+            status=RecordReviewStatus.approved,
+            actor=curator,
+        )
+
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.checks["quality_recorded"] is EvidenceOutcome.passed
+
+    def test_reviewed_but_not_approved_is_distinguishable_from_no_review_at_all(
+        self, db_session
+    ):
+        """A review row that exists but isn't approving must not pass —
+        and, critically, must be a genuinely different *state* from "no
+        row exists", not merely a different label on the same state.
+
+        Both calcs report ``missing`` on the evidence check (this rubric's
+        existing convention: "applies and did not pass"), so asserting
+        only the check outcome on each in isolation would pass even if the
+        implementation quietly collapsed "reviewed, refused" and "never
+        reviewed" into one code path. What must differ is the underlying
+        ``record_review`` relationship each calc carries — checked here
+        directly, on both calcs, in the same test.
+        """
+        no_review_calc = _make_minimal_opt_calc(
+            db_session, quality=CalculationQuality.curated
+        )
+        reviewed_and_rejected_calc = _make_minimal_opt_calc(
+            db_session, quality=CalculationQuality.curated
+        )
+        curator = _curator(db_session, "trust-eval-curator-rejects")
+        _set_calc_review(
+            db_session,
+            calc=reviewed_and_rejected_calc,
+            status=RecordReviewStatus.rejected,
+            actor=curator,
+        )
+
+        no_review_result = evaluate_computed_calculation(
+            db_session, no_review_calc.id
+        )
+        reviewed_result = evaluate_computed_calculation(
+            db_session, reviewed_and_rejected_calc.id
+        )
+
+        # Same evidence *outcome* for both...
+        assert no_review_result.checks["quality_recorded"] is EvidenceOutcome.missing
+        assert reviewed_result.checks["quality_recorded"] is EvidenceOutcome.missing
+
+        # ...but a genuinely different underlying *state*: one calc has no
+        # record_review row at all, the other has a concrete, inspectable
+        # row recording who rejected it and when.
+        no_review = _record_review_of(db_session, no_review_calc.id)
+        reviewed_and_rejected = _record_review_of(
+            db_session, reviewed_and_rejected_calc.id
+        )
+        assert no_review is None
+        assert reviewed_and_rejected is not None
+        assert reviewed_and_rejected.status is RecordReviewStatus.rejected
+        assert reviewed_and_rejected.status is not RecordReviewStatus.approved
+        assert reviewed_and_rejected.reviewed_by == curator.id
+
+    def test_under_review_status_does_not_pass(self, db_session):
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.curated)
+        curator = _curator(db_session, "trust-eval-curator-under-review")
+        _set_calc_review(
+            db_session,
+            calc=calc,
+            status=RecordReviewStatus.under_review,
+            actor=curator,
+        )
+        result = evaluate_computed_calculation(db_session, calc.id)
+        assert result.checks["quality_recorded"] is EvidenceOutcome.missing
+
+    def test_loaded_and_by_id_entrypoints_agree(self, db_session):
+        """``evaluate_loaded_calculation`` must see the same review-gated
+        outcome as the session/id wrapper once the caller eager-loads
+        ``record_review`` — the two entrypoints must not disagree just
+        because one call site forgot the eager-load option.
+        """
+        calc = _make_minimal_opt_calc(db_session, quality=CalculationQuality.curated)
+        curator = _curator(db_session, "trust-eval-curator-parity")
+        _set_calc_review(
+            db_session,
+            calc=calc,
+            status=RecordReviewStatus.approved,
+            actor=curator,
+        )
+
+        loaded = db_session.get(
+            Calculation,
+            calc.id,
+            options=(selectinload(Calculation.record_review),),
+        )
+        by_loaded = evaluate_loaded_calculation(loaded)
+        by_id = evaluate_computed_calculation(db_session, calc.id)
+
+        assert by_loaded.checks["quality_recorded"] is EvidenceOutcome.passed
+        assert by_id.checks["quality_recorded"] is EvidenceOutcome.passed
+        assert by_loaded == by_id
 
 
 # ---------------------------------------------------------------------------

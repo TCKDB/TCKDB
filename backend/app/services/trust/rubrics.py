@@ -29,6 +29,7 @@ from app.db.models.common import (
     KineticsCalculationRole,
     KineticsModelKind,
     ReactionRole,
+    RecordReviewStatus,
     ScientificOriginKind,
     StatmechCalculationRole,
     StatmechTreatmentKind,
@@ -160,16 +161,53 @@ def _check_result_block_present(calc: Calculation) -> EvidenceOutcome:
 
 
 def _check_quality_recorded(calc: Calculation) -> EvidenceOutcome:
-    """Return passed when ``quality`` has been curated past the default ``raw``.
+    """Return passed only when an independent, approved review backs this calc.
 
-    A default ``raw`` quality counts as "not recorded" for the purposes
-    of this evidence check; ``rejected`` would normally short-circuit
-    into a hard-fail before reaching here, so we do not list it as
-    passed evidence either.
+    Trust is deliberately decoupled from ``calculation.quality`` here.
+    ``quality`` is a depositor-authored field on the upload payload
+    (:class:`~app.db.models.common.CalculationQuality`) — nothing stops a
+    contributor from setting it to ``curated`` on their own submission, and
+    before this fix that self-declaration alone was accepted as passed
+    evidence. A trust signal earned by the party being judged is not a
+    trust signal, so this check now reads
+    :attr:`~app.db.models.calculation.Calculation.record_review` — the
+    curator-authored row written by :func:`app.services.record_review.set_record_review_status`
+    — instead of the depositor's own claim. ``calculation.quality`` keeps
+    its other jobs (``artifacts_search`` filtering, species read-time
+    product ordering); only its role as an evidence-check input is
+    retired here.
+
+    Three states exist, and only one of them passes:
+
+    * **no ``record_review`` row at all** -- nothing has been checked yet.
+      Returns ``missing``.
+    * **a row exists, ``status`` is anything other than ``approved``**
+      (``not_reviewed``, ``under_review``, ``rejected``, ``deprecated``)
+      -- a reviewer has looked, or the record is merely awaiting review,
+      and neither is a pass. Returns ``missing`` — the same *outcome* as
+      "no row", matching this rubric's existing missing/failing
+      convention for a required-but-unmet check, but a genuinely
+      different *state*: ``calc.record_review`` is ``None`` in the first
+      case and a concrete, inspectable row in this one. Callers that need
+      to tell the two apart (e.g. an admin surface) read
+      ``calc.record_review`` directly rather than this check's outcome.
+    * **a row exists with ``status == approved``** -- an independent
+      reviewer actually signed off. Returns ``passed``.
+
+    ``CalculationQuality.rejected`` is unaffected by this change: it still
+    short-circuits the whole evaluation to ``hard_failed`` via
+    :func:`app.services.trust.evaluator._detect_calculation_hard_fail`
+    before this check's outcome is ever consulted, exactly as before.
+
+    Pure over the loaded graph, per this module's contract: reads
+    ``calc.record_review``, which callers must eager-load (see the
+    relationship's docstring in ``app/db/models/calculation.py``) rather
+    than this function querying for it.
     """
-    if calc.quality is None:
+    review = calc.record_review
+    if review is None:
         return EvidenceOutcome.missing
-    if calc.quality is CalculationQuality.curated:
+    if review.status is RecordReviewStatus.approved:
         return EvidenceOutcome.passed
     return EvidenceOutcome.missing
 
@@ -1682,7 +1720,11 @@ COMPUTED_CALCULATION_V1: EvidenceRubric = EvidenceRubric(
         EvidenceCheckSpec(
             name="quality_recorded",
             kind=EvidenceCheckKind.optional,
-            explain="CalculationQuality should be promoted past the default 'raw'.",
+            explain=(
+                "An independent reviewer should have approved this calculation "
+                "via record_review; self-declared CalculationQuality is not "
+                "sufficient (decoupled from trust, see _check_quality_recorded)."
+            ),
             runner=_check_quality_recorded,
         ),
         EvidenceCheckSpec(

@@ -700,7 +700,10 @@ def evaluate_loaded_calculation(
     This entrypoint is pure over the ORM object graph it receives: it
     does not perform a lookup and the check runners must not issue
     their own queries. Callers are responsible for eager-loading the
-    relationships required by ``computed_calculation_v1``.
+    relationships required by ``computed_calculation_v1`` — notably
+    ``Calculation.record_review`` (``selectinload(Calculation.record_review)``),
+    which ``_check_quality_recorded`` reads to decide whether an
+    independent reviewer, not the depositor, approved this calculation.
     """
     rubric = COMPUTED_CALCULATION_V1
     if calculation is None:
@@ -1125,7 +1128,11 @@ def evaluate_computed_calculation(
     already have a loaded calculation should call
     :func:`evaluate_loaded_calculation` directly.
     """
-    calculation: Optional[Calculation] = session.get(Calculation, calculation_id)
+    calculation: Optional[Calculation] = session.get(
+        Calculation,
+        calculation_id,
+        options=(selectinload(Calculation.record_review),),
+    )
     if calculation is None:
         return _empty_evaluation_for_missing_calculation(
             calculation_id, COMPUTED_CALCULATION_V1

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.db.models.common import (
     ArtifactKind,
+    CalculationQuality,
     CalculationType,
     RecordReviewStatus,
     SubmissionRecordType,
@@ -418,6 +419,41 @@ def test_include_rejected_restores_them(client, db_session):
         record_id=calc.id,
         status=RecordReviewStatus.rejected,
     )
+    body = client.get(
+        SEARCH_URL + "?artifact_kind=output_log&include_rejected=true"
+    ).json()
+    refs = {r["calculation"]["calculation_ref"] for r in body["records"]}
+    assert calc.public_ref in refs
+
+
+def test_default_hides_rejected_quality_owner(client, db_session):
+    """Distinct from ``test_default_hides_rejected_owner`` above: this one
+    exercises ``Calculation.quality == rejected`` (``_apply_calc_filters``),
+    not ``RecordReviewStatus.rejected`` (the review-badge visibility gate).
+    Neither calc here has any ``record_review`` row, so only the
+    quality-based filter can be responsible for the exclusion.
+    """
+    _, _, ok_calc = _make_species_owned_calc(db_session)
+    attach_artifact(db_session, calculation=ok_calc)
+    _, _, rejected_quality_calc = _make_species_owned_calc(db_session)
+    attach_artifact(db_session, calculation=rejected_quality_calc)
+    rejected_quality_calc.quality = CalculationQuality.rejected
+    db_session.add(rejected_quality_calc)
+    db_session.flush()
+
+    body = client.get(SEARCH_URL + "?artifact_kind=output_log").json()
+    refs = {r["calculation"]["calculation_ref"] for r in body["records"]}
+    assert ok_calc.public_ref in refs
+    assert rejected_quality_calc.public_ref not in refs
+
+
+def test_include_rejected_restores_rejected_quality_owner(client, db_session):
+    _, _, calc = _make_species_owned_calc(db_session)
+    attach_artifact(db_session, calculation=calc)
+    calc.quality = CalculationQuality.rejected
+    db_session.add(calc)
+    db_session.flush()
+
     body = client.get(
         SEARCH_URL + "?artifact_kind=output_log&include_rejected=true"
     ).json()

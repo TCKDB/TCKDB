@@ -207,6 +207,10 @@ _TRUST_EAGER_LOADS = (
     selectinload(Calculation.artifacts),
     selectinload(Calculation.parameters),
     selectinload(Calculation.child_dependencies),
+    # ``_check_quality_recorded`` (app/services/trust/rubrics.py) reads
+    # this to decide whether an independent reviewer, not the depositor,
+    # approved the calculation. Required whenever "trust" is requested.
+    selectinload(Calculation.record_review),
 )
 
 
