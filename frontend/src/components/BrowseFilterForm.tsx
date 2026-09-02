@@ -33,6 +33,18 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
     return (
         <form aria-label="Narrow this listing" className="browse-filters" onSubmit={(event) => event.preventDefault()}>
             <div className="browse-filter-grid">
+                {/*
+                 * Structure and formula lead the grid -- they are how a
+                 * reader FINDS a molecule; charge, review status and the
+                 * rest are refinements applied afterwards ("why isn't
+                 * smiles and formula the first in the filter?" -- the
+                 * owner). `CompositionFields` already opens with Formula
+                 * then the structure controls (see its own body below), so
+                 * moving the whole group first is enough -- no need to
+                 * flatten it.
+                 */}
+                {kind !== "transition_state" && <CompositionFields filters={filters} onChange={onChange} />}
+
                 <TextField label="Charge" onChange={(value) => onChange({ charge: value })} value={filters.charge} />
                 <TextField label="Multiplicity" onChange={(value) => onChange({ multiplicity: value })} value={filters.multiplicity} />
                 <SelectField
@@ -44,7 +56,6 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
                 <CheckField label="Include rejected" checked={filters.includeRejected} onChange={(checked) => onChange({ includeRejected: checked })} />
                 <CheckField label="Include deprecated" checked={filters.includeDeprecated} onChange={(checked) => onChange({ includeDeprecated: checked })} />
 
-                {kind !== "transition_state" && <CompositionFields filters={filters} onChange={onChange} />}
                 <ProvenanceFields filters={filters} kind={kind} onChange={onChange} />
                 {kind === "transition_state" && <EvidenceFields filters={filters} onChange={onChange} />}
             </div>

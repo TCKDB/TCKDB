@@ -18,6 +18,7 @@ from app.db.models.common import (
     SpeciesEntryStateKind,
     SubmissionRecordType,
 )
+from app.db.models.species import SpeciesEntry
 from app.schemas.reads.scientific_species import (
     ElementMatchMode,
     SpeciesBrowseRequest,
@@ -1448,3 +1449,301 @@ def test_structure_filter_similarity_threshold_echoed_only_in_similarity_mode(
 
     # Omitted similarity_threshold still echoes the effective default.
     assert response.request.filter["similarity_threshold"] == pytest.approx(0.5)
+
+
+# ---------------------------------------------------------------------------
+# Smallest-match-first ordering, under an active substructure/similarity
+# structure filter. The owner's ask: typing a SMILES incrementally, a
+# substructure match returns everything containing that fragment, and the
+# smallest match should sort first (see _rank_and_slice_species's
+# ``order_by_size`` docstring for the full design). Nothing here touches
+# ordinary browse (no structure filter) or exact mode -- both are covered
+# by dedicated tests below that assert the OLD order still applies.
+# ---------------------------------------------------------------------------
+
+
+def test_structure_filter_substructure_orders_smallest_match_first(db_session):
+    """The headline case: four DIFFERENT heavy-atom counts, not two -- a
+    fixture where any two rows share a count cannot distinguish a correct
+    ascending comparator from a reversed one, and a fixture of only two
+    rows barely exercises the sort at all."""
+    methanol, _ = _make_real_species(db_session, "CO")  # 2 heavy atoms
+    ethanol, _ = _make_real_species(db_session, "CCO")  # 3
+    propanol, _ = _make_real_species(db_session, "CCCO")  # 4
+    butanol, _ = _make_real_species(db_session, "CCCCO")  # 5
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CO", mode="substructure", limit=200),
+    )
+
+    ours = {methanol.id, ethanol.id, propanol.id, butanol.id}
+    returned_ids = [r.species_id for r in response.records if r.species_id in ours]
+    assert returned_ids == [methanol.id, ethanol.id, propanol.id, butanol.id]
+
+
+def test_structure_filter_similarity_also_orders_smallest_match_first(db_session):
+    """Similarity mode gets the same size sort as substructure -- both are
+    the "more than one size of match is normal" modes named in the
+    ``order_by_size`` derivation in ``browse_species``."""
+    methanol, _ = _make_real_species(db_session, "CO")  # 2 heavy atoms
+    ethanol, _ = _make_real_species(db_session, "CCO")  # 3
+    propanol, _ = _make_real_species(db_session, "CCCO")  # 4
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(
+            query_smiles="CO", mode="similarity", similarity_threshold=0.1, limit=200
+        ),
+    )
+
+    ours = {methanol.id, ethanol.id, propanol.id}
+    returned_ids = [r.species_id for r in response.records if r.species_id in ours]
+    assert returned_ids == [methanol.id, ethanol.id, propanol.id]
+
+
+def test_structure_filter_size_ties_are_stable_across_repeated_requests(db_session):
+    """Heavy-atom-count ties are the common case (many species share a
+    count), so the sort needs a deterministic tiebreak -- otherwise two
+    identical requests could return a tied pair in a different relative
+    order.
+
+    Comparing two calls under the SAME query plan can look stable by
+    accident -- unchanged data tends to walk a hash table or a heap in the
+    same order every time even with no tiebreak at all in the SQL (see
+    ``test_pagination_is_stable_even_across_different_query_plans``'s own
+    docstring, which hit exactly this while writing that test). So this
+    forces a plan change (``HashAggregate`` vs a forced ``GroupAggregate``)
+    between the two calls, same technique, rather than repeating the same
+    plan twice."""
+    from sqlalchemy import text
+
+    ethanol, _ = _make_real_species(db_session, "CCO")  # 3 heavy atoms
+    dme, _ = _make_real_species(db_session, "COC")  # 3 heavy atoms, different shape
+    mhp, _ = _make_real_species(
+        db_session, "COO"
+    )  # methyl hydroperoxide, 3 heavy atoms, a third distinct shape --
+    # three tied rows, not two: with only a pair, a coin-flip 50% chance
+    # of an accidentally-matching random order can pass this test even
+    # with no real tiebreak at all (confirmed while writing this test).
+    tied_ids = {ethanol.id, dme.id, mhp.id}
+
+    def order(*, force_groupagg: bool) -> list[int]:
+        db_session.execute(
+            text(f"SET LOCAL enable_hashagg = {'off' if force_groupagg else 'on'}")
+        )
+        response = browse_species(
+            db_session,
+            SpeciesBrowseRequest(query_smiles="CO", mode="substructure", limit=200),
+        )
+        return [r.species_id for r in response.records if r.species_id in tied_ids]
+
+    first = order(force_groupagg=False)
+    second = order(force_groupagg=True)
+    assert set(first) == tied_ids
+    assert first == second
+
+
+def test_structure_filter_size_sort_pagination_has_no_duplicates_or_gaps(db_session):
+    """The assertion that actually catches a missing unique tiebreak on the
+    size-sort path: fetching page 1 then page 2 of a size-ordered listing
+    must tile the matching set exactly -- no id returned on both pages,
+    none dropped on neither.
+
+    Three of the eight fixture species share ONE heavy-atom count (4), and
+    that tied trio is placed so it straddles the ``offset=4`` page
+    boundary (ascending sizes 2, 3, 4, 4, 4, 5, 6, 7 -- page one takes the
+    first four, page two the rest, splitting the tied trio across the
+    boundary). A tie that does not straddle the boundary can't expose a
+    missing tiebreak: the pages would still tile correctly regardless of
+    which order the tied rows come back in. The two page fetches are also
+    forced onto different aggregate plans (same ``enable_hashagg`` technique
+    as the ties test above and ``test_pagination_is_stable_even_across_different_query_plans``),
+    since two same-plan calls can look stable by accident."""
+    from sqlalchemy import text
+
+    fixture_smiles = [
+        "CO",  # methanol, 2 heavy atoms
+        "CCO",  # ethanol, 3
+        "CCCO",  # butanol (linear), 4
+        "CC(C)O",  # isopropanol (branched), 4 -- ties with butanol
+        "COCC",  # ethyl methyl ether, 4 -- ties with both
+        "CCCCO",  # pentanol, 5
+        "CCCCCO",  # hexanol, 6
+        "CCCCCCO",  # heptanol, 7
+    ]
+    species_ids = [_make_real_species(db_session, s)[0].id for s in fixture_smiles]
+
+    def page(offset: int, limit: int, *, force_groupagg: bool) -> list[int]:
+        db_session.execute(
+            text(f"SET LOCAL enable_hashagg = {'off' if force_groupagg else 'on'}")
+        )
+        response = browse_species(
+            db_session,
+            SpeciesBrowseRequest(
+                query_smiles="CO", mode="substructure", offset=offset, limit=limit
+            ),
+        )
+        return [r.species_id for r in response.records if r.species_id in species_ids]
+
+    page_a = page(0, 4, force_groupagg=False)
+    page_b = page(4, 4, force_groupagg=True)
+
+    duplicated = set(page_a) & set(page_b)
+    combined = page_a + page_b
+    dropped = set(species_ids) - set(combined)
+    assert not duplicated, f"row(s) on both pages: {sorted(duplicated)}"
+    assert not dropped, f"row(s) missing from both pages: {sorted(dropped)}"
+    assert set(combined) == set(species_ids)
+
+
+def test_no_structure_filter_leaves_the_default_order_unchanged(db_session):
+    """Guardrail: the size sort must never leak into an ordinary browse
+    with no active structure filter. Two species, small then large, with
+    NO structure filter: the existing default order is created_at DESC
+    (then id DESC) among ties, so the LATER-created (larger) species must
+    lead -- the opposite of what a leaked size sort would produce."""
+    small, _ = _make_real_species(db_session, "CO")  # 2 heavy atoms, created first
+    large, _ = _make_real_species(
+        db_session, "CCCCCCCCCCO"
+    )  # 11 heavy atoms, created second
+
+    response = browse_species(db_session, SpeciesBrowseRequest(limit=200))
+
+    returned_ids = [
+        r.species_id for r in response.records if r.species_id in (small.id, large.id)
+    ]
+    assert returned_ids == [large.id, small.id]
+
+
+def test_structure_filter_exact_mode_can_return_multiple_species_unsized(db_session):
+    """``species.inchi_key`` is explicitly non-unique -- see
+    ``Species.__table_args__``: "one InChIKey may map to several species"
+    -- so an ``exact`` match CAN return more than one row; this is
+    verified here rather than assumed. Because ``exact`` is not given the
+    size sort (see ``_rank_and_slice_species``'s ``order_by_size``
+    docstring for why), the two rows keep the ordinary
+    ``best_rank/has_entries/created_at DESC/id DESC`` order: the
+    LATER-created (larger) row leads, the opposite of what a leaked size
+    sort would produce. Same synthetic-shared-InChIKey technique as
+    production data can genuinely produce (distinct species, one
+    InChIKey)."""
+    target_key = _real_inchi_key("CO")
+    small = make_species(db_session, smiles=unique_smiles(), inchi_key=target_key)
+    make_species_entry(db_session, small)
+    large = make_species(db_session, smiles=unique_smiles(), inchi_key=target_key)
+    make_species_entry(db_session, large)
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CO", mode="exact", limit=200),
+    )
+
+    returned_ids = [
+        r.species_id for r in response.records if r.species_id in (small.id, large.id)
+    ]
+    assert set(returned_ids) == {small.id, large.id}
+    assert returned_ids == [large.id, small.id]
+
+
+def test_structure_filter_size_sort_keeps_unparseable_smiles_species_visible(
+    db_session,
+):
+    """A species whose OWN ``smiles`` RDKit cannot parse yields a NULL
+    ``heavy_atom_count`` (:func:`_heavy_atom_count_expr`'s documented
+    NULL-on-unparseable behaviour) -- ``.nulls_last()`` must keep that row
+    in the listing, not drop it, and it must land deterministically (after
+    every successfully-sized row).
+
+    Contrived on purpose: production species resolution derives
+    ``species_entry.mol`` from the SAME ``species.smiles`` (see
+    ``make_species_entry``'s docstring), so the two normally fail
+    together -- which is exactly why a species with unparseable ``smiles``
+    can never reach a structure-filtered candidate set through the normal
+    pipeline (``_apply_structure_filter`` requires ``species_entry.mol IS
+    NOT NULL``). This fixture deliberately decouples them (a valid ``mol``
+    on an entry whose parent species carries garbage ``smiles``) so the
+    NULLS-LAST path is actually exercised rather than assumed safe because
+    it is unreachable in practice.
+    """
+    garbled = make_species(
+        db_session, smiles="not-a-smiles(((", inchi_key=next_inchi_key("BRNULLSZ")
+    )
+    db_session.add(SpeciesEntry(species_id=garbled.id, mol="CCO"))
+    db_session.flush()
+    ethanol, _ = _make_real_species(db_session, "CCO")  # 3 heavy atoms, real size
+
+    response = browse_species(
+        db_session,
+        SpeciesBrowseRequest(query_smiles="CO", mode="substructure", limit=200),
+    )
+
+    ours = {garbled.id, ethanol.id}
+    returned_ids = [r.species_id for r in response.records if r.species_id in ours]
+    # Not dropped, and sorted after the species with a known size.
+    assert returned_ids == [ethanol.id, garbled.id]
+
+
+def test_structure_filter_size_sort_keeps_id_as_the_final_tiebreak(db_session):
+    """A direct, plan-independent guard for the missing-unique-tiebreak
+    defect the pagination test above targets behaviourally.
+
+    Two Postgres rows tied on every other key have no order guaranteed by
+    the SQL standard, and empirically (checked while writing this suite,
+    forcing ``enable_hashagg`` on/off between two page fetches the same
+    way ``test_pagination_is_stable_even_across_different_query_plans``
+    does for the unfiltered case) this particular query shape did not
+    reproduce a visible reordering at any fixture size tried -- Postgres's
+    sort happened to preserve input order for every tied group tried here,
+    which is NOT a guarantee this code can rely on. So this test does not
+    depend on provoking that nondeterminism at runtime: it captures the
+    actual SQL Postgres is sent for a size-sorted browse and asserts
+    ``id`` is present as the LAST key in the ``ORDER BY`` clause, after
+    ``heavy_atom_count`` -- the thing that makes the full key list a total
+    order regardless of what any given Postgres version does with ties on
+    a given day.
+    """
+    from sqlalchemy import event
+
+    _make_real_species(db_session, "CCCO")
+
+    captured: list[str] = []
+
+    def _capture(conn, cursor, statement, parameters, context, executemany):
+        captured.append(statement)
+
+    bind = db_session.get_bind()
+    event.listen(bind, "before_cursor_execute", _capture)
+    try:
+        browse_species(
+            db_session,
+            SpeciesBrowseRequest(query_smiles="CO", mode="substructure"),
+        )
+    finally:
+        event.remove(bind, "before_cursor_execute", _capture)
+
+    order_by_statements = [
+        s for s in captured if "ORDER BY" in s and "heavy_atom_count" in s
+    ]
+    assert order_by_statements, (
+        "no captured statement both sorted and referenced heavy_atom_count "
+        f"-- captured {len(captured)} statement(s) total"
+    )
+    for statement in order_by_statements:
+        # Not a bare ".id" substring search: the CASE expression that
+        # computes best_rank/has_entries legitimately contains
+        # "species_entry.id IS NOT NULL" earlier in the same ORDER BY
+        # clause, which a looser check matches by accident. The compiled
+        # sort key itself is this exact, unambiguous fragment.
+        order_by_clause = statement.split("ORDER BY", 1)[1]
+        heavy_pos = order_by_clause.find("heavy_atom_count")
+        id_key_pos = order_by_clause.find("candidate_species.id DESC")
+        assert heavy_pos != -1, statement
+        assert id_key_pos != -1, (
+            "candidate_species.id DESC is not present as an ORDER BY key: "
+            f"{order_by_clause!r}"
+        )
+        assert heavy_pos < id_key_pos, (
+            "heavy_atom_count must lead id, not the other way around: "
+            f"{order_by_clause!r}"
+        )
