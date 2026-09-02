@@ -93,6 +93,21 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
     const typeCounts = calculationTypeCounts(conformer)
     const fingerprint = conformer.conformer_group.fingerprint
     const rotors = fingerprint ? buildBasinRotors(fingerprint) : null
+    // One line, no wrap, per card (`species-entry.css`'s `.conformer-card-
+    // meta`/`-coverage`) -- three fixed columns per row do not leave room
+    // for the longest real value to fit unwrapped (measured: a 69-character
+    // meta line exists in the live archive), so that CSS clips with an
+    // ellipsis rather than wrapping or silently truncating. Built as a
+    // plain string, once, here -- rather than as JSX with inline `{...}`
+    // expressions the way this used to render -- so the exact same text
+    // backs BOTH the visible (possibly clipped) line and its `title`
+    // tooltip, which is what keeps the full value reachable on hover/
+    // focus. The two can never drift apart because there is only one
+    // string, not a rendered version and a separately-composed summary.
+    const metaText = `${total} observation${total === 1 ? "" : "s"} · `
+        + `${conformer.evidence_summary.calculation_count} calculation row${conformer.evidence_summary.calculation_count === 1 ? "" : "s"}`
+        + (typeCounts.length > 0 ? ` (${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")})` : "")
+    const coverageText = `opt ${coverage.opt}/${total} obs · freq ${coverage.freq}/${total} obs · sp ${coverage.sp}/${total} obs`
     return (
         <div className="conformer-card" data-selected={isSelected}>
             <button
@@ -102,13 +117,8 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
                 onClick={() => onSelect(ref)}
             >
                 <span className="conformer-card-label">{conformerLabel(conformer)}</span>
-                <span className="conformer-card-meta">
-                    {total} observation{total === 1 ? "" : "s"} · {conformer.evidence_summary.calculation_count} calculation row{conformer.evidence_summary.calculation_count === 1 ? "" : "s"}
-                    {typeCounts.length > 0 && ` (${typeCounts.map(({ type, count }) => `${count} ${type}`).join(" · ")})`}
-                </span>
-                <span className="conformer-card-coverage">
-                    opt {coverage.opt}/{total} obs · freq {coverage.freq}/{total} obs · sp {coverage.sp}/{total} obs
-                </span>
+                <span className="conformer-card-meta" title={metaText}>{metaText}</span>
+                <span className="conformer-card-coverage" title={coverageText}>{coverageText}</span>
             </button>
             {/* `rotors` is `null` when the archive returned no fingerprint at
                 all for this group (not requested, or the row itself is

@@ -84,6 +84,39 @@ describe("ConformerSelector card", () => {
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
         expect(within(card).getByText("1 observation · 2 calculation rows (1 opt · 1 freq)")).toBeVisible()
     })
+
+    // `species-entry.css`'s `.conformer-card-meta`/`-coverage` clip long
+    // lines with an ellipsis at three-per-row width (measured: a
+    // 69-character real meta line exists in the live archive -- see that
+    // stylesheet's comment). The full value must stay reachable even when
+    // clipped -- "never silently truncate a scientific value" -- via the
+    // native `title` tooltip, built from the EXACT SAME string as what's
+    // rendered, so the two can never drift apart.
+    it("carries the full, un-clipped meta/coverage text in a title tooltip -- reachable even when the visible line is ellipsis-clipped", () => {
+        const many = conformer({
+            evidence_summary: {
+                calculation_count: 16, optimization_chain_count: 4, geometry_count: 4,
+                evidence_coverage: { opt: 4, freq: 4, sp: 4 }, levels_of_theory: {},
+            },
+            observations_summary: { total: 4 },
+            calculations: [
+                { calculation_ref: "c1", type: "opt" }, { calculation_ref: "c2", type: "opt" },
+                { calculation_ref: "c3", type: "opt" }, { calculation_ref: "c4", type: "opt" },
+                { calculation_ref: "c5", type: "freq" }, { calculation_ref: "c6", type: "freq" },
+                { calculation_ref: "c7", type: "freq" }, { calculation_ref: "c8", type: "freq" },
+                { calculation_ref: "c9", type: "sp" }, { calculation_ref: "c10", type: "sp" },
+                { calculation_ref: "c11", type: "sp" }, { calculation_ref: "c12", type: "sp" },
+                { calculation_ref: "c13", type: "scan" }, { calculation_ref: "c14", type: "scan" },
+                { calculation_ref: "c15", type: "scan" }, { calculation_ref: "c16", type: "scan" },
+            ],
+        })
+        renderSelector([many])
+        const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
+        const meta = within(card).getByText("4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4 scan)")
+        expect(meta).toHaveAttribute("title", "4 observations · 16 calculation rows (4 opt · 4 freq · 4 sp · 4 scan)")
+        const coverage = within(card).getByText("opt 4/4 obs · freq 4/4 obs · sp 4/4 obs")
+        expect(coverage).toHaveAttribute("title", "opt 4/4 obs · freq 4/4 obs · sp 4/4 obs")
+    })
 })
 
 // The prompt's own measured fingerprint shapes: the 3-group species' first
@@ -214,6 +247,24 @@ describe("ConformerSelector basin identity (item 3)", () => {
     // The majority case, measured: 37 of 66 groups have no rotors at all.
     // Must render as a POSITIVE statement, not an empty section or a bare
     // dash that reads as missing data.
+    // ROUND-TRIP ANCHOR: `{ rotor_count: 0, bin_width_deg: 15, torsions: [] }`
+    // is not an invented shape -- it is the LITERAL fingerprint object the
+    // fixed backend endpoint now serves for a real zero-rotor group
+    // (`backend/tests/api/scientific/test_api_scientific_conformers.py::
+    // test_cg_detail_include_fingerprints_zero_rotor_group_serves_object_not_null`
+    // asserts the exact same JSON off a real HTTP response). Before that
+    // backend fix (`_build_group_fingerprint`,
+    // `backend/app/services/scientific_read/conformers.py`), this endpoint
+    // answered `fingerprint: null` for every one of the archive's 37 (of
+    // 66 measured) rigid groups -- indistinguishable on the wire from a
+    // group that never had a fingerprint computed at all -- so this
+    // component's "no rotatable bonds" branch, though correctly written
+    // and covered right here, could never fire against real production
+    // data. A true single cross-language test isn't practical (separate
+    // pytest/vitest runners, no shared fixture file) -- this comment plus
+    // the identical literal object on both ends is the closest available
+    // substitute, and it is what would go stale first if either side's
+    // shape ever drifted.
     it("renders a rigid-conformer statement -- not an empty section -- for a group with a fingerprint but zero rotors", () => {
         const rigid = conformer({
             conformer_group: {
@@ -257,5 +308,97 @@ describe("ConformerSelector basin identity (item 3)", () => {
         renderSelector([noFingerprint])
         expect(document.querySelector(".conformer-basin-identity")).toBeNull()
         expect(screen.queryByText(/No rotatable bonds recorded/)).not.toBeInTheDocument()
+    })
+})
+
+// `species-entry.css`'s `@supports (grid-template-rows: subgrid)` block
+// pins `.conformer-card > .refs-disclosure` to an EXPLICIT row line
+// (`grid-row: 5`), specifically so a card that renders less content above
+// it -- a 1-rotor basin box instead of a 7-rotor one, or (the archive's
+// own majority case) no basin element at all -- still lines its
+// references toggle up with every sibling card's. That CSS only works if
+// `.refs-disclosure` really is a DIRECT child of `.conformer-card`, in a
+// stable structural position, regardless of what rendered above it --
+// jsdom cannot lay the page out to show the pixels lining up (see
+// `species-entry.css.test.ts` for what CAN be checked about the CSS
+// itself without a browser), but it CAN show that the DOM the CSS acts on
+// stays uniform across 1 rotor, 7 rotors, and 0.
+describe("conformer card DOM structure feeds the CSS row-track pinning (design/conformer-card-alignment)", () => {
+    function rotorFingerprint(count: number) {
+        return {
+            rotor_count: count,
+            bin_width_deg: 15,
+            torsions: Array.from({ length: count }, (_, i) => ({
+                rotor_key: `R_${i + 1}_${i + 2}`,
+                quantized_bin: i,
+                raw_torsion_deg: i * 10,
+                folded_torsion_deg: i * 10,
+            })),
+        }
+    }
+
+    it("a 1-rotor card and a 7-rotor card both place References as .conformer-card's 3rd direct child, right after the basin element -- the shape a same-content fixture could never catch", () => {
+        const one = conformer({
+            conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1", fingerprint: rotorFingerprint(1) },
+        })
+        const seven = conformer({
+            conformer_group: { conformer_group_ref: "cg_two", label: "conformer_2", fingerprint: rotorFingerprint(7) },
+        })
+        renderSelector([one, seven])
+
+        for (const label of ["Conformer Group 1", "Conformer Group 2"]) {
+            const card = screen.getByText(label, { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+            // Exactly 3 direct children regardless of rotor count: the
+            // select button, the basin identity box, and the references
+            // disclosure -- the same shape the CSS's fixed 5-row subgrid
+            // (button spans rows 1-3, basin is row 4, references is row 5)
+            // relies on to keep every card's references toggle on the same
+            // line, whether the basin box above it holds 1 rotor or 7.
+            expect(Array.from(card.children).map((el) => el.className)).toEqual([
+                "conformer-card-select", "conformer-basin-identity", "refs-disclosure",
+            ])
+        }
+
+        const oneCard = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+        const sevenCard = screen.getByText("Conformer Group 2", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+        // The rotor COUNTS genuinely differ (this is what a fixture where
+        // every card has identical content cannot exercise) -- only the
+        // number and identity of .conformer-card's own DIRECT children,
+        // the CSS's row-track anchor points, stay equal.
+        expect(oneCard.querySelectorAll(".conformer-basin-rotor")).toHaveLength(1)
+        expect(sevenCard.querySelectorAll(".conformer-basin-rotor")).toHaveLength(7)
+        expect(oneCard.children.length).toBe(sevenCard.children.length)
+    })
+
+    it("a zero-rotor card (fingerprint present, empty torsions -- the archive's OWN 'rigid' shape) still places References as .conformer-card's 3rd direct child, occupying the basin row's slot rather than collapsing it away", () => {
+        const rigid = conformer({
+            conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1", fingerprint: rotorFingerprint(0) },
+        })
+        renderSelector([rigid])
+        const card = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+        expect(Array.from(card.children).map((el) => el.className)).toEqual([
+            "conformer-card-select", "conformer-basin-rigid", "refs-disclosure",
+        ])
+    })
+
+    // FLAGGED, not fixed on this branch (CSS-scoped work; see the
+    // row-track-alignment comment in `species-entry.css`): a group with NO
+    // fingerprint at all on the wire renders NEITHER basin variant, so
+    // `.refs-disclosure` becomes `.conformer-card`'s 2nd direct child here,
+    // not its 3rd -- unlike the zero-rotor-with-fingerprint case just
+    // above. The CSS's explicit `grid-row: 5` pin on `.conformer-card >
+    // .refs-disclosure` still lands it on the shared references row
+    // regardless of which direct-child position it occupies in the DOM --
+    // row 4 (the basin row) is simply empty for this card, reserved by the
+    // grid's own row-track sizing, not by an element sitting inside it.
+    // This documents that DOM shape rather than asserting a 3rd child that
+    // does not exist for it.
+    it("a no-fingerprint card has References as its 2nd (not 3rd) direct child -- the CSS's explicit row pin, not DOM position, is what keeps it aligned with siblings that DO render a basin element", () => {
+        const noFingerprint = conformer({
+            conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1" },
+        })
+        renderSelector([noFingerprint])
+        const card = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
+        expect(Array.from(card.children).map((el) => el.className)).toEqual(["conformer-card-select", "refs-disclosure"])
     })
 })

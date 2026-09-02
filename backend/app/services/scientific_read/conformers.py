@@ -574,10 +574,29 @@ def _build_group_fingerprint(
     ``fingerprint_hash`` is read off the blob but never placed on the
     returned shape -- see :class:`ConformerGroupFingerprint`.
 
-    Returns ``None`` when the row carries no fingerprint blob, or when
-    the blob is malformed (not all four arrays present, non-list, or not
-    all the same length). A malformed/partial blob must never manufacture
-    a specious pairing -- absence is the honest response.
+    Returns ``None`` only when the row genuinely cannot answer: no
+    fingerprint blob at all, or a blob that is malformed (not all four
+    arrays present, non-list, or not all the same length). A
+    malformed/partial blob must never manufacture a specious pairing --
+    absence is the honest response there.
+
+    An empty ``canonical_rotor_keys`` array is NOT one of those cases --
+    it is DATA, not absence. ``TorsionFingerprint.to_dict()``
+    (``app.chemistry.torsion_fingerprint``) always writes a real
+    ``bin_width_deg`` and all four arrays, even for a molecule with zero
+    rotatable bonds (``rotor_slots == []``); ``resolve_conformer_group``
+    (``app.services.conformer_resolution``) stores exactly that blob
+    whenever atom-mapping succeeded, regardless of rotor count. Treating
+    that stored, well-formed, zero-rotor blob the same as "no blob at
+    all" collapsed two different facts -- "we know this molecule is
+    rigid" and "we never computed a fingerprint" -- into the same
+    ``None``, which is what silently disabled the frontend's rigid-
+    conformer statement (``.conformer-basin-rigid`` in
+    ``ConformerSelector.tsx``) against every real zero-rotor group: 37 of
+    66 measured. ``bin_width_deg`` stays required either way -- it is
+    populated unconditionally by ``to_dict()``, so its absence still
+    means a genuinely malformed or hand-inserted blob, never a rigid
+    molecule's real shape.
     """
     blob = cg.representative_fingerprint_json
     if not blob:
@@ -593,8 +612,11 @@ def _build_group_fingerprint(
     arrays = (rotor_keys, quantized_bins, raw_torsions, folded_torsions)
     if any(not isinstance(a, list) for a in arrays) or bin_width_deg is None:
         return None
-    if not rotor_keys:
-        return None
+    # NOT `if not rotor_keys: return None` -- an empty list here is a rigid
+    # molecule's real, well-formed answer (see the docstring above), and
+    # falls straight through the length-agreement check next: all four
+    # arrays empty is `{0}`, one distinct length, same as any other
+    # internally-consistent blob.
     lengths = {len(a) for a in arrays}
     if len(lengths) != 1:
         return None
