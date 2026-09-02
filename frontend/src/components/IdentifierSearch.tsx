@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { searchSpeciesExact, type SearchMatch } from "../api/scientificApi"
+import { ScientificApiError, searchSpeciesExact, type SearchMatch } from "../api/scientificApi"
 import { classifyIdentifier, resultPath, type IdentifierClassification } from "../domain/recordModel"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { Formula } from "./Formula"
@@ -37,7 +37,21 @@ export function IdentifierSearch() {
             } else setMatches(matches)
         } catch (error) {
             if (activeRequest.current !== controller || controller.signal.aborted || (error instanceof DOMException && error.name === "AbortError")) return
-            setMessage("The archive could not complete that search. Check the identifier and try again.")
+            // An unparseable structure query (RDKit rejected the SMILES/InChI)
+            // is a DIFFERENT fact from "the archive was searched and holds no
+            // such record" -- the former says the input itself is malformed,
+            // the latter says the input was understood and came up empty.
+            // Collapsing them into one generic message would tell a chemist
+            // their syntactically bad SMILES "was not found", which reads as
+            // "this molecule is absent from the archive" -- exactly the wrong
+            // answer this fix exists to stop giving. The archive's own `code`
+            // (`app/api/error_contract.py`) distinguishes the two; see
+            // `structure_search.py`'s `invalid_structure_query` raises.
+            if (error instanceof ScientificApiError && error.code === "invalid_structure_query") {
+                setMessage(`"${classified.identifier.value}" could not be parsed as a valid ${classified.label} -- check the syntax and try again.`)
+            } else {
+                setMessage("The archive could not complete that search. Check the identifier and try again.")
+            }
         } finally { if (activeRequest.current === controller && !controller.signal.aborted) setIsSearching(false) }
     }
 

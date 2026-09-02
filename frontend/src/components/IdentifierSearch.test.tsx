@@ -124,3 +124,118 @@ describe("IdentifierSearch chemistry-first results", () => {
         expect(row.getByText("spe_ethanol0000000000000000000")).toBeVisible()
     })
 })
+
+/**
+ * The bug this suite exists to catch: a SMILES search that compares
+ * strings byte-for-byte against the stored canonical form instead of
+ * chemical identity. A fixture built from the CANONICAL spelling
+ * ("CCC(=O)O") cannot catch that bug -- a string-equality implementation
+ * would pass it too. Both cases below use a spelling that is chemically
+ * identical to, but textually different from, the archive's own
+ * canonical SMILES for propanoic acid.
+ */
+describe("SMILES/InChI search routes through structure-search (chemical identity, not string equality)", () => {
+    const propanoicAcid = {
+        species_ref: "spc_propanoic00000000000000acid",
+        species_entry_ref: "spe_propanoic00000000000000acid",
+        smiles: "CCC(=O)O",
+        charge: 0,
+        multiplicity: 1,
+    }
+
+    it.each([
+        ["OC(=O)CC"],
+        ["C(CC)(=O)O"],
+    ])("finds propanoic acid from the non-canonical spelling \"%s\"", async (nonCanonical) => {
+        let capturedUrl: URL | undefined
+        // Deliberately no `/scientific/species/search` handler is
+        // registered here. This suite's `server` is configured
+        // `onUnhandledRequest: "error"` (top of file) -- a regression to
+        // string-equality search (routing through
+        // `species/search?smiles=`, the exact defect this test guards
+        // against) would hit that unhandled route and fail the test for
+        // that reason alone, even before the assertions below run.
+        server.use(http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
+            capturedUrl = new URL(request.url)
+            return HttpResponse.json({ records: [propanoicAcid] })
+        }))
+        const user = userEvent.setup(); page()
+        await searchFormula(user, nonCanonical)
+
+        expect(await screen.findByText(propanoicAcid.species_entry_ref)).toBeVisible()
+        expect(screen.queryByText(/No exact/)).not.toBeInTheDocument()
+        expect(capturedUrl?.pathname).toBe("/api/v1/scientific/species/structure-search")
+        expect(capturedUrl?.searchParams.get("query_smiles")).toBe(nonCanonical)
+        expect(capturedUrl?.searchParams.get("mode")).toBe("exact")
+    })
+
+    it("routes InChI the same way -- through structure-search mode=exact, not string equality", async () => {
+        let capturedUrl: URL | undefined
+        server.use(http.get("/api/v1/scientific/species/structure-search", ({ request }) => {
+            capturedUrl = new URL(request.url)
+            return HttpResponse.json({ records: [propanoicAcid] })
+        }))
+        const user = userEvent.setup(); page()
+        const inchi = "InChI=1S/C3H6O2/c1-2-3(4)5/h2H2,1H3,(H,4,5)"
+        await searchFormula(user, inchi)
+
+        expect(await screen.findByText(propanoicAcid.species_entry_ref)).toBeVisible()
+        expect(capturedUrl?.searchParams.get("query_inchi")).toBe(inchi)
+        expect(capturedUrl?.searchParams.get("mode")).toBe("exact")
+    })
+
+    it("a formula query still goes through the formula path, never through RDKit/structure-search", async () => {
+        let capturedUrl: URL | undefined
+        server.use(http.get("/api/v1/scientific/species/search", ({ request }) => {
+            capturedUrl = new URL(request.url)
+            return HttpResponse.json({ records: [methylRadical] })
+        }))
+        // No structure-search handler registered -- an accidental funnel of
+        // every identifier through one endpoint (the constraint this test
+        // guards) would hit the unhandled route and fail here too.
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "CH3")
+
+        expect(await screen.findByText(methylRadical.species_ref)).toBeVisible()
+        expect(capturedUrl?.pathname).toBe("/api/v1/scientific/species/search")
+        expect(capturedUrl?.searchParams.get("formula")).toBe("CH3")
+        expect(capturedUrl?.searchParams.has("query_smiles")).toBe(false)
+    })
+
+    it("reports an unparseable SMILES as invalid, distinct from 'not found' and from a generic failure", async () => {
+        server.use(http.get("/api/v1/scientific/species/structure-search", () =>
+            HttpResponse.json(
+                {
+                    code: "invalid_structure_query",
+                    detail: "invalid_structure_query: RDKit could not parse the SMILES supplied as query_smiles.",
+                },
+                { status: 422 },
+            )
+        ))
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "smiles:not((a valid smiles")
+
+        const message = await screen.findByText(/could not be parsed/i)
+        expect(message).toBeVisible()
+        // Distinct wording from both other failure modes: a resolved
+        // zero-record search, and an unclassified/network failure.
+        expect(screen.queryByText(/No exact/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/archive could not complete that search/i)).not.toBeInTheDocument()
+    })
+
+    it("reports a genuine zero-record structure-search result as 'not found', not as invalid", async () => {
+        server.use(http.get("/api/v1/scientific/species/structure-search", () =>
+            HttpResponse.json({ records: [] })
+        ))
+        // "smiles:" prefix, not bare "CCO": a bare "CCO" is ambiguous
+        // between formula and SMILES (`classifyIdentifier`) and this test
+        // is about the resolved-empty-result message, not the ambiguity
+        // picker.
+        const user = userEvent.setup(); page()
+        await searchFormula(user, "smiles:CCO")
+
+        const message = await screen.findByText(/No exact SMILES record was found/i)
+        expect(message).toBeVisible()
+        expect(screen.queryByText(/could not be parsed/i)).not.toBeInTheDocument()
+    })
+})

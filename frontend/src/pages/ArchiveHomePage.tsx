@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom"
 import { IdentifierSearch } from "../components/IdentifierSearch"
+import { StructureSearch } from "../components/StructureSearch"
 
 const destinations = [
     ["Browse species", "Find stable species and species-entry records.", "/species", "⌬"],
@@ -16,6 +17,7 @@ function ArchiveHomePage() {
             <div className="accession-rail" aria-hidden="true"><span>species</span><i /><span>entry</span><i /><span>record</span></div>
             <IdentifierSearch />
         </section>
+        <StructureSearch />
         <section className="destination-grid" aria-label="Archive destinations">
             {destinations.map(([title, detail, to, glyph]) => <Link className="destination" key={to} to={to}>
                 <span className="destination-icon" aria-hidden="true">{glyph}</span><h2>{title}</h2><p>{detail}</p><span>Open index →</span>
