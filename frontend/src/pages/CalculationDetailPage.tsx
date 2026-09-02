@@ -105,6 +105,29 @@ const roleLabel = (role: string) => DEPENDENCY_ROLE_LABELS[role] ?? role.replace
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
+// The owner's own wording for a presence check with nothing recorded --
+// kept in this ONE place (not four separate ternaries) so a future
+// reversal (he's flagged "absent" itself as possibly ambiguous here) is a
+// one-line edit, not a hunt through the coverage checklist below.
+const EVIDENCE_ABSENT_LABEL = "absent"
+
+/**
+ * `provenance.converged` genuinely has THREE states, and they must never
+ * collapse to two: `null`/`undefined` is an ABSENCE of data (no
+ * convergence check was ever recorded), while `false` is a SCIENTIFIC
+ * OUTCOME (the optimisation ran and failed to converge). Reusing the
+ * presence-only "absent" wording for `false` -- or rendering `null` and
+ * `false` as the same string -- would turn a missing record into a claim
+ * of failure, which is the worst error this block could make. `true` and
+ * `false` get their own outcome words; only the missing-data case uses
+ * the shared `EVIDENCE_ABSENT_LABEL`.
+ */
+function convergenceLabel(converged: boolean | null | undefined): string {
+    if (converged === true) return "converged"
+    if (converged === false) return "not converged"
+    return EVIDENCE_ABSENT_LABEL
+}
+
 /**
  * The one headline energy figure this page promotes into its header —
  * see the design brief's "Promote the answer". Only `sp` (electronic
@@ -290,7 +313,26 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 
                         <dl className="record-context">
                             <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
-                            <div><dt>Quality</dt><dd>{core.quality}</dd></div>
+                            {/* `quality` and `review.status` (the badge beside the
+                                heading above) are two SEPARATE mechanisms -- one is how
+                                much to trust the record (`raw`/`curated`/`rejected`),
+                                the other is who has examined it (`not_reviewed`/
+                                `under_review`/`approved`/`rejected`/`deprecated`). They
+                                only look redundant today because every one of the 572
+                                calculations measured on the live archive is
+                                `(not_reviewed, raw)` -- neither mechanism has been used
+                                yet, not because they are the same axis. `raw` is also
+                                the column's own `server_default`, so showing it
+                                unconditionally distinguishes nothing on any record.
+                                `curated` and `rejected` DO carry information a reader
+                                needs (they change how this calculation is filtered/
+                                scored elsewhere -- see `services/scientific_read/
+                                artifacts_search.py` and `services/trust/rubrics.py`),
+                                so this only hides the uninformative default, never the
+                                field itself. */}
+                            {core.quality !== "raw" && (
+                                <div><dt>Quality</dt><dd>{core.quality}</dd></div>
+                            )}
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                             <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
                             {/* The compact label above can be identical for two different rows —
@@ -333,13 +375,33 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 <Metric label="Dependency edges" value={dependencies.length} />
                 <div className="coverage-card">
                     <span>Evidence on this calculation</span>
-                    <strong>
-                        result {provenance.has_result ? "recorded" : "not recorded"} · geometry validation
-                        {` ${provenance.geometry_validation_status === "not_present" ? "not recorded" : "recorded"}`} · SCF
-                        stability
-                        {` ${provenance.scf_stability_status === "not_present" ? "not recorded" : "recorded"}`} · convergence
-                        {` ${provenance.converged === null || provenance.converged === undefined ? "not recorded" : provenance.converged ? "converged" : "not converged"}`}
-                    </strong>
+                    {/* A vertical checklist, one row per check, label: value --
+                        replacing the single `<strong>` that joined four facts with
+                        "·" and wrapped mid-phrase at narrow widths (the owner: "this
+                        should be a going down list, not a wrap around text"). Real
+                        `<dl>` markup, not `<br>`-separated text, so each row is a
+                        term/value pair a screen reader announces as such. */}
+                    <dl className="coverage-checklist">
+                        <div>
+                            <dt>Result</dt>
+                            <dd>{provenance.has_result ? "recorded" : EVIDENCE_ABSENT_LABEL}</dd>
+                        </div>
+                        <div>
+                            <dt>Geometry validation</dt>
+                            <dd>{provenance.geometry_validation_status === "not_present" ? EVIDENCE_ABSENT_LABEL : "recorded"}</dd>
+                        </div>
+                        <div>
+                            <dt>SCF stability</dt>
+                            <dd>{provenance.scf_stability_status === "not_present" ? EVIDENCE_ABSENT_LABEL : "recorded"}</dd>
+                        </div>
+                        {/* Convergence keeps all three states distinct -- see
+                            `convergenceLabel`'s own docstring for why "not recorded"
+                            and "not converged" must never render the same text. */}
+                        <div>
+                            <dt>Convergence</dt>
+                            <dd>{convergenceLabel(provenance.converged)}</dd>
+                        </div>
+                    </dl>
                     <p>
                         Presence says a check exists on this record, not that it passed — the actual outcome,
                         where one was recorded, is in the matching section below.
@@ -410,18 +472,35 @@ function OwnerCard({
                             </Link>
                         </dd>
                     </div>
-                    {/* The linked text above prefers the human label; the stable ref stays
-                        visible on its own line regardless, per the "never label ?? ref" rule —
-                        a label must never be the only way to see the ref. */}
-                    <div><dt>Species entry ref</dt><dd>{ownerSpecies.species_entry_ref}</dd></div>
+                    {/* The linked text above prefers the human label; the stable ref
+                        gets its OWN row only when the label pushed it out of view --
+                        a label must never be the only way to see the ref. Measured:
+                        `species_entry_label` is null on all 200 entries sampled off
+                        the browse endpoint, so without this guard the ref row below
+                        repeated the link's own fallback text verbatim on every
+                        calculation page. The rule ("never label ?? ref") is
+                        unchanged; only the never-considered no-label branch is
+                        fixed. */}
+                    {ownerSpecies.species_entry_label && (
+                        <div><dt>Species entry ref</dt><dd>{ownerSpecies.species_entry_ref}</dd></div>
+                    )}
                     <div><dt>Structure</dt><dd>{ownerSpecies.canonical_smiles}</dd></div>
                     <div><dt>InChIKey</dt><dd>{ownerSpecies.inchi_key}</dd></div>
+                    {/* Categorical, bounded-vocabulary facts render as pills, replacing
+                        their plain-text form (never alongside it -- see `.value-pill`
+                        in `calculation-detail.css` for why this is not the deleted
+                        `RecordFacetChips` come back). Identifiers above (species /
+                        species entry / structure / InChIKey) are never pills -- they
+                        stay selectable monospace text. */}
                     <div>
                         <dt>Charge / multiplicity</dt>
-                        <dd>{chargeDisplay(ownerSpecies.charge)} / {spinDisplay(ownerSpecies.multiplicity)}</dd>
+                        <dd>
+                            <span className="value-pill">{chargeDisplay(ownerSpecies.charge)}</span>{" "}
+                            <span className="value-pill">{spinDisplay(ownerSpecies.multiplicity)}</span>
+                        </dd>
                     </div>
-                    <div><dt>Entry kind</dt><dd>{statusLabel(ownerSpecies.species_entry_kind)}</dd></div>
-                    <div><dt>Electronic state</dt><dd>{ownerSpecies.electronic_state_kind}</dd></div>
+                    <div><dt>Entry kind</dt><dd><span className="value-pill">{statusLabel(ownerSpecies.species_entry_kind)}</span></dd></div>
+                    <div><dt>Electronic state</dt><dd><span className="value-pill">{ownerSpecies.electronic_state_kind}</span></dd></div>
                 </dl>
             </section>
         )
@@ -437,12 +516,18 @@ function OwnerCard({
                 <dl>
                     <div><dt>Transition state</dt><dd>{ownerTS.transition_state_ref}</dd></div>
                     <div><dt>Transition state entry</dt><dd>{ownerTS.label ?? ownerTS.transition_state_entry_ref}</dd></div>
-                    <div><dt>Transition state entry ref</dt><dd>{ownerTS.transition_state_entry_ref}</dd></div>
+                    {/* Same guard as the species branch above -- see its comment. */}
+                    {ownerTS.label && (
+                        <div><dt>Transition state entry ref</dt><dd>{ownerTS.transition_state_entry_ref}</dd></div>
+                    )}
                     <div>
                         <dt>Charge / multiplicity</dt>
-                        <dd>{chargeDisplay(ownerTS.charge)} / {spinDisplay(ownerTS.multiplicity)}</dd>
+                        <dd>
+                            <span className="value-pill">{chargeDisplay(ownerTS.charge)}</span>{" "}
+                            <span className="value-pill">{spinDisplay(ownerTS.multiplicity)}</span>
+                        </dd>
                     </div>
-                    <div><dt>Status</dt><dd>{statusLabel(ownerTS.status)}</dd></div>
+                    <div><dt>Status</dt><dd><span className="value-pill">{statusLabel(ownerTS.status)}</span></dd></div>
                     <div><dt>Reaction entry</dt><dd>{ownerTS.reaction_entry_ref ?? "not recorded"}</dd></div>
                 </dl>
             </section>

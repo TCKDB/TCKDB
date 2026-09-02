@@ -11072,7 +11072,7 @@
         "type": "object"
       },
       "ConformerGroupCoreBlock": {
-        "description": "Direct conformer-group-row metadata.\n\nCarries the public ref (``cg_…``) plus the curator-facing label /\nnote pair. The two JSONB blobs on the row\n(``representative_fingerprint_json``, ``representative_coords_json``)\nare intentionally absent — they can be large and are out of the\ndefault surface. A future ``include=fingerprints`` token could\nsurface them with explicit size bounds.",
+        "description": "Direct conformer-group-row metadata.\n\nCarries the public ref (``cg_…``) plus the curator-facing label /\nnote pair. Of the two JSONB blobs on the row,\n``representative_coords_json`` is intentionally absent — no surface\nneed for it has been requested. ``representative_fingerprint_json``\nis surfaced as ``fingerprint``, populated only under\n``include=fingerprints`` (``None`` otherwise, and ``None`` when the\nrow itself carries no fingerprint blob or an internally inconsistent\none — see ``_build_group_fingerprint``).",
         "properties": {
           "conformer_group_id": {
             "anyOf": [
@@ -11094,6 +11094,16 @@
             "format": "date-time",
             "title": "Created At",
             "type": "string"
+          },
+          "fingerprint": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ConformerGroupFingerprint"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "label": {
             "anyOf": [
@@ -11279,6 +11289,33 @@
           "levels_of_theory"
         ],
         "title": "ConformerGroupEvidenceSummary",
+        "type": "object"
+      },
+      "ConformerGroupFingerprint": {
+        "description": "Numeric basin identity for one conformer group.\n\nSurfaced only under ``include=fingerprints`` — see\n``ConformerGroupCoreBlock.fingerprint``. ``bin_width_deg`` plus each\nentry's ``quantized_bin`` together define the torsional-basin\nmembership test that groups conformers into this basin; that is the\ngroup's actual *definition*. The per-rotor ``raw_torsion_deg`` /\n``folded_torsion_deg`` values on each :class:`ConformerRotorTorsion`\nare the *representative* conformer's own measured angles — a single\nmember of the basin, not the basin's boundary. Two representatives can\nsit tens of degrees apart while sharing the same bin; that is normal\nand expected, not a data error.\n\n``fingerprint_hash`` from the underlying\n``representative_fingerprint_json`` blob is deliberately never\nreproduced here. It identifies the basin bin internally\n(deduplication key) and carries no meaning for a reader.",
+        "properties": {
+          "bin_width_deg": {
+            "title": "Bin Width Deg",
+            "type": "number"
+          },
+          "rotor_count": {
+            "title": "Rotor Count",
+            "type": "integer"
+          },
+          "torsions": {
+            "items": {
+              "$ref": "#/components/schemas/ConformerRotorTorsion"
+            },
+            "title": "Torsions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rotor_count",
+          "bin_width_deg",
+          "torsions"
+        ],
+        "title": "ConformerGroupFingerprint",
         "type": "object"
       },
       "ConformerGroupRead": {
@@ -11786,6 +11823,35 @@
           "status"
         ],
         "title": "ConformerReviewEntry",
+        "type": "object"
+      },
+      "ConformerRotorTorsion": {
+        "description": "One rotor's torsion angle within a group's representative fingerprint.\n\nPairs a rotor (``rotor_key``, e.g. ``\"R_8_10\"`` — a canonical\n``R_<atom index>_<atom index>`` label for the rotatable bond) with the\nquantized bin it falls in and the representative conformer's measured\nangle at that rotor. ``quantized_bin`` — read together with the parent\n:class:`ConformerGroupFingerprint`'s ``bin_width_deg`` — is what\n*defines* basin membership for this rotor; ``raw_torsion_deg`` /\n``folded_torsion_deg`` are what the *representative* conformer happens\nto measure there, which is a member of the basin, not the basin\nitself. Never render one as a stand-in for the other.\n\nBuilt by zipping the row's parallel ``canonical_rotor_keys`` /\n``quantized_bins`` / ``raw_torsions_deg`` / ``folded_torsions_deg``\narrays positionally (see\n``app.services.scientific_read.conformers._build_group_fingerprint``);\nthis type exists so that positional pairing is fixed once, at the\nservice boundary, rather than re-done — and re-riskable — by every\ncaller that wants to know which angle belongs to which rotor.",
+        "properties": {
+          "folded_torsion_deg": {
+            "title": "Folded Torsion Deg",
+            "type": "number"
+          },
+          "quantized_bin": {
+            "title": "Quantized Bin",
+            "type": "integer"
+          },
+          "raw_torsion_deg": {
+            "title": "Raw Torsion Deg",
+            "type": "number"
+          },
+          "rotor_key": {
+            "title": "Rotor Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rotor_key",
+          "quantized_bin",
+          "raw_torsion_deg",
+          "folded_torsion_deg"
+        ],
+        "title": "ConformerRotorTorsion",
         "type": "object"
       },
       "ConformerSelectionContentRef": {

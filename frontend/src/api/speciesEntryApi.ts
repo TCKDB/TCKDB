@@ -36,11 +36,35 @@ const observationSchema = z.object({
     calculations: observationCalculationsSchema,
 }).passthrough()
 
+// One rotor's torsion within a group's numeric basin identity --
+// `include=fingerprints` on `conformers/search` (opt-in; see
+// `backend/app/schemas/reads/scientific_conformer.py`). `quantized_bin`
+// (read together with the parent fingerprint's `bin_width_deg`) is what
+// DEFINES basin membership for this rotor; `raw_torsion_deg` /
+// `folded_torsion_deg` are the REPRESENTATIVE conformer's own measured
+// angle there -- a member of the basin, not the basin's boundary. The
+// backend already zips these positionally (rotor_key together with its
+// own bin/angles) before they reach the wire, so nothing here re-pairs
+// them -- only renders what arrived already paired.
+const conformerRotorTorsionSchema = z.object({
+    rotor_key: z.string(),
+    quantized_bin: z.number(),
+    raw_torsion_deg: z.number(),
+    folded_torsion_deg: z.number(),
+}).passthrough()
+
+const conformerGroupFingerprintSchema = z.object({
+    rotor_count: z.number(),
+    bin_width_deg: z.number(),
+    torsions: z.array(conformerRotorTorsionSchema),
+}).passthrough()
+
 const conformerResponseSchema = z.object({
     records: z.array(z.object({
         conformer_group: z.object({
             conformer_group_ref: z.string(),
             label: z.string().nullable(),
+            fingerprint: conformerGroupFingerprintSchema.nullable().optional(),
         }).passthrough(),
         observations_summary: z.object({ total: z.number() }).passthrough(),
         evidence_summary: z.object({
@@ -77,6 +101,8 @@ export type SpeciesEntryProjection = z.infer<typeof speciesEntrySummarySchema> &
     multiplicity: number
 }
 export type ConformerProjection = z.infer<typeof conformerResponseSchema>["records"][number]
+export type ConformerGroupFingerprint = z.infer<typeof conformerGroupFingerprintSchema>
+export type ConformerRotorTorsion = z.infer<typeof conformerRotorTorsionSchema>
 
 export async function loadSpeciesEntry(entryRef: string, signal?: AbortSignal): Promise<SpeciesEntryProjection | null> {
     const query = new URLSearchParams({ species_entry_ref: entryRef })
@@ -100,7 +126,16 @@ export async function loadSpeciesEntry(entryRef: string, signal?: AbortSignal): 
 
 export async function loadEntryConformers(entryRef: string, signal?: AbortSignal): Promise<ConformerProjection[]> {
     const query = new URLSearchParams({ species_entry_ref: entryRef, limit: "50" })
-    for (const include of ["observations", "calculations", "geometries"]) query.append("include", include)
+    // `fingerprints` populates `conformer_group.fingerprint` -- the numeric
+    // basin identity (quantized torsion bins + representative angles) that
+    // distinguishes one group from another under the same entry. Small
+    // (bounded per group, a handful of rotors) so requesting it on every
+    // load of this list -- rather than lazily, per card -- costs nothing
+    // meaningful and lets `ConformerSelector` render it without a second
+    // round trip per card.
+    for (const include of ["observations", "calculations", "geometries", "fingerprints"]) {
+        query.append("include", include)
+    }
     const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal)
     return parseScientificResponse(conformerResponseSchema, payload, "conformer").records
 }

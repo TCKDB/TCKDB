@@ -237,6 +237,43 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("calc_freq_one", { selector: "dd" })).toBeVisible()
     })
 
+    // Item 4 of the design brief: `species_entry_label` is measured null on
+    // every entry sampled off the live archive's browse endpoint, so the
+    // link above ALREADY falls back to showing the ref -- a separate
+    // "Species entry ref" row underneath it would repeat that same string
+    // verbatim. Two fixtures (this one has NO label; the test above has
+    // one), because a single fixture cannot tell "always shows the row"
+    // apart from "shows it only when it says something new" -- the bug IS
+    // the untested branch.
+    it("omits the duplicate 'Species entry ref' row when the entry has no label (the link already shows the ref)", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                owner: {
+                    kind: "species_entry",
+                    species_entry: {
+                        species_ref: "spc_demo", species_entry_ref: "spe_demo",
+                        species_entry_label: null,
+                        canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N",
+                        charge: 0, multiplicity: 2,
+                        species_entry_kind: "minimum", electronic_state_kind: "ground",
+                    },
+                    transition_state_entry: null,
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const owner = screen.getByRole("heading", { name: "Owner" }).closest("section") as HTMLElement
+        // The link now shows the ref itself, since there is no label to prefer.
+        expect(within(owner).getByRole("link", { name: "spe_demo" })).toHaveAttribute("href", "/species-entries/spe_demo")
+        // No second row repeating it -- positively confirmed there is
+        // exactly one "spe_demo" text in the owner card, not zero (which
+        // would mean the ref vanished) and not two (the duplicate).
+        expect(within(owner).getAllByText("spe_demo")).toHaveLength(1)
+        expect(within(owner).queryByText("Species entry ref")).not.toBeInTheDocument()
+    })
+
     it("surfaces level_of_theory_ref, dispersion and solvent — the fields that actually distinguish two rows with the same compact label", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
@@ -291,7 +328,12 @@ describe("CalculationDetailPage", () => {
 
         const ownerSection = screen.getByRole("heading", { name: "Owner" }).closest("section") as HTMLElement
         const chargeRow = within(ownerSection).getByText("Charge / multiplicity").closest("div") as HTMLElement
-        expect(within(chargeRow).getByText("0 / doublet (2)")).toBeVisible()
+        // Charge and multiplicity each render as their own pill (item 5 of
+        // the design brief) rather than one joined "0 / doublet (2)"
+        // string -- the two values are still both there, just as two
+        // adjacent elements under the one "Charge / multiplicity" label.
+        const pills = within(chargeRow).getAllByText((_, el) => el?.classList.contains("value-pill") === true)
+        expect(pills.map((el) => el.textContent)).toEqual(["0", "doublet (2)"])
     })
 
     it("renders the literature citation and its own stable ref, never dropping it silently", async () => {
@@ -436,21 +478,96 @@ describe("CalculationDetailPage", () => {
         ])
     })
 
-    it("reports a check as recorded/not recorded, never as a pass/fail verdict, on the summary card", async () => {
+    it("reports a check as recorded/absent, never as a pass/fail verdict, on the summary card", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await screen.findByRole("heading", { name: "Frequency calculation" })
 
         const summary = screen.getByLabelText("Calculation evidence summary")
         const coverage = summary.querySelector(".coverage-card") as HTMLElement
-        // Scoped to the <strong> line itself — the coverage card's caveat
+        // Scoped to the checklist itself — the coverage card's caveat
         // sentence legitimately contains the word "passed" ("not that it
         // passed"), so asserting over the whole card would pass whether or
-        // not the summary line itself ever named a pass/fail verdict.
-        const verdictLine = coverage.querySelector("strong") as HTMLElement
-        expect(within(verdictLine).getByText(/geometry validation\s*not recorded/)).toBeVisible()
-        expect(within(verdictLine).queryByText(/passed/i)).not.toBeInTheDocument()
-        expect(within(verdictLine).queryByText(/fail/i)).not.toBeInTheDocument()
+        // not the checklist itself ever named a pass/fail verdict.
+        const checklist = coverage.querySelector(".coverage-checklist") as HTMLElement
+        expect(ddFor(checklist, "Geometry validation")).toBe("absent")
+        expect(within(checklist).queryByText(/passed/i)).not.toBeInTheDocument()
+        expect(within(checklist).queryByText(/fail/i)).not.toBeInTheDocument()
+    })
+
+    // The house defect (a fixture whose shape excludes the bug) applied
+    // directly: a single fixture asserting one row in isolation would pass
+    // even if EVERY row rendered "absent" regardless of its own state, or
+    // if all four checks collapsed onto one shared row. Each of the four
+    // checks is asserted as its own row with its own label, appearing
+    // exactly once.
+    it("renders each of the four evidence checks as its own labelled row", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true,
+                    converged: true,
+                    geometry_validation_status: "not_present",
+                    scf_stability_status: "present",
+                    submission_ref: "sub_demo",
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+
+        const checklist = document.querySelector(".coverage-checklist") as HTMLElement
+        expect(checklist.querySelectorAll("dt")).toHaveLength(4)
+        for (const label of ["Result", "Geometry validation", "SCF stability", "Convergence"]) {
+            expect(within(checklist).getAllByText(label)).toHaveLength(1)
+        }
+        expect(ddFor(checklist, "Result")).toBe("recorded")
+        expect(ddFor(checklist, "Geometry validation")).toBe("absent")
+        expect(ddFor(checklist, "SCF stability")).toBe("recorded")
+        expect(ddFor(checklist, "Convergence")).toBe("converged")
+    })
+
+    // The exact assertion the brief calls out: `converged: false` and
+    // `converged: null` must render DIFFERENT text -- a missing convergence
+    // check is not the same claim as a convergence check that ran and
+    // failed. Asserting each value in isolation would pass even if both
+    // mapped to the same string; this asserts the DIFFERENCE directly.
+    it("keeps 'not converged' (an outcome) and the absence wording (no data) visibly distinct", async () => {
+        // Two independent renders (not a shared server handler toggle) so
+        // each is unambiguous about which `converged` value produced it.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true,
+                    converged: false,
+                    geometry_validation_status: "not_present",
+                    scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        const { unmount } = page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const notConvergedText = ddFor(document.querySelector(".coverage-checklist") as HTMLElement, "Convergence")
+        unmount()
+        cleanup()
+
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true,
+                    converged: null,
+                    geometry_validation_status: "not_present",
+                    scf_stability_status: "not_present",
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const absentText = ddFor(document.querySelector(".coverage-checklist") as HTMLElement, "Convergence")
+
+        expect(notConvergedText).toBe("not converged")
+        expect(absentText).toBe("absent")
+        expect(notConvergedText).not.toBe(absentText)
     })
 
     it("renders an available on-demand section as idle (not fetched, not empty) until it is opened", async () => {
@@ -762,6 +879,65 @@ describe("CalculationDetailPage", () => {
         // The bug this replaces: a `.record-facet-chips` pill row repeating
         // the same two facts a second time, right below this same card.
         expect(document.querySelector(".record-facet-chips")).not.toBeInTheDocument()
+    })
+
+    // Item 5: pills are for bounded-vocabulary categorical values only.
+    // Both directions asserted -- a rule that pilled EVERY value would pass
+    // a test that only checked the categorical side.
+    it("renders a categorical value as a pill and an identifier as plain text -- both directions", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const owner = screen.getByRole("heading", { name: "Owner" }).closest("section") as HTMLElement
+
+        // Categorical: entry kind, a bounded species_entry_kind vocabulary value.
+        const entryKindDd = within(owner).getByText("Entry kind").closest("div")!.querySelector("dd")!
+        expect(entryKindDd.querySelector(".value-pill")).not.toBeNull()
+        expect(entryKindDd.querySelector(".value-pill")?.textContent).toBe("minimum")
+
+        // Identifier: the species entry ref -- a stable, copyable, arbitrary-length
+        // handle, never a bounded vocabulary value, and never a pill.
+        const speciesEntryDd = within(owner).getByText("Species entry").closest("div")!.querySelector("dd")!
+        expect(speciesEntryDd.querySelector(".value-pill")).toBeNull()
+    })
+
+    // Item 7: `quality` and `record_review.status` are two separate
+    // mechanisms that only happen to agree on the live archive today
+    // (measured: all 572 calculations are `(not_reviewed, raw)`) because
+    // neither has been used yet. `raw` is the column's own server default,
+    // so showing it unconditionally distinguishes nothing -- but `curated`
+    // and `rejected` are load-bearing (they change filtering/trust scoring
+    // elsewhere) and must stay visible. Three fixtures, since the archive
+    // today only ever produces one of the three values.
+    it("omits the Quality row for the default 'raw' value, but keeps the review-status badge visible", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const context = screen.getByText("Calculation ref").closest(".record-context") as HTMLElement
+        expect(within(context).queryByText("Quality")).not.toBeInTheDocument()
+        // Positively asserted so this test cannot pass by the whole record
+        // header failing to render: the review-status badge is still there.
+        expect(screen.getByText("not reviewed", { selector: ".review-badge" })).toBeVisible()
+    })
+
+    it("shows the Quality row for 'curated'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ calculation: { ...mockRecord().calculation, quality: "curated" } }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const context = screen.getByText("Calculation ref").closest(".record-context") as HTMLElement
+        expect(ddFor(context, "Quality")).toBe("curated")
+    })
+
+    it("shows the Quality row for 'rejected' -- the more consequential of the two non-default values", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ calculation: { ...mockRecord().calculation, quality: "rejected" } }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Frequency calculation" })
+        const context = screen.getByText("Calculation ref").closest(".record-context") as HTMLElement
+        expect(ddFor(context, "Quality")).toBe("rejected")
     })
 
     it("renders no submission row at all when the key is absent (anonymous caller)", async () => {

@@ -1251,10 +1251,18 @@ def attach_dependency(
 
 
 def make_conformer_group(
-    session: Session, species_entry, *, label: str | None = None
+    session: Session,
+    species_entry,
+    *,
+    label: str | None = None,
+    representative_fingerprint_json: dict | None = None,
 ) -> ConformerGroup:
     """Create a ConformerGroup row attached to a species entry."""
-    g = ConformerGroup(species_entry_id=species_entry.id, label=label)
+    g = ConformerGroup(
+        species_entry_id=species_entry.id,
+        label=label,
+        representative_fingerprint_json=representative_fingerprint_json,
+    )
     session.add(g)
     session.flush()
     return g

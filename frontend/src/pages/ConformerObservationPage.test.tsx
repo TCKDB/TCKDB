@@ -227,6 +227,25 @@ describe("ConformerObservationPage", () => {
         expect(screen.getByRole("link", { name: "geo_one" })).toHaveAttribute("href", "/geometries/geo_one")
     })
 
+    // Same shape as the fix on `CalculationDetailPage.tsx`'s `OwnerCard`:
+    // a separate "Group ref" row is only needed when the "Conformer basin"
+    // link above shows a LABEL, not the ref itself. Without a label, the
+    // link already shows the ref, and a second row would repeat it.
+    it("omits the duplicate 'Group ref' row when the basin has no label (the link already shows the ref)", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    conformer_group: { conformer_group_ref: "cg_demo", label: null, note: null, review: { status: "not_reviewed" } },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+        expect(screen.getByRole("link", { name: "cg_demo" })).toHaveAttribute("href", "/conformer-groups/cg_demo")
+        expect(screen.getAllByText("cg_demo")).toHaveLength(1)
+        expect(screen.queryByText("Group ref")).not.toBeInTheDocument()
+    })
+
     it("reports a check as 'recorded', never as a pass/fail verdict", async () => {
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
             HttpResponse.json({ record: mockRecord() })
