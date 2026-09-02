@@ -236,6 +236,13 @@ def test_detail_default_response_carries_summaries_and_review(
     assert record["provenance"]["has_result"] is False
     assert record["provenance"]["geometry_validation_status"] == "not_present"
     assert record["provenance"]["scf_stability_status"] == "not_present"
+    # This calc is `opt` (the fixture's default type): opt is the one
+    # type geometry validation and convergence structurally apply to, so
+    # both applicability flags are true even though nothing is recorded
+    # yet -- absent, not not-applicable.
+    assert record["provenance"]["result_applicable"] is True
+    assert record["provenance"]["geometry_validation_applicable"] is True
+    assert record["provenance"]["convergence_applicable"] is True
     # Phase D default: integer submission_id is stripped. submission_ref
     # is gated separately, on authentication rather than on internal-id
     # policy: this default ``client`` call carries no ``X-API-Key``/
@@ -840,23 +847,34 @@ def test_available_sections_all_false_for_bare_calculation(
         f"/api/v1/scientific/calculations/{calc.public_ref}"
     ).json()
     sections = body["record"]["available_sections"]
+    # `_make_species_owned_calc` defaults to `type=opt` -- the one type
+    # that structurally carries geometry validation and constraints, so
+    # those two `*_applicable` flags are true here even with nothing
+    # attached yet (absent, not not-applicable); `freq`/`scan`/`irc`/
+    # `path_search`-only sections are not applicable to an opt calc.
     assert sections == {
         "has_results": False,
         "has_dependencies": False,
         "has_parameters": False,
         "has_constraints": False,
+        "constraints_applicable": True,
         "has_artifacts": False,
         "has_input_geometries": False,
         "has_output_geometries": False,
         "has_geometry_validation": False,
+        "geometry_validation_applicable": True,
         "has_scf_stability": False,
         "has_wavefunction_diagnostic": False,
         "has_spin_diagnostic": False,
         "has_freq_modes": False,
+        "freq_modes_applicable": False,
         "has_hessian": False,
         "has_scan": False,
+        "scan_applicable": False,
         "has_irc": False,
+        "irc_applicable": False,
         "has_path_search": False,
+        "path_search_applicable": False,
         "has_execution_environment": False,
         "has_energy_corrections": False,
     }
@@ -936,14 +954,32 @@ def test_available_sections_reflect_attached_children(client, db_session):
     assert sections["has_scan"] is False
     assert sections["has_irc"] is False
     assert sections["has_path_search"] is False
+    # This calc is `opt`: constraints and geometry validation are
+    # structurally applicable to it (and both are populated above);
+    # `freq`/`scan`/`irc`/`path_search`-only sections are not.
+    assert sections["constraints_applicable"] is True
+    assert sections["geometry_validation_applicable"] is True
+    assert sections["freq_modes_applicable"] is False
+    assert sections["scan_applicable"] is False
+    assert sections["irc_applicable"] is False
+    assert sections["path_search_applicable"] is False
 
     assert provenance["has_result"] is True
+    assert provenance["result_applicable"] is True
     assert provenance["converged"] is True
+    assert provenance["convergence_applicable"] is True
     assert provenance["geometry_validation_status"] == "passed"
+    assert provenance["geometry_validation_applicable"] is True
     assert provenance["scf_stability_status"] == "stable"
 
 
 def test_provenance_converged_null_for_sp_calc_without_opt(client, db_session):
+    """`sp` cannot carry convergence or geometry-validation evidence --
+    the two-fixture pair with `test_available_sections_reflect_attached_children`
+    (an `opt` calc, both `True`) above, asserted to differ, is exactly the
+    bug this endpoint fix targets: an `sp` calc must read `not applicable`
+    where an `opt` calc reads `absent`/`recorded`, never the same value.
+    """
     species, entry, calc = _make_species_owned_calc(
         db_session, calc_type=CalculationType.sp
     )
@@ -954,9 +990,83 @@ def test_provenance_converged_null_for_sp_calc_without_opt(client, db_session):
         f"/api/v1/scientific/calculations/{calc.public_ref}"
     ).json()
     provenance = body["record"]["provenance"]
+    sections = body["record"]["available_sections"]
     assert provenance["has_result"] is True
+    assert provenance["result_applicable"] is True
     # SP calcs don't carry a convergence flag in our model.
     assert provenance["converged"] is None
+    assert provenance["convergence_applicable"] is False
+    assert provenance["geometry_validation_status"] == "not_present"
+    assert provenance["geometry_validation_applicable"] is False
+    # ToC-facing sections that only `opt`/`scan`/`irc`/`path_search`/
+    # `freq` calcs can structurally carry are all inapplicable for `sp`.
+    assert sections["constraints_applicable"] is False
+    assert sections["geometry_validation_applicable"] is False
+    assert sections["freq_modes_applicable"] is False
+    assert sections["scan_applicable"] is False
+    assert sections["irc_applicable"] is False
+    assert sections["path_search_applicable"] is False
+
+
+def test_provenance_converged_false_distinct_from_absent_and_not_applicable(
+    client, db_session
+):
+    """Three-way distinctness for `converged`, pinned in one place:
+
+    - `opt`, no result row at all -> `converged=None`,
+      `convergence_applicable=True` (ABSENT: the archive is missing a
+      check this type can have).
+    - `opt`, result row present with `converged=False` -> `converged=False`,
+      `convergence_applicable=True` (a real scientific outcome: the
+      optimisation ran and failed to converge).
+    - `sp`, result row present -> `converged=None`,
+      `convergence_applicable=False` (NOT APPLICABLE: sp does not
+      converge a geometry at all).
+
+    These three must never collapse into the same reading.
+    """
+    _, _, bare_opt = _make_species_owned_calc(db_session)
+    _, _, failed_opt = _make_species_owned_calc(db_session)
+    attach_opt_result(
+        db_session,
+        calculation=failed_opt,
+        final_energy_hartree=-1.5,
+        converged=False,
+    )
+    _, _, sp_calc = _make_species_owned_calc(
+        db_session, calc_type=CalculationType.sp
+    )
+    attach_sp_result(
+        db_session, calculation=sp_calc, electronic_energy_hartree=-1.0
+    )
+
+    bare_provenance = client.get(
+        f"/api/v1/scientific/calculations/{bare_opt.public_ref}"
+    ).json()["record"]["provenance"]
+    failed_provenance = client.get(
+        f"/api/v1/scientific/calculations/{failed_opt.public_ref}"
+    ).json()["record"]["provenance"]
+    sp_provenance = client.get(
+        f"/api/v1/scientific/calculations/{sp_calc.public_ref}"
+    ).json()["record"]["provenance"]
+
+    assert bare_provenance["converged"] is None
+    assert bare_provenance["convergence_applicable"] is True
+
+    assert failed_provenance["converged"] is False
+    assert failed_provenance["convergence_applicable"] is True
+
+    assert sp_provenance["converged"] is None
+    assert sp_provenance["convergence_applicable"] is False
+
+    # Pairwise distinct: `(converged, convergence_applicable)` differs
+    # across all three records.
+    readings = {
+        (bare_provenance["converged"], bare_provenance["convergence_applicable"]),
+        (failed_provenance["converged"], failed_provenance["convergence_applicable"]),
+        (sp_provenance["converged"], sp_provenance["convergence_applicable"]),
+    }
+    assert len(readings) == 3
 
 
 # ---------------------------------------------------------------------------
