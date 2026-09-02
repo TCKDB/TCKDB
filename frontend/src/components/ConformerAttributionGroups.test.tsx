@@ -122,10 +122,22 @@ describe("ConformerAttributionGroups", () => {
         expect(document.querySelector(".conformer-attribution-other")).toBeNull()
     })
 
-    it("keeps the no-conformer-link group at plain (non-emphasized) styling -- only the SELECTED conformer's empty state is emphasized", () => {
+    it("omits the no-conformer-link group entirely when nothing falls into it", () => {
         renderGroups({ thisConformer: [{ id: "mine" }], otherConformers: [], noLink: [] })
-        const noLinkText = screen.getByText("No entry-level thermo record is deposited for this entry.")
-        expect(noLinkText).toHaveClass("empty-projection")
-        expect(noLinkText).not.toHaveClass("conformer-attribution-answer")
+        // An empty bucket used to print its heading and explanation for
+        // nothing, directly under a card stating the conformer WAS derived --
+        // which read as a contradiction. Assert the selected conformer's own
+        // record still renders, so this cannot pass by the whole section
+        // failing to mount.
+        expect(screen.getByTestId("record-mine")).toBeInTheDocument()
+        expect(screen.queryByText("No conformer link")).not.toBeInTheDocument()
+        expect(screen.queryByText("No entry-level thermo record is deposited for this entry.")).not.toBeInTheDocument()
+    })
+
+    it("keeps a POPULATED no-conformer-link group at plain (non-emphasized) styling -- only the SELECTED conformer's state is emphasized", () => {
+        renderGroups({ thisConformer: [{ id: "mine" }], otherConformers: [], noLink: [{ id: "unlinked" }] })
+        expect(screen.getByText("No conformer link")).toBeInTheDocument()
+        const heading = screen.getByText("No conformer link")
+        expect(heading).not.toHaveClass("conformer-attribution-answer")
     })
 })

@@ -100,13 +100,23 @@ export function ConformerAttributionGroups<T>({
                     ))}
                 </details>
             )}
-            <AttributionGroup
-                title="No conformer link"
-                note={noLinkNote}
-                records={attribution.noLink}
-                emptyText={noLinkEmptyText}
-                renderRecord={renderRecord}
-            />
+            {/* Rendered only when it HOLDS something. An empty "No conformer
+                link" bucket printed a heading and an explanation for nothing,
+                directly beneath a card stating the conformer WAS derived from
+                the source calculations -- which read as a contradiction. The
+                sibling "other conformers" group above is conditional for the
+                same reason; this one was not. `noLinkEmptyText` is kept for
+                the caller that has no records in ANY bucket, where the parent
+                section's own empty state does not fire. */}
+            {attribution.noLink.length > 0 && (
+                <AttributionGroup
+                    title="No conformer link"
+                    note={noLinkNote}
+                    records={attribution.noLink}
+                    emptyText={noLinkEmptyText}
+                    renderRecord={renderRecord}
+                />
+            )}
         </>
     )
 }
