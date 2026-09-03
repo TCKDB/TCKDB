@@ -85,6 +85,7 @@ from app.services.scientific_read.calculations import (
     _LEGAL_INCLUDE_TOKENS,
     _NOT_IMPLEMENTED_INCLUDE_TOKENS,
     build_record,
+    load_conformer_summaries,
 )
 from app.services.scientific_read.common import (
     build_pagination,
@@ -393,6 +394,19 @@ def search_calculations(
         )
     }
 
+    # One IN on the page's conformer_observation_ids, same shape as the
+    # badge bulk-load above -- without this, build_record's conformer
+    # block issues one conformer_observation JOIN conformer_group per
+    # conformer-linked record (see test_record_builder_statement_cost.py).
+    conformer_map = load_conformer_summaries(
+        session,
+        [
+            calc.conformer_observation_id
+            for calc in calcs_by_id.values()
+            if calc.conformer_observation_id is not None
+        ],
+    )
+
     # Materialize each page row via the shared record builder so search
     # records and detail records have identical shape.
     records: list[ScientificCalculationRecord] = []
@@ -401,7 +415,13 @@ def search_calculations(
         if calc is None:  # pragma: no cover — race with delete; skip
             continue
         records.append(
-            build_record(session, calc, includes, badge=badges[cid])
+            build_record(
+                session,
+                calc,
+                includes,
+                badge=badges[cid],
+                conformer_map=conformer_map,
+            )
         )
 
     return ScientificCalculationsSearchResponse(

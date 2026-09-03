@@ -316,6 +316,7 @@ def build_record(
     includes: set[str],
     *,
     badge: RecordReviewBadge | None = None,
+    conformer_map: dict[int, CalculationConformerSummary] | None = None,
 ) -> ScientificCalculationRecord:
     """Construct a public ``ScientificCalculationRecord`` for *calc*.
 
@@ -327,12 +328,27 @@ def build_record(
     post-Phase-D internal-ids policy) — this builder does not validate
     it. *badge* may be supplied by callers that already loaded badges
     in bulk; otherwise this builder fetches the calc's badge itself.
+
+    *conformer_map* may be supplied by callers that already bulk-loaded
+    conformer summaries for a page (keyed by ``conformer_observation_id``,
+    via :func:`load_conformer_summaries`) — otherwise this builder fetches
+    the calc's own conformer summary itself. ``None`` is a legitimate
+    per-record value (a transition-state-owned calculation has no basin
+    at all), so unlike *badge* this can't default-trigger on ``None``;
+    the map's mere presence (even empty) is what signals "already loaded".
     """
     if badge is None:
         badge = _load_review_badge(session, calc.id)
 
     owner = _build_owner(session, calc)
-    conformer_summary = _build_conformer_summary(session, calc)
+    if conformer_map is not None:
+        conformer_summary = (
+            conformer_map.get(calc.conformer_observation_id)
+            if calc.conformer_observation_id is not None
+            else None
+        )
+    else:
+        conformer_summary = _build_conformer_summary(session, calc)
     lot_summary = _build_lot_summary(session, calc.lot_id)
     software_summary = _build_software_summary(session, calc.software_release_id)
     workflow_summary = _build_workflow_summary(
@@ -678,6 +694,47 @@ def _build_conformer_summary(
         conformer_group_ref=row.group_ref,
         conformer_group_label=row.group_label,
     )
+
+
+def load_conformer_summaries(
+    session: Session, observation_ids: list[int]
+) -> dict[int, CalculationConformerSummary]:
+    """Bulk-build conformer summaries for a page, keyed by observation id.
+
+    A search page used to call :func:`_build_conformer_summary` once per
+    record inside :func:`build_record`, which is one
+    ``conformer_observation JOIN conformer_group`` round trip per
+    conformer-linked calculation — a per-record fan-out that moved the
+    page's statement slope from 3 to 4 (measured on
+    ``test_record_builder_statement_cost.py``). Bulk-loading with one
+    ``IN`` here, the same shape as the badge bulk-load beside it in
+    ``calculations_search.py``, keeps the slope flat regardless of how
+    many of the page's records are conformer-linked.
+    """
+    ids = {oid for oid in observation_ids if oid is not None}
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(
+            ConformerObservation.id.label("observation_id"),
+            ConformerObservation.public_ref.label("observation_ref"),
+            ConformerGroup.public_ref.label("group_ref"),
+            ConformerGroup.label.label("group_label"),
+        )
+        .join(
+            ConformerGroup,
+            ConformerGroup.id == ConformerObservation.conformer_group_id,
+        )
+        .where(ConformerObservation.id.in_(ids))
+    ).all()
+    return {
+        row.observation_id: CalculationConformerSummary(
+            conformer_observation_ref=row.observation_ref,
+            conformer_group_ref=row.group_ref,
+            conformer_group_label=row.group_label,
+        )
+        for row in rows
+    }
 
 
 # ---------------------------------------------------------------------------

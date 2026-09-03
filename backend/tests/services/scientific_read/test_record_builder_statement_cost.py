@@ -129,11 +129,19 @@ def test_a_search_page_costs_a_fixed_few_statements_per_record(db_session):
     entry = make_species_entry(
         db_session, make_species(db_session, smiles="[CH4:40]")
     )
-    for _ in range(_LARGE_PAGE + 5):
-        make_calculation(
+    # Conformer-LINKED, one basin per calculation -- an unlinked calc short
+    # circuits the conformer block for free (`conformer_observation_id is
+    # None` returns without a query), which used to make this fixture blind
+    # to a per-record conformer join. Most calculations on the live archive
+    # ARE conformer-linked, so this is the honest ceiling.
+    for index in range(_LARGE_PAGE + 5):
+        group = make_conformer_group(db_session, entry, label=f"stmt-cost-{index}")
+        observation = make_conformer_observation(db_session, conformer_group=group)
+        make_calculation_with_conformer(
             db_session,
+            species_entry=entry,
+            conformer_observation=observation,
             type=CalculationType.sp,
-            species_entry_id=entry.id,
             lot_id=lot.id,
         )
 
