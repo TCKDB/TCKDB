@@ -660,7 +660,11 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         pageWithToc()
         await screen.findByText("thm_alpha")
 
-        const link = screen.getByRole("link", { name: "NASA-7 thermo record" })
+        // `findByRole`, not `getByRole`: the record text above renders on
+        // the data commit, but a ToC entry registers from an effect that
+        // lands a tick later -- under full-suite load that tick was
+        // sometimes still pending, and the sync query missed the link.
+        const link = await screen.findByRole("link", { name: "NASA-7 thermo record" })
         expect(link).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         // The href doesn't merely look plausible -- the id it points to is
         // a real element actually on the page.
@@ -668,9 +672,9 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
 
         // The two other present model kinds register too, each under its
         // own label -- not just NASA-7.
-        expect(screen.getByRole("link", { name: "NASA-9 thermo record" }))
+        expect(await screen.findByRole("link", { name: "NASA-9 thermo record" }))
             .toHaveAttribute("href", "#thermo-heading-thm_beta")
-        expect(screen.getByRole("link", { name: "Wilhoit thermo record" }))
+        expect(await screen.findByRole("link", { name: "Wilhoit thermo record" }))
             .toHaveAttribute("href", "#thermo-heading-thm_gamma")
     })
 
@@ -682,11 +686,12 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         pageWithToc()
         await screen.findByText("thm_gamma")
 
+        // Positive check FIRST, and awaited: the ONE present model kind is
+        // in the ToC, so registration has actually run by the time the
+        // absence below is asserted. Asserting the absence before that
+        // wait would pass trivially on an unregistered nav.
+        expect(await screen.findByRole("link", { name: "Wilhoit thermo record" })).toBeVisible()
         expect(screen.queryByRole("link", { name: /NASA-7/ })).not.toBeInTheDocument()
-        // Positive check alongside the absence: the ToC list itself did
-        // render (so this isn't "the whole nav failed to mount" passing
-        // for the wrong reason) and the ONE present model kind is in it.
-        expect(screen.getByRole("link", { name: "Wilhoit thermo record" })).toBeVisible()
     })
 
     it("does not register a ToC entry for a record whose declared model_kind has no matching data -- a claimed kind is not the same as data", async () => {
@@ -717,9 +722,10 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         pageWithToc()
         await screen.findByText("thm_delta")
 
+        const first = await screen.findByRole("link", { name: "NASA-7 thermo record 1" })
+        const second = await screen.findByRole("link", { name: "NASA-7 thermo record 2" })
+        // Absence asserted after the positive waits, so the nav has registered.
         expect(screen.queryByRole("link", { name: "NASA-7 thermo record" })).not.toBeInTheDocument()
-        const first = screen.getByRole("link", { name: "NASA-7 thermo record 1" })
-        const second = screen.getByRole("link", { name: "NASA-7 thermo record 2" })
         expect(first).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         expect(second).toHaveAttribute("href", "#thermo-heading-thm_delta")
     })
