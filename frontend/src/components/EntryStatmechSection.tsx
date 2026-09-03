@@ -379,7 +379,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
             thisConformerNote="Computed against this conformer's own basin, per the archive's own conformer link."
             thisConformerEmptyText="No statmech record is linked to this conformer yet."
             otherConformerNote="Computed against a different conformer's basin than the one selected above."
-            noLinkNote="No conformer link on the wire for this record -- shown here regardless of which conformer is selected."
+            noLinkNote="No conformer is linked to this record -- shown here regardless of which conformer is selected."
             noLinkEmptyText="No entry-level statmech record is deposited for this entry."
         />
     )

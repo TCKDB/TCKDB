@@ -58,7 +58,7 @@ export function ConformerSelector({ conformers, selectedRef, onSelect }: {
             <p className="eyebrow">Conformers</p>
             <SectionHeading id="conformer-picker-title">{pickerHeading(conformers.length)}</SectionHeading>
             {conformers.length === 0 ? (
-                <p className="empty-projection">No conformer basins are projected for this entry.</p>
+                <p className="empty-projection">No conformers are recorded for this entry.</p>
             ) : (
                 <>
                     <p className="conformer-picker-note">
