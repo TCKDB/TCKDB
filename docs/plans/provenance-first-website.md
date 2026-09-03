@@ -127,6 +127,36 @@ provenance and machine detail live on dedicated linked pages.
     a geometry cited by several calculations shown once -- plus a real
     not-found route in place of the silent home-page fallback.
 
+14. Second review pass, two pages deep. Two independent reviewers (a
+    scientist reading the record, an information designer) walked the
+    calculation detail page for optimisations and, separately, the
+    transition-state entry page and browse list, each through headless
+    Chrome against the live site. Calculation page (#358): identity ->
+    classification -> provenance header with an "Optimisation of C2H4"
+    h1, a new read-model conformer block so one of eighteen ethylene
+    optimisations says which conformer and which stage it belongs to,
+    related calculations as one fixed-subject sentence per edge (the
+    old Relationship/Role table read backwards), each fact stated once,
+    count tiles removed, a per-page conformer lookup batched after the
+    statement-cost gate was extended to see it. Transition-state entry
+    (#357): the reaction equation as the h1 with the ARC label demoted
+    to a facet, the imaginary frequency served and rendered as the first
+    evidence statement, IRC reported as "ran, endpoint identity not
+    deposited" (no entry in the archive carries a validation-evidence
+    record), the trust label beside the review pill with the rubric's
+    "IRC evidence present" check relabelled to what it tests, other
+    saddle points for the same reaction, and the References disclosure
+    CSS moved out of the species stylesheet so it no longer depended on
+    which page loaded first. Transition-state browse (#356): level of
+    theory and software per row so same-reaction deposits are
+    distinguishable, stretched-link rows with the ref selectable,
+    reactant/product SMILES and family filters on both browse and search,
+    and a species-page link to its transition states. Four data facts
+    surfaced and left alone: no validation evidence is ever deposited by
+    the ARC uploads; every optimisation parses as two steps; path-search
+    energies on one entry look mis-united; hydrazine reactions have no
+    family.
+
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
 standards/spec review, CI, PR merge, image build, and Pi verification.
