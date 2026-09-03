@@ -360,7 +360,7 @@ describe("EntryStatmechSection", () => {
         expect(refElement).not.toHaveClass("value-pill")
     })
 
-    it("renders an available on-demand section as idle until opened, and fetches exactly its own token once -- unlike source_calculations, which now loads eagerly for the conformer derivation", async () => {
+    it("renders an available on-demand section as idle until opened, and fetches exactly its own token once -- unlike source_calculations and frequencies, which now load eagerly", async () => {
         const requestedIncludeSets: string[][] = []
         server.use(http.get(ENDPOINT, ({ request }) => {
             requestedIncludeSets.push(new URL(request.url).searchParams.getAll("include"))
@@ -369,9 +369,11 @@ describe("EntryStatmechSection", () => {
         page()
         await screen.findByText("sm_one")
         // `source_calculations` is fetched eagerly (every record card
-        // derives its conformer from it by default) -- `torsions` is not,
-        // it still waits for its own disclosure to be opened.
-        await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"]]))
+        // derives its conformer from it by default), and so is
+        // `frequencies` now (every card's own `FrequenciesBlock` shows it
+        // by default, finding 6) -- `torsions` is not, it still waits for
+        // its own disclosure to be opened.
+        await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"]]))
 
         const section = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLDetailsElement
         expect(section.open).toBe(false)
@@ -379,7 +381,7 @@ describe("EntryStatmechSection", () => {
 
         fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
         await within(section).findByText("Torsions loaded.")
-        expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["torsions"]])
+        expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["torsions"]])
     })
 
     it("shares one fetch across every record's disclosure for the same token, and never merges one record's rows into another's", async () => {
@@ -480,15 +482,17 @@ describe("EntryStatmechSection", () => {
         }))
         page()
         await screen.findByText("sm_one")
-        // Neither sm_one nor sm_two has electronic levels.
-        const heading = screen.getByRole("heading", { name: "Electronic levels" })
-        expect(heading.closest("details")).toBeNull()
+        // Neither sm_one nor sm_two has electronic levels. Finding 6: this
+        // collapses to one line, with no heading at all -- there is no
+        // destination to jump to, so no `SectionHeading` registers one.
+        expect(screen.queryByRole("heading", { name: "Electronic levels" })).not.toBeInTheDocument()
         expect(screen.getByText("No electronic levels are recorded for any statmech record on this entry.")).toBeVisible()
-        // Two requests, never a third for "Electronic levels" (which stays
-        // request-free): the base list load, plus the ONE eager
-        // `source_calculations` fetch every record card's conformer
-        // derivation needs (see the eager-load test above).
-        await waitFor(() => expect(requestCount).toBe(2))
+        // Three requests, never a fourth for "Electronic levels" (which
+        // stays request-free): the base list load, plus the two eager
+        // fetches every record card needs by default -- `source_calculations`
+        // (conformer derivation) and `frequencies` (finding 6's
+        // `FrequenciesBlock`) -- see the eager-load test above.
+        await waitFor(() => expect(requestCount).toBe(3))
     })
 
     it("states honestly when no statmech records are deposited for this entry, without noise from six separate empty lazy sections", async () => {
@@ -673,5 +677,161 @@ describe("EntryStatmechSection -- conformer derived from source calculations", (
         expect(within(card).queryByText(/Conformer \(derived/)).not.toBeInTheDocument()
         expect(within(card).queryByText(/do not trace to any conformer/)).not.toBeInTheDocument()
         expect(within(card).queryByText(/span more than one conformer/)).not.toBeInTheDocument()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Finding 6: the vibrational-frequency evidence -- the CONTENT of a
+// statmech record -- used to sit in a global "Frequencies" disclosure
+// ~6000px below every record card, collapsed and request-free until
+// opened. It now renders on each card directly, loaded by default, gated
+// by that record's own `available_sections.has_frequencies`.
+// ---------------------------------------------------------------------------
+describe("EntryStatmechSection: frequencies render on the card by default", () => {
+    it("shows the source frequency calculation refs on the card itself, without any click, when the record has frequency evidence", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("frequencies") ? {
+                    frequencies: { source_freq_calculation_refs: ["calc_freq_1"], frequency_scale_factor_value: 0.999, note: null },
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        // No click, no expand -- present as soon as the card renders.
+        const link = await within(card).findByRole("link", { name: "calc_freq_1" })
+        expect(link).toHaveAttribute("href", "/calculations/calc_freq_1")
+        // The "Frequencies" heading lives on the CARD now (inside the
+        // `<article>`), not behind a global "Expand to load this section"
+        // `<details>` disclosure the way the other five lazy sections are.
+        const freqHeading = screen.getByRole("heading", { name: "Frequencies" })
+        expect(card.contains(freqHeading)).toBe(true)
+        expect(freqHeading.closest("details")).toBeNull()
+    })
+
+    it("renders no Frequencies block at all for a record with no frequency evidence -- vanishes rather than showing an empty box", async () => {
+        // sm_one: has_frequencies false. sm_two: has_frequencies true, with
+        // real frequencies data -- included so this test can WAIT for
+        // sm_two's positive content (a real network round trip) before
+        // asserting sm_one shows nothing. Both records share ONE
+        // `frequenciesState` (see `useStatmechSection`'s own docstring), so
+        // once sm_two's link is visible the shared fetch has genuinely
+        // settled to "ready" -- checking sm_one's absence any earlier would
+        // pass vacuously whether or not the gate actually works, since
+        // nothing renders for either record while the fetch is still
+        // in flight.
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const records = [
+                baseRecord({ available_sections: { ...baseRecord().available_sections, has_frequencies: false } }),
+                baseRecord({
+                    statmech: { ...baseRecord().statmech, statmech_ref: "sm_two", point_group: "C2v" },
+                    ...(includes.includes("frequencies") ? {
+                        frequencies: { source_freq_calculation_refs: ["calc_freq_2"], frequency_scale_factor_value: 0.999, note: null },
+                    } : {}),
+                }),
+            ]
+            return HttpResponse.json(mockResponse(records))
+        }))
+        page()
+        const oneCard = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        const twoCard = (await screen.findByText("sm_two")).closest("article") as HTMLElement
+        // Positive wait: proves the shared frequencies fetch has resolved.
+        await within(twoCard).findByRole("link", { name: "calc_freq_2" })
+        // Only now is sm_one's absence a real assertion about the gate,
+        // not an accident of timing.
+        expect(within(oneCard).queryByText("Source frequency calculations")).not.toBeInTheDocument()
+        expect(within(oneCard).queryByText(/frequency evidence/)).not.toBeInTheDocument()
+        expect(within(oneCard).queryByRole("heading", { name: "Frequencies" })).not.toBeInTheDocument()
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Finding 7: "seven byte-identical statmech records render as fourteen
+// full cards" (paired with thermo's identical finding). See
+// `EntryThermoSection.test.tsx`'s matching describe block for the same
+// rule, applied to `statmechRecordFingerprint`.
+// ---------------------------------------------------------------------------
+describe("EntryStatmechSection: identical-value records group under one card", () => {
+    /** Three clones, identical in every fingerprinted field, differing only
+     *  in `statmech_ref` and one PROVENANCE field (`software_release`) --
+     *  the review's own worked case: six records say "Record software: not
+     *  recorded" and one says "Arkane" while sharing every scientific
+     *  value. */
+    function identicalClones() {
+        return [
+            baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_g1" }, software_release: null }),
+            baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_g2" }, software_release: null }),
+            baseRecord({
+                statmech: { ...baseRecord().statmech, statmech_ref: "sm_g3" },
+                software_release: { software_release_ref: "srel_arkane", software: "Arkane", version: null },
+            }),
+        ]
+    }
+
+    it("groups records reporting identical point group, symmetry, and scale factor under one card, listing every ref", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
+        page()
+        await screen.findByText("3 records with identical values")
+
+        expect(document.querySelectorAll("article.identical-record-group")).toHaveLength(1)
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        const ownHeadingRow = groupCard.querySelector(":scope > .science-record-heading") as HTMLElement
+        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("computed statmech record")
+
+        const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
+        expect(within(refsTable).getByText("sm_g1")).toBeVisible()
+        expect(within(refsTable).getByText("sm_g2")).toBeVisible()
+        expect(within(refsTable).getByText("sm_g3")).toBeVisible()
+    })
+
+    it("keeps provenance that differs across an identical-value group visible per ref -- six 'not recorded', one 'Arkane'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
+        page()
+        await screen.findByText("3 records with identical values")
+        const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+        const rows = within(refsTable).getAllByRole("row").slice(1)
+        const g1Row = rows.find((row) => within(row).queryByText("sm_g1"))!
+        const g3Row = rows.find((row) => within(row).queryByText("sm_g3"))!
+        expect(cellAt(g1Row, "Record software")).toBe("not recorded")
+        expect(cellAt(g3Row, "Record software")).toBe("Arkane")
+    })
+
+    it("show-all mounts every member's own full card, in a disclosure closed by default", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
+        page()
+        await screen.findByText("3 records with identical values")
+        const detail = screen.getByText("Show all 3 records individually").closest("details") as HTMLDetailsElement
+        expect(detail.open).toBe(false)
+        const memberCards = within(detail).getAllByRole("article") as HTMLElement[]
+        expect(memberCards).toHaveLength(3)
+        const memberRefs = memberCards.map((card) => card.querySelector("code")?.textContent)
+        expect(memberRefs.sort()).toEqual(["sm_g1", "sm_g2", "sm_g3"])
+        fireEvent.click(screen.getByText("Show all 3 records individually"))
+        expect(detail.open).toBe(true)
+    })
+
+    it("never wraps a lone record in a '1 identical' group -- a single record renders as a plain card", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([baseRecord()]))))
+        page()
+        await screen.findByText("sm_one")
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Show all \d+ records individually/)).not.toBeInTheDocument()
+        expect(screen.queryByText("Records in this group")).not.toBeInTheDocument()
+    })
+
+    it("keeps records that differ in scientific_origin as separate cards, even when every other field matches", async () => {
+        // The file's own mockRecords() fixture: sm_one is "computed", sm_two
+        // is "estimated" -- otherwise near-identical. A computed value and
+        // an experimental one that happen to share a number are NOT the
+        // same record.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("sm_one")
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+        expect(screen.getByText("sm_one")).toBeVisible()
+        expect(screen.getByText("sm_two")).toBeVisible()
     })
 })

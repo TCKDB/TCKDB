@@ -23,14 +23,23 @@ import type { ConformerAttribution } from "../domain/conformerEvidence"
  * visibility changes.
  */
 export function ConformerAttributionGroups<T>({
-    attribution, selectedLabel, renderRecord,
+    attribution, selectedLabel, renderRecords,
     thisConformerNote, thisConformerEmptyText,
     otherConformerNote,
     noLinkNote, noLinkEmptyText,
 }: {
     attribution: ConformerAttribution<T>
     selectedLabel: string
-    renderRecord: (record: T) => ReactNode
+    /**
+     * Renders one bucket's WHOLE record array at once, not one record at a
+     * time -- callers (`EntryThermoSection`/`EntryStatmechSection`) group
+     * scientifically-identical records within the bucket they were handed
+     * before rendering (`domain/identicalRecordGroups.ts`), so grouping
+     * stays bucket-scoped: a record traced to a different conformer never
+     * gets folded into "this conformer"'s identical-values card just
+     * because the two happen to report the same numbers.
+     */
+    renderRecords: (records: T[]) => ReactNode
     thisConformerNote: string
     thisConformerEmptyText: string
     otherConformerNote: string
@@ -80,7 +89,7 @@ export function ConformerAttributionGroups<T>({
                 note={thisConformerNote}
                 records={attribution.thisConformer}
                 emptyText={thisConformerEmptyText}
-                renderRecord={renderRecord}
+                renderRecords={renderRecords}
                 primary
             />
             {otherRecordCount > 0 && (
@@ -95,7 +104,7 @@ export function ConformerAttributionGroups<T>({
                             note={otherConformerNote}
                             records={records}
                             emptyText=""
-                            renderRecord={renderRecord}
+                            renderRecords={renderRecords}
                         />
                     ))}
                 </details>
@@ -114,19 +123,19 @@ export function ConformerAttributionGroups<T>({
                     note={noLinkNote}
                     records={attribution.noLink}
                     emptyText={noLinkEmptyText}
-                    renderRecord={renderRecord}
+                    renderRecords={renderRecords}
                 />
             )}
         </>
     )
 }
 
-function AttributionGroup<T>({ title, note, records, emptyText, renderRecord, primary = false }: {
+function AttributionGroup<T>({ title, note, records, emptyText, renderRecords, primary = false }: {
     title: string
     note: string
     records: T[]
     emptyText: string
-    renderRecord: (record: T) => ReactNode
+    renderRecords: (records: T[]) => ReactNode
     primary?: boolean
 }) {
     return (
@@ -135,7 +144,7 @@ function AttributionGroup<T>({ title, note, records, emptyText, renderRecord, pr
             <p className="section-note">{note}</p>
             {records.length === 0
                 ? <p className={primary ? "conformer-attribution-answer" : "empty-projection"}>{emptyText}</p>
-                : records.map((record) => renderRecord(record))}
+                : renderRecords(records)}
         </div>
     )
 }

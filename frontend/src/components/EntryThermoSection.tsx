@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
@@ -5,6 +6,7 @@ import { lotLabel } from "../api/scientificSchemas"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoListResponse, ThermoRecord } from "../api/thermoApi"
 import { conformerLabel, partitionByConformerLink, thermoConformerGroupRef } from "../domain/conformerEvidence"
+import { groupByFingerprint, thermoRecordFingerprint } from "../domain/identicalRecordGroups"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
@@ -179,17 +181,52 @@ function makeThermoRecordRenderer(sectionLabels: Map<string, string>) {
     }
 }
 
+/**
+ * Renders a WHOLE bucket of records at once -- grouping it, locally, by
+ * scientific content (`groupByFingerprint`/`thermoRecordFingerprint`) --
+ * rather than mapping one record to one card. Grouping happens per call
+ * (per `ConformerAttributionGroups` bucket, and once for the flat
+ * no-conformer-selected list) so a record traced to a different conformer
+ * is never folded into another bucket's identical-values card just because
+ * the two report the same numbers -- see `ConformerAttributionGroups.tsx`'s
+ * `renderRecords` docstring. `sectionLabels` is looked up against every
+ * member of a LOCAL group, not only its first record, so a ToC entry
+ * survives even if the record `thermoSectionLabels` originally chose to
+ * label lands in a different position within a differently-grouped bucket.
+ */
+function makeThermoGroupedRenderer(sectionLabels: Map<string, string>) {
+    const renderThermoRecord = makeThermoRecordRenderer(sectionLabels)
+    return function renderThermoRecords(records: ThermoRecord[]): ReactNode {
+        return groupByFingerprint(records, thermoRecordFingerprint).map((group) => {
+            if (group.records.length === 1) return renderThermoRecord(group.records[0])
+            const representative = group.records[0]
+            const sectionLabel = group.records
+                .map((record) => sectionLabels.get(record.thermo_ref))
+                .find((label): label is string => label != null) ?? null
+            return (
+                <SectionErrorBoundary key={representative.thermo_ref} fallback={thermoRecordFallback(representative)}>
+                    <IdenticalThermoRecordsCard records={group.records} sectionLabel={sectionLabel} />
+                </SectionErrorBoundary>
+            )
+        })
+    }
+}
+
 function ThermoList({ response, conformer, conformers }: {
     response: ThermoListResponse
     conformer?: ConformerProjection | null
     conformers: ConformerProjection[]
 }) {
     const { records, review_summary: reviewSummary, pagination } = response
-    // Computed once, over the full deposited list -- see
-    // `thermoSectionLabels`'s own docstring for why this must not be
-    // recomputed per render path.
-    const sectionLabels = thermoSectionLabels(records)
-    const renderThermoRecord = makeThermoRecordRenderer(sectionLabels)
+    // Computed once, over the full deposited list's GROUP REPRESENTATIVES
+    // (see `thermoSectionLabels`'s own docstring for why this must not be
+    // recomputed per render path) -- a group of N identical records
+    // contributes exactly ONE ToC entry, never N near-duplicate entries
+    // ("NASA-7 thermo record 1".."NASA-7 thermo record 7") for content a
+    // reader only needs to visit once.
+    const representativeRecords = groupByFingerprint(records, thermoRecordFingerprint).map((group) => group.records[0])
+    const sectionLabels = thermoSectionLabels(representativeRecords)
+    const renderThermoRecords = makeThermoGroupedRenderer(sectionLabels)
     return (
         <section className="ledger-section" aria-labelledby="thermo-heading">
             <div className="ledger-heading">
@@ -238,7 +275,7 @@ function ThermoList({ response, conformer, conformers }: {
                         },
                     )}
                     selectedLabel={conformerLabel(conformer)}
-                    renderRecord={renderThermoRecord}
+                    renderRecords={renderThermoRecords}
                     thisConformerNote="Traced to this conformer's own primary calculation."
                     thisConformerEmptyText="No thermo record traces to this conformer yet."
                     otherConformerNote="Traced to a different conformer than the one selected above."
@@ -246,7 +283,7 @@ function ThermoList({ response, conformer, conformers }: {
                     noLinkEmptyText="No entry-level thermo record is deposited for this entry."
                 />
             ) : (
-                records.map(renderThermoRecord)
+                renderThermoRecords(records)
             )}
         </section>
     )
@@ -270,12 +307,29 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
                 <span className="review-badge">{statusLabel(record.review.status)}</span>
                 <code>{record.thermo_ref}</code>
             </div>
+            <ThermoRecordBody record={record} />
+        </article>
+    )
+}
 
+/**
+ * Everything under a thermo card's own heading -- shared by the normal
+ * one-record `ThermoRecordCard` above and `IdenticalThermoRecordsCard`
+ * below (which shows this body ONCE, from a representative record, for a
+ * whole group of scientifically-identical deposits).
+ *
+ * "Model kind" is never its own row here: the card's `<h3>` already reads
+ * "{kind} thermo record" (`ThermoRecordCard` above, or
+ * `IdenticalThermoRecordsCard`'s own heading) -- a `<dd>` repeating the
+ * exact word the heading just used is not a second fact.
+ */
+function ThermoRecordBody({ record }: { record: ThermoRecord }) {
+    return (
+        <>
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
 
             <dl className="kv-list">
                 <div><dt>Scientific origin</dt><dd>{record.scientific_origin}</dd></div>
-                <div><dt>Model kind</dt><dd>{record.model_kind}</dd></div>
                 <div><dt>H298</dt><dd><QuantityValue value={formatQuantity("thermo_h298_kj_mol", record.h298_kj_mol)} /></dd></div>
                 <div>
                     <dt>H298 uncertainty</dt>
@@ -289,21 +343,140 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
             </dl>
 
             <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} />
-            <NasaBlock nasa={record.nasa ?? null} thermoRef={record.thermo_ref} />
-            <Nasa9Block nasa9={record.nasa9 ?? null} thermoRef={record.thermo_ref} />
-            <WilhoitBlock wilhoit={record.wilhoit ?? null} thermoRef={record.thermo_ref} />
-            <PointsBlock points={record.points ?? null} thermoRef={record.thermo_ref} />
+            <ModelBlock record={record} />
             <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} />
             <ProvenanceBlock provenance={record.provenance ?? null} thermoRef={record.thermo_ref} />
             <GroupAdditivityBlock groupAdditivity={record.group_additivity ?? null} thermoRef={record.thermo_ref} />
+        </>
+    )
+}
+
+/**
+ * Renders exactly the ONE model-kind block this record's own `model_kind`
+ * names -- never all four. A `nasa` (computed) record used to also print
+ * an empty "NASA-9 polynomial" box, an empty "Wilhoit form" box, and an
+ * empty "Evaluated points" box beneath its real NASA-7 table -- three
+ * dashed "not recorded" boxes for model shapes the record was never going
+ * to have, on every single card. `model_kind` values this page has no
+ * dedicated block for (e.g. `"scalar"`) render nothing here, matching
+ * `hasModelKindData`'s own "no ToC-worthy destination" verdict above --
+ * still defensive against a declared kind with no matching data (a `nasa`
+ * record whose `nasa` field is null still renders `NasaBlock`'s own "No
+ * NASA-7 polynomial recorded" line, never silently nothing).
+ */
+function ModelBlock({ record }: { record: ThermoRecord }) {
+    switch (record.model_kind) {
+        case "nasa": return <NasaBlock nasa={record.nasa ?? null} thermoRef={record.thermo_ref} />
+        case "nasa9": return <Nasa9Block nasa9={record.nasa9 ?? null} thermoRef={record.thermo_ref} />
+        case "wilhoit": return <WilhoitBlock wilhoit={record.wilhoit ?? null} thermoRef={record.thermo_ref} />
+        case "points": return <PointsBlock points={record.points ?? null} thermoRef={record.thermo_ref} />
+        default: return null
+    }
+}
+
+/**
+ * One card for N deposited thermo records that report IDENTICAL scientific
+ * content (`domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`)
+ * -- the finding measured live: seven ethene thermo records, all H298 =
+ * 62.84 kJ/mol, S298 = 218.80 J/mol·K, identical NASA-7 coefficients,
+ * rendered as seven full cards. The shared scientific content renders ONCE
+ * -- from the group's first record; every member reports the identical
+ * body by construction of the fingerprint -- via the same `ThermoRecordBody`
+ * a single-record card uses, so nothing about the science itself is a
+ * special, second rendering path. Every record's own ref stays listed
+ * (`IdenticalThermoGroupRefs`), including its own provenance where that
+ * DOES differ across the group -- grouping never hides a provenance
+ * disagreement, only the repeated scientific values. "Show all" mounts
+ * every member's own full, unmodified card on demand; nothing here
+ * replaces a record with a summary, it only collapses a default DISPLAY
+ * that would otherwise repeat the same numbers N times.
+ */
+function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: ThermoRecord[]; sectionLabel: string | null }) {
+    const representative = records[0]
+    const anchorId = `thermo-heading-${representative.thermo_ref}`
+    useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "")
+    return (
+        <article className="science-record identical-record-group" aria-labelledby={anchorId}>
+            <div className="science-record-heading">
+                <h3 id={anchorId}>{modelKindLabel(representative.model_kind)} thermo record</h3>
+                <span className="review-badge">{records.length} records with identical values</span>
+            </div>
+            <p className="section-note">
+                {records.length} deposited records report identical H298, S298 and model-form values — shown
+                once below. Every record's own ref and provenance is listed underneath, and each one stays
+                individually reachable; none was merged, averaged, or dropped in favor of another.
+            </p>
+            <ThermoRecordBody record={representative} />
+            <IdenticalThermoGroupRefs records={records} />
+            <details className="identical-record-group-detail">
+                <summary>Show all {records.length} records individually</summary>
+                {records.map((record) => (
+                    <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
+                        <ThermoRecordCard record={record} sectionLabel={null} />
+                    </SectionErrorBoundary>
+                ))}
+            </details>
         </article>
     )
 }
 
+/**
+ * Every ref in an identical-values group, with its OWN provenance --
+ * "Provenance that differs across identical-value records (six say 'Record
+ * software: not recorded', one says Arkane) must still be visible" is the
+ * finding's own requirement: grouping on scientific content must never
+ * collapse provenance that genuinely differs record to record.
+ */
+function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
+    const headingId = `identical-refs-${records[0].thermo_ref}`
+    return (
+        <section aria-labelledby={headingId}>
+            <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
+            <div className="table-scroll table-scroll--compact">
+                <table className="stage-table" aria-label="Records sharing these identical values">
+                    <thead>
+                        <tr>
+                            <th scope="col">Ref</th>
+                            <th scope="col">Review</th>
+                            <th scope="col">Software</th>
+                            <th scope="col">Workflow tool</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {records.map((record) => (
+                            <tr key={record.thermo_ref}>
+                                <td data-label="Ref"><code>{record.thermo_ref}</code></td>
+                                <td data-label="Review">{statusLabel(record.review.status)}</td>
+                                <td data-label="Software">{softwareLabel(record.provenance?.software_release) ?? "not recorded"}</td>
+                                <td data-label="Workflow tool">{toolReleaseLabel(record.provenance?.workflow_tool_release) ?? "not recorded"}</td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    )
+}
+
+/**
+ * `record_min_k`/`record_max_k` are a fact of the RECORD -- always shown.
+ * `requested_min_k`/`requested_max_k`/`covers_requested_range`/
+ * `extrapolation_distance_k` describe the REQUEST that produced this
+ * response -- a temperature filter nobody applied on this page (this slice
+ * never sends one) is not a fact about the record, and printing
+ * "Requested range (K): No temperature filter applied" / "Covers requested
+ * range: Yes" / "Extrapolation distance (K): 0" on every card presents
+ * query metadata as though it were something the record itself claims.
+ * These three rows render only when a range was genuinely requested
+ * (either bound non-null); when neither bound is set, they are omitted
+ * entirely rather than printed with a "not applicable" stand-in for a
+ * question this page never asked.
+ */
 function TemperatureCoverageBlock({ coverage, thermoRef }: {
     coverage: ThermoRecord["temperature_coverage"] | null
     thermoRef: string
 }) {
+    const wasRequested = coverage != null && (coverage.requested_min_k != null || coverage.requested_max_k != null)
     return (
         <section aria-labelledby={`coverage-${thermoRef}`}>
             <h4 className="model-block-heading" id={`coverage-${thermoRef}`}>Temperature coverage</h4>
@@ -313,16 +486,16 @@ function TemperatureCoverageBlock({ coverage, thermoRef }: {
                         <dt>Record range (K)</dt>
                         <dd>{coverage.record_min_k ?? "not recorded"}–{coverage.record_max_k ?? "not recorded"}</dd>
                     </div>
-                    <div>
-                        <dt>Requested range (K)</dt>
-                        <dd>
-                            {coverage.requested_min_k == null && coverage.requested_max_k == null
-                                ? "No temperature filter applied"
-                                : `${coverage.requested_min_k ?? "?"}–${coverage.requested_max_k ?? "?"}`}
-                        </dd>
-                    </div>
-                    <div><dt>Covers requested range</dt><dd>{coverage.covers_requested_range ? "Yes" : "No"}</dd></div>
-                    <div><dt>Extrapolation distance (K)</dt><dd>{coverage.extrapolation_distance_k}</dd></div>
+                    {wasRequested && (
+                        <>
+                            <div>
+                                <dt>Requested range (K)</dt>
+                                <dd>{coverage.requested_min_k ?? "?"}–{coverage.requested_max_k ?? "?"}</dd>
+                            </div>
+                            <div><dt>Covers requested range</dt><dd>{coverage.covers_requested_range ? "Yes" : "No"}</dd></div>
+                            <div><dt>Extrapolation distance (K)</dt><dd>{coverage.extrapolation_distance_k}</dd></div>
+                        </>
+                    )}
                 </dl>
             ) : <p className="empty-projection">No temperature coverage computed for this record.</p>}
         </section>
@@ -534,6 +707,55 @@ function EvidenceCompletenessBlock({ completeness, thermoRef }: {
     )
 }
 
+type CalcRefRow = { labels: string[]; ref: string }
+
+/**
+ * Primary/frequency/single-point calculation refs, merged into one row per
+ * DISTINCT calculation. An SP-from-optimization record routinely cites the
+ * SAME calculation as both its `primary_calculation` and its
+ * `sp_calculation_ref` (see `feedback_sp_vs_opt_energy`: "use opt energy as
+ * SP when LOTs match") -- printing that one calculation ref under two
+ * separate headings reads as though the record cited two different
+ * calculations that simply happen to match, not one calculation serving
+ * two roles. Each DISTINCT ref gets exactly one row here, labelled with
+ * every role it fills, joined "/"; a role whose own ref is `null` keeps
+ * its own separate row, stating "not recorded" plainly rather than being
+ * folded into a group it was never actually part of.
+ */
+function provenanceCalculationRows(provenance: NonNullable<ThermoRecord["provenance"]>): { rows: CalcRefRow[]; missing: string[] } {
+    const fields: Array<{ label: string; ref: string | null }> = [
+        { label: "Primary calculation", ref: provenance.primary_calculation?.calculation_ref ?? null },
+        { label: "Frequency calculation", ref: provenance.freq_calculation_ref ?? null },
+        { label: "Single-point calculation", ref: provenance.sp_calculation_ref ?? null },
+    ]
+    const rows: CalcRefRow[] = []
+    const missing: string[] = []
+    for (const field of fields) {
+        if (!field.ref) { missing.push(field.label); continue }
+        const existing = rows.find((row) => row.ref === field.ref)
+        if (existing) existing.labels.push(field.label)
+        else rows.push({ labels: [field.label], ref: field.ref })
+    }
+    return { rows, missing }
+}
+
+function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<ThermoRecord["provenance"]> }) {
+    const { rows, missing } = provenanceCalculationRows(provenance)
+    return (
+        <>
+            {rows.map((row) => (
+                <div key={row.ref}>
+                    <dt>{row.labels.join(" / ")}</dt>
+                    <dd><Link to={`/calculations/${row.ref}`}>{row.ref}</Link></dd>
+                </div>
+            ))}
+            {missing.map((label) => (
+                <div key={label}><dt>{label}</dt><dd>not recorded</dd></div>
+            ))}
+        </>
+    )
+}
+
 function ProvenanceBlock({ provenance, thermoRef }: {
     provenance: ThermoRecord["provenance"] | null
     thermoRef: string
@@ -566,30 +788,7 @@ function ProvenanceBlock({ provenance, thermoRef }: {
                     <dt>Workflow tool</dt>
                     <dd>{toolReleaseLabel(provenance.workflow_tool_release) ?? "not recorded"}</dd>
                 </div>
-                <div>
-                    <dt>Primary calculation</dt>
-                    <dd>
-                        {provenance.primary_calculation?.calculation_ref
-                            ? <Link to={`/calculations/${provenance.primary_calculation.calculation_ref}`}>{provenance.primary_calculation.calculation_ref}</Link>
-                            : "not recorded"}
-                    </dd>
-                </div>
-                <div>
-                    <dt>Frequency calculation</dt>
-                    <dd>
-                        {provenance.freq_calculation_ref
-                            ? <Link to={`/calculations/${provenance.freq_calculation_ref}`}>{provenance.freq_calculation_ref}</Link>
-                            : "not recorded"}
-                    </dd>
-                </div>
-                <div>
-                    <dt>Single-point calculation</dt>
-                    <dd>
-                        {provenance.sp_calculation_ref
-                            ? <Link to={`/calculations/${provenance.sp_calculation_ref}`}>{provenance.sp_calculation_ref}</Link>
-                            : "not recorded"}
-                    </dd>
-                </div>
+                <CalculationProvenanceRows provenance={provenance} />
                 {/* No dedicated statmech detail page exists in this project (see the
                     module docstring), so this stays plain text rather than a dead link. */}
                 <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ?? "not recorded"}</dd></div>
@@ -611,19 +810,16 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
     thermoRef: string
 }) {
     // `group_additivity` genuinely is `null` on the wire for any record
-    // that isn't an estimated thermo with an attached GA breakdown (unlike
-    // the two blocks above) — it is named in `_response.py`'s "absent
-    // scientific fact" list alongside nasa/nasa9/wilhoit/points. Consistent
-    // with those siblings: render the heading and an explicit "not
-    // recorded" line rather than omitting the section entirely.
-    if (!groupAdditivity) {
-        return (
-            <section aria-labelledby={`ga-${thermoRef}`}>
-                <h4 className="model-block-heading" id={`ga-${thermoRef}`}>Group-additivity estimation</h4>
-                <p className="empty-projection">No group-additivity estimation recorded for this record.</p>
-            </section>
-        )
-    }
+    // that isn't an estimated thermo with an attached GA breakdown. Unlike
+    // nasa/nasa9/wilhoit/points -- which are the four possible SHAPES of
+    // the one model every thermo record declares via its own `model_kind`,
+    // so an empty box for the other three is at least pointing at a real
+    // classification the record chose not to use -- group-additivity is a
+    // scheme only an estimated record ever has at all. An empty
+    // "Group-additivity estimation" box on a `nasa`/computed record (the
+    // common case) answers a question that record was never going to
+    // answer; this section renders nothing rather than that box.
+    if (!groupAdditivity) return null
     return (
         <section aria-labelledby={`ga-${thermoRef}`}>
             <h4 className="model-block-heading" id={`ga-${thermoRef}`}>Group-additivity estimation</h4>
