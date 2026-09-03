@@ -499,18 +499,19 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                     <tbody>
                         {records.map((record) => {
                             const provenance = record.provenance ?? null
+                            const primaryRef = provenance?.primary_calculation?.calculation_ref ?? null
                             return (
                                 <tr key={record.thermo_ref}>
                                     <td data-label="Ref"><code>{record.thermo_ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
                                     <td data-label="Primary calculation">
-                                        <CalculationRefCell calculationRef={provenance?.primary_calculation?.calculation_ref ?? null} />
+                                        <CalculationRefCell calculationRef={primaryRef} />
                                     </td>
                                     <td data-label="Freq calculation">
-                                        <CalculationRefCell calculationRef={provenance?.freq_calculation_ref ?? null} />
+                                        <CalculationRefCell calculationRef={provenance?.freq_calculation_ref ?? null} primaryRef={primaryRef} />
                                     </td>
                                     <td data-label="SP calculation">
-                                        <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} />
+                                        <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} primaryRef={primaryRef} />
                                     </td>
                                     <td data-label="Statmech ref">{provenance?.statmech_ref ?? "not recorded"}</td>
                                     <td data-label="Software">{softwareLabel(provenance?.software_release) ?? "not recorded"}</td>
@@ -525,9 +526,35 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
     )
 }
 
-/** One calculation-ref cell in `IdenticalThermoGroupRefs`' table: a link when the ref is present, plain "not recorded" text otherwise. */
-function CalculationRefCell({ calculationRef }: { calculationRef: string | null }) {
-    return calculationRef ? <Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link> : <>not recorded</>
+/**
+ * One calculation-ref cell in `IdenticalThermoGroupRefs`' table: a link
+ * when the ref is present, plain "not recorded" text otherwise.
+ *
+ * `primaryRef`, when passed, is the SAME dedup this table's Primary
+ * column always shows in full -- if this cell's own ref equals it, the
+ * cell says "same as primary" instead of repeating the identical ref a
+ * second time. Measured against the live archive (every deposited thermo
+ * record across every species entry, 65 records / 8 multi-record groups,
+ * curled 2026-09-03): `sp_calculation_ref` equals `primary_calculation
+ * .calculation_ref` on EVERY record (an SP-from-optimization record
+ * citing its own opt/sp job for both roles, same finding as
+ * `provenanceCalculationRows` below already applies to the single-record
+ * provenance block) -- `freq_calculation_ref` never does (a frequency job
+ * is structurally a separate calculation run, distinct from the
+ * electronic-energy job either role above cites). `primaryRef` is still
+ * threaded through the Freq column too, rather than hard-coding "the SP
+ * column is the one that collapses": a future record whose freq calc
+ * genuinely reuses its primary job must collapse the same way, and a
+ * differing case -- true for every sampled Freq cell today -- must never
+ * be hidden, only the identical one.
+ */
+function CalculationRefCell({ calculationRef, primaryRef = null }: { calculationRef: string | null; primaryRef?: string | null }) {
+    if (!calculationRef) return <>not recorded</>
+    // Plain text, not a link -- like the "not recorded" branch above, this
+    // cell has no calculation of its own to point at; the ref is already
+    // linked from the Primary column in the same row.
+    if (primaryRef && calculationRef === primaryRef) return <>same as primary</>
+    return <Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
 }
 
 /**

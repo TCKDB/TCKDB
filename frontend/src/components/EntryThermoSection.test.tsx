@@ -892,6 +892,67 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(provenanceHeadingsOutsideDetail).toHaveLength(0)
     })
 
+    /**
+     * Owner report: the group-refs table showed the same calculation ref
+     * twice, once under "Primary calculation" and again under a second
+     * role's column. Measured against the live archive (every deposited
+     * thermo record across every species entry, 65 records / 8
+     * multi-record groups, curled 2026-09-03) before fixing: it is the SP
+     * column that always repeats the Primary ref (an SP-from-optimization
+     * record cites the same job for both roles — 65/65), never the Freq
+     * column (a frequency job is a structurally separate calculation run
+     * — 0/65). The fix is applied to BOTH columns identically rather than
+     * hard-coded to SP, so it stays correct if a future record's Freq ref
+     * ever does collapse onto Primary; this fixture exercises that Freq
+     * "same" branch directly since no live record does today.
+     */
+    function cloneWithMixedCalculationOverlap() {
+        const [alpha] = mockRecords()
+        // A second clone, identical in every fingerprinted (H298/S298/
+        // NASA-7) field to the first -- required for either row to reach
+        // the group-refs table at all (a lone record renders as a plain
+        // card with no such table, per the "never wraps a lone record"
+        // test above).
+        const plain = { ...alpha, thermo_ref: "thm_plain" }
+        const overlap = {
+            ...alpha,
+            thermo_ref: "thm_overlap",
+            provenance: {
+                ...alpha.provenance,
+                primary_calculation: { ...alpha.provenance.primary_calculation, calculation_ref: "calc_shared" },
+                // SAME as primary -- collapses to "same as primary".
+                freq_calculation_ref: "calc_shared",
+                // DIFFERENT from primary -- keeps its own ref/link.
+                sp_calculation_ref: "calc_distinct_sp",
+            },
+        }
+        return [plain, overlap]
+    }
+
+    it("collapses a Freq/SP calculation cell to 'same as primary' when it cites the SAME calculation as Primary, but keeps a differing ref linked in full", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: cloneWithMixedCalculationOverlap() }))))
+        page()
+        await screen.findByText("2 records with identical values")
+
+        const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+        const row = within(refsTable).getByText("thm_overlap").closest("tr") as HTMLElement
+
+        // Primary keeps its own ref, linked -- the anchor every other
+        // column is compared against.
+        expect(cellAt(row, "Primary calculation")).toBe("calc_shared")
+        expect(within(row).getByRole("link", { name: "calc_shared" })).toHaveAttribute("href", "/calculations/calc_shared")
+
+        // Freq cites the IDENTICAL ref -- collapsed to prose, never a
+        // second link to the same record, never the raw ref repeated.
+        expect(cellAt(row, "Freq calculation")).toBe("same as primary")
+        expect(within(row).queryAllByRole("link", { name: "calc_shared" })).toHaveLength(1)
+
+        // SP cites a DIFFERENT ref -- stays its own link, never hidden or
+        // collapsed just because a sibling column collapsed.
+        expect(cellAt(row, "SP calculation")).toBe("calc_distinct_sp")
+        expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
+    })
+
     it("shows the shared level of theory once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: clonesWithDifferentCalculations() }))))
         page()
