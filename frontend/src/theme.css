@@ -48,23 +48,51 @@
                                 measured within 4-7 units per channel of
                                 #536578's 29 uses elsewhere; one accidental-
                                 drift grey, not two intended ones) */
-    --muted-2: #6b7888;     /* SpeciesEntryPage's own secondary-label grey.
+    --muted-2: #586471;     /* SpeciesEntryPage's own secondary-label grey.
                                 Kept a DISTINCT name from --muted rather than
                                 merged into it: at a glance the two read as
                                 the same "quiet label" role, but side by side
-                                they are visibly different greys (#536578 vs
-                                #6b7888, an 8-14% delta per channel) used on
-                                two different pages — merging them would have
+                                they are visibly different greys used on two
+                                different pages — merging them would have
                                 silently shifted one page's already-shipped
-                                colour. */
-    --faint: #9aa6b3;       /* barely-there tertiary text: ref-item labels,
+                                colour.
+                                Darkened from the original #6b7888 (accessibility
+                                pass, finding 10): that value cleared 4.5:1 on
+                                plain white (4.499 — already borderline) but
+                                fell to 4.216 on --page-bg and 3.95 on
+                                --accent-50 (the tint a selected `.conformer-
+                                card` gets, which COPY-button labels and the
+                                conformer-card coverage line sit on directly).
+                                #586471 clears 4.5:1 against EVERY background
+                                this token actually renders on — white 6.04,
+                                page-bg 5.66, surface-sunken 5.89, accent-50
+                                5.30 (the worst case; measured against the
+                                built CSS, see theme.css.test.ts) — with
+                                margin to spare, not a value that just
+                                scrapes past the threshold. */
+    --faint: #5f6b78;       /* barely-there tertiary text: ref-item labels,
                                 the missing-formula fallback, linkage
-                                connectors (merges #8a97a6, index.css's
-                                search-result-formula-missing/search-result-ref
-                                grey — same "almost not there" role, a larger
-                                ~15/255-unit delta than the other merges here
-                                but still visually the same faint tier once
-                                rendered) */
+                                connectors.
+                                Darkened from the original #9aa6b3 (accessibility
+                                pass, finding 10): that value read 2.48:1 on
+                                white and as low as 2.17:1 on --accent-50 —
+                                nowhere near AA on any background it actually
+                                sits on, at font sizes as small as 9-10px.
+                                #5f6b78 clears 4.5:1 everywhere --muted-2 does
+                                (white 5.44, page-bg 5.10, surface-sunken 5.30,
+                                accent-50 4.78 worst-case) while staying the
+                                lighter/quieter of the pair — --muted-2 still
+                                reads a shade darker at every one of the same
+                                backgrounds, preserving which token is "more
+                                there" even though AA now pulls both much
+                                closer together than the original #6b7888 vs
+                                #9aa6b3 spread. That convergence is real and
+                                deliberate, not a merge-by-accident like the
+                                ones documented elsewhere in this file: a
+                                token that must individually clear the same
+                                4.5:1 floor on the same worst-case background
+                                (--accent-50) has nowhere left to sit but
+                                close to the other one that also must. */
 
     /* ---- Hairlines & borders ---- */
     --line: #dbe2ea;            /* the app's one hairline: card borders,
@@ -180,8 +208,26 @@
         --ink: #e6ecf2;
         --ink-2: #b7c2ce;
         --muted: #99a7b8;
-        --muted-2: #7c8a9a;
-        --faint: #5f6d7e;
+        --muted-2: #8595a8;     /* accessibility pass, finding 10: darkened
+                                   (i.e. brightened, this is dark mode) from
+                                   #7c8a9a — that value read 4.67:1 on
+                                   --surface but only 3.95:1 on --accent-50's
+                                   dark equivalent (a selected `.conformer-
+                                   card`'s tint, #16283a). #8595a8 clears
+                                   4.5:1 on every background this token
+                                   renders on: surface 5.37, page-bg 6.19,
+                                   surface-sunken 5.77, accent-50 4.91
+                                   worst-case. */
+        --faint: #8393a5;       /* accessibility pass, finding 10: brightened
+                                   from #5f6d7e — that value read 3.11:1 on
+                                   --surface and as low as 2.84:1 on dark
+                                   --accent-50 (measured: the review's
+                                   "labels 2.84-3.34" range). #8393a5 clears
+                                   4.5:1 everywhere: surface 5.23, page-bg
+                                   6.03, surface-sunken 5.62, accent-50 4.78
+                                   worst-case — see the light-block comment
+                                   above for why this sits so close to the
+                                   new --muted-2. */
 
         --line: #253241;
         --line-2: #1c2732;
@@ -222,8 +268,17 @@
     --ink: #e6ecf2;
     --ink-2: #b7c2ce;
     --muted: #99a7b8;
-    --muted-2: #7c8a9a;
-    --faint: #5f6d7e;
+    --muted-2: #8595a8;     /* accessibility pass, finding 10 -- see the
+                               `@media (prefers-color-scheme: dark)` block
+                               above for the full rationale; this explicit
+                               block must carry the identical value (the
+                               "three blocks define the same set of token
+                               names" test doesn't check VALUES match
+                               across blocks, but a diverging one here
+                               would mean the in-app Dark toggle and an OS
+                               dark preference render this token
+                               differently, which is its own bug). */
+    --faint: #8393a5;
 
     --line: #253241;
     --line-2: #1c2732;

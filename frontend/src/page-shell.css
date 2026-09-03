@@ -101,6 +101,18 @@
     border-left-color: var(--accent);
     color: var(--accent-700);
     font-weight: 600;
+    /* Accessibility pass (dark-mode ToC finding): in dark mode the active
+       colour (--accent-700) and the inactive-item colour (--muted) are
+       both light, pale blues fairly close to each other in luminance --
+       the border-left and bold weight above still mark the active item,
+       but the colour step alone reads as much weaker than light mode's
+       jump from --muted to a near-black navy. A background wash fixes
+       that in BOTH themes at once, using a token already fully defined
+       per-theme (no new token needed): the same accent-tint treatment
+       `.conformer-card[data-selected="true"]` already uses for "this one
+       is picked" elsewhere in the app, not a one-off. */
+    background: var(--accent-50);
+    border-radius: 0 .3rem .3rem 0;
 }
 
 /* Below this width the side rail has no room to sit beside the content
@@ -140,21 +152,57 @@
         padding: 0;
     }
 
+    /* Visual-review finding: below this width the collapsed strip was a
+       bare row of plain monospace words with nothing marking it as a
+       table of contents at all -- no heading, no list affordance, easy to
+       mistake for a stray line of body text. `<nav aria-label="Sections on
+       this page">` (`TableOfContents.tsx`) already gives it a real
+       accessible name for assistive tech; what it lacked was anything a
+       SIGHTED reader could see. Chose to keep it and label it (over
+       hiding it below the breakpoint): the jump list is real navigational
+       value on a page whose sections can run long, and hiding it would
+       trade a readability nit for a functionality loss. `content` on
+       `::before` supplies the visible label without touching
+       `TableOfContents.tsx` -- this file only labels the RAIL, it does
+       not duplicate the nav's own accessible name (a screen reader gets
+       "Sections on this page" from the `aria-label`, a sighted reader
+       gets "On this page" printed above the row; two labels for two
+       audiences, not a mismatch). Only paints when a `<nav>` is actually
+       present, so an empty `.page-toc` (`:empty` above) stays exactly as
+       silent as before -- nothing for `nav::before` to attach to when
+       there is no `<nav>`. */
+    .page-toc nav::before {
+        content: "On this page";
+        display: block;
+        margin: 0 0 .5rem;
+        color: var(--muted);
+        font: 600 .68rem var(--mono);
+        text-transform: uppercase;
+        letter-spacing: .08em;
+    }
+
     .page-toc ul {
         grid-auto-flow: column;
         grid-auto-columns: max-content;
-        gap: 1.25rem;
+        gap: .6rem;
     }
 
+    /* Bare underlined words (the old `border-bottom: 2px solid
+       transparent`) read as plain text until hovered or active -- chips
+       (a border + a filled pill, the same idiom `.value-pill` and
+       `.browse-entry-kind-pill` already use elsewhere for "this is a
+       discrete, clickable thing") give every item a visible boundary at
+       rest, not only on interaction. */
     .page-toc a {
-        padding: .2rem 0;
-        border-left: 0;
-        border-bottom: 2px solid transparent;
+        padding: .3rem .7rem;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: var(--surface-sunken);
         white-space: nowrap;
     }
 
     .page-toc a.page-toc-active {
-        border-left-color: transparent;
-        border-bottom-color: var(--accent);
+        border-color: var(--accent);
+        border-radius: 999px;
     }
 }
