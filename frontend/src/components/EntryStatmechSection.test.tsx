@@ -702,6 +702,15 @@ describe("EntryStatmechSection -- conformer derived from source calculations", (
         expect(note).toHaveAttribute("role", "alert")
         expect(within(note).getByRole("link", { name: "Conformer Group 1" })).toBeInTheDocument()
         expect(within(note).getByRole("link", { name: "Conformer Group 2" })).toBeInTheDocument()
+        // Full rendered text, including punctuation -- an em dash on both
+        // sides of the conformer list, never a plain " -- " (this sentence
+        // is built from a text node/{" "}/text node sequence around the
+        // link list, which is exactly the shape a naive dash-normalization
+        // pass over single text nodes can miss at the node's own edge).
+        expect(note).toHaveTextContent(
+            "Conformer: this record's source calculations span more than one conformer — "
+            + "Conformer Group 1, Conformer Group 2 — so no single conformer is shown here.",
+        )
         // Never silently collapses to the single-conformer phrasing.
         expect(within(card).queryByText(/Conformer \(derived from source calculations\)/)).not.toBeInTheDocument()
     })

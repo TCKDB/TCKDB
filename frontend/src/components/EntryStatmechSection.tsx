@@ -844,14 +844,14 @@ function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
     // Disagreement: named individually, never collapsed to "the first one".
     return (
         <p className="section-note" role="alert">
-            Conformer: this record's source calculations span more than one conformer --{" "}
+            Conformer: this record's source calculations span more than one conformer —{" "}
             {derived.conformers.map((entry, index) => (
                 <span key={entry.conformerGroupRef}>
                     {index > 0 && ", "}
                     <Link to={`/conformer-groups/${entry.conformerGroupRef}`}>{entry.label}</Link>
                 </span>
             ))}
-            {" "}-- so no single conformer is shown here.
+            {" "}— so no single conformer is shown here.
         </p>
     )
 }
