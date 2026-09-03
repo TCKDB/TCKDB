@@ -227,6 +227,31 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("CalculationDetailPage", () => {
+    // The freq Result block used to print the raw field name
+    // "n_imag at or above tau" and, for a null value, "not determinable" --
+    // a claim about the data where the archive simply holds no projection.
+    it("labels the imaginary-mode projection plainly and reads a missing projection as not recorded", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+
+        const row = screen.getByText("Imaginary modes above the noise floor (τ)").closest("div") as HTMLElement
+        expect(within(row).getByText("not recorded")).toBeVisible()
+        expect(screen.queryByText(/n_imag at or above tau/)).not.toBeInTheDocument()
+        expect(screen.queryByText("not determinable")).not.toBeInTheDocument()
+    })
+
+    it("renders a stored imaginary-mode projection count in that row", async () => {
+        const record = mockRecord()
+        ;(record.results as { freq: Record<string, unknown> }).freq.n_imag_at_or_above_tau = 2
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record })))
+        page()
+        await findLoaded("Frequency")
+
+        const row = screen.getByText("Imaginary modes above the noise floor (τ)").closest("div") as HTMLElement
+        expect(within(row).getByText("2")).toBeVisible()
+    })
+
     it("requests exactly the eager section tokens, in the documented order", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             expect(new URL(request.url).searchParams.getAll("include")).toEqual([
