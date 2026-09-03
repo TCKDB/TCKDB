@@ -161,6 +161,10 @@ describe("TransitionStateEntryPage", () => {
             .toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a")
         expect(screen.getByText("(record view not yet available)")).toBeVisible()
 
+        // No duplicate "Equation" fact in the Reaction section -- the h1
+        // above already IS the rendered equation.
+        expect(screen.queryByText("Equation", { selector: "dt" })).not.toBeInTheDocument()
+
         // Review status -- only the entry's own review-badge pill in the
         // header.
         const header = document.querySelector(".basin-header") as HTMLElement
@@ -200,6 +204,27 @@ describe("TransitionStateEntryPage", () => {
         expect(identityHeader.nextElementSibling).toBe(statement)
     })
 
+    it("saddle-point: flags a structural (higher-order) saddle without citing an internal ADR number in user-facing text", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    saddle_point: {
+                        n_imag: 2,
+                        imag_freq_cm1: -50.1,
+                        reaction_coordinate_mode_index: 3,
+                        imaginary_mode_structural_flag: true,
+                        calculation_ref: "calc_structural",
+                        level_of_theory: null,
+                    },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/flagged as a higher-order saddle point/)).toBeVisible()
+        expect(screen.queryByText(/ADR/)).not.toBeInTheDocument()
+    })
+
     it("saddle-point: names multiple imaginary modes with no designated reaction-coordinate mode distinctly", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
@@ -220,22 +245,65 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByText(/3 imaginary modes; reaction-coordinate mode not designated/)).toBeVisible()
     })
 
-    it("saddle-point: says plainly when no frequency calculation was deposited", async () => {
+    it("saddle-point: says plainly when no frequency calculation was deposited at all (has_freq false, saddle_point null)", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
-            HttpResponse.json({ record: mockRecord({ saddle_point: null }) })
+            HttpResponse.json({
+                record: mockRecord({
+                    saddle_point: null,
+                    evidence_summary: {
+                        calculation_count: 3,
+                        has_opt: true,
+                        has_freq: false,
+                        has_sp: true,
+                        has_irc: true,
+                        has_path_search: false,
+                        has_geometry_validation: false,
+                        has_scf_stability: false,
+                        levels_of_theory: {},
+                    },
+                }),
+            })
         )))
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
         expect(screen.getByText("No frequency calculation deposited for this entry.")).toBeVisible()
     })
 
-    it("saddle-point: renders nothing served (the live deployment does not carry this field yet) the same as an explicit null", async () => {
+    // BLOCKING #2 (PR #357 review): a freq-type calculation CAN be
+    // attached (has_freq true, a lit `freq` evidence pill, a `freq` row
+    // in the calculation table) while `saddle_point` is still null -- the
+    // backend's join finds no `calc_freq_result` row for it. The old,
+    // unconditional "No frequency calculation deposited for this entry."
+    // was a false claim about deposited data in exactly this case, on
+    // every live page (every entry sampled has `has_freq: true`). This
+    // pins the corrected, distinct message.
+    it("saddle-point: says a freq calc exists with no recorded result when saddle_point is null but has_freq is true", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            // default mockRecord()'s evidence_summary already has has_freq: true
+            HttpResponse.json({ record: mockRecord({ saddle_point: null }) })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("Frequency calculation deposited; no imaginary-mode result recorded.")).toBeVisible()
+        expect(screen.queryByText("No frequency calculation deposited for this entry.")).not.toBeInTheDocument()
+    })
+
+    // Rewritten per BLOCKING #2: the omitted-field and explicit-null cases
+    // are NOT the same claim and must not render the same text. `undefined`
+    // means this deployment doesn't serve `saddle_point` at all (a request-
+    // side absence); `null` means the backend answered and has nothing to
+    // report for this entry (a data-side absence, further split by
+    // `has_freq` above). The previous version of this test asserted they
+    // rendered identically, which is the wrong behaviour being pinned.
+    it("saddle-point: distinguishes the field being unserved (undefined) from an explicit null", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({ record: mockRecord() }) // no `saddle_point` key at all
         )))
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
-        expect(screen.getByText("No frequency calculation deposited for this entry.")).toBeVisible()
+        expect(screen.getByText("Saddle-point verdict not served by this deployment.")).toBeVisible()
+        expect(screen.queryByText("No frequency calculation deposited for this entry.")).not.toBeInTheDocument()
+        expect(screen.queryByText("Frequency calculation deposited; no imaginary-mode result recorded.")).not.toBeInTheDocument()
     })
 
     it("trust: surfaces the trust label and passed/possible counts beside the review pill", async () => {
@@ -612,15 +680,33 @@ describe("TransitionStateEntryPage", () => {
                 return HttpResponse.json({
                     records: [
                         {
-                            transition_state_entry: { transition_state_entry_ref: ENTRY_REF, review: { status: "not_reviewed" } },
+                            transition_state_entry: { transition_state_entry_ref: ENTRY_REF, created_at: "2026-08-05T00:00:00", review: { status: "not_reviewed" } },
                             transition_state: { label: "TS0" },
                             calculations: [],
                         },
                         {
-                            transition_state_entry: { transition_state_entry_ref: "tse_sibling", review: { status: "approved" } },
+                            transition_state_entry: { transition_state_entry_ref: "tse_sibling", created_at: "2026-08-02T00:00:00", review: { status: "approved" } },
                             transition_state: { label: "TS1" },
                             calculations: [{
                                 calculation_ref: "calc_sib_sp",
+                                type: "sp",
+                                quality: "raw",
+                                review: { status: "not_reviewed" },
+                                level_of_theory: { method: "MRCI+Davidson", basis: "aug-cc-pV(T+d)Z", display: "MRCI+Davidson/aug-cc-pV(T+d)Z" },
+                                software_release: { software: "Molpro", version: null },
+                                workflow_tool_release: null,
+                            }],
+                        },
+                        {
+                            // Same label AND same level-of-theory/software as
+                            // the row above -- MEASURED report: three
+                            // indistinguishable "TS4 · ... · NOT REVIEWED"
+                            // rows on the hydrazine reaction's own page.
+                            // Distinguishable now only by ref and date.
+                            transition_state_entry: { transition_state_entry_ref: "tse_sibling_2", created_at: "2026-07-15T00:00:00", review: { status: "not_reviewed" } },
+                            transition_state: { label: "TS1" },
+                            calculations: [{
+                                calculation_ref: "calc_sib2_sp",
                                 type: "sp",
                                 quality: "raw",
                                 review: { status: "not_reviewed" },
@@ -636,14 +722,39 @@ describe("TransitionStateEntryPage", () => {
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
-        // Excludes itself -- only the other entry shows.
+        // Excludes itself -- only the other two entries show.
         const siblingsSection = await screen.findByText("Other saddle points deposited for this reaction")
         const section = siblingsSection.closest("section") as HTMLElement
         expect(within(section).queryByText("TS0")).not.toBeInTheDocument()
-        const link = within(section).getByRole("link", { name: "TS1" })
-        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
-        expect(within(section).getByText(/MRCI\+Davidson/)).toBeVisible()
-        expect(within(section).getByText(/Molpro \(version not recorded\)/)).toBeVisible()
+
+        const links = within(section).getAllByRole("link", { name: "TS1" })
+        expect(links).toHaveLength(2)
+        expect(links[0]).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
+        expect(links[1]).toHaveAttribute("href", "/transition-state-entries/tse_sibling_2")
+
+        // The two same-label, same-lot, same-software siblings are told
+        // apart by their own ref and deposited date.
+        expect(within(section).getByText("tse_sibling")).toBeVisible()
+        expect(within(section).getByText("tse_sibling_2")).toBeVisible()
+        expect(within(section).getByText(/deposited 2026-08-02/)).toBeVisible()
+        expect(within(section).getByText(/deposited 2026-07-15/)).toBeVisible()
+
+        expect(within(section).getAllByText(/MRCI\+Davidson/)).toHaveLength(2)
+        expect(within(section).getAllByText(/Molpro \(version not recorded\)/)).toHaveLength(2)
+    })
+
+    it("siblings: renders a distinct message when the sibling search request fails, instead of silently claiming there are none", async () => {
+        server.use(
+            http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+                HttpResponse.json({ record: mockRecord() })
+            )),
+            http.get("/api/v1/scientific/transition-states/search", () => (
+                HttpResponse.json({ code: "internal_error", detail: "boom" }, { status: 500 })
+            )),
+        )
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(await screen.findByText("Could not load sibling saddle points for this reaction.")).toBeVisible()
     })
 
     it("siblings: omits the section entirely when the reaction has none", async () => {

@@ -178,3 +178,18 @@
 .tse-siblings-list a { color: var(--accent); font-weight: 600; }
 
 .tse-siblings-list .value-pill { font-size: .68rem; }
+
+.tse-siblings-list code { font-size: .7rem; color: var(--muted-2); }
+
+/* MEASURED at 1100px: the Energy column squeezed Stage into "STAG / E"
+   and rows into "fre / q" -- `.stage-table th`/`td`'s shared
+   `overflow-wrap: anywhere` (`conformer-group.css`) breaking a short,
+   never-long token mid-word once five columns had to share the width.
+   Scoped to `.tse-page` (this page's own root class) rather than edited
+   on the shared rule, since `.stage-table`'s other consumers
+   (`ConformerObservationPage`, `ConformerGroupPage`) have a different
+   first column that may legitimately need to wrap. */
+.tse-page .stage-table th:first-child,
+.tse-page .stage-table td:first-child {
+    white-space: nowrap;
+}

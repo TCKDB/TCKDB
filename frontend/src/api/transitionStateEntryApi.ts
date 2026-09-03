@@ -93,7 +93,6 @@ const calculationSchema = z.object({
     calculation_ref: z.string(),
     type: z.string(),
     quality: z.string().optional(),
-    created_at: z.string().optional(),
     review: recordReviewSchema.optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
     // `version` is served alongside the name ('Gaussian' + '16', 'ARC' +
@@ -189,14 +188,20 @@ export async function loadTransitionStateEntry(ref: string, signal?: AbortSignal
 // Sibling saddle points -- `GET /scientific/transition-states/search
 // ?reaction_ref=...&include=calculations`, one request, confirmed on the
 // wire (hydrazine reaction `rxn_xj7yamh5drvxapzlaukpzndbbu`, 4 entries):
-// serves `transition_state.label`, `transition_state_entry.review`, and
-// (under `include=calculations`) per-calc level of theory + software --
-// everything "Other saddle points deposited for this reaction" needs.
+// serves `transition_state.label`, `transition_state_entry.review`/
+// `.created_at`, and (under `include=calculations`) per-calc level of
+// theory + software -- everything "Other saddle points deposited for
+// this reaction" needs. `created_at` is what tells three same-label,
+// same-level-of-theory siblings apart (MEASURED: three "TS4 ·
+// MRCI+Davidson/... · Molpro (version not recorded) · NOT REVIEWED" rows
+// on TS8's own siblings list, indistinguishable without it) alongside
+// their own ref.
 // ---------------------------------------------------------------------------
 
 const siblingRecordSchema = z.object({
     transition_state_entry: z.object({
         transition_state_entry_ref: z.string(),
+        created_at: z.string(),
         review: recordReviewSchema,
     }).passthrough(),
     transition_state: z.object({

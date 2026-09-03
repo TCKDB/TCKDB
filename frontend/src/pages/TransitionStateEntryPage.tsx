@@ -45,9 +45,12 @@ function geometryRoleSummaryLabel(role: string): string {
 const GEOMETRY_ROLE_ORDER = ["irc_forward", "irc_reverse"]
 
 // Deterministic calculation-table row order -- opt precedes freq precedes
-// sp precedes irc precedes path_search, replacing "whatever order the
-// archive returned rows in" (a claim the table used to make in its own
-// caption and did not actually keep once evidence.energy sorting mattered).
+// sp precedes irc precedes path_search, replacing the previous row order
+// (archive/`created_at` return order, whatever it happened to be) and the
+// caption that claimed it ("Rows are listed in the order the archive
+// returned them."), which this sort makes untrue and which was dropped
+// along with it. Ties within a stage keep their original relative order
+// (a stable sort, via the `index` tiebreak below).
 const STAGE_ORDER: Record<string, number> = {
     opt: 0,
     freq: 1,
@@ -171,11 +174,16 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         validation,
         available_sections: available,
     } = record
-    // Not served by every deployment yet (additive backend field -- see
-    // the PR body); `?? null` treats "field absent from an older backend"
-    // and "field present and explicitly null" identically, which is the
-    // right call here since both mean "nothing to show".
-    const saddlePoint: SaddlePoint | null = record.saddle_point ?? null
+    // `record.saddle_point` is passed through to `SaddlePointStatement`
+    // WITHOUT folding to `?? null` here -- `undefined` (field not served by
+    // this deployment yet) and `null` (served, and this entry genuinely has
+    // no freq-result row) are NOT the same claim, and collapsing them was
+    // the BLOCKING #2 defect: every live page has a lit `freq` evidence
+    // pill and a `freq` calculation-table row sitting directly below a
+    // sentence that said "No frequency calculation deposited for this
+    // entry" -- false whenever a freq calc exists but never got a result
+    // row. See `SaddlePointStatement`'s own docstring for the three-way
+    // split this now makes.
     const trust = record.trust ?? null
 
     const identity: TransitionStateIdentity = {
@@ -251,10 +259,11 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
         ...(reaction.reaction_entry_ref ? [{ label: "Reaction entry", value: reaction.reaction_entry_ref }] : []),
     ]
 
-    const siblings = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
+    const { siblings, status: siblingsStatus } = useTransitionStateSiblings(reaction.reaction_ref, entry.transition_state_entry_ref)
+    const siblingsFailed = siblingsStatus === "error"
 
     return (
-        <section className="conformer-page">
+        <section className="conformer-page tse-page">
             <nav className="record-breadcrumbs" aria-label="Breadcrumb">
                 <Link to="/">TCKDB</Link>
                 <span aria-hidden="true">/</span>
@@ -280,8 +289,13 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                 <span className="tse-label-facet">label {ts.label ?? "not recorded"}</span>
                             </div>
                         </div>
-                        <RecordIdentityHeader identity={identity} />
-                        <SaddlePointStatement saddlePoint={saddlePoint} />
+                        {/* explainTransitionStateIdentity=false: the Reaction
+                            section's own lede below is this page's one
+                            "no canonical SMILES" sentence -- see that
+                            section and `RecordIdentityHeader`'s own
+                            docstring for the duplication this avoids. */}
+                        <RecordIdentityHeader identity={identity} explainTransitionStateIdentity={false} />
+                        <SaddlePointStatement saddlePoint={record.saddle_point} evidence={evidence} />
                         {/* No "Charge / multiplicity" row here: `RecordIdentityHeader`
                             above already carries it as one of its identity
                             facts for every `transition_state_entry` -- see
@@ -307,8 +321,10 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     <SectionHeading id="reaction-context">Reaction</SectionHeading>
                     <p>A transition state is identified by the reaction it connects, not a molecular graph of its own.</p>
                 </div>
+                {/* No "Equation" fact here: the h1 above already IS the
+                    rendered equation (see the h1 rework). Restating it
+                    here duplicated the exact same text twice on one page. */}
                 <dl className="basin-context">
-                    <div><dt>Equation</dt><dd>{reaction.equation ?? "not recorded"}</dd></div>
                     <div><dt>Family</dt><dd>{reaction.family ? statusLabel(reaction.family) : "not recorded"}</dd></div>
                     <div><dt>Reversible</dt><dd>{reaction.reversible === null || reaction.reversible === undefined ? "not recorded" : (reaction.reversible ? "yes" : "no")}</dd></div>
                     {reaction.reaction_ref && (
@@ -340,6 +356,13 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                     <Link to={`/transition-state-entries/${siblingRef}`}>
                                         {sibling.transition_state.label ?? "Unlabeled transition state"}
                                     </Link>
+                                    {/* Own ref + deposited date -- MEASURED report: three
+                                        siblings on one reaction (hydrazine TS8's page) all
+                                        read "TS4 · MRCI+Davidson/... · Molpro (version not
+                                        recorded) · NOT REVIEWED", indistinguishable without
+                                        these two facts. */}
+                                    <code>{siblingRef}</code>
+                                    <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
                                     <span className={reviewStatus === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill"}>
@@ -349,6 +372,15 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             )
                         })}
                     </ul>
+                </section>
+            )}
+            {siblingsFailed && (
+                <section className="ledger-section" aria-labelledby="siblings-ledger-error">
+                    <div className="ledger-heading">
+                        <p className="eyebrow">Reaction context</p>
+                        <SectionHeading id="siblings-ledger-error">Other saddle points deposited for this reaction</SectionHeading>
+                    </div>
+                    <p className="empty-projection">Could not load sibling saddle points for this reaction.</p>
                 </section>
             )}
 
@@ -477,53 +509,97 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     )
 }
 
+type SiblingsFetchStatus = "loading" | "loaded" | "error"
+
 /**
  * Fetches "Other saddle points deposited for this reaction" as soon as
  * the reaction ref is known (a second, best-effort round trip -- see
- * `loadTransitionStateSiblings`). A failed or still-loading fetch renders
- * as no siblings rather than an error state: this section is additive
- * context, and a transient failure here must never block the rest of an
- * otherwise-successful page render.
+ * `loadTransitionStateSiblings`). A still-loading fetch renders as no
+ * siblings (the section simply hasn't appeared yet) -- this section is
+ * additive context, and it must never block the rest of an otherwise-
+ * successful page render. A FAILED fetch is distinguished from "this
+ * reaction genuinely has no siblings": both return an empty
+ * `siblings` array, but `status === "error"` lets the caller render a
+ * short "could not load" line instead of silently claiming there are
+ * none. MEASURED gap this fixes: the previous version's `.catch(() =>
+ * setSiblings([]))` made a network failure look identical to zero
+ * siblings.
  */
 function useTransitionStateSiblings(
     reactionRef: string | null | undefined,
     excludeEntryRef: string,
-): TransitionStateSiblingRecord[] {
+): { siblings: TransitionStateSiblingRecord[]; status: SiblingsFetchStatus } {
     // Keyed on (reactionRef, excludeEntryRef) rather than reset with a
     // synchronous `setState([])` at the top of the effect (the
     // `useScientificRecord` pattern): a stale result is discarded by
     // comparing the key at READ time instead, so the effect body only
     // ever calls `setState` from inside the async callback.
     const key = `${reactionRef ?? ""}:${excludeEntryRef}`
-    const [state, setState] = useState<{ key: string; siblings: TransitionStateSiblingRecord[] }>({ key, siblings: [] })
-    const siblings = state.key === key ? state.siblings : []
+    const [state, setState] = useState<{
+        key: string
+        siblings: TransitionStateSiblingRecord[]
+        status: SiblingsFetchStatus
+    }>({ key, siblings: [], status: "loading" })
+    const current = state.key === key ? state : { key, siblings: [] as TransitionStateSiblingRecord[], status: "loading" as const }
 
     useEffect(() => {
         if (!reactionRef) return
         const controller = new AbortController()
         loadTransitionStateSiblings(reactionRef, excludeEntryRef, controller.signal)
             .then((records) => {
-                if (!controller.signal.aborted) setState({ key, siblings: records })
+                if (!controller.signal.aborted) setState({ key, siblings: records, status: "loaded" })
             })
             .catch(() => {
-                if (!controller.signal.aborted) setState({ key, siblings: [] })
+                if (!controller.signal.aborted) setState({ key, siblings: [], status: "error" })
             })
         return () => controller.abort()
     }, [key, reactionRef, excludeEntryRef])
-    return siblings
+    return { siblings: current.siblings, status: current.status }
 }
 
 /**
  * The first evidence statement on the page, directly under identity --
  * MEASURED absent from the live TS0 page entirely ("imaginary" and "768"
  * both zero hits in a `--dump-dom`) despite every freq result serving
- * `n_imag`/`imag_freq_cm1` and the trust rubric reading them. `null`
- * (no freq result at all) is the one case this page can still hit today
- * against the live deployment, since `saddle_point` itself is not yet
- * served there -- see `EntryDetail`'s own `?? null` fold.
+ * `n_imag`/`imag_freq_cm1` and the trust rubric reading them.
+ *
+ * `saddlePoint` is passed through in its RAW, un-folded tri-state on
+ * purpose -- `undefined` / `null` / populated are three different facts,
+ * not two:
+ *
+ * - `undefined`: this deployment does not serve `saddle_point` at all
+ *   (the field is additive and the live archive predates it as of this
+ *   writing). Absence describes the *request* here -- the page asked a
+ *   backend that never learned to answer -- so it must not be rendered
+ *   the same as a populated backend's honest "nothing recorded".
+ * - `null` with `evidence.has_freq === false`: no freq calculation was
+ *   deposited at all.
+ * - `null` with `evidence.has_freq === true`: a freq-type calculation
+ *   IS attached to this entry, but the backend's join found no
+ *   `calc_freq_result` row for it (the calc has no parsed result yet).
+ *   MEASURED BLOCKING DEFECT this fixes: every live page shows a lit
+ *   `freq` evidence pill and a `freq` calculation-table row directly
+ *   below what used to be an unconditional "No frequency calculation
+ *   deposited for this entry." -- a false claim about deposited data,
+ *   not merely an unfinished feature. `evidence_summary.has_freq` (any
+ *   freq-type calc) is the one signal already on this page that can
+ *   tell those two `null` cases apart; `saddle_point === null` alone
+ *   cannot, since the backend returns `None` for both "no freq calc"
+ *   and "freq calc with no result row" alike (see
+ *   `_build_saddle_point_index`'s own docstring).
+ * - populated: the full verdict, as before.
  */
-function SaddlePointStatement({ saddlePoint }: { saddlePoint: SaddlePoint | null }) {
-    if (!saddlePoint) {
+function SaddlePointStatement({ saddlePoint, evidence }: {
+    saddlePoint: SaddlePoint | null | undefined
+    evidence: EvidenceSummary
+}) {
+    if (saddlePoint === undefined) {
+        return <p className="tse-saddle-point">Saddle-point verdict not served by this deployment.</p>
+    }
+    if (saddlePoint === null) {
+        if (evidence.has_freq) {
+            return <p className="tse-saddle-point">Frequency calculation deposited; no imaginary-mode result recorded.</p>
+        }
         return <p className="tse-saddle-point">No frequency calculation deposited for this entry.</p>
     }
     const lotText = saddlePoint.level_of_theory ? lotLabel(saddlePoint.level_of_theory) : "level of theory not recorded"
@@ -550,7 +626,7 @@ function SaddlePointStatement({ saddlePoint }: { saddlePoint: SaddlePoint | null
     return (
         <p className="tse-saddle-point">
             <strong>{verdict}</strong> · {lotText} · <Link to={`/calculations/${saddlePoint.calculation_ref}`}>{saddlePoint.calculation_ref}</Link>
-            {saddlePoint.imaginary_mode_structural_flag ? " · flagged as a higher-order saddle (ADR 0012)" : ""}
+            {saddlePoint.imaginary_mode_structural_flag ? " · flagged as a higher-order saddle point" : ""}
         </p>
     )
 }
