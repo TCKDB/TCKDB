@@ -1569,6 +1569,30 @@ def test_tse_detail_saddle_point_null_without_freq_result(client, db_session):
     _attach_calc(db_session, tse=tse, calc_type=CalculationType.opt, lot=lot)
     body = client.get(_tse_detail_url(tse.public_ref)).json()
     assert body["record"]["saddle_point"] is None
+    assert body["record"]["evidence_summary"]["has_freq"] is False
+
+
+def test_tse_detail_saddle_point_null_when_freq_calc_has_no_result_row(
+    client, db_session
+):
+    """A freq *calculation* exists but never got a ``calc_freq_result`` row.
+
+    Distinct from the "no freq calc at all" case above: here
+    ``evidence_summary.has_freq`` is True (a freq-type calculation is
+    attached) while ``saddle_point`` is still None (nothing to report --
+    the join finds no result row). The page must tell these two apart
+    rather than say "No frequency calculation deposited" for both --
+    see the BLOCKING #2 fix on ``SaddlePointStatement``.
+    """
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    lot = make_lot(db_session)
+    # freq-type calc attached, but no CalculationFreqResult row -- unlike
+    # `_attach_ts_freq`, which always creates one.
+    _attach_calc(db_session, tse=tse, calc_type=CalculationType.freq, lot=lot)
+    body = client.get(_tse_detail_url(tse.public_ref)).json()
+    assert body["record"]["saddle_point"] is None
+    assert body["record"]["evidence_summary"]["has_freq"] is True
 
 
 def test_tse_detail_saddle_point_picks_latest_freq_by_created_at(
