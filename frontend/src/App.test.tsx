@@ -281,7 +281,7 @@ const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     // page itself no longer titles by that label at all.
     ["/conformer-groups/cfg_abc", "Conformer basin", "cfg_abc"],
     ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
-    ["/calculations/calc_abc", "Single-point calculation", "calc_abc"],
+    ["/calculations/calc_abc", "Single-point of H2O", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],
     ["/reactions", "Reactions", undefined],
     ["/reactions/rxn_abc", "Reaction", "rxn_abc"],
@@ -356,6 +356,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
                         kind: "species_entry",
                         species_entry: {
                             species_ref: speciesRef, species_entry_ref: entryRef,
+                            formula: "H2O",
                             canonical_smiles: "[OH2]", inchi_key: "XLYOFNOQVPJJNP-UHFFFAOYSA-N",
                             charge: 0, multiplicity: 1,
                             species_entry_kind: "minimum", electronic_state_kind: "ground",
@@ -398,6 +399,13 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         }
         window.history.replaceState({}, "", path); render(<App />)
         expect(await screen.findByRole("heading", { name: heading })).toBeVisible()
+        // The calculation page's own ref lives inside the collapsed
+        // References disclosure (item 3 of the calculation-page rework) --
+        // present in the DOM, but not VISIBLE until opened.
+        if (path.startsWith("/calculations/")) {
+            const summary = screen.getByText(/References \(/)
+            summary.closest("details")?.setAttribute("open", "")
+        }
         if (ref) expect(screen.getByText(ref)).toBeVisible()
         if (path.includes("/species-entries/") && path.split("/").length === 4) {
             expect(screen.getByText(path.split("/").at(-1) ?? "", { selector: "code" })).toBeVisible()
