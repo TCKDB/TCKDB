@@ -593,6 +593,57 @@ describe("EntryStatmechSection conformer-scoped attribution", () => {
         expect(otherDetails.open).toBe(false)
         expect(within(otherDetails).getByText("sm_one")).toBeInTheDocument()
     })
+
+    // Test gap the owner flagged (mirrors the identical gap in
+    // `EntryThermoSection.test.tsx`): `renderStatmechRecords` groups by
+    // scientific fingerprint INSIDE whatever record list it's called
+    // with, and `ConformerAttributionGroups` calls it once per bucket
+    // (this-conformer / other-conformer / no-link), never once over the
+    // whole entry. No test proved that a record naming a DIFFERENT
+    // conformer than the selected one, but reporting an IDENTICAL
+    // point-group/symmetry/frequency-scale-factor fingerprint, stays its
+    // own ungrouped card in its OWN bucket rather than being folded into
+    // a cross-bucket "2 records with identical values" group.
+    it("never groups two identical-value records together when they name DIFFERENT conformers -- each bucket groups its own records only", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const withConformers = includes.includes("conformers")
+            const recordG1 = baseRecord({
+                statmech: { ...baseRecord().statmech, statmech_ref: "sm_g1" },
+                available_sections: { ...baseRecord().available_sections, has_conformers: true },
+                ...(withConformers ? { conformers: [{ conformer_group_ref: "cg_one", label: "conformer_1" }] } : {}),
+            })
+            const recordG2 = baseRecord({
+                statmech: { ...baseRecord().statmech, statmech_ref: "sm_g2" },
+                available_sections: { ...baseRecord().available_sections, has_conformers: true },
+                ...(withConformers ? { conformers: [{ conformer_group_ref: "cg_two", label: "conformer_2" }] } : {}),
+            })
+            return HttpResponse.json(mockResponse([recordG1, recordG2]))
+        }))
+        page(conformerGroups[0], conformerGroups) // conformer_1 selected
+
+        await screen.findByRole("heading", { name: "From Conformer Group 1" })
+
+        // The selected conformer's own bucket shows ONLY its own record,
+        // as a plain (ungrouped) card -- never the "N records with
+        // identical values" wrapper a same-bucket duplicate would get.
+        const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 1" }).closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).getByText("sm_g1")).toBeVisible()
+        expect(within(primaryGroup).queryByText("sm_g2")).not.toBeInTheDocument()
+        expect(within(primaryGroup).queryByText(/records with identical values/)).not.toBeInTheDocument()
+
+        // The other-conformer record is demoted into its own collapsed
+        // disclosure -- not merged into the primary bucket's card just
+        // because the two report the same numbers.
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails).not.toBeNull()
+        expect(within(otherDetails).getByText("sm_g2")).toBeInTheDocument()
+        expect(within(otherDetails).queryByText("sm_g1")).not.toBeInTheDocument()
+        expect(within(otherDetails).queryByText(/records with identical values/)).not.toBeInTheDocument()
+
+        // Nowhere on the page do the two get grouped under one card.
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+    })
 })
 
 // `statmech` has no conformer column at all (entry-scoped, never

@@ -640,6 +640,47 @@ describe("EntryThermoSection", () => {
         expect(within(primaryGroup).getByText("thm_alpha")).toBeVisible()
         expect(document.querySelector(".conformer-attribution-other")).toBeNull()
     })
+
+    // Test gap the owner flagged: `renderThermoRecords` (built by
+    // `makeThermoGroupedRenderer`) groups by scientific fingerprint INSIDE
+    // whatever record list it's called with -- and `ConformerAttributionGroups`
+    // calls it once per bucket (this-conformer / other-conformer / no-link),
+    // never once over the whole entry. No test proved that a record traced
+    // to a DIFFERENT conformer than the selected one, but reporting
+    // IDENTICAL H298/S298/NASA-7 values, stays its own ungrouped card in
+    // its OWN bucket rather than being folded into a cross-bucket
+    // "2 records with identical values" group.
+    it("never groups two identical-value records together when they trace to DIFFERENT conformers -- each bucket groups its own records only", async () => {
+        const [alpha] = mockRecords()
+        const tracedToOne = { ...alpha, thermo_ref: "thm_g1", provenance: { ...alpha.provenance, conformer_group_ref: "cg_one" } }
+        const tracedToTwo = { ...alpha, thermo_ref: "thm_g2", provenance: { ...alpha.provenance, conformer_group_ref: "cg_two" } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [tracedToOne, tracedToTwo] }))))
+        page(conformerGroups[0], conformerGroups) // conformer_1 selected
+
+        await screen.findByRole("heading", { name: "From Conformer Group 1" })
+
+        // The selected conformer's own bucket shows ONLY its own record,
+        // as a plain (ungrouped) card -- never the "N records with
+        // identical values" wrapper a same-bucket duplicate would get.
+        const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 1" }).closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).getByText("thm_g1")).toBeVisible()
+        expect(within(primaryGroup).queryByText("thm_g2")).not.toBeInTheDocument()
+        expect(within(primaryGroup).queryByText(/records with identical values/)).not.toBeInTheDocument()
+
+        // The other-conformer record is demoted into its own collapsed
+        // disclosure, same as any other cross-conformer record -- not
+        // merged into the primary bucket's card just because the two
+        // report the same numbers.
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails).not.toBeNull()
+        expect(within(otherDetails).getByText("thm_g2")).toBeInTheDocument()
+        expect(within(otherDetails).queryByText("thm_g1")).not.toBeInTheDocument()
+        expect(within(otherDetails).queryByText(/records with identical values/)).not.toBeInTheDocument()
+
+        // Nowhere on the page do the two get grouped under one card --
+        // the bug this test guards against would show exactly this text.
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+    })
 })
 
 // ---------------------------------------------------------------------------
