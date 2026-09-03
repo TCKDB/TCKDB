@@ -252,6 +252,70 @@ describe("CalculationDetailPage", () => {
         expect(within(row).getByText("2")).toBeVisible()
     })
 
+    // 2026-09-04 owner decision: τ is resolved from the freq job's Hessian
+    // method (`imaginary_mode_tau_basis`). A null basis (never judged) reads
+    // "not recorded" on both new rows, same as every other absent value.
+    it("reads a null tau basis as not recorded on both the Hessian method and noise floor τ rows", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(ddFor(resultsSection, "Hessian method")).toBe("not recorded")
+        expect(ddFor(resultsSection, "Noise floor τ")).toBe("not recorded")
+    })
+
+    it("renders a RECORDED tau basis as its plain-language method, with no assumed language", async () => {
+        const record = mockRecord()
+        ;(record.results as { freq: Record<string, unknown> }).freq = {
+            ...(record.results as { freq: Record<string, unknown> }).freq,
+            imaginary_mode_tau_cm1: 15, imaginary_mode_tau_basis: "analytic_tight",
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record })))
+        page()
+        await findLoaded("Frequency")
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(ddFor(resultsSection, "Hessian method")).toBe("analytic")
+        const tauCell = ddFor(resultsSection, "Noise floor τ")
+        expect(tauCell).toContain("15 cm⁻¹")
+        expect(tauCell).toContain("analytic, tight convergence")
+        expect(tauCell).not.toContain("assumed")
+    })
+
+    // Copy rule (brief item 4): "assumed" must appear whenever an
+    // assumed_* basis is rendered, and never otherwise -- covered from the
+    // other direction in `tauBasis.test.ts`; this is the page-level half.
+    it("renders an ASSUMED tau basis with a visible 'assumed' word on both rows, same τ as its recorded counterpart", async () => {
+        const record = mockRecord()
+        ;(record.results as { freq: Record<string, unknown> }).freq = {
+            ...(record.results as { freq: Record<string, unknown> }).freq,
+            imaginary_mode_tau_cm1: 15, imaginary_mode_tau_basis: "assumed_analytic_default",
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record })))
+        page()
+        await findLoaded("Frequency")
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        const methodCell = ddFor(resultsSection, "Hessian method")
+        expect(methodCell).toContain("analytic")
+        expect(methodCell).toContain("assumed")
+        const tauCell = ddFor(resultsSection, "Noise floor τ")
+        expect(tauCell).toContain("15 cm⁻¹")
+        expect(tauCell).toContain("assumed")
+    })
+
+    it("shows an unrecognised tau basis token raw rather than hiding it", async () => {
+        const record = mockRecord()
+        ;(record.results as { freq: Record<string, unknown> }).freq = {
+            ...(record.results as { freq: Record<string, unknown> }).freq,
+            imaginary_mode_tau_cm1: 15, imaginary_mode_tau_basis: "semi_numerical_v2",
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record })))
+        page()
+        await findLoaded("Frequency")
+        const resultsSection = screen.getByRole("heading", { name: "Result" }).closest("section") as HTMLElement
+        expect(ddFor(resultsSection, "Hessian method")).toBe("semi_numerical_v2")
+        expect(ddFor(resultsSection, "Noise floor τ")).toContain("semi_numerical_v2")
+    })
+
     it("requests exactly the eager section tokens, in the documented order", async () => {
         server.use(http.get(ENDPOINT, ({ request }) => {
             expect(new URL(request.url).searchParams.getAll("include")).toEqual([

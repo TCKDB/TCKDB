@@ -35,6 +35,7 @@ import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
+import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 
@@ -699,6 +700,17 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
         pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "not recorded"])
         pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "not designated"])
+        // ADR 0012's noise floor (τ) is resolved from this freq job's
+        // Hessian method (`imaginary_mode_tau_basis`), translated to plain
+        // language by `tauBasis.ts`. An `assumed_*` basis means the method
+        // was never recorded and TCKDB assumed the program's default for
+        // it -- shown with a visible "(assumed: ...)" word, never a bare
+        // asterisk (owner decision, 2026-09-04). Placed directly before
+        // the existing "above the noise floor" row so the three read as
+        // one thought: what the method was, what τ it implies, and how
+        // many imaginary modes clear it.
+        pairs.push(["Hessian method", <HessianMethodCell basis={results.freq.imaginary_mode_tau_basis} />])
+        pairs.push(["Noise floor τ", <TauValueCell tauCm1={results.freq.imaginary_mode_tau_cm1} basis={results.freq.imaginary_mode_tau_basis} />])
         // ADR 0012's projection: how many imaginary modes sit above the
         // producing protocol's noise floor (tau). Null means the projection
         // was never stored for this record -- that is an absence, so it
@@ -734,6 +746,36 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
 function boolLabel(value: boolean | null | undefined) {
     if (value === null || value === undefined) return "not recorded"
     return value ? "Yes" : "No"
+}
+
+/**
+ * "Hessian method" cell -- `tauBasis.ts`'s plain-language translation of
+ * `imaginary_mode_tau_basis`, marked with `.tau-assumed` (a value, not a
+ * pill -- ADR 0012's τ is a number, and this row states the method that
+ * produced it, not a category) when the basis is one of the three
+ * `assumed_*` tokens, so the assumption reads distinctly even at a glance.
+ */
+function HessianMethodCell({ basis }: { basis: string | null | undefined }) {
+    const label = hessianMethodLabel(basis)
+    return isAssumedTauBasis(basis) ? <span className="tau-assumed">{label}</span> : <>{label}</>
+}
+
+/**
+ * "Noise floor τ" cell -- the numeric value from `imaginary_mode_tau_cm1`
+ * with the basis explained underneath in a short muted note. Null τ reads
+ * "not recorded" with no note, matching every other absent value on this
+ * page; a non-null τ always shows a note, even for `protocol_not_recorded`
+ * or an unrecognised basis, since a producing method IS on the record
+ * whenever τ itself is.
+ */
+function TauValueCell({ tauCm1, basis }: { tauCm1: number | null | undefined; basis: string | null | undefined }) {
+    if (tauCm1 === null || tauCm1 === undefined) return <>not recorded</>
+    return (
+        <>
+            <span className={isAssumedTauBasis(basis) ? "tau-assumed" : undefined}>{tauCm1} cm⁻¹</span>
+            <div className="kv-note">{tauBasisNote(basis)}</div>
+        </>
+    )
 }
 
 /**
