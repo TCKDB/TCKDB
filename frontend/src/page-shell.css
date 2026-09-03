@@ -192,7 +192,8 @@
         display: block;
         margin: 0 0 .5rem;
         color: var(--muted);
-        font: 600 .68rem var(--mono);
+        /* Accessibility-pass floor (11px / .6875rem) -- was .68rem (10.88px). */
+        font: 600 .6875rem var(--mono);
         text-transform: uppercase;
         letter-spacing: .08em;
     }
