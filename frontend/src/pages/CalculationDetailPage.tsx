@@ -699,7 +699,12 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
         pairs.push(["ZPE (hartree)", results.freq.zpe_hartree ?? "not recorded"])
         pairs.push(["Reaction-coordinate mode", results.freq.reaction_coordinate_mode_index ?? "not designated"])
-        pairs.push(["n_imag at or above tau", results.freq.n_imag_at_or_above_tau ?? "not determinable"])
+        // ADR 0012's projection: how many imaginary modes sit above the
+        // producing protocol's noise floor (tau). Null means the projection
+        // was never stored for this record -- that is an absence, so it
+        // reads "not recorded" like every other absent value, not
+        // "not determinable" (which claimed something about the data).
+        pairs.push(["Imaginary modes above the noise floor (τ)", results.freq.n_imag_at_or_above_tau ?? "not recorded"])
     } else if (results.kind === "scan" && results.scan) {
         pairs.push(["Dimension", results.scan.dimension ?? "not recorded"])
         pairs.push(["Relaxed scan", boolLabel(results.scan.is_relaxed)])
