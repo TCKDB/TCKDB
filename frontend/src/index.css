@@ -104,7 +104,11 @@
     padding: .25rem .55rem;
     background: none;
     color: var(--muted-2);
-    font: 600 .68rem var(--mono);
+    /* .68rem (10.88px) raised to .6875rem (11px) -- accessibility pass
+       finding 10's font-size floor for the smallest, most-repeated UI
+       text; the token fix above (--muted-2) covers contrast, this covers
+       the "9-11px" size half of the same finding. */
+    font: 600 .6875rem var(--mono);
     letter-spacing: .03em;
     cursor: pointer;
 }
@@ -237,3 +241,31 @@
 }
 
 @media (max-width: 680px) { .utility-bar { height: auto; min-height: 48px; gap: .8rem; padding-block: .65rem; align-items: flex-start; }.utility-bar-end { flex-wrap: wrap; justify-content: flex-end; gap: .5rem .8rem; }.utility-bar nav { flex-wrap: wrap; justify-content: flex-end; gap: .35rem .8rem; }.archive-hero { padding-top: 4rem; }.search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.destination-grid { grid-template-columns: 1fr; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+
+/*
+ * Accessibility pass, finding 10 -- font-size floor for a handful of
+ * classes owned by `browse.css` and `species-entry.css`, two files this
+ * pass is not allowed to touch (other agents own their layout rules in
+ * parallel). Both sit at 9-10px today: `.ref-item-label` .6rem (9.6px),
+ * `.copy-button` .58rem (9.28px), `.browse-row-ref` .68rem (10.88px),
+ * `.refs-disclosure summary` .68rem (10.88px) -- all below the 11px floor
+ * this finding asks for.
+ *
+ * This file (`index.css`) is loaded once, globally, before any page's own
+ * stylesheet mounts, so a same-specificity `.ref-item-label { font-size:
+ * ... }` here would LOSE the cascade to the later-loaded page file's own
+ * rule despite living in the file this pass is scoped to. Prefixing with
+ * `.archive-shell` (the one wrapper every route already renders inside,
+ * `AppShell.tsx`) adds a class to the selector -- (0,2,1) beats the
+ * target rules' own (0,1,1)/(0,1,0) -- so the override wins on
+ * SPECIFICITY, not load order, and needs no `!important`. Only
+ * `font-size` is set: family, weight, colour, and every other declaration
+ * in the shorthand `font:` rule those classes use stays exactly what the
+ * owning file already declares.
+ */
+.archive-shell .ref-item-label,
+.archive-shell .copy-button,
+.archive-shell .browse-row-ref,
+.archive-shell .refs-disclosure summary {
+    font-size: .6875rem; /* 11px */
+}
