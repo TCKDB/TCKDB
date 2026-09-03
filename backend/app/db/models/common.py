@@ -115,6 +115,16 @@ IMAGINARY_MODE_TAU_BASIS_VALUES: tuple[str, ...] = (
     "finite_difference_gradient",
     "finite_difference_energy",
     "protocol_not_recorded",
+    # ADR 0012's 2026-09-04 amendment: an unrecorded Hessian method may
+    # be assumed from the producing program's documented default for the
+    # level-of-theory's method family (see
+    # app/services/hessian_method_inference.py). Never confusable with a
+    # recorded statement -- hence separate members rather than reusing
+    # the three above -- and widened onto this CHECK constraint by the
+    # revision following e2a7c9d4b615, not folded into it.
+    "assumed_analytic_default",
+    "assumed_finite_difference_gradient",
+    "assumed_finite_difference_energy",
 )
 
 
