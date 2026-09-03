@@ -48,7 +48,7 @@ export function IdentifierSearch() {
             // (`app/api/error_contract.py`) distinguishes the two; see
             // `structure_search.py`'s `invalid_structure_query` raises.
             if (error instanceof ScientificApiError && error.code === "invalid_structure_query") {
-                setMessage(`"${classified.identifier.value}" could not be parsed as a valid ${classified.label} -- check the syntax and try again.`)
+                setMessage(`"${classified.identifier.value}" could not be parsed as a valid ${classified.label} — check the syntax and try again.`)
             } else {
                 setMessage("The archive could not complete that search. Check the identifier and try again.")
             }

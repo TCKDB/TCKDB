@@ -279,7 +279,7 @@ function ThermoList({ response, conformer, conformers }: {
                     thisConformerNote="Traced to this conformer's own primary calculation."
                     thisConformerEmptyText="No thermo record traces to this conformer yet."
                     otherConformerNote="Traced to a different conformer than the one selected above."
-                    noLinkNote="No resolvable primary calculation to trace a conformer through -- shown here at entry level, not flagged as missing anything."
+                    noLinkNote="No resolvable primary calculation to trace a conformer through — shown here at entry level, not flagged as missing anything."
                     noLinkEmptyText="No entry-level thermo record is deposited for this entry."
                 />
             ) : (
@@ -436,8 +436,8 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
             </div>
             <p className="section-note">
                 {records.length} deposited records report identical H298, S298 and model-form values — shown
-                once below. Each record's own ref and provenance -- including which calculation and statmech
-                record it cites -- is listed per ref in the table below, never collapsed into one; every
+                once below. Each record's own ref and provenance — including which calculation and statmech
+                record it cites — is listed per ref in the table below, never collapsed into one; every
                 record stays individually reachable, and none was merged, averaged, or dropped in favor of
                 another.
             </p>

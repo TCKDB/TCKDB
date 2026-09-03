@@ -379,7 +379,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
             thisConformerNote="Computed against this conformer's own basin, per the archive's own conformer link."
             thisConformerEmptyText="No statmech record is linked to this conformer yet."
             otherConformerNote="Computed against a different conformer's basin than the one selected above."
-            noLinkNote="No conformer is linked to this record -- shown here regardless of which conformer is selected."
+            noLinkNote="No conformer is linked to this record — shown here regardless of which conformer is selected."
             noLinkEmptyText="No entry-level statmech record is deposited for this entry."
         />
     )
@@ -605,8 +605,8 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
             </div>
             <p className="section-note">
                 {records.length} deposited records report identical point group, symmetry, and frequency
-                scale factor values — shown once below. Each record's own ref and provenance -- including
-                which source calculations and frequency calculation it cites -- is listed per ref in the
+                scale factor values — shown once below. Each record's own ref and provenance — including
+                which source calculations and frequency calculation it cites — is listed per ref in the
                 table below, never collapsed into one; every record stays individually reachable, and none
                 was merged, averaged, or dropped in favor of another.
             </p>

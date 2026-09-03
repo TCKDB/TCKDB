@@ -84,7 +84,7 @@ describe("ConformerEvidenceLinkage", () => {
         // sentence, which still directly answers "does the opt count include
         // the pre-opt" without naming which sighting was staged.
         expect(story).toHaveTextContent(
-            "Three optimisation calculations are on file across two independent optimisation chains -- one of "
+            "Three optimisation calculations are on file across two independent optimisation chains — one of "
             + "those calculations is a coarse pass later refined within the same chain, though the archive "
             + "does not say which sighting they belong to.",
         )
@@ -327,7 +327,7 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={noStaging} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "Two optimisation calculations are on file, one per chain -- no chain was staged in more than one pass.",
+            "Two optimisation calculations are on file, one per chain — no chain was staged in more than one pass.",
         )
         // "staged" itself appears in the honest NEGATIVE sentence ("no
         // chain was staged in more than one pass"), so only the AFFIRMATIVE

@@ -24,7 +24,7 @@ const KIND_PLURAL: Record<BrowseKind, string> = {
 export function archiveEmptyMessage(kind: BrowseKind): string {
     if (kind === "vdw") {
         return "No van der Waals complexes have been deposited in this archive yet. That is a fact about the archive, " +
-            "not a failed search -- species and transition-state records are unaffected."
+            "not a failed search — species and transition-state records are unaffected."
     }
     return `No ${KIND_PLURAL[kind]} have been deposited in this archive yet.`
 }
