@@ -21,6 +21,23 @@ import { buildCpChartSeries } from "../domain/thermoCpSeries"
 import { JOULES_PER_CALORIE, cpUnitLabel, type CpUnit } from "../domain/thermoNasa"
 import { SectionHeading } from "./PageSections"
 
+// Visually-hidden but still in the accessible text tree — unlike a `title`
+// attribute (hover-only: unreachable by keyboard and not announced by a
+// screen reader without extra explicit action), this content is read by
+// both. Standard clip-based hidden-but-present pattern; inline so this
+// stays a one-file change with no new CSS class.
+const visuallyHiddenStyle = {
+    position: "absolute",
+    width: 1,
+    height: 1,
+    padding: 0,
+    margin: -1,
+    overflow: "hidden",
+    clip: "rect(0,0,0,0)",
+    whiteSpace: "nowrap",
+    border: 0,
+} as const
+
 // ---------------------------------------------------------------------------
 // Hand-rolled SVG, no charting library: this project has no plotting
 // dependency in `package.json` today and has precedent for hand-rolled SVG
@@ -165,6 +182,9 @@ function ChartLegend({ groups }: { groups: CpChartRenderGroup[] }) {
                     >
                         <span className="cp-chart-swatch" style={{ background: seriesColor(index) }} aria-hidden="true" />
                         <span className="cp-chart-legend-label">{groupLegendLabel(group, groups)}</span>
+                        {group.members.length > 1 && (
+                            <span style={visuallyHiddenStyle}>{` (records: ${memberRefs})`}</span>
+                        )}
                         {isSelected && <span className="cp-chart-legend-flag">selected</span>}
                     </li>
                 )

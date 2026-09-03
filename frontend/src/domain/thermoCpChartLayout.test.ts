@@ -97,6 +97,47 @@ describe("groupIdenticalSeries", () => {
         expect(groups.map((g) => g.representative.thermoRef)).toEqual(["thm_a", "thm_b"])
         expect(groups[0].members.map((m) => m.thermoRef)).toEqual(["thm_a", "thm_a2"])
     })
+
+    it("never groups two series that both plot nothing, even though their structural signature ([[],null]) is identical -- each stays its own group so a different conformer group's record is never silently dropped (the blocking review finding)", () => {
+        const emptyOnGroupOne = series({
+            thermoRef: "thm_empty_1",
+            label: "Conformer Group 1",
+            hasUsableFit: false,
+            hasMeasuredPoints: false,
+            measured: [],
+            fitted: null,
+        })
+        const emptyOnGroupTwo = series({
+            thermoRef: "thm_empty_2",
+            label: "Conformer Group 2",
+            hasUsableFit: false,
+            hasMeasuredPoints: false,
+            measured: [],
+            fitted: null,
+        })
+        const groups = groupIdenticalSeries([emptyOnGroupOne, emptyOnGroupTwo])
+        expect(groups).toHaveLength(2)
+        expect(groups[0].members).toHaveLength(1)
+        expect(groups[1].members).toHaveLength(1)
+        expect(groups.map((g) => g.representative.thermoRef)).toEqual(["thm_empty_1", "thm_empty_2"])
+    })
+
+    it("still collapses several genuinely byte-identical PLOTTABLE series sharing one conformer, even alongside an unrelated empty series -- the fix only carves out the unplottable case", () => {
+        const a = series({ thermoRef: "thm_a" })
+        const b = series({ thermoRef: "thm_b" })
+        const emptyElsewhere = series({
+            thermoRef: "thm_empty",
+            label: "Conformer Group 2",
+            hasUsableFit: false,
+            hasMeasuredPoints: false,
+            measured: [],
+            fitted: null,
+        })
+        const groups = groupIdenticalSeries([a, b, emptyElsewhere])
+        expect(groups).toHaveLength(2)
+        expect(groups[0].members.map((m) => m.thermoRef)).toEqual(["thm_a", "thm_b"])
+        expect(groups[1].members).toHaveLength(1)
+    })
 })
 
 describe("groupLegendLabel", () => {
@@ -124,5 +165,24 @@ describe("groupLegendLabel", () => {
         const all = [groupA, groupAv2]
         expect(groupLegendLabel(groupA, all)).toBe("Conformer Group 1 (thm_a)")
         expect(groupLegendLabel(groupAv2, all)).toBe("Conformer Group 1 (thm_a_v2)")
+    })
+
+    it("disambiguates two DIFFERENT multi-member groups sharing the same base label AND the same member count -- not only single-member collisions", () => {
+        const groupAMembers = [series({ thermoRef: "thm_a1" }), series({ thermoRef: "thm_a2" })]
+        const groupA = { representative: groupAMembers[0], members: groupAMembers }
+        const groupBMembers = [
+            series({
+                thermoRef: "thm_b1",
+                fitted: { low: [{ temperatureK: 100, cpDisplay: 11 }], high: [{ temperatureK: 900, cpDisplay: 91 }] },
+            }),
+            series({
+                thermoRef: "thm_b2",
+                fitted: { low: [{ temperatureK: 100, cpDisplay: 11 }], high: [{ temperatureK: 900, cpDisplay: 91 }] },
+            }),
+        ]
+        const groupB = { representative: groupBMembers[0], members: groupBMembers }
+        const all = [groupA, groupB]
+        expect(groupLegendLabel(groupA, all)).toBe("Conformer Group 1 (thm_a1) — 2 identical records")
+        expect(groupLegendLabel(groupB, all)).toBe("Conformer Group 1 (thm_b1) — 2 identical records")
     })
 })

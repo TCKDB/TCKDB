@@ -127,6 +127,19 @@ export type CpChartRenderGroup = {
 }
 
 function plotSignature(item: CpChartSeries): string {
+    // A series that plots NOTHING (no usable fit, no measured points) must
+    // never be grouped with another such series. Its structural signature
+    // would otherwise be the same empty shape (`[[],null]`) no matter which
+    // conformer group it traces to — a review finding caught this
+    // collapsing two UNRELATED unplottable records from DIFFERENT conformer
+    // groups into one bogus "N identical records" chip under the first
+    // group's label, silently dropping the second group's record from the
+    // page entirely. Keyed by `thermoRef` instead (unique per record) so an
+    // unplottable series is always its own group, with its own chip and its
+    // own absence note.
+    if (!item.hasUsableFit && !item.hasMeasuredPoints) {
+        return `unplottable:${item.thermoRef}`
+    }
     // Measured + fitted fully determine what the line/markers look like;
     // `thermoRef`/`label`/`isSelected` deliberately excluded so grouping
     // reflects what's drawn, not which record happened to be uploaded
@@ -164,26 +177,29 @@ export function groupIdenticalSeries(series: readonly CpChartSeries[]): CpChartR
  * `ThermoRecord` today; see `api/thermoApi.ts`).
  */
 export function groupLegendLabel(group: CpChartRenderGroup, allGroups: readonly CpChartRenderGroup[]): string {
-    if (group.members.length > 1) {
-        return `${group.representative.label} — ${group.members.length} identical records`
-    }
+    // Collision check applies to EVERY group, not just single-member ones —
+    // two different multi-member groups can share both a base label and a
+    // member count (e.g. two pairs of re-uploads on two different fits of
+    // the same conformer), which used to render as two colour-only-distinct
+    // "N identical records" chips.
     const collidesWithAnotherGroup = allGroups.some(
         (other) => other !== group && other.representative.label === group.representative.label,
     )
-    return collidesWithAnotherGroup
+    const base = collidesWithAnotherGroup
         ? `${group.representative.label} (${group.representative.thermoRef})`
         : group.representative.label
+    return group.members.length > 1 ? `${base} — ${group.members.length} identical records` : base
 }
 
 export function seriesAbsenceNote(series: CpChartSeries): string | null {
     if (series.hasUsableFit && !series.hasMeasuredPoints) {
-        return `${series.label}: no measured points on file for this record — the fitted curve is drawn without markers.`
+        return `${series.label}: no evaluated points on file for this record — the fitted curve is drawn without markers.`
     }
     if (!series.hasUsableFit && series.hasMeasuredPoints) {
-        return `${series.label}: no usable NASA-7 fit on file for this record — measured points only, no curve.`
+        return `${series.label}: no usable NASA-7 fit on file for this record — evaluated points only, no curve.`
     }
     if (!series.hasUsableFit && !series.hasMeasuredPoints) {
-        return `${series.label}: no measured points or usable NASA-7 fit on file for this record — nothing plotted.`
+        return `${series.label}: no evaluated points or usable NASA-7 fit on file for this record — nothing plotted.`
     }
     return null
 }

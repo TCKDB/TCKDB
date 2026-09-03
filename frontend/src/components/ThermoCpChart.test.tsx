@@ -82,6 +82,20 @@ function neitherRecord(): ThermoRecord {
     return { ...recordAlpha(), thermo_ref: "thm_neither", nasa: null, points: null, provenance: { conformer_group_ref: null } } as ThermoRecord
 }
 
+// A "neither" record (no fit, no points -- plots nothing) linked to a given
+// conformer group, so two of these can be built on DIFFERENT groups. This is
+// the live-bug shape from the review's own repro:
+// [fit-on-cfg_1, empty-on-cfg_1, empty-on-cfg_2].
+function neitherOnGroup(ref: string, groupRef: string): ThermoRecord {
+    return {
+        ...recordAlpha(),
+        thermo_ref: ref,
+        nasa: null,
+        points: null,
+        provenance: { conformer_group_ref: groupRef },
+    } as ThermoRecord
+}
+
 // Same conformer link, same nasa fit, same points as `recordAlpha()` -- only
 // the ref differs. This is the live-page shape (`spe_5nr24y2ssxokx…`: seven
 // `thm_` records, byte-identical NASA-7 coefficients and points) the
@@ -203,7 +217,7 @@ describe("ThermoCpChart — the three honest-absence cases", () => {
         renderChart([fitOnlyRecord()])
         expect(screen.getByTestId("fit-low-thm_fit_only")).toBeInTheDocument()
         expect(screen.queryByTestId("measured-point-thm_fit_only-0")).not.toBeInTheDocument()
-        expect(screen.getByText(/no measured points on file for this record/)).toBeInTheDocument()
+        expect(screen.getByText(/no evaluated points on file for this record/)).toBeInTheDocument()
     })
 
     it("a points-only record: draws markers, no curve", () => {
@@ -226,7 +240,7 @@ describe("ThermoCpChart — the three honest-absence cases", () => {
         expect(screen.getByTestId("series-thm_neither")).toBeEmptyDOMElement()
         expect(screen.queryByTestId("fit-low-thm_neither")).not.toBeInTheDocument()
         expect(screen.queryByTestId("measured-point-thm_neither-0")).not.toBeInTheDocument()
-        expect(screen.getByText(/no measured points or usable NASA-7 fit on file for this record — nothing plotted/)).toBeInTheDocument()
+        expect(screen.getByText(/no evaluated points or usable NASA-7 fit on file for this record — nothing plotted/)).toBeInTheDocument()
     })
 })
 
@@ -262,6 +276,45 @@ describe("ThermoCpChart — collapsing records that plot as the exact same line"
         // only by dot colour.
         expect(screen.getByTestId("legend-thm_alpha")).toHaveTextContent("Conformer Group 1 (thm_alpha)")
         expect(screen.getByTestId("legend-thm_alpha_v2")).toHaveTextContent("Conformer Group 1 (thm_alpha_v2)")
+    })
+
+    it("never collapses two records that both plot nothing, when they trace to DIFFERENT conformer groups -- the blocking review finding (repro shape: one plottable record plus one empty record per group)", () => {
+        // Mirrors the review's own repro: [fit-on-cfg_1, empty-on-cfg_1, empty-on-cfg_2].
+        renderChart([recordAlpha(), neitherOnGroup("thm_empty_1", "cg_one"), neitherOnGroup("thm_empty_2", "cg_two")])
+
+        // Both empty records get their OWN chip -- neither disappears, and
+        // they are never merged into a false "2 identical records" claim.
+        expect(screen.getByTestId("legend-thm_empty_1")).toBeInTheDocument()
+        expect(screen.getByTestId("legend-thm_empty_2")).toBeInTheDocument()
+        expect(screen.queryByText(/identical records/)).not.toBeInTheDocument()
+
+        // thm_alpha and thm_empty_1 share a conformer (cg_one) and therefore
+        // a base label -- a genuine collision between two DIFFERENT records,
+        // correctly disambiguated by ref.
+        expect(screen.getByTestId("legend-thm_alpha")).toHaveTextContent("Conformer Group 1 (thm_alpha)")
+        expect(screen.getByTestId("legend-thm_empty_1")).toHaveTextContent("Conformer Group 1 (thm_empty_1)")
+        // thm_empty_2 (cg_two) has no colliding label -- plain.
+        expect(screen.getByTestId("legend-thm_empty_2")).toHaveTextContent("Conformer Group 2")
+
+        // Each empty record gets its OWN absence note -- never merged into
+        // one shared note under the first group's label. (The note itself
+        // uses the series' own base label, not the legend's disambiguated
+        // form, so both read "Conformer Group N: ..." here.)
+        const absenceNotes = screen.getAllByText(/no evaluated points or usable NASA-7 fit/)
+        expect(absenceNotes).toHaveLength(2)
+        expect(absenceNotes.some((el) => el.textContent?.startsWith("Conformer Group 1:"))).toBe(true)
+        expect(absenceNotes.some((el) => el.textContent?.startsWith("Conformer Group 2:"))).toBe(true)
+    })
+
+    it("names every collapsed member's own ref in accessible text content, not only in a hover-only title attribute", () => {
+        renderChart([identicalToAlpha("thm_dup_1"), identicalToAlpha("thm_dup_2"), identicalToAlpha("thm_dup_3")])
+
+        // title= remains, for pointer users hovering the chip.
+        expect(screen.getByTestId("legend-thm_dup_1")).toHaveAttribute("title", "thm_dup_1, thm_dup_2, thm_dup_3")
+        // The same refs are also reachable as real text content -- not
+        // dependent on a mouse hover, so keyboard and screen-reader users
+        // get the same information pointer users do.
+        expect(screen.getByTestId("legend-thm_dup_1").textContent).toMatch(/thm_dup_1.*thm_dup_2.*thm_dup_3/)
     })
 })
 
