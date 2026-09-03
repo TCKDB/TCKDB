@@ -108,47 +108,20 @@
     .geometry-summary { grid-template-columns: 1fr; }
 }
 
-/* Validation card content, reshaped: a short status line stays prose,
-   but the producer/consumer pointers are a set of NAMED rows (one per
-   relationship, each naming which relationship it is), not one run-on
-   sentence with links stitched into it. The live CH3 fixture this page
-   was measured against (geom_qcnisbgb4abax5oxym3dtjxu34) carries 4
-   producers and 10 consumers — enough links that the old single-paragraph
-   shape wrapped into an unreadable block even before the grid-width bug
-   above made its column too narrow. */
+/* Validation card content: a short status line, plus (when this geometry
+   has any producers/consumers) one plain sentence pointing at the
+   "Produced by" / "Used as input by" tables further down this page. This
+   card used to also repeat every producing/consuming calculation ref
+   inline as its own set of named `<dl>` rows — removed (finding #13):
+   those refs are the SAME ones those tables already render as real,
+   correctly-cased links, so duplicating them here bought nothing and gave
+   a caption-styled ancestor a second place to mis-transform identifier
+   text. See the comment on this paragraph in GeometryDetailPage.tsx. */
 .validation-card p {
     margin: .5rem 0 0;
     color: var(--muted);
     font: .68rem/1.5 var(--mono);
 }
-
-.validation-pointers {
-    display: grid;
-    gap: .65rem;
-    margin: .85rem 0 0;
-}
-
-.validation-pointer dt {
-    margin: 0;
-    color: var(--muted);
-    font: .6rem var(--mono);
-    letter-spacing: .05em;
-    text-transform: uppercase;
-}
-
-.validation-pointer dd {
-    margin: .3rem 0 0;
-    color: var(--accent-700);
-    font: .72rem/1.6 var(--mono);
-    overflow-wrap: anywhere;
-}
-
-/* No margin here: the ", " literal rendered between links (see
-   GeometryDetailPage.tsx's `index > 0 && ", "`) already supplies the
-   space between consecutive links. A `margin-right` on every link
-   additionally pushed that following comma away from the link it
-   belongs to — MEASURED, "CALC_AFS… , CALC_2HH… ," reads with the comma
-   visibly detached from its own reference. */
 
 /* Owns no width of its own any more — the caption (`.viewer-caption`)
    and the picture+controls (`.viewer-stage`) size and centre
