@@ -13,7 +13,9 @@ function token(value: string) {
 // the only line it needs to change. Do not inline this expression anywhere
 // else in this file.
 function tsRowTarget(record: TransitionStateBrowseRecord): string | null {
-    return record.reaction.reaction_ref ? `/reactions/${record.reaction.reaction_ref}` : null
+    return record.transition_state_entry.transition_state_entry_ref
+        ? `/transition-state-entries/${record.transition_state_entry.transition_state_entry_ref}`
+        : null
 }
 
 /**

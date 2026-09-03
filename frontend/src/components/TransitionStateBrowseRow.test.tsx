@@ -95,7 +95,7 @@ describe("TransitionStateBrowseRow: pills, not plain text", () => {
 // checking that content OUTSIDE the old headline -- the pill and the ref
 // code -- is now inside the SAME link as the equation.
 describe("TransitionStateBrowseRow: the whole row is the click target", () => {
-    it("wraps the entire row's content in one link to the reaction, not just the equation", () => {
+    it("wraps the entire row's content in one link to the transition-state entry, not just the equation", () => {
         renderRow(record())
         // The link has NO aria-label, so its accessible name is its full text
         // content. Pin the pieces an aria-label once silenced: charge and the
@@ -105,7 +105,7 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
         expect(link).toHaveAccessibleName(expect.stringContaining("charge 0"))
         expect(link).toHaveAccessibleName(expect.stringContaining("tse_one"))
         expect(link).not.toHaveAttribute("aria-label")
-        expect(link).toHaveAttribute("href", "/reactions/rxn_one")
+        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
 
         // Content far from the headline -- the review pill and the stable
         // ref code -- are inside the SAME link element, not sitting
@@ -114,10 +114,20 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
         expect(within(link).getByText("tse_one")).toBeVisible()
     })
 
-    it("does not change WHERE the row links -- still exactly reaction.reaction_ref, untouched", () => {
-        renderRow(record({ reaction: { reaction_ref: "rxn_specific", reaction_entry_ref: "rxe_x", equation: "X <=> Y", reversible: null, family: null } }))
-        expect(screen.getByRole("link", { name: /tse_one/ }))
-            .toHaveAttribute("href", "/reactions/rxn_specific")
+    it("does not change WHERE the row links -- exactly transition_state_entry.transition_state_entry_ref, not the reaction ref", () => {
+        renderRow(record({
+            transition_state_entry: {
+                transition_state_entry_ref: "tse_specific",
+                charge: 0,
+                multiplicity: 2,
+                status: "optimized",
+                unmapped_smiles: null,
+                review: { status: "not_reviewed" },
+            },
+            reaction: { reaction_ref: "rxn_specific", reaction_entry_ref: "rxe_x", equation: "X <=> Y", reversible: null, family: null },
+        }))
+        expect(screen.getByRole("link", { name: /tse_specific/ }))
+            .toHaveAttribute("href", "/transition-state-entries/tse_specific")
     })
 
     it("keeps the label, status and ref inside the link, so they are announced as part of its content", () => {
@@ -129,8 +139,21 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
         expect(within(link).getByText("tse_one")).toBeVisible()
     })
 
-    it("renders no link at all when the archive gave no reaction ref -- the row is inert, matching the prior fallback", () => {
-        renderRow(record({ reaction: { reaction_ref: null, reaction_entry_ref: null, equation: "Z <=> W", reversible: null, family: null } }))
+    it("renders no link at all when the archive gave no transition-state entry ref -- the row is inert, matching the prior fallback", () => {
+        // The schema marks transition_state_entry_ref as always-present, but
+        // the component still guards against a falsy ref defensively -- this
+        // exercises that guard the same way an untyped/malformed payload would.
+        renderRow(record({
+            transition_state_entry: {
+                transition_state_entry_ref: null as unknown as string,
+                charge: 0,
+                multiplicity: 2,
+                status: "optimized",
+                unmapped_smiles: null,
+                review: { status: "not_reviewed" },
+            },
+            reaction: { reaction_ref: "rxn_one", reaction_entry_ref: "rxe_one", equation: "Z <=> W", reversible: null, family: null },
+        }))
         expect(screen.queryByRole("link")).not.toBeInTheDocument()
         expect(screen.getByText("Z <=> W")).toBeVisible()
     })
