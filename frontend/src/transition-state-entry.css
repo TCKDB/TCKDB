@@ -1,0 +1,180 @@
+/*
+ * TransitionStateEntryPage -- its own stylesheet, imported only by this
+ * page. It layers on top of `conformer-group.css` (the shared "scientific
+ * record ledger" vocabulary: `.basin-header`, `.ledger-section`,
+ * `.stage-table`, `.geometry-*`, `.empty-projection`, ...), which this
+ * page keeps reusing verbatim for the shapes review found no fault with.
+ * New rules here are scoped to classes NOT defined in that shared file, so
+ * nothing here can win or lose a cascade fight against
+ * `ConformerObservationPage`, the other page that imports it.
+ *
+ * The one exception is `.basin-title h1` / `.basin-intro`, both retired
+ * from THIS page's own markup (the h1 is no longer inside a `.basin-title`
+ * wrapper, and the intro paragraph is deleted -- see `.tse-title-row` /
+ * `.tse-equation-heading` below and the Reaction section's own lede) --
+ * `conformer-group.css` is left untouched either way, since
+ * `ConformerObservationPage` still uses both.
+ */
+
+/* Review found the h1 at 88px (`.basin-title h1`'s `clamp(3rem, 8vw,
+   5.5rem)`) while the equation it should have led with sat 12px, ~900px
+   down the page, in a `<dd>`. The reaction equation is now the h1 here,
+   at its own (smaller, still prominent) scale -- a computed sentence-
+   length string reads worse blown up to 88px than a 4-character label
+   did. */
+.tse-title-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .6rem 1rem;
+}
+
+.tse-equation-heading {
+    flex: 1 1 28rem;
+    min-width: 0;
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: var(--ink);
+    font: 600 clamp(1.7rem, 3.4vw, 2.6rem)/1.25 var(--serif);
+    letter-spacing: -.02em;
+}
+
+.tse-title-badges {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+}
+
+/* The label demoted from the h1 -- a plain facet beside the review pill,
+   not a pill itself: "label TS0" is provenance the way a `dt`/`dd` fact
+   is, not a categorical value the pill vocabulary is for. */
+.tse-label-facet {
+    color: var(--muted-2);
+    font: .72rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+/* Trust badge -- reuses `.review-badge`'s exact look (same visual
+   register as the pill beside it) rather than a new color, so two
+   badges reading two different verdicts about the same entry do not
+   compete for attention. */
+.tse-trust-badge {
+    flex: 0 1 auto;
+    display: inline-block;
+    padding: .25rem .45rem;
+    overflow-wrap: anywhere;
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font: .64rem var(--mono);
+    text-transform: uppercase;
+}
+
+/* The saddle-point verdict -- the first evidence statement on the page,
+   directly under the identity block, per the finding that the imaginary
+   frequency (the one fact that says "is this actually a saddle point")
+   was nowhere on the page at all. */
+.tse-saddle-point {
+    max-width: 44rem;
+    margin: 1.1rem 0 0;
+    padding: .75rem 1rem;
+    border: 1px solid var(--line-2);
+    border-radius: .4rem;
+    background: var(--surface-sunken);
+    color: var(--ink-2);
+    font: .92rem/1.55 var(--serif);
+}
+
+.tse-saddle-point strong { color: var(--ink); }
+
+/* Evidence-present pills, positive-only phrasing ("opt", not "opt yes") --
+   matches `TransitionStateBrowseRow`'s own evidence line, reusing the
+   global `.value-pill`/`.value-pill--muted` pair rather than inventing a
+   third pill treatment. */
+.tse-evidence-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+    margin: .9rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+/* IRC-ran statement inside the Geometry section -- distinct from (and
+   placed beside) the disclosures it summarizes, carrying the point
+   counts and a link to the IRC calculation itself. */
+.tse-irc-summary {
+    margin: 0 0 1.1rem;
+    padding: .75rem 1rem;
+    border: 1px solid var(--line-2);
+    border-radius: .4rem;
+    background: var(--surface-sunken);
+}
+
+.tse-irc-summary p {
+    margin: 0;
+    color: var(--ink-2);
+    font: .85rem/1.55 var(--sans);
+}
+
+.tse-irc-summary p + p { margin-top: .4rem; }
+
+.tse-irc-summary .empty-projection { margin: .4rem 0 0; }
+
+/* IRC trajectory points, hoisted out of one-card-per-point into a compact
+   ordered list -- 2-3 text columns (index, ref, atom count), no card
+   chrome. */
+.tse-irc-point-list {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    gap: .3rem .9rem;
+    margin: .85rem 0 0;
+    padding: 0;
+    list-style: none;
+    font: .76rem var(--mono);
+}
+
+.tse-irc-point-list li {
+    display: flex;
+    gap: .4rem;
+    align-items: baseline;
+    color: var(--muted-2);
+}
+
+.tse-irc-point-list a { color: var(--accent); }
+
+/* Reaction-record link, marked as pointing at a not-yet-built page --
+   the placeholder route itself does not say so on this side of the
+   link. */
+.tse-placeholder-note {
+    color: var(--muted);
+    font: .72rem var(--sans);
+}
+
+/* "Other saddle points deposited for this reaction" -- one row per
+   sibling entry, plain list rather than a table (three short facts, no
+   header row worth the width). */
+.tse-siblings-list {
+    display: grid;
+    gap: .5rem;
+    margin: .9rem 0 0;
+    padding: 0;
+    list-style: none;
+}
+
+.tse-siblings-list li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .3rem .6rem;
+    padding: .6rem .8rem;
+    border: 1px solid var(--line-2);
+    border-radius: .4rem;
+    background: var(--surface);
+    font: .82rem var(--sans);
+}
+
+.tse-siblings-list a { color: var(--accent); font-weight: 600; }
+
+.tse-siblings-list .value-pill { font-size: .68rem; }

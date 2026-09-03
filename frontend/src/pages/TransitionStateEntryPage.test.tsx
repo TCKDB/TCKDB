@@ -6,15 +6,25 @@ import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import TransitionStateEntryPage from "./TransitionStateEntryPage"
 
-const server = setupServer()
+const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
+
+// A default empty-siblings handler so every test gets one without having
+// to register it individually -- `resetHandlers()` (no arguments) restores
+// exactly this initial list between tests, so a test's own `server.use`
+// override for the entry endpoint layers on top without removing it.
+// Tests that care about the siblings section override this one directly.
+const defaultSiblingsHandler = http.get(
+    "/api/v1/scientific/transition-states/search",
+    () => HttpResponse.json({ records: [] }),
+)
+
+const server = setupServer(defaultSiblingsHandler)
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
     server.resetHandlers()
     cleanup()
 })
 afterAll(() => server.close())
-
-const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
 
 function page(ref = ENTRY_REF) {
     return render(
@@ -27,14 +37,17 @@ function page(ref = ENTRY_REF) {
 }
 
 // Trimmed from a live `GET /api/v1/scientific/transition-state-entries/
-// tse_aq5ktxlu27nvul3hmdwpuyuz4e?include=calculations,geometries,review`
+// tse_aq5ktxlu27nvul3hmdwpuyuz4e?include=calculations,geometries,review,trust`
 // response (curled 2026-09-03) -- field names, nesting and the `has_irc:
 // true` / `validation.irc: "absent"` combination (an IRC calculation
 // exists, but no *passed evidence record* was deposited for it -- see
 // `TransitionStateValidationDescriptor`'s own docstring) are the real
 // served shape, not invented. The 18 `irc_reverse` geometries the live
 // record actually carries are trimmed to 2 here -- the count is not the
-// thing under test.
+// thing under test. `saddle_point` is NOT part of the live shape yet (the
+// deployed backend does not serve it) -- tests exercising it below supply
+// it explicitly via `overrides`, and the "not served" case is its own
+// dedicated test.
 function mockRecord(overrides: Record<string, unknown> = {}) {
     return {
         transition_state_entry: {
@@ -114,17 +127,20 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
 }
 
 describe("TransitionStateEntryPage", () => {
-    it("renders the entry's identity from the real API shape and never shows a SMILES row", async () => {
+    it("leads with the reaction equation as the h1, and never shows a SMILES row", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, ({ request }) => {
-            expect(new URL(request.url).searchParams.getAll("include")).toEqual(["calculations", "geometries", "review"])
+            expect(new URL(request.url).searchParams.getAll("include")).toEqual(["calculations", "geometries", "review", "trust"])
             return HttpResponse.json({ record: mockRecord() })
         }))
 
         page()
-        expect(await screen.findByRole("heading", { name: "TS0" })).toBeVisible()
+        expect(await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })).toBeVisible()
 
-        // The unmapped SMILES the API actually serves is shown...
-        const unmappedRow = screen.getByText("Unmapped SMILES").closest("div")
+        // The label is demoted to a facet beside the review pill, not the h1.
+        expect(document.querySelector(".tse-label-facet")).toHaveTextContent("label TS0")
+
+        // The unmapped SMILES the API actually serves is shown, relabeled...
+        const unmappedRow = screen.getByText("Reaction SMILES (unmapped)").closest("div")
         expect(unmappedRow).not.toBeNull()
         expect(within(unmappedRow as HTMLElement).getByText("C1=C[C]2C=CCC2C=C1>>C1=CC2=C(C=C1)CC=C2.[H]")).toBeVisible()
 
@@ -134,28 +150,132 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.queryByText("SMILES", { selector: "dt" })).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
 
+        // Neither duplicate "no canonical SMILES" sentence is rendered --
+        // only the Reaction section's own lede survives.
+        expect(screen.queryAllByText(/no canonical SMILES/i)).toHaveLength(0)
+        expect(screen.getByText(/A transition state is identified by the reaction it connects/)).toBeVisible()
+
         // Reaction context the API serves.
-        expect(screen.getByText("C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]")).toBeVisible()
         expect(screen.getByText("R Addition MultipleBond")).toBeVisible()
-        // Two links share this name here: the reaction-context section's
-        // own, and the (present-but-collapsed) References disclosure row --
-        // both must point at the reaction record.
-        for (const link of screen.getAllByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" })) {
-            expect(link).toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a")
-        }
+        expect(screen.getByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" }))
+            .toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a")
+        expect(screen.getByText("(record view not yet available)")).toBeVisible()
 
         // Review status -- only the entry's own review-badge pill in the
-        // header. The header used to also carry a "Transition state
-        // review" row restating the transition-state concept's status,
-        // which the live archive's whole review pipeline (0 reviewed
-        // records total, per `review_summary`) always matched to the
-        // pill's value -- the same status shown twice back to back.
-        // Scoped to `.basin-header`, since "not reviewed" also legitimately
-        // repeats per-calculation and in the review-history row further
-        // down the page.
+        // header.
         const header = document.querySelector(".basin-header") as HTMLElement
         expect(within(header).getAllByText("not reviewed")).toHaveLength(1)
         expect(within(header).queryByText("Transition state review")).not.toBeInTheDocument()
+    })
+
+    it("saddle-point: states the imaginary-mode verdict first, under the identity block, when a freq result exists", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    saddle_point: {
+                        n_imag: 1,
+                        imag_freq_cm1: -768.67,
+                        reaction_coordinate_mode_index: null,
+                        imaginary_mode_structural_flag: null,
+                        calculation_ref: "calc_k4snenouw4m6zbmbzyvqrmn2om",
+                        level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" },
+                    },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        const statement = document.querySelector(".tse-saddle-point") as HTMLElement
+        expect(statement).not.toBeNull()
+        expect(statement).toHaveTextContent("1 imaginary mode")
+        expect(statement).toHaveTextContent("-768.7")
+        expect(statement).toHaveTextContent("b3lyp/def2tzvp")
+        expect(within(statement).getByRole("link", { name: "calc_k4snenouw4m6zbmbzyvqrmn2om" }))
+            .toHaveAttribute("href", "/calculations/calc_k4snenouw4m6zbmbzyvqrmn2om")
+
+        // It is the first thing under the identity header -- immediately
+        // adjacent in the DOM, not buried further down the page.
+        const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
+        expect(identityHeader.nextElementSibling).toBe(statement)
+    })
+
+    it("saddle-point: names multiple imaginary modes with no designated reaction-coordinate mode distinctly", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    saddle_point: {
+                        n_imag: 3,
+                        imag_freq_cm1: -50.1,
+                        reaction_coordinate_mode_index: null,
+                        imaginary_mode_structural_flag: null,
+                        calculation_ref: "calc_multi",
+                        level_of_theory: null,
+                    },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/3 imaginary modes; reaction-coordinate mode not designated/)).toBeVisible()
+    })
+
+    it("saddle-point: says plainly when no frequency calculation was deposited", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord({ saddle_point: null }) })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("No frequency calculation deposited for this entry.")).toBeVisible()
+    })
+
+    it("saddle-point: renders nothing served (the live deployment does not carry this field yet) the same as an explicit null", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() }) // no `saddle_point` key at all
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("No frequency calculation deposited for this entry.")).toBeVisible()
+    })
+
+    it("trust: surfaces the trust label and passed/possible counts beside the review pill", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    trust: {
+                        trust_status: "well_supported",
+                        evidence: { passed_count: 24, possible_count: 26 },
+                    },
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/well supported/)).toBeVisible()
+        expect(screen.getByText(/24\/26/)).toBeVisible()
+    })
+
+    it("evidence pills: positive-only phrasing, present kinds unmuted and absent kinds muted", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        const pills = document.querySelector(".tse-evidence-pills") as HTMLElement
+        const opt = within(pills).getByText("opt")
+        const pathSearch = within(pills).getByText("path search")
+        expect(opt).toHaveClass("value-pill")
+        expect(opt).not.toHaveClass("value-pill--muted")
+        expect(pathSearch).toHaveClass("value-pill--muted")
+
+        // No "yes"/"no" phrasing anywhere in the pill list.
+        expect(within(pills).queryByText(/opt yes/)).not.toBeInTheDocument()
+
+        // The old headline metrics ("Calculation rows N", "Stored
+        // geometries N") are gone entirely.
+        expect(screen.queryByText("Calculation rows")).not.toBeInTheDocument()
+        expect(screen.queryByText("Stored geometries")).not.toBeInTheDocument()
     })
 
     it("states each stage's level of theory once, in the calculation table, not in a separate by-stage block", async () => {
@@ -163,16 +283,10 @@ describe("TransitionStateEntryPage", () => {
             HttpResponse.json({ record: mockRecord() })
         )))
         page()
-        await screen.findByRole("heading", { name: "TS0" })
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
-        // The standalone "Levels of theory by stage" section is gone -- it
-        // duplicated the Stage/Level-of-theory columns of the calculation
-        // table immediately below it (same fix as `ConformerObservationPage`
-        // for the same finding).
         expect(screen.queryByRole("heading", { name: "Levels of theory by stage" })).not.toBeInTheDocument()
 
-        // The calculation table is still the one place carrying this: each
-        // row pairs its own stage with its own level of theory.
         const calcTable = screen.getByRole("table", { name: `Calculations for ${ENTRY_REF}` })
         const optRow = within(calcTable).getByText("opt").closest("tr")
         const ircRow = within(calcTable).getByText("irc").closest("tr")
@@ -182,198 +296,70 @@ describe("TransitionStateEntryPage", () => {
         expect(within(ircRow as HTMLElement).getByText("b3lyp/def2tzvp")).toBeVisible()
     })
 
-    it("distinguishes an IRC calculation existing from a passed IRC validation record", async () => {
-        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "TS0" })
-        // has_irc: true, validation.irc: "absent" -- the served combination
-        // this endpoint measured for tse_aq5ktxlu27nvul3hmdwpuyuz4e. The
-        // page must say BOTH things, not collapse them into one claim.
-        expect(screen.getByText(/irc yes/)).toBeVisible()
-        expect(screen.getByText("not established")).toBeVisible()
-        expect(screen.getByText(/An IRC calculation exists on this entry, but no structured pass\/fail evidence/))
-            .toBeVisible()
-    })
-
-    it("lists calculation and geometry evidence linking to their own record pages", async () => {
-        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "TS0" })
-
-        expect(screen.getByRole("link", { name: "calc_yu6nspewwco74qzh6lwgh6ewxy" }))
-            .toHaveAttribute("href", "/calculations/calc_yu6nspewwco74qzh6lwgh6ewxy")
-        expect(screen.getByRole("link", { name: "calc_heds3dt3dsqxmqkcchibvbtwi4" }))
-            .toHaveAttribute("href", "/calculations/calc_heds3dt3dsqxmqkcchibvbtwi4")
-
-        // The final (saddle-point) geometry is always visible, led with its
-        // own label. The single `irc_reverse` point sits behind its
-        // direction's disclosure (see the dedicated geometry-wall test
-        // below for the collapsed/expanded behaviour itself) -- named on
-        // the closed summary by role and count, not opened by default.
-        expect(screen.getByRole("link", { name: "geom_mtihqs7ac7btur4efqushl7aoy" }))
-            .toHaveAttribute("href", "/geometries/geom_mtihqs7ac7btur4efqushl7aoy")
-        expect(screen.getByText(/^final/)).toBeVisible()
-        expect(screen.getByText(/IRC reverse.*1 point/)).toBeVisible()
-    })
-
-    it("keeps the transition-state ref behind a References disclosure, collapsed by default", async () => {
-        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "TS0" })
-        // The `ts_…` ref lives only inside `RefsDisclosure` (unlike the
-        // `tse_…` entry ref, which also renders in the always-visible
-        // identity header) -- collapsed-but-present, then genuinely
-        // visible after opening the toggle, is the real proof this page
-        // keeps it behind "References (4)" rather than open at rest.
-        // (A closed `<details>` keeps its content in the DOM -- jest-dom's
-        // `toBeVisible` is what actually understands that state, not
-        // `queryByText`/`toBeInTheDocument`, which would find it either way.)
-        expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).not.toBeVisible()
-        await userEvent.setup().click(screen.getByText(/References \(4\)/))
-        expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).toBeVisible()
-        // Two links now share this name: the reaction-context section's own
-        // (always visible) and the opened disclosure's ref row -- both must
-        // point at the reaction record.
-        for (const link of screen.getAllByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" })) {
-            expect(link).toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a")
-        }
-    })
-
-    it("shows a not-found style message for an unknown entry ref", async () => {
-        server.use(http.get("/api/v1/scientific/transition-state-entries/tse_missing", () => (
-            HttpResponse.json({ detail: "not found" }, { status: 404 })
-        )))
-        page("tse_missing")
-        expect(await screen.findByText("Transition state entry not found")).toBeVisible()
-    })
-
-    // Owner report: 'TS0' appeared in the page's own `<h1>` AND again in
-    // `RecordIdentityHeader`'s formula slot (which used to fall back to the
-    // label when `formula` was null, since a TS never carries one), and
-    // 'Charge / multiplicity — 0 / doublet (2)' appeared once in the
-    // header's own identity facts and again in the page's `basin-context`.
-    // Fixed by dropping the identity header's label fallback (a TS has no
-    // formula; the page's `<h1>` already carries the label) and dropping
-    // the page's own duplicate charge/multiplicity row (the identity
-    // header already carries it). Every fact now renders exactly once.
-    it("states the label and the charge/multiplicity fact exactly once each", async () => {
-        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
-            HttpResponse.json({ record: mockRecord() })
-        )))
-        page()
-        await screen.findByRole("heading", { name: "TS0" })
-
-        expect(screen.getAllByText("TS0")).toHaveLength(1)
-        expect(screen.getAllByText((_, node) => node?.tagName === "DD" && node.textContent === "0 / doublet (2)"))
-            .toHaveLength(1)
-    })
-
-    // Owner report: the geometry section rendered every served geometry as
-    // an undifferentiated 5-column grid of `geom_` links -- on the live
-    // record, 1 `final` + 50 `irc_forward` + 33 `irc_reverse`, ~1,900px in
-    // which the one saddle-point geometry was indistinguishable from the
-    // IRC trajectory around it. Fixed by leading with `final`, prominently
-    // and linked, then collapsing each IRC direction behind its own
-    // disclosure showing a point count rather than one card per point.
-    it("leads with the final geometry and collapses each IRC direction behind a disclosure showing its point count", async () => {
+    it("calculation table: orders rows by stage (opt, freq, sp, irc, path_search), not archive order", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
                 record: mockRecord({
-                    geometries: [
-                        { geometry_ref: "geom_final", input_order: null, output_order: 1, role: "final", natoms: 18, geom_hash: "a" },
-                        { geometry_ref: "geom_fwd_1", input_order: null, output_order: 2, role: "irc_forward", natoms: 18, geom_hash: "b" },
-                        { geometry_ref: "geom_fwd_2", input_order: null, output_order: 3, role: "irc_forward", natoms: 18, geom_hash: "c" },
-                        { geometry_ref: "geom_fwd_3", input_order: null, output_order: 4, role: "irc_forward", natoms: 18, geom_hash: "d" },
-                        { geometry_ref: "geom_rev_1", input_order: null, output_order: 5, role: "irc_reverse", natoms: 18, geom_hash: "e" },
-                        { geometry_ref: "geom_rev_2", input_order: null, output_order: 6, role: "irc_reverse", natoms: 18, geom_hash: "f" },
+                    calculations: [
+                        { calculation_ref: "calc_irc", type: "irc", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: null, software_release: null, workflow_tool_release: null },
+                        { calculation_ref: "calc_sp", type: "sp", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: null, software_release: null, workflow_tool_release: null },
+                        { calculation_ref: "calc_opt", type: "opt", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: null, software_release: null, workflow_tool_release: null },
+                        { calculation_ref: "calc_freq", type: "freq", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: null, software_release: null, workflow_tool_release: null },
                     ],
                 }),
             })
         )))
         page()
-        await screen.findByRole("heading", { name: "TS0" })
-
-        // The final geometry is rendered prominently -- under its own
-        // "Saddle-point geometry" label -- and linked to its record page.
-        expect(screen.getByText("Saddle-point geometry")).toBeVisible()
-        expect(screen.getByRole("link", { name: "geom_final" })).toHaveAttribute("href", "/geometries/geom_final")
-
-        // The two IRC directions are two disclosures, each naming its own
-        // point count -- not six individual geometry cards.
-        expect(screen.getByText(/IRC forward.*3 points/)).toBeVisible()
-        expect(screen.getByText(/IRC reverse.*2 points/)).toBeVisible()
-
-        // Their contents are collapsed at rest...
-        expect(screen.getByRole("link", { name: "geom_fwd_1" })).not.toBeVisible()
-        expect(screen.getByRole("link", { name: "geom_rev_1" })).not.toBeVisible()
-
-        // ...but present in the DOM, and become visible once opened.
-        for (const summary of screen.getAllByText(/IRC (forward|reverse)/)) {
-            await userEvent.setup().click(summary)
-        }
-        expect(screen.getByRole("link", { name: "geom_fwd_1" })).toBeVisible()
-        expect(screen.getByRole("link", { name: "geom_rev_1" })).toBeVisible()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        const calcTable = screen.getByRole("table", { name: `Calculations for ${ENTRY_REF}` })
+        const refCells = within(calcTable).getAllByRole("link").map((link) => link.textContent)
+        expect(refCells).toEqual(["calc_opt", "calc_freq", "calc_sp", "calc_irc"])
     })
 
-    // Observed on the live archive (tse_4fzvo2qpovgytr5yduytj3mmh4): one
-    // saddle-point geometry object cited by three calculations (opt, freq,
-    // sp) came back as three rows sharing a geometry_ref and rendered as
-    // three identical "final" cards -- one saddle point shown as three,
-    // with colliding React keys, and a "Stored geometries" count of 3.
-    it("shows a geometry cited by several calculations once, and counts it once", async () => {
+    it("calculation table: shows a served calculation energy, labeled by kind", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
                 record: mockRecord({
-                    geometries: [
-                        { geometry_ref: "geom_shared", input_order: null, output_order: 1, role: "final", natoms: 6, geom_hash: "a" },
-                        { geometry_ref: "geom_shared", input_order: null, output_order: 2, role: "final", natoms: 6, geom_hash: "a" },
-                        { geometry_ref: "geom_shared", input_order: null, output_order: 3, role: "final", natoms: 6, geom_hash: "a" },
-                    ],
+                    calculations: [{
+                        calculation_ref: "calc_energy",
+                        type: "sp",
+                        quality: "raw",
+                        review: { status: "not_reviewed" },
+                        level_of_theory: null,
+                        software_release: null,
+                        workflow_tool_release: null,
+                        energy: { energy_hartree: -348.435, energy_kind: "electronic_energy" },
+                    }],
                 }),
             })
         )))
         page()
-        await screen.findByRole("heading", { name: "TS0" })
-
-        expect(screen.getAllByRole("link", { name: "geom_shared" })).toHaveLength(1)
-        expect(screen.getByText("Stored geometries").parentElement).toHaveTextContent(/^Stored geometries1$/)
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/SP electronic energy/)).toBeVisible()
+        expect(screen.getByText(/-348.435000 hartree/)).toBeVisible()
     })
 
-    // No entry on the live archive lacks a `final` geometry today, so this
-    // branch is reachable only from here: the saddle-point block must say
-    // plainly that none was deposited rather than render an empty label,
-    // while the other roles still get their disclosures.
-    it("says when no saddle-point geometry was deposited, and still lists the other roles", async () => {
+    it("calculation table: shows 'version not recorded' for software without a version, rather than silently omitting it", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
                 record: mockRecord({
-                    geometries: [
-                        { geometry_ref: "geom_fwd_1", input_order: null, output_order: 1, role: "irc_forward", natoms: 18, geom_hash: "b" },
-                        { geometry_ref: "geom_fwd_2", input_order: null, output_order: 2, role: "irc_forward", natoms: 18, geom_hash: "c" },
-                    ],
+                    calculations: [{
+                        calculation_ref: "calc_molpro",
+                        type: "sp",
+                        quality: "raw",
+                        review: { status: "not_reviewed" },
+                        level_of_theory: null,
+                        software_release: { software: "Molpro", version: null },
+                        workflow_tool_release: null,
+                    }],
                 }),
             })
         )))
         page()
-        await screen.findByRole("heading", { name: "TS0" })
-
-        expect(screen.getByText("No saddle-point (final) geometry was deposited for this entry.")).toBeVisible()
-        expect(screen.queryByText("Saddle-point geometry")).not.toBeInTheDocument()
-        expect(screen.getByText(/IRC forward.*2 points/)).toBeVisible()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/Molpro \(version not recorded\)/)).toBeVisible()
     })
 
-    // Owner report: `software_release.version` and `workflow_tool_release
-    // .version` ('Gaussian 16', 'ARC 1.1.0') are served by this endpoint and
-    // are load-bearing provenance in this archive, but the calculation
-    // table showed only the bare names ('Gaussian', 'ARC'). Fixed by
-    // parsing the version through `softwareLabel`/`toolReleaseLabel`, the
-    // same helpers every other record page already uses for this.
     it("shows the software and workflow-tool versions in the calculation table", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({
@@ -391,9 +377,309 @@ describe("TransitionStateEntryPage", () => {
             })
         )))
         page()
-        await screen.findByRole("heading", { name: "TS0" })
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
         expect(screen.getByText(/Gaussian 16/)).toBeVisible()
         expect(screen.getByText(/ARC 1\.1\.0/)).toBeVisible()
+    })
+
+    it("IRC: says an IRC ran with its point counts and a link, distinct from a passed validation record", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_final", input_order: null, output_order: 1, role: "final", natoms: 18, geom_hash: "a" },
+                        ...Array.from({ length: 3 }, (_, i) => ({ geometry_ref: `geom_fwd_${i}`, input_order: null, output_order: 2 + i, role: "irc_forward", natoms: 18, geom_hash: `f${i}` })),
+                        ...Array.from({ length: 2 }, (_, i) => ({ geometry_ref: `geom_rev_${i}`, input_order: null, output_order: 5 + i, role: "irc_reverse", natoms: 18, geom_hash: `r${i}` })),
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        const ircSummary = document.querySelector(".tse-irc-summary") as HTMLElement
+        expect(within(ircSummary).getByText(/IRC ran/)).toBeVisible()
+        expect(ircSummary).toHaveTextContent("3 forward")
+        expect(ircSummary).toHaveTextContent("2 reverse")
+        expect(within(ircSummary).getByRole("link", { name: "calc_heds3dt3dsqxmqkcchibvbtwi4" }))
+            .toHaveAttribute("href", "/calculations/calc_heds3dt3dsqxmqkcchibvbtwi4")
+        expect(within(ircSummary).getByText(/Endpoint identity \(reactant\/product\) not deposited/)).toBeVisible()
+
+        // The old vague "not established" coverage-card wording is gone.
+        expect(screen.queryByText("not established")).not.toBeInTheDocument()
+    })
+
+    it("IRC: says plainly when no IRC calculation was deposited at all -- a fourth, distinct state", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    evidence_summary: {
+                        calculation_count: 2,
+                        has_opt: true,
+                        has_freq: true,
+                        has_sp: false,
+                        has_irc: false,
+                        has_path_search: false,
+                        has_geometry_validation: false,
+                        has_scf_stability: false,
+                        levels_of_theory: {},
+                    },
+                    calculations: [],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        const ircSummary = document.querySelector(".tse-irc-summary") as HTMLElement
+        expect(within(ircSummary).getByText("No IRC calculation was deposited for this entry.")).toBeVisible()
+    })
+
+    it("IRC: renders a passed validation record distinctly from 'ran but no evidence'", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord({ validation: { irc: "present" } }) })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/IRC validation passed/)).toBeVisible()
+    })
+
+    it("IRC: renders a failed validation record distinctly", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord({ validation: { irc: "failed" } }) })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/IRC validation failed/)).toBeVisible()
+    })
+
+    it("lists calculation and geometry evidence linking to their own record pages", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        expect(screen.getByRole("link", { name: "calc_yu6nspewwco74qzh6lwgh6ewxy" }))
+            .toHaveAttribute("href", "/calculations/calc_yu6nspewwco74qzh6lwgh6ewxy")
+        expect(screen.getAllByRole("link", { name: "calc_heds3dt3dsqxmqkcchibvbtwi4" })[0])
+            .toHaveAttribute("href", "/calculations/calc_heds3dt3dsqxmqkcchibvbtwi4")
+
+        // The final (saddle-point) geometry is always visible, led with its
+        // own label. The single `irc_reverse` point sits behind its
+        // direction's disclosure -- named on the closed summary by role,
+        // count AND atom count now.
+        expect(screen.getByRole("link", { name: "geom_mtihqs7ac7btur4efqushl7aoy" }))
+            .toHaveAttribute("href", "/geometries/geom_mtihqs7ac7btur4efqushl7aoy")
+        expect(screen.getByText(/^final/)).toBeVisible()
+        expect(screen.getByText(/IRC reverse.*1 point.*18 atoms/)).toBeVisible()
+    })
+
+    it("keeps the transition-state ref behind a References disclosure, collapsed by default -- with no duplicate reaction link inside it", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        // The reaction-record link now lives ONCE (the Reaction section),
+        // so References drops from 4 to 3 rows: entry, TS, reaction entry.
+        expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).not.toBeVisible()
+        await userEvent.setup().click(screen.getByText(/References \(3\)/))
+        expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).toBeVisible()
+        // No second "rxn_..." link inside the (now open) disclosure -- only
+        // the Reaction section's own link exists anywhere on the page.
+        expect(screen.getAllByRole("link", { name: "rxn_nu4c52up4c4hqtbtxufwbscq3a" })).toHaveLength(1)
+    })
+
+    it("shows not-found style message for an unknown entry ref", async () => {
+        server.use(http.get("/api/v1/scientific/transition-state-entries/tse_missing", () => (
+            HttpResponse.json({ detail: "not found" }, { status: 404 })
+        )))
+        page("tse_missing")
+        expect(await screen.findByText("Transition state entry not found")).toBeVisible()
+    })
+
+    it("states the label and the charge/multiplicity fact exactly once each", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        // "TS0" appears exactly once on the page now -- the label facet
+        // beside the review pill -- not also in the h1 (now the equation)
+        // or a formula-fallback slot in the identity header.
+        expect(document.body.textContent?.match(/TS0/g)).toHaveLength(1)
+        expect(document.querySelector(".tse-label-facet")).toHaveTextContent("label TS0")
+        expect(screen.getAllByText((_, node) => node?.tagName === "DD" && node.textContent === "0 / doublet (2)"))
+            .toHaveLength(1)
+    })
+
+    it("leads with the final geometry and collapses each IRC direction behind a disclosure showing its point count and atom count", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_final", input_order: null, output_order: 1, role: "final", natoms: 18, geom_hash: "a" },
+                        { geometry_ref: "geom_fwd_1", input_order: null, output_order: 2, role: "irc_forward", natoms: 18, geom_hash: "b" },
+                        { geometry_ref: "geom_fwd_2", input_order: null, output_order: 3, role: "irc_forward", natoms: 18, geom_hash: "c" },
+                        { geometry_ref: "geom_fwd_3", input_order: null, output_order: 4, role: "irc_forward", natoms: 18, geom_hash: "d" },
+                        { geometry_ref: "geom_rev_1", input_order: null, output_order: 5, role: "irc_reverse", natoms: 18, geom_hash: "e" },
+                        { geometry_ref: "geom_rev_2", input_order: null, output_order: 6, role: "irc_reverse", natoms: 18, geom_hash: "f" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        expect(screen.getByText("Saddle-point geometry")).toBeVisible()
+        expect(screen.getByRole("link", { name: "geom_final" })).toHaveAttribute("href", "/geometries/geom_final")
+
+        expect(screen.getByText(/IRC forward.*3 points.*18 atoms/)).toBeVisible()
+        expect(screen.getByText(/IRC reverse.*2 points.*18 atoms/)).toBeVisible()
+
+        expect(screen.getByRole("link", { name: "geom_fwd_1" })).not.toBeVisible()
+        expect(screen.getByRole("link", { name: "geom_rev_1" })).not.toBeVisible()
+
+        for (const summary of screen.getAllByText(/IRC (forward|reverse)/)) {
+            await userEvent.setup().click(summary)
+        }
+        expect(screen.getByRole("link", { name: "geom_fwd_1" })).toBeVisible()
+        expect(screen.getByRole("link", { name: "geom_rev_1" })).toBeVisible()
+    })
+
+    it("teaches geometryRoleSummaryLabel the path_search_point role", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_final", input_order: null, output_order: 1, role: "final", natoms: 18, geom_hash: "a" },
+                        { geometry_ref: "geom_ps_1", input_order: null, output_order: 2, role: "path_search_point", natoms: 18, geom_hash: "b" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText(/Path search.*1 point/)).toBeVisible()
+    })
+
+    it("shows a geometry cited by several calculations once, and counts it once", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_shared", input_order: null, output_order: 1, role: "final", natoms: 6, geom_hash: "a" },
+                        { geometry_ref: "geom_shared", input_order: null, output_order: 2, role: "final", natoms: 6, geom_hash: "a" },
+                        { geometry_ref: "geom_shared", input_order: null, output_order: 3, role: "final", natoms: 6, geom_hash: "a" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getAllByRole("link", { name: "geom_shared" })).toHaveLength(1)
+    })
+
+    it("says when no saddle-point geometry was deposited, and still lists the other roles", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_fwd_1", input_order: null, output_order: 1, role: "irc_forward", natoms: 18, geom_hash: "b" },
+                        { geometry_ref: "geom_fwd_2", input_order: null, output_order: 2, role: "irc_forward", natoms: 18, geom_hash: "c" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        expect(screen.getByText("No saddle-point (final) geometry was deposited for this entry.")).toBeVisible()
+        expect(screen.queryByText("Saddle-point geometry")).not.toBeInTheDocument()
+        expect(screen.getByText(/IRC forward.*2 points/)).toBeVisible()
+    })
+
+    it("siblings: renders 'Other saddle points deposited for this reaction' when the search endpoint serves siblings", async () => {
+        server.use(
+            http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+                HttpResponse.json({ record: mockRecord() })
+            )),
+            http.get("/api/v1/scientific/transition-states/search", ({ request }) => {
+                const url = new URL(request.url)
+                expect(url.searchParams.get("reaction_ref")).toBe("rxn_nu4c52up4c4hqtbtxufwbscq3a")
+                return HttpResponse.json({
+                    records: [
+                        {
+                            transition_state_entry: { transition_state_entry_ref: ENTRY_REF, review: { status: "not_reviewed" } },
+                            transition_state: { label: "TS0" },
+                            calculations: [],
+                        },
+                        {
+                            transition_state_entry: { transition_state_entry_ref: "tse_sibling", review: { status: "approved" } },
+                            transition_state: { label: "TS1" },
+                            calculations: [{
+                                calculation_ref: "calc_sib_sp",
+                                type: "sp",
+                                quality: "raw",
+                                review: { status: "not_reviewed" },
+                                level_of_theory: { method: "MRCI+Davidson", basis: "aug-cc-pV(T+d)Z", display: "MRCI+Davidson/aug-cc-pV(T+d)Z" },
+                                software_release: { software: "Molpro", version: null },
+                                workflow_tool_release: null,
+                            }],
+                        },
+                    ],
+                })
+            }),
+        )
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        // Excludes itself -- only the other entry shows.
+        const siblingsSection = await screen.findByText("Other saddle points deposited for this reaction")
+        const section = siblingsSection.closest("section") as HTMLElement
+        expect(within(section).queryByText("TS0")).not.toBeInTheDocument()
+        const link = within(section).getByRole("link", { name: "TS1" })
+        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_sibling")
+        expect(within(section).getByText(/MRCI\+Davidson/)).toBeVisible()
+        expect(within(section).getByText(/Molpro \(version not recorded\)/)).toBeVisible()
+    })
+
+    it("siblings: omits the section entirely when the reaction has none", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        // defaultSiblingsHandler already serves `{ records: [] }`.
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.queryByText("Other saddle points deposited for this reaction")).not.toBeInTheDocument()
+    })
+
+    it("review history: collapses a lone default 'not reviewed / not recorded / not recorded' row to one sentence", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        expect(screen.getByText("Not yet reviewed — no review events recorded.")).toBeVisible()
+        expect(screen.queryByRole("table", { name: `Review history for ${ENTRY_REF}` })).not.toBeInTheDocument()
+    })
+
+    it("review history: keeps the table when real review events exist", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    review_history: [
+                        { status: "approved", reviewed_at: "2026-08-10T00:00:00", note: "Looks correct." },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+        const table = screen.getByRole("table", { name: `Review history for ${ENTRY_REF}` })
+        expect(within(table).getByText("Looks correct.")).toBeVisible()
+        expect(screen.queryByText("Not yet reviewed — no review events recorded.")).not.toBeInTheDocument()
     })
 })

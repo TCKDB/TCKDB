@@ -420,6 +420,7 @@ it("retains the admin machine-review route outside public navigation", async () 
 })
 
 it("routes a transition-state-entry ref to its detail page (finding #1)", async () => {
+    server.use(http.get("/api/v1/scientific/transition-states/search", () => HttpResponse.json({ records: [] })))
     server.use(http.get("/api/v1/scientific/transition-state-entries/tse_abc", () => HttpResponse.json({
         record: {
             transition_state_entry: {
@@ -450,7 +451,7 @@ it("routes a transition-state-entry ref to its detail page (finding #1)", async 
     })))
     window.history.replaceState({}, "", "/transition-state-entries/tse_abc")
     render(<App />)
-    expect(await screen.findByRole("heading", { name: "TS0" })).toBeVisible()
+    expect(await screen.findByRole("heading", { name: "A <=> B" })).toBeVisible()
 })
 
 describe("unmatched routes (finding #12)", () => {
