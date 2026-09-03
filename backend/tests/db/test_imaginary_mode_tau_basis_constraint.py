@@ -3,10 +3,11 @@
 ``calc_freq_result.imaginary_mode_tau_basis`` says which row of ADR 0012's
 protocol table set the tolerance a record's imaginary modes were judged
 at. It is ``TEXT``, and until ``e2a7c9d4b615`` nothing but convention kept
-it to the five rows that exist: ``app/services/calculation_resolution.py``
-writes ``TauBasis(...).value`` and always has, but a second write path, a
-bulk loader, or a restore from a hand-edited dump could put anything
-there.
+it to the rows that exist (five originally; ``ae3d607cc9f8`` widened the
+vocabulary to eight with the 2026-09-04 ``assumed_*`` amendment):
+``app/services/calculation_resolution.py`` writes ``TauBasis(...).value``
+and always has, but a second write path, a bulk loader, or a restore from
+a hand-edited dump could put anything there.
 
 Why that matters more than a typo usually does. The column is *read* as
 ``str`` on purpose -- an unrecognised basis is displayed rather than made
@@ -125,7 +126,7 @@ def _insert_freq_result(db_session, calculation_id: int, basis: str | None) -> N
 def test_every_basis_the_upload_path_can_resolve_is_accepted(
     db_session, calculation_id, basis
 ):
-    """The five rows of the protocol table, and "never judged" as NULL.
+    """Every row of the protocol table (recorded and assumed), plus NULL.
 
     Parametrised over ``TauBasis`` itself rather than a hand-written list,
     so a member added to the enum shows up here as a failure to accept
@@ -348,6 +349,142 @@ def test_the_migration_refuses_rather_than_guesses(db_engine, monkeypatch):
         _purge_planted_rows(engine, planted)
         command.upgrade(config, "head")
         engine.dispose()
+
+
+# ---------------------------------------------------------------------------
+# ae3d607cc9f8 -- widening the vocabulary for the 2026-09-04 amendment
+# ---------------------------------------------------------------------------
+
+_WIDENING_MIGRATION = revision_under_test("ae3d607cc9f8")
+
+_ASSUMED_BASES = (
+    "assumed_analytic_default",
+    "assumed_finite_difference_gradient",
+    "assumed_finite_difference_energy",
+)
+
+
+def test_widening_migration_downgrade_refuses_rows_holding_an_assumed_basis(
+    db_engine, monkeypatch
+):
+    """``ae3d607cc9f8`` downgrade must not silently narrow under a row.
+
+    Mirrors ``test_the_migration_refuses_rather_than_guesses`` above, one
+    revision up the chain: a row recorded under an ``assumed_*`` basis is
+    a real judgement, and downgrading past the revision that widened the
+    constraint to allow it must refuse rather than either violate the
+    narrower CHECK or guess what the row should say instead.
+    """
+    db_name = db_engine.url.database
+    url = db_engine.url.render_as_string(hide_password=False)
+    db_engine.dispose()
+    for key, value in (
+        ("DB_NAME", db_name),
+        ("DB_USER", "tckdb"),
+        ("DB_PASSWORD", "tckdb"),
+        ("DB_HOST", "127.0.0.1"),
+        ("DB_PORT", "5432"),
+    ):
+        monkeypatch.setenv(key, value)
+    config = Config(str(_BACKEND_ROOT / "alembic.ini"))
+    engine = create_engine(url)
+    planted = "DELETE FROM calc_freq_result WHERE calculation_id = -903"
+
+    try:
+        # Standing at head, plant a row under an assumed basis -- exactly
+        # what the backfill script and the upload path both legitimately
+        # write once this revision is applied.
+        with engine.begin() as connection:
+            connection.execute(text("SET LOCAL session_replication_role = replica"))
+            connection.execute(
+                text(
+                    "INSERT INTO calc_freq_result (calculation_id, n_imag,"
+                    " imaginary_mode_tau_basis) VALUES"
+                    " (-903, 1, 'assumed_analytic_default')"
+                )
+            )
+
+        with pytest.raises(RuntimeError) as excinfo:
+            command.downgrade(config, _WIDENING_MIGRATION.parent)
+        message = str(excinfo.value)
+        assert "assumed_analytic_default" in message, (
+            f"the migration must name the assumed basis it refused to "
+            f"narrow past; it said: {message}"
+        )
+
+        # Nothing changed: still at the wide constraint, row untouched.
+        with engine.connect() as connection:
+            assert _constraint_count(connection) == 1
+            still_there = connection.scalar(
+                text(
+                    "SELECT imaginary_mode_tau_basis FROM calc_freq_result"
+                    " WHERE calculation_id = -903"
+                )
+            )
+            assert still_there == "assumed_analytic_default"
+
+        # Repaired -- the row removed, as an operator would after deciding
+        # it should not have been assumed -- the downgrade goes through.
+        _purge_planted_rows(engine, planted)
+        command.downgrade(config, _WIDENING_MIGRATION.parent)
+        with engine.connect() as connection:
+            definition = connection.scalar(
+                text(
+                    "SELECT pg_get_constraintdef(oid) FROM pg_constraint"
+                    " WHERE conname = :name"
+                    " AND conrelid = 'calc_freq_result'::regclass"
+                ),
+                {"name": _CONSTRAINT},
+            )
+            assert definition is not None
+            quoted = _values_in(definition)
+            assert quoted == set(_ORIGINAL_TAU_BASIS_VALUES_FOR_TEST), (
+                f"downgrade left {sorted(quoted)}, expected the original "
+                f"five: {sorted(_ORIGINAL_TAU_BASIS_VALUES_FOR_TEST)}"
+            )
+    finally:
+        _purge_planted_rows(engine, planted)
+        command.upgrade(config, "head")
+        engine.dispose()
+
+
+#: The five values ``e2a7c9d4b615`` installed, restated here (not
+#: imported from the migration module -- Alembic revision modules are not
+#: meant to be imported as libraries) purely to assert what
+#: ``ae3d607cc9f8``'s downgrade restores.
+_ORIGINAL_TAU_BASIS_VALUES_FOR_TEST = (
+    "analytic_tight",
+    "analytic_default",
+    "finite_difference_gradient",
+    "finite_difference_energy",
+    "protocol_not_recorded",
+)
+
+
+def test_widening_migration_upgrade_accepts_all_three_assumed_bases(db_session):
+    """After ``ae3d607cc9f8``, every ``assumed_*`` token is a legal write.
+
+    The parametrised acceptance test above already proves this against
+    every live ``TauBasis`` member; this test pins the same fact against
+    the literal tokens the amendment introduced, so a future rename of
+    ``TauBasis`` members would show up here as well as there.
+    """
+    lot = make_lot(db_session, method="taubasiswiden", basis="def2tzvp")
+    entry = make_species_entry(
+        db_session, make_species(db_session, inchi_key=next_inchi_key("TAUW"))
+    )
+    calc = make_calculation(
+        db_session,
+        type=CalculationType.freq,
+        lot_id=lot.id,
+        species_entry_id=entry.id,
+    )
+    for basis in _ASSUMED_BASES:
+        savepoint = db_session.begin_nested()
+        try:
+            _insert_freq_result(db_session, calc.id, basis)
+        finally:
+            savepoint.rollback()
 
 
 def _purge_planted_rows(engine, statement: str) -> None:

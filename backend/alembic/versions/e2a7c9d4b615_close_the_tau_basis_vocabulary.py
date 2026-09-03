@@ -1,5 +1,16 @@
 """close the tau-basis vocabulary at the write side
 
+.. note::
+   **Superseded 2026-09-04 by** ``ae3d607cc9f8`` (widen the tau-basis
+   vocabulary for an assumed default). This revision's five-value
+   vocabulary is no longer the whole story: ADR 0012's amendment added
+   three ``assumed_*`` tokens, and ``ae3d607cc9f8`` widened
+   ``ck_calc_freq_result_imaginary_mode_tau_basis_known`` to accept them.
+   Everything below describes what *this* revision did and is still
+   true of it; it is not a description of the constraint as it stands
+   at head. Comment-only per the 2026-08-13 migration-rules decision --
+   nothing executable here changed.
+
 ``c2f7a4e8d1b6`` added ``calc_freq_result.imaginary_mode_tau_basis`` as
 plain ``TEXT``. It carries which row of ADR 0012's protocol table set the
 tolerance a record's imaginary modes were judged at, and the only thing
