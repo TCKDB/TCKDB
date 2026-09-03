@@ -268,7 +268,7 @@ Which rubric applies is decided by the kind of record: `computed_calculation` (v
 | `imaginary_frequency_value_present` | `computed_transition_state` | optional | 1 | Representative freq result should record the imaginary-mode value (cm-1). |
 | `input_geometry_present` | `computed_calculation` | required | 1 | At least one input geometry must be linked. |
 | `irc_evidence_present` | `computed_kinetics` | optional | 1 | IRC evidence should be linked when available. |
-| `irc_evidence_present` | `computed_transition_state` | optional | 1 | IRC evidence should be linked when available (additive only). |
+| `irc_evidence_present` | `computed_transition_state` | optional | 1 | IRC calculation present (additive only) -- this checks that an IRC calculation exists in the source set, not that structured pass/fail validation evidence was deposited. |
 | `is_linear_present` | `computed_statmech` | optional | 1 | Linearity should be explicitly recorded. |
 | `kinetics_model_present` | `computed_kinetics` | required | 1 | Kinetics.model_kind must be set. |
 | `level_of_theory_present` | `computed_calculation` | required | 1 | Calculation must resolve to a level_of_theory row. |
