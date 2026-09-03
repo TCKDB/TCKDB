@@ -11,8 +11,10 @@ import { BrowseFilterForm } from "./BrowseFilterForm"
 /**
  * `BrowseFilterForm`'s six vocabulary-backed PROVENANCE fields (Method,
  * Basis, Software, Software version, Workflow tool, Workflow tool version
- * -- `ProvenanceFields`, mounted for EVERY `kind`) and the transition-state-
- * only `EvidenceFields` (Status + seven `has_*` flags). Fixtures mirror the
+ * -- `ProvenanceFields`, mounted for EVERY `kind`), the transition-state-
+ * only `EvidenceFields` (Status + a collapsed "Show only entries with..."
+ * checkbox row for the seven `has_*` flags), and the transition-state-only
+ * `TransitionStateFindabilityFields` (SMILES + Family). Fixtures mirror the
  * MEASURED live archive vocabulary (see the design brief), not invented
  * values: Gaussian genuinely has two version strings that look like
  * duplicates and are not (`"16"` vs `"Gaussian 16, Revision C.02"`, a
@@ -47,6 +49,16 @@ const GAUSSIAN_VERSIONS = [
     { value: "09", count: 4 },
     { value: "16", count: 11 },
     { value: "Gaussian 16, Revision C.02", count: 2 },
+]
+// Mirrors the live archive's shape (measured): `/meta/reaction-families`
+// lists the FULL seeded vocabulary, most of it unused (count: 0), each
+// with a `display_name` distinct from a naive `token(value)` rendering
+// (`"R_Addition_MultipleBond"` -> `"Radical Addition Multiple Bond"`, not
+// `"R Addition MultipleBond"`).
+const REACTION_FAMILIES = [
+    { value: "R_Addition_MultipleBond", display_name: "Radical Addition Multiple Bond", count: 5 },
+    { value: "H_Abstraction", display_name: "Hydrogen Abstraction", count: 3 },
+    { value: "Never_Used_Family", display_name: "Never Used Family", count: 0 },
 ]
 
 type MetaOptions = {
@@ -88,6 +100,12 @@ function metaHandlers(options: MetaOptions = {}) {
             if (!workflowTool) return HttpResponse.json({ code: "missing_version_parent", detail: "workflow_tool is required" }, { status: 422 })
             return HttpResponse.json({ results: versionsByParent[workflowTool] ?? [] })
         }),
+        // `TransitionStateFindabilityFields`' Family select fetches this on
+        // every mount for kind="transition_state" -- present in every
+        // `metaHandlers()` call (not just TS-specific tests) so a species/
+        // vdw-kind test that happens to switch kinds mid-test never hits
+        // `onUnhandledRequest: "error"`.
+        http.get("/api/v1/scientific/meta/reaction-families", () => HttpResponse.json({ results: REACTION_FAMILIES })),
     ]
 }
 
@@ -376,10 +394,21 @@ describe("a failed vocabulary fetch degrades ONE select without breaking the oth
 })
 
 const PROVENANCE_LABELS = ["Method", "Basis", "Software", "Software version", "Workflow tool", "Workflow tool version"]
+// The seven `has_*` selects collapsed into one checkbox row (item 4 of the
+// findability change): each checkbox's own accessible name is now just the
+// evidence kind ("optimization", not "Has optimization") -- the "Show only
+// entries with..." legend supplies the "Has"/"show only" framing instead
+// of repeating it seven times. `Status` is unaffected (still its own
+// select).
 const EVIDENCE_ONLY_LABELS = [
-    "Status", "Has optimization", "Has frequency", "Has single point", "Has IRC",
-    "Has path search", "Has geometry validation", "Has SCF stability",
+    "Status", "optimization", "frequency", "single point", "IRC",
+    "path search", "geometry validation", "SCF stability",
 ]
+// The TS-only findability fields added alongside the evidence checkboxes
+// (item 4): `/transition-states/browse` now narrows by the reaction's
+// participant structure and its family, even though a transition state
+// still has no formula/elements axis of its own.
+const FINDABILITY_ONLY_LABELS = ["SMILES", "Family"]
 
 // The six provenance selects used to live inside a section mounted ONLY
 // for `kind="transition_state"` -- `/species/browse` has genuinely
@@ -409,25 +438,74 @@ describe("the six provenance selects render on EVERY browse kind, not just trans
 // that renders both sections unconditionally would still pass any test
 // that only checks transition_state.
 describe("Status and the has_* evidence fields render ONLY on transition state", () => {
-    it('kind="species": none of the evidence-only fields are present', async () => {
+    it('kind="species": none of the evidence-only or findability-only fields are present', async () => {
         server.use(...metaHandlers())
         renderForm("species")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
         for (const label of EVIDENCE_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+        for (const label of FINDABILITY_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
     })
 
-    it('kind="vdw": none of the evidence-only fields are present', async () => {
+    it('kind="vdw": none of the evidence-only or findability-only fields are present', async () => {
         server.use(...metaHandlers())
         renderForm("vdw")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
         for (const label of EVIDENCE_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
+        for (const label of FINDABILITY_ONLY_LABELS) expect(screen.queryByLabelText(label)).not.toBeInTheDocument()
     })
 
-    it('kind="transition_state": every evidence-only field IS present', async () => {
+    it('kind="transition_state": every evidence-only AND findability-only field IS present', async () => {
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
         for (const label of EVIDENCE_ONLY_LABELS) expect(screen.getByLabelText(label)).toBeInTheDocument()
+        for (const label of FINDABILITY_ONLY_LABELS) expect(screen.getByLabelText(label)).toBeInTheDocument()
+    })
+})
+
+// Item 4: the seven `has_*` selects (19 controls total on the old row)
+// collapsed into one "Show only entries with..." checkbox group. Checked
+// as behavior, not just presence -- ticking a box must reach `onChange`
+// with the SAME `has_*` field the old select used, valued "true" (never
+// "false": the collapsed control only offers the positive half of the
+// old tri-state).
+describe("the evidence checkboxes collapse the seven has_* selects into one row", () => {
+    it("ticking 'optimization' patches hasOpt to \"true\"; unticking patches it back to \"\"", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="transition_state" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-has-opt={filters.hasOpt} data-testid="debug-has-opt" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+
+        const checkbox = screen.getByLabelText("optimization")
+        expect(checkbox).not.toBeChecked()
+        expect(screen.getByTestId("debug-has-opt")).toHaveAttribute("data-has-opt", "")
+
+        await user.click(checkbox)
+        expect(checkbox).toBeChecked()
+        expect(screen.getByTestId("debug-has-opt")).toHaveAttribute("data-has-opt", "true")
+
+        await user.click(checkbox)
+        expect(checkbox).not.toBeChecked()
+        expect(screen.getByTestId("debug-has-opt")).toHaveAttribute("data-has-opt", "")
+    })
+
+    it("the seven checkboxes sit under one 'Show only entries with…' group, not seven separate selects", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        expect(screen.getByText("Show only entries with…")).toBeInTheDocument()
+        // Every "has_*" flag is a checkbox now, not a <select> offering Yes/No/Any.
+        for (const label of ["optimization", "frequency", "single point", "IRC", "path search", "geometry validation", "SCF stability"]) {
+            expect(screen.getByLabelText(label).tagName).toBe("INPUT")
+            expect(screen.getByLabelText(label)).toHaveAttribute("type", "checkbox")
+        }
     })
 })
 
@@ -535,17 +613,80 @@ describe("structure search fields render on species/vdw, not on transition_state
         expect(await screen.findByLabelText("Structure (SMILES)")).toBeInTheDocument()
     })
 
-    it('kind="transition_state": absent -- /transition-states/browse accepts no structure filter', async () => {
+    it('kind="transition_state": the SPECIES structure engine (mode/SMARTS/similarity) is absent, but a TS-specific SMILES + Family pair now renders instead', async () => {
+        // Corrects an earlier version of this test, which additionally
+        // claimed `/transition-states/browse` "accepts no structure
+        // filter" -- true when that test was written, no longer true
+        // after item 4 added `participant_smiles`/`family`. What is STILL
+        // true, and what this test now actually asserts, is narrower: the
+        // species/vdW structure-SEARCH ENGINE (substructure/similarity/
+        // exact mode, SMARTS) does not apply to a transition state, which
+        // has no molecular graph of its own -- only the exact-match
+        // participant filter does, through the reaction it connects.
         server.use(...metaHandlers())
         renderForm("transition_state")
         await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
         expect(screen.queryByLabelText("Structure (SMILES)")).not.toBeInTheDocument()
         expect(screen.queryByLabelText("Structure search mode")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Treat structure as SMARTS")).not.toBeInTheDocument()
         // The rest of CompositionFields (Formula, Elements, ...) is gated on
         // the SAME `kind !== "transition_state"` conditional as the
         // structure controls -- a transition state has no stored species
-        // SMILES to match against, so neither section should render.
+        // formula to match against, so neither section should render.
         expect(screen.queryByLabelText("Formula")).not.toBeInTheDocument()
+        expect(screen.queryByLabelText("Elements")).not.toBeInTheDocument()
+        // The TS-specific replacement IS present.
+        expect(screen.getByLabelText("SMILES")).toBeInTheDocument()
+        expect(screen.getByLabelText("Family")).toBeInTheDocument()
+    })
+})
+
+describe("Family select: only used families, readable labels", () => {
+    it("lists only families with count > 0, using display_name rather than a naive underscore-to-space rendering", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+
+        const family = screen.getByLabelText("Family") as HTMLSelectElement
+        await waitFor(() => expect(family.querySelectorAll("option")).toHaveLength(3)) // Any + 2 used families
+
+        const optionTexts = [...family.querySelectorAll("option")].map((o) => o.textContent)
+        expect(optionTexts).toEqual(["Any", "Radical Addition Multiple Bond", "Hydrogen Abstraction"])
+        // The zero-count family never appears, and the mangled
+        // underscore-substitution rendering ("R Addition MultipleBond")
+        // is gone.
+        expect(screen.queryByText("Never Used Family")).not.toBeInTheDocument()
+        expect(screen.queryByText("R Addition MultipleBond")).not.toBeInTheDocument()
+    })
+
+    it("selecting a family by its display_name sends the underlying value on the wire", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="transition_state" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-family={filters.family} data-testid="debug-family" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+
+        await user.selectOptions(screen.getByLabelText("Family"), "Radical Addition Multiple Bond")
+        expect(screen.getByTestId("debug-family")).toHaveAttribute("data-family", "R_Addition_MultipleBond")
+    })
+})
+
+describe("SMILES field: short label, hint text instead of a wrapping long label", () => {
+    it('is labeled "SMILES" (not "SMILES (reactant or product)"), with the scope explained in a hint', async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        expect(screen.getByLabelText("SMILES")).toBeInTheDocument()
+        expect(
+            screen.getByText("Matches either the reactant or the product side of the reaction."),
+        ).toBeVisible()
     })
 })
 

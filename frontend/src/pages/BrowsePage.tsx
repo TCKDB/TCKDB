@@ -44,7 +44,19 @@ export default function BrowsePage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the resolved kind or the raw param changes, not on every searchParams object identity change
     }, [kind, requestedKind])
 
-    const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+    // Seeded ONCE from the URL on mount (a lazy initializer, not an effect
+    // that keeps re-syncing) -- the one deep-link case this page needs to
+    // serve today is `SpeciesEntryPage`'s "Transition states for reactions
+    // of this species" link, which arrives as a fresh navigation (a
+    // different route, so `BrowsePage` mounts fresh and this runs with the
+    // real query params) carrying `?kind=transition_state&participant_
+    // smiles=...`. Not a general filters<->URL sync for every field --
+    // only `participant_smiles` has an external linker today, so only it
+    // is read back out.
+    const [filters, setFilters] = useState<BrowseFilters>(() => ({
+        ...EMPTY_BROWSE_FILTERS,
+        participantSmiles: kind === "transition_state" ? (searchParams.get("participant_smiles") ?? "") : "",
+    }))
     const [offset, setOffset] = useState(0)
 
     function selectKind(nextKind: BrowseKind) {

@@ -93,6 +93,23 @@ def scientific_transition_states_search_get(
     software_version: str | None = Query(None),
     workflow_tool: str | None = Query(None),
     workflow_tool_version: str | None = Query(None),
+    family: str | None = Query(
+        None,
+        description=(
+            "Exact match against the seeded reaction_family vocabulary "
+            "(see /meta/reaction-families for the discoverable set of "
+            "values). Unknown values return an empty result, not a 422."
+        ),
+    ),
+    participant_smiles: str | None = Query(
+        None,
+        description=(
+            "Exact-match SMILES filter over the parent reaction's "
+            "participants (reactant or product side, either matches). "
+            "Parsed via RDKit and compared by InChIKey, same exact-match "
+            "semantics as /species/browse's mode=exact structure filter."
+        ),
+    ),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -131,6 +148,8 @@ def scientific_transition_states_search_get(
         software_version=software_version,
         workflow_tool=workflow_tool,
         workflow_tool_version=workflow_tool_version,
+        family=family,
+        participant_smiles=participant_smiles,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,

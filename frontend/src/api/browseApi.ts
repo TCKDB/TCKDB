@@ -46,8 +46,20 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
 // Filters
 // ---------------------------------------------------------------------------
 
-/** Tri-state for a `has_*` evidence flag: unset ("any"), "true", or "false" -- matching the query parameter's own optional-boolean shape. */
-export type TriState = "" | "true" | "false"
+/**
+ * State for a `has_*` evidence flag: unset ("any") or "true". Was a
+ * three-way type (`"" | "true" | "false"`) matching the query parameter's
+ * own optional-boolean shape, back when each flag had its own tri-state
+ * select (Any / Yes / No). The seven selects collapsed into one "Show
+ * only entries with..." checkbox row (item 4 of the findability change),
+ * which offers only the positive half -- a checkbox has no third state to
+ * put "No" in, and nothing in `BrowseFilterForm.tsx` produces "false" for
+ * any of these fields any more. Narrowed to match: the backend query
+ * param still legitimately accepts `has_x=false` (unrelated to this UI,
+ * used by other callers), so this type describes what the FORM can
+ * produce, not what the wire protocol allows.
+ */
+export type EvidenceFlagState = "" | "true"
 
 /**
  * Every filter field across all three kinds, flattened into one object
@@ -95,13 +107,21 @@ export type BrowseFilters = {
     softwareVersion: string
     workflowTool: string
     workflowToolVersion: string
-    hasOpt: TriState
-    hasFreq: TriState
-    hasSp: TriState
-    hasIrc: TriState
-    hasPathSearch: TriState
-    hasGeometryValidation: TriState
-    hasScfStability: TriState
+    hasOpt: EvidenceFlagState
+    hasFreq: EvidenceFlagState
+    hasSp: EvidenceFlagState
+    hasIrc: EvidenceFlagState
+    hasPathSearch: EvidenceFlagState
+    hasGeometryValidation: EvidenceFlagState
+    hasScfStability: EvidenceFlagState
+    // Transition-state findability filters (item 4): `/transition-states/
+    // browse` has no formula/elements of its own -- a transition state is
+    // identified by the reaction it connects, not a molecular graph -- so
+    // these narrow through that reaction instead. `participantSmiles` is
+    // ONE field matching either side (reactant or product); `family` is an
+    // exact match against `/meta/reaction-families`' bounded vocabulary.
+    participantSmiles: string
+    family: string
 }
 
 export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
@@ -110,6 +130,7 @@ export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
     queryStructure: "", queryIsSmarts: false, structureMode: "substructure", similarityThreshold: "",
     status: "", method: "", basis: "", software: "", softwareVersion: "", workflowTool: "", workflowToolVersion: "",
     hasOpt: "", hasFreq: "", hasSp: "", hasIrc: "", hasPathSearch: "", hasGeometryValidation: "", hasScfStability: "",
+    participantSmiles: "", family: "",
 }
 
 const COMPOSITION_DEFAULTS = {
@@ -129,8 +150,12 @@ const COMPOSITION_DEFAULTS = {
  */
 const EVIDENCE_DEFAULTS = {
     status: "",
-    hasOpt: "" as TriState, hasFreq: "" as TriState, hasSp: "" as TriState, hasIrc: "" as TriState,
-    hasPathSearch: "" as TriState, hasGeometryValidation: "" as TriState, hasScfStability: "" as TriState,
+    hasOpt: "" as EvidenceFlagState, hasFreq: "" as EvidenceFlagState, hasSp: "" as EvidenceFlagState, hasIrc: "" as EvidenceFlagState,
+    hasPathSearch: "" as EvidenceFlagState, hasGeometryValidation: "" as EvidenceFlagState, hasScfStability: "" as EvidenceFlagState,
+    // TS-only findability filters (item 4) -- cleared the same way `status`
+    // and the seven `has_*` flags above are, on a switch AWAY from
+    // "transition_state".
+    participantSmiles: "", family: "",
 }
 
 /**
@@ -171,7 +196,7 @@ export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): bool
         || filters.softwareVersion !== "" || filters.workflowTool !== "" || filters.workflowToolVersion !== ""
     if (provenanceActive) return true
     if (kind === "transition_state") {
-        return filters.status !== "" || [
+        return filters.status !== "" || filters.participantSmiles !== "" || filters.family !== "" || [
             filters.hasOpt, filters.hasFreq, filters.hasSp, filters.hasIrc,
             filters.hasPathSearch, filters.hasGeometryValidation, filters.hasScfStability,
         ].some((value) => value !== "")
@@ -278,12 +303,17 @@ export function buildSpeciesBrowseQuery(
 export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = sharedQueryParams(filters, offset, limit)
     if (filters.status !== "") query.set("status", filters.status)
-    const evidenceFlags: [string, TriState][] = [
+    const evidenceFlags: [string, EvidenceFlagState][] = [
         ["has_opt", filters.hasOpt], ["has_freq", filters.hasFreq], ["has_sp", filters.hasSp],
         ["has_irc", filters.hasIrc], ["has_path_search", filters.hasPathSearch],
         ["has_geometry_validation", filters.hasGeometryValidation], ["has_scf_stability", filters.hasScfStability],
     ]
     for (const [param, value] of evidenceFlags) if (value !== "") query.set(param, value)
+    // Findability filters (item 4) -- both additive, both exact match. See
+    // `TransitionStatesBrowseRequest.participant_smiles`/`.family` on the
+    // backend for the matching semantics.
+    if (filters.participantSmiles !== "") query.set("participant_smiles", filters.participantSmiles)
+    if (filters.family !== "") query.set("family", filters.family)
     return query
 }
 
@@ -315,6 +345,18 @@ const reactionContextSchema = z.object({
     family: z.string().nullable().optional(),
 }).passthrough()
 
+// Mirrors `calculationSummarySchema`'s own inline `software_release` shape
+// (`scientificSchemas.ts`) rather than importing a shared export -- this
+// module owns its own response schemas end to end (see the module
+// docstring), and the shape is small enough that duplicating it here does
+// not risk drifting from the calculation surface's meaning of the same
+// three fields.
+const softwareReleaseSchema = z.object({
+    software: z.string(),
+    version: z.string().nullable().optional(),
+    software_release_ref: z.string().optional(),
+}).passthrough()
+
 const evidenceSummarySchema = z.object({
     calculation_count: z.number(),
     has_opt: z.boolean(),
@@ -325,6 +367,12 @@ const evidenceSummarySchema = z.object({
     has_geometry_validation: z.boolean(),
     has_scf_stability: z.boolean(),
     levels_of_theory: z.record(z.string(), z.array(levelOfTheorySchema)).optional(),
+    // Added alongside `levels_of_theory` -- same per-calculation-type shape,
+    // same absence contract (key absent: no calculation of that type; key
+    // present, empty list: a calculation exists but names no software
+    // release). Optional here because `evidenceSummarySchema` is shared by
+    // response shapes that predate this field.
+    software: z.record(z.string(), z.array(softwareReleaseSchema)).optional(),
 }).passthrough()
 
 const transitionStateEntryCoreSchema = z.object({
@@ -333,6 +381,7 @@ const transitionStateEntryCoreSchema = z.object({
     multiplicity: z.number(),
     status: z.string(),
     unmapped_smiles: z.string().nullable().optional(),
+    created_at: z.string().optional(),
     review: recordReviewSchema,
 }).passthrough()
 

@@ -18,7 +18,17 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * `loadWorkflowToolNames` must not render that constant as if it varied.
  */
 
-const vocabEntrySchema = z.object({ value: z.string(), count: z.number() }).passthrough()
+// `display_name` is optional because only `/meta/reaction-families` sends
+// it (`app/services/scientific_read/meta.py::list_reaction_families`) --
+// every other vocabulary endpoint's `value` IS its own readable label, so
+// there is nothing to translate. Typed here (not left to `.passthrough()`)
+// so `TransitionStateFindabilityFields`' Family select can read it without
+// an unsafe cast.
+const vocabEntrySchema = z.object({
+    value: z.string(),
+    count: z.number(),
+    display_name: z.string().optional(),
+}).passthrough()
 export type VocabEntry = z.infer<typeof vocabEntrySchema>
 
 const vocabResponseSchema = z.object({ results: z.array(vocabEntrySchema) }).passthrough()
@@ -78,4 +88,17 @@ export function loadSoftwareVersions(software: string, signal?: AbortSignal): Pr
 export function loadWorkflowToolVersions(workflowTool: string, signal?: AbortSignal): Promise<VocabEntry[]> {
     const query = new URLSearchParams({ workflow_tool: workflowTool })
     return loadVocab(`/api/v1/scientific/meta/workflow-tool-versions?${query}`, signal)
+}
+
+/**
+ * The bounded reaction-family vocabulary -- `/transition-states/browse`'s
+ * `family` filter matches one of these exactly (`ReactionFamily.name`).
+ * Reuses `loadVocab`/`vocabEntrySchema` like every other list here: the
+ * endpoint's rows also carry `display_name`, passed through untouched by
+ * `.passthrough()` but not surfaced as a separate type here, since no
+ * caller needs it yet -- `value` is both the filter token and (for this
+ * vocabulary) a reasonably readable label on its own.
+ */
+export function loadReactionFamilies(signal?: AbortSignal): Promise<VocabEntry[]> {
+    return loadVocab("/api/v1/scientific/meta/reaction-families", signal)
 }

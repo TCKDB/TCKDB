@@ -24,6 +24,7 @@ function record(overrides: Partial<TransitionStateBrowseRecord> = {}): Transitio
             multiplicity: 2,
             status: "optimized",
             unmapped_smiles: null,
+            created_at: "2026-08-05T14:04:16.914780",
             review: { status: "not_reviewed" },
         },
         transition_state: {
@@ -48,70 +49,255 @@ function record(overrides: Partial<TransitionStateBrowseRecord> = {}): Transitio
             has_path_search: false,
             has_geometry_validation: false,
             has_scf_stability: false,
+            levels_of_theory: {
+                opt: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                freq: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                sp: [{ method: "MRCI+Davidson", basis: "aug-cc-pV(T+d)Z", display: "MRCI+Davidson/aug-cc-pV(T+d)Z" }],
+            },
+            software: {
+                opt: [{ software: "orca", version: "5.0.4" }],
+                freq: [{ software: "orca", version: "5.0.4" }],
+                sp: [{ software: "molpro", version: "2022.1" }],
+            },
         },
         ...overrides,
     } as TransitionStateBrowseRecord
 }
 
-// The owner's report, reproduced: "TS0 · optimized · review not reviewed"
-// rendered as one run of plain text where the species row already uses
-// pills for the equivalent facts. Fixed by reusing the species row's own
-// pill classes -- asserted here as a POSITIVE check on the pill markup
-// itself, not just on the text content (a fixture where the text alone
-// matches but the markup regressed back to a plain `<p>` would still pass
-// a text-only check).
-describe("TransitionStateBrowseRow: pills, not plain text", () => {
-    it("renders label+status as one value pill, and review status as its own separate pill", () => {
+// Item 3: the pill used to fuse the label onto the status ("TS0 ·
+// optimized"). The label now lives on the meta line as plain text; the
+// pill carries the status alone.
+describe("TransitionStateBrowseRow: pill is status only, label moved to the meta line", () => {
+    it("renders the status alone in the classification pill, and the label in the meta line instead", () => {
         renderRow(record())
         const row = document.querySelector(".ts-browse-row") as HTMLElement
         expect(row).toBeTruthy()
 
-        const kindPill = within(row).getByText("TS0 · optimized").closest(".value-pill")
+        const kindPill = within(row).getByText("optimized").closest(".value-pill")
         expect(kindPill).toBeTruthy()
         expect(kindPill).toHaveClass("browse-entry-kind-pill")
+        // The old fused text is gone from the pill.
+        expect(within(row).queryByText("TS0 · optimized")).not.toBeInTheDocument()
 
         const reviewPill = within(row).getByText("not reviewed").closest(".value-pill")
         expect(reviewPill).toBeTruthy()
         expect(reviewPill).toHaveClass("browse-entry-review")
         expect(reviewPill).toHaveClass("value-pill--muted")
-
-        // Two distinct pills, never one shared box -- same shape the
-        // species row's own review-status fix already established.
         expect(kindPill).not.toBe(reviewPill)
 
-        // The awkward literal word "review" glued onto the status is gone.
-        expect(within(row).queryByText(/review not reviewed/)).not.toBeInTheDocument()
+        // The label is visible as plain text in the meta line.
+        const meta = row.querySelector(".browse-row-meta") as HTMLElement
+        expect(meta).toBeTruthy()
+        expect(within(meta).getByText(/TS0/)).toBeInTheDocument()
     })
 
-    it("falls back to 'Unlabeled transition state' inside the pill when no label was deposited", () => {
+    it("falls back to 'Unlabeled transition state' in the meta line when no label was deposited", () => {
         renderRow(record({ transition_state: { transition_state_ref: "ts_one", label: null, note: null, review: { status: "not_reviewed" } } }))
         const row = document.querySelector(".ts-browse-row") as HTMLElement
-        expect(within(row).getByText("Unlabeled transition state · optimized")).toBeVisible()
+        const meta = row.querySelector(".browse-row-meta") as HTMLElement
+        expect(within(meta).getByText(/Unlabeled transition state/)).toBeVisible()
+        // Still just "optimized" in the pill, not fused with the fallback label.
+        expect(within(row).getByText("optimized")).toBeVisible()
     })
 })
 
-// Only the equation text used to be clickable; every other element in the
-// row (pills, evidence, ref) sat outside any link. Reproduced here by
-// checking that content OUTSIDE the old headline -- the pill and the ref
-// code -- is now inside the SAME link as the equation.
-describe("TransitionStateBrowseRow: the whole row is the click target", () => {
-    it("wraps the entire row's content in one link to the transition-state entry, not just the equation", () => {
+// Item 3: "family not recorded" must read as an absence, not a real family
+// name -- the muted/italic `.absent` register the rest of the archive
+// already uses for a missing value (`QuantityValue.tsx`), not plain text
+// indistinguishable from "R_Addition_MultipleBond".
+describe("TransitionStateBrowseRow: absent family uses the muted/absent register", () => {
+    it("renders a real family as plain text, not in the absent register", () => {
         renderRow(record())
-        // The link has NO aria-label, so its accessible name is its full text
-        // content. Pin the pieces an aria-label once silenced: charge and the
-        // ref (a re-review found family, charge, spin and the evidence line
-        // unannounced). Restoring any aria-label that omits these fails here.
-        const link = screen.getByRole("link", { name: /tse_one/ })
-        expect(link).toHaveAccessibleName(expect.stringContaining("charge 0"))
-        expect(link).toHaveAccessibleName(expect.stringContaining("tse_one"))
-        expect(link).not.toHaveAttribute("aria-label")
-        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const meta = row.querySelector(".browse-row-meta") as HTMLElement
+        expect(meta.textContent).toContain("R Addition MultipleBond")
+        expect(meta.querySelector(".absent")).toBeNull()
+    })
 
-        // Content far from the headline -- the review pill and the stable
-        // ref code -- are inside the SAME link element, not sitting
-        // outside it as dead space.
-        expect(within(link).getByText("not reviewed")).toBeVisible()
-        expect(within(link).getByText("tse_one")).toBeVisible()
+    it("renders 'family not recorded' in an absent-styled element, not indistinguishable plain text", () => {
+        renderRow(record({ reaction: { reaction_ref: "rxn_one", reaction_entry_ref: "rxe_one", equation: "A <=> B", reversible: true, family: null } }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const absent = within(row).getByText("family not recorded")
+        expect(absent.className).toMatch(/absent/)
+    })
+})
+
+// Item 1: level of theory + software + deposit date must be visible on the
+// row, not hidden behind a second request -- the wire already carries
+// `evidence_summary.levels_of_theory` (confirmed against the live API),
+// this component just has to read it, and the backend now also serves
+// `evidence_summary.software`.
+describe("TransitionStateBrowseRow: provenance line (level of theory, software, deposit date)", () => {
+    it("shows the opt and sp levels of theory together", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/opt wb97xd\/def2tzvp/)).toBeVisible()
+        expect(within(row).getByText(/sp MRCI\+Davidson\/aug-cc-pV\(T\+d\)Z/)).toBeVisible()
+    })
+
+    it("states software distinctly per stage when it differs (opt on orca, sp on molpro)", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/orca 5\.0\.4/)).toBeVisible()
+        expect(within(row).getByText(/molpro 2022\.1/)).toBeVisible()
+    })
+
+    it("states software once when every selected stage shares it", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 2,
+                has_opt: true, has_freq: false, has_sp: true, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {
+                    opt: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                    sp: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                },
+                software: {
+                    opt: [{ software: "gaussian", version: "16" }],
+                    sp: [{ software: "gaussian", version: "16" }],
+                },
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const provenance = row.querySelector(".browse-row-provenance") as HTMLElement
+        expect(provenance.textContent).toContain("gaussian 16")
+        // Only stated once -- not "opt gaussian 16 · sp gaussian 16".
+        expect(provenance.textContent?.match(/gaussian 16/g)?.length).toBe(1)
+    })
+
+    it("states 'software not recorded' when a calculation exists but names no software release", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 1,
+                has_opt: true, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {
+                    opt: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                },
+                software: { opt: [] },
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/software not recorded/)).toBeVisible()
+    })
+
+    it("states 'level of theory not recorded' / 'software not recorded' when there is no evidence at all, on a CURRENT API response (software key present, empty)", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 0,
+                has_opt: false, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                software: {},
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/level of theory not recorded/)).toBeVisible()
+        expect(within(row).getByText(/software not recorded/)).toBeVisible()
+    })
+
+    it("joins every distinct level of theory for a stage, not just the first, when a stage genuinely carries more than one", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 2,
+                has_opt: false, has_freq: false, has_sp: true, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {
+                    sp: [
+                        { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" },
+                        { method: "CCSD(T)-F12", basis: "cc-pVTZ-F12", display: "CCSD(T)-F12/cc-pVTZ-F12" },
+                    ],
+                },
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const provenance = row.querySelector(".browse-row-provenance") as HTMLElement
+        expect(provenance.textContent).toContain("b3lyp/def2tzvp")
+        expect(provenance.textContent).toContain("CCSD(T)-F12/cc-pVTZ-F12")
+    })
+
+    it("renders NOTHING for software when evidence_summary.software is undefined (an API version that never served the field), never 'software not recorded'", () => {
+        // Same evidence_summary as the 'no evidence at all' fixture above,
+        // but WITHOUT a `software` key at all -- this is what an older API
+        // response (or the TS-entry-detail builder, which does not
+        // populate this field) looks like on the wire. "software not
+        // recorded" is a claim the CURRENT API makes about the DATA; an
+        // absent field is a claim about the WIRE VERSION and must not be
+        // rendered as if the archive had asserted anything about software.
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 0,
+                has_opt: false, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/level of theory not recorded/)).toBeVisible()
+        expect(within(row).queryByText(/software/)).not.toBeInTheDocument()
+    })
+
+    it("renders NOTHING for software when it is undefined even though levels_of_theory IS present", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 1,
+                has_opt: true, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {
+                    opt: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                },
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/opt wb97xd\/def2tzvp/)).toBeVisible()
+        expect(within(row).queryByText(/software/)).not.toBeInTheDocument()
+    })
+
+    it("shows the deposit date from transition_state_entry.created_at", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/deposited 2026-08-05/)).toBeVisible()
+    })
+})
+
+// Item 2: the link wraps ONLY the equation now -- not the ref, not the
+// pills, not the evidence line. Reproduced here by checking those pieces
+// sit OUTSIDE the link element, the inverse of the old test suite (which
+// asserted they were INSIDE it).
+describe("TransitionStateBrowseRow: link wraps only the equation", () => {
+    it("has an accessible name of exactly the equation plus the label, not the ref or the whole row", () => {
+        renderRow(record())
+        const link = screen.getByRole("link")
+        // Exact, not a length bound or a substring match: an aria-label
+        // sets the accessible name precisely, so this is load-bearing --
+        // it fails the moment the name gains or loses anything, unlike a
+        // "<30 chars" bound that would still pass with unrelated content
+        // swapped in. The ~170-character accessible name the old
+        // whole-row link produced (equation + family + charge/spin + both
+        // pills + evidence text + ref) is gone.
+        expect(link).toHaveAccessibleName("A <=> B (TS0)")
+        expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
+    })
+
+    it("does not contain the ref, the pills, or the evidence line", () => {
+        renderRow(record())
+        const link = screen.getByRole("link")
+        expect(within(link).queryByText("tse_one")).not.toBeInTheDocument()
+        expect(within(link).queryByText("optimized")).not.toBeInTheDocument()
+        expect(within(link).queryByText("not reviewed")).not.toBeInTheDocument()
+        expect(within(link).queryByText(/Evidence:/)).not.toBeInTheDocument()
+    })
+
+    it("renders the ref, pills and evidence line as ordinary text OUTSIDE the link, in the same row", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        // Present in the row overall...
+        expect(within(row).getByText("tse_one")).toBeVisible()
+        expect(within(row).getByText("optimized")).toBeVisible()
+        expect(within(row).getByText(/Evidence:/)).toBeVisible()
+        // ...but not reachable via the link's own subtree (checked above),
+        // and the ref is a plain <code>, never an anchor descendant, so a
+        // drag-select over it cannot start a link drag.
+        const refCode = within(row).getByText("tse_one")
+        expect(refCode.closest("a")).toBeNull()
     })
 
     it("does not change WHERE the row links -- exactly transition_state_entry.transition_state_entry_ref, not the reaction ref", () => {
@@ -122,27 +308,15 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
                 multiplicity: 2,
                 status: "optimized",
                 unmapped_smiles: null,
+                created_at: "2026-08-05T14:04:16.914780",
                 review: { status: "not_reviewed" },
             },
             reaction: { reaction_ref: "rxn_specific", reaction_entry_ref: "rxe_x", equation: "X <=> Y", reversible: null, family: null },
         }))
-        expect(screen.getByRole("link", { name: /tse_specific/ }))
-            .toHaveAttribute("href", "/transition-state-entries/tse_specific")
-    })
-
-    it("keeps the label, status and ref inside the link, so they are announced as part of its content", () => {
-        renderRow(record())
-        const link = screen.getByRole("link", { name: /tse_one/ })
-        // The visible pill text and ref are unaffected by the aria-label --
-        // both are still real, visible text content inside the link.
-        expect(within(link).getByText("TS0 · optimized")).toBeVisible()
-        expect(within(link).getByText("tse_one")).toBeVisible()
+        expect(screen.getByRole("link")).toHaveAttribute("href", "/transition-state-entries/tse_specific")
     })
 
     it("renders no link at all when the archive gave no transition-state entry ref -- the row is inert, matching the prior fallback", () => {
-        // The schema marks transition_state_entry_ref as always-present, but
-        // the component still guards against a falsy ref defensively -- this
-        // exercises that guard the same way an untyped/malformed payload would.
         renderRow(record({
             transition_state_entry: {
                 transition_state_entry_ref: null as unknown as string,
@@ -150,6 +324,7 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
                 multiplicity: 2,
                 status: "optimized",
                 unmapped_smiles: null,
+                created_at: "2026-08-05T14:04:16.914780",
                 review: { status: "not_reviewed" },
             },
             reaction: { reaction_ref: "rxn_one", reaction_entry_ref: "rxe_one", equation: "Z <=> W", reversible: null, family: null },
@@ -160,10 +335,9 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
 })
 
 describe("TransitionStateBrowseRow: unchanged behaviour", () => {
-    it("still renders the family, charge/spin, evidence summary and 'Equation not recorded' fallback", () => {
+    it("still renders charge/spin and the 'Equation not recorded' fallback", () => {
         renderRow(record({ reaction: { reaction_ref: null, reaction_entry_ref: null, equation: null, reversible: null, family: null } }))
         expect(screen.getByText("Equation not recorded")).toBeVisible()
-        expect(screen.getByText(/family not recorded/)).toBeVisible()
         expect(screen.getByText(/charge 0 · spin doublet/)).toBeVisible()
         expect(screen.getByText(/Evidence: opt · freq · sp · irc \(4 calculations\)/)).toBeVisible()
     })

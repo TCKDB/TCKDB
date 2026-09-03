@@ -1,6 +1,6 @@
 import { useMemo } from "react"
-import type { BrowseFilters, BrowseKind, TriState } from "../api/browseApi"
-import { loadBasisSets, loadMethods, loadSoftwareNames, loadSoftwareVersions, loadWorkflowToolNames, loadWorkflowToolVersions } from "../api/vocabApi"
+import type { BrowseFilters, BrowseKind } from "../api/browseApi"
+import { loadBasisSets, loadMethods, loadReactionFamilies, loadSoftwareNames, loadSoftwareVersions, loadWorkflowToolNames, loadWorkflowToolVersions } from "../api/vocabApi"
 import type { VocabRecordKind } from "../api/vocabApi"
 import type { VersionVocabularyState, VocabularyState } from "../hooks/useVocabulary"
 import { useVersionVocabulary, useVocabulary } from "../hooks/useVocabulary"
@@ -44,6 +44,7 @@ export function BrowseFilterForm({ kind, filters, onChange }: {
                  * flatten it.
                  */}
                 {kind !== "transition_state" && <CompositionFields filters={filters} onChange={onChange} />}
+                {kind === "transition_state" && <TransitionStateFindabilityFields filters={filters} onChange={onChange} />}
 
                 <TextField label="Charge" onChange={(value) => onChange({ charge: value })} value={filters.charge} />
                 <TextField label="Multiplicity" onChange={(value) => onChange({ multiplicity: value })} value={filters.multiplicity} />
@@ -87,6 +88,74 @@ function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onCh
             options={[["", "Any"], ...ELECTRONIC_STATES.map((state): [string, string] => [state, token(state)])]}
             value={filters.electronicStateKind}
         />
+    </>
+}
+
+/**
+ * The TS-kind counterpart of `CompositionFields`: `/transition-states/
+ * browse` has no formula/elements/heavy-atom axis of its own (a
+ * transition state is identified by the reaction it connects, not a
+ * molecular graph -- see `TransitionStatesBrowseRequest`'s docstring), but
+ * it DOES now narrow through that reaction's structure -- SMILES first,
+ * per the same "SMILES before Formula" ordering `CompositionFields`
+ * applies to species (both asked for by the owner in the same breath).
+ * `participantSmiles` is exact-match only (no substructure/similarity
+ * mode, unlike the species structure filter) and matches EITHER side of
+ * the reaction (reactant or product) -- one field, not two, mirroring the
+ * backend's single `participant_smiles` filter. Labeled just "SMILES"
+ * (not "SMILES (reactant or product)", which wrapped and misaligned its
+ * input at 1920px) -- the reactant/product scope is explained in the
+ * field's hint text instead, the same way every other field with a
+ * non-obvious matching rule in this form already explains itself.
+ */
+function TransitionStateFindabilityFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    const familyVocab = useVocabulary(loadReactionFamilies)
+    // Only families actually used by >=1 reaction -- `/meta/reaction-
+    // families` deliberately lists the FULL seeded vocabulary (0-count
+    // rows included, see its own docstring), which is the right answer
+    // for a caller enumerating valid tokens but the wrong one for a
+    // dropdown: measured at 125 entries, 110 of them count=0, so a
+    // reader would have to scroll past 110 options that can never
+    // return a result to reach the 15 that can. Mirrors how the
+    // method/basis/software vocabularies above only ever list values a
+    // real calculation actually uses.
+    const entries = familyVocab.status === "ready"
+        ? familyVocab.entries.filter((entry) => entry.count > 0)
+        : []
+    return <>
+        <TextField
+            hint="Matches either the reactant or the product side of the reaction."
+            label="SMILES"
+            onChange={(value) => onChange({ participantSmiles: value })}
+            placeholder="CCO"
+            value={filters.participantSmiles}
+        />
+        <div className="browse-filter-field">
+            <label htmlFor={fieldId("Family")}>Family</label>
+            <select
+                disabled={familyVocab.status === "loading"}
+                id={fieldId("Family")}
+                onChange={(event) => onChange({ family: event.target.value })}
+                value={filters.family}
+            >
+                <option value="">Any</option>
+                {/* `display_name` ("Radical Addition Multiple Bond") is the
+                    readable label; `value` ("R_Addition_MultipleBond") is
+                    the filter token sent on the wire -- rendering
+                    `token(entry.value)` here used to produce "R Addition
+                    MultipleBond", a naive underscore-to-space substitution
+                    that mangles the word boundary inside "MultipleBond".
+                    Falls back to `token(entry.value)` only if the archive
+                    ever omits `display_name` for a family. */}
+                {entries.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                        {entry.display_name ?? token(entry.value)}
+                    </option>
+                ))}
+            </select>
+            {familyVocab.status === "loading" && <p className="browse-filter-hint">Loading family list…</p>}
+            {familyVocab.status === "unavailable" && <p className="browse-filter-hint">Could not load family list.</p>}
+        </div>
     </>
 }
 
@@ -244,6 +313,16 @@ function ProvenanceFields({ kind, filters, onChange }: {
  * `/species/browse` accepts none of these (unlike the six provenance
  * fields above, which it does accept), so this section stays gated on
  * `kind === "transition_state"` in `BrowseFilterForm`.
+ *
+ * The seven `has_*` flags used to each be their own tri-state ("Any" /
+ * "Yes" / "No") select -- seven grid cells for what a reader almost
+ * always uses to say "show me only the ones that have X", never "show me
+ * only the ones that DON'T" (19 controls total on this row, first row
+ * starting at y=829 at 1920px). Collapsed into one checkbox row
+ * (`EvidenceChecks`): a reader can still narrow to entries that carry
+ * several kinds of evidence at once (check optimization AND single
+ * point), just not to entries that LACK one -- that half of the tri-state
+ * is deliberately dropped, not hidden behind another control.
  */
 function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     return <>
@@ -253,27 +332,53 @@ function EvidenceFields({ filters, onChange }: { filters: BrowseFilters; onChang
             options={[["", "Any"], ...TS_STATUSES.map((status): [string, string] => [status, token(status)])]}
             value={filters.status}
         />
-        <TriField label="Has optimization" onChange={(value) => onChange({ hasOpt: value })} value={filters.hasOpt} />
-        <TriField label="Has frequency" onChange={(value) => onChange({ hasFreq: value })} value={filters.hasFreq} />
-        <TriField label="Has single point" onChange={(value) => onChange({ hasSp: value })} value={filters.hasSp} />
-        <TriField label="Has IRC" onChange={(value) => onChange({ hasIrc: value })} value={filters.hasIrc} />
-        <TriField label="Has path search" onChange={(value) => onChange({ hasPathSearch: value })} value={filters.hasPathSearch} />
-        <TriField label="Has geometry validation" onChange={(value) => onChange({ hasGeometryValidation: value })} value={filters.hasGeometryValidation} />
-        <TriField label="Has SCF stability" onChange={(value) => onChange({ hasScfStability: value })} value={filters.hasScfStability} />
+        <EvidenceChecks filters={filters} onChange={onChange} />
     </>
 }
 
-function TextField({ label, value, onChange, placeholder }: {
+const EVIDENCE_CHECKS: { key: "hasOpt" | "hasFreq" | "hasSp" | "hasIrc" | "hasPathSearch" | "hasGeometryValidation" | "hasScfStability"; label: string }[] = [
+    { key: "hasOpt", label: "optimization" },
+    { key: "hasFreq", label: "frequency" },
+    { key: "hasSp", label: "single point" },
+    { key: "hasIrc", label: "IRC" },
+    { key: "hasPathSearch", label: "path search" },
+    { key: "hasGeometryValidation", label: "geometry validation" },
+    { key: "hasScfStability", label: "SCF stability" },
+]
+
+function EvidenceChecks({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
+    return (
+        <fieldset className="browse-filter-evidence-group">
+            <legend>Show only entries with…</legend>
+            <div className="browse-filter-evidence-checks">
+                {EVIDENCE_CHECKS.map(({ key, label }) => (
+                    <label className="browse-filter-evidence-check" key={key}>
+                        <input
+                            checked={filters[key] === "true"}
+                            onChange={(event) => onChange({ [key]: event.target.checked ? "true" : "" } as Partial<BrowseFilters>)}
+                            type="checkbox"
+                        />
+                        {label}
+                    </label>
+                ))}
+            </div>
+        </fieldset>
+    )
+}
+
+function TextField({ label, value, onChange, placeholder, hint }: {
     label: string
     value: string
     onChange: (value: string) => void
     placeholder?: string
+    hint?: string
 }) {
     const id = fieldId(label)
     return (
         <div className="browse-filter-field">
             <label htmlFor={id}>{label}</label>
             <input id={id} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
+            {hint && <p className="browse-filter-hint">{hint}</p>}
         </div>
     )
 }
@@ -372,16 +477,6 @@ function VersionField({ label, parentLabel, parent, value, onChange, vocab }: {
     )
 }
 
-function TriField({ label, value, onChange }: { label: string; value: TriState; onChange: (value: TriState) => void }) {
-    return (
-        <SelectField
-            label={label}
-            onChange={(next) => onChange(next as TriState)}
-            options={[["", "Any"], ["true", "Yes"], ["false", "No"]]}
-            value={value}
-        />
-    )
-}
 
 function CheckField({ label, checked, onChange }: { label: string; checked: boolean; onChange: (checked: boolean) => void }) {
     const id = fieldId(label)

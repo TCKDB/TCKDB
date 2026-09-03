@@ -16,6 +16,7 @@ from app.db.models.common import (
     SubmissionRecordType,
     TransitionStateEntryStatus,
 )
+from app.db.models.reaction import ReactionFamily
 from tests.api.scientific.test_api_scientific_transition_states import (
     _attach_calc,
     _make_reaction_with_ts,
@@ -25,7 +26,13 @@ from tests.api.scientific.test_api_scientific_transition_states import (
 from tests.services.scientific_read._factories import (
     attach_geometry_validation,
     attach_scf_stability,
+    make_chem_reaction,
     make_lot,
+    make_reaction_entry,
+    make_species,
+    make_species_entry,
+    make_transition_state,
+    make_transition_state_entry,
     set_review,
 )
 
@@ -618,3 +625,296 @@ def test_default_response_omits_calculations_key(client, db_session):
         == entries[0].public_ref
     )
     assert "calculations" not in record
+
+
+# ===========================================================================
+# Software on evidence_summary (item 1: rows must state software)
+# ===========================================================================
+
+
+def test_evidence_summary_reports_software_per_calculation_type(client, db_session):
+    """A calc's ``software_release`` must surface on the browse row.
+
+    Mirrors ``levels_of_theory``'s shape and absence contract: keyed by
+    calculation type, a list even at length one. This is the wire field
+    that lets a reader tell apart two rows with an identical level of
+    theory but different originating code (e.g. CCSD(T)-F12 on Molpro vs
+    ORCA) -- see the PR description for the live-archive case this closes.
+    """
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    _, sr = _make_software_release(db_session, name="orca", version="5.0.4")
+    _attach_calc(db_session, tse=entries[0], software_release=sr)
+
+    resp = client.get(_browse_url())
+    assert resp.status_code == 200, resp.text
+    record = next(
+        r
+        for r in resp.json()["records"]
+        if r["transition_state_entry"]["transition_state_entry_ref"]
+        == entries[0].public_ref
+    )
+    software = record["evidence_summary"]["software"]
+    assert "opt" in software
+    assert len(software["opt"]) == 1
+    assert software["opt"][0]["software"] == "orca"
+    assert software["opt"][0]["version"] == "5.0.4"
+    assert software["opt"][0]["software_release_ref"] == sr.public_ref
+    # Internal ids stripped by default, same boundary as every other block.
+    assert "software_release_id" not in software["opt"][0]
+
+
+def test_evidence_summary_software_key_present_empty_when_unattributed(
+    client, db_session
+):
+    """A calc of a type exists but names no software -- key present, empty
+    list, never an absent key (that would claim the type has no calc at
+    all, which is false). Same absence-vs-emptiness contract as
+    ``levels_of_theory``.
+    """
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    _attach_calc(db_session, tse=entries[0])  # no software_release
+
+    resp = client.get(_browse_url())
+    record = next(
+        r
+        for r in resp.json()["records"]
+        if r["transition_state_entry"]["transition_state_entry_ref"]
+        == entries[0].public_ref
+    )
+    software = record["evidence_summary"]["software"]
+    assert software.get("opt") == []
+
+
+def test_evidence_summary_software_absent_key_when_no_calculation(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    resp = client.get(_browse_url())
+    record = next(
+        r
+        for r in resp.json()["records"]
+        if r["transition_state_entry"]["transition_state_entry_ref"]
+        == entries[0].public_ref
+    )
+    assert record["evidence_summary"]["software"] == {}
+
+
+# ===========================================================================
+# Findability filters (item 4: family + participant_smiles)
+# ===========================================================================
+
+
+def _make_reaction_with_species(
+    db_session, *, reactant_smiles: str, product_smiles: str, family_name=None
+):
+    """Build a Species x2 -> ChemReaction -> ReactionEntry -> TS -> TS-entry
+    chain with caller-controlled reactant/product SMILES and an optional
+    reaction family, for filter tests that need real structural content
+    (unlike ``_make_reaction_with_ts``, which uses opaque fake InChIKeys).
+    """
+    # ``make_species`` defaults ``inchi_key`` to an opaque fake value
+    # (deliberately, per its own docstring) -- the participant filter
+    # matches on the *real* RDKit-computed InChIKey, so these tests must
+    # supply it explicitly, same as production's species-resolution
+    # listener would.
+    from app.schemas.reads.scientific_structure_search import StructureQueryKind
+    from app.services.scientific_read.structure_query import (
+        inchi_key_from_query,
+    )
+
+    sp_a = make_species(
+        db_session,
+        smiles=reactant_smiles,
+        inchi_key=inchi_key_from_query(StructureQueryKind.smiles, reactant_smiles),
+    )
+    sp_b = make_species(
+        db_session,
+        smiles=product_smiles,
+        inchi_key=inchi_key_from_query(StructureQueryKind.smiles, product_smiles),
+    )
+    se_a = make_species_entry(db_session, sp_a)
+    se_b = make_species_entry(db_session, sp_b)
+    chem = make_chem_reaction(db_session, reactants=[sp_a], products=[sp_b])
+    if family_name is not None:
+        family = (
+            db_session.query(ReactionFamily)
+            .filter(ReactionFamily.name == family_name)
+            .one_or_none()
+        )
+        if family is None:
+            family = ReactionFamily(name=family_name)
+            db_session.add(family)
+            db_session.flush()
+        chem.reaction_family_id = family.id
+        db_session.flush()
+    rxe = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=[se_a],
+        product_entries=[se_b],
+    )
+    ts = make_transition_state(db_session, reaction_entry=rxe, label="TS0")
+    entry = make_transition_state_entry(db_session, transition_state=ts)
+    return chem, rxe, ts, entry
+
+
+def test_filter_by_family_is_a_strict_subset(client, db_session):
+    _, _, _, entry_a = _make_reaction_with_species(
+        db_session,
+        reactant_smiles="CCO",
+        product_smiles="CC=O",
+        family_name="R_Addition_MultipleBond",
+    )
+    _, _, _, entry_b = _make_reaction_with_species(
+        db_session,
+        reactant_smiles="CCN",
+        product_smiles="CC=N",
+        family_name="H_Abstraction",
+    )
+
+    unfiltered = client.get(_browse_url()).json()
+    filtered = client.get(
+        _browse_url(family="R_Addition_MultipleBond")
+    ).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in filtered["records"]
+    }
+    assert filtered_refs < unfiltered_refs
+    assert filtered_refs == {entry_a.public_ref}
+    assert entry_b.public_ref in unfiltered_refs - filtered_refs
+    assert all(
+        r["reaction"]["family"] == "R_Addition_MultipleBond"
+        for r in filtered["records"]
+    )
+
+
+def test_filter_by_unknown_family_returns_empty_not_422(client, db_session):
+    _make_reaction_with_ts(db_session)
+    resp = client.get(_browse_url(family="not_a_real_family"))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["records"] == []
+
+
+def test_filter_by_participant_smiles_matches_reactant_side(client, db_session):
+    _, _, _, entry_a = _make_reaction_with_species(
+        db_session, reactant_smiles="CCO", product_smiles="CC=O"
+    )
+    _, _, _, entry_b = _make_reaction_with_species(
+        db_session, reactant_smiles="CCN", product_smiles="CC=N"
+    )
+
+    unfiltered = client.get(_browse_url()).json()
+    filtered = client.get(_browse_url(participant_smiles="CCO")).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in filtered["records"]
+    }
+    assert filtered_refs < unfiltered_refs
+    assert filtered_refs == {entry_a.public_ref}
+    assert entry_b.public_ref in unfiltered_refs - filtered_refs
+
+
+def test_filter_by_participant_smiles_matches_product_side_too(client, db_session):
+    """The filter is OR-across-role -- a query matching only the product
+    still finds the reaction, since the request has no separate
+    reactant/product fields (one filter, either side). Asserted as a
+    strict subset against a second, non-matching reaction (not just
+    ``in``) -- an ``in`` check alone would pass vacuously if the filter
+    were silently ignored and every record came back unfiltered.
+    """
+    _, _, _, entry_a = _make_reaction_with_species(
+        db_session, reactant_smiles="CCO", product_smiles="CC=O"
+    )
+    _, _, _, entry_b = _make_reaction_with_species(
+        db_session, reactant_smiles="CCN", product_smiles="CC=N"
+    )
+
+    unfiltered = client.get(_browse_url()).json()
+    filtered = client.get(_browse_url(participant_smiles="CC=O")).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in filtered["records"]
+    }
+    assert filtered_refs < unfiltered_refs
+    assert filtered_refs == {entry_a.public_ref}
+    assert entry_b.public_ref in unfiltered_refs - filtered_refs
+
+
+def test_filter_by_participant_smiles_invalid_smiles_422s(client, db_session):
+    from urllib.parse import quote
+
+    resp = client.get(
+        _browse_url(participant_smiles=quote("not(a valid smiles", safe=""))
+    )
+    assert resp.status_code == 422, resp.text
+    assert "invalid_structure_query" in resp.text
+    # The 422 must name the query parameter the caller actually supplied
+    # (`participant_smiles`), not `query_smiles` -- the two share the same
+    # RDKit parsing helper (`inchi_key_from_query`), which used to hardcode
+    # the species-browse structure filter's own field name into every
+    # message regardless of caller.
+    assert "participant_smiles" in resp.text
+    assert "query_smiles" not in resp.text
+
+
+def test_filter_by_empty_participant_smiles_is_a_no_op_not_a_zero_match(
+    client, db_session
+):
+    """``?participant_smiles=`` (present, empty) must behave exactly like
+    omitting the filter, not like a filter that matches nothing.
+
+    RDKit parses the empty string as a valid *empty* molecule rather than
+    returning ``None``, so before the ``if request.participant_smiles:``
+    guard this silently computed a real (if useless) InChIKey and narrowed
+    the result set to zero rows -- a caller clearing a form field would see
+    "no results" rather than "no filter applied".
+    """
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+
+    unfiltered = client.get(_browse_url()).json()
+    empty_filtered = client.get(_browse_url(participant_smiles="")).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    empty_filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in empty_filtered["records"]
+    }
+    assert empty_filtered_refs == unfiltered_refs
+    assert entries[0].public_ref in empty_filtered_refs
+
+
+def test_filter_by_empty_family_is_a_no_op_not_a_zero_match(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+
+    unfiltered = client.get(_browse_url()).json()
+    empty_filtered = client.get(_browse_url(family="")).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    empty_filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in empty_filtered["records"]
+    }
+    assert empty_filtered_refs == unfiltered_refs
+    assert entries[0].public_ref in empty_filtered_refs
