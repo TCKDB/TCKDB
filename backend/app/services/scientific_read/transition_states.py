@@ -1248,9 +1248,7 @@ def _build_saddle_point_index(
     row — a real absence, per the invariant that absence describes the
     request and null describes the data.
     """
-    index: dict[int, TransitionStateSaddlePointEvidence | None] = {
-        entry_id: None for entry_id in entry_ids
-    }
+    index: dict[int, TransitionStateSaddlePointEvidence | None] = dict.fromkeys(entry_ids)
     if not entry_ids:
         return index
 
