@@ -256,6 +256,50 @@ describe("browse page: kind selection queries the right endpoint with the right 
         expect(await screen.findByText("A <=> B")).toBeVisible()
     })
 
+    // Item 5's deep link (`SpeciesEntryPage.tsx`'s "Transition states for
+    // reactions of this species") relies on this: `?participant_smiles=`
+    // must be seeded into `filters` on the initial mount, not silently
+    // dropped the way every OTHER filter field already is (only `kind`
+    // round-trips through the URL in general -- see `BrowsePage.tsx`'s own
+    // doc comment on the lazy `useState` initializer for why
+    // `participant_smiles` is a deliberate, narrow exception). Asserted
+    // two ways: the SMILES field actually shows the seeded value (proves
+    // the FORM state was seeded, not just the outgoing request), and the
+    // outgoing `/transition-states/browse` request carries
+    // `participant_smiles` (proves the seed actually reaches the filter,
+    // not just the input's local display).
+    it("?participant_smiles= on the initial URL seeds the SMILES filter field and the outgoing request", async () => {
+        let capturedUrl: URL | undefined
+        server.use(...handlers({ captureTsUrl: (url) => { capturedUrl = url } }))
+        renderAt("/species?kind=transition_state&participant_smiles=CCO")
+        expect(await screen.findByText("A <=> B")).toBeVisible()
+        expect(screen.getByLabelText("SMILES")).toHaveValue("CCO")
+        await waitFor(() => expect(capturedUrl?.searchParams.get("participant_smiles")).toBe("CCO"))
+    })
+
+    it("omits participant_smiles from the outgoing request when the URL carries none (no accidental seeding)", async () => {
+        let capturedUrl: URL | undefined
+        server.use(...handlers({ captureTsUrl: (url) => { capturedUrl = url } }))
+        renderAt("/species?kind=transition_state")
+        expect(await screen.findByText("A <=> B")).toBeVisible()
+        expect(screen.getByLabelText("SMILES")).toHaveValue("")
+        await waitFor(() => expect(capturedUrl).toBeDefined())
+        expect(capturedUrl?.searchParams.has("participant_smiles")).toBe(false)
+    })
+
+    it("does NOT seed participant_smiles when the initial kind is species (the param is transition-state-only)", async () => {
+        const user = userEvent.setup()
+        server.use(...handlers())
+        renderAt("/species?participant_smiles=CCO")
+        await screen.findByText(/records · showing/)
+        await user.click(screen.getByRole("radio", { name: "Transition state" }))
+        expect(await screen.findByText("A <=> B")).toBeVisible()
+        // Switching to transition_state AFTER mount does not retroactively
+        // apply a species-kind URL's participant_smiles -- the seed is
+        // read once, on mount, for whatever kind was resolved then.
+        expect(screen.getByLabelText("SMILES")).toHaveValue("")
+    })
+
     // Mutation-shaped regression: if BOTH kinds pointed at the same endpoint,
     // the vdW selection above would still render *something*, but the
     // species_entry_kind assertion would fail -- this is that exact check,

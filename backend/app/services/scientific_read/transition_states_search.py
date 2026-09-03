@@ -602,8 +602,20 @@ def _apply_reaction_context_filters(
     ``TransitionStateEntry.transition_state_id``, matching the shape every
     other optional filter in this module uses -- additive, AND-combined in
     the same statement, never a second round trip.
+
+    An empty string is treated the same as ``None`` (no filter) for both
+    fields, not as a value to match against. Neither field has a
+    ``min_length`` constraint, so ``?participant_smiles=`` (present, empty)
+    reaches here as ``""`` rather than being rejected up front; without
+    this guard RDKit parses ``""`` as a valid *empty* molecule (it does not
+    return ``None``, so the exact-match branch below would not 422 either)
+    and computes a real InChIKey for it, which matches nothing in the
+    corpus -- silently narrowing a request that supplied no meaningful
+    SMILES into a request that matches zero rows. ``family=""`` has the
+    same failure shape for the same reason: no seeded family is named the
+    empty string, so it would silently narrow rather than silently no-op.
     """
-    if request.family is not None:
+    if request.family:
         ex = exists().where(
             and_(
                 TransitionState.id == TransitionStateEntry.transition_state_id,
@@ -615,9 +627,11 @@ def _apply_reaction_context_filters(
         )
         stmt = stmt.where(ex)
 
-    if request.participant_smiles is not None:
+    if request.participant_smiles:
         target_key = inchi_key_from_query(
-            StructureQueryKind.smiles, request.participant_smiles
+            StructureQueryKind.smiles,
+            request.participant_smiles,
+            field_name="participant_smiles",
         )
         ex = exists().where(
             and_(

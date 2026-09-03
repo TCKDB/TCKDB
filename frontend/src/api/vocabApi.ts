@@ -18,7 +18,17 @@ import { parseScientificResponse, requestScientificJson } from "./scientificTran
  * `loadWorkflowToolNames` must not render that constant as if it varied.
  */
 
-const vocabEntrySchema = z.object({ value: z.string(), count: z.number() }).passthrough()
+// `display_name` is optional because only `/meta/reaction-families` sends
+// it (`app/services/scientific_read/meta.py::list_reaction_families`) --
+// every other vocabulary endpoint's `value` IS its own readable label, so
+// there is nothing to translate. Typed here (not left to `.passthrough()`)
+// so `TransitionStateFindabilityFields`' Family select can read it without
+// an unsafe cast.
+const vocabEntrySchema = z.object({
+    value: z.string(),
+    count: z.number(),
+    display_name: z.string().optional(),
+}).passthrough()
 export type VocabEntry = z.infer<typeof vocabEntrySchema>
 
 const vocabResponseSchema = z.object({ results: z.array(vocabEntrySchema) }).passthrough()

@@ -102,14 +102,30 @@ function CompositionFields({ filters, onChange }: { filters: BrowseFilters; onCh
  * `participantSmiles` is exact-match only (no substructure/similarity
  * mode, unlike the species structure filter) and matches EITHER side of
  * the reaction (reactant or product) -- one field, not two, mirroring the
- * backend's single `participant_smiles` filter.
+ * backend's single `participant_smiles` filter. Labeled just "SMILES"
+ * (not "SMILES (reactant or product)", which wrapped and misaligned its
+ * input at 1920px) -- the reactant/product scope is explained in the
+ * field's hint text instead, the same way every other field with a
+ * non-obvious matching rule in this form already explains itself.
  */
 function TransitionStateFindabilityFields({ filters, onChange }: { filters: BrowseFilters; onChange: (patch: Partial<BrowseFilters>) => void }) {
     const familyVocab = useVocabulary(loadReactionFamilies)
-    const entries = familyVocab.status === "ready" ? familyVocab.entries : []
+    // Only families actually used by >=1 reaction -- `/meta/reaction-
+    // families` deliberately lists the FULL seeded vocabulary (0-count
+    // rows included, see its own docstring), which is the right answer
+    // for a caller enumerating valid tokens but the wrong one for a
+    // dropdown: measured at 125 entries, 110 of them count=0, so a
+    // reader would have to scroll past 110 options that can never
+    // return a result to reach the 15 that can. Mirrors how the
+    // method/basis/software vocabularies above only ever list values a
+    // real calculation actually uses.
+    const entries = familyVocab.status === "ready"
+        ? familyVocab.entries.filter((entry) => entry.count > 0)
+        : []
     return <>
         <TextField
-            label="SMILES (reactant or product)"
+            hint="Matches either the reactant or the product side of the reaction."
+            label="SMILES"
             onChange={(value) => onChange({ participantSmiles: value })}
             placeholder="CCO"
             value={filters.participantSmiles}
@@ -123,7 +139,19 @@ function TransitionStateFindabilityFields({ filters, onChange }: { filters: Brow
                 value={filters.family}
             >
                 <option value="">Any</option>
-                {entries.map((entry) => <option key={entry.value} value={entry.value}>{token(entry.value)}</option>)}
+                {/* `display_name` ("Radical Addition Multiple Bond") is the
+                    readable label; `value` ("R_Addition_MultipleBond") is
+                    the filter token sent on the wire -- rendering
+                    `token(entry.value)` here used to produce "R Addition
+                    MultipleBond", a naive underscore-to-space substitution
+                    that mangles the word boundary inside "MultipleBond".
+                    Falls back to `token(entry.value)` only if the archive
+                    ever omits `display_name` for a family. */}
+                {entries.map((entry) => (
+                    <option key={entry.value} value={entry.value}>
+                        {entry.display_name ?? token(entry.value)}
+                    </option>
+                ))}
             </select>
             {familyVocab.status === "loading" && <p className="browse-filter-hint">Loading family list…</p>}
             {familyVocab.status === "unavailable" && <p className="browse-filter-hint">Could not load family list.</p>}
@@ -338,17 +366,19 @@ function EvidenceChecks({ filters, onChange }: { filters: BrowseFilters; onChang
     )
 }
 
-function TextField({ label, value, onChange, placeholder }: {
+function TextField({ label, value, onChange, placeholder, hint }: {
     label: string
     value: string
     onChange: (value: string) => void
     placeholder?: string
+    hint?: string
 }) {
     const id = fieldId(label)
     return (
         <div className="browse-filter-field">
             <label htmlFor={id}>{label}</label>
             <input id={id} onChange={(event) => onChange(event.target.value)} placeholder={placeholder} value={value} />
+            {hint && <p className="browse-filter-hint">{hint}</p>}
         </div>
     )
 }

@@ -181,7 +181,48 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
         expect(within(row).getByText(/software not recorded/)).toBeVisible()
     })
 
-    it("states 'level of theory not recorded' / 'software not recorded' when there is no evidence at all", () => {
+    it("states 'level of theory not recorded' / 'software not recorded' when there is no evidence at all, on a CURRENT API response (software key present, empty)", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 0,
+                has_opt: false, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                software: {},
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/level of theory not recorded/)).toBeVisible()
+        expect(within(row).getByText(/software not recorded/)).toBeVisible()
+    })
+
+    it("joins every distinct level of theory for a stage, not just the first, when a stage genuinely carries more than one", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 2,
+                has_opt: false, has_freq: false, has_sp: true, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {
+                    sp: [
+                        { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" },
+                        { method: "CCSD(T)-F12", basis: "cc-pVTZ-F12", display: "CCSD(T)-F12/cc-pVTZ-F12" },
+                    ],
+                },
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const provenance = row.querySelector(".browse-row-provenance") as HTMLElement
+        expect(provenance.textContent).toContain("b3lyp/def2tzvp")
+        expect(provenance.textContent).toContain("CCSD(T)-F12/cc-pVTZ-F12")
+    })
+
+    it("renders NOTHING for software when evidence_summary.software is undefined (an API version that never served the field), never 'software not recorded'", () => {
+        // Same evidence_summary as the 'no evidence at all' fixture above,
+        // but WITHOUT a `software` key at all -- this is what an older API
+        // response (or the TS-entry-detail builder, which does not
+        // populate this field) looks like on the wire. "software not
+        // recorded" is a claim the CURRENT API makes about the DATA; an
+        // absent field is a claim about the WIRE VERSION and must not be
+        // rendered as if the archive had asserted anything about software.
         renderRow(record({
             evidence_summary: {
                 calculation_count: 0,
@@ -191,7 +232,23 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
         }))
         const row = document.querySelector(".ts-browse-row") as HTMLElement
         expect(within(row).getByText(/level of theory not recorded/)).toBeVisible()
-        expect(within(row).getByText(/software not recorded/)).toBeVisible()
+        expect(within(row).queryByText(/software/)).not.toBeInTheDocument()
+    })
+
+    it("renders NOTHING for software when it is undefined even though levels_of_theory IS present", () => {
+        renderRow(record({
+            evidence_summary: {
+                calculation_count: 1,
+                has_opt: true, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {
+                    opt: [{ method: "wb97xd", basis: "def2tzvp", display: "wb97xd/def2tzvp" }],
+                },
+            } as TransitionStateBrowseRecord["evidence_summary"],
+        }))
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(within(row).getByText(/opt wb97xd\/def2tzvp/)).toBeVisible()
+        expect(within(row).queryByText(/software/)).not.toBeInTheDocument()
     })
 
     it("shows the deposit date from transition_state_entry.created_at", () => {
@@ -206,19 +263,17 @@ describe("TransitionStateBrowseRow: provenance line (level of theory, software, 
 // sit OUTSIDE the link element, the inverse of the old test suite (which
 // asserted they were INSIDE it).
 describe("TransitionStateBrowseRow: link wraps only the equation", () => {
-    it("has an accessible name of just the equation (+ label), not the ref or the whole row", () => {
+    it("has an accessible name of exactly the equation plus the label, not the ref or the whole row", () => {
         renderRow(record())
         const link = screen.getByRole("link")
-        const name = link.textContent ?? ""
-        // Contains the equation and the label...
-        expect(name).toMatch(/A <=> B/)
-        expect(name).toMatch(/TS0/)
-        // ...and nothing else: no ref, no review status, no evidence text,
-        // no family/charge/spin -- the ~170-character accessible name the
-        // old whole-row link produced is gone. 30 chars comfortably covers
-        // "A <=> B (TS0)" with margin for formatting differences.
-        expect(name.length).toBeLessThan(30)
-        expect(link).not.toHaveAttribute("aria-label")
+        // Exact, not a length bound or a substring match: an aria-label
+        // sets the accessible name precisely, so this is load-bearing --
+        // it fails the moment the name gains or loses anything, unlike a
+        // "<30 chars" bound that would still pass with unrelated content
+        // swapped in. The ~170-character accessible name the old
+        // whole-row link produced (equation + family + charge/spin + both
+        // pills + evidence text + ref) is gone.
+        expect(link).toHaveAccessibleName("A <=> B (TS0)")
         expect(link).toHaveAttribute("href", "/transition-state-entries/tse_one")
     })
 

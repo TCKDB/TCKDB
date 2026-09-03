@@ -76260,6 +76260,42 @@
             }
           },
           {
+            "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
+              "title": "Family"
+            }
+          },
+          {
+            "description": "Exact-match SMILES filter over the parent reaction's participants (reactant or product side, either matches). Parsed via RDKit and compared by InChIKey, same exact-match semantics as /species/browse's mode=exact structure filter.",
+            "in": "query",
+            "name": "participant_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact-match SMILES filter over the parent reaction's participants (reactant or product side, either matches). Parsed via RDKit and compared by InChIKey, same exact-match semantics as /species/browse's mode=exact structure filter.",
+              "title": "Participant Smiles"
+            }
+          },
+          {
             "in": "query",
             "name": "min_review_status",
             "required": false,

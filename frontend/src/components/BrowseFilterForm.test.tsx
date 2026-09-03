@@ -50,9 +50,15 @@ const GAUSSIAN_VERSIONS = [
     { value: "16", count: 11 },
     { value: "Gaussian 16, Revision C.02", count: 2 },
 ]
+// Mirrors the live archive's shape (measured): `/meta/reaction-families`
+// lists the FULL seeded vocabulary, most of it unused (count: 0), each
+// with a `display_name` distinct from a naive `token(value)` rendering
+// (`"R_Addition_MultipleBond"` -> `"Radical Addition Multiple Bond"`, not
+// `"R Addition MultipleBond"`).
 const REACTION_FAMILIES = [
-    { value: "R_Addition_MultipleBond", count: 5 },
-    { value: "H_Abstraction", count: 3 },
+    { value: "R_Addition_MultipleBond", display_name: "Radical Addition Multiple Bond", count: 5 },
+    { value: "H_Abstraction", display_name: "Hydrogen Abstraction", count: 3 },
+    { value: "Never_Used_Family", display_name: "Never Used Family", count: 0 },
 ]
 
 type MetaOptions = {
@@ -402,7 +408,7 @@ const EVIDENCE_ONLY_LABELS = [
 // (item 4): `/transition-states/browse` now narrows by the reaction's
 // participant structure and its family, even though a transition state
 // still has no formula/elements axis of its own.
-const FINDABILITY_ONLY_LABELS = ["SMILES (reactant or product)", "Family"]
+const FINDABILITY_ONLY_LABELS = ["SMILES", "Family"]
 
 // The six provenance selects used to live inside a section mounted ONLY
 // for `kind="transition_state"` -- `/species/browse` has genuinely
@@ -630,8 +636,57 @@ describe("structure search fields render on species/vdw, not on transition_state
         expect(screen.queryByLabelText("Formula")).not.toBeInTheDocument()
         expect(screen.queryByLabelText("Elements")).not.toBeInTheDocument()
         // The TS-specific replacement IS present.
-        expect(screen.getByLabelText("SMILES (reactant or product)")).toBeInTheDocument()
+        expect(screen.getByLabelText("SMILES")).toBeInTheDocument()
         expect(screen.getByLabelText("Family")).toBeInTheDocument()
+    })
+})
+
+describe("Family select: only used families, readable labels", () => {
+    it("lists only families with count > 0, using display_name rather than a naive underscore-to-space rendering", async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+
+        const family = screen.getByLabelText("Family") as HTMLSelectElement
+        await waitFor(() => expect(family.querySelectorAll("option")).toHaveLength(3)) // Any + 2 used families
+
+        const optionTexts = [...family.querySelectorAll("option")].map((o) => o.textContent)
+        expect(optionTexts).toEqual(["Any", "Radical Addition Multiple Bond", "Hydrogen Abstraction"])
+        // The zero-count family never appears, and the mangled
+        // underscore-substitution rendering ("R Addition MultipleBond")
+        // is gone.
+        expect(screen.queryByText("Never Used Family")).not.toBeInTheDocument()
+        expect(screen.queryByText("R Addition MultipleBond")).not.toBeInTheDocument()
+    })
+
+    it("selecting a family by its display_name sends the underlying value on the wire", async () => {
+        const user = userEvent.setup()
+        server.use(...metaHandlers())
+        function Wrapper() {
+            const [filters, setFilters] = useState<BrowseFilters>(EMPTY_BROWSE_FILTERS)
+            return <>
+                <BrowseFilterForm filters={filters} kind="transition_state" onChange={(patch) => setFilters((current) => ({ ...current, ...patch }))} />
+                <output data-family={filters.family} data-testid="debug-family" />
+            </>
+        }
+        render(<Wrapper />)
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        await waitFor(() => expect(screen.getByLabelText("Family").querySelectorAll("option")).toHaveLength(3))
+
+        await user.selectOptions(screen.getByLabelText("Family"), "Radical Addition Multiple Bond")
+        expect(screen.getByTestId("debug-family")).toHaveAttribute("data-family", "R_Addition_MultipleBond")
+    })
+})
+
+describe("SMILES field: short label, hint text instead of a wrapping long label", () => {
+    it('is labeled "SMILES" (not "SMILES (reactant or product)"), with the scope explained in a hint', async () => {
+        server.use(...metaHandlers())
+        renderForm("transition_state")
+        await waitFor(() => expect(screen.getByLabelText("Method").querySelectorAll("option")).toHaveLength(METHODS.length + 1))
+        expect(screen.getByLabelText("SMILES")).toBeInTheDocument()
+        expect(
+            screen.getByText("Matches either the reactant or the product side of the reaction."),
+        ).toBeVisible()
     })
 })
 

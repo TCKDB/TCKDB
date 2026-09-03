@@ -247,14 +247,21 @@
    the ref/pills/evidence line and swallow their clicks/text-selection even
    though they come later in markup. Giving them their own `position`
    re-enters them into the same "positioned, DOM order" paint bucket as the
-   overlay, and DOM order wins there: these three are declared after
-   `.browse-row-title` in `TransitionStateBrowseRow.tsx`, so they paint (and
-   hit-test) above it. This is the standard "stretched link" caveat, not
-   TS-row-specific -- kept adjacent to the overlay rule so the two are never
-   edited apart from each other. */
-.ts-browse-row .browse-row-entries,
-.ts-browse-row .browse-row-footer,
-.ts-browse-row .browse-row-provenance {
+   overlay, and DOM order wins there: `.browse-row-footer` is declared
+   after `.browse-row-title` in `TransitionStateBrowseRow.tsx`, so it
+   paints (and hit-tests) above it. This is the standard "stretched link"
+   caveat, not TS-row-specific -- kept adjacent to the overlay rule so the
+   two are never edited apart from each other.
+
+   Deliberately NOT applied to `.browse-row-entries` (the status/review
+   pills) or `.browse-row-provenance` (the level-of-theory/software line):
+   neither carries a value a reader needs to select or click through, so
+   lifting them above the overlay would only shrink the row's actual click
+   target for no benefit -- measured at one point covering 62% of the row
+   box, because both were wrongly included here. Only `.browse-row-footer`
+   holds something that must stay out of the anchor's hit box: the ref
+   code, which a reader drags over to copy. */
+.ts-browse-row .browse-row-footer {
     position: relative;
 }
 
@@ -323,24 +330,6 @@ span.browse-row-title {
     font-size: .82rem;
 }
 
-/* Screen-reader-only text: visually hidden, still in the accessibility
-   tree. Used to fold the TS label into the row link's accessible name
-   ("equation (+ label)") without duplicating it as visible text -- the
-   label is already visible on `.browse-row-meta`. Standard clip-based
-   hiding technique (not `display: none` / `visibility: hidden`, both of
-   which remove the text from the accessible name too). */
-.sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border: 0;
-}
-
 .browse-row-smiles {
     font-family: var(--mono);
     font-size: .78rem;
@@ -387,8 +376,10 @@ span.browse-row-title {
    rather than plain inline text so the ref (`.browse-row-ref`, reused
    as-is for its color) can still wrap onto its own line at narrow widths
    without the evidence text truncating. See the painting-order comment
-   above `.ts-browse-row .browse-row-entries` for why this needs its own
-   `position: relative` too. */
+   above `.ts-browse-row .browse-row-footer` for why this element needs
+   its own `position: relative` (declared there, not here -- that rule is
+   scoped to `.ts-browse-row` specifically, this one is the shared layout
+   the species row does not use). */
 .browse-row-footer {
     display: flex;
     flex-wrap: wrap;

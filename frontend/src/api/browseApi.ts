@@ -46,8 +46,20 @@ export const BROWSE_KIND_LABELS: Record<BrowseKind, string> = {
 // Filters
 // ---------------------------------------------------------------------------
 
-/** Tri-state for a `has_*` evidence flag: unset ("any"), "true", or "false" -- matching the query parameter's own optional-boolean shape. */
-export type TriState = "" | "true" | "false"
+/**
+ * State for a `has_*` evidence flag: unset ("any") or "true". Was a
+ * three-way type (`"" | "true" | "false"`) matching the query parameter's
+ * own optional-boolean shape, back when each flag had its own tri-state
+ * select (Any / Yes / No). The seven selects collapsed into one "Show
+ * only entries with..." checkbox row (item 4 of the findability change),
+ * which offers only the positive half -- a checkbox has no third state to
+ * put "No" in, and nothing in `BrowseFilterForm.tsx` produces "false" for
+ * any of these fields any more. Narrowed to match: the backend query
+ * param still legitimately accepts `has_x=false` (unrelated to this UI,
+ * used by other callers), so this type describes what the FORM can
+ * produce, not what the wire protocol allows.
+ */
+export type EvidenceFlagState = "" | "true"
 
 /**
  * Every filter field across all three kinds, flattened into one object
@@ -95,13 +107,13 @@ export type BrowseFilters = {
     softwareVersion: string
     workflowTool: string
     workflowToolVersion: string
-    hasOpt: TriState
-    hasFreq: TriState
-    hasSp: TriState
-    hasIrc: TriState
-    hasPathSearch: TriState
-    hasGeometryValidation: TriState
-    hasScfStability: TriState
+    hasOpt: EvidenceFlagState
+    hasFreq: EvidenceFlagState
+    hasSp: EvidenceFlagState
+    hasIrc: EvidenceFlagState
+    hasPathSearch: EvidenceFlagState
+    hasGeometryValidation: EvidenceFlagState
+    hasScfStability: EvidenceFlagState
     // Transition-state findability filters (item 4): `/transition-states/
     // browse` has no formula/elements of its own -- a transition state is
     // identified by the reaction it connects, not a molecular graph -- so
@@ -138,8 +150,8 @@ const COMPOSITION_DEFAULTS = {
  */
 const EVIDENCE_DEFAULTS = {
     status: "",
-    hasOpt: "" as TriState, hasFreq: "" as TriState, hasSp: "" as TriState, hasIrc: "" as TriState,
-    hasPathSearch: "" as TriState, hasGeometryValidation: "" as TriState, hasScfStability: "" as TriState,
+    hasOpt: "" as EvidenceFlagState, hasFreq: "" as EvidenceFlagState, hasSp: "" as EvidenceFlagState, hasIrc: "" as EvidenceFlagState,
+    hasPathSearch: "" as EvidenceFlagState, hasGeometryValidation: "" as EvidenceFlagState, hasScfStability: "" as EvidenceFlagState,
     // TS-only findability filters (item 4) -- cleared the same way `status`
     // and the seven `has_*` flags above are, on a switch AWAY from
     // "transition_state".
@@ -291,7 +303,7 @@ export function buildSpeciesBrowseQuery(
 export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: number, limit: number): URLSearchParams {
     const query = sharedQueryParams(filters, offset, limit)
     if (filters.status !== "") query.set("status", filters.status)
-    const evidenceFlags: [string, TriState][] = [
+    const evidenceFlags: [string, EvidenceFlagState][] = [
         ["has_opt", filters.hasOpt], ["has_freq", filters.hasFreq], ["has_sp", filters.hasSp],
         ["has_irc", filters.hasIrc], ["has_path_search", filters.hasPathSearch],
         ["has_geometry_validation", filters.hasGeometryValidation], ["has_scf_stability", filters.hasScfStability],

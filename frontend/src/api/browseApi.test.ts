@@ -165,10 +165,15 @@ describe("clearInapplicableFilters: the six provenance fields apply to every kin
     })
 
     it("leaving transition_state clears status and the seven has_* evidence flags", () => {
+        // Every flag set to "true" (never "false"): the seven tri-state
+        // selects collapsed into checkboxes, which can only ever produce
+        // "true" or "" (see `EvidenceFlagState`'s own doc comment) -- a
+        // fixture using "false" no longer reflects anything the form can
+        // actually produce.
         const filters: BrowseFilters = {
             ...EMPTY_BROWSE_FILTERS,
-            status: "optimized", hasOpt: "true", hasFreq: "false", hasSp: "true", hasIrc: "true",
-            hasPathSearch: "false", hasGeometryValidation: "true", hasScfStability: "false",
+            status: "optimized", hasOpt: "true", hasFreq: "true", hasSp: "true", hasIrc: "true",
+            hasPathSearch: "true", hasGeometryValidation: "true", hasScfStability: "true",
         }
         const cleared = clearInapplicableFilters("species", filters)
         expect(cleared.status).toBe("")

@@ -109,24 +109,39 @@ def parse_inchi_to_canonical_smiles(inchi_str: str) -> str:
     return Chem.MolToSmiles(mol, canonical=True)
 
 
-def inchi_key_from_query(kind: StructureQueryKind, value: str) -> str:
-    """Compute the canonical InChIKey for an exact-mode query."""
+def inchi_key_from_query(
+    kind: StructureQueryKind, value: str, *, field_name: str | None = None
+) -> str:
+    """Compute the canonical InChIKey for an exact-mode query.
+
+    ``field_name`` names the query parameter in the 422 message -- it
+    defaults to the field ``kind`` names on the standalone structure-search
+    surface (``query_smiles`` / ``query_inchi``), which is what
+    ``species.py`` and ``structure_search.py`` both actually call this
+    with. A caller whose field is named something else (the TS
+    findability filter's ``participant_smiles``, which is always
+    ``StructureQueryKind.smiles`` but never named ``query_smiles`` on the
+    wire) passes its own name explicitly, so the error a caller sees
+    always matches the parameter they actually supplied.
+    """
     if kind is StructureQueryKind.inchi_key:
         return value
     if kind is StructureQueryKind.smiles:
+        name = field_name or "query_smiles"
         mol = Chem.MolFromSmiles(value)
         if mol is None:
             raise ValueError(
                 "invalid_structure_query: RDKit could not parse the "
-                "SMILES supplied as query_smiles."
+                f"SMILES supplied as {name}."
             )
         return _inchi.MolToInchiKey(mol)
     if kind is StructureQueryKind.inchi:
+        name = field_name or "query_inchi"
         mol = Chem.MolFromInchi(value)
         if mol is None:
             raise ValueError(
                 "invalid_structure_query: RDKit could not parse the "
-                "InChI supplied as query_inchi."
+                f"InChI supplied as {name}."
             )
         return _inchi.MolToInchiKey(mol)
     raise ValueError(

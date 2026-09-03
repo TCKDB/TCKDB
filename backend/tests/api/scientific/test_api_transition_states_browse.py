@@ -864,3 +864,57 @@ def test_filter_by_participant_smiles_invalid_smiles_422s(client, db_session):
     )
     assert resp.status_code == 422, resp.text
     assert "invalid_structure_query" in resp.text
+    # The 422 must name the query parameter the caller actually supplied
+    # (`participant_smiles`), not `query_smiles` -- the two share the same
+    # RDKit parsing helper (`inchi_key_from_query`), which used to hardcode
+    # the species-browse structure filter's own field name into every
+    # message regardless of caller.
+    assert "participant_smiles" in resp.text
+    assert "query_smiles" not in resp.text
+
+
+def test_filter_by_empty_participant_smiles_is_a_no_op_not_a_zero_match(
+    client, db_session
+):
+    """``?participant_smiles=`` (present, empty) must behave exactly like
+    omitting the filter, not like a filter that matches nothing.
+
+    RDKit parses the empty string as a valid *empty* molecule rather than
+    returning ``None``, so before the ``if request.participant_smiles:``
+    guard this silently computed a real (if useless) InChIKey and narrowed
+    the result set to zero rows -- a caller clearing a form field would see
+    "no results" rather than "no filter applied".
+    """
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+
+    unfiltered = client.get(_browse_url()).json()
+    empty_filtered = client.get(_browse_url(participant_smiles="")).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    empty_filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in empty_filtered["records"]
+    }
+    assert empty_filtered_refs == unfiltered_refs
+    assert entries[0].public_ref in empty_filtered_refs
+
+
+def test_filter_by_empty_family_is_a_no_op_not_a_zero_match(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+
+    unfiltered = client.get(_browse_url()).json()
+    empty_filtered = client.get(_browse_url(family="")).json()
+
+    unfiltered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in unfiltered["records"]
+    }
+    empty_filtered_refs = {
+        r["transition_state_entry"]["transition_state_entry_ref"]
+        for r in empty_filtered["records"]
+    }
+    assert empty_filtered_refs == unfiltered_refs
+    assert entries[0].public_ref in empty_filtered_refs

@@ -41,28 +41,51 @@ function selectedStages(levels: Record<string, unknown[]> | undefined): string[]
  * `evidence_summary` are per-calculation-type maps (see
  * `scientific_transition_state.py`'s `TransitionStateEntryEvidenceSummary`)
  * -- this reads the same `selectedStages` set out of each so a stage's
- * level and its software always describe the SAME calculation. Software is
- * never silently omitted: a stage with no software on record renders
- * "software not recorded", never a blank -- see the module's "software
- * must always be stated" invariant. When several selected stages share one
- * software name, it is stated once; when they differ, each stage gets its
- * own software note.
+ * level and its software always describe the SAME calculation. A stage can
+ * carry more than one distinct level (the same reason
+ * `levels_of_theory.py` returns a list, not a scalar: benchmark
+ * comparisons at one stage are real, deposited data) -- every distinct
+ * level for a selected stage is joined, never just the first.
+ *
+ * `software` return value is `null` -- as opposed to the literal text
+ * "software not recorded" -- specifically when `evidence_summary.software`
+ * itself is `undefined`: an OLDER API response that never served this
+ * field at all is a claim about the WIRE VERSION, not about the record,
+ * and must not be rendered as if the archive had asserted "no software on
+ * this calculation". "software not recorded" is reserved for the case the
+ * CURRENT API actually asserts it (the field is present, but a selected
+ * stage's list is empty) -- that is a real statement about the record,
+ * per the "software must always be stated" invariant. The caller renders
+ * the `· {software}` clause only when this is non-null.
  */
-function provenanceSummary(record: TransitionStateBrowseRecord): { levelOfTheory: string; software: string } {
+function provenanceSummary(
+    record: TransitionStateBrowseRecord,
+): { levelOfTheory: string; software: string | null } {
     const levels = record.evidence_summary.levels_of_theory
     const software = record.evidence_summary.software
     const stages = selectedStages(levels)
 
     if (stages.length === 0) {
-        return { levelOfTheory: "level of theory not recorded", software: "software not recorded" }
+        return {
+            levelOfTheory: "level of theory not recorded",
+            software: software === undefined ? null : "software not recorded",
+        }
     }
 
-    const levelOfTheory = stages.map((stage) => `${stage} ${lotLabel(levels![stage][0])}`).join(" · ")
+    const levelOfTheory = stages
+        .map((stage) => `${stage} ${levels![stage].map((entry) => lotLabel(entry)).join(", ")}`)
+        .join(" · ")
+
+    if (software === undefined) {
+        return { levelOfTheory, software: null }
+    }
 
     const perStageSoftware = stages.map((stage) => {
-        const entries = software?.[stage]
+        const entries = software[stage]
         return entries && entries.length > 0
-            ? (entries[0].version ? `${entries[0].software} ${entries[0].version}` : entries[0].software)
+            ? entries
+                .map((entry) => (entry.version ? `${entry.software} ${entry.version}` : entry.software))
+                .join(", ")
             : null
     })
     const distinct = [...new Set(perStageSoftware.filter((value): value is string => Boolean(value)))]
@@ -97,18 +120,29 @@ function depositedDate(createdAt: string | undefined): string | null {
  * made it (a) part of a ~170-character accessible name spelled out letter
  * by letter (the ref alone is 26 characters) and (b) unselectable --
  * dragging over the ref started a link drag instead of a text selection.
- * Fixed with the same stretched-link technique `SpeciesBrowseRow.tsx`
- * already used for its own title-only link (`browse.css`'s
- * `.ts-browse-row .browse-row-title::after`, `inset: 0` against
- * `.ts-browse-row`'s `position: relative`): the `<Link>` wraps ONLY the
- * equation (plus a screen-reader-only mention of the TS label, so the
- * accessible name is "equation (+ label)" rather than the equation alone),
- * while the ref/pills/evidence line sit OUTSIDE it as ordinary, selectable
- * text. The full row still reads as the click target visually -- the
- * pseudo-element overlay covers the row's box, not just the title's own
- * inline extent.
+ * Fixed with a stretched-link overlay (`browse.css`'s `.ts-browse-row
+ * .browse-row-title::after`, `inset: 0` against `.ts-browse-row`'s
+ * `position: relative`): the `<Link>` wraps ONLY the equation (plus a
+ * screen-reader-only mention of the TS label, so the accessible name is
+ * "equation (+ label)" rather than the equation alone). Measured against
+ * an earlier claim that this pattern was "already used by
+ * `SpeciesBrowseRow.tsx`" -- it is not; that row's own title `<Link>` has
+ * no stretched-link overlay and no full-row click target at all today.
+ * The overlay here is new, scoped to `.ts-browse-row` so it cannot reach
+ * the species row.
  *
- * Earlier revision of this doc comment claimed the row links to
+ * The click target is the row MINUS the footer line (`.browse-row-
+ * footer`, evidence text + ref): that element alone carries `position:
+ * relative` to paint above the overlay, because the ref is the one thing
+ * on the row a reader needs to drag-select. `.browse-row-entries` (the
+ * pills) and `.browse-row-provenance` (the level-of-theory/software line)
+ * carry no such value and are NOT lifted above the overlay -- an earlier
+ * revision lifted both anyway "to be safe", which shrank the actual click
+ * target to about 62% of the row's box while this comment still claimed
+ * "the full row". See `browse.css`'s comment beside `.ts-browse-row
+ * .browse-row-footer` for the CSS-painting-order mechanics.
+ *
+ * Earlier revision of this doc comment also claimed the row links to
  * `/reactions/:ref` and that "no such page exists" -- both stale by the
  * time of this pass: the link target is
  * `/transition-state-entries/:transition_state_entry_ref` (`tsRowTarget`
@@ -147,13 +181,26 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
             <div className="browse-row-headline">
                 {target
                     ? (
-                        <Link className="browse-row-title" to={target}>
+                        // `aria-label` (not a visually-hidden child span) is
+                        // what makes the accessible name an EXACT, testable
+                        // string ("equation (+ label)") -- letting the
+                        // browser's accname algorithm concatenate a visible
+                        // text node with a nested element's trimmed text
+                        // produced inconsistent spacing ("A <=> B(TS0)",
+                        // missing the space before the parenthesis) that
+                        // depended on undocumented whitespace-collapsing
+                        // behavior around JSX text nodes. The equation still
+                        // renders as ordinary visible text as the Link's
+                        // child; `aria-label` only overrides what a screen
+                        // reader announces, not what is on screen -- the
+                        // label is separately visible on `.browse-row-meta`
+                        // below, so this does not duplicate it visually.
+                        <Link
+                            aria-label={`${equation} (${entryLabel})`}
+                            className="browse-row-title"
+                            to={target}
+                        >
                             {equation}
-                            {/* Folds the label into the accessible name
-                                ("equation (+ label)") without duplicating
-                                it as VISIBLE text -- the label is already
-                                visible on `.browse-row-meta` below. */}
-                            <span className="sr-only"> ({entryLabel})</span>
                         </Link>
                     )
                     : <span className="browse-row-title">{equation}</span>}
@@ -166,7 +213,10 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                     {deposited && <> · deposited {deposited}</>}
                 </span>
             </div>
-            <p className="browse-row-provenance">{levelOfTheory} · {software}</p>
+            <p className="browse-row-provenance">
+                {levelOfTheory}
+                {software !== null && <> · {software}</>}
+            </p>
             <ul className="browse-row-entries">
                 <li className="browse-entry-chip">
                     <span className="value-pill browse-entry-kind-pill">{entryStatusText}</span>

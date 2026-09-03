@@ -406,6 +406,32 @@ describe("species-entry page: identity and errors", () => {
         expect(screen.queryByRole("link", { name: "View record section" })).not.toBeInTheDocument()
     })
 
+    // Item 5 (findability PR): "Transition states for reactions of this
+    // species" links to the TS browse with `participant_smiles` prefilled
+    // to this entry's own canonical SMILES. Also pins its PLACEMENT: an
+    // earlier revision rendered it above the breadcrumb-adjacent identity
+    // block entirely (measured tops 170px for the link vs 206/243px for
+    // the eyebrow/h1 -- i.e. ABOVE both). It must render AFTER the
+    // heading in document order (`PageShell` renders `identity` before
+    // `children`), which a DOM-order check on `compareDocumentPosition`
+    // catches and a same-page `getByRole` presence check would not.
+    it('links "Transition states for reactions of this species" to the TS browse with participant_smiles prefilled, placed after the identity heading', async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        const heading = await screen.findByRole("heading", { name: "CH3" })
+
+        const link = screen.getByRole("link", { name: "Transition states for reactions of this species" })
+        expect(link).toHaveAttribute(
+            "href",
+            `/species?kind=transition_state&participant_smiles=${encodeURIComponent("[CH3]")}`,
+        )
+
+        // DOCUMENT_POSITION_FOLLOWING (4) means `link` comes AFTER
+        // `heading` in the DOM -- below the identity block, not above it.
+        expect(heading.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    })
+
     it("distinguishes empty, malformed-success, HTTP error, and loading states", async () => {
         server.use(...handlers({ empty: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
