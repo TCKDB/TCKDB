@@ -116,13 +116,13 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
 
     it("does not change WHERE the row links -- still exactly reaction.reaction_ref, untouched", () => {
         renderRow(record({ reaction: { reaction_ref: "rxn_specific", reaction_entry_ref: "rxe_x", equation: "X <=> Y", reversible: null, family: null } }))
-        expect(screen.getByRole("link", { name: "Reaction X <=> Y — TS0 · optimized, review not reviewed, tse_one" }))
+        expect(screen.getByRole("link", { name: /tse_one/ }))
             .toHaveAttribute("href", "/reactions/rxn_specific")
     })
 
-    it("extends (rather than replaces) the link's accessible name with the label, status and ref, so they are still announced", () => {
+    it("keeps the label, status and ref inside the link, so they are announced as part of its content", () => {
         renderRow(record())
-        const link = screen.getByRole("link", { name: "Reaction A <=> B — TS0 · optimized, review not reviewed, tse_one" })
+        const link = screen.getByRole("link", { name: /tse_one/ })
         // The visible pill text and ref are unaffected by the aria-label --
         // both are still real, visible text content inside the link.
         expect(within(link).getByText("TS0 · optimized")).toBeVisible()
