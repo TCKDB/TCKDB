@@ -40,13 +40,40 @@ export function evenTicks(domain: readonly [number, number], count = 5): number[
     return Array.from({ length: count }, (_, i) => d0 + ((d1 - d0) * i) / (count - 1))
 }
 
-/** A short, fixed-precision label for an axis tick -- never scientific
- * notation, so gridline labels stay readable at a glance regardless of the
- * chart's own value range. */
-export function formatTick(value: number): string {
-    const magnitude = Math.abs(value)
-    if (magnitude === 0) return "0"
-    if (magnitude >= 100) return value.toFixed(0)
-    if (magnitude >= 10) return value.toFixed(1)
-    return value.toFixed(2)
+/**
+ * Fixed-precision labels for a whole axis's worth of ticks -- never
+ * scientific notation, so gridline labels stay readable at a glance
+ * regardless of the chart's own value range.
+ *
+ * Precision is chosen ONCE per axis, from the axis's own tick STEP (the
+ * smallest positive gap between consecutive ticks), and then applied to
+ * EVERY tick on that axis. Deciding it per VALUE instead (as an earlier
+ * version of this function did) let each tick round to its own "natural"
+ * precision independently -- a review finding caught an axis reading
+ * "8.50, 10.0, 100": three different decimal counts on ticks that are all
+ * multiples of the same step and should read as one consistent scale.
+ *
+ * `decimals = max(0, -floor(log10(step)))` -- a step of 1 or more (the
+ * common case for `niceTicks`' {1, 2, 5}×10^n steps) needs no decimal
+ * places; a step below 1 needs enough to distinguish consecutive ticks
+ * (step 0.5 -> 1 place, step 0.05 -> 2 places). Guarded against a
+ * non-finite or non-positive step (fewer than two ticks, or ticks that
+ * collide exactly) by falling back to 0 decimals rather than propagating
+ * `NaN`/`Infinity` into every label.
+ */
+export function formatTicks(ticks: readonly number[]): string[] {
+    if (ticks.length === 0) return []
+    let step = Infinity
+    const sorted = [...ticks].sort((a, b) => a - b)
+    for (let i = 1; i < sorted.length; i++) {
+        const gap = sorted[i] - sorted[i - 1]
+        if (gap > 0 && gap < step) step = gap
+    }
+    const decimals = Number.isFinite(step) && step > 0 ? Math.max(0, -Math.floor(Math.log10(step))) : 0
+    return ticks.map((value) => {
+        // Avoid `(-0).toFixed(n)` printing a spurious leading minus sign --
+        // a tick that lands on exactly zero should always read "0"/"0.0"/…
+        const normalized = Object.is(value, -0) ? 0 : value
+        return normalized.toFixed(decimals)
+    })
 }
