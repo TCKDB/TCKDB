@@ -82,6 +82,29 @@ function neitherRecord(): ThermoRecord {
     return { ...recordAlpha(), thermo_ref: "thm_neither", nasa: null, points: null, provenance: { conformer_group_ref: null } } as ThermoRecord
 }
 
+// Same conformer link, same nasa fit, same points as `recordAlpha()` -- only
+// the ref differs. This is the live-page shape (`spe_5nr24y2ssxokx…`: seven
+// `thm_` records, byte-identical NASA-7 coefficients and points) the
+// collapsing tests below exercise.
+function identicalToAlpha(ref: string): ThermoRecord {
+    return { ...recordAlpha(), thermo_ref: ref } as ThermoRecord
+}
+
+// Shares `recordAlpha()`'s conformer link (so the same base legend label)
+// but carries a GENUINELY different fit -- the "reprocessed later" case
+// `groupLegendLabel` disambiguates by ref rather than collapsing.
+function reprocessedAlpha(): ThermoRecord {
+    return {
+        ...recordAlpha(),
+        thermo_ref: "thm_alpha_v2",
+        nasa: {
+            t_low: 100, t_mid: 500, t_high: 1000,
+            low_temperature_coefficients: [2, 0, 0, 0, 0, 0, 0],
+            high_temperature_coefficients: [2.4, 0, 0, 0, 0, 0, 0],
+        },
+    } as ThermoRecord
+}
+
 function renderChart(records: ThermoRecord[], selectedConformerGroupRef: string | null = null) {
     return render(
         <ThermoCpChart records={records} conformers={conformers} selectedConformerGroupRef={selectedConformerGroupRef} />,
@@ -136,13 +159,13 @@ describe("ThermoCpChart — multiple conformers overlay as separate series", () 
     })
 })
 
-describe("ThermoCpChart — RAW/FIT/BOTH toggle", () => {
-    it("shows both markers and curves by default, hides curves under Measured, hides markers under Fit", () => {
+describe("ThermoCpChart — POINTS/FIT/BOTH toggle", () => {
+    it("shows both markers and curves by default, hides curves under Points, hides markers under Fit", () => {
         renderChart([recordAlpha()])
         expect(screen.getByTestId("fit-low-thm_alpha")).toBeInTheDocument()
         expect(screen.getByTestId("measured-point-thm_alpha-0")).toBeInTheDocument()
 
-        fireEvent.click(screen.getByRole("button", { name: "Measured" }))
+        fireEvent.click(screen.getByRole("button", { name: "Points" }))
         expect(screen.queryByTestId("fit-low-thm_alpha")).not.toBeInTheDocument()
         expect(screen.getByTestId("measured-point-thm_alpha-0")).toBeInTheDocument()
 
@@ -204,6 +227,76 @@ describe("ThermoCpChart — the three honest-absence cases", () => {
         expect(screen.queryByTestId("fit-low-thm_neither")).not.toBeInTheDocument()
         expect(screen.queryByTestId("measured-point-thm_neither-0")).not.toBeInTheDocument()
         expect(screen.getByText(/no measured points or usable NASA-7 fit on file for this record — nothing plotted/)).toBeInTheDocument()
+    })
+})
+
+describe("ThermoCpChart — collapsing records that plot as the exact same line", () => {
+    it("draws several byte-identical records as ONE line and names the count in the one legend chip, rather than N indistinguishable, identically-labelled chips", () => {
+        renderChart([identicalToAlpha("thm_dup_1"), identicalToAlpha("thm_dup_2"), identicalToAlpha("thm_dup_3")])
+
+        expect(screen.getByTestId("legend-thm_dup_1")).toHaveTextContent("Conformer Group 1 — 3 identical records")
+        expect(screen.queryByTestId("legend-thm_dup_2")).not.toBeInTheDocument()
+        expect(screen.queryByTestId("legend-thm_dup_3")).not.toBeInTheDocument()
+
+        expect(screen.getByTestId("series-thm_dup_1")).toBeInTheDocument()
+        expect(screen.queryByTestId("series-thm_dup_2")).not.toBeInTheDocument()
+        expect(screen.queryByTestId("series-thm_dup_3")).not.toBeInTheDocument()
+
+        // Every collapsed record's own ref is still named somewhere, not
+        // silently dropped -- available on hover rather than asserted only
+        // as a bare count.
+        expect(screen.getByTestId("legend-thm_dup_1")).toHaveAttribute("title", "thm_dup_1, thm_dup_2, thm_dup_3")
+    })
+
+    it("never collapses two records that share a conformer link but carry a genuinely different fit -- and disambiguates their now-identical base label by ref", () => {
+        renderChart([recordAlpha(), reprocessedAlpha()])
+
+        // Both still draw as two separate lines.
+        expect(screen.getByTestId("series-thm_alpha")).toBeInTheDocument()
+        expect(screen.getByTestId("series-thm_alpha_v2")).toBeInTheDocument()
+        expect(screen.getByTestId("fit-high-thm_alpha").getAttribute("points"))
+            .not.toBe(screen.getByTestId("fit-high-thm_alpha_v2").getAttribute("points"))
+
+        // Both trace to "Conformer Group 1" -- disambiguated by thermo_ref
+        // rather than left as two chips reading the same label, distinguished
+        // only by dot colour.
+        expect(screen.getByTestId("legend-thm_alpha")).toHaveTextContent("Conformer Group 1 (thm_alpha)")
+        expect(screen.getByTestId("legend-thm_alpha_v2")).toHaveTextContent("Conformer Group 1 (thm_alpha_v2)")
+    })
+})
+
+describe("ThermoCpChart — 'evaluated points', never 'measured', since every record here is computed", () => {
+    it("names the toggle Points and the intro sentence 'evaluated points', not 'measured'", () => {
+        renderChart([recordAlpha()])
+        expect(screen.getByRole("button", { name: "Points" })).toBeInTheDocument()
+        expect(screen.queryByRole("button", { name: "Measured" })).not.toBeInTheDocument()
+        expect(screen.getByText(/own evaluated points and NASA-7 fit/)).toBeInTheDocument()
+    })
+})
+
+describe("ThermoCpChart — the temperature axis never goes negative, and both axes tick at round numbers", () => {
+    it("clamps the x domain at 0 K and ticks both axes at nice round numbers, for a record whose own padded domain used to go negative", () => {
+        // `recordAlpha()`'s nasa block runs t_low=100..t_high=1000; the OLD
+        // 4%-padded domain would have started below 100 already, and a
+        // record starting near 0 K (this archive's live data commonly
+        // states t_low around 10 K) used to pad straight through zero into
+        // negative kelvin -- the review finding this test guards.
+        renderChart([recordAlpha()])
+        const chart = screen.getByRole("img", { name: /Heat capacity versus temperature/ })
+        const tickTexts = Array.from(chart.querySelectorAll(".cp-chart-tick-label--x")).map((el) => el.textContent)
+
+        expect(tickTexts.length).toBeGreaterThan(0)
+        for (const text of tickTexts) {
+            expect(text).not.toMatch(/^-/)
+        }
+        // Every x tick is a whole, round number (nice-step ticks never
+        // produce a bare-eval float like "698" or "-110").
+        for (const text of tickTexts) {
+            expect(Number(text)).not.toBeNaN()
+            expect(Number.isInteger(Number(text))).toBe(true)
+        }
+        // The axis starts at 0 -- domain clamped, not padded outward.
+        expect(tickTexts).toContain("0")
     })
 })
 

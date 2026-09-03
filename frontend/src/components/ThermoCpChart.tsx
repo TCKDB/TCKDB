@@ -2,18 +2,22 @@ import { useMemo, useState } from "react"
 import "../thermo-cp-chart.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoRecord } from "../api/thermoApi"
-import { evenTicks, formatTick, linearScale } from "../domain/chartScale"
+import { formatTick, linearScale } from "../domain/chartScale"
 import {
     CHART_MARGIN,
     CP_CHART_HEIGHT,
     CP_CHART_WIDTH,
     type CpChartMode,
+    type CpChartRenderGroup,
     computeCpValueDomain,
     computeTemperatureDomain,
+    groupIdenticalSeries,
+    groupLegendLabel,
+    niceTicks,
     seriesAbsenceNote,
     seriesColor,
 } from "../domain/thermoCpChartLayout"
-import { buildCpChartSeries, type CpChartSeries } from "../domain/thermoCpSeries"
+import { buildCpChartSeries } from "../domain/thermoCpSeries"
 import { JOULES_PER_CALORIE, cpUnitLabel, type CpUnit } from "../domain/thermoNasa"
 import { SectionHeading } from "./PageSections"
 
@@ -75,6 +79,12 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
         () => buildCpChartSeries(records, conformers, selectedConformerGroupRef, unit),
         [records, conformers, selectedConformerGroupRef, unit],
     )
+    // One rendered line/legend chip per DISTINCT plotted curve -- several
+    // records can share one conformer group and one NASA-7 fit byte-for-byte
+    // (see `groupIdenticalSeries`'s own doc comment); collapsing them here
+    // is what keeps the legend from reading N identically-labelled chips
+    // distinguished only by colour.
+    const groups = useMemo(() => groupIdenticalSeries(series), [series])
 
     const plottable = series.filter((item) => item.hasUsableFit || item.hasMeasuredPoints)
     const anySelected = series.some((item) => item.isSelected)
@@ -85,7 +95,7 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
                 <p className="eyebrow">Derived view</p>
                 <SectionHeading id="cp-chart-heading">Heat capacity vs. temperature</SectionHeading>
                 <p>
-                    Every deposited thermo record's own measured points and NASA-7 fit, overlaid — never combined
+                    Every deposited thermo record's own evaluated points and NASA-7 fit, overlaid — never combined
                     or averaged across conformers. Comparing the lines is how far the conformers actually agree.
                 </p>
             </div>
@@ -98,9 +108,9 @@ export function ThermoCpChart({ records, conformers, selectedConformerGroupRef }
             ) : (
                 <>
                     <ChartControls mode={mode} unit={unit} onModeChange={setMode} onUnitChange={setUnit} />
-                    <ChartLegend series={series} />
-                    <CpPanel series={series} mode={mode} unit={unit} anySelected={anySelected} />
-                    <AbsenceNotes series={series} />
+                    <ChartLegend groups={groups} />
+                    <CpPanel groups={groups} mode={mode} unit={unit} anySelected={anySelected} />
+                    <AbsenceNotes groups={groups} />
                 </>
             )}
         </section>
@@ -117,7 +127,7 @@ function ChartControls({ mode, unit, onModeChange, onUnitChange }: {
         <div className="cp-chart-controls">
             <fieldset className="cp-chart-toggle">
                 <legend>Show</legend>
-                <button type="button" aria-pressed={mode === "raw"} onClick={() => onModeChange("raw")}>Measured</button>
+                <button type="button" aria-pressed={mode === "raw"} onClick={() => onModeChange("raw")}>Points</button>
                 <button type="button" aria-pressed={mode === "fit"} onClick={() => onModeChange("fit")}>Fit</button>
                 <button type="button" aria-pressed={mode === "both"} onClick={() => onModeChange("both")}>Both</button>
             </fieldset>
@@ -137,26 +147,37 @@ function ChartControls({ mode, unit, onModeChange, onUnitChange }: {
     )
 }
 
-function ChartLegend({ series }: { series: CpChartSeries[] }) {
+function ChartLegend({ groups }: { groups: CpChartRenderGroup[] }) {
     return (
         <ul className="cp-chart-legend" aria-label="Thermo record series">
-            {series.map((item, index) => (
-                <li
-                    key={item.thermoRef}
-                    className={item.isSelected ? "cp-chart-legend-item cp-chart-legend-item--selected" : "cp-chart-legend-item"}
-                    data-testid={`legend-${item.thermoRef}`}
-                >
-                    <span className="cp-chart-swatch" style={{ background: seriesColor(index) }} aria-hidden="true" />
-                    <span className="cp-chart-legend-label">{item.label}</span>
-                    {item.isSelected && <span className="cp-chart-legend-flag">selected</span>}
-                </li>
-            ))}
+            {groups.map((group, index) => {
+                const isSelected = group.members.some((member) => member.isSelected)
+                // Every member's own ref, so a duplicate group's "N
+                // identical records" claim is checkable on hover rather
+                // than asked to be taken on faith.
+                const memberRefs = group.members.map((member) => member.thermoRef).join(", ")
+                return (
+                    <li
+                        key={group.representative.thermoRef}
+                        className={isSelected ? "cp-chart-legend-item cp-chart-legend-item--selected" : "cp-chart-legend-item"}
+                        data-testid={`legend-${group.representative.thermoRef}`}
+                        title={group.members.length > 1 ? memberRefs : undefined}
+                    >
+                        <span className="cp-chart-swatch" style={{ background: seriesColor(index) }} aria-hidden="true" />
+                        <span className="cp-chart-legend-label">{groupLegendLabel(group, groups)}</span>
+                        {isSelected && <span className="cp-chart-legend-flag">selected</span>}
+                    </li>
+                )
+            })}
         </ul>
     )
 }
 
-function AbsenceNotes({ series }: { series: CpChartSeries[] }) {
-    const notes = series.map(seriesAbsenceNote).filter((note): note is string => !!note)
+function AbsenceNotes({ groups }: { groups: CpChartRenderGroup[] }) {
+    // One note per rendered group, not per record -- a group of identical
+    // records that all lack the same thing would otherwise repeat the exact
+    // same sentence once per record.
+    const notes = groups.map((group) => seriesAbsenceNote(group.representative)).filter((note): note is string => !!note)
     if (notes.length === 0) return null
     return (
         <ul className="cp-chart-absence-notes">
@@ -199,12 +220,16 @@ function ChartAxes({ xTicks, yTicks, xScale, yScale, plotHeight, plotWidth, yTic
     )
 }
 
-function CpPanel({ series, mode, unit, anySelected }: {
-    series: CpChartSeries[]
+function CpPanel({ groups, mode, unit, anySelected }: {
+    groups: CpChartRenderGroup[]
     mode: CpChartMode
     unit: CpUnit
     anySelected: boolean
 }) {
+    // Domains are computed from every UNDERLYING record, not one per
+    // group -- collapsing duplicate lines for drawing must never change
+    // what temperature/Cp range the axes cover.
+    const series = groups.flatMap((group) => group.members)
     const temperatureDomain = computeTemperatureDomain(series)
     const cpDomain = computeCpValueDomain(series)
     const { top, right, bottom, left } = CHART_MARGIN
@@ -222,23 +247,29 @@ function CpPanel({ series, mode, unit, anySelected }: {
                 className="cp-chart-svg"
             >
                 <ChartAxes
-                    xTicks={evenTicks(temperatureDomain, 5)}
-                    yTicks={evenTicks(cpDomain, 5)}
+                    xTicks={niceTicks(temperatureDomain, 5)}
+                    yTicks={niceTicks(cpDomain, 5)}
                     xScale={xScale}
                     yScale={yScale}
                     plotHeight={plotHeight}
                     plotWidth={plotWidth}
                 />
-                {series.map((item, index) => {
+                {groups.map((group, index) => {
+                    // One line/marker set per rendered group -- a group of
+                    // several identical records draws exactly once, using
+                    // its representative's data (every member's data is,
+                    // by construction, the same data).
+                    const item = group.representative
+                    const isSelected = group.members.some((member) => member.isSelected)
                     const color = seriesColor(index)
-                    const dimmed = anySelected && !item.isSelected
+                    const dimmed = anySelected && !isSelected
                     const groupClassName = dimmed ? "cp-chart-series cp-chart-series--dimmed" : "cp-chart-series"
-                    const strokeWidth = item.isSelected ? 2.6 : 1.5
+                    const strokeWidth = isSelected ? 2.6 : 1.5
                     return (
                         <g
                             key={item.thermoRef}
                             data-testid={`series-${item.thermoRef}`}
-                            data-selected={item.isSelected}
+                            data-selected={isSelected}
                             className={groupClassName}
                         >
                             {mode !== "raw" && item.fitted && (
@@ -265,7 +296,7 @@ function CpPanel({ series, mode, unit, anySelected }: {
                                     data-testid={`measured-point-${item.thermoRef}-${pointIndex}`}
                                     cx={xScale(point.temperatureK)}
                                     cy={yScale(point.cpDisplay)}
-                                    r={item.isSelected ? 4.5 : 3.5}
+                                    r={isSelected ? 4.5 : 3.5}
                                     fill={color}
                                     stroke="var(--surface)"
                                     strokeWidth={1}
