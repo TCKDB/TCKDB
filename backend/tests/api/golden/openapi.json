@@ -35617,6 +35617,16 @@
             "title": "Review History",
             "x-tckdb-include-gated": "review"
           },
+          "saddle_point": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TransitionStateSaddlePointEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "transition_state": {
             "$ref": "#/components/schemas/TransitionStateCoreBlock"
           },
@@ -45119,6 +45129,74 @@
           "status"
         ],
         "title": "TransitionStateReviewEntry",
+        "type": "object"
+      },
+      "TransitionStateSaddlePointEvidence": {
+        "description": "The imaginary-frequency verdict for a TS entry, always present.\n\nTaken from the entry's *representative* freq result: the calculation\ndirectly attached to this entry (``calculation.transition_state_entry_id\n== entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,\npicking the latest by ``created_at`` with ``calculation.id`` as the\ntie-break — the same deterministic rule the trust rubric's\n``_ts_representative_freq_result`` uses (spec §8.5). That rule agrees\nwith this block whenever the representative freq calc is directly\nattached to the entry, which is the common case — but the rubric's own\nsource-calculation discovery additionally walks one dependency hop\n(e.g. a ``freq_on`` edge), so a freq calc the rubric reaches only that\nway is invisible to this block, and the two surfaces CAN disagree on\nwhich freq result is \"representative\" in that case. See\n``app.services.scientific_read.transition_states._build_saddle_point_index``\nfor the exact scope this block uses.\n\n``None`` on the parent record exactly when the entry carries no freq\ncalculation with a result row — a real absence, not a zeroed-out\nstruct. When present, every field below still reports its own\n``None`` faithfully: a freq result can record ``n_imag`` without a\ndesignated ``reaction_coordinate_mode_index`` (single imaginary mode,\nADR 0012), and a pre-ADR-0012 record may have neither the mode index\nnor the structural flag at all.",
+        "properties": {
+          "calculation_ref": {
+            "title": "Calculation Ref",
+            "type": "string"
+          },
+          "imag_freq_cm1": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imag Freq Cm1"
+          },
+          "imaginary_mode_structural_flag": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imaginary Mode Structural Flag"
+          },
+          "level_of_theory": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LevelOfTheorySummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "n_imag": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Imag"
+          },
+          "reaction_coordinate_mode_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reaction Coordinate Mode Index"
+          }
+        },
+        "required": [
+          "calculation_ref"
+        ],
+        "title": "TransitionStateSaddlePointEvidence",
         "type": "object"
       },
       "TransitionStateUploadRequest": {
