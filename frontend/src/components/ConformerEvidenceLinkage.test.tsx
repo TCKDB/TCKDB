@@ -101,6 +101,20 @@ describe("ConformerEvidenceLinkage", () => {
         expect(document.querySelector(".evidence-linkage .eyebrow")).not.toBeInTheDocument()
     })
 
+    // Finding 14: the card above prints "11 obs" / "opt 7/11 obs" with no
+    // expansion anywhere on the page -- this mechanics note is the one
+    // place "obs" (and "calc") ever gets tied back to its full word, so it
+    // must actually say so, not just define "observation" in isolation.
+    it("ties the card's 'obs'/'calc' abbreviations back to their full words, inside the mechanics disclosure", () => {
+        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        openMechanics()
+        const note = document.querySelector(".evidence-linkage-note")
+        expect(note).toHaveTextContent(
+            "the card above abbreviates the first two as \"obs\" and \"calc\": an observation is a deposited "
+            + "sighting of this basin",
+        )
+    })
+
     it("renders no prose paragraph at all when there is no staging fact to add beyond the card's own counts", () => {
         // `calculations: null` -> `optimizationStaging` returns "unknown" ->
         // no staging sentence exists at all, so the trimmed prose has
