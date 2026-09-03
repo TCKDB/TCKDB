@@ -577,10 +577,14 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
     dependenciesAvailability: SectionAvailability
     conformer: CalculationConformer | null
 }) {
-    // "empty" (the archive was asked and returned no edges) reads as a
-    // real single-pass optimisation, same as "populated" with no matching
-    // edge -- only "not-requested" (the wire key itself absent) has
-    // nothing to read a stage from at all.
+    // "empty" (the archive was asked and returned no edges) and
+    // "populated" with no matching edge both go through optimisationStage,
+    // which reads them as "No refinement stage recorded" -- an absence of
+    // evidence, not evidence of a single pass (review finding: the old
+    // text asserted a stage the archive never actually reported). Only
+    // "not-requested" (the wire key itself absent) skips the call
+    // entirely -- there the page never even asked, so it renders no Stage
+    // row at all rather than a "not recorded" one.
     const stage = calcType === "opt" && dependenciesAvailability !== "not-requested"
         ? optimisationStage(dependencies)
         : null
@@ -621,15 +625,22 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
  * below -- never a second, independently-derived graph read. A parent-side
  * `optimized_from` edge means this calculation was later refined further
  * (it is the coarse pass); a child-side one means this calculation IS the
- * refinement. Neither present -- the ordinary case for a species with only
- * one optimisation stage -- reads as a single pass, not silence.
+ * refinement.
+ *
+ * Neither present does NOT mean this is confidently a single pass -- review
+ * finding: the old "Single-pass optimisation" text asserted a stage from an
+ * absence of edges, including on a calculation with no dependency edges at
+ * all (nothing to read a stage from, one way or the other). An edge that
+ * doesn't exist in the archive is not evidence there is no refinement
+ * stage, only that this page has no evidence of one -- so the no-edge case
+ * says exactly that, and reads as "not recorded", not as an asserted fact.
  */
 function optimisationStage(dependencies: CalculationDependency[]): { text: string; linkRef?: string } {
     const parentEdge = dependencies.find((dep) => dep.direction === "parent" && dep.role === "optimized_from")
     if (parentEdge) return { text: "Coarse pass; refined by", linkRef: parentEdge.child_calculation_ref }
     const childEdge = dependencies.find((dep) => dep.direction === "child" && dep.role === "optimized_from")
     if (childEdge) return { text: "Refinement of", linkRef: childEdge.parent_calculation_ref }
-    return { text: "Single-pass optimisation" }
+    return { text: "No refinement stage recorded" }
 }
 
 // ---------------------------------------------------------------------------

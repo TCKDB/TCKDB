@@ -1049,7 +1049,13 @@ describe("CalculationDetailPage", () => {
         expect(within(stageRow).getByRole("link", { name: "calc_coarse_stage" })).toHaveAttribute("href", "/calculations/calc_coarse_stage")
     })
 
-    it("reads 'Single-pass optimisation' when no optimized_from edge exists on an opt calculation", async () => {
+    // Review finding (SHOULD-FIX-3): the old "Single-pass optimisation"
+    // text asserted a stage from an absence of edges -- including on a
+    // calculation with no dependency edges at all, which has no evidence
+    // either way. "No refinement stage recorded" says exactly what the
+    // page knows: not that there's confidently one pass, only that it has
+    // no edge saying otherwise.
+    it("reads 'No refinement stage recorded' when no optimized_from edge exists on an opt calculation", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
                 calculation: { ...mockRecord().calculation, type: "opt" },
@@ -1061,7 +1067,8 @@ describe("CalculationDetailPage", () => {
         page()
         await findLoaded("Optimisation")
         const stageRow = screen.getByText("Stage").closest("div") as HTMLElement
-        expect(within(stageRow).getByText("Single-pass optimisation")).toBeVisible()
+        expect(within(stageRow).getByText("No refinement stage recorded")).toBeVisible()
+        expect(within(stageRow).queryByText("Single-pass optimisation")).not.toBeInTheDocument()
     })
 
     // Item 5: input == output collapses to one card.
