@@ -79,3 +79,16 @@ export function loadWorkflowToolVersions(workflowTool: string, signal?: AbortSig
     const query = new URLSearchParams({ workflow_tool: workflowTool })
     return loadVocab(`/api/v1/scientific/meta/workflow-tool-versions?${query}`, signal)
 }
+
+/**
+ * The bounded reaction-family vocabulary -- `/transition-states/browse`'s
+ * `family` filter matches one of these exactly (`ReactionFamily.name`).
+ * Reuses `loadVocab`/`vocabEntrySchema` like every other list here: the
+ * endpoint's rows also carry `display_name`, passed through untouched by
+ * `.passthrough()` but not surfaced as a separate type here, since no
+ * caller needs it yet -- `value` is both the filter token and (for this
+ * vocabulary) a reasonably readable label on its own.
+ */
+export function loadReactionFamilies(signal?: AbortSignal): Promise<VocabEntry[]> {
+    return loadVocab("/api/v1/scientific/meta/reaction-families", signal)
+}

@@ -134,6 +134,46 @@
     letter-spacing: normal;
 }
 
+/* The seven TS `has_*` selects used to each occupy their own grid cell
+   (19 controls on the row before Status/evidence, first row starting at
+   y=829 at 1920px). Collapsed into one "Show only entries with..." row:
+   a <fieldset> spanning every grid column (`grid-column: 1 / -1`) rather
+   than sitting in one `minmax(11rem, 1fr)` cell like the rest of the
+   grid, so the seven checkboxes can lay out in a single wrapping row
+   instead of stacking narrowly. */
+.browse-filter-evidence-group {
+    grid-column: 1 / -1;
+    display: flex;
+    flex-direction: column;
+    gap: .5rem;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+.browse-filter-evidence-group legend {
+    padding: 0;
+    color: var(--muted);
+    font: .68rem var(--mono);
+    letter-spacing: .04em;
+    text-transform: uppercase;
+}
+
+.browse-filter-evidence-checks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .5rem 1.1rem;
+}
+
+.browse-filter-evidence-check {
+    display: flex;
+    align-items: center;
+    gap: .4rem;
+    color: var(--ink-2);
+    font: .84rem var(--sans);
+    cursor: pointer;
+}
+
 .browse-status {
     margin: 2rem 0;
     color: var(--ink-2);
@@ -178,20 +218,44 @@
     background: var(--surface);
 }
 
-/* The TS row's whole-row <Link> wraps block content (headline, pill list,
-   evidence text, ref code). Made an explicit block so its hoverable/
-   clickable box is the full row -- without this the hover affordance
-   below only reliably reaches the equation text's own :hover rule, not
-   the rest of the row that is now equally clickable. */
-.browse-row-link {
-    display: block;
-    color: inherit;
-    text-decoration: none;
+/* Stretched-link pattern for the TS browse row: the <Link> in
+   `TransitionStateBrowseRow.tsx` wraps ONLY the equation text (its
+   `.browse-row-title`), never the ref/pills/evidence line -- so the ref
+   stays selectable/copyable text and the link's accessible name stays
+   short (equation + label) instead of the whole row's ~170 characters
+   read out letter by letter. `.browse-row-title::after` is an absolutely
+   positioned, empty pseudo-element stretched to the row's full box
+   (`inset: 0` against `.ts-browse-row`'s `position: relative`); a click
+   anywhere in that box still lands on the <a> it belongs to, so the full
+   row remains the click target visually while only the title text is
+   inside the anchor in the DOM. Scoped to `.ts-browse-row` rather than
+   applied to `.browse-row-title` globally so it cannot reach
+   `SpeciesBrowseRow.tsx`'s own (differently-scoped) title link. */
+.ts-browse-row {
+    position: relative;
 }
 
-.browse-row-link:hover .browse-row-title {
-    color: var(--accent);
-    text-decoration-color: currentColor;
+.ts-browse-row .browse-row-title::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+}
+
+/* Per the CSS painting-order spec, a positioned descendant (the `::after`
+   above) paints ON TOP OF later non-positioned in-flow siblings regardless
+   of DOM order -- so without this, the stretched overlay would sit above
+   the ref/pills/evidence line and swallow their clicks/text-selection even
+   though they come later in markup. Giving them their own `position`
+   re-enters them into the same "positioned, DOM order" paint bucket as the
+   overlay, and DOM order wins there: these three are declared after
+   `.browse-row-title` in `TransitionStateBrowseRow.tsx`, so they paint (and
+   hit-test) above it. This is the standard "stretched link" caveat, not
+   TS-row-specific -- kept adjacent to the overlay rule so the two are never
+   edited apart from each other. */
+.ts-browse-row .browse-row-entries,
+.ts-browse-row .browse-row-footer,
+.ts-browse-row .browse-row-provenance {
+    position: relative;
 }
 
 .browse-row-headline {
@@ -223,7 +287,20 @@ span.browse-row-title {
 .browse-row-meta {
     color: var(--muted);
     font: .76rem var(--mono);
-    white-space: nowrap;
+}
+
+/* `nowrap` only above 900px. Below that, the TS row's meta text (label ·
+   family · charge/spin · deposited date -- longer than the species row's
+   "charge X · spin Y") wrapped mid-word against `justify-content:
+   space-between` on `.browse-row-headline`, zig-zagging line to line. Not
+   scoped to `.ts-browse-row` because the underlying cause (a long inline
+   run fighting `nowrap` at narrow widths) applies to any row, and no
+   other row currently puts enough text in `.browse-row-meta` to trigger
+   it. */
+@media (min-width: 900px) {
+    .browse-row-meta {
+        white-space: nowrap;
+    }
 }
 
 .browse-row-smiles,
@@ -232,6 +309,36 @@ span.browse-row-title {
     margin: .35rem 0 0;
     color: var(--ink-2);
     font-size: .84rem;
+}
+
+/* Level-of-theory + software line (item 1): the two headline stages
+   (opt/sp, falling back to whichever stages exist) plus the software that
+   ran them -- see `TransitionStateBrowseRow.tsx`'s `provenanceSummary`.
+   Same visual weight as `.browse-row-evidence` (a fact about the record,
+   not the headline), kept as its own class rather than folded into that
+   selector so the two can be reordered or restyled independently later. */
+.browse-row-provenance {
+    margin: .35rem 0 0;
+    color: var(--ink-2);
+    font-size: .82rem;
+}
+
+/* Screen-reader-only text: visually hidden, still in the accessibility
+   tree. Used to fold the TS label into the row link's accessible name
+   ("equation (+ label)") without duplicating it as visible text -- the
+   label is already visible on `.browse-row-meta`. Standard clip-based
+   hiding technique (not `display: none` / `visibility: hidden`, both of
+   which remove the text from the accessible name too). */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .browse-row-smiles {
@@ -272,6 +379,35 @@ span.browse-row-title {
     margin-top: .6rem;
     color: var(--faint);
     font: .68rem var(--mono);
+}
+
+/* TS row only: the evidence text and the ref code used to be two separate
+   `<p>`s at different sizes; nothing about either needs its own line, so
+   they now share one row at the ref's smaller 11px (`.68rem`) size. Flex
+   rather than plain inline text so the ref (`.browse-row-ref`, reused
+   as-is for its color) can still wrap onto its own line at narrow widths
+   without the evidence text truncating. See the painting-order comment
+   above `.ts-browse-row .browse-row-entries` for why this needs its own
+   `position: relative` too. */
+.browse-row-footer {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: .25rem .7rem;
+    margin-top: .6rem;
+    color: var(--ink-2);
+    font: .68rem var(--mono);
+}
+
+.browse-row-footer .browse-row-ref {
+    margin-top: 0;
+}
+
+@media (max-width: 899px) {
+    .ts-browse-row .browse-row-headline {
+        flex-direction: column;
+        align-items: flex-start;
+    }
 }
 
 .browse-pagination {

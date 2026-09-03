@@ -40,7 +40,14 @@ from app.db.models.common import (
     RecordReviewStatus,
     SubmissionRecordType,
 )
-from app.db.models.reaction import ChemReaction, ReactionEntry
+from app.db.models.reaction import (
+    ChemReaction,
+    ReactionEntry,
+    ReactionFamily,
+    ReactionParticipant,
+)
+from app.db.models.software import Software, SoftwareRelease
+from app.db.models.species import Species
 from app.db.models.transition_state import (
     TransitionState,
     TransitionStateEntry,
@@ -48,7 +55,9 @@ from app.db.models.transition_state import (
 from app.schemas.reads.scientific_common import (
     REVIEW_RANK,
     RecordReviewBadge,
+    SoftwareReleaseSummary,
 )
+from app.schemas.reads.scientific_structure_search import StructureQueryKind
 from app.schemas.reads.scientific_transition_state import (
     ScientificTransitionStateEntryRecord,
 )
@@ -77,6 +86,9 @@ from app.services.scientific_read.handles import (
 )
 from app.services.scientific_read.internal_ids import (
     filter_internal_ids_from_resolved,
+)
+from app.services.scientific_read.structure_query import (
+    inchi_key_from_query,
 )
 from app.services.scientific_read.transition_states import (
     _INTERNAL_INCLUDE_TOKENS as _CONCEPT_INTERNAL_INCLUDE_TOKENS,
@@ -149,6 +161,8 @@ _MEANINGFUL_FILTER_FIELDS: tuple[str, ...] = (
     "software_version",
     "workflow_tool",
     "workflow_tool_version",
+    "family",
+    "participant_smiles",
 )
 
 
@@ -225,6 +239,7 @@ def search_transition_states(
     stmt = _apply_scalar_filters(stmt, request)
     stmt = _apply_evidence_filters(stmt, request)
     stmt = _apply_method_basis_software_filters(stmt, request)
+    stmt = _apply_reaction_context_filters(stmt, request)
 
     rows = session.execute(stmt).all()
     candidate_ids = [row.id for row in rows]
@@ -345,6 +360,7 @@ def browse_transition_states(
     stmt = _apply_scalar_filters(stmt, request)
     stmt = _apply_evidence_filters(stmt, request)
     stmt = _apply_method_basis_software_filters(stmt, request)
+    stmt = _apply_reaction_context_filters(stmt, request)
 
     rows = session.execute(stmt).all()
     candidate_ids = [row.id for row in rows]
@@ -574,6 +590,49 @@ def _apply_method_basis_software_filters(
     )
 
 
+def _apply_reaction_context_filters(
+    stmt, request: TransitionStatesSearchRequest | TransitionStatesBrowseRequest
+):
+    """``family`` and ``participant_smiles`` narrow by the *reaction*, not
+    the TS entry -- see :class:`TransitionStatesBrowseRequest`'s docstring
+    for why a TS entry, which has no molecular graph of its own, can still
+    be filtered structurally through the reaction it belongs to.
+
+    Both are correlated ``EXISTS`` predicates against
+    ``TransitionStateEntry.transition_state_id``, matching the shape every
+    other optional filter in this module uses -- additive, AND-combined in
+    the same statement, never a second round trip.
+    """
+    if request.family is not None:
+        ex = exists().where(
+            and_(
+                TransitionState.id == TransitionStateEntry.transition_state_id,
+                TransitionState.reaction_entry_id == ReactionEntry.id,
+                ReactionEntry.reaction_id == ChemReaction.id,
+                ChemReaction.reaction_family_id == ReactionFamily.id,
+                ReactionFamily.name == request.family,
+            )
+        )
+        stmt = stmt.where(ex)
+
+    if request.participant_smiles is not None:
+        target_key = inchi_key_from_query(
+            StructureQueryKind.smiles, request.participant_smiles
+        )
+        ex = exists().where(
+            and_(
+                TransitionState.id == TransitionStateEntry.transition_state_id,
+                TransitionState.reaction_entry_id == ReactionEntry.id,
+                ReactionParticipant.reaction_id == ReactionEntry.reaction_id,
+                Species.id == ReactionParticipant.species_id,
+                Species.inchi_key == target_key,
+            )
+        )
+        stmt = stmt.where(ex)
+
+    return stmt
+
+
 # ---------------------------------------------------------------------------
 # Materialization
 # ---------------------------------------------------------------------------
@@ -643,6 +702,14 @@ def _materialize_records(
     # 169 → 189 at ``limit=20``).
     saddle_point_index = _build_saddle_point_index(session, page_ids)
 
+    # Software attributed to the whole page's calculations, one grouped
+    # statement, same cost discipline as ``levels_index`` above. Deliberately
+    # NOT threaded into ``build_entry_record`` (that shared builder is also
+    # the TS-entry-detail code path) -- applied here, after the record is
+    # built, so this surface's evidence-summary addition cannot perturb
+    # detail's construction of the same shared schema.
+    software_index = _software_index_for_entries(session, page_ids)
+
     # ``include=entries`` gives every record its parent's entry list. Built
     # once per distinct parent on the page and shared, because search pages
     # cluster: several entries of one transition state routinely match the
@@ -678,20 +745,92 @@ def _materialize_records(
                     includes=includes,
                 )
             entries_block = entries_blocks[ts.id]
-        records.append(
-            build_entry_record(
-                session,
-                entry=entry,
-                ts_core=ts_core,
-                reaction=reaction,
-                entry_badge=badges[cid],
-                includes=includes,
-                entries_block=entries_block,
-                levels_index=levels_index,
-                saddle_point_index=saddle_point_index,
-            )
+        record = build_entry_record(
+            session,
+            entry=entry,
+            ts_core=ts_core,
+            reaction=reaction,
+            entry_badge=badges[cid],
+            includes=includes,
+            entries_block=entries_block,
+            levels_index=levels_index,
         )
+        software_map = software_index.get(cid, {})
+        if software_map:
+            record = record.model_copy(
+                update={
+                    "evidence_summary": record.evidence_summary.model_copy(
+                        update={"software": software_map}
+                    )
+                }
+            )
+        records.append(record)
     return records
+
+
+def _software_index_for_entries(
+    session: Session, entry_ids: list[int]
+) -> dict[int, dict[str, list[SoftwareReleaseSummary]]]:
+    """Software (release) actually attributed to a page's TS entries.
+
+    Mirrors :func:`levels_of_theory.for_transition_state_entries`'s shape
+    and cost contract (one grouped statement for the whole page, an
+    outer join so a calculation naming no ``software_release`` still puts
+    its *type* in the map with an empty list rather than dropping the
+    type entirely) -- see that module's docstring for the full argument.
+    Kept local to this module rather than folded into ``levels_of_theory``
+    because it serves one caller (this file's own materializer) and the
+    shared module's ``for_*``/``merged`` machinery is built around
+    :class:`LevelOfTheorySummary`, not :class:`SoftwareReleaseSummary`.
+
+    :returns: ``transition_state_entry_id`` -> calculation type -> distinct
+        software releases named by that entry's calculations of that type.
+    """
+    if not entry_ids:
+        return {}
+    stmt = (
+        select(
+            Calculation.transition_state_entry_id.label("owner_id"),
+            Calculation.type,
+            SoftwareRelease.id,
+            SoftwareRelease.public_ref,
+            SoftwareRelease.version,
+            Software.name,
+        )
+        .select_from(Calculation)
+        .outerjoin(
+            SoftwareRelease,
+            SoftwareRelease.id == Calculation.software_release_id,
+        )
+        .outerjoin(Software, Software.id == SoftwareRelease.software_id)
+        .where(Calculation.transition_state_entry_id.in_(entry_ids))
+        .distinct()
+    )
+
+    collected: dict[int, dict[str, dict[int, SoftwareReleaseSummary]]] = {}
+    for row in session.execute(stmt):
+        per_owner = collected.setdefault(row.owner_id, {})
+        type_key = row.type.value if hasattr(row.type, "value") else str(row.type)
+        bucket = per_owner.setdefault(type_key, {})
+        if row.id is None:
+            continue
+        bucket[row.id] = SoftwareReleaseSummary(
+            software_release_id=row.id,
+            software_release_ref=row.public_ref,
+            software=row.name,
+            version=row.version,
+        )
+
+    return {
+        owner_id: {
+            key: sorted(
+                bucket.values(),
+                key=lambda s: (s.software, s.version or "", s.software_release_id),
+            )
+            for key, bucket in per_owner.items()
+        }
+        for owner_id, per_owner in collected.items()
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -753,6 +892,8 @@ _BROWSE_FILTER_FIELDS: tuple[str, ...] = (
     "software_version",
     "workflow_tool",
     "workflow_tool_version",
+    "family",
+    "participant_smiles",
 )
 
 

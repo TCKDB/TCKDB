@@ -302,6 +302,25 @@ class TransitionStateEntryEvidenceSummary(BaseModel):
     #: ``has_sp`` false and an absent ``sp`` key are the same fact said
     #: twice. See ``app/services/scientific_read/levels_of_theory.py``.
     levels_of_theory: dict[str, list[LevelOfTheorySummary]]
+    #: Software (release) actually attributed to this entry's calculations,
+    #: per calculation type -- the ``levels_of_theory`` block's counterpart
+    #: for the other half of "at what level, on what code". Same
+    #: absence/emptiness contract: a type key is absent when no calculation
+    #: of that type exists, present with an empty list when one exists but
+    #: names no ``software_release`` (``calculation.software_release_id``
+    #: is nullable), and present with entries otherwise. Two entries can
+    #: report an identical level of theory (same method/basis) while
+    #: differing only in software -- CCSD(T)-F12/cc-pVTZ-F12 run on
+    #: Molpro is not the same evidence as the identical level run on
+    #: ORCA -- so a caller reading only ``levels_of_theory`` cannot tell
+    #: those rows apart on the search/browse surfaces, which is what this
+    #: field exists to fix. Only populated on
+    #: ``/scientific/transition-states/search`` and
+    #: ``.../browse`` today (see ``transition_states_search.py``); other
+    #: builders of this shared shape leave it at its default ``{}``.
+    software: dict[str, list[SoftwareReleaseSummary]] = Field(
+        default_factory=dict
+    )
 
 
 class TransitionStateValidationEvidenceSummary(BaseModel):

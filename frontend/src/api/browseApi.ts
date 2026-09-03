@@ -102,6 +102,14 @@ export type BrowseFilters = {
     hasPathSearch: TriState
     hasGeometryValidation: TriState
     hasScfStability: TriState
+    // Transition-state findability filters (item 4): `/transition-states/
+    // browse` has no formula/elements of its own -- a transition state is
+    // identified by the reaction it connects, not a molecular graph -- so
+    // these narrow through that reaction instead. `participantSmiles` is
+    // ONE field matching either side (reactant or product); `family` is an
+    // exact match against `/meta/reaction-families`' bounded vocabulary.
+    participantSmiles: string
+    family: string
 }
 
 export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
@@ -110,6 +118,7 @@ export const EMPTY_BROWSE_FILTERS: BrowseFilters = {
     queryStructure: "", queryIsSmarts: false, structureMode: "substructure", similarityThreshold: "",
     status: "", method: "", basis: "", software: "", softwareVersion: "", workflowTool: "", workflowToolVersion: "",
     hasOpt: "", hasFreq: "", hasSp: "", hasIrc: "", hasPathSearch: "", hasGeometryValidation: "", hasScfStability: "",
+    participantSmiles: "", family: "",
 }
 
 const COMPOSITION_DEFAULTS = {
@@ -131,6 +140,10 @@ const EVIDENCE_DEFAULTS = {
     status: "",
     hasOpt: "" as TriState, hasFreq: "" as TriState, hasSp: "" as TriState, hasIrc: "" as TriState,
     hasPathSearch: "" as TriState, hasGeometryValidation: "" as TriState, hasScfStability: "" as TriState,
+    // TS-only findability filters (item 4) -- cleared the same way `status`
+    // and the seven `has_*` flags above are, on a switch AWAY from
+    // "transition_state".
+    participantSmiles: "", family: "",
 }
 
 /**
@@ -171,7 +184,7 @@ export function hasActiveFilters(kind: BrowseKind, filters: BrowseFilters): bool
         || filters.softwareVersion !== "" || filters.workflowTool !== "" || filters.workflowToolVersion !== ""
     if (provenanceActive) return true
     if (kind === "transition_state") {
-        return filters.status !== "" || [
+        return filters.status !== "" || filters.participantSmiles !== "" || filters.family !== "" || [
             filters.hasOpt, filters.hasFreq, filters.hasSp, filters.hasIrc,
             filters.hasPathSearch, filters.hasGeometryValidation, filters.hasScfStability,
         ].some((value) => value !== "")
@@ -284,6 +297,11 @@ export function buildTransitionStateBrowseQuery(filters: BrowseFilters, offset: 
         ["has_geometry_validation", filters.hasGeometryValidation], ["has_scf_stability", filters.hasScfStability],
     ]
     for (const [param, value] of evidenceFlags) if (value !== "") query.set(param, value)
+    // Findability filters (item 4) -- both additive, both exact match. See
+    // `TransitionStatesBrowseRequest.participant_smiles`/`.family` on the
+    // backend for the matching semantics.
+    if (filters.participantSmiles !== "") query.set("participant_smiles", filters.participantSmiles)
+    if (filters.family !== "") query.set("family", filters.family)
     return query
 }
 
@@ -315,6 +333,18 @@ const reactionContextSchema = z.object({
     family: z.string().nullable().optional(),
 }).passthrough()
 
+// Mirrors `calculationSummarySchema`'s own inline `software_release` shape
+// (`scientificSchemas.ts`) rather than importing a shared export -- this
+// module owns its own response schemas end to end (see the module
+// docstring), and the shape is small enough that duplicating it here does
+// not risk drifting from the calculation surface's meaning of the same
+// three fields.
+const softwareReleaseSchema = z.object({
+    software: z.string(),
+    version: z.string().nullable().optional(),
+    software_release_ref: z.string().optional(),
+}).passthrough()
+
 const evidenceSummarySchema = z.object({
     calculation_count: z.number(),
     has_opt: z.boolean(),
@@ -325,6 +355,12 @@ const evidenceSummarySchema = z.object({
     has_geometry_validation: z.boolean(),
     has_scf_stability: z.boolean(),
     levels_of_theory: z.record(z.string(), z.array(levelOfTheorySchema)).optional(),
+    // Added alongside `levels_of_theory` -- same per-calculation-type shape,
+    // same absence contract (key absent: no calculation of that type; key
+    // present, empty list: a calculation exists but names no software
+    // release). Optional here because `evidenceSummarySchema` is shared by
+    // response shapes that predate this field.
+    software: z.record(z.string(), z.array(softwareReleaseSchema)).optional(),
 }).passthrough()
 
 const transitionStateEntryCoreSchema = z.object({
@@ -333,6 +369,7 @@ const transitionStateEntryCoreSchema = z.object({
     multiplicity: z.number(),
     status: z.string(),
     unmapped_smiles: z.string().nullable().optional(),
+    created_at: z.string().optional(),
     review: recordReviewSchema,
 }).passthrough()
 

@@ -23,10 +23,16 @@ from app.schemas.reads._field_bounds import (
     MAX_BASIS_LENGTH as _MAX_BASIS_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
+    MAX_FAMILY_LENGTH as _MAX_FAMILY_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
     MAX_METHOD_LENGTH as _MAX_METHOD_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
     MAX_PUBLIC_REF_LENGTH as _MAX_PUBLIC_REF_LENGTH,
+)
+from app.schemas.reads._field_bounds import (
+    MAX_SMILES_LENGTH as _MAX_SMILES_LENGTH,
 )
 from app.schemas.reads._field_bounds import (
     MAX_SOFTWARE_NAME_LENGTH as _MAX_SOFTWARE_NAME_LENGTH,
@@ -93,6 +99,26 @@ class TransitionStatesSearchRequest(BaseModel):
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
 
+    # --- reaction context filters -----------------------------------------
+    #: Exact match against the seeded ``reaction_family`` vocabulary
+    #: (``ReactionFamily.name``), same semantics as
+    #: ``ReactionSearchRequest.family`` / ``KineticsSearchRequest.family``:
+    #: an unknown value returns an empty result set, not a 422 -- the
+    #: discoverable set of valid tokens is ``/meta/reaction-families``.
+    family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
+    #: Exact-match structural filter over the *reaction's* participants
+    #: (either side, reactant or product), not the TS entry itself -- a
+    #: transition state has no molecular graph of its own (see the browse
+    #: request's docstring). Matched the same way
+    #: ``SpeciesBrowseRequest``'s ``mode=exact`` does: the query SMILES is
+    #: parsed via RDKit to its InChIKey
+    #: (``app.services.scientific_read.structure_query.inchi_key_from_query``)
+    #: and compared against ``species.inchi_key`` -- no substructure or
+    #: similarity mode here, deliberately narrower than the species filter.
+    participant_smiles: str | None = Field(
+        default=None, max_length=_MAX_SMILES_LENGTH
+    )
+
     # --- review filters --------------------------------------------------
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
@@ -128,11 +154,17 @@ class TransitionStatesBrowseRequest(BaseModel):
     behavioural gain. The only way ``/transition-states/browse`` gains an
     identifier field is a change written on *this* class.
 
-    No composition filters exist here (contrast
-    ``SpeciesBrowseRequest.elements`` / ``max_heavy_atoms`` /
-    ``min_heavy_atoms``): a transition state has no formula of its own — it
-    is identified by the reaction it connects, not by a molecular graph —
-    so there is no composition axis to browse by. See
+    ``elements`` / ``max_heavy_atoms`` / ``min_heavy_atoms`` still do not
+    exist here, and for the reason the old docstring gave: a transition
+    state has no formula of its own. But "no composition axis to browse
+    by" no longer holds as a blanket claim — it conflated "a TS entry has
+    no molecular graph" with "nothing reachable from a TS entry has one",
+    and the second is false: every TS entry belongs to exactly one
+    reaction, and a reaction's participants are ordinary species with
+    ordinary structures. ``participant_smiles`` filters on *that* graph
+    (the reaction's reactants/products), not a TS graph that does not
+    exist, which is why it is a structural filter without being a
+    composition filter in the ``elements``/heavy-atom sense above. See
     ``docs/specs/scientific_transition_state_reads.md``.
     """
 
@@ -162,6 +194,14 @@ class TransitionStatesBrowseRequest(BaseModel):
         default=None, max_length=_MAX_WORKFLOW_TOOL_LENGTH
     )
     workflow_tool_version: str | None = Field(default=None, max_length=128)
+
+    # --- reaction context filters -----------------------------------------
+    # Same fields, same semantics, as ``TransitionStatesSearchRequest``
+    # above -- see that class for the full rationale.
+    family: str | None = Field(default=None, max_length=_MAX_FAMILY_LENGTH)
+    participant_smiles: str | None = Field(
+        default=None, max_length=_MAX_SMILES_LENGTH
+    )
 
     # --- review filters --------------------------------------------------
     min_review_status: RecordReviewStatus | None = None

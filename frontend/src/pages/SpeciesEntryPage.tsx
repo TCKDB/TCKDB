@@ -176,6 +176,27 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef 
             <span aria-hidden="true">/</span>
             <span aria-current="page">Species entry</span>
         </nav>
+        {/* Item 5: one line pointing at the TS browse, participant filter
+            prefilled with this species' own canonical SMILES
+            (`participant_smiles`, exact-match against either side of the
+            reaction -- see `TransitionStatesBrowseRequest`). Always
+            rendered, not gated behind a count check: a second request just
+            to decide whether to show one line would add latency to every
+            entry-page load for a link that, even at zero matches, lands on
+            a well-formed empty state (`filteredEmptyMessage`/
+            `archiveEmptyMessage` on `BrowsePage`) rather than a broken
+            page -- the cost of "sometimes links to zero results" is lower
+            than the cost of an extra round trip on every page view. */}
+        {/* No new CSS class: this file's stylesheet (`species-entry.css`) is
+            out of scope for this change (see the file-ownership note in
+            the PR), so this one line renders with plain default link/
+            paragraph styling rather than reaching into a stylesheet this
+            change does not otherwise touch. */}
+        <p>
+            <Link to={`/species?kind=transition_state&participant_smiles=${encodeURIComponent(entry.canonicalSmiles)}`}>
+                Transition states for reactions of this species
+            </Link>
+        </p>
         {/* `EntryIdentity` now routes through `PageShell`'s `identity` slot
             (previously it rendered directly above `<PageShell>`, spanning
             full width above the ToC/content flex row -- an earlier version

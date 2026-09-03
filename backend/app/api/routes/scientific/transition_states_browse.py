@@ -90,6 +90,23 @@ def scientific_transition_states_browse(
     software_version: str | None = Query(None),
     workflow_tool: str | None = Query(None),
     workflow_tool_version: str | None = Query(None),
+    family: str | None = Query(
+        None,
+        description=(
+            "Exact match against the seeded reaction_family vocabulary "
+            "(see /meta/reaction-families for the discoverable set of "
+            "values). Unknown values return an empty result, not a 422."
+        ),
+    ),
+    participant_smiles: str | None = Query(
+        None,
+        description=(
+            "Exact-match SMILES filter over the parent reaction's "
+            "participants (reactant or product side, either matches). "
+            "Parsed via RDKit and compared by InChIKey, same exact-match "
+            "semantics as /species/browse's mode=exact structure filter."
+        ),
+    ),
     min_review_status: RecordReviewStatus | None = Query(None),
     include_rejected: bool = Query(False),
     include_deprecated: bool = Query(False),
@@ -107,10 +124,14 @@ def scientific_transition_states_browse(
     ref filters are excluded because they are handles, not narrowing
     filters: a caller who already has one wants an exact lookup on
     ``/transition-states/search``, and there is no field on
-    ``TransitionStatesBrowseRequest`` to carry one. Unlike
-    ``/species/browse``, there are no composition filters here either --
-    a transition state has no formula of its own; it is identified by the
-    reaction it connects, not by a molecular graph. ``limit`` is capped at
+    ``TransitionStatesBrowseRequest`` to carry one. There is still no
+    ``formula`` / ``elements`` filter here -- a transition state has no
+    formula of its own -- but ``family`` and ``participant_smiles`` DO
+    narrow by structure now, reached through the reaction each entry
+    belongs to rather than through the entry itself; see
+    ``TransitionStatesBrowseRequest``'s docstring for why that is a
+    meaningfully different claim from "no composition axis to browse
+    by". ``limit`` is capped at
     200 (default 50, same as ``/transition-states/search``); ``offset`` is
     capped by the hosted ``public_max_offset`` setting via the shared
     pagination validator. Ordering is
@@ -145,6 +166,8 @@ def scientific_transition_states_browse(
         software_version=software_version,
         workflow_tool=workflow_tool,
         workflow_tool_version=workflow_tool_version,
+        family=family,
+        participant_smiles=participant_smiles,
         min_review_status=min_review_status,
         include_rejected=include_rejected,
         include_deprecated=include_deprecated,
