@@ -199,8 +199,13 @@ describe("Every record page routes its header through PageShell's identity slot"
                 </Routes>
             </MemoryRouter>,
         )
-        await screen.findByRole("heading", { name: "conformer_1" })
-        assertIdentityLeadsContentColumn(container, "conformer_1")
+        // The h1 now states what the record IS ("Conformer basin"), not
+        // the producer's own deposited label -- see
+        // `ConformerGroupPage.tsx`'s header comment. The fixture keeps
+        // `label: "conformer_1"` on purpose; this file only checks that
+        // whatever the header renders leads the content column.
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        assertIdentityLeadsContentColumn(container, "Conformer basin")
     })
 
     it("SpeciesEntryPage: EntryIdentity leads the content column (previously rendered entirely outside PageShell)", async () => {

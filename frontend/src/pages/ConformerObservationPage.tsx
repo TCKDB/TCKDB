@@ -77,7 +77,19 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
     // the array itself is the only trustworthy signal here.
     const selections = observation.selections ?? []
 
-    const stages = Object.entries(evidence.levels_of_theory)
+    // A real timestamped or annotated status change, as opposed to a
+    // placeholder row the archive returns even when nothing has happened
+    // yet (status mirroring the observation's current status, with
+    // `reviewed_at`/`note` both null). Only the former counts as an
+    // "event" worth a table -- see the review-ledger section below, whose
+    // owner-reported defect was a one-row table saying nothing beyond what
+    // the hero badge already says.
+    const hasReviewEvents = reviewHistory.some((entry) => entry.reviewed_at != null || entry.note != null)
+    // Whether the "Review history" table will actually render below. The
+    // intro sentence describes that table -- it should not appear when
+    // there is no table to describe (see the `<p>` right above the
+    // review-history section for the full history of this fix).
+    const showReviewTable = reviewAvailability === "populated" && hasReviewEvents
 
     return (
         <section className="conformer-page">
@@ -173,26 +185,14 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 </div>
             </section>
 
-            <section className="ledger-section" aria-labelledby="lot-by-stage">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Deposited provenance</p>
-                    <SectionHeading id="lot-by-stage">Levels of theory by stage</SectionHeading>
-                    <p>Each stage keeps its own method. Differing levels across stages are never flattened.</p>
-                </div>
-                {stages.length ? (
-                    <dl className="basin-context">
-                        {stages.map(([stage, levels]) => (
-                            <div key={stage}>
-                                <dt>{stage}</dt>
-                                <dd>{levels.map((level) => lotLabel(level)).join(", ") || "not recorded"}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                ) : (
-                    <p className="empty-projection">No levels of theory were recorded for this observation.</p>
-                )}
-            </section>
-
+            {/* The "Levels of theory by stage" section that used to sit here
+                showed exactly the same (stage, level of theory) pairs as the
+                "Stage" and "Level of theory" columns of the calculation
+                table immediately below -- the owner flagged this as the
+                same fact stated twice back to back. The table is the more
+                complete of the two (it also carries software/workflow,
+                review, and the calculation's own record link per row), so
+                it is the one that stays. */}
             <section className="ledger-section" aria-labelledby="calc-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Machine detail</p>
@@ -247,12 +247,16 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited provenance</p>
                     <SectionHeading id="sibling-ledger">Sibling observations</SectionHeading>
-                    <p>Each sibling is an independent deposition; none of them is this observation.</p>
+                    <p>Each sibling is an independent deposition; none of them is this observation. Review status is shown only where it differs from this observation's.</p>
                 </div>
                 {observationsAvailability === "populated" && siblings.length > 0 ? (
                     <ul className="observation-list">
                         {siblings.map((sibling) => (
-                            <SiblingRow key={sibling.conformer_observation.conformer_observation_ref} sibling={sibling} />
+                            <SiblingRow
+                                key={sibling.conformer_observation.conformer_observation_ref}
+                                sibling={sibling}
+                                currentStatus={core.review.status}
+                            />
                         ))}
                     </ul>
                 ) : (
@@ -267,9 +271,20 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <div className="ledger-heading">
                     <p className="eyebrow">Review &amp; trust</p>
                     <SectionHeading id="review-ledger">Review history</SectionHeading>
-                    <p>The current status is {statusLabel(core.review.status)}. This is the record of how it got there.</p>
+                    {/* Used to restate the current status here as prose
+                        ("The current status is not reviewed.") -- the hero
+                        badge above already carries it, and the owner
+                        counted this page showing review status in eight
+                        places (hero pill, this sentence, every calculation
+                        row, every sibling pill, and the history table
+                        itself). This sentence describes the TABLE now,
+                        without repeating the status value -- and only
+                        renders when a table follows; when there is no
+                        table, the single empty-state line below speaks for
+                        itself. */}
+                    {showReviewTable && <p>This is the record of how the current status was reached.</p>}
                 </div>
-                {reviewAvailability === "populated" ? (
+                {showReviewTable ? (
                     <table className="stage-table" aria-label={`Review history for ${core.conformer_observation_ref}`}>
                         <thead>
                             <tr>
@@ -289,9 +304,15 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         </tbody>
                     </table>
                 ) : (
+                    // No table when review history carries no real events --
+                    // a one-row table of "not reviewed / not recorded / not
+                    // recorded" said nothing the hero badge hadn't already
+                    // said. `reviewAvailability` is remapped to "empty" for
+                    // the populated-but-eventless case so this renders the
+                    // same single line as a genuinely empty response.
                     <SectionEmptyMessage
-                        availability={reviewAvailability}
-                        emptyText="No review history was returned for this observation."
+                        availability={reviewAvailability === "populated" ? "empty" : reviewAvailability}
+                        emptyText="No review events are recorded for this observation."
                         contradicted={reviewAvailability === "empty" && available.has_review}
                     />
                 )}
@@ -315,14 +336,19 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
     )
 }
 
-function SiblingRow({ sibling }: { sibling: SiblingObservation }) {
+function SiblingRow({ sibling, currentStatus }: { sibling: SiblingObservation; currentStatus: string }) {
     const core = sibling.conformer_observation
+    // Review status is shown once, in this record's own hero pill. A
+    // sibling only gets its own pill when its status genuinely differs --
+    // otherwise this list would repeat the same "not reviewed" the hero
+    // already said, once per sibling.
+    const statusDiffers = core.review.status !== currentStatus
     return (
         <li>
             <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
                 {core.conformer_observation_ref}
             </Link>
-            <span className="review-badge">{statusLabel(core.review.status)}</span>
+            {statusDiffers && <span className="review-badge">{statusLabel(core.review.status)}</span>}
         </li>
     )
 }
@@ -375,6 +401,12 @@ function CalculationTable({ calculations, observationRef }: {
     calculations: CalculationEntry[]
     observationRef: string
 }) {
+    // No "Review" column here. These calculations are this observation's
+    // own; the observation's review status is the hero pill above, shown
+    // once. A per-row review column repeated that same value once per
+    // calculation (four extra "not reviewed"s on the record that surfaced
+    // this) without adding any calculation-specific fact -- calculations
+    // are not independently reviewed in this archive today.
     return (
         <table className="stage-table" aria-label={`Calculations for ${observationRef}`}>
             <thead>
@@ -382,7 +414,6 @@ function CalculationTable({ calculations, observationRef }: {
                     <th scope="col">Stage</th>
                     <th scope="col">Level of theory</th>
                     <th scope="col">Software / workflow</th>
-                    <th scope="col">Review</th>
                     <th scope="col">Record</th>
                 </tr>
             </thead>
@@ -400,11 +431,6 @@ function CalculationTable({ calculations, observationRef }: {
                             {calculation.workflow_tool_release?.workflow_tool
                                 ? ` · ${calculation.workflow_tool_release.workflow_tool}`
                                 : ""}
-                        </td>
-                        <td data-label="Review">
-                            {calculation.review
-                                ? statusLabel(calculation.review.status)
-                                : "not recorded"}
                         </td>
                         <td data-label="Record">
                             <Link to={`/calculations/${calculation.calculation_ref}`}>

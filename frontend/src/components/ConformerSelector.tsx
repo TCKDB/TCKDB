@@ -1,8 +1,32 @@
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { calculationTypeCounts, conformerLabel, sortConformersForDisplay } from "../domain/conformerEvidence"
-import { buildBasinRotors, formatDeg, formatRangeDeg } from "../domain/conformerFingerprint"
+import { buildBasinRotors, formatDeg, formatRangeDeg, parseRotorKey } from "../domain/conformerFingerprint"
 import { SectionHeading } from "./PageSections"
 import { RefsDisclosure } from "./RefsDisclosure"
+
+// A dihedral is defined by four atoms, so a rotor row reading "ATOMS 8–10"
+// -- an en dash, right beside a basin range that ALSO reads "345–360°" --
+// is misread as "atoms 8 through 10", a run of three atoms, not the two
+// atom indices that anchor the rotatable bond itself. `rotor.bondLabel`
+// (built by `domain/conformerFingerprint.ts`'s `rotorBondLabel`) already
+// says "atoms 8–10" for exactly that reason -- this local override only
+// changes the WORD in front of the numbers, from "atoms" to "bond", since
+// what the pair of indices actually identifies is the bond the torsion
+// measures, not a three-atom span. Kept local to this component (rather
+// than editing the shared domain helper) because this fix is scoped to
+// this card's rendered text, not to every consumer of that helper.
+//
+// The basin range's own top edge is left as "345–360°" rather than folded
+// to "345–0°": a 0–360° torsion range is conventionally read as wrapping,
+// but flipping the displayed high edge to a number SMALLER than the low
+// edge reads as a reversed or broken range at a glance, which is a worse
+// misreading than the one being fixed here. The "bond" relabel above
+// already removes the reading that motivated this -- "bond 8–10" next to
+// "basin 345–360°" no longer looks like one four-number atom span.
+function bondRowLabel(rotorKey: string): string {
+    const pair = parseRotorKey(rotorKey)
+    return pair ? `bond ${pair.atomA}–${pair.atomB}` : rotorKey
+}
 
 // The heading is imperative ("Choose a conformer") only when there is an
 // actual choice to make. At zero or one conformer there is nothing to
@@ -125,7 +149,7 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
                     >
                         {rotors.map((rotor) => (
                             <div className="conformer-basin-rotor" key={rotor.rotorKey} data-rotor-key={rotor.rotorKey}>
-                                <dt>{rotor.bondLabel}</dt>
+                                <dt>{bondRowLabel(rotor.rotorKey)}</dt>
                                 <dd>
                                     {/* The basin (what DEFINES this group -- a degree RANGE,
                                         never the internal bin index a reader has no use for)
