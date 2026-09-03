@@ -92,9 +92,10 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                     {", "}{evidence.geometry_count} distinct geometr{evidence.geometry_count === 1 ? "y" : "ies"})
                 </summary>
                 <p className="evidence-linkage-note">
-                    Three different units, not three counts of the same thing: an observation is a deposited sighting
-                    of this basin; a calculation row is one piece of evidence attached to an observation; a stored
-                    geometry is a coordinate set several calculation rows can share.
+                    Three different units, not three counts of the same thing -- the card above abbreviates the
+                    first two as "obs" and "calc": an observation is a deposited sighting of this basin; a
+                    calculation row is one piece of evidence attached to an observation; a stored geometry is a
+                    coordinate set several calculation rows can share.
                 </p>
                 <div className="linkage-flow">
                     <LinkageStep
