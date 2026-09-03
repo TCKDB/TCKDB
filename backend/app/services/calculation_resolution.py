@@ -9,7 +9,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.sql import ColumnElement
-from tckdb_schemas.stationary_point import has_structural_flag
+from tckdb_schemas.stationary_point import TauBasis, has_structural_flag
 
 from app.db.models.calculation import (
     Calculation,
@@ -68,6 +68,7 @@ from app.services.calculation_geometry_composition import (
 )
 from app.services.execution_environment_integrity import manifest_integrity_evidence
 from app.services.geometry_resolution import resolve_geometry_payload
+from app.services.hessian_method_inference import infer_hessian_method
 from app.services.literature_resolution import resolve_or_create_literature
 from app.services.software_reconciliation import (
     SoftwareReconciliationResult,
@@ -1047,6 +1048,38 @@ def persist_calculation_result(
         # the warn tier can reach this point: a blocking finding refused
         # the payload long before persistence.
         tau = calc_upload.tau_resolution()
+
+        # ADR 0012's 2026-09-04 amendment: when the frequency job's
+        # Hessian method was not recorded, assume the producing
+        # program's documented default for the level-of-theory's method
+        # family, rather than leaving every such record at the
+        # conservative "protocol not recorded" row. Measured 2026-09-04:
+        # 0 of 132 stored frequency results carry `freq.hessian_method`,
+        # so this fires on effectively every deposit whose method family
+        # this build has been taught -- see
+        # `app.services.hessian_method_inference` for the table and
+        # `TauBasis` for why the assumed bases are separate tokens.
+        #
+        # A recorded method always wins: this only ever runs on
+        # `tau_resolution()`'s conservative fallback, never after a real
+        # `freq.hessian_method` observation resolved the basis, so a
+        # depositor who states the method is never overridden by a
+        # guess. tau's magnitude is unchanged either way -- an assumed
+        # basis carries the same tau as its recorded counterpart -- only
+        # which basis is credited, and whether one is, moves.
+        if tau.basis is TauBasis.protocol_not_recorded:
+            software_name = (
+                calculation.software_release.software.name
+                if calculation.software_release is not None
+                else None
+            )
+            lot_method = (
+                calculation.lot.method if calculation.lot is not None else None
+            )
+            assumed = infer_hessian_method(software_name, lot_method)
+            if assumed is not None:
+                tau = assumed
+
         designated = calc_upload.freq_result.reaction_coordinate_mode_index
 
         # The flag is judged only where there is a reaction coordinate to
