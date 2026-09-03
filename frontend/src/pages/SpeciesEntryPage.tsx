@@ -15,7 +15,7 @@ import { EntryTransportSection } from "../components/EntryTransportSection"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { EntryIdentity } from "../components/SpeciesEntrySummary"
-import { DEFAULT_SECTION, isEntrySection } from "../domain/speciesEntrySections"
+import { DEFAULT_SECTION, isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
 import { useSpeciesEntry } from "../hooks/useSpeciesEntry"
 
@@ -25,15 +25,18 @@ export default function SpeciesEntryPage() {
     const navigate = useNavigate()
     const state = useSpeciesEntry(entryRef)
 
-    // Canonicalize an unrecognized section segment (e.g. a stale
-    // `/calculations` link from the earlier chapter-nav design) to the
-    // default tab's own path. `isEntrySection` below already falls back to
-    // `DEFAULT_SECTION` for what RENDERS; the address bar must say the same
-    // thing that's on screen, not silently keep showing a path for content
-    // that isn't there. `?conformer=` already self-heals on its own effect
-    // below -- this preserves it rather than dropping it.
+    // Canonicalize a known legacy section alias (e.g. a stale
+    // `/calculations` link from the earlier chapter-nav design --
+    // `LEGACY_ENTRY_SECTION_ALIASES`, the same set `App.tsx`'s
+    // `SpeciesEntrySectionRoute` already used to let this alias reach this
+    // page instead of the not-found one) to the default tab's own path.
+    // `isEntrySection` below already falls back to `DEFAULT_SECTION` for
+    // what RENDERS; the address bar must say the same thing that's on
+    // screen, not silently keep showing a path for content that isn't
+    // there. `?conformer=` already self-heals on its own effect below --
+    // this preserves it rather than dropping it.
     useEffect(() => {
-        if (section !== undefined && !isEntrySection(section)) {
+        if (section !== undefined && !isEntrySection(section) && LEGACY_ENTRY_SECTION_ALIASES.has(section)) {
             navigate(`/species-entries/${entryRef}/${DEFAULT_SECTION}${location.search}`, { replace: true })
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run only when the entry/section identity changes, not on every navigate/location re-render

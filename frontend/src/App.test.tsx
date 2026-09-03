@@ -410,3 +410,73 @@ it("retains the admin machine-review route outside public navigation", async () 
     render(<QueryClientProvider client={new QueryClient()}><App /></QueryClientProvider>)
     expect(await screen.findByRole("heading", { name: "Submission Machine-Review Inspection" })).toBeVisible()
 })
+
+it("routes a transition-state-entry ref to its detail page (finding #1)", async () => {
+    server.use(http.get("/api/v1/scientific/transition-state-entries/tse_abc", () => HttpResponse.json({
+        record: {
+            transition_state_entry: {
+                transition_state_entry_ref: "tse_abc", charge: 0, multiplicity: 2, status: "optimized",
+                unmapped_smiles: "[C]>>C", created_at: "2026-08-05T14:04:16.914780",
+                review: { status: "not_reviewed" },
+            },
+            transition_state: {
+                transition_state_ref: "ts_abc", label: "TS0", note: null,
+                created_at: "2026-08-05T14:04:16.914780", review: { status: "not_reviewed" },
+            },
+            reaction: {
+                reaction_ref: "rxn_abc", reaction_entry_ref: "rxe_abc",
+                equation: "A <=> B", reversible: true, family: "R_Addition_MultipleBond",
+            },
+            evidence_summary: {
+                calculation_count: 0, has_opt: false, has_freq: false, has_sp: false, has_irc: false,
+                has_path_search: false, has_geometry_validation: false, has_scf_stability: false,
+                levels_of_theory: {},
+            },
+            validation: { irc: "absent" },
+            available_sections: {
+                has_entries: true, has_calculations: false, has_geometries: false,
+                has_review: false, has_validation_evidence: false,
+            },
+            calculations: [], geometries: [], review_history: [],
+        },
+    })))
+    window.history.replaceState({}, "", "/transition-state-entries/tse_abc")
+    render(<App />)
+    expect(await screen.findByRole("heading", { name: "TS0" })).toBeVisible()
+})
+
+describe("unmatched routes (finding #12)", () => {
+    it("shows the not-found page instead of silently rendering the home page", async () => {
+        window.history.replaceState({}, "", "/this-route-does-not-exist")
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "No page at this address" })).toBeVisible()
+        expect(screen.getByText("/this-route-does-not-exist")).toBeVisible()
+        // Not the home page, which this route used to silently redirect to.
+        expect(screen.queryByLabelText("Exact species identifier")).not.toBeInTheDocument()
+    })
+
+    it("shows the not-found page for a plausible-looking but wrong tab segment, not the first tab", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [overviewSpecies()] })))
+        // A guess at a tab route (the real one is `/sp`) used to silently
+        // render the Geometry tab -- SpeciesEntryPage's own default -- with
+        // no signal the URL was wrong.
+        window.history.replaceState({}, "", `/species-entries/${entryRef}/single-point`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "No page at this address" })).toBeVisible()
+        expect(screen.queryByText("Geometry")).not.toBeInTheDocument()
+    })
+
+    it("still serves every real species-entry tab segment", async () => {
+        server.use(
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [overviewSpecies()] })),
+            http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: [] })),
+        )
+        for (const section of ["geometry", "sp", "statmech", "thermo", "transport"]) {
+            window.history.replaceState({}, "", `/species-entries/${entryRef}/${section}`)
+            render(<App />)
+            expect(await screen.findByRole("heading", { name: "H2O" })).toBeVisible()
+            expect(screen.queryByRole("heading", { name: "No page at this address" })).not.toBeInTheDocument()
+            cleanup()
+        }
+    })
+})
