@@ -405,11 +405,13 @@ describe("CalculationDetailPage", () => {
         await findLoaded("Frequency")
         const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
 
-        // Parent-side: the OTHER calculation is the subject.
+        // Parent-side: the OTHER calculation is the subject, and the
+        // sentence has a verb ("was run on") -- review finding: it used to
+        // read "single point on this geometry" with no verb at all.
         const spItem = within(depSection).getByRole("link", { name: "calc_osrf4pnfcesq6s6somn7nr5hly" }).closest("li") as HTMLElement
-        expect(spItem.textContent).toMatch(/^calc_osrf4pnfcesq6s6somn7nr5hly single point on this geometry$/)
+        expect(spItem.textContent).toBe("calc_osrf4pnfcesq6s6somn7nr5hly single point was run on this geometry")
 
-        // Child-side: THIS calculation is the subject, fixed sentence.
+        // Child-side optimized_from: THIS calculation is the subject, fixed sentence.
         const optFromItem = within(depSection).getByRole("link", { name: "calc_htgb7s5nakuw52eqhcxpvilpoq" }).closest("li") as HTMLElement
         expect(optFromItem.textContent).toBe("This was optimized from calc_htgb7s5nakuw52eqhcxpvilpoq")
 
@@ -434,6 +436,89 @@ describe("CalculationDetailPage", () => {
         const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
         const item = within(depSection).getByRole("link", { name: "calc_rypxkxvsku5x2nk6sqbhhmfcla" }).closest("li") as HTMLElement
         expect(item.textContent).toBe("calc_rypxkxvsku5x2nk6sqbhhmfcla (frequency) was run on this geometry")
+    })
+
+    // Review finding (BLOCKING-1): child-side edges used to say "This was
+    // optimized from <link>" for EVERY role, not only `optimized_from` --
+    // the live archive has child-side `freq_on` (a freq calc's edge back to
+    // the opt it ran on), `single_point_on`, and `irc_start` edges, and each
+    // one rendered a sentence claiming the calc was an optimisation of its
+    // parent, which is false. Each of these three gets its own sentence
+    // with THIS calculation as the fixed subject and the correct verb.
+    it("renders a freq_on child-side edge naming what THIS calc is, not 'optimized from'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                dependencies: [
+                    {
+                        role: "freq_on", direction: "child",
+                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
+                    },
+                ],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
+        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
+        expect(item.textContent).toBe("This frequency calculation was run on the geometry from calc_ts0_opt")
+        expect(item.textContent).not.toMatch(/optimized from/)
+    })
+
+    it("renders a single_point_on child-side edge naming what THIS calc is, not 'optimized from'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                dependencies: [
+                    {
+                        role: "single_point_on", direction: "child",
+                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
+                    },
+                ],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
+        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
+        expect(item.textContent).toBe("This single point was run on the geometry from calc_ts0_opt")
+        expect(item.textContent).not.toMatch(/optimized from/)
+    })
+
+    it("renders an irc_start child-side edge naming what THIS calc is, not 'optimized from'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                dependencies: [
+                    {
+                        role: "irc_start", direction: "child",
+                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
+                    },
+                ],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
+        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
+        expect(item.textContent).toBe("This IRC started from the geometry of calc_ts0_opt")
+        expect(item.textContent).not.toMatch(/optimized from/)
+    })
+
+    it("falls back to the raw role token for an unrecognised child-side role, never to 'optimized from'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                dependencies: [
+                    {
+                        role: "some_future_role", direction: "child",
+                        parent_calculation_ref: "calc_ts0_opt", child_calculation_ref: "calc_freq_one",
+                    },
+                ],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const depSection = screen.getByRole("heading", { name: "Related calculations" }).closest("section") as HTMLElement
+        const item = within(depSection).getByRole("link", { name: "calc_ts0_opt" }).closest("li") as HTMLElement
+        expect(item.textContent).toMatch(/some future role/)
+        expect(item.textContent).not.toMatch(/optimized from/)
     })
 
     it("shows no dependency edge when the archive returns none", async () => {

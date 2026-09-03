@@ -733,22 +733,32 @@ function boolLabel(value: boolean | null | undefined) {
  * (a `role` names the CHILD's relation to the parent, so on a parent-side
  * row it describes what the *other* calculation is, not this one). A
  * parent-side row states what the related calculation IS relative to this
- * geometry/result; a child-side row always reduces to the same one
- * sentence, "This was optimized from <link>", since `optimized_from` is
- * the only role a child-side edge on this page's roster carries.
+ * geometry/result.
+ *
+ * Child-side dispatches on `role` too -- review finding: the live archive
+ * carries child-side `freq_on`, `single_point_on` and `irc_start` edges
+ * (a freq/sp/IRC calc's edge back to the opt it ran on), not only
+ * `optimized_from`, and every one of them used to read "This was
+ * optimized from <link>" regardless of what the edge actually was. Only
+ * `optimized_from` gets that sentence now; the other three each get a
+ * subject-fixed sentence naming what THIS calculation actually did on the
+ * parent's geometry, and an unrecognised role falls back to the raw role
+ * token -- never to "optimized from", which would silently re-introduce
+ * the same bug for a role this page doesn't know about yet.
  */
 function dependencySentence(dep: CalculationDependency): { linkRef: string; text: (linkNode: ReactNode) => ReactNode } {
     if (dep.direction === "child") {
-        // The only child-side role in this app's vocabulary today is
-        // `optimized_from` (this calc is the refinement of its parent) --
-        // see `optimisationStage`'s own docstring for the same read used
-        // in the header's stage sentence.
-        return { linkRef: dep.parent_calculation_ref, text: (link) => <>This was optimized from {link}</> }
+        const ref = dep.parent_calculation_ref
+        if (dep.role === "optimized_from") return { linkRef: ref, text: (link) => <>This was optimized from {link}</> }
+        if (dep.role === "freq_on") return { linkRef: ref, text: (link) => <>This frequency calculation was run on the geometry from {link}</> }
+        if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>This single point was run on the geometry from {link}</> }
+        if (dep.role === "irc_start") return { linkRef: ref, text: (link) => <>This IRC started from the geometry of {link}</> }
+        return { linkRef: ref, text: (link) => <>This — {roleLabel(dep.role)} — {link}</> }
     }
     const ref = dep.child_calculation_ref
     if (dep.role === "freq_on") return { linkRef: ref, text: (link) => <>{link} (frequency) was run on this geometry</> }
     if (dep.role === "optimized_from") return { linkRef: ref, text: (link) => <>{link} was optimized from this result</> }
-    if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>{link} single point on this geometry</> }
+    if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>{link} single point was run on this geometry</> }
     if (dep.role === "irc_start") return { linkRef: ref, text: (link) => <>{link} IRC started from this geometry</> }
     return { linkRef: ref, text: (link) => <>{link} — {roleLabel(dep.role)}</> }
 }
