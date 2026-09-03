@@ -1090,6 +1090,28 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByText("not reviewed", { selector: ".review-badge" })).toBeVisible()
     })
 
+    // Two reviewers flagged the review-status pill as reading "orphaned"
+    // rather than attached to the record it describes -- it used to be a
+    // flex sibling of the h1 inside `.record-title`, which at 1920px and
+    // 900px let it drift into the whitespace beside a wrapped title. A
+    // DOM-adjacency assertion (e.g. "the badge is the h1's nextSibling")
+    // would pass even for that detached layout, since siblings can still
+    // be positioned arbitrarily far apart on the page. What actually
+    // proves attachment is DOM CONTAINMENT: the badge must be a descendant
+    // of the same heading block that contains the h1 -- the record's
+    // `<header className="record-header">` -- not a node positioned
+    // outside it, e.g. by a sibling of that header aligned to the page
+    // edge.
+    it("nests the review-status pill inside the heading block that contains the h1, not outside it", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        const heading = await screen.findByRole("heading", { name: "Frequency calculation" })
+        const headingBlock = heading.closest(".record-header") as HTMLElement
+        expect(headingBlock).not.toBeNull()
+        const pill = within(headingBlock).getByText("not reviewed", { selector: ".review-badge" })
+        expect(headingBlock.contains(pill)).toBe(true)
+    })
+
     it("shows the Quality row for 'curated'", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({ calculation: { ...mockRecord().calculation, quality: "curated" } }),
