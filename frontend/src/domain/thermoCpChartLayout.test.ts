@@ -122,6 +122,28 @@ describe("groupIdenticalSeries", () => {
         expect(groups.map((g) => g.representative.thermoRef)).toEqual(["thm_empty_1", "thm_empty_2"])
     })
 
+    it("never groups two unplottable series from the SAME conformer group either -- identity must key on the record, not the label (a re-review mutation keyed on label passed every existing test)", () => {
+        const first = series({
+            thermoRef: "thm_empty_a",
+            label: "Conformer Group 1",
+            hasUsableFit: false,
+            hasMeasuredPoints: false,
+            measured: [],
+            fitted: null,
+        })
+        const second = series({
+            thermoRef: "thm_empty_b",
+            label: "Conformer Group 1",
+            hasUsableFit: false,
+            hasMeasuredPoints: false,
+            measured: [],
+            fitted: null,
+        })
+        const groups = groupIdenticalSeries([first, second])
+        expect(groups).toHaveLength(2)
+        expect(groups.map((g) => g.representative.thermoRef)).toEqual(["thm_empty_a", "thm_empty_b"])
+    })
+
     it("still collapses several genuinely byte-identical PLOTTABLE series sharing one conformer, even alongside an unrelated empty series -- the fix only carves out the unplottable case", () => {
         const a = series({ thermoRef: "thm_a" })
         const b = series({ thermoRef: "thm_b" })
