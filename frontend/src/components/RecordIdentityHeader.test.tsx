@@ -70,8 +70,13 @@ describe("RecordIdentityHeader", () => {
         expect(screen.getByText("[CH2]OO[CH2]")).toBeVisible()
     })
 
-    it("does not render the 'no canonical SMILES' note for a transition-state identity -- the Reaction section's own lede covers it", () => {
+    it("renders the 'no canonical SMILES' note for a transition-state identity by default", () => {
         renderHeader({ identity: tsIdentity })
+        expect(screen.getByText(/no canonical SMILES/i)).toBeVisible()
+    })
+
+    it("omits the 'no canonical SMILES' note when explainTransitionStateIdentity=false -- the caller's own Reaction section covers it instead", () => {
+        renderHeader({ identity: tsIdentity, explainTransitionStateIdentity: false })
         expect(screen.queryByText(/no canonical SMILES/i)).not.toBeInTheDocument()
     })
 

@@ -141,6 +141,12 @@ describe("GeometryDetailPage identity (#321)", () => {
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
         expect(screen.getByText("Reaction SMILES (unmapped)")).toBeVisible()
+        // This page does not opt out of `RecordIdentityHeader`'s
+        // `explainTransitionStateIdentity` default (only
+        // `TransitionStateEntryPage`, which has its own Reaction-section
+        // lede, does) -- it has no Reaction section of its own for a
+        // TS-owned geometry, so it must keep the one explanation.
+        expect(screen.getByText(/no canonical SMILES/i)).toBeVisible()
     })
 
     it("renders no submission row when the key is absent (anonymous caller)", async () => {

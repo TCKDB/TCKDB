@@ -46,15 +46,27 @@ function withSmilesBreaks(value: string): ReactNode {
  *   exists) and renders NO row at all; `null` means an authenticated
  *   caller was told there is no linked submission, and renders "not
  *   recorded"; a string renders the ref.
+ * - `explainTransitionStateIdentity` (default `true`) governs the one
+ *   sentence explaining that a transition state has no canonical SMILES
+ *   the way a species does -- shown only for a `transition_state_entry`
+ *   identity. `TransitionStateEntryPage` passes `false`: its own Reaction
+ *   section already states this (see that page's own comment), and
+ *   showing the sentence twice ~900px apart on one page was the exact
+ *   duplication this override exists to avoid. Every OTHER caller that
+ *   can render a `transition_state_entry` identity but has no Reaction
+ *   section of its own -- `GeometryDetailPage` on a TS-owned geometry, as
+ *   of this writing -- keeps the default `true` and gets the one sentence
+ *   this header has always carried for that case.
  */
-export function RecordIdentityHeader({ identity, facets, submissionRef }: {
+export function RecordIdentityHeader({ identity, facets, submissionRef, explainTransitionStateIdentity = true }: {
     identity: RecordIdentity
     facets?: EntryFacetAxes
     submissionRef?: string | null
+    explainTransitionStateIdentity?: boolean
 }) {
     return (
         <div className="record-identity-header">
-            <IdentityTier identity={identity} />
+            <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} />
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
                 `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report
@@ -77,7 +89,10 @@ export function RecordIdentityHeader({ identity, facets, submissionRef }: {
     )
 }
 
-function IdentityTier({ identity }: { identity: RecordIdentity }) {
+function IdentityTier({ identity, explainTransitionStateIdentity }: {
+    identity: RecordIdentity
+    explainTransitionStateIdentity: boolean
+}) {
     if (identity.kind === "absent") {
         return <p className="record-identity-absent">No molecular identity is recorded for this record.</p>
     }
@@ -132,23 +147,27 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
     // row (the reaction equation, per the h1 rework) rather than this
     // header's job to restate.
     //
-    // No "no canonical SMILES" note here either. It used to duplicate,
-    // almost word for word, `TransitionStateEntryPage`'s own Reaction-
-    // section lede ("A transition state is identified by the reaction it
-    // connects, not a molecular graph of its own.") -- the two sentences
-    // sat ~900px apart on the same page saying the same thing. The page's
-    // Reaction section keeps the explanation; this header stays silent
-    // rather than restate it. A caller reaching a `transition_state_entry`
-    // identity from a page with no Reaction section of its own (a TS-
-    // owned geometry, say) currently gets no substitute for that lost
-    // sentence -- flagged rather than fixed here, since growing this
-    // component's contract to cover pages outside this branch's remit is
-    // its own change.
+    // The "no canonical SMILES" note is gated behind
+    // `explainTransitionStateIdentity` (default true). It used to
+    // duplicate, almost word for word, `TransitionStateEntryPage`'s own
+    // Reaction-section lede ("A transition state is identified by the
+    // reaction it connects, not a molecular graph of its own.") -- the
+    // two sentences sat ~900px apart on the same page saying the same
+    // thing. That page passes `false` and keeps its own lede as the one
+    // explanation; every other caller (a TS-owned geometry on
+    // `GeometryDetailPage`, which has no Reaction section of its own)
+    // keeps the default and still gets this sentence.
     return (
         <div className="record-identity-known">
             {identity.formula && (
                 <p className="record-identity-formula">
                     <Formula value={identity.formula} />
+                </p>
+            )}
+            {explainTransitionStateIdentity && (
+                <p className="record-identity-note">
+                    Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
+                    where deposited, is a depositor-supplied label, not a deduped identity key.
                 </p>
             )}
             <dl className="record-identity-facts">
