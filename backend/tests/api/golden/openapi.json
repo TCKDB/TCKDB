@@ -44500,6 +44500,16 @@
             },
             "title": "Levels Of Theory",
             "type": "object"
+          },
+          "software": {
+            "additionalProperties": {
+              "items": {
+                "$ref": "#/components/schemas/SoftwareReleaseSummary"
+              },
+              "type": "array"
+            },
+            "title": "Software",
+            "type": "object"
           }
         },
         "required": [
@@ -45525,6 +45535,18 @@
             ],
             "title": "Charge"
           },
+          "family": {
+            "anyOf": [
+              {
+                "maxLength": 256,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Family"
+          },
           "has_calculations": {
             "anyOf": [
               {
@@ -45673,6 +45695,18 @@
             "default": 0,
             "title": "Offset",
             "type": "integer"
+          },
+          "participant_smiles": {
+            "anyOf": [
+              {
+                "maxLength": 2048,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Smiles"
           },
           "reaction_entry_ref": {
             "anyOf": [
@@ -75419,7 +75453,7 @@
     },
     "/api/v1/scientific/transition-states/browse": {
       "get": {
-        "description": "List transition-state entries with no filter required, for a catalogue page.\n\nEvery filter ``/transition-states/search`` accepts *except* the four\nowner/parent ref filters (``reaction_ref``, ``reaction_entry_ref``,\n``transition_state_ref``, ``transition_state_entry_ref``) is accepted\nhere too, so a listing can be narrowed after it is opened. The four\nref filters are excluded because they are handles, not narrowing\nfilters: a caller who already has one wants an exact lookup on\n``/transition-states/search``, and there is no field on\n``TransitionStatesBrowseRequest`` to carry one. Unlike\n``/species/browse``, there are no composition filters here either --\na transition state has no formula of its own; it is identified by the\nreaction it connects, not by a molecular graph. ``limit`` is capped at\n200 (default 50, same as ``/transition-states/search``); ``offset`` is\ncapped by the hosted ``public_max_offset`` setting via the shared\npagination validator. Ordering is\n``review_rank ASC, created_at DESC, id DESC`` -- the same default as\n``/transition-states/search`` -- which is what keeps pagination stable\nacross requests. Client-supplied ``sort=`` is rejected with 422\n(``client_sort_not_supported``), matching the sibling endpoint.\n\nRecords are at the transition-state-entry grain, same shape as\n``/transition-states/search`` and the TS-entry detail endpoint\n(``ScientificTransitionStateEntryRecord``): each carries its own\n``transition_state_entry`` core block, its parent ``transition_state``\ncore block, and a ``reaction`` context block (refs plus a rendered\nequation string) -- enough to identify the record and say what\nreaction it belongs to without a second request.",
+        "description": "List transition-state entries with no filter required, for a catalogue page.\n\nEvery filter ``/transition-states/search`` accepts *except* the four\nowner/parent ref filters (``reaction_ref``, ``reaction_entry_ref``,\n``transition_state_ref``, ``transition_state_entry_ref``) is accepted\nhere too, so a listing can be narrowed after it is opened. The four\nref filters are excluded because they are handles, not narrowing\nfilters: a caller who already has one wants an exact lookup on\n``/transition-states/search``, and there is no field on\n``TransitionStatesBrowseRequest`` to carry one. There is still no\n``formula`` / ``elements`` filter here -- a transition state has no\nformula of its own -- but ``family`` and ``participant_smiles`` DO\nnarrow by structure now, reached through the reaction each entry\nbelongs to rather than through the entry itself; see\n``TransitionStatesBrowseRequest``'s docstring for why that is a\nmeaningfully different claim from \"no composition axis to browse\nby\". ``limit`` is capped at\n200 (default 50, same as ``/transition-states/search``); ``offset`` is\ncapped by the hosted ``public_max_offset`` setting via the shared\npagination validator. Ordering is\n``review_rank ASC, created_at DESC, id DESC`` -- the same default as\n``/transition-states/search`` -- which is what keeps pagination stable\nacross requests. Client-supplied ``sort=`` is rejected with 422\n(``client_sort_not_supported``), matching the sibling endpoint.\n\nRecords are at the transition-state-entry grain, same shape as\n``/transition-states/search`` and the TS-entry detail endpoint\n(``ScientificTransitionStateEntryRecord``): each carries its own\n``transition_state_entry`` core block, its parent ``transition_state``\ncore block, and a ``reaction`` context block (refs plus a rendered\nequation string) -- enough to identify the record and say what\nreaction it belongs to without a second request.",
         "operationId": "scientific_transition_states_browse_api_v1_scientific_transition_states_browse_get",
         "parameters": [
           {
@@ -75693,6 +75727,42 @@
                 }
               ],
               "title": "Workflow Tool Version"
+            }
+          },
+          {
+            "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
+            "in": "query",
+            "name": "family",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact match against the seeded reaction_family vocabulary (see /meta/reaction-families for the discoverable set of values). Unknown values return an empty result, not a 422.",
+              "title": "Family"
+            }
+          },
+          {
+            "description": "Exact-match SMILES filter over the parent reaction's participants (reactant or product side, either matches). Parsed via RDKit and compared by InChIKey, same exact-match semantics as /species/browse's mode=exact structure filter.",
+            "in": "query",
+            "name": "participant_smiles",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Exact-match SMILES filter over the parent reaction's participants (reactant or product side, either matches). Parsed via RDKit and compared by InChIKey, same exact-match semantics as /species/browse's mode=exact structure filter.",
+              "title": "Participant Smiles"
             }
           },
           {
