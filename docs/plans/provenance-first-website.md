@@ -112,6 +112,21 @@ provenance and machine detail live on dedicated linked pages.
     render as a bare "R". The discriminator was right; presenting it as
     a title was not.
 
+13. Whole-site review pass. A Fable reviewer walked every page through
+    headless Chrome for visual design, accessibility, right-data and
+    redundancy, and the 24 findings were fixed in file-scoped batches
+    (#342-#353). Two were fabricated identity: unplottable Cp series
+    merging across conformer groups, and a grouped thermo card showing
+    provenance from a record outside its group. The rest were
+    redundancy (levels of theory repeated, review status twice),
+    contrast tokens, three table-of-contents test races, and a
+    transition-state browse row that led to the species route. That last
+    one produced the transition-state entry page (#352): identity by
+    reaction rather than SMILES, the saddle-point geometry led with and
+    each IRC direction behind a disclosure showing its point count, and
+    a geometry cited by several calculations shown once -- plus a real
+    not-found route in place of the silent home-page fallback.
+
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
 standards/spec review, CI, PR merge, image build, and Pi verification.
