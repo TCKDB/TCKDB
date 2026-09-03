@@ -437,6 +437,51 @@ therefore shows two recorded transitions per row, which is what happened.
 
 ---
 
+## Assumed Hessian method for tau (revision `ae3d607cc9f8` + backfill script)
+
+`ae3d607cc9f8` widens `ck_calc_freq_result_imaginary_mode_tau_basis_known`
+to accept three new tokens (`assumed_analytic_default`,
+`assumed_finite_difference_gradient`, `assumed_finite_difference_energy`) --
+the 2026-09-04 amendment to ADR 0012. **The migration itself writes
+nothing.** It only widens what the column may hold; upgrading it needs no
+operator action beyond the usual `alembic upgrade head`.
+
+Filling the new vocabulary onto *existing* rows is a separate, explicit
+step: `backend/scripts/ops/backfill_assumed_tau.py`. Run it after the
+migration is applied:
+
+```bash
+# From an operator shell with DB_* pointed at the target database.
+python backend/scripts/ops/backfill_assumed_tau.py            # dry run (default)
+python backend/scripts/ops/backfill_assumed_tau.py --apply --i-know-this-is-deployed
+```
+
+`--apply` alone is refused against any database whose name does not match
+`tckdb_test*` -- `--i-know-this-is-deployed` is the explicit acknowledgement
+that this is a real database. The script:
+
+- Scopes to `calc_freq_result` rows with `imaginary_mode_tau_cm1 IS NULL`
+  (every row deposited before ADR 0012 shipped; nothing else qualifies).
+- Resolves tau exactly as the upload path would: recorded
+  `calculation_parameter` rows first, then -- only when that resolves to
+  the conservative `protocol_not_recorded` row -- the assumption table in
+  `app/services/hessian_method_inference.py`, keyed on the calculation's
+  software and level-of-theory method.
+- Writes only `imaginary_mode_tau_cm1` and `imaginary_mode_tau_basis`.
+  **`imaginary_mode_structural_flag` is never touched** -- it is judged
+  only where a reaction-coordinate mode is designated, and no row in this
+  script's scope has one.
+- Prints a tally by basis, never a calculation id or any other primary or
+  foreign key.
+- Is idempotent: the scope is `imaginary_mode_tau_cm1 IS NULL`, so a
+  second run (dry or applied) finds nothing left once the first `--apply`
+  has completed.
+
+`--limit N` caps how many rows one invocation processes, for running the
+backfill against a large corpus in batches.
+
+---
+
 ## Self-hosted / Raspberry Pi note
 
 Single-node and Raspberry-Pi deployments follow the same flow as any other deployed DB. Two extra notes:
