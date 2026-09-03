@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { EntryThermoSection } from "./EntryThermoSection"
@@ -324,28 +324,110 @@ describe("EntryThermoSection", () => {
         }
     })
 
-    it("distinguishes a null nasa9 (no NASA-9 polynomial recorded) from a populated one — never renders it as 'not requested'", async () => {
+    // Finding 16 (block review): a card used to render ALL FOUR model
+    // blocks (NASA-7/NASA-9/Wilhoit/points) regardless of the record's own
+    // `model_kind`, so a `nasa` record also carried an empty "NASA-9
+    // polynomial" box, an empty "Wilhoit form" box, and an empty "Evaluated
+    // points" box beneath its real NASA-7 table -- on every card. Only the
+    // ONE block matching the record's own declared `model_kind` renders
+    // now; the other three model-kind headings are absent entirely, not
+    // present-with-an-absence-line.
+    it("renders only the ONE model block matching the record's own model_kind — never the other three as empty boxes", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
 
-        // thm_alpha has nasa9: null and nasa: populated.
+        // thm_alpha: model_kind nasa, nasa populated. NASA-7 renders; the
+        // other three model-kind headings (and their absence text) do not
+        // exist on this card at all.
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        expect(within(alphaCard).getByText("No NASA-9 polynomial recorded for this record.")).toBeVisible()
-        expect(within(alphaCard).queryByText(/not requested/i)).not.toBeInTheDocument()
         expect(within(alphaCard).getByRole("table", { name: /NASA-7 coefficients/ })).toBeVisible()
+        expect(within(alphaCard).queryByText("NASA-9 polynomial")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("Wilhoit form")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("Evaluated points")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText(/not requested/i)).not.toBeInTheDocument()
 
-        // thm_beta is the mirror image: nasa: null, nasa9: populated.
+        // thm_beta: model_kind nasa9, nasa9 populated. Only NASA-9 renders
+        // -- NASA-7's own heading (and its "not recorded" line) is absent,
+        // not present-and-empty.
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
-        expect(within(betaCard).getByText("No NASA-7 polynomial recorded for this record.")).toBeVisible()
         expect(within(betaCard).getByRole("table", { name: /NASA-9 intervals/ })).toBeVisible()
+        expect(within(betaCard).queryByText("NASA-7 polynomial")).not.toBeInTheDocument()
+        expect(within(betaCard).queryByText("No NASA-7 polynomial recorded for this record.")).not.toBeInTheDocument()
 
-        // thm_gamma has neither nasa nor nasa9 (wilhoit only) — both must
-        // read as absent facts, and wilhoit itself must be populated.
+        // thm_gamma: model_kind wilhoit, wilhoit populated. Only Wilhoit
+        // renders -- neither NASA-7 nor NASA-9's heading exists on this
+        // card.
         const gammaCard = screen.getByText("thm_gamma").closest("article") as HTMLElement
-        expect(within(gammaCard).getByText("No NASA-7 polynomial recorded for this record.")).toBeVisible()
-        expect(within(gammaCard).getByText("No NASA-9 polynomial recorded for this record.")).toBeVisible()
-        expect(within(gammaCard).queryByText("No Wilhoit fit recorded for this record.")).not.toBeInTheDocument()
+        expect(within(gammaCard).getByText("Cp0 (J/mol·K)")).toBeVisible()
+        expect(within(gammaCard).queryByText("NASA-7 polynomial")).not.toBeInTheDocument()
+        expect(within(gammaCard).queryByText("NASA-9 polynomial")).not.toBeInTheDocument()
+    })
+
+    // A `model_kind` claiming data it doesn't have is still the record's
+    // OWN declared kind -- `ModelBlock` still renders that one block
+    // defensively (its own "No X recorded" line), it just never falls
+    // back to rendering a DIFFERENT kind's block instead.
+    it("still renders the record's own declared model_kind's block defensively when its data is null — never falls back to a different kind's block", async () => {
+        const [alpha] = mockRecords()
+        const claimsNasaButEmpty = { ...alpha, thermo_ref: "thm_empty_nasa", nasa: null }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [claimsNasaButEmpty] }))))
+        page()
+        const card = (await screen.findByText("thm_empty_nasa")).closest("article") as HTMLElement
+        expect(within(card).getByText("No NASA-7 polynomial recorded for this record.")).toBeVisible()
+        expect(within(card).queryByText("NASA-9 polynomial")).not.toBeInTheDocument()
+        expect(within(card).queryByText("Wilhoit form")).not.toBeInTheDocument()
+        expect(within(card).queryByText("Evaluated points")).not.toBeInTheDocument()
+    })
+
+    // Finding 16: "REQUESTED RANGE (K): No temperature filter applied" /
+    // "COVERS REQUESTED RANGE: Yes" / "EXTRAPOLATION DISTANCE (K): 0"
+    // describe the REQUEST, not the record -- this page never sends a
+    // temperature filter, so these three rows must not print on a record
+    // whose `temperature_coverage.requested_min_k`/`requested_max_k` are
+    // both null. `Record range (K)` is a fact of the record and stays.
+    it("omits the request-scoped temperature-coverage rows when no range was requested, but keeps the record's own range", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        // thm_alpha's fixture: requested_min_k/requested_max_k both null,
+        // record_min_k: 100, record_max_k: 3000.
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        expect(ddFor(alphaCard, "Record range (K)")).toBe("100–3000")
+        expect(within(alphaCard).queryByText("Requested range (K)")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("Covers requested range")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("Extrapolation distance (K)")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("No temperature filter applied")).not.toBeInTheDocument()
+    })
+
+    it("shows the request-scoped temperature-coverage rows when a range genuinely was requested", async () => {
+        const [alpha, ...rest] = mockRecords()
+        const requested = {
+            ...alpha,
+            thermo_ref: "thm_requested",
+            temperature_coverage: {
+                ...alpha.temperature_coverage,
+                requested_min_k: 200, requested_max_k: 2000,
+                covers_requested_range: false, extrapolation_distance_k: 50,
+            },
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [requested, ...rest] }))))
+        page()
+        const card = (await screen.findByText("thm_requested")).closest("article") as HTMLElement
+        expect(ddFor(card, "Requested range (K)")).toBe("200–2000")
+        expect(ddFor(card, "Covers requested range")).toBe("No")
+        expect(ddFor(card, "Extrapolation distance (K)")).toBe("50")
+    })
+
+    // Finding 16: "MODEL KIND: nasa" under a heading that already says
+    // "NASA-7 thermo record" repeats the exact word the heading just used.
+    it("never prints a 'Model kind' row that repeats the card's own heading", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        const alphaCard = (await screen.findByText("thm_alpha")).closest("article") as HTMLElement
+        expect(within(alphaCard).queryByText("Model kind")).not.toBeInTheDocument()
+        // The heading itself is unaffected -- this isn't "nothing about
+        // the model kind renders at all".
+        expect(within(alphaCard).getByText("NASA-7 thermo record")).toBeVisible()
     })
 
     it("never hides a superseded record — renders the notice alongside the record, not instead of it", async () => {
@@ -379,38 +461,79 @@ describe("EntryThermoSection", () => {
         expect(within(alphaCard).queryByText("Superseded")).not.toBeInTheDocument()
     })
 
-    it("renders group-additivity provenance data only for the record that has it, but the section itself (with an explicit absence line) on every record", async () => {
+    // Finding 16: an empty "Group-additivity estimation" box rendered on
+    // every card, including `nasa`/computed records that were never going
+    // to have one — group-additivity is a scheme only an ESTIMATED record
+    // ever carries at all, unlike nasa/nasa9/wilhoit/points (the four
+    // possible SHAPES of the one model kind every record declares). The
+    // section renders only for the record that actually has it now.
+    it("renders group-additivity data only for the record that has it, and renders nothing at all (no section) for one that doesn't", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_beta")
         const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
+        expect(within(betaCard).getByText("Group-additivity estimation")).toBeVisible()
         expect(within(betaCard).getByText("Benson v2 (2.0)")).toBeVisible()
         expect(within(betaCard).getByText("C/H3")).toBeVisible()
 
-        // thm_alpha has group_additivity: null — an absent scientific fact,
-        // consistent with nasa/nasa9/wilhoit/points: the section heading
-        // still renders, with an explicit "not recorded" line rather than
-        // being silently omitted.
+        // thm_alpha has group_additivity: null — no section at all, not a
+        // heading over an explicit "not recorded" line.
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        expect(within(alphaCard).getByText("Group-additivity estimation")).toBeVisible()
-        expect(within(alphaCard).getByText("No group-additivity estimation recorded for this record.")).toBeVisible()
+        expect(within(alphaCard).queryByText("Group-additivity estimation")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("No group-additivity estimation recorded for this record.")).not.toBeInTheDocument()
     })
 
-    it("links calculation provenance refs to their calculation detail pages, and leaves the un-paged statmech ref as text", async () => {
+    // Finding 16: PRIMARY CALCULATION and SINGLE-POINT CALCULATION used to
+    // list the same ref twice, under two separate headings, whenever a
+    // record's SP energy came from its own optimization
+    // (`feedback_sp_vs_opt_energy`) -- reading as though two different
+    // calculations happened to match. thm_alpha's fixture is deliberately
+    // that case (`primary_calculation.calculation_ref` ===
+    // `sp_calculation_ref` === "calc_alpha_sp"): the two roles now merge
+    // into ONE row, said once.
+    it("merges Primary calculation and Single-point calculation into one row when they cite the SAME calculation ref, and links each distinct ref once", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("thm_alpha")
         const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
-        // calc_alpha_sp is deliberately both the primary calculation and the
-        // sp calculation on this fixture record — two separate links, same
-        // target ref, each still its own correctly-hrefed anchor.
+
+        // calc_alpha_sp: exactly ONE link, under a row naming BOTH roles.
         const spLinks = within(alphaCard).getAllByRole("link", { name: "calc_alpha_sp" })
-        expect(spLinks).toHaveLength(2)
-        for (const link of spLinks) expect(link).toHaveAttribute("href", "/calculations/calc_alpha_sp")
+        expect(spLinks).toHaveLength(1)
+        expect(spLinks[0]).toHaveAttribute("href", "/calculations/calc_alpha_sp")
+        expect(ddFor(alphaCard, "Primary calculation / Single-point calculation")).toBe("calc_alpha_sp")
+        expect(within(alphaCard).queryByText("Primary calculation")).not.toBeInTheDocument()
+        expect(within(alphaCard).queryByText("Single-point calculation")).not.toBeInTheDocument()
+
+        // calc_alpha_freq is a genuinely DIFFERENT calculation -- its own
+        // row, own link, never folded into the merged row above.
         expect(within(alphaCard).getByRole("link", { name: "calc_alpha_freq" })).toHaveAttribute("href", "/calculations/calc_alpha_freq")
+        expect(ddFor(alphaCard, "Frequency calculation")).toBe("calc_alpha_freq")
+
         expect(within(alphaCard).getByText("sm_alpha")).toBeVisible()
         expect(within(alphaCard).queryByRole("link", { name: "sm_alpha" })).not.toBeInTheDocument()
     })
+
+    it("keeps Primary/Frequency/Single-point calculation as three separate rows when all three cite different refs", async () => {
+        const [, beta] = mockRecords()
+        const distinctRefs = {
+            ...beta,
+            thermo_ref: "thm_distinct_refs",
+            provenance: {
+                ...beta.provenance,
+                primary_calculation: { calculation_ref: "calc_primary", calculation_type: "opt", converged: true, geometry_validation_status: "not_present", scf_stability_status: "not_present", level_of_theory: null, software: null },
+                freq_calculation_ref: "calc_freq",
+                sp_calculation_ref: "calc_sp",
+            },
+        }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [distinctRefs] }))))
+        page()
+        const card = (await screen.findByText("thm_distinct_refs")).closest("article") as HTMLElement
+        expect(ddFor(card, "Primary calculation")).toBe("calc_primary")
+        expect(ddFor(card, "Frequency calculation")).toBe("calc_freq")
+        expect(ddFor(card, "Single-point calculation")).toBe("calc_sp")
+    })
+
 
     it("renders the thermo's OWN software/workflow-tool provenance when populated — never 'not recorded' for a served value (issue #284)", async () => {
         // Every other fixture in this file carries `software_release: null` /
@@ -599,5 +722,199 @@ describe("EntryThermoSection: thermo records register in the ToC", () => {
         const second = screen.getByRole("link", { name: "NASA-7 thermo record 2" })
         expect(first).toHaveAttribute("href", "#thermo-heading-thm_alpha")
         expect(second).toHaveAttribute("href", "#thermo-heading-thm_delta")
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Finding 7 of the block review: "seven byte-identical thermo records
+// render as fourteen full cards" -- 12,000px of scrolling to learn one
+// fact. `domain/identicalRecordGroups.ts`'s `thermoRecordFingerprint`
+// compares model_kind, scientific_origin, H298/S298 (+ uncertainties), the
+// full model block (nasa/nasa9/wilhoit/points), and the record's own
+// temperature range -- never ref, date, review status, or provenance.
+// ---------------------------------------------------------------------------
+describe("EntryThermoSection: identical-value records group under one card", () => {
+    /** Three clones of thm_alpha, identical in every fingerprinted field,
+     *  differing only in `thermo_ref` and one PROVENANCE field
+     *  (`provenance.software_release`) -- the review's own worked case:
+     *  provenance that differs across identical-value records must stay
+     *  visible even though the records are grouped. */
+    function identicalClones() {
+        const [alpha] = mockRecords()
+        return [
+            { ...alpha, thermo_ref: "thm_g1", provenance: { ...alpha.provenance, software_release: null } },
+            { ...alpha, thermo_ref: "thm_g2", provenance: { ...alpha.provenance, software_release: null } },
+            { ...alpha, thermo_ref: "thm_g3", provenance: { ...alpha.provenance, software_release: { software_release_ref: "srel_arkane", software: "Arkane", version: "1.0" } } },
+        ]
+    }
+
+    it("groups records reporting identical H298/S298/NASA-7 coefficients under one card, listing every ref", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: identicalClones() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+
+        // Exactly ONE group card -- never three separate ones.
+        expect(document.querySelectorAll("article.identical-record-group")).toHaveLength(1)
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        // The group's OWN heading, scoped to its own heading row (not the
+        // three member headings nested inside the collapsed "show all"
+        // detail -- jsdom's default queries do not filter those out by
+        // visibility, so this reads the DOM structure directly instead).
+        const ownHeadingRow = groupCard.querySelector(":scope > .science-record-heading") as HTMLElement
+        expect(ownHeadingRow.querySelector("h3")?.textContent).toBe("NASA-7 thermo record")
+        // Every ref is still listed, in the always-visible group-refs table
+        // (not hidden behind "show all").
+        const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
+        expect(within(refsTable).getByText("thm_g1")).toBeVisible()
+        expect(within(refsTable).getByText("thm_g2")).toBeVisible()
+        expect(within(refsTable).getByText("thm_g3")).toBeVisible()
+        // The shared scientific content itself renders once in the group's
+        // own body (outside the collapsed detail) -- not once per record.
+        const detail = groupCard.querySelector(".identical-record-group-detail") as HTMLElement
+        const bodyOutsideDetail = Array.from(groupCard.querySelectorAll("dd"))
+            .filter((el) => !detail.contains(el))
+            .filter((el) => el.textContent === "111.10 kJ/mol")
+        expect(bodyOutsideDetail).toHaveLength(1)
+    })
+
+    it("keeps provenance that differs across an identical-value group visible per ref, never collapsed away by grouping", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: identicalClones() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+        const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+        const rows = within(refsTable).getAllByRole("row").slice(1)
+        const g1Row = rows.find((row) => within(row).queryByText("thm_g1"))!
+        const g3Row = rows.find((row) => within(row).queryByText("thm_g3"))!
+        expect(cellAt(g1Row, "Software")).toBe("not recorded")
+        expect(cellAt(g3Row, "Software")).toBe("Arkane 1.0")
+    })
+
+    it("show-all is a real disclosure, closed by default, that mounts every member's own full card underneath the group card", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: identicalClones() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+
+        const detail = screen.getByText("Show all 3 records individually").closest("details") as HTMLDetailsElement
+        expect(detail.open).toBe(false)
+        // Three member cards mounted inside it -- one full `<article>` per
+        // record in the group, each carrying its own ref as a `<code>`.
+        const memberCards = within(detail).getAllByRole("article") as HTMLElement[]
+        expect(memberCards).toHaveLength(3)
+        const memberRefs = memberCards.map((card) => card.querySelector("code")?.textContent)
+        expect(memberRefs.sort()).toEqual(["thm_g1", "thm_g2", "thm_g3"])
+
+        fireEvent.click(screen.getByText("Show all 3 records individually"))
+        expect(detail.open).toBe(true)
+    })
+
+    it("never wraps a lone record in a '1 identical' group -- a single record renders as a plain card", async () => {
+        const [alpha] = mockRecords()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha] }))))
+        page()
+        await screen.findByText("thm_alpha")
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/Show all \d+ records individually/)).not.toBeInTheDocument()
+        expect(screen.queryByText("Records in this group")).not.toBeInTheDocument()
+    })
+
+    it("keeps records that differ in ANY scientific value as separate cards, never grouped", async () => {
+        // The file's own mockRecords() fixture: three records deliberately
+        // differing in every field under test (see its own docstring) --
+        // no grouping should occur at all.
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+        expect(screen.getByText("thm_alpha")).toBeVisible()
+        expect(screen.getByText("thm_beta")).toBeVisible()
+        expect(screen.getByText("thm_gamma")).toBeVisible()
+    })
+
+    /**
+     * Three clones sharing every fingerprinted field (including LoT) but
+     * citing THREE DIFFERENT primary/freq/SP calculations and three
+     * different statmech refs -- the live bug this fix was written
+     * against: the group card previously rendered `records[0]`'s
+     * provenance under an unqualified "Provenance" heading as though it
+     * held for all three, which is false the moment the records cite
+     * different calculations (as the real ethene entry's 7 thermo records
+     * do).
+     */
+    function clonesWithDifferentCalculations() {
+        const [alpha] = mockRecords()
+        return ["c1", "c2", "c3"].map((suffix) => ({
+            ...alpha,
+            thermo_ref: `thm_${suffix}`,
+            provenance: {
+                ...alpha.provenance,
+                primary_calculation: { ...alpha.provenance.primary_calculation, calculation_ref: `calc_${suffix}_primary` },
+                freq_calculation_ref: `calc_${suffix}_freq`,
+                sp_calculation_ref: `calc_${suffix}_sp`,
+                statmech_ref: `sm_${suffix}`,
+            },
+        }))
+    }
+
+    it("lists each record's OWN primary/freq/SP calculation and statmech ref in the group table, on the card, without expanding anything -- never one record's provenance standing in for the whole group", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: clonesWithDifferentCalculations() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        const detail = groupCard.querySelector(".identical-record-group-detail") as HTMLElement
+        const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
+        // Reachable WITHOUT expanding "Show all" -- the table sits outside
+        // the collapsed detail entirely.
+        expect(detail.contains(refsTable)).toBe(false)
+
+        const rows = within(refsTable).getAllByRole("row").slice(1)
+        const rowFor = (ref: string) => rows.find((row) => within(row).queryByText(ref))!
+
+        for (const suffix of ["c1", "c2", "c3"]) {
+            const row = rowFor(`thm_${suffix}`)
+            expect(cellAt(row, "Primary calculation")).toBe(`calc_${suffix}_primary`)
+            expect(cellAt(row, "Freq calculation")).toBe(`calc_${suffix}_freq`)
+            expect(cellAt(row, "SP calculation")).toBe(`calc_${suffix}_sp`)
+            expect(cellAt(row, "Statmech ref")).toBe(`sm_${suffix}`)
+        }
+
+        // The shared body (outside the table, outside "Show all") never
+        // attributes any ONE record's provenance to the group -- no
+        // "Provenance" block renders there at all.
+        const provenanceHeadingsOutsideDetail = Array.from(groupCard.querySelectorAll("h4"))
+            .filter((heading) => heading.textContent === "Provenance" && !detail.contains(heading))
+        expect(provenanceHeadingsOutsideDetail).toHaveLength(0)
+    })
+
+    it("shows the shared level of theory once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: clonesWithDifferentCalculations() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        // Positive: the LoT row is ON the group card, outside the collapsed
+        // per-record detail -- not merely "no Provenance heading".
+        // Query the row by its own label: the collapsed per-record detail also
+        // contains a <dt>Level of theory</dt> inside each ProvenanceBlock, so a
+        // text query would match twice.
+        const shared = groupCard.querySelector('dl[aria-label="Shared level of theory"]') as HTMLElement | null
+        expect(shared).not.toBeNull()
+        expect(within(shared as HTMLElement).getByText("Level of theory", { selector: "dt" })).toBeInTheDocument()
+        expect((shared as HTMLElement).closest(".identical-record-group-detail")).toBeNull()
+    })
+
+    it("never mints a duplicate DOM id between the group card's own elements and the same representative record's card inside 'Show all'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: identicalClones() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+        // Expand "Show all" so the representative's own (unmodified) card
+        // -- and its ids -- are actually mounted alongside the group's.
+        fireEvent.click(screen.getByText("Show all 3 records individually"))
+
+        const idCounts = new Map<string, number>()
+        document.querySelectorAll("[id]").forEach((el) => {
+            idCounts.set(el.id, (idCounts.get(el.id) ?? 0) + 1)
+        })
+        const duplicates = [...idCounts.entries()].filter(([, count]) => count > 1)
+        expect(duplicates).toEqual([])
     })
 })

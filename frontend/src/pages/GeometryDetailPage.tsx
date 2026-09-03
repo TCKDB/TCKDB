@@ -208,61 +208,45 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                 <Metric label="Consuming calculations" value={usedAsInputBy.length} />
                 <div className="coverage-card validation-card">
                     <span>Validation</span>
-                    <strong>Not recorded on this endpoint</strong>
+                    {/* Finding #9: "on this endpoint" was API jargon leaking into a
+                        chemist-facing page — "for this geometry" says the same thing
+                        (this record has no validation field of its own) without it. */}
+                    <strong>Not recorded for this geometry</strong>
                     <p>
                         This geometry record carries no validation field of its own. A geometry-vs-formula check,
                         where one was recorded, lives on the calculation that produced or consumed it, not here.
                     </p>
+                    {/* Finding #13: the panel used to repeat every producing/consuming
+                        calculation ref inline (twelve on the live CH3 record, comma-joined
+                        under one caption) with no visual link affordance -- the same refs
+                        are already a proper linked table further down this page, under
+                        "Produced by" / "Used as input by". Pointing here instead of
+                        repeating the list keeps this card short and gives the reader ONE
+                        place to click through, not two lists that can drift out of sync. */}
                     {/* No `#section-geometry-validation` fragment: this app has no fragment-scroll
                         handling (no ScrollRestoration, no hash effect) and a react-router `<Link>`
                         does a pushState navigation the browser does not scroll for anyway — and the
                         id sits inside a closed `<details>` whose content never loads until opened.
                         A fragment that silently does nothing is worse than a plain link to the right
-                        page, so this links to the calculation only. Both producers AND consumers can
-                        carry the validation row (it references either `input_geometry_ref` or
-                        `output_geometry_ref`), so both lists are offered here, each labelled by its
-                        own relationship — never merged into one undifferentiated list.
+                        page, so this points at the "Produced by" / "Used as input by" tables further
+                        down this same page, not at a fragment.
 
-                        Shaped as a definition list of named pointers (one row per relationship),
-                        not one run-on sentence with links stitched into its prose — a geometry with
-                        several producers/consumers (the live CH3 record this page was measured
-                        against carries 4 producers and 10 consumers) turned that sentence into an
-                        unreadable wrapped blob inside this card's narrow column. */}
+                        Previously repeated every producing/consuming calculation ref inline here too
+                        (a `<dl>` of named pointers, one row per relationship) — up to twelve refs,
+                        comma-joined, on the live CH3 record, reported rendering all-caps despite the
+                        DOM holding the lowercase ref. Those are the SAME refs the "Produced by" /
+                        "Used as input by" tables below already render as real, correctly-cased links
+                        (`ProvenanceSection` below; no `text-transform` on that table's `td`s at all).
+                        Rather than hunt the specific inherited-uppercase source in THIS card's own
+                        rules, this removes the duplicate identifier list altogether — one pointer
+                        sentence to the tables that already render these refs correctly, so the two
+                        lists can no longer drift and there is nothing left in this card for a
+                        caption-styled ancestor to mis-transform. */}
                     {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
-                        <dl className="validation-pointers">
-                            {producedBy.length > 0 && (
-                                <div className="validation-pointer" data-testid="validation-producer-pointer">
-                                    <dt>
-                                        See "Geometry validation" on the producing calculation
-                                        {producedBy.length > 1 ? "s" : ""}
-                                    </dt>
-                                    <dd>
-                                        {producedBy.map((link, index) => (
-                                            <span key={`validation-produced-${link.calculation_ref}`}>
-                                                {index > 0 && ", "}
-                                                <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
-                                            </span>
-                                        ))}
-                                    </dd>
-                                </div>
-                            )}
-                            {usedAsInputBy.length > 0 && (
-                                <div className="validation-pointer" data-testid="validation-consumer-pointer">
-                                    <dt>
-                                        See "Geometry validation" on the consuming calculation
-                                        {usedAsInputBy.length > 1 ? "s" : ""}
-                                    </dt>
-                                    <dd>
-                                        {usedAsInputBy.map((link, index) => (
-                                            <span key={`validation-consumed-${link.calculation_ref}`}>
-                                                {index > 0 && ", "}
-                                                <Link to={`/calculations/${link.calculation_ref}`}>{link.calculation_ref}</Link>
-                                            </span>
-                                        ))}
-                                    </dd>
-                                </div>
-                            )}
-                        </dl>
+                        <p>
+                            See "Geometry validation" on the producing or consuming calculations, listed with links
+                            in the "Produced by" and "Used as input by" tables below.
+                        </p>
                     )}
                 </div>
             </section>
@@ -419,11 +403,16 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                         `.toFixed(6)`'d for a stable column width (see
                         `formatCoordinate`), so a reader comparing this column
                         against their own conversion is not surprised by a
-                        7th-digit difference this note never mentioned. */}
+                        7th-digit difference this note never mentioned.
+
+                        Finding #9: plain wording, no `coordinate_units`-on-the-wire
+                        jargon — the guarantee (stored in ångström; bohr is a display
+                        conversion) and the rounding/conversion-factor detail both stay,
+                        just said in words a chemist reads without needing to know this
+                        app's field names. */}
                     <p className="coordinate-toggle-note">
-                        Always stored in ångström (<code>coordinate_units</code> on the wire);
-                        bohr here is a display conversion only, rounded to 6 decimal places, at
-                        1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr (CODATA 2018 Bohr radius).
+                        Stored in ångström; bohr here is a display conversion only, rounded to 6 decimal
+                        places, at 1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr (CODATA 2018 Bohr radius).
                     </p>
                 </div>
             )}

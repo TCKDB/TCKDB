@@ -13,6 +13,7 @@ import { EntryTabs } from "../components/EntryTabs"
 import { EntryThermoSection } from "../components/EntryThermoSection"
 import { EntryTransportSection } from "../components/EntryTransportSection"
 import { PageShell } from "../components/PageShell"
+import { SectionHeading } from "../components/PageSections"
 import { EntryIdentity } from "../components/SpeciesEntrySummary"
 import { DEFAULT_SECTION, isEntrySection } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
@@ -91,6 +92,38 @@ function UnavailableEntry() {
 // carries the active tab; an unset or stale param self-heals to the first
 // conformer via `useEffect` below rather than erroring.
 // ---------------------------------------------------------------------------
+// Whether this entry has ANYTHING to show below the hero -- reads the same
+// `availability` flags the hero's own "Archive availability" fact row
+// already carries (`SpeciesEntrySummary.tsx`), never a second, independent
+// check. When every flag is false (the empty-N2 case: no conformers, no
+// thermo, no statmech, no transport) the picker/evidence/tab strip below
+// would otherwise each restate that same emptiness in their own words --
+// three empty states instead of one. When at least one flag is true, the
+// full picker+tabs UI renders as normal; `EntryTabs` marks which of ITS
+// tabs are populated using these same flags.
+function hasAnyEvidence(entry: SpeciesEntryProjection): boolean {
+    const availability = entry.availability
+    return availability.has_conformers || availability.has_thermo || availability.has_statmech || availability.has_transport
+}
+
+// The ONE empty state for an entry with nothing recorded at all -- replaces
+// what used to be three: the conformer picker's own "no conformer basins"
+// message, the evidence panel (which never even mounted, since there was
+// no selected conformer), and the active tab panel's own "no conformer
+// basins" fallback. Reuses the picker's own container shape (`.conformer-
+// picker`, the `conformer-picker-title` heading id) for visual continuity
+// -- `ConformerSelector` itself never renders in this branch, so there is
+// no id collision.
+function EmptyEntryEvidence() {
+    return (
+        <section className="conformer-picker" aria-labelledby="conformer-picker-title">
+            <p className="eyebrow">Conformers</p>
+            <SectionHeading id="conformer-picker-title">Conformers</SectionHeading>
+            <p className="empty-projection">No conformers are recorded for this entry.</p>
+        </section>
+    )
+}
+
 function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef }: {
     entry: SpeciesEntryProjection
     conformers: ConformerProjection[]
@@ -148,21 +181,32 @@ function EntryDocument({ entry, conformers, spEnergies, activeSection, entryRef 
             record page's header through the same slot so the ToC rail
             starts level with the header, not below it). */}
         <PageShell identity={<EntryIdentity entry={entry} />}>
-        <ConformerSelector
-            conformers={conformers}
-            selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}
-            onSelect={selectConformer}
-        />
-        {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
+        {hasAnyEvidence(entry) ? (
+            <>
+                <ConformerSelector
+                    conformers={conformers}
+                    selectedRef={selectedConformer?.conformer_group.conformer_group_ref ?? null}
+                    onSelect={selectConformer}
+                />
+                {selectedConformer && <ConformerEvidenceLinkage conformer={selectedConformer} />}
 
-        <EntryTabs entryRef={entryRef} activeSection={activeSection} conformerQuery={conformerQuery} />
-        <TabPanel
-            section={activeSection}
-            entryRef={entryRef}
-            conformer={selectedConformer}
-            conformers={conformers}
-            spEnergies={spEnergies}
-        />
+                <EntryTabs
+                    entryRef={entryRef}
+                    activeSection={activeSection}
+                    conformerQuery={conformerQuery}
+                    availability={entry.availability}
+                />
+                <TabPanel
+                    section={activeSection}
+                    entryRef={entryRef}
+                    conformer={selectedConformer}
+                    conformers={conformers}
+                    spEnergies={spEnergies}
+                />
+            </>
+        ) : (
+            <EmptyEntryEvidence />
+        )}
         </PageShell>
     </section>
 }
@@ -197,12 +241,12 @@ function TabPanelBody({ section, entryRef, conformer, conformers, spEnergies }: 
     if (section === "geometry") {
         return conformer
             ? <ConformerGeometryTab conformer={conformer} />
-            : <p className="empty-projection">No conformer basins are projected for this entry, so there is no geometry evidence to show.</p>
+            : <p className="empty-projection">No conformers are recorded for this entry, so there is no geometry evidence to show.</p>
     }
     if (section === "sp") {
         return conformer
             ? <ConformerSinglePointTab conformer={conformer} spEnergies={spEnergies} />
-            : <p className="empty-projection">No conformer basins are projected for this entry, so there is no single-point evidence to show.</p>
+            : <p className="empty-projection">No conformers are recorded for this entry, so there is no single-point evidence to show.</p>
     }
     if (section === "statmech") return <EntryStatmechSection entryRef={entryRef} conformer={conformer} conformers={conformers} />
     if (section === "thermo") return <EntryThermoSection entryRef={entryRef} conformer={conformer} conformers={conformers} />

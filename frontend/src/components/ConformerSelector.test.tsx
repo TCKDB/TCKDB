@@ -154,7 +154,7 @@ describe("ConformerSelector basin identity (item 3)", () => {
         })
         renderSelector([single])
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        const rotorRow = within(card).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        const rotorRow = within(card).getByText("bond 8–10").closest(".conformer-basin-rotor") as HTMLElement
         expect(rotorRow).toHaveAttribute("data-rotor-key", "R_8_10")
         // Basin (the definition: a degree RANGE, never the internal bin
         // index) and representative (one member's own measured angle) are
@@ -168,6 +168,20 @@ describe("ConformerSelector basin identity (item 3)", () => {
         expect(basin).not.toBe(representative)
     })
 
+    // A dihedral is four atoms, so a row reading "atoms 8–10" beside a
+    // basin range that ALSO reads "345–360°" is misread as a run of three
+    // atoms, not the two-atom bond the rotor key actually identifies. The
+    // rotor row now says "bond", never "atoms".
+    it("labels the rotatable bond as 'bond', not 'atoms', to avoid reading as an atom range", () => {
+        const single = conformer({
+            conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1", fingerprint: GROUP_1_FINGERPRINT },
+        })
+        renderSelector([single])
+        const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
+        expect(within(card).getByText("bond 8–10")).toBeVisible()
+        expect(within(card).queryByText(/^atoms /)).not.toBeInTheDocument()
+    })
+
     it("renders two groups' basins with different numbers -- not the same row twice", () => {
         const one = conformer({
             conformer_group: { conformer_group_ref: "cg_one", label: "conformer_1", fingerprint: GROUP_1_FINGERPRINT },
@@ -179,8 +193,8 @@ describe("ConformerSelector basin identity (item 3)", () => {
 
         const card1 = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
         const card2 = screen.getByText("Conformer Group 2", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
-        const rotor1 = within(card1).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
-        const rotor2 = within(card2).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        const rotor1 = within(card1).getByText("bond 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        const rotor2 = within(card2).getByText("bond 8–10").closest(".conformer-basin-rotor") as HTMLElement
         expect(within(rotor1).getByText(/^basin /)).toHaveTextContent("basin 345–360°")
         expect(within(rotor2).getByText(/^basin /)).toHaveTextContent("basin 210–225°")
         expect(rotor1.textContent).not.toBe(rotor2.textContent)
@@ -204,9 +218,9 @@ describe("ConformerSelector basin identity (item 3)", () => {
         })
         renderSelector([shuffled])
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        const row9_10 = within(card).getByText("atoms 9–10").closest(".conformer-basin-rotor") as HTMLElement
-        const row1_2 = within(card).getByText("atoms 1–2").closest(".conformer-basin-rotor") as HTMLElement
-        const row20_21 = within(card).getByText("atoms 20–21").closest(".conformer-basin-rotor") as HTMLElement
+        const row9_10 = within(card).getByText("bond 9–10").closest(".conformer-basin-rotor") as HTMLElement
+        const row1_2 = within(card).getByText("bond 1–2").closest(".conformer-basin-rotor") as HTMLElement
+        const row20_21 = within(card).getByText("bond 20–21").closest(".conformer-basin-rotor") as HTMLElement
         expect(within(row9_10).getByText(/^basin /)).toHaveTextContent("basin 70–80°")
         expect(within(row9_10).getByText(/^representative /)).toHaveTextContent("representative 70.5°")
         expect(within(row1_2).getByText(/^basin /)).toHaveTextContent("basin 10–20°")
@@ -229,7 +243,7 @@ describe("ConformerSelector basin identity (item 3)", () => {
         })
         renderSelector([folded])
         const card = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
-        const row = within(card).getByText("atoms 1–2").closest(".conformer-basin-rotor") as HTMLElement
+        const row = within(card).getByText("bond 1–2").closest(".conformer-basin-rotor") as HTMLElement
         expect(within(row).getByText(/^basin /)).toHaveTextContent("basin 0–15° (folded coordinates)")
         expect(within(row).getByText(/^representative /)).toHaveTextContent("representative 370° (folds to 10°)")
     })
@@ -320,8 +334,8 @@ describe("the basin differences comparison is removed (item 5)", () => {
         // made the comparison table redundant.
         const card1 = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
         const card2 = screen.getByText("Conformer Group 2", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
-        const rotor1 = within(card1).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
-        const rotor2 = within(card2).getByText("atoms 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        const rotor1 = within(card1).getByText("bond 8–10").closest(".conformer-basin-rotor") as HTMLElement
+        const rotor2 = within(card2).getByText("bond 8–10").closest(".conformer-basin-rotor") as HTMLElement
         expect(within(rotor1).getByText(/^basin /)).toHaveTextContent("basin 345–360°")
         expect(within(rotor2).getByText(/^basin /)).toHaveTextContent("basin 210–225°")
     })

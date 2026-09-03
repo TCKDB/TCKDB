@@ -188,3 +188,67 @@ describe("the three theme blocks define the same set of token names", () => {
         expect(new Set(mediaDarkNames)).toEqual(new Set(explicitDarkNames))
     })
 })
+
+/**
+ * Accessibility pass (review finding 10): `--faint` and `--muted-2` back
+ * the smallest, most-repeated text in the app -- browse `spc_` refs,
+ * `.ref-item-label` captions, the COPY button label, the conformer-card
+ * coverage line, filter hints -- and measured well under WCAG AA's 4.5:1
+ * on every background they actually render on, as low as 2.17:1 (light
+ * `--faint` on `--accent-50`, the tint a SELECTED `.conformer-card` gets;
+ * the COPY button and coverage line sit directly on that tint, not just
+ * on plain white).
+ *
+ * A value that only clears 4.5:1 on plain white is not actually fixed --
+ * this checks all four real backgrounds these tokens render on
+ * (`--surface`, `--page-bg`, `--surface-sunken`, `--accent-50`), per
+ * theme, computed from the LIVE token values in this file (not a
+ * hardcoded expectation disconnected from it), so a future edit that
+ * quietly darkens `--accent-50` or lightens `--faint`/`--muted-2` back
+ * toward the original failing values fails here instead of shipping.
+ */
+describe("--faint and --muted-2 clear 4.5:1 on every background they render on", () => {
+    // Handles both `#rrggbb` and the shorthand `#rgb` (`--surface: #fff` in
+    // the light block) -- a real form this file uses, not a hypothetical.
+    function hexOf(block: string, name: string): [number, number, number] {
+        const match = new RegExp(`(?<!\\()--${name}:\\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\\b`).exec(block)
+        if (!match) throw new Error(`--${name} not found as a #rgb/#rrggbb declaration`)
+        const hex = match[1].length === 3 ? match[1].split("").map((c) => c + c).join("") : match[1]
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+    }
+
+    function relativeLuminance([r, g, b]: [number, number, number]): number {
+        const channel = (c: number) => {
+            const s = c / 255
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+        }
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    }
+
+    // WCAG 2 contrast ratio: (L_lighter + 0.05) / (L_darker + 0.05).
+    function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+        const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    const lightBlock = extractBlock(themeCss, /^:root \{/m)
+    const darkBlock = extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m)
+
+    const BACKGROUND_NAMES = ["surface", "page-bg", "surface-sunken", "accent-50"]
+
+    for (const theme of ["light", "dark"] as const) {
+        const block = theme === "light" ? lightBlock : darkBlock
+        const backgrounds = Object.fromEntries(BACKGROUND_NAMES.map((n) => [n, hexOf(block, n)]))
+
+        for (const tokenName of ["faint", "muted-2"]) {
+            it(`${theme} --${tokenName} clears 4.5:1 against --surface/--page-bg/--surface-sunken/--accent-50`, () => {
+                const fg = hexOf(block, tokenName)
+                for (const [bgName, bg] of Object.entries(backgrounds)) {
+                    const ratio = contrastRatio(fg, bg)
+                    expect(ratio, `--${tokenName} vs --${bgName} in ${theme} mode (got ${ratio.toFixed(2)}:1)`)
+                        .toBeGreaterThanOrEqual(4.5)
+                }
+            })
+        }
+    }
+})

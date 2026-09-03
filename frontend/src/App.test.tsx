@@ -274,7 +274,12 @@ describe("public archive shell", () => {
 const publicRoutes: Array<[path: string, heading: string, ref?: string]> = [
     ["/species", "Browse the archive", undefined],
     ["/species/spc_abcde234567abcde234567abcd", "H2O", speciesRef],
-    ["/conformer-groups/cfg_abc", "Conformer group", "cfg_abc"],
+    // The h1 states what the record IS ("Conformer basin"), not the
+    // producer's own deposited label -- see `ConformerGroupPage.tsx`'s own
+    // header comment. The fixture below still sets `label: "Conformer
+    // group"` deliberately, so this heading value only changes because the
+    // page itself no longer titles by that label at all.
+    ["/conformer-groups/cfg_abc", "Conformer basin", "cfg_abc"],
     ["/conformer-observations/cfo_abc", "Computed observation", "cfo_abc"],
     ["/calculations/calc_abc", "Single-point calculation", "calc_abc"],
     ["/geometries/geom_abc", "Geometry", "geom_abc"],

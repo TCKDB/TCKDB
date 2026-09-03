@@ -16,11 +16,25 @@
 
 .record-header { max-width: 63rem; }
 
-.record-title {
+/* Houses the eyebrow label AND the review-status pill -- see the comment
+   in CalculationDetailPage.tsx above this row's markup for why the pill
+   lives here rather than beside the h1: the eyebrow text never wraps at
+   any width this page supports, so the pill has a stable anchor point
+   immediately above the title, always read as part of the same heading
+   block instead of drifting into whitespace when the h1 itself wraps.
+   `flex-wrap` is defensive, not load-bearing -- even a future longer
+   status token wraps onto its own line under the eyebrow rather than
+   overflowing the record's max-width. */
+.record-eyebrow-row {
     display: flex;
-    align-items: baseline;
-    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem .75rem;
 }
+
+.record-eyebrow-row .eyebrow { margin-bottom: 0; }
+
+.record-title { margin-top: 1.35rem; }
 
 .record-title h1,
 .owner-card h2,
@@ -34,12 +48,6 @@
     min-width: 0;
     overflow-wrap: anywhere;
     font-size: clamp(3rem, 8vw, 5.5rem);
-}
-
-.record-intro {
-    max-width: 44rem;
-    color: var(--ink-2);
-    font: 1.15rem/1.55 var(--serif);
 }
 
 .record-context {

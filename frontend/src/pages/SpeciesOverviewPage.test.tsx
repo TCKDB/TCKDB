@@ -93,7 +93,10 @@ describe("species overview", () => {
         expect(await screen.findByRole("heading", { name: "CH3" })).toBeVisible()
         expect(screen.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible()
         expect(screen.getByRole("heading", { name: "Electronic-state entries" })).toBeVisible()
-        expect(screen.getByText("2 entries")).toBeVisible()
+        // The section heading no longer carries its own "N entries" total --
+        // that number is only ever shown once, on the per-state-group
+        // heading below, so it isn't stated twice for the same fact.
+        expect(screen.queryByText("2 entries")).not.toBeInTheDocument()
         expect(screen.getByRole("heading", { name: /ground electronic state.*1 entry/i })).toBeVisible()
         expect(screen.getByRole("heading", { name: /excited electronic state.*1 entry/i })).toBeVisible()
 
@@ -107,6 +110,11 @@ describe("species overview", () => {
         const groundCard = await cardFor(entryRef)
         expect(within(groundCard).getByRole("link", { name: "minimum" }))
             .toHaveAttribute("href", `/species-entries/${entryRef}`)
+        // The row used to link to its own record twice -- the heading link
+        // above, plus a separate "Open state-specific record →" link lower
+        // in the card. One link, one destination, per row now.
+        expect(within(groundCard).getAllByRole("link")).toHaveLength(1)
+        expect(screen.queryByText(/Open state-specific record/)).not.toBeInTheDocument()
 
         const excitedCard = await cardFor(excitedEntryRef)
         expect(within(excitedCard).getByRole("link", { name: "minimum · T1" }))
@@ -139,7 +147,12 @@ describe("species overview", () => {
         expect(groundLinks[1]).toHaveAttribute("href", "/species-entries/spe_secondgroundentryrecordabcdefgh")
         expect(screen.getByText("spe_secondgroundentryrecordabcdefgh")).toBeVisible()
         expect(screen.getByText("7")).toBeVisible()
-        expect(screen.getAllByText(/Each row is a separate record/)).toHaveLength(2)
+        // One explanatory sentence for the whole entry index, not one per
+        // state group -- the per-group "Each row is a separate record..."
+        // paragraph this used to be is gone; the section-level sentence
+        // above the groups is the only one now, however many groups render.
+        expect(screen.getAllByText(/Entries are separate deposited records/)).toHaveLength(1)
+        expect(screen.queryByText(/Each row is a separate record/)).not.toBeInTheDocument()
     })
 
     it("explains when no state-specific entries are projected", async () => {

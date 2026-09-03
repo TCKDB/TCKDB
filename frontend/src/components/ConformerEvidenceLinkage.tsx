@@ -22,6 +22,28 @@ function calculationRowDetail(
         + " (a staged coarse-then-fine reoptimisation counts as one chain)"
 }
 
+// Pulled out of the FULL prose `describeConformerEvidence` builds, rather
+// than reimplemented here: that function (`domain/conformerEvidence.ts`) is
+// the single source of truth for how staged optimisation is described --
+// it encodes real chemistry judgement (see its own module comment on why a
+// three-row/one-chain observation can't honestly be called "three
+// stages"), and this component has no business owning a second copy of
+// that judgement.
+//
+// The full prose has a FIXED shape: exactly one lead sentence ("This
+// conformer was sighted N times."), then zero or more staging sentences,
+// then exactly two coverage sentences (frequency, then single-point) --
+// both of which just restate numbers the conformer card already shows.
+// Splitting on sentence boundaries and dropping the first sentence and the
+// last two, however many are left over, isolates the staging content --
+// the one thing in the paragraph that ISN'T already on the card -- without
+// this component re-deriving it from the raw evidence fields itself.
+function stagingSentence(conformer: ConformerProjection): string | null {
+    const sentences = describeConformerEvidence(conformer).split(/(?<=\.)\s+/)
+    const middle = sentences.slice(1, -2)
+    return middle.length > 0 ? middle.join(" ") : null
+}
+
 /**
  * Answers the owner's own confusion directly: "they see 2 distinct Geoms
  * but then 4 conformers... 14 calculation rows but only 12 I see (opt 4/4,
@@ -29,14 +51,17 @@ function calculationRowDetail(
  * three different UNITS printed as if they were comparable. But naming the
  * units was still the wrong answer to a different question he actually
  * asked -- "is the 7 opt also including the pre-opt?" -- which is about
- * what happened to THIS molecule, not what each figure counts. The prose
- * lead (`describeConformerEvidence`) answers that directly and sits outside
- * any disclosure, so a reader gets the story with no click; the figures
- * that back it up -- the unit-by-unit flow and the per-stage coverage --
- * sit inside a collapsed `<details>` for the reader who wants the
- * mechanics. No number here is recomputed or merged -- each is read
- * straight off the same `evidence_summary` fields the conformer card
- * already renders.
+ * what happened to THIS molecule, not what each figure counts. The
+ * conformer card above already states the counts (how many observations,
+ * how many calculation rows, per-stage coverage) -- repeating them here in
+ * prose would just be a third form of the same two numbers, so the only
+ * thing shown by default is `stagingSentence` below: the ONE fact the card
+ * cannot express (whether a sighting's optimisation ran in more than one
+ * pass). The figures that back the counts up -- the unit-by-unit flow and
+ * the per-stage coverage -- sit inside a collapsed `<details>` for the
+ * reader who wants the mechanics. No number here is recomputed or merged
+ * -- each is read straight off the same `evidence_summary` fields the
+ * conformer card already renders.
  */
 export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerProjection }) {
     const total = conformer.observations_summary.total
@@ -45,13 +70,17 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
     const typeCounts = calculationTypeCounts(conformer)
     const convergence = geometryConvergence(conformer)
     const label = conformerLabel(conformer)
-    const story = describeConformerEvidence(conformer)
+    const staging = stagingSentence(conformer)
 
     return (
         <section className="evidence-linkage" aria-labelledby="evidence-linkage-heading">
-            <p className="eyebrow">Evidence</p>
+            {/* No separate "Evidence" eyebrow here -- the conformer picker
+                right above already carries one, and the tab strip below
+                carries its own "Evidence for this conformer" eyebrow too.
+                Three "evidence" labels in a row said nothing a heading
+                alone doesn't; the heading is enough. */}
             <SectionHeading id="evidence-linkage-heading" label={`Evidence for ${label}`}>Evidence for {label}</SectionHeading>
-            <p className="evidence-linkage-story">{story}</p>
+            {staging && <p className="evidence-linkage-story">{staging}</p>}
             <details className="evidence-linkage-detail">
                 {/* The count in the summary is the "References (4)" lesson applied
                     here: a bare "How this evidence connects" gave a reader no reason
@@ -63,9 +92,10 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                     {", "}{evidence.geometry_count} distinct geometr{evidence.geometry_count === 1 ? "y" : "ies"})
                 </summary>
                 <p className="evidence-linkage-note">
-                    Three different units, not three counts of the same thing: an observation is a deposited sighting
-                    of this basin; a calculation row is one piece of evidence attached to an observation; a stored
-                    geometry is a coordinate set several calculation rows can share.
+                    Three different units, not three counts of the same thing -- the card above abbreviates the
+                    first two as "obs" and "calc": an observation is a deposited sighting of this basin; a
+                    calculation row is one piece of evidence attached to an observation; a stored geometry is a
+                    coordinate set several calculation rows can share.
                 </p>
                 <div className="linkage-flow">
                     <LinkageStep

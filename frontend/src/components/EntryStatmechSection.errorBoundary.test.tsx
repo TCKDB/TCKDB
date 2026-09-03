@@ -123,7 +123,14 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
                         }],
                     }),
                     baseRecord({
-                        statmech: { ...baseRecord().statmech, statmech_ref: "sm_good" },
+                        // `point_group` deliberately differs from `sm_bad`'s
+                        // "D3h" -- otherwise the two records are
+                        // scientifically IDENTICAL and finding 7's grouping
+                        // (`identicalRecordGroups.ts`) would fold them into
+                        // one "2 records with identical values" card,
+                        // defeating this file's whole point: proving
+                        // per-row isolation between two SEPARATE cards.
+                        statmech: { ...baseRecord().statmech, statmech_ref: "sm_good", point_group: "C2v" },
                         torsions: [{
                             torsion_index: 0, treatment_kind: "hindered_rotor", symmetry_number: 3,
                             dimension: 1, top_description: null, invalidated_reason: null, note: null,
@@ -132,9 +139,27 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
                     }),
                 ]))
             }
+            // `include=frequencies` (fetched eagerly, same as
+            // `source_calculations`) gets REAL data here -- not the bare
+            // `has_frequencies: true` flag with no payload behind it. A
+            // fixture that never actually returns `frequencies` would make
+            // the "no global Frequencies section" assertion below pass
+            // vacuously: `FrequenciesBlock` renders no heading either way
+            // when its own data never arrives, so the assertion could not
+            // tell "removed globally, moved to the card" from "removed
+            // globally, broken everywhere".
+            if (includes.includes("frequencies")) {
+                return HttpResponse.json(mockResponse([
+                    baseRecord({ frequencies: { source_freq_calculation_refs: ["calc_freq_bad"], frequency_scale_factor_value: 0.999, note: null } }),
+                    baseRecord({
+                        statmech: { ...baseRecord().statmech, statmech_ref: "sm_good", point_group: "C2v" },
+                        frequencies: { source_freq_calculation_refs: ["calc_freq_good"], frequency_scale_factor_value: 0.999, note: null },
+                    }),
+                ]))
+            }
             return HttpResponse.json(mockResponse([
                 baseRecord(),
-                baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_good" } }),
+                baseRecord({ statmech: { ...baseRecord().statmech, statmech_ref: "sm_good", point_group: "C2v" } }),
             ]))
         }))
         // SectionErrorBoundary's own componentDidCatch logs to console.error;
@@ -173,8 +198,29 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         expect(within(recordsSection).getByText("sm_good")).toBeVisible()
         expect(screen.getByText("2 records · review: 2 not reviewed")).toBeVisible()
         expect(screen.getByRole("heading", { name: "Source calculations" })).toBeVisible()
-        expect(screen.getByRole("heading", { name: "Electronic levels" })).toBeVisible()
-        expect(screen.getByRole("heading", { name: "Frequencies" })).toBeVisible()
+        // "Electronic levels" has no record on this entry (both fixtures
+        // set `has_electronic_levels: false`) -- it collapses to one line,
+        // no heading (finding 6), not a full section over a dashed empty
+        // box.
+        expect(screen.queryByRole("heading", { name: "Electronic levels" })).not.toBeInTheDocument()
+        expect(screen.getByText("No electronic levels are recorded for any statmech record on this entry.")).toBeVisible()
+        // "Frequencies" is no longer its own global section at all -- it
+        // moved onto each record card (finding 6's `FrequenciesBlock`).
+        // Proven POSITIVELY, not just by absence: both cards actually carry
+        // their own "Frequencies" heading (the mock above returns real
+        // `frequencies` data for this very assertion), and neither one
+        // sits inside a `<details>` -- the shape the OTHER five lazy
+        // sections (Source calculations, Electronic levels, ...) still
+        // use. An assertion that only checked "no heading named
+        // Frequencies anywhere" would pass identically whether the block
+        // moved onto the card or simply broke everywhere.
+        const badCard = within(recordsSection).getByText("sm_bad").closest("article") as HTMLElement
+        const goodCard = within(recordsSection).getByText("sm_good").closest("article") as HTMLElement
+        const badFreqHeading = within(badCard).getByRole("heading", { name: "Frequencies" })
+        expect(badFreqHeading.closest("details")).toBeNull()
+        const goodFreqHeading = within(goodCard).getByRole("heading", { name: "Frequencies" })
+        expect(goodFreqHeading.closest("details")).toBeNull()
+        expect(screen.getAllByRole("heading", { name: "Frequencies" })).toHaveLength(2)
         expect(screen.getByRole("heading", { name: "Conformer context" })).toBeVisible()
         expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
 

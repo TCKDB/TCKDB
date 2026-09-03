@@ -1,45 +1,75 @@
-import { Fragment } from "react"
+import { useState } from "react"
 import { Link } from "react-router-dom"
 import "../conformer-group.css"
 import "../entry-science.css"
+import "../energy-display.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { SpeciesCalculationEnergyRecord } from "../api/speciesCalculationsApi"
 import { lotLabel } from "../api/scientificSchemas"
 import { conformerLabel } from "../domain/conformerEvidence"
-import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
-import { EnergyDisplay } from "./EnergyDisplay"
+import {
+    ENERGY_DISPLAY_UNITS,
+    energyUnitLabel,
+    formatEnergyForDisplay,
+    type EnergyDisplayUnit,
+} from "../domain/energyUnits"
+import { softwareLabel } from "../domain/provenanceFormat"
 import { SectionHeading } from "./PageSections"
 
+type Calculation = NonNullable<NonNullable<ConformerProjection["observations"]>[number]["calculations"]>[number]
+
+// One row per single-point CALCULATION, never per observation: an
+// observation that deposited two independent sp calculations (a real,
+// fixture-covered case) gets two rows, not one row hiding a second value.
+// An observation with no sp calculation at all still gets exactly one row
+// -- absent evidence is a row that says so, never a row that disappears.
+type Row = { key: string; observationRef: string; calculation: Calculation | null }
+
+function buildRows(observations: NonNullable<ConformerProjection["observations"]>): Row[] {
+    const rows: Row[] = []
+    for (const observation of observations) {
+        const ref = observation.conformer_observation.conformer_observation_ref
+        const spCalculations = (observation.calculations ?? []).filter((calculation) => calculation.type === "sp")
+        if (spCalculations.length === 0) {
+            rows.push({ key: ref, observationRef: ref, calculation: null })
+            continue
+        }
+        for (const calculation of spCalculations) {
+            rows.push({ key: `${ref}-${calculation.calculation_ref}`, observationRef: ref, calculation })
+        }
+    }
+    return rows
+}
+
 /**
- * One row per deposited observation, never merged: an observation with two
- * single-point calculations shows both, an observation with none says so
- * plainly rather than being silently skipped.
+ * A table, not a card per observation: this tab used to render one
+ * `science-record` article per observation, each with its OWN hartree
+ * value and its OWN five-button unit toggle -- eleven observations meant
+ * eleven near-identical toggles for what is, underneath, one electronic
+ * energy shown in one chosen unit at a time. The unit is now a single
+ * control for the whole table (`unit` state below); every cell still
+ * carries its unit on the value itself (`formatEnergyForDisplay` has no
+ * "value only" mode -- see `domain/energyUnits.ts` -- so switching away
+ * from hartree can never leave a bare, ambiguous number in a cell).
  *
- * The owner's own complaint this fixes: "i kinda expect the single point
- * energy to also show on the species entries page rather than just being a
- * link… oh wait it does in Result but it doesnt catch the eye". The energy
- * VALUE, not just the calculation ref link, now renders directly on this
- * row — joined from `spEnergies` (`api/speciesCalculationsApi.ts`) by
- * `calculation_ref`, since the calculation summaries this tab already had
- * (`conformer.observations[].calculations`) do not carry a result value at
- * all (see that API module's own docstring for why). A calculation ref with
- * no matching energy record (the enrichment fetch failed, or genuinely has
- * no parsed energy) still renders its row — the value cell alone says "not
- * recorded", never a silently dropped row.
- *
- * `calculation.type` renders as a pill (categorical, bounded-vocabulary --
- * `opt`/`freq`/`sp`/…), matching the convention set on the statmech record
- * card (`EntryStatmechSection.tsx`'s `FrequencyScaleFactorDetail`): a pill
- * REPLACES a value's plain-text form and is never shown alongside it. The
- * energy value itself is never a pill -- a quantity, not a category -- and
- * the calculation ref stays plain monospace, same as every identifier on
- * this app.
+ * `valueHartree` is joined from `spEnergies` (`api/speciesCalculationsApi.ts`)
+ * by `calculation_ref`, since the calculation summaries this tab already
+ * had (`conformer.observations[].calculations`) do not carry a result
+ * value at all (see that API module's own docstring for why). A
+ * calculation ref with no matching energy record (the enrichment fetch
+ * failed, or genuinely has no parsed energy) still renders its row -- the
+ * energy cell alone says "not recorded", never a silently dropped row. An
+ * observation with no sp calculation at all ALSO keeps its row (`buildRows`
+ * above) -- dropping it would make an 11-observation entry look like it
+ * only ever deposited 7 sightings of single-point evidence.
  */
 export function ConformerSinglePointTab({ conformer, spEnergies }: {
     conformer: ConformerProjection
     spEnergies: SpeciesCalculationEnergyRecord[]
 }) {
+    const [unit, setUnit] = useState<EnergyDisplayUnit>("hartree")
     const observations = conformer.observations ?? []
+    const rows = buildRows(observations)
     const energyByCalculationRef = new Map(
         spEnergies.map((record) => [record.calculation.calculation_ref, record.energy?.energy_hartree ?? null]),
     )
@@ -51,53 +81,76 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                 <SectionHeading id="sp-heading">Single-point energy</SectionHeading>
                 <p>Single-point energy evidence for {conformerLabel(conformer)}, one row per deposited observation.</p>
             </div>
-            {observations.length === 0 ? (
+            {rows.length === 0 ? (
                 <p className="empty-projection">No deposited observations are projected for this conformer.</p>
             ) : (
-                observations.map((observation) => {
-                    const ref = observation.conformer_observation.conformer_observation_ref
-                    const spCalculations = (observation.calculations ?? []).filter((calculation) => calculation.type === "sp")
-                    return (
-                        <article key={ref} className="science-record">
-                            <div className="science-record-heading">
-                                <h3><Link to={`/conformer-observations/${ref}`}>{ref}</Link></h3>
-                            </div>
-                            {spCalculations.length === 0 ? (
-                                <p className="empty-projection">No single-point calculation recorded for this observation.</p>
-                            ) : (
-                                <dl className="kv-list">
-                                    {spCalculations.map((calculation) => (
-                                        <Fragment key={calculation.calculation_ref}>
-                                            <div className="single-point-energy-row">
-                                                <dt>Electronic energy</dt>
-                                                <dd>
-                                                    <EnergyDisplay
-                                                        valueHartree={energyByCalculationRef.get(calculation.calculation_ref) ?? null}
-                                                        size="inline"
-                                                    />
-                                                </dd>
-                                            </div>
-                                            <div>
-                                                <dt>Calculation</dt>
-                                                <dd><Link to={`/calculations/${calculation.calculation_ref}`}>{calculation.calculation_ref}</Link></dd>
-                                            </div>
-                                            <div>
-                                                <dt>Type</dt>
-                                                <dd><span className="value-pill">{calculation.type}</span></dd>
-                                            </div>
-                                            <div>
-                                                <dt>Level of theory</dt>
-                                                <dd>{calculation.level_of_theory ? lotLabel(calculation.level_of_theory) : "not recorded"}</dd>
-                                            </div>
-                                            <div><dt>Software</dt><dd>{softwareLabel(calculation.software_release) ?? "not recorded"}</dd></div>
-                                            <div><dt>Workflow</dt><dd>{toolReleaseLabel(calculation.workflow_tool_release) ?? "not recorded"}</dd></div>
-                                        </Fragment>
-                                    ))}
-                                </dl>
-                            )}
-                        </article>
-                    )
-                })
+                <>
+                    {/* ONE unit switcher for the whole table -- every row's
+                        energy cell reads off this same `unit` state, rather
+                        than each row owning its own toggle. */}
+                    <fieldset className="energy-toggle" aria-label="Energy display unit for every row below">
+                        <legend>Units</legend>
+                        {ENERGY_DISPLAY_UNITS.map((candidate) => (
+                            <button
+                                key={candidate}
+                                type="button"
+                                aria-pressed={unit === candidate}
+                                onClick={() => setUnit(candidate)}
+                            >
+                                {energyUnitLabel(candidate)}
+                            </button>
+                        ))}
+                    </fieldset>
+                    <div className="table-scroll table-scroll--compact">
+                        <table className="stage-table" aria-label="Single-point energies">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Observation</th>
+                                    <th scope="col">Calculation</th>
+                                    <th scope="col">Energy</th>
+                                    <th scope="col">Level of theory</th>
+                                    <th scope="col">Software</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {rows.map((row) => {
+                                    const valueHartree = row.calculation
+                                        ? energyByCalculationRef.get(row.calculation.calculation_ref) ?? null
+                                        : null
+                                    return (
+                                        <tr key={row.key}>
+                                            <td data-label="Observation">
+                                                <Link to={`/conformer-observations/${row.observationRef}`}>{row.observationRef}</Link>
+                                            </td>
+                                            <td data-label="Calculation">
+                                                {row.calculation
+                                                    ? <Link to={`/calculations/${row.calculation.calculation_ref}`}>{row.calculation.calculation_ref}</Link>
+                                                    : "not recorded"}
+                                            </td>
+                                            <td data-label="Energy">
+                                                {!row.calculation ? (
+                                                    <span className="energy-display-absent">no single-point calculation recorded</span>
+                                                ) : valueHartree === null ? (
+                                                    <span className="energy-display-absent">not recorded</span>
+                                                ) : (
+                                                    <span className="energy-display-value" data-testid="energy-display-value">
+                                                        {formatEnergyForDisplay(valueHartree, unit)}
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td data-label="Level of theory">
+                                                {row.calculation?.level_of_theory ? lotLabel(row.calculation.level_of_theory) : "not recorded"}
+                                            </td>
+                                            <td data-label="Software">
+                                                {row.calculation ? (softwareLabel(row.calculation.software_release) ?? "not recorded") : "not recorded"}
+                                            </td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </>
             )}
         </section>
     )

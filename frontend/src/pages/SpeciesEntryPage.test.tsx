@@ -35,6 +35,12 @@ type HandlerOptions = {
     malformed?: boolean
     status?: number
     noConformers?: boolean
+    // The N2-shaped case: every `availability` flag false, so nothing at
+    // all is recorded for this entry -- not conformers, not thermo, not
+    // statmech, not transport. Distinct from `noConformers` (which only
+    // empties the conformer list while the OTHER sections still carry
+    // real records and their own tabs still work).
+    noEvidence?: boolean
     singleConformer?: boolean
     statmechConformersIncludeFails?: boolean
     // The archive orders `conformers/search` by review rank, not by label
@@ -289,13 +295,15 @@ function handlers(options: HandlerOptions = {}) {
                 entries: [{
                     species_entry_ref: entryRef, species_entry_kind: "minimum", electronic_state_kind: "ground",
                     review: { status: "not_reviewed" },
-                    availability: { has_thermo: true, has_statmech: true, has_transport: false, has_conformers: true, calculation_count: 10 },
+                    availability: options.noEvidence
+                        ? { has_thermo: false, has_statmech: false, has_transport: false, has_conformers: false, calculation_count: 0 }
+                        : { has_thermo: true, has_statmech: true, has_transport: false, has_conformers: true, calculation_count: 10 },
                 }],
             }] })
         }),
         http.get("/api/v1/scientific/conformers/search", () => {
             if (options.status) return HttpResponse.json({ detail: "archive unavailable" }, { status: options.status })
-            if (options.noConformers) return HttpResponse.json({ records: [] })
+            if (options.noConformers || options.noEvidence) return HttpResponse.json({ records: [] })
             if (options.singleConformer) return HttpResponse.json({ records: [conformerRecords()[0]] })
             // `conformers/search` orders by review rank, not by label number, so
             // the archive really can return conformer_2 ahead of conformer_1 --
@@ -548,13 +556,32 @@ describe("species-entry page: conformer picker", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         expect(await screen.findByRole("heading", { name: "Conformers" })).toBeVisible()
-        expect(screen.getByText("No conformer basins are projected for this entry.")).toBeVisible()
-        expect(screen.getByText("No conformer basins are projected for this entry, so there is no geometry evidence to show.")).toBeVisible()
+        expect(screen.getByText("No conformers are recorded for this entry.")).toBeVisible()
+        expect(screen.getByText("No conformers are recorded for this entry, so there is no geometry evidence to show.")).toBeVisible()
         // Thermo/statmech/transport are entry-scoped lists, independent of
         // whether any conformer basin is projected -- they still render.
         await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
         expect(await screen.findByText("thm_one")).toBeVisible()
         expect(screen.getByText("thm_two")).toBeVisible()
+    })
+
+    it("shows ONE empty state and no tab strip when the entry has nothing recorded at all (the N2 case)", async () => {
+        server.use(...handlers({ noEvidence: true }))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        expect(await screen.findByRole("heading", { name: "Conformers" })).toBeVisible()
+        expect(screen.getByText("No conformers are recorded for this entry.")).toBeVisible()
+        // Exactly one empty-state sentence on the page -- not the picker's
+        // own message, a separate evidence panel, AND a tab-panel fallback
+        // all saying the same thing three different ways.
+        expect(screen.getAllByText(/no conformers are recorded/i)).toHaveLength(1)
+        // No tab strip at all when there is nothing to switch between.
+        expect(screen.queryByRole("tablist")).not.toBeInTheDocument()
+        expect(screen.queryByRole("tab", { name: "Geometry" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("tab", { name: "Transport" })).not.toBeInTheDocument()
+        // Nor the "Evidence for <conformer>" panel, which has no conformer
+        // to be evidence for.
+        expect(screen.queryByText(/^Evidence for /)).not.toBeInTheDocument()
     })
 
     it("uses a neutral 'Conformer' heading, not the imperative 'Choose a conformer', when there is exactly one basin", async () => {
@@ -627,6 +654,22 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
             "No transport records are deposited for this entry. This is the archive's own answer — not a failed request — so nothing further will load if you retry.",
         )).toBeVisible()
     })
+
+    it("marks tabs that have content using the entry's own availability, leaving the empty Transport tab undotted", async () => {
+        server.use(...handlers())
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await screen.findByText("Choose a conformer")
+        const tablist = screen.getByRole("tablist", { name: "Conformer evidence" })
+        // Default fixture: has_conformers/has_thermo/has_statmech true,
+        // has_transport false.
+        for (const name of ["Geometry", "Single-point energy", "Thermochemistry", "Statistical mechanics"]) {
+            const tab = within(tablist).getByRole("tab", { name })
+            expect(tab.querySelector(".entry-tab-dot")).not.toBeNull()
+        }
+        const transportTab = within(tablist).getByRole("tab", { name: "Transport" })
+        expect(transportTab.querySelector(".entry-tab-dot")).toBeNull()
+    })
 })
 
 describe("species-entry page: selecting a conformer scopes geometry, single-point, thermo and statmech to it", () => {
@@ -654,12 +697,13 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         server.use(...handlers())
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
-        expect(await screen.findByRole("link", { name: "co_1" })).toBeVisible()
+        // co_1 has two sp calculations -- both must render as their OWN row
+        // (two "co_1" observation links), not just the first.
+        expect(await screen.findAllByRole("link", { name: "co_1" })).toHaveLength(2)
         expect(screen.getByRole("link", { name: "co_2" })).toBeVisible()
-        // co_1 has two sp calculations -- both must render, not just the first.
         expect(screen.getByRole("link", { name: "calc_sp_1" })).toBeVisible()
         expect(screen.getByRole("link", { name: "calc_sp_1b" })).toBeVisible()
-        expect(screen.getByText("No single-point calculation recorded for this observation.")).toBeVisible()
+        expect(screen.getByText("no single-point calculation recorded")).toBeVisible()
     })
 
     it("surfaces the single-point energy VALUE on the entry page, not just a link to the calculation", async () => {
@@ -678,7 +722,6 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         window.history.replaceState({}, "", `/species-entries/${entryRef}/sp`)
         render(<App />)
         expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
-        expect(screen.getAllByText("Electronic energy").length).toBeGreaterThan(0)
         expect(screen.getAllByText("not recorded").length).toBeGreaterThan(0)
     })
 
