@@ -764,6 +764,21 @@
     font-weight: 600;
 }
 
+/* A tab with content gets a small dot, not a colour change -- shape, not
+   colour alone, is what survives a colour-blind or high-contrast viewer.
+   `currentColor` ties it to whatever colour the tab link already has
+   (muted at rest, accent when selected/hovered), so it never needs its
+   own colour token. */
+.entry-tab-dot {
+    display: inline-block;
+    width: .4em;
+    height: .4em;
+    margin-left: .45em;
+    border-radius: 50%;
+    background: currentColor;
+    vertical-align: middle;
+}
+
 .entry-tabs a:focus-visible,
 .conformer-card-select:focus-visible {
     outline: 2px solid var(--accent);

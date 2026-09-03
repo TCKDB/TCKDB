@@ -74,7 +74,7 @@ describe("ConformerEvidenceLinkage", () => {
         expect(screen.getByRole("heading", { name: "Evidence for Conformer Group 1" })).toBeVisible()
     })
 
-    it("shows the prose story sentence WITHOUT opening anything -- the reader gets the story with no click", () => {
+    it("shows only the staging sentence WITHOUT opening anything -- the ONE fact the card doesn't already state", () => {
         render(<ConformerEvidenceLinkage conformer={conformer()} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toBeVisible()
@@ -84,12 +84,31 @@ describe("ConformerEvidenceLinkage", () => {
         // sentence, which still directly answers "does the opt count include
         // the pre-opt" without naming which sighting was staged.
         expect(story).toHaveTextContent(
-            "This conformer was sighted three times. Three optimisation calculations are on file across two "
-            + "independent optimisation chains -- one of those calculations is a coarse pass later refined "
-            + "within the same chain, though the archive does not say which sighting they belong to. Two of "
-            + "the three sightings got a frequency calculation. One of the three sightings got a "
-            + "single-point energy.",
+            "Three optimisation calculations are on file across two independent optimisation chains -- one of "
+            + "those calculations is a coarse pass later refined within the same chain, though the archive "
+            + "does not say which sighting they belong to.",
         )
+        // The lead ("sighted N times") and the freq/sp coverage sentences are
+        // ALL already on the conformer card (in a different form) -- they
+        // must not be repeated here.
+        expect(story).not.toHaveTextContent(/sighted/)
+        expect(story).not.toHaveTextContent(/frequency calculation/)
+        expect(story).not.toHaveTextContent(/single-point energy/)
+    })
+
+    it("drops the separate 'Evidence' eyebrow -- the picker above and the tab strip below already carry one", () => {
+        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        expect(document.querySelector(".evidence-linkage .eyebrow")).not.toBeInTheDocument()
+    })
+
+    it("renders no prose paragraph at all when there is no staging fact to add beyond the card's own counts", () => {
+        // `calculations: null` -> `optimizationStaging` returns "unknown" ->
+        // no staging sentence exists at all, so the trimmed prose has
+        // nothing left to show -- the paragraph should not render an empty
+        // shell.
+        const noBreakdown = conformer({ calculations: null } as Partial<ConformerProjection>)
+        render(<ConformerEvidenceLinkage conformer={noBreakdown} />)
+        expect(document.querySelector(".evidence-linkage-story")).not.toBeInTheDocument()
     })
 
     it("collapses the mechanics disclosure by default, with a summary that previews what's behind it", () => {
@@ -265,10 +284,12 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={ch3Conformer()} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "This conformer was sighted four times. Three were optimised in two stages, one in a single pass. "
-            + "A staged optimisation runs a coarse pass first, then refines it. Every sighting got a frequency "
-            + "calculation. Three of the four sightings got a single-point energy.",
+            "Three were optimised in two stages, one in a single pass. "
+            + "A staged optimisation runs a coarse pass first, then refines it.",
         )
+        expect(story).not.toHaveTextContent(/sighted/)
+        expect(story).not.toHaveTextContent(/frequency calculation/)
+        expect(story).not.toHaveTextContent(/single-point energy/)
     })
 
     it("never claims staging for a conformer whose optimizations are all standalone single passes (aggregate path)", () => {
@@ -292,15 +313,14 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={noStaging} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "This conformer was sighted twice. Two optimisation calculations are on file, one per chain -- "
-            + "no chain was staged in more than one pass. None of the sightings got a frequency calculation. "
-            + "None of the sightings got a single-point energy.",
+            "Two optimisation calculations are on file, one per chain -- no chain was staged in more than one pass.",
         )
         // "staged" itself appears in the honest NEGATIVE sentence ("no
         // chain was staged in more than one pass"), so only the AFFIRMATIVE
         // multi-stage phrasing is the thing that must not appear.
         expect(story).not.toHaveTextContent(/\bstages\b/)
         expect(story).toHaveTextContent(/no chain was staged in more than one pass/)
+        expect(story).not.toHaveTextContent(/sighted/)
     })
 
     it("never claims staging for a conformer whose optimizations are all standalone single passes (per-observation path)", () => {
@@ -332,12 +352,10 @@ describe("ConformerEvidenceLinkage", () => {
         })
         render(<ConformerEvidenceLinkage conformer={noStaging} />)
         const story = document.querySelector(".evidence-linkage-story")
-        expect(story).toHaveTextContent(
-            "This conformer was sighted twice. Two were optimised in a single pass. "
-            + "None of the sightings got a frequency calculation. None of the sightings got a single-point energy.",
-        )
+        expect(story).toHaveTextContent("Two were optimised in a single pass.")
         expect(story).not.toHaveTextContent(/\bstages\b/)
         expect(story).not.toHaveTextContent(/\bstaged\b/)
+        expect(story).not.toHaveTextContent(/sighted/)
     })
 
     // Finding 3 of the BLOCK review: this test used to assert the SEQUENTIAL
@@ -383,17 +401,14 @@ describe("ConformerEvidenceLinkage", () => {
         })
         render(<ConformerEvidenceLinkage conformer={threeRowsOneChain} />)
         const story = document.querySelector(".evidence-linkage-story")
-        expect(story).toHaveTextContent(
-            "This conformer was sighted once. One was optimised in three calculations belonging to a single "
-            + "chain. None of the sightings got a frequency calculation. None of the sightings got a "
-            + "single-point energy.",
-        )
+        expect(story).toHaveTextContent("One was optimised in three calculations belonging to a single chain.")
         // Neither a specific step count nor the coarse-then-fine SEQUENCE
         // gloss may appear -- both assert more than three rows folded into
         // one chain actually proves.
         expect(story).not.toHaveTextContent(/\btwo stages\b/)
         expect(story).not.toHaveTextContent(/\bthree stages\b/)
         expect(story).not.toHaveTextContent(/coarse pass first, then refines it/)
+        expect(story).not.toHaveTextContent(/sighted/)
     })
 
     // The two-row case is the one shape where "two stages" and "a coarse
@@ -428,20 +443,19 @@ describe("ConformerEvidenceLinkage", () => {
         render(<ConformerEvidenceLinkage conformer={twoRowsOneChain} />)
         const story = document.querySelector(".evidence-linkage-story")
         expect(story).toHaveTextContent(
-            "This conformer was sighted once. One was optimised in two stages. A staged optimisation runs a "
-            + "coarse pass first, then refines it. None of the sightings got a frequency calculation. None of "
-            + "the sightings got a single-point energy.",
+            "One was optimised in two stages. A staged optimisation runs a coarse pass first, then refines it.",
         )
+        expect(story).not.toHaveTextContent(/sighted/)
     })
 
-    it("never renders single-conformer wording for a group with more than one sighting", () => {
-        // The story sentence always says "sighted N times" / "sighted once"
-        // based on the REAL observation count -- never the generic "This
-        // conformer was sighted" singular framing applied to a multi-
-        // observation group.
+    it("never leaks the 'sighted N times' lead sentence into the trimmed prose, regardless of observation count", () => {
+        // The full paragraph `describeConformerEvidence` builds always
+        // opens with "This conformer was sighted N times." -- the count is
+        // already the conformer card's own line-1 number, so it must never
+        // reach the trimmed `.evidence-linkage-story`, for any N.
         render(<ConformerEvidenceLinkage conformer={conformer({ observations_summary: { total: 5 } })} />)
         const story = document.querySelector(".evidence-linkage-story")
-        expect(story).toHaveTextContent(/^This conformer was sighted five times\./)
+        expect(story).not.toHaveTextContent(/sighted/)
         expect(story).not.toHaveTextContent(/sighted once/)
     })
 })
