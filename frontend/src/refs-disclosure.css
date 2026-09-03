@@ -1,0 +1,93 @@
+/*
+ * RefsDisclosure — base styling for the `<details className="refs-
+ * disclosure">` / `.ref-item` / `.copy-button` markup `components/
+ * RefsDisclosure.tsx` renders, imported by the component itself so every
+ * consumer gets it regardless of which page-level stylesheet (if any) is
+ * loaded.
+ *
+ * MEASURED gap this fixes: these rules used to live only in
+ * `species-entry.css`, which only `SpeciesEntryPage` imports. Any other
+ * page rendering `RefsDisclosure` (`TransitionStateEntryPage`,
+ * `ConformerObservationPage`, `GeometryDetailPage`-style record pages)
+ * got the raw `<details>`/`<summary>` — 11px unstyled sans, ref rows
+ * running together ("Transition state entrytse_aq5…"), and UA default
+ * outset borders on the Copy buttons. `species-entry.css` keeps only its
+ * own species-specific overrides (the `.conformer-card .refs-disclosure`
+ * border/margin reset, `.identifier-chip .copy-button`) — those are
+ * more specific selectors and still win the cascade regardless of import
+ * order.
+ */
+
+.refs-disclosure {
+    margin-top: 1.75rem;
+    border: 1px solid var(--line-2);
+    border-radius: .5rem;
+    background: var(--surface-sunken);
+}
+
+.refs-disclosure summary {
+    padding: .6rem 1rem;
+    color: var(--muted-2);
+    font: .68rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    cursor: pointer;
+}
+
+.refs-disclosure[open] summary { border-bottom: 1px solid var(--line-2); }
+
+.refs-disclosure-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem 1.4rem;
+    padding: .8rem 1rem;
+}
+
+.ref-item {
+    display: flex;
+    min-width: 0;
+    align-items: baseline;
+    gap: .5rem;
+}
+
+.ref-item-label {
+    flex: none;
+    color: var(--faint);
+    font: .6rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .07em;
+}
+
+.ref-item a,
+.ref-item-value {
+    overflow-wrap: anywhere;
+    font: .72rem var(--mono);
+}
+
+.ref-item-value { color: var(--muted-2); }
+
+.ref-item a {
+    color: var(--accent);
+    text-decoration: underline;
+    text-decoration-color: var(--line);
+    text-underline-offset: .16em;
+}
+
+.ref-item a:hover { text-decoration-color: currentColor; }
+
+.copy-button {
+    flex: none;
+    border: 1px solid var(--line);
+    border-radius: .3rem;
+    background: var(--surface);
+    color: var(--muted-2);
+    font: .58rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    padding: .15rem .4rem;
+    cursor: pointer;
+}
+
+.copy-button:hover { border-color: var(--accent); color: var(--accent); }
+.copy-button[data-copied="true"] { border-color: var(--accent); color: var(--accent-700); }

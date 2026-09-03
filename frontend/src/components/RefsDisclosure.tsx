@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react"
 import { Link } from "react-router-dom"
+import "../refs-disclosure.css"
 
 export type RefEntry = { label: string; value: string; to?: string }
 
