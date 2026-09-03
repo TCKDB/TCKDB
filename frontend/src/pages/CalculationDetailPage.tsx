@@ -422,7 +422,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                                 This calculation belongs to the transition-state entry{" "}
                                 <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
                                     {ownerTS.label ?? ownerTS.transition_state_entry_ref}
-                                </Link>. A transition state has no canonical SMILES or InChIKey the way a species does.
+                                </Link>.
                             </p>
                         )}
 
@@ -483,10 +483,13 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     </header>
                 )}
             >
-            <section className="ledger-summary" aria-label="Calculation evidence summary">
-                <Metric label="Input geometries" value={inputGeometries.length} />
-                <Metric label="Output geometries" value={outputGeometries.length} />
-                <Metric label="Dependency edges" value={dependencies.length} />
+            {/* No count tiles here (review finding): "Input geometries 1 /
+                Output geometries 1 / Dependency edges 3" rendered cardinalities
+                a reader never asks for at display size, each duplicating a
+                section directly below that shows the same one or three links.
+                The evidence checklist is the only card that carries a fact
+                with no other home on the page. */}
+            <section className="ledger-summary ledger-summary--single" aria-label="Calculation evidence summary">
                 <div className="coverage-card">
                     <span>Evidence on this calculation</span>
                     {/* Geometry validation and SCF stability only -- Result and
@@ -624,15 +627,6 @@ function optimisationStage(dependencies: CalculationDependency[]): { text: strin
     const childEdge = dependencies.find((dep) => dep.direction === "child" && dep.role === "optimized_from")
     if (childEdge) return { text: "Refinement of", linkRef: childEdge.parent_calculation_ref }
     return { text: "Single-pass optimisation" }
-}
-
-function Metric({ label, value }: { label: string; value: number }) {
-    return (
-        <div className="metric">
-            <span>{label}</span>
-            <strong>{value}</strong>
-        </div>
-    )
 }
 
 // ---------------------------------------------------------------------------

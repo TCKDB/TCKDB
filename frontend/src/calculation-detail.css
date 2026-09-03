@@ -193,3 +193,7 @@
     .record-context--compact,
     .kv-list { grid-template-columns: 1fr; }
 }
+
+/* The evidence strip on this page is a single checklist card, not the
+   four-column tile row `.ledger-summary` lays out on entry pages. */
+.ledger-summary--single { grid-template-columns: 1fr; }

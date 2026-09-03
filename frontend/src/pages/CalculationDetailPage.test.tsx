@@ -365,17 +365,23 @@ describe("CalculationDetailPage", () => {
         expect(within(workflowRow).getByText("ARC 1.1.0")).toBeVisible()
     })
 
-    it("keeps input-geometry, output-geometry and dependency-edge counts in their own metric", async () => {
+    // Review finding (item 4): the "Input geometries / Output geometries /
+    // Dependency edges" count tiles rendered cardinalities at display size
+    // that each duplicated a section directly below. They are gone; the
+    // evidence checklist is the only card left in the summary strip.
+    it("renders no count tiles -- the summary strip is the evidence checklist alone", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await findLoaded("Frequency")
 
-        const inputMetric = screen.getByText("Input geometries").closest(".metric") as HTMLElement
-        const outputMetric = screen.getByText("Output geometries").closest(".metric") as HTMLElement
-        const depMetric = screen.getByText("Dependency edges").closest(".metric") as HTMLElement
-        expect(within(inputMetric).getByText("1")).toBeVisible()
-        expect(within(outputMetric).getByText("2")).toBeVisible()
-        expect(within(depMetric).getByText("1")).toBeVisible()
+        expect(screen.queryByText("Input geometries")).not.toBeInTheDocument()
+        expect(screen.queryByText("Output geometries")).not.toBeInTheDocument()
+        expect(screen.queryByText("Dependency edges")).not.toBeInTheDocument()
+        expect(document.querySelector(".metric")).toBeNull()
+        // Positive check so this cannot pass on an empty page: the checklist
+        // card is still there, inside the summary region.
+        const strip = screen.getByRole("region", { name: "Calculation evidence summary" })
+        expect(within(strip).getByText("Evidence on this calculation")).toBeVisible()
     })
 
     // Item 6: one sentence per edge, with a FIXED subject, replacing the
