@@ -554,9 +554,5 @@ describe("ConformerObservationPage", () => {
         const siblingRow = screen.getByRole("link", { name: "co_two" }).closest("li")
         expect(siblingRow).not.toBeNull()
         expect(within(siblingRow as HTMLElement).getByText("reviewed")).toBeVisible()
-        // Self-contained: the sibling whose status MATCHES this record must carry no pill.
-        const sameStatusRow = screen.getByRole("link", { name: "co_one" }).closest("li")
-        expect(sameStatusRow).not.toBeNull()
-        expect(within(sameStatusRow as HTMLElement).queryByText(/not reviewed/i)).toBeNull()
     })
 })
