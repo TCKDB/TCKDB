@@ -24,6 +24,7 @@ from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
+    CalculationFreqResult,
     CalculationGeometryValidation,
     CalculationOptResult,
     CalculationOutputGeometry,
@@ -75,6 +76,7 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateEvidenceSummary,
     TransitionStateReactionContext,
     TransitionStateReviewEntry,
+    TransitionStateSaddlePointEvidence,
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
@@ -542,6 +544,7 @@ def _build_entry_record(
     evidence = _build_entry_evidence_summary(
         session, entry.id, levels_index=levels_index
     )
+    saddle_point = _build_saddle_point_block(session, entry.id)
     available = _build_available_sections(session, [entry], [entry.id])
 
     calcs_block: list[TransitionStateCalculationSummary] | None = None
@@ -611,6 +614,7 @@ def _build_entry_record(
         reaction=reaction,
         evidence_summary=evidence,
         validation=_build_validation_descriptor(session, entry.id),
+        saddle_point=saddle_point,
         available_sections=available,
         entries=entries_block,
         calculations=calcs_block,
@@ -1186,6 +1190,65 @@ def _build_validation_descriptor(
         return TransitionStateValidationDescriptor(irc="absent")
     return TransitionStateValidationDescriptor(
         irc="present" if any(passed_values) else "failed"
+    )
+
+
+def _build_saddle_point_block(
+    session: Session, entry_id: int
+) -> TransitionStateSaddlePointEvidence | None:
+    """Resolve the entry's representative freq result into the saddle-point verdict.
+
+    Scope is calculations directly attached to *this* entry
+    (``calculation.transition_state_entry_id == entry_id``) — the same
+    scope ``_build_calculations_summary`` already queries for the
+    ``calculations`` include, not the trust rubric's wider one-dependency-
+    hop source set. Selection among candidates is the same deterministic
+    rule the trust rubric's ``_ts_representative_freq_result`` uses
+    (latest ``created_at``, ``calculation.id`` DESC tie-break), so the two
+    surfaces never cite different freq calculations for the same entry.
+
+    Returns ``None`` when the entry has no freq calculation carrying a
+    ``calc_freq_result`` row — a real absence, per the invariant that
+    absence describes the request and null describes the data.
+    """
+    row = session.execute(
+        select(Calculation, CalculationFreqResult)
+        .join(
+            CalculationFreqResult,
+            CalculationFreqResult.calculation_id == Calculation.id,
+        )
+        .where(
+            Calculation.transition_state_entry_id == entry_id,
+            Calculation.type == CalculationType.freq,
+        )
+        .order_by(Calculation.created_at.desc(), Calculation.id.desc())
+        .limit(1)
+    ).one_or_none()
+    if row is None:
+        return None
+    calc, freq = row
+
+    lot_summary: LevelOfTheorySummary | None = None
+    if calc.lot_id is not None:
+        lot = session.get(LevelOfTheory, calc.lot_id)
+        if lot is not None:
+            lot_summary = LevelOfTheorySummary(
+                level_of_theory_id=lot.id,
+                level_of_theory_ref=lot.public_ref,
+                method=lot.method,
+                basis=lot.basis,
+                dispersion=lot.dispersion,
+                solvent=lot.solvent,
+                label=None,
+            )
+
+    return TransitionStateSaddlePointEvidence(
+        n_imag=freq.n_imag,
+        imag_freq_cm1=freq.imag_freq_cm1,
+        reaction_coordinate_mode_index=freq.reaction_coordinate_mode_index,
+        imaginary_mode_structural_flag=freq.imaginary_mode_structural_flag,
+        calculation_ref=calc.public_ref,
+        level_of_theory=lot_summary,
     )
 
 

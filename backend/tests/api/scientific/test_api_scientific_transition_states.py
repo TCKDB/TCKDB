@@ -1537,6 +1537,74 @@ def test_tse_detail_default_response_omits_trust(client, db_session):
     assert "trust" not in body["record"]
 
 
+# ---------------------------------------------------------------------------
+# saddle_point block (item 1 -- the imaginary-frequency verdict)
+# ---------------------------------------------------------------------------
+
+
+def test_tse_detail_saddle_point_served_from_representative_freq(
+    client, db_session
+):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    freq_calc = _attach_ts_freq(db_session, tse=tse, n_imag=1, imag_freq_cm1=-768.67)
+    body = client.get(_tse_detail_url(tse.public_ref)).json()
+    saddle = body["record"]["saddle_point"]
+    assert saddle is not None
+    assert saddle["n_imag"] == 1
+    assert saddle["imag_freq_cm1"] == -768.67
+    assert saddle["calculation_ref"] == freq_calc.public_ref
+    assert saddle["level_of_theory"] is not None
+    # No mode-index designation or structural flag was stored on this
+    # result -- both must round-trip as null, not be silently dropped.
+    assert saddle["reaction_coordinate_mode_index"] is None
+    assert saddle["imaginary_mode_structural_flag"] is None
+
+
+def test_tse_detail_saddle_point_null_without_freq_result(client, db_session):
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    lot = make_lot(db_session)
+    # opt-only entry: no freq calc at all.
+    _attach_calc(db_session, tse=tse, calc_type=CalculationType.opt, lot=lot)
+    body = client.get(_tse_detail_url(tse.public_ref)).json()
+    assert body["record"]["saddle_point"] is None
+
+
+def test_tse_detail_saddle_point_picks_latest_freq_by_created_at(
+    client, db_session
+):
+    """Multiple freq calcs on one entry: the latest created_at wins.
+
+    Mirrors the trust rubric's ``_ts_representative_freq_result`` tie-
+    break rule exactly, so the two surfaces never cite different freq
+    calculations for the same entry.
+    """
+    from datetime import datetime
+
+    _, _, _, entries = _make_reaction_with_ts(db_session)
+    tse = entries[0]
+    older = _attach_ts_freq(db_session, tse=tse, n_imag=1, imag_freq_cm1=-100.0)
+    older.created_at = datetime(2026, 1, 1, 0, 0, 0)
+    newer = _attach_ts_freq(db_session, tse=tse, n_imag=2, imag_freq_cm1=-200.0)
+    newer.created_at = datetime(2026, 6, 1, 0, 0, 0)
+    db_session.flush()
+    body = client.get(_tse_detail_url(tse.public_ref)).json()
+    saddle = body["record"]["saddle_point"]
+    assert saddle["calculation_ref"] == newer.public_ref
+    assert saddle["n_imag"] == 2
+
+
+def test_ts_detail_include_entries_serves_saddle_point_per_entry(
+    client, db_session
+):
+    _, _, ts, entries = _make_reaction_with_ts(db_session)
+    _attach_ts_freq(db_session, tse=entries[0], n_imag=1, imag_freq_cm1=-768.67)
+    body = client.get(_ts_detail_url(ts.public_ref, include="entries")).json()
+    entry_records = body["record"]["entries"]
+    assert entry_records[0]["saddle_point"]["n_imag"] == 1
+
+
 def test_tse_detail_include_trust_returns_fragment(client, db_session):
     _, _, _, entries = _make_reaction_with_ts(db_session)
     body = client.get(

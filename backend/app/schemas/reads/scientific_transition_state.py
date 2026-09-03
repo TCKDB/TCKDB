@@ -340,6 +340,35 @@ class TransitionStateEntryValidationEvidence(BaseModel):
     validation_evidence: list[TransitionStateValidationEvidenceSummary]
 
 
+class TransitionStateSaddlePointEvidence(BaseModel):
+    """The imaginary-frequency verdict for a TS entry, always present.
+
+    Taken from the entry's *representative* freq result: the calculation
+    directly attached to this entry (``calculation.transition_state_entry_id
+    == entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,
+    picking the latest by ``created_at`` with ``calculation.id`` as the
+    tie-break — the same deterministic rule the trust rubric's
+    ``_ts_representative_freq_result`` uses (spec §8.5), so this block and
+    ``include=trust`` never cite two different freq calculations for the
+    same entry.
+
+    ``None`` on the parent record exactly when the entry carries no freq
+    calculation with a result row — a real absence, not a zeroed-out
+    struct. When present, every field below still reports its own
+    ``None`` faithfully: a freq result can record ``n_imag`` without a
+    designated ``reaction_coordinate_mode_index`` (single imaginary mode,
+    ADR 0012), and a pre-ADR-0012 record may have neither the mode index
+    nor the structural flag at all.
+    """
+
+    n_imag: int | None = None
+    imag_freq_cm1: float | None = None
+    reaction_coordinate_mode_index: int | None = None
+    imaginary_mode_structural_flag: bool | None = None
+    calculation_ref: str
+    level_of_theory: LevelOfTheorySummary | None = None
+
+
 class TransitionStateValidationDescriptor(BaseModel):
     """One compact, machine-readable statement of validation status.
 
@@ -409,6 +438,13 @@ class ScientificTransitionStateEntryRecord(BaseModel):
     reaction: TransitionStateReactionContext
     evidence_summary: TransitionStateEntryEvidenceSummary
     validation: TransitionStateValidationDescriptor
+    #: The saddle-point verdict (imaginary-mode count / frequency / mode
+    #: designation), always computed — never gated behind an include
+    #: token, since it is the single fact a reviewer needs first and
+    #: costs one extra query already-scoped to this entry. ``None`` when
+    #: the entry has no freq result to report; see
+    #: :class:`TransitionStateSaddlePointEvidence`.
+    saddle_point: TransitionStateSaddlePointEvidence | None = None
     available_sections: AvailableTransitionStateSections
 
     #: Every entry under this record's parent transition state, this one
@@ -515,5 +551,6 @@ __all__ = [
     "TransitionStateEvidenceSummary",
     "TransitionStateReactionContext",
     "TransitionStateReviewEntry",
+    "TransitionStateSaddlePointEvidence",
     "TransitionStateValidationEvidenceSummary",
 ]
