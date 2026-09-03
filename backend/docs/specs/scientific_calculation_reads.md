@@ -289,6 +289,7 @@ class ScientificCalculationDetail(BaseModel):
 class ScientificCalculationRecord(BaseModel):
     calculation: CalculationCoreBlock          # calc_ref, type, quality, created_at, review
     owner: CalculationOwnerSummary             # species-entry or TS-entry summary
+    conformer: CalculationConformerSummary | None  # eager, like owner; null when unlinked (2026-09, calc-detail-page rework)
     level_of_theory: LevelOfTheorySummary | None
     software_release: SoftwareReleaseSummary | None
     workflow_tool_release: WorkflowToolReleaseSummary | None

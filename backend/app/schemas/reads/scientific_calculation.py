@@ -130,6 +130,11 @@ class SpeciesEntryOwnerSummary(BaseModel):
     shared by every entry under it, so without the label two
     calculations on two stereoisomers report the same owner.
     ``None`` for the plain ground-state, stereo-unlabelled entry.
+
+    ``formula`` is derived server-side (RDKit cartridge, Hill notation)
+    from ``canonical_smiles`` — ``species`` has no stored formula column,
+    same derivation as ``GeometrySpeciesIdentity.formula`` — and is
+    ``None`` only when the stored SMILES fails to parse.
     """
 
     species_id: int
@@ -137,6 +142,7 @@ class SpeciesEntryOwnerSummary(BaseModel):
     species_entry_id: int
     species_entry_ref: str
     species_entry_label: str | None = None
+    formula: str | None = None
     canonical_smiles: str
     inchi_key: str
     charge: int
@@ -172,6 +178,26 @@ class CalculationOwnerSummary(BaseModel):
     kind: Literal["species_entry", "transition_state_entry"]
     species_entry: SpeciesEntryOwnerSummary | None = None
     transition_state_entry: TransitionStateEntryOwnerSummary | None = None
+
+
+class CalculationConformerSummary(BaseModel):
+    """Which conformer this calculation observed, when one is recorded.
+
+    Populated only when ``Calculation.conformer_observation_id`` is set —
+    the service never fabricates a conformer association from the
+    calculation's owner or level of theory. Always ``None`` for a
+    transition-state-owned calculation (a TS has no conformer basin to
+    anchor to) and for a species-owned calculation that was never linked
+    to a specific observation. Same shape (``conformer_observation_ref`` /
+    ``conformer_group_ref`` / ``conformer_group_label``) as
+    ``ConformerContextBlock`` on
+    ``/scientific/species-calculations/search``, so a client already
+    reading that endpoint recognises this block on sight.
+    """
+
+    conformer_observation_ref: str
+    conformer_group_ref: str
+    conformer_group_label: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -1356,6 +1382,11 @@ class ScientificCalculationRecord(BaseModel):
 
     calculation: CalculationCoreBlock
     owner: CalculationOwnerSummary
+    #: Eager, like ``owner`` — never gated behind an ``include`` token.
+    #: ``None`` when this calculation has no recorded conformer
+    #: observation (every transition-state-owned calculation, and any
+    #: species-owned one that predates or skipped conformer linkage).
+    conformer: CalculationConformerSummary | None = None
     level_of_theory: LevelOfTheorySummary | None = None
     software_release: SoftwareReleaseSummary | None = None
     workflow_tool_release: WorkflowToolReleaseSummary | None = None
@@ -1404,6 +1435,7 @@ __all__ = [
     "AvailableCalculationSections",
     "CalculationArtifactSummary",
     "CalculationConstraintSummary",
+    "CalculationConformerSummary",
     "CalculationCoreBlock",
     "CalculationDependencySummary",
     "CalculationDetailRequest",

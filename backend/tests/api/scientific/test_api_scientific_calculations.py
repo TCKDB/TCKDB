@@ -63,6 +63,9 @@ from tests.services.scientific_read._factories import (
     attach_sp_result,
     attach_spin_diagnostic,
     make_calculation,
+    make_calculation_with_conformer,
+    make_conformer_group,
+    make_conformer_observation,
     make_geometry,
     make_lot,
     make_species,
@@ -282,6 +285,28 @@ def test_detail_species_owned_calculation_owner_block(client, db_session):
     assert "species_entry_id" not in se
 
 
+def test_detail_species_owner_formula_is_rdkit_derived(client, db_session):
+    """``owner.species_entry.formula`` -- Hill notation from the stored
+    SMILES, the field the calculation-detail h1 needs to print
+    "Optimisation of C2H4" instead of a bare SMILES string.
+
+    Mutation check: drop ``_owner_formula_expr(Species.smiles)`` from the
+    owner query (or the ``formula=row.formula`` kwarg) and this fails --
+    the key goes missing or reverts to ``None``.
+    """
+    species = make_species(
+        db_session, smiles="C=C", inchi_key=next_inchi_key("FORM")
+    )
+    entry = make_species_entry(db_session, species)
+    calc = make_calculation(
+        db_session, type=CalculationType.opt, species_entry_id=entry.id
+    )
+    resp = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}")
+    assert resp.status_code == 200
+    se = resp.json()["record"]["owner"]["species_entry"]
+    assert se["formula"] == "C2H4"
+
+
 def test_detail_transition_state_owned_calculation_owner_block(
     client, db_session
 ):
@@ -302,6 +327,54 @@ def test_detail_transition_state_owned_calculation_owner_block(
     # Reaction-entry pointers should be present.
     assert "reaction_entry_ref" in ts
     assert ts["reaction_entry_ref"].startswith("rxe_")
+
+
+def test_detail_conformer_block_populated_when_observation_linked(
+    client, db_session
+):
+    """Eager ``conformer`` block: which of N observations this calc used.
+
+    Mutation check: flip ``make_calculation_with_conformer`` back to a
+    bare ``make_calculation`` (no ``conformer_observation_id``) and this
+    assertion block fails — the ref/group fields it checks would be gone.
+    """
+    species = make_species(db_session, inchi_key=next_inchi_key("CALC"))
+    entry = make_species_entry(db_session, species)
+    group = make_conformer_group(db_session, entry, label="basin-1")
+    observation = make_conformer_observation(db_session, conformer_group=group)
+    calc = make_calculation_with_conformer(
+        db_session, species_entry=entry, conformer_observation=observation
+    )
+    resp = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}")
+    assert resp.status_code == 200
+    conformer = resp.json()["record"]["conformer"]
+    assert conformer is not None
+    assert conformer["conformer_observation_ref"] == observation.public_ref
+    assert conformer["conformer_group_ref"] == group.public_ref
+    assert conformer["conformer_group_label"] == "basin-1"
+
+
+def test_detail_conformer_block_null_when_no_observation_linked(
+    client, db_session
+):
+    """A calculation with no recorded conformer link reports ``null``,
+    never an omitted key and never a guessed observation."""
+    _, _, calc = _make_species_owned_calc(db_session)
+    resp = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}")
+    assert resp.status_code == 200
+    body = resp.json()["record"]
+    assert "conformer" in body
+    assert body["conformer"] is None
+
+
+def test_detail_conformer_block_null_for_transition_state_owned_calculation(
+    client, db_session
+):
+    """A TS-owned calculation has no conformer basin to link to at all."""
+    _, calc = _make_ts_owned_calc(db_session)
+    resp = client.get(f"/api/v1/scientific/calculations/{calc.public_ref}")
+    assert resp.status_code == 200
+    assert resp.json()["record"]["conformer"] is None
 
 
 # ---------------------------------------------------------------------------
