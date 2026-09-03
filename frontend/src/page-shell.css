@@ -116,15 +116,22 @@
 }
 
 /* Below this width the side rail has no room to sit beside the content
-   column without squeezing it -- collapse to a horizontal, scrollable
-   strip above the content instead of stacking vertically above it (which
+   column without squeezing it -- collapse to a wrapping row of chips above
+   the content instead of stacking a full vertical list above it (which
    would push every page's content down by a whole ToC's height on every
    load, the opposite of "find info quickly"). Unlike the wide layout,
    nothing is RESERVED here: a `.page-toc` with no list inside it collapses
    out of the flow entirely (`display: none` below) rather than reserving
    a blank strip's worth of vertical space above the content, since there
    is no fixed-width column to protect a tab switch from resizing in a
-   column layout in the first place. */
+   column layout in the first place.
+
+   Review finding: `flex: 0 0 14rem` (set above, for the wide layout's
+   HORIZONTAL basis) was never reset here, so in this block's column
+   `flex-direction` the same 14rem became the strip's HEIGHT instead --
+   a blank ~224px band above the content on every shell page at this
+   width, "populated" `.page-toc` or not. `flex: none` below is what
+   actually makes this row size to its own wrapped content. */
 @media (max-width: 62rem) {
     .page-shell-layout {
         flex-direction: column;
@@ -145,6 +152,7 @@
            means "off-screen below it" instead. */
         position: static;
         order: -1;
+        flex: none;
         width: 100%;
         max-height: none;
         overflow-y: visible;
