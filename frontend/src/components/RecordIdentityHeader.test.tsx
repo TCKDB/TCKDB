@@ -59,15 +59,44 @@ describe("RecordIdentityHeader", () => {
         // empty value, not present at all.
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
-        // Its own field, "Unmapped SMILES", is present and says plainly
-        // that nothing was deposited -- not a blank cell.
-        expect(screen.getByText("Unmapped SMILES")).toBeVisible()
+        // Its own field, "Reaction SMILES (unmapped)", is present and
+        // says plainly that nothing was deposited -- not a blank cell.
+        expect(screen.getByText("Reaction SMILES (unmapped)")).toBeVisible()
         expect(screen.getByText("not recorded")).toBeVisible()
     })
 
     it("renders a transition-state's unmapped SMILES when one was deposited", () => {
         renderHeader({ identity: { ...tsIdentity, unmappedSmiles: "[CH2]OO[CH2]" } })
         expect(screen.getByText("[CH2]OO[CH2]")).toBeVisible()
+    })
+
+    it("renders the 'no canonical SMILES' note for a transition-state identity by default", () => {
+        renderHeader({ identity: tsIdentity })
+        expect(screen.getByText(/no canonical SMILES/i)).toBeVisible()
+    })
+
+    it("omits the 'no canonical SMILES' note when explainTransitionStateIdentity=false -- the caller's own Reaction section covers it instead", () => {
+        renderHeader({ identity: tsIdentity, explainTransitionStateIdentity: false })
+        expect(screen.queryByText(/no canonical SMILES/i)).not.toBeInTheDocument()
+    })
+
+    it("inserts a <wbr> after '>>' and '.' in a multi-fragment unmapped SMILES so it wraps at token boundaries", () => {
+        const { container } = renderHeader({
+            identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]>>[CH4].[O]" },
+        })
+        const code = container.querySelector(".record-identity-facts code")
+        expect(code).not.toBeNull()
+        expect(code?.querySelectorAll("wbr").length).toBe(3)
+        expect(code?.textContent).toBe("[CH3].[OH2]>>[CH4].[O]")
+    })
+
+    it("spans the unmapped-SMILES fact across the full facts grid", () => {
+        const { container } = renderHeader({
+            identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]" },
+        })
+        const wideFact = container.querySelector(".record-identity-fact-wide")
+        expect(wideFact).not.toBeNull()
+        expect(wideFact?.textContent).toContain("Reaction SMILES (unmapped)")
     })
 
     it("renders no submission row at all when the key is absent (anonymous caller)", () => {

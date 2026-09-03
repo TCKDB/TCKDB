@@ -24,6 +24,7 @@ from app.api.errors import not_found
 from app.db.models.calculation import (
     Calculation,
     CalculationDependency,
+    CalculationFreqResult,
     CalculationGeometryValidation,
     CalculationOptResult,
     CalculationOutputGeometry,
@@ -75,6 +76,7 @@ from app.schemas.reads.scientific_transition_state import (
     TransitionStateEvidenceSummary,
     TransitionStateReactionContext,
     TransitionStateReviewEntry,
+    TransitionStateSaddlePointEvidence,
     TransitionStateValidationDescriptor,
     TransitionStateValidationEvidenceSummary,
 )
@@ -316,6 +318,11 @@ def get_transition_state(
         session, entry_ids, levels_index=levels_index
     )
     available = _build_available_sections(session, entries, entry_ids)
+    # Same bargain as ``levels_index`` above: one statement for the whole
+    # TS concept's entries, shared across every embedded entry record,
+    # rather than one per entry — see ``_build_saddle_point_index``'s own
+    # docstring for the N+1 this guards against.
+    saddle_point_index = _build_saddle_point_index(session, entry_ids)
 
     entry_badges = (
         fetch_review_badges(
@@ -345,6 +352,7 @@ def get_transition_state(
                 ),
                 includes=nested_includes,
                 levels_index=levels_index,
+                saddle_point_index=saddle_point_index,
             )
             for e in entries
         ]
@@ -495,6 +503,9 @@ def build_entry_record(
     includes: set[str],
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
     levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
+    saddle_point_index: (
+        dict[int, TransitionStateSaddlePointEvidence | None] | None
+    ) = None,
 ) -> ScientificTransitionStateEntryRecord:
     """Public alias for :func:`_build_entry_record`.
 
@@ -510,6 +521,7 @@ def build_entry_record(
         includes=includes,
         entries_block=entries_block,
         levels_index=levels_index,
+        saddle_point_index=saddle_point_index,
     )
 
 
@@ -523,6 +535,9 @@ def _build_entry_record(
     includes: set[str],
     entries_block: list[ScientificTransitionStateEntryRecord] | None = None,
     levels_index: levels_of_theory.LevelsOfTheoryIndex | None = None,
+    saddle_point_index: (
+        dict[int, TransitionStateSaddlePointEvidence | None] | None
+    ) = None,
 ) -> ScientificTransitionStateEntryRecord:
     """Project one TS entry into the shared record shape.
 
@@ -538,10 +553,18 @@ def _build_entry_record(
     ``limit`` of them. ``None`` means "resolve it for this entry alone",
     which is the right answer on a detail read and the wrong one inside a
     loop — every loop in this module hands one in.
+
+    ``saddle_point_index`` is the same bargain again, for the
+    ``saddle_point`` block — see :func:`_build_saddle_point_index`. ``None``
+    means "resolve it for this entry alone" (the single-entry detail path);
+    every loop over more than one entry in this module hands one in.
     """
     evidence = _build_entry_evidence_summary(
         session, entry.id, levels_index=levels_index
     )
+    if saddle_point_index is None:
+        saddle_point_index = _build_saddle_point_index(session, [entry.id])
+    saddle_point = saddle_point_index.get(entry.id)
     available = _build_available_sections(session, [entry], [entry.id])
 
     calcs_block: list[TransitionStateCalculationSummary] | None = None
@@ -611,6 +634,7 @@ def _build_entry_record(
         reaction=reaction,
         evidence_summary=evidence,
         validation=_build_validation_descriptor(session, entry.id),
+        saddle_point=saddle_point,
         available_sections=available,
         entries=entries_block,
         calculations=calcs_block,
@@ -687,6 +711,7 @@ def _build_sibling_entry_records(
     levels_index = levels_of_theory.for_transition_state_entries(
         session, sibling_ids
     )
+    saddle_point_index = _build_saddle_point_index(session, sibling_ids)
     return [
         _build_entry_record(
             session,
@@ -699,6 +724,7 @@ def _build_sibling_entry_records(
             ),
             includes=nested_includes,
             levels_index=levels_index,
+            saddle_point_index=saddle_point_index,
         )
         for sibling in siblings
     ]
@@ -1187,6 +1213,84 @@ def _build_validation_descriptor(
     return TransitionStateValidationDescriptor(
         irc="present" if any(passed_values) else "failed"
     )
+
+
+def _build_saddle_point_index(
+    session: Session, entry_ids: list[int]
+) -> dict[int, TransitionStateSaddlePointEvidence | None]:
+    """Resolve every entry's representative freq result in ONE statement.
+
+    Mirrors ``levels_of_theory.for_transition_state_entries``'s bargain:
+    called once per page (search) or once per parent's entry set (TS
+    concept detail with ``include=entries``), never once per record — a
+    per-record implementation is exactly the N+1
+    ``test_the_saddle_point_map_costs_a_ts_search_page_one_statement``
+    exists to catch (measured regression: +1 statement per record on
+    ``/transition-states/search``, 169 → 189 at ``limit=20``).
+
+    Scope is calculations directly attached to each entry
+    (``calculation.transition_state_entry_id``) — the same scope
+    ``_build_calculations_summary`` already queries for the
+    ``calculations`` include. This is **narrower** than the trust rubric's
+    ``_ts_source_calculations``, which additionally walks one dependency
+    hop (e.g. a ``freq_on`` edge to a calc not directly attached to the
+    entry). Selection *among candidates this scope finds* uses the same
+    deterministic rule as the rubric's ``_ts_representative_freq_result``
+    (latest ``created_at``, ``calculation.id`` DESC tie-break) — so the two
+    surfaces agree whenever the representative freq calc is directly
+    attached, which is the common case, but a rubric pick reached only
+    through a dependency hop is a freq calc this block never sees, and the
+    two surfaces can disagree on which entry's freq result is
+    "representative" in that case. That gap is not closed here.
+
+    Every id in *entry_ids* is a key in the returned map, valued ``None``
+    for an entry with no freq calculation carrying a ``calc_freq_result``
+    row — a real absence, per the invariant that absence describes the
+    request and null describes the data.
+    """
+    index: dict[int, TransitionStateSaddlePointEvidence | None] = dict.fromkeys(entry_ids)
+    if not entry_ids:
+        return index
+
+    rows = session.execute(
+        select(Calculation, CalculationFreqResult)
+        .join(
+            CalculationFreqResult,
+            CalculationFreqResult.calculation_id == Calculation.id,
+        )
+        .where(
+            Calculation.transition_state_entry_id.in_(entry_ids),
+            Calculation.type == CalculationType.freq,
+        )
+    ).all()
+    if not rows:
+        return index
+
+    by_entry: dict[int, list[tuple[Calculation, CalculationFreqResult]]] = {}
+    for calc, freq in rows:
+        by_entry.setdefault(calc.transition_state_entry_id, []).append(
+            (calc, freq)
+        )
+
+    lot_ids = {
+        calc.lot_id
+        for pairs in by_entry.values()
+        for calc, _ in pairs
+        if calc.lot_id is not None
+    }
+    lot_summaries = _bulk_lot_summaries(session, lot_ids)
+
+    for entry_id, pairs in by_entry.items():
+        calc, freq = max(pairs, key=lambda pair: (pair[0].created_at, pair[0].id))
+        index[entry_id] = TransitionStateSaddlePointEvidence(
+            n_imag=freq.n_imag,
+            imag_freq_cm1=freq.imag_freq_cm1,
+            reaction_coordinate_mode_index=freq.reaction_coordinate_mode_index,
+            imaginary_mode_structural_flag=freq.imaginary_mode_structural_flag,
+            calculation_ref=calc.public_ref,
+            level_of_theory=lot_summaries.get(calc.lot_id),
+        )
+    return index
 
 
 # ---------------------------------------------------------------------------

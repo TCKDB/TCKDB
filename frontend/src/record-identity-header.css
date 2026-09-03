@@ -45,6 +45,22 @@
     word-break: break-word;
 }
 
+/* MEASURED: `.record-identity-facts code` had no rule of its own here,
+   so a fact rendered as `<code>` (the unmapped-SMILES fact) fell back to
+   the UA default monospace at 13px -- visibly inconsistent with every
+   other mono-styled string on this header (`dt` labels, refs). */
+.record-identity-facts code {
+    font-family: var(--mono);
+    overflow-wrap: anywhere;
+}
+
+/* A fact whose value can run long (a multi-fragment unmapped SMILES) --
+   spans the full facts grid instead of being squeezed into one
+   `minmax(12rem, 1fr)` column alongside short facts like charge/multiplicity. */
+.record-identity-fact-wide {
+    grid-column: 1 / -1;
+}
+
 .record-identity-facets {
     margin: 0;
     color: var(--ink-2);

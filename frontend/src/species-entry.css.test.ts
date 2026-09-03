@@ -3,6 +3,12 @@ import { describe, expect, it } from "vitest"
 // comment atop `geometry-detail.css.test.ts` for why this suffix (not a
 // bare import) is required under this project's `css: true` vitest config.
 import css from "./species-entry.css?raw"
+// Base `.refs-disclosure` rules moved out of this file into their own
+// stylesheet (imported by `components/RefsDisclosure.tsx` itself, so
+// every consumer -- not just `SpeciesEntryPage` -- gets them). Only the
+// species-page-specific overrides (`.conformer-card`-scoped) stay in
+// `species-entry.css`; see the last `describe` block below.
+import refsDisclosureCss from "./refs-disclosure.css?raw"
 
 /**
  * Conformer card row-track alignment (design/conformer-card-alignment).
@@ -219,8 +225,12 @@ describe("References disclosure border removal is scoped to the conformer card, 
     // complaint. A global deletion of the base rule would pass a
     // conformer-only assertion -- both directions are asserted here so a
     // global deletion cannot slip through unnoticed.
+    //
+    // The base rule itself now lives in `refs-disclosure.css` (moved out
+    // of this file so every page rendering `RefsDisclosure` gets it, not
+    // just this one) -- read from there rather than `species-entry.css`.
     it("the base (hero-applicable) rule still draws the border when open", () => {
-        const rule = extractRule(css, ".refs-disclosure[open] summary")
+        const rule = extractRule(refsDisclosureCss, ".refs-disclosure[open] summary")
         expect(rule).toMatch(/border-bottom:\s*1px solid var\(--line-2\)/)
     })
 

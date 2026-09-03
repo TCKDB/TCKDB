@@ -8,6 +8,24 @@ import type { RecordIdentity } from "../domain/recordIdentity"
 import { Formula } from "./Formula"
 
 /**
+ * Breaks a SMILES-shaped string at `>>` (reaction arrow) and `.`
+ * (disconnected-fragment separator) boundaries with `<wbr>` -- the
+ * punctuation that already marks a sensible break point in this
+ * vocabulary, so a long unmapped-SMILES string wraps at a token
+ * boundary instead of `overflow-wrap: anywhere` picking an arbitrary
+ * character mid-fragment.
+ */
+function withSmilesBreaks(value: string): ReactNode {
+    const parts = value.split(/(>>|\.)/)
+    const nodes: ReactNode[] = []
+    parts.forEach((part, index) => {
+        nodes.push(part)
+        if (part === ">>" || part === ".") nodes.push(<wbr key={`smiles-wbr-${index}`} />)
+    })
+    return nodes
+}
+
+/**
  * The shared header block every record page (species entry, geometry,
  * calculation, conformer group, conformer observation) renders through:
  * identity, then classification facets, then provenance -- top to
@@ -28,15 +46,27 @@ import { Formula } from "./Formula"
  *   exists) and renders NO row at all; `null` means an authenticated
  *   caller was told there is no linked submission, and renders "not
  *   recorded"; a string renders the ref.
+ * - `explainTransitionStateIdentity` (default `true`) governs the one
+ *   sentence explaining that a transition state has no canonical SMILES
+ *   the way a species does -- shown only for a `transition_state_entry`
+ *   identity. `TransitionStateEntryPage` passes `false`: its own Reaction
+ *   section already states this (see that page's own comment), and
+ *   showing the sentence twice ~900px apart on one page was the exact
+ *   duplication this override exists to avoid. Every OTHER caller that
+ *   can render a `transition_state_entry` identity but has no Reaction
+ *   section of its own -- `GeometryDetailPage` on a TS-owned geometry, as
+ *   of this writing -- keeps the default `true` and gets the one sentence
+ *   this header has always carried for that case.
  */
-export function RecordIdentityHeader({ identity, facets, submissionRef }: {
+export function RecordIdentityHeader({ identity, facets, submissionRef, explainTransitionStateIdentity = true }: {
     identity: RecordIdentity
     facets?: EntryFacetAxes
     submissionRef?: string | null
+    explainTransitionStateIdentity?: boolean
 }) {
     return (
         <div className="record-identity-header">
-            <IdentityTier identity={identity} />
+            <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} />
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
                 `SpeciesEntrySummary.tsx`'s `EntryIdentity` for the report
@@ -59,7 +89,10 @@ export function RecordIdentityHeader({ identity, facets, submissionRef }: {
     )
 }
 
-function IdentityTier({ identity }: { identity: RecordIdentity }) {
+function IdentityTier({ identity, explainTransitionStateIdentity }: {
+    identity: RecordIdentity
+    explainTransitionStateIdentity: boolean
+}) {
     if (identity.kind === "absent") {
         return <p className="record-identity-absent">No molecular identity is recorded for this record.</p>
     }
@@ -110,10 +143,20 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
     // no field that could render as an empty "SMILES" row. Likewise no
     // formula slot: a TS never carries `formula` on this endpoint (see
     // `TransitionStateEntryCoreBlock`), and the label this used to fall
-    // back to is already the page's own `<h1>` (`TransitionStateEntryPage`'s
-    // `basin-title`) -- rendering it a second time here read as the same
-    // fact stated twice. The page's `<h1>` keeps the label; this header
-    // renders nothing in the formula slot's place rather than an empty box.
+    // back to is now a facet on `TransitionStateEntryPage`'s own `<h1>`
+    // row (the reaction equation, per the h1 rework) rather than this
+    // header's job to restate.
+    //
+    // The "no canonical SMILES" note is gated behind
+    // `explainTransitionStateIdentity` (default true). It used to
+    // duplicate, almost word for word, `TransitionStateEntryPage`'s own
+    // Reaction-section lede ("A transition state is identified by the
+    // reaction it connects, not a molecular graph of its own.") -- the
+    // two sentences sat ~900px apart on the same page saying the same
+    // thing. That page passes `false` and keeps its own lede as the one
+    // explanation; every other caller (a TS-owned geometry on
+    // `GeometryDetailPage`, which has no Reaction section of its own)
+    // keeps the default and still gets this sentence.
     return (
         <div className="record-identity-known">
             {identity.formula && (
@@ -121,13 +164,15 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
                     <Formula value={identity.formula} />
                 </p>
             )}
-            <p className="record-identity-note">
-                Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
-                where deposited, is a depositor-supplied label, not a deduped identity key.
-            </p>
+            {explainTransitionStateIdentity && (
+                <p className="record-identity-note">
+                    Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
+                    where deposited, is a depositor-supplied label, not a deduped identity key.
+                </p>
+            )}
             <dl className="record-identity-facts">
-                <IdentityFact label="Unmapped SMILES">
-                    {identity.unmappedSmiles ? <code>{identity.unmappedSmiles}</code> : <span className="record-identity-absent-inline">not recorded</span>}
+                <IdentityFact label="Reaction SMILES (unmapped)" wide>
+                    {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                 </IdentityFact>
                 <IdentityFact label="Charge / multiplicity">
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
@@ -140,6 +185,6 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
     )
 }
 
-function IdentityFact({ label, children }: { label: string; children: ReactNode }) {
-    return <div><dt>{label}</dt><dd>{children}</dd></div>
+function IdentityFact({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+    return <div className={wide ? "record-identity-fact-wide" : undefined}><dt>{label}</dt><dd>{children}</dd></div>
 }
