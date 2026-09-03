@@ -1007,9 +1007,25 @@ function LazySection<T>({
                 if ((event.target as HTMLDetailsElement).open) onOpen()
             }}
         >
-            <summary>{heading}</summary>
+            {/*
+             * The idle-state affordance lives HERE, not in the `role="status"`
+             * paragraph below -- review finding (nit): a closed `<details>`
+             * natively hides every child except `<summary>`, so a "Show" line
+             * in that paragraph was never visible while idle, which is the
+             * ONLY state a reader sees before opening it. `<summary>` is the
+             * one element a closed `<details>` still renders, so a visible
+             * affordance has to sit inside it. The heading text stays its own
+             * span so `getByText(heading)` keeps matching it exactly, rather
+             * than the combined "heading + affordance" text of the whole
+             * `<summary>`.
+             */}
+            <summary>
+                <span>{heading}</span>
+                {state.status === "idle" && (
+                    <span className="lazy-section-affordance" aria-hidden="true">Show</span>
+                )}
+            </summary>
             <p className="section-note" role="status">
-                {state.status === "idle" && "Show"}
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}

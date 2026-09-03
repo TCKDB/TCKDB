@@ -2,9 +2,11 @@
  * CalculationDetailPage. Imported alongside `conformer-group.css`, which
  * already supplies the shared "scientific record ledger" vocabulary this
  * page reuses verbatim: `.review-badge`, `.ledger-section`,
- * `.ledger-heading`, `.ledger-summary`, `.metric`, `.coverage-card`,
+ * `.ledger-heading`, `.ledger-summary`, `.coverage-card`,
  * `.stage-table`, `.empty-projection`, `.geometry-links` / `.geometry-link`,
  * `.geometry-role-disclosure` (the "Further evidence" disclosure recipe).
+ * (`.metric` dropped from this list -- the count-tile summary strip that
+ * used it is gone; see the "no count tiles" test in this page's spec.)
  * Only the page-root layout and a few calculation-specific patterns live
  * here.
  */
@@ -164,6 +166,19 @@
     color: var(--muted);
     font-size: .8rem;
     line-height: 1.5;
+}
+
+/* The idle-state click affordance -- lives in `<summary>` itself, not
+   `.section-note`, since that's the one part of a closed `<details>` a
+   reader actually sees (see `LazySection`'s own comment). Styled as a
+   quiet trailing label, not a button: the whole `<summary>` row is
+   already the click target. */
+.lazy-section-affordance {
+    margin-left: .5rem;
+    color: var(--muted);
+    font: .6875rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
 
 .section-note[aria-busy="true"]::after { content: "…"; }

@@ -629,8 +629,15 @@ describe("CalculationDetailPage", () => {
         const section = summary.closest("details") as HTMLDetailsElement
         expect(section).not.toBeNull()
         expect(section.open).toBe(false)
-        // Item 10: idle text is "Show", not the old full sentence.
-        expect(within(section).getByText("Show")).toBeInTheDocument()
+        // Item 10 / nit fix: idle text is "Show", and it must actually be
+        // VISIBLE to a reader before the section is opened -- a closed
+        // `<details>` hides every child except `<summary>` natively, so
+        // "Show" has to live inside the summary itself (not the
+        // `role="status"` paragraph, which is hidden while closed) to be
+        // seen at all. `toBeVisible()`, not `toBeInTheDocument()`: the
+        // latter would have passed even when "Show" sat somewhere the
+        // closed-details rules hide.
+        expect(within(section).getByText("Show")).toBeVisible()
         expect(within(section).queryByText(/The archive returned no parameter rows/)).not.toBeInTheDocument()
         expect(requestCount).toBe(1) // only the eager fetch so far
 
