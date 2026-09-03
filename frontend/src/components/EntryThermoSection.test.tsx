@@ -954,7 +954,9 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // the group-refs table at all (a lone record renders as a plain
         // card with no such table, per the "never wraps a lone record"
         // test above).
-        const plain = { ...alpha, thermo_ref: "thm_plain" }
+        // Also carries a null Freq ref -- the group table's third branch
+        // (NIT: no test previously covered "not recorded" in this table).
+        const plain = { ...alpha, thermo_ref: "thm_plain", provenance: { ...alpha.provenance, freq_calculation_ref: null } }
         const overlap = {
             ...alpha,
             thermo_ref: "thm_overlap",
@@ -992,6 +994,14 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         // collapsed just because a sibling column collapsed.
         expect(cellAt(row, "SP calculation")).toBe("calc_distinct_sp")
         expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
+
+        // The sibling row's null Freq ref hits the cell's third branch --
+        // "not recorded", plain text, never a link and never confused with
+        // the "same as primary" collapse (a null ref is not a match).
+        const plainRow = within(refsTable).getByText("thm_plain").closest("tr") as HTMLElement
+        expect(cellAt(plainRow, "Freq calculation")).toBe("not recorded")
+        const plainFreqCell = plainRow.querySelector('td[data-label="Freq calculation"]') as HTMLElement
+        expect(within(plainFreqCell).queryByRole("link")).toBeNull()
     })
 
     it("shows the shared level of theory once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {
