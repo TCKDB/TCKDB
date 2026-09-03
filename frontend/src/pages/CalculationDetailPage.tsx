@@ -336,10 +336,28 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
             <PageShell
                 identity={(
                     <header className="record-header">
-                        <p className="eyebrow">Calculation · deposited evidence</p>
+                        {/* The review-status pill used to sit beside the h1 inside
+                            `.record-title`, a `display:flex; align-items:baseline`
+                            row. At the giant serif sizes this heading renders at,
+                            "Optimisation calculation" alone is wide enough to wrap
+                            onto two lines even before the pill claims horizontal
+                            space -- and a `nowrap` flex row squeezes the h1 down
+                            further to keep the pill on the same line, pinning the
+                            pill to the far right of a mostly-empty row while the
+                            wrapped title sits on the left. Two reviewers read that
+                            as the pill floating loose from the record it describes,
+                            at both 1920px and 900px. Anchoring it to the eyebrow
+                            line instead sidesteps the h1's own wrapping entirely --
+                            "Calculation · deposited evidence" never wraps at any
+                            width this page supports, so the pill has a stable home
+                            immediately above the title it describes, always inside
+                            the same heading block. */}
+                        <div className="record-eyebrow-row">
+                            <p className="eyebrow">Calculation · deposited evidence</p>
+                            <span className="review-badge">{statusLabel(core.review.status)}</span>
+                        </div>
                         <div className="record-title">
                             <h1>{typeLabel(core.type)} calculation</h1>
-                            <span className="review-badge">{statusLabel(core.review.status)}</span>
                         </div>
                         {/* The answer this page exists to give, promoted to the
                             largest weight on the page — previously it sat inside the
