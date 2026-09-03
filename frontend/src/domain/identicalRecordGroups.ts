@@ -59,22 +59,28 @@ export function groupByFingerprint<T>(records: T[], fingerprint: (record: T) => 
  * `h298_kj_mol` + its uncertainty, `s298_j_mol_k` + its uncertainty, the
  * full body of whichever model block the record actually carries
  * (`nasa`/`nasa9`/`wilhoit`/`points`, every field of it -- not just the
- * headline coefficients), and `temperature_coverage`'s two RECORD facts
+ * headline coefficients), `temperature_coverage`'s two RECORD facts
  * (`record_min_k`/`record_max_k` -- never the request-scoped fields
  * alongside them, which describe the query, not the record, and are
  * identical across every record in one response regardless of content
- * anyway).
+ * anyway), and `provenance.level_of_theory`'s `method`/`basis`/
+ * `dispersion` -- two records reporting the identical numbers at DIFFERENT
+ * levels of theory are not the same record, even though a level-of-theory
+ * disagreement would never show up in H298/S298/the model block itself.
+ * Mirrors `statmechRecordFingerprint`'s own scale-factor LoT comparison
+ * below.
  *
  * Deliberately EXCLUDED: `thermo_ref`, `review`, `supersession`,
  * `evidence_completeness` (a diagnostic about the record, not a scientific
  * value of it), `group_additivity` (an estimation scheme's own provenance),
- * and all of `provenance` (level of theory, software, workflow tool,
+ * and the REST of `provenance` (software, workflow tool,
  * calculation/statmech/conformer refs) -- provenance that differs across
  * otherwise-identical records is real and must stay visible per ref, never
  * used to split them into different groups or hidden by merging them into
  * one.
  */
 export function thermoRecordFingerprint(record: ThermoRecord): string {
+    const lot = record.provenance?.level_of_theory
     return JSON.stringify({
         scientific_origin: record.scientific_origin,
         model_kind: record.model_kind,
@@ -88,6 +94,7 @@ export function thermoRecordFingerprint(record: ThermoRecord): string {
         points: record.points ?? null,
         record_min_k: record.temperature_coverage?.record_min_k ?? null,
         record_max_k: record.temperature_coverage?.record_max_k ?? null,
+        level_of_theory: lot ? { method: lot.method, basis: lot.basis ?? null, dispersion: lot.dispersion ?? null } : null,
     })
 }
 

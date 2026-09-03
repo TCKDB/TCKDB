@@ -322,8 +322,29 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
  * "{kind} thermo record" (`ThermoRecordCard` above, or
  * `IdenticalThermoRecordsCard`'s own heading) -- a `<dd>` repeating the
  * exact word the heading just used is not a second fact.
+ *
+ * `idSuffix` distinguishes the ids this body mints from the ids the SAME
+ * record mints again inside a group's "Show all" disclosure
+ * (`IdenticalThermoRecordsCard` renders every member, including the
+ * representative, a second time via the plain `ThermoRecordCard` path) --
+ * without it, the group's own `coverage-<ref>`/`nasa7-<ref>`/
+ * `completeness-<ref>` ids collide with that same representative's ids
+ * inside the disclosure, breaking `aria-labelledby` and the ToC anchor
+ * (both resolve to whichever DOM node happens to match first). Empty for
+ * every normal, non-grouped card.
+ *
+ * `showProvenance` is `false` only for the group's own shared body
+ * (`IdenticalThermoRecordsCard`) -- provenance is the one thing this body
+ * is NOT safe to show once for a whole group: the representative's
+ * calculation/statmech refs are its own, not the group's (see
+ * `IdenticalThermoGroupRefs`, which lists every member's provenance
+ * per-ref instead). Every other caller shows it, unchanged.
  */
-function ThermoRecordBody({ record }: { record: ThermoRecord }) {
+function ThermoRecordBody({ record, idSuffix = "", showProvenance = true }: {
+    record: ThermoRecord
+    idSuffix?: string
+    showProvenance?: boolean
+}) {
     return (
         <>
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
@@ -342,11 +363,11 @@ function ThermoRecordBody({ record }: { record: ThermoRecord }) {
                 </div>
             </dl>
 
-            <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} />
-            <ModelBlock record={record} />
-            <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} />
-            <ProvenanceBlock provenance={record.provenance ?? null} thermoRef={record.thermo_ref} />
-            <GroupAdditivityBlock groupAdditivity={record.group_additivity ?? null} thermoRef={record.thermo_ref} />
+            <TemperatureCoverageBlock coverage={record.temperature_coverage ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+            <ModelBlock record={record} idSuffix={idSuffix} />
+            <EvidenceCompletenessBlock completeness={record.evidence_completeness ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+            {showProvenance && <ProvenanceBlock provenance={record.provenance ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />}
+            <GroupAdditivityBlock groupAdditivity={record.group_additivity ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         </>
     )
 }
@@ -364,15 +385,21 @@ function ThermoRecordBody({ record }: { record: ThermoRecord }) {
  * record whose `nasa` field is null still renders `NasaBlock`'s own "No
  * NASA-7 polynomial recorded" line, never silently nothing).
  */
-function ModelBlock({ record }: { record: ThermoRecord }) {
+function ModelBlock({ record, idSuffix = "" }: { record: ThermoRecord; idSuffix?: string }) {
     switch (record.model_kind) {
-        case "nasa": return <NasaBlock nasa={record.nasa ?? null} thermoRef={record.thermo_ref} />
-        case "nasa9": return <Nasa9Block nasa9={record.nasa9 ?? null} thermoRef={record.thermo_ref} />
-        case "wilhoit": return <WilhoitBlock wilhoit={record.wilhoit ?? null} thermoRef={record.thermo_ref} />
-        case "points": return <PointsBlock points={record.points ?? null} thermoRef={record.thermo_ref} />
+        case "nasa": return <NasaBlock nasa={record.nasa ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+        case "nasa9": return <Nasa9Block nasa9={record.nasa9 ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+        case "wilhoit": return <WilhoitBlock wilhoit={record.wilhoit ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
+        case "points": return <PointsBlock points={record.points ?? null} thermoRef={record.thermo_ref} idSuffix={idSuffix} />
         default: return null
     }
 }
+
+// Suffix applied to every id the group card's OWN shared body mints, so
+// they never collide with the same representative record's ids when it is
+// rendered a second time, unmodified, inside "Show all" below (see
+// `ThermoRecordBody`'s own docstring).
+const GROUP_ID_SUFFIX = "-group"
 
 /**
  * One card for N deposited thermo records that report IDENTICAL scientific
@@ -383,17 +410,23 @@ function ModelBlock({ record }: { record: ThermoRecord }) {
  * -- from the group's first record; every member reports the identical
  * body by construction of the fingerprint -- via the same `ThermoRecordBody`
  * a single-record card uses, so nothing about the science itself is a
- * special, second rendering path. Every record's own ref stays listed
- * (`IdenticalThermoGroupRefs`), including its own provenance where that
- * DOES differ across the group -- grouping never hides a provenance
- * disagreement, only the repeated scientific values. "Show all" mounts
- * every member's own full, unmodified card on demand; nothing here
- * replaces a record with a summary, it only collapses a default DISPLAY
- * that would otherwise repeat the same numbers N times.
+ * special, second rendering path. "Show all" mounts every member's own
+ * full, unmodified card on demand; nothing here replaces a record with a
+ * summary, it only collapses a default DISPLAY that would otherwise repeat
+ * the same numbers N times.
+ *
+ * Provenance is NOT part of that shared display: the live case this fix
+ * was written against is seven ethene records citing SEVEN DIFFERENT
+ * primary/single-point calculations and seven different statmech refs --
+ * `showProvenance={false}` below drops the representative's own
+ * `ProvenanceBlock` from the shared body (rendering only one record's
+ * calculation/statmech refs there would attribute them to all seven, which
+ * is false), and `IdenticalThermoGroupRefs` prints every member's own
+ * provenance, per ref, directly on the card -- never behind "Show all".
  */
 function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: ThermoRecord[]; sectionLabel: string | null }) {
     const representative = records[0]
-    const anchorId = `thermo-heading-${representative.thermo_ref}`
+    const anchorId = `thermo-heading-${representative.thermo_ref}${GROUP_ID_SUFFIX}`
     useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "")
     return (
         <article className="science-record identical-record-group" aria-labelledby={anchorId}>
@@ -403,10 +436,12 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
             </div>
             <p className="section-note">
                 {records.length} deposited records report identical H298, S298 and model-form values — shown
-                once below. Every record's own ref and provenance is listed underneath, and each one stays
-                individually reachable; none was merged, averaged, or dropped in favor of another.
+                once below. Each record's own ref and provenance -- including which calculation and statmech
+                record it cites -- is listed per ref in the table below, never collapsed into one; every
+                record stays individually reachable, and none was merged, averaged, or dropped in favor of
+                another.
             </p>
-            <ThermoRecordBody record={representative} />
+            <ThermoRecordBody record={representative} idSuffix={GROUP_ID_SUFFIX} showProvenance={false} />
             <IdenticalThermoGroupRefs records={records} />
             <details className="identical-record-group-detail">
                 <summary>Show all {records.length} records individually</summary>
@@ -422,10 +457,14 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
 
 /**
  * Every ref in an identical-values group, with its OWN provenance --
- * "Provenance that differs across identical-value records (six say 'Record
- * software: not recorded', one says Arkane) must still be visible" is the
- * finding's own requirement: grouping on scientific content must never
- * collapse provenance that genuinely differs record to record.
+ * "Provenance that differs across identical-value records must still be
+ * visible … list it per ref inside the group, never collapse provenance"
+ * is the finding's own requirement. The live ethene case this was written
+ * against: seven records citing seven different primary/single-point
+ * calculations and seven different statmech refs, alongside six saying
+ * "Record software: not recorded" and one saying "Arkane" -- every one of
+ * those differences gets its own column, its own row, per ref; nothing
+ * here is summarized from "the group" or from any one representative.
  */
 function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
     const headingId = `identical-refs-${records[0].thermo_ref}`
@@ -438,24 +477,46 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                         <tr>
                             <th scope="col">Ref</th>
                             <th scope="col">Review</th>
+                            <th scope="col">Primary calculation</th>
+                            <th scope="col">Freq calculation</th>
+                            <th scope="col">SP calculation</th>
+                            <th scope="col">Statmech ref</th>
                             <th scope="col">Software</th>
                             <th scope="col">Workflow tool</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {records.map((record) => (
-                            <tr key={record.thermo_ref}>
-                                <td data-label="Ref"><code>{record.thermo_ref}</code></td>
-                                <td data-label="Review">{statusLabel(record.review.status)}</td>
-                                <td data-label="Software">{softwareLabel(record.provenance?.software_release) ?? "not recorded"}</td>
-                                <td data-label="Workflow tool">{toolReleaseLabel(record.provenance?.workflow_tool_release) ?? "not recorded"}</td>
-                            </tr>
-                        ))}
+                        {records.map((record) => {
+                            const provenance = record.provenance ?? null
+                            return (
+                                <tr key={record.thermo_ref}>
+                                    <td data-label="Ref"><code>{record.thermo_ref}</code></td>
+                                    <td data-label="Review">{statusLabel(record.review.status)}</td>
+                                    <td data-label="Primary calculation">
+                                        <CalculationRefCell calculationRef={provenance?.primary_calculation?.calculation_ref ?? null} />
+                                    </td>
+                                    <td data-label="Freq calculation">
+                                        <CalculationRefCell calculationRef={provenance?.freq_calculation_ref ?? null} />
+                                    </td>
+                                    <td data-label="SP calculation">
+                                        <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} />
+                                    </td>
+                                    <td data-label="Statmech ref">{provenance?.statmech_ref ?? "not recorded"}</td>
+                                    <td data-label="Software">{softwareLabel(provenance?.software_release) ?? "not recorded"}</td>
+                                    <td data-label="Workflow tool">{toolReleaseLabel(provenance?.workflow_tool_release) ?? "not recorded"}</td>
+                                </tr>
+                            )
+                        })}
                     </tbody>
                 </table>
             </div>
         </section>
     )
+}
+
+/** One calculation-ref cell in `IdenticalThermoGroupRefs`' table: a link when the ref is present, plain "not recorded" text otherwise. */
+function CalculationRefCell({ calculationRef }: { calculationRef: string | null }) {
+    return calculationRef ? <Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link> : <>not recorded</>
 }
 
 /**
@@ -472,14 +533,15 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
  * entirely rather than printed with a "not applicable" stand-in for a
  * question this page never asked.
  */
-function TemperatureCoverageBlock({ coverage, thermoRef }: {
+function TemperatureCoverageBlock({ coverage, thermoRef, idSuffix = "" }: {
     coverage: ThermoRecord["temperature_coverage"] | null
     thermoRef: string
+    idSuffix?: string
 }) {
     const wasRequested = coverage != null && (coverage.requested_min_k != null || coverage.requested_max_k != null)
     return (
-        <section aria-labelledby={`coverage-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`coverage-${thermoRef}`}>Temperature coverage</h4>
+        <section aria-labelledby={`coverage-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`coverage-${thermoRef}${idSuffix}`}>Temperature coverage</h4>
             {coverage ? (
                 <dl className="kv-list">
                     <div>
@@ -502,10 +564,10 @@ function TemperatureCoverageBlock({ coverage, thermoRef }: {
     )
 }
 
-function NasaBlock({ nasa, thermoRef }: { nasa: ThermoRecord["nasa"] | null; thermoRef: string }) {
+function NasaBlock({ nasa, thermoRef, idSuffix = "" }: { nasa: ThermoRecord["nasa"] | null; thermoRef: string; idSuffix?: string }) {
     return (
-        <section aria-labelledby={`nasa7-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`nasa7-${thermoRef}`}>NASA-7 polynomial</h4>
+        <section aria-labelledby={`nasa7-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`nasa7-${thermoRef}${idSuffix}`}>NASA-7 polynomial</h4>
             {nasa ? (
                 <>
                     <dl className="kv-list">
@@ -543,10 +605,10 @@ function NasaBlock({ nasa, thermoRef }: { nasa: ThermoRecord["nasa"] | null; the
     )
 }
 
-function Nasa9Block({ nasa9, thermoRef }: { nasa9: ThermoRecord["nasa9"] | null; thermoRef: string }) {
+function Nasa9Block({ nasa9, thermoRef, idSuffix = "" }: { nasa9: ThermoRecord["nasa9"] | null; thermoRef: string; idSuffix?: string }) {
     return (
-        <section aria-labelledby={`nasa9-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`nasa9-${thermoRef}`}>NASA-9 polynomial</h4>
+        <section aria-labelledby={`nasa9-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`nasa9-${thermoRef}${idSuffix}`}>NASA-9 polynomial</h4>
             {nasa9 && nasa9.length > 0 ? (
                 <div className="table-scroll">
                     <table className="stage-table" aria-label={`NASA-9 intervals for ${thermoRef}`}>
@@ -583,10 +645,10 @@ function Nasa9Block({ nasa9, thermoRef }: { nasa9: ThermoRecord["nasa9"] | null;
     )
 }
 
-function WilhoitBlock({ wilhoit, thermoRef }: { wilhoit: ThermoRecord["wilhoit"] | null; thermoRef: string }) {
+function WilhoitBlock({ wilhoit, thermoRef, idSuffix = "" }: { wilhoit: ThermoRecord["wilhoit"] | null; thermoRef: string; idSuffix?: string }) {
     return (
-        <section aria-labelledby={`wilhoit-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`wilhoit-${thermoRef}`}>Wilhoit form</h4>
+        <section aria-labelledby={`wilhoit-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`wilhoit-${thermoRef}${idSuffix}`}>Wilhoit form</h4>
             {wilhoit ? (
                 <dl className="kv-list">
                     <div><dt>Cp0 (J/mol·K)</dt><dd>{wilhoit.cp0_j_mol_k}</dd></div>
@@ -601,10 +663,10 @@ function WilhoitBlock({ wilhoit, thermoRef }: { wilhoit: ThermoRecord["wilhoit"]
     )
 }
 
-function PointsBlock({ points, thermoRef }: { points: ThermoRecord["points"] | null; thermoRef: string }) {
+function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecord["points"] | null; thermoRef: string; idSuffix?: string }) {
     return (
-        <section aria-labelledby={`points-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`points-${thermoRef}`}>Evaluated points</h4>
+        <section aria-labelledby={`points-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`points-${thermoRef}${idSuffix}`}>Evaluated points</h4>
             {points && points.length > 0 ? (
                 <details>
                     <summary>{points.length} temperature point{points.length === 1 ? "" : "s"}</summary>
@@ -657,9 +719,10 @@ function evidenceCheckLabel(key: string): string {
     return EVIDENCE_CHECK_LABELS[key] ?? key.replace(/^has_/, "").replaceAll("_", " ")
 }
 
-function EvidenceCompletenessBlock({ completeness, thermoRef }: {
+function EvidenceCompletenessBlock({ completeness, thermoRef, idSuffix = "" }: {
     completeness: ThermoRecord["evidence_completeness"] | null
     thermoRef: string
+    idSuffix?: string
 }) {
     // Consistent with `NasaBlock`/`Nasa9Block`/`WilhoitBlock`/`PointsBlock`:
     // an absent block renders its own heading and an explicit "not
@@ -670,8 +733,8 @@ function EvidenceCompletenessBlock({ completeness, thermoRef }: {
     // absence this client expects to see.
     if (!completeness) {
         return (
-            <section aria-labelledby={`completeness-${thermoRef}`}>
-                <h4 className="model-block-heading" id={`completeness-${thermoRef}`}>Evidence completeness</h4>
+            <section aria-labelledby={`completeness-${thermoRef}${idSuffix}`}>
+                <h4 className="model-block-heading" id={`completeness-${thermoRef}${idSuffix}`}>Evidence completeness</h4>
                 <p className="empty-projection">No evidence-completeness breakdown recorded for this record.</p>
             </section>
         )
@@ -683,8 +746,8 @@ function EvidenceCompletenessBlock({ completeness, thermoRef }: {
     // a disclosure, never enumerated by default.
     const missing = Object.entries(completeness.checklist).filter(([, value]) => !value).map(([key]) => key)
     return (
-        <section aria-labelledby={`completeness-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`completeness-${thermoRef}`}>
+        <section aria-labelledby={`completeness-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`completeness-${thermoRef}${idSuffix}`}>
                 Evidence completeness ({completeness.score} / {completeness.max})
             </h4>
             {missing.length === 0 ? (
@@ -756,24 +819,25 @@ function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<The
     )
 }
 
-function ProvenanceBlock({ provenance, thermoRef }: {
+function ProvenanceBlock({ provenance, thermoRef, idSuffix = "" }: {
     provenance: ThermoRecord["provenance"] | null
     thermoRef: string
+    idSuffix?: string
 }) {
     // Same consistency rule as `EvidenceCompletenessBlock` above — always
     // present on the wire per `ThermoProvenance` (not `| None`), so this
     // branch is defensive.
     if (!provenance) {
         return (
-            <section aria-labelledby={`provenance-${thermoRef}`}>
-                <h4 className="model-block-heading" id={`provenance-${thermoRef}`}>Provenance</h4>
+            <section aria-labelledby={`provenance-${thermoRef}${idSuffix}`}>
+                <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
                 <p className="empty-projection">No provenance block recorded for this record.</p>
             </section>
         )
     }
     return (
-        <section aria-labelledby={`provenance-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`provenance-${thermoRef}`}>Provenance</h4>
+        <section aria-labelledby={`provenance-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`provenance-${thermoRef}${idSuffix}`}>Provenance</h4>
             <dl className="kv-list">
                 <div>
                     <dt>Level of theory</dt>
@@ -805,9 +869,10 @@ function ProvenanceBlock({ provenance, thermoRef }: {
     )
 }
 
-function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
+function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
     groupAdditivity: ThermoRecord["group_additivity"] | null
     thermoRef: string
+    idSuffix?: string
 }) {
     // `group_additivity` genuinely is `null` on the wire for any record
     // that isn't an estimated thermo with an attached GA breakdown. Unlike
@@ -821,8 +886,8 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef }: {
     // answer; this section renders nothing rather than that box.
     if (!groupAdditivity) return null
     return (
-        <section aria-labelledby={`ga-${thermoRef}`}>
-            <h4 className="model-block-heading" id={`ga-${thermoRef}`}>Group-additivity estimation</h4>
+        <section aria-labelledby={`ga-${thermoRef}${idSuffix}`}>
+            <h4 className="model-block-heading" id={`ga-${thermoRef}${idSuffix}`}>Group-additivity estimation</h4>
             <dl className="kv-list">
                 <div>
                     <dt>Scheme</dt>

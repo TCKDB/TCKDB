@@ -95,6 +95,36 @@ describe("thermoRecordFingerprint", () => {
         const b = thermoRecord({ temperature_coverage: { requested_min_k: 200, requested_max_k: 2000, record_min_k: 100, record_max_k: 3000, covers_requested_range: false, extrapolation_distance_k: 50 } })
         expect(thermoRecordFingerprint(a)).toBe(thermoRecordFingerprint(b))
     })
+
+    it("gives two records a DIFFERENT fingerprint when the level of theory differs, even though every other scientific field (H298/S298/NASA-7) matches -- two records reporting the same numbers at different LoTs are not the same record", () => {
+        const a = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp" } } })
+        const b = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "wb97xd", basis: "def2tzvp" } } })
+        expect(thermoRecordFingerprint(a)).not.toBe(thermoRecordFingerprint(b))
+    })
+
+    it("gives two records a DIFFERENT fingerprint when the level of theory differs only in dispersion treatment, even with the same display text", () => {
+        const a = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", dispersion: null } } })
+        const b = thermoRecord({ provenance: { primary_calculation: null, software_release: null, level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp", dispersion: "d3bj" } } })
+        expect(thermoRecordFingerprint(a)).not.toBe(thermoRecordFingerprint(b))
+    })
+
+    it("gives two records the SAME fingerprint when the level of theory matches, even though the rest of provenance (calc refs, software) differs", () => {
+        const a = thermoRecord({
+            provenance: {
+                primary_calculation: { calculation_type: "sp", geometry_validation_status: "not_present", scf_stability_status: "not_present", calculation_ref: "calc_a" },
+                software_release: { software_release_ref: "srel_1", software: "Arkane" },
+                level_of_theory: { method: "b3lyp", basis: "def2tzvp" },
+            },
+        })
+        const b = thermoRecord({
+            provenance: {
+                primary_calculation: { calculation_type: "sp", geometry_validation_status: "not_present", scf_stability_status: "not_present", calculation_ref: "calc_b" },
+                software_release: null,
+                level_of_theory: { method: "b3lyp", basis: "def2tzvp" },
+            },
+        })
+        expect(thermoRecordFingerprint(a)).toBe(thermoRecordFingerprint(b))
+    })
 })
 
 /**

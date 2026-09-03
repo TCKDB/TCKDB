@@ -807,8 +807,8 @@ describe("EntryThermoSection: identical-value records group under one card", () 
     })
 
     it("never wraps a lone record in a '1 identical' group -- a single record renders as a plain card", async () => {
-        const [alpha, ...rest] = mockRecords()
-        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha, ...rest] }))))
+        const [alpha] = mockRecords()
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [alpha] }))))
         page()
         await screen.findByText("thm_alpha")
         expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
@@ -827,5 +827,77 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(screen.getByText("thm_alpha")).toBeVisible()
         expect(screen.getByText("thm_beta")).toBeVisible()
         expect(screen.getByText("thm_gamma")).toBeVisible()
+    })
+
+    /**
+     * Three clones sharing every fingerprinted field (including LoT) but
+     * citing THREE DIFFERENT primary/freq/SP calculations and three
+     * different statmech refs -- the live bug this fix was written
+     * against: the group card previously rendered `records[0]`'s
+     * provenance under an unqualified "Provenance" heading as though it
+     * held for all three, which is false the moment the records cite
+     * different calculations (as the real ethene entry's 7 thermo records
+     * do).
+     */
+    function clonesWithDifferentCalculations() {
+        const [alpha] = mockRecords()
+        return ["c1", "c2", "c3"].map((suffix) => ({
+            ...alpha,
+            thermo_ref: `thm_${suffix}`,
+            provenance: {
+                ...alpha.provenance,
+                primary_calculation: { ...alpha.provenance.primary_calculation, calculation_ref: `calc_${suffix}_primary` },
+                freq_calculation_ref: `calc_${suffix}_freq`,
+                sp_calculation_ref: `calc_${suffix}_sp`,
+                statmech_ref: `sm_${suffix}`,
+            },
+        }))
+    }
+
+    it("lists each record's OWN primary/freq/SP calculation and statmech ref in the group table, on the card, without expanding anything -- never one record's provenance standing in for the whole group", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: clonesWithDifferentCalculations() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        const detail = groupCard.querySelector(".identical-record-group-detail") as HTMLElement
+        const refsTable = within(groupCard).getByRole("table", { name: "Records sharing these identical values" })
+        // Reachable WITHOUT expanding "Show all" -- the table sits outside
+        // the collapsed detail entirely.
+        expect(detail.contains(refsTable)).toBe(false)
+
+        const rows = within(refsTable).getAllByRole("row").slice(1)
+        const rowFor = (ref: string) => rows.find((row) => within(row).queryByText(ref))!
+
+        for (const suffix of ["c1", "c2", "c3"]) {
+            const row = rowFor(`thm_${suffix}`)
+            expect(cellAt(row, "Primary calculation")).toBe(`calc_${suffix}_primary`)
+            expect(cellAt(row, "Freq calculation")).toBe(`calc_${suffix}_freq`)
+            expect(cellAt(row, "SP calculation")).toBe(`calc_${suffix}_sp`)
+            expect(cellAt(row, "Statmech ref")).toBe(`sm_${suffix}`)
+        }
+
+        // The shared body (outside the table, outside "Show all") never
+        // attributes any ONE record's provenance to the group -- no
+        // "Provenance" block renders there at all.
+        const provenanceHeadingsOutsideDetail = Array.from(groupCard.querySelectorAll("h4"))
+            .filter((heading) => heading.textContent === "Provenance" && !detail.contains(heading))
+        expect(provenanceHeadingsOutsideDetail).toHaveLength(0)
+    })
+
+    it("never mints a duplicate DOM id between the group card's own elements and the same representative record's card inside 'Show all'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: identicalClones() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+        // Expand "Show all" so the representative's own (unmodified) card
+        // -- and its ids -- are actually mounted alongside the group's.
+        fireEvent.click(screen.getByText("Show all 3 records individually"))
+
+        const idCounts = new Map<string, number>()
+        document.querySelectorAll("[id]").forEach((el) => {
+            idCounts.set(el.id, (idCounts.get(el.id) ?? 0) + 1)
+        })
+        const duplicates = [...idCounts.entries()].filter(([, count]) => count > 1)
+        expect(duplicates).toEqual([])
     })
 })

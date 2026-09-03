@@ -746,6 +746,30 @@ describe("EntryStatmechSection: frequencies render on the card by default", () =
         expect(within(oneCard).queryByText(/frequency evidence/)).not.toBeInTheDocument()
         expect(within(oneCard).queryByRole("heading", { name: "Frequencies" })).not.toBeInTheDocument()
     })
+
+    it("never prints the server's own developer-facing note (an API path) on the card, even when the wire carries one", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("frequencies") ? {
+                    frequencies: {
+                        source_freq_calculation_refs: ["calc_freq_1"],
+                        frequency_scale_factor_value: 0.999,
+                        note: "Per-mode frequency arrays live on the source freq calculation(s); fetch the full array via /api/v1/scientific/calculations/{calculation_ref}?include=freq_modes.",
+                    },
+                } : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page()
+        const card = (await screen.findByText("sm_one")).closest("article") as HTMLElement
+        await within(card).findByRole("link", { name: "calc_freq_1" })
+        expect(screen.queryByText(/\/api\/v1\//)).not.toBeInTheDocument()
+        expect(screen.queryByText(/include=freq_modes/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/fetch the full array/)).not.toBeInTheDocument()
+        // A plain, reader-facing line takes its place.
+        await within(card).findByText(/Per-mode frequency values are recorded on the source calculation/)
+    })
 })
 
 // ---------------------------------------------------------------------------
@@ -833,5 +857,84 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
         expect(screen.getByText("sm_one")).toBeVisible()
         expect(screen.getByText("sm_two")).toBeVisible()
+    })
+
+    /**
+     * Three clones sharing every fingerprinted field but citing THREE
+     * DIFFERENT opt/freq/sp source calculations and three different
+     * frequency-calculation refs -- the live bug this fix was written
+     * against: the group card previously printed the representative's
+     * "Record software: Arkane · Workflow: ARC 1.1.0", its own
+     * source-calculation count, and its single freq-calculation ref as
+     * though they held for the whole group, when the real ethene entry's 7
+     * statmech records cite 7 different freq calculations.
+     */
+    function statmechClonesWithDifferentCalculations() {
+        return ["g1", "g2", "g3"].map((suffix) => baseRecord({
+            statmech: { ...baseRecord().statmech, statmech_ref: `sm_${suffix}` },
+        }))
+    }
+
+    it("lists each record's OWN opt/freq/sp source calculations and frequency calculation in the group table, without expanding anything -- never one record's evidence standing in for the whole group", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const records = statmechClonesWithDifferentCalculations().map((record) => ({
+                ...record,
+                ...(includes.includes("source_calculations") ? {
+                    source_calculations: [
+                        sourceCalc("opt", `calc_${record.statmech.statmech_ref}_opt`),
+                        sourceCalc("freq", `calc_${record.statmech.statmech_ref}_freq`),
+                        sourceCalc("sp", `calc_${record.statmech.statmech_ref}_sp`),
+                    ],
+                } : {}),
+                ...(includes.includes("frequencies") ? {
+                    frequencies: { source_freq_calculation_refs: [`calc_${record.statmech.statmech_ref}_freqcalc`], frequency_scale_factor_value: 0.999, note: null },
+                } : {}),
+            }))
+            return HttpResponse.json(mockResponse(records))
+        }))
+        page()
+        await screen.findByText("3 records with identical values")
+
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        const detail = groupCard.querySelector(".identical-record-group-detail") as HTMLElement
+        const refsTable = await within(groupCard).findByRole("table", { name: "Records sharing these identical values" })
+        // Reachable WITHOUT expanding "Show all".
+        expect(detail.contains(refsTable)).toBe(false)
+
+        for (const suffix of ["g1", "g2", "g3"]) {
+            const ref = `sm_${suffix}`
+            const row = (await within(refsTable).findAllByRole("row")).find((r) => within(r).queryByText(ref))!
+            expect(cellAt(row, "Opt calc")).toBe(`calc_${ref}_opt`)
+            expect(cellAt(row, "Freq calc")).toBe(`calc_${ref}_freq`)
+            expect(cellAt(row, "SP calc")).toBe(`calc_${ref}_sp`)
+            expect(cellAt(row, "Frequencies")).toBe(`calc_${ref}_freqcalc`)
+        }
+
+        // The shared body (outside the table, outside "Show all") never
+        // shows a per-record "Record software" line or a "Frequencies"
+        // heading standing in for the whole group -- "Show all"'s own
+        // member cards legitimately carry both, so this checks only the
+        // part of the group card that sits OUTSIDE that collapsed detail.
+        const softwareLinesOutsideDetail = Array.from(groupCard.querySelectorAll("p"))
+            .filter((paragraph) => /^Record software:/.test(paragraph.textContent ?? "") && !detail.contains(paragraph))
+        expect(softwareLinesOutsideDetail).toHaveLength(0)
+        const freqHeadingsOutsideDetail = Array.from(groupCard.querySelectorAll("h4"))
+            .filter((heading) => heading.textContent === "Frequencies" && !detail.contains(heading))
+        expect(freqHeadingsOutsideDetail).toHaveLength(0)
+    })
+
+    it("never mints a duplicate DOM id between the group card's own heading and the same representative record's card inside 'Show all'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
+        page()
+        await screen.findByText("3 records with identical values")
+        fireEvent.click(screen.getByText("Show all 3 records individually"))
+
+        const idCounts = new Map<string, number>()
+        document.querySelectorAll("[id]").forEach((el) => {
+            idCounts.set(el.id, (idCounts.get(el.id) ?? 0) + 1)
+        })
+        const duplicates = [...idCounts.entries()].filter(([, count]) => count > 1)
+        expect(duplicates).toEqual([])
     })
 })
