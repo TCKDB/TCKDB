@@ -194,70 +194,45 @@ describe("GeometryDetailPage", () => {
         expect(within(context).getByText("angstrom")).toBeVisible()
     })
 
-    it("says validation is not recorded on this endpoint, rather than fabricating a verdict", async () => {
+    it("says validation is not recorded for this geometry, rather than fabricating a verdict", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const summary = screen.getByLabelText("Geometry provenance summary")
-        expect(within(summary).getByText("Not recorded on this endpoint")).toBeVisible()
+        expect(within(summary).getByText("Not recorded for this geometry")).toBeVisible()
         expect(within(summary).queryByText(/passed/i)).not.toBeInTheDocument()
         expect(within(summary).queryByText(/failed/i)).not.toBeInTheDocument()
     })
 
-    it("points to validation on BOTH producing and consuming calculations, each labelled by its own relationship", async () => {
-        // A geometry_validation row can carry either an input_geometry_ref
-        // or an output_geometry_ref, so the check can live on a consuming
-        // calculation just as easily as a producing one. Gating this
-        // pointer on producers only (an earlier version of this page) left
-        // consume-only geometries with a sentence and zero links. This
-        // fixture's fixed producer/consumer sets (calc_opt_two appears in
-        // both) mean a swap or a merge of the two lists is observable here,
-        // not just their presence.
+    it("points to the Produced by / Used as input by tables below, rather than repeating every ref inline", async () => {
+        // Finding #13: this card used to repeat every producing/consuming
+        // calculation ref inline as its own `<dl>` of links -- up to twelve
+        // on the live CH3 record, reported rendering all-caps with no link
+        // affordance. Those SAME refs are already real, correctly-cased
+        // links in the "Produced by" / "Used as input by" tables further
+        // down this page (see the tests around those headings below) -- this
+        // card now just points there instead of duplicating the list, so
+        // there is only ONE place on the page that can get a ref's case or
+        // link styling wrong.
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const summary = screen.getByLabelText("Geometry provenance summary")
 
-        const producerPointer = within(summary).getByTestId("validation-producer-pointer")
-        expect(producerPointer).toHaveTextContent(/producing calculations/)
-        expect(within(producerPointer).getByRole("link", { name: "calc_opt_two" }))
-            .toHaveAttribute("href", "/calculations/calc_opt_two")
-        expect(within(producerPointer).getByRole("link", { name: "calc_opt_one" }))
-            .toHaveAttribute("href", "/calculations/calc_opt_one")
-        // calc_freq_one and calc_sp_one never produced this geometry — a
-        // mutation that swapped the two lists would put them here.
-        expect(within(producerPointer).queryByRole("link", { name: "calc_freq_one" })).not.toBeInTheDocument()
-        expect(within(producerPointer).queryByRole("link", { name: "calc_sp_one" })).not.toBeInTheDocument()
-
-        const consumerPointer = within(summary).getByTestId("validation-consumer-pointer")
-        expect(consumerPointer).toHaveTextContent(/consuming calculations/)
-        expect(within(consumerPointer).getByRole("link", { name: "calc_freq_one" }))
-            .toHaveAttribute("href", "/calculations/calc_freq_one")
-        expect(within(consumerPointer).getByRole("link", { name: "calc_opt_two" }))
-            .toHaveAttribute("href", "/calculations/calc_opt_two")
-        expect(within(consumerPointer).getByRole("link", { name: "calc_sp_one" }))
-            .toHaveAttribute("href", "/calculations/calc_sp_one")
-        // calc_opt_one only produced this geometry — a mutation that
-        // merged the two lists into one would put it here too.
-        expect(within(consumerPointer).queryByRole("link", { name: "calc_opt_one" })).not.toBeInTheDocument()
-
-        // No fragment on any link — see the module comment on this block:
-        // this app has no fragment-scroll handling, and the target id
-        // lives inside a closed <details>.
-        for (const link of within(summary).getAllByRole("link")) {
-            expect(link.getAttribute("href")).not.toContain("#")
-        }
+        expect(within(summary).getByText(/Produced by.*Used as input by/s)).toBeVisible()
+        // No calculation refs repeated inline in this card -- confirmed by
+        // there being no links inside it at all (the pointer is plain text).
+        expect(within(summary).queryAllByRole("link")).toHaveLength(0)
     })
 
-    it("says nothing about validation pointers when a geometry has no producers or consumers at all", async () => {
+    it("says nothing about a validation pointer when a geometry has no producers or consumers at all", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord({
             provenance: { produced_by: [], used_as_input_by: [] },
         }))))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
         const summary = screen.getByLabelText("Geometry provenance summary")
-        expect(within(summary).queryByTestId("validation-producer-pointer")).not.toBeInTheDocument()
-        expect(within(summary).queryByTestId("validation-consumer-pointer")).not.toBeInTheDocument()
+        expect(within(summary).queryByText(/Produced by/)).not.toBeInTheDocument()
     })
 
     it("renders every atom row in the coordinate table, in payload order", async () => {
@@ -621,7 +596,10 @@ describe("GeometryDetailPage", () => {
             await screen.findByRole("heading", { name: "CH4 geometry" })
             const table = screen.getByRole("table", { name: "Coordinates for geom_ch4_one" })
             const section = table.closest("section") as HTMLElement
-            expect(within(section).getByText(/Always stored in ångström/)).toBeVisible()
+            // Finding #9: plain wording, no `coordinate_units`-on-the-wire jargon --
+            // the guarantee (stored in ångström; bohr is a display conversion) stays.
+            expect(within(section).getByText(/Stored in ångström; bohr here is a display conversion/)).toBeVisible()
+            expect(within(section).queryByText(/coordinate_units/)).not.toBeInTheDocument()
             expect(within(section).getByText(new RegExp(ANGSTROM_TO_BOHR.toFixed(10).replace(".", "\\.")))).toBeVisible()
             expect(within(section).queryByText(/\(converted\)/i)).not.toBeInTheDocument()
         })
@@ -793,21 +771,22 @@ describe("GeometryDetailPage", () => {
     })
 
     describe("validation card shape", () => {
-        it("shapes producer/consumer pointers as named rows (a definition list), not one run-on sentence", async () => {
+        // Finding #13: this card no longer repeats every producing/consuming
+        // calculation ref inline (a `<dl>` of named pointer rows, previously
+        // asserted here) -- it points at the "Produced by" / "Used as input
+        // by" tables further down the page instead, where those SAME refs
+        // already render as real, correctly-cased links. See the
+        // "points to the Produced by / Used as input by tables below" and
+        // "says nothing about a validation pointer..." tests above, which
+        // now cover this card's shape.
+        it("renders the pointer sentence as plain prose inside the validation card, not a link list", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: "CH4 geometry" })
             const summary = screen.getByLabelText("Geometry provenance summary")
-            const producerPointer = within(summary).getByTestId("validation-producer-pointer")
-            const consumerPointer = within(summary).getByTestId("validation-consumer-pointer")
-            // Each relationship is its own labelled row (a <dt>), not text
-            // interleaved into a shared paragraph — a mutation collapsing
-            // this back into prose would still pass every pre-existing
-            // text-content assertion in this file, but not this DOM-shape
-            // one.
-            expect(producerPointer.querySelector("dt")).not.toBeNull()
-            expect(consumerPointer.querySelector("dt")).not.toBeNull()
-            expect(producerPointer.tagName).not.toBe("SPAN")
+            const card = within(summary).getByText("Validation").closest(".validation-card") as HTMLElement
+            expect(card.querySelector("dl")).toBeNull()
+            expect(card.querySelector("a")).toBeNull()
         })
     })
 
