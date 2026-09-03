@@ -33,7 +33,6 @@ from tests.services.scientific_read._factories import (
     make_species_entry,
     make_transition_state,
     make_transition_state_entry,
-    next_inchi_key,
     set_review,
 )
 
