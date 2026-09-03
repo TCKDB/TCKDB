@@ -320,13 +320,16 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
         core.calculation_ref, "geometry_validation",
     )
 
+    // The provenance refs are optional on the wire; a row is only a row
+    // when its ref is actually present (a label with nothing to copy is
+    // not a reference).
     const refs: RefEntry[] = [
         { label: "Calculation ref", value: core.calculation_ref },
-        ...(lot ? [{ label: "Level of theory ref", value: lot.level_of_theory_ref }] : []),
-        ...(software ? [{ label: "Software release ref", value: software.software_release_ref }] : []),
-        ...(workflow ? [{ label: "Workflow tool release ref", value: workflow.workflow_tool_release_ref }] : []),
-        ...(literature ? [{ label: "Literature ref", value: literature.literature_ref }] : []),
-    ]
+        { label: "Level of theory ref", value: lot?.level_of_theory_ref },
+        { label: "Software release ref", value: software?.software_release_ref },
+        { label: "Workflow tool release ref", value: workflow?.workflow_tool_release_ref },
+        { label: "Literature ref", value: literature?.literature_ref },
+    ].filter((entry): entry is RefEntry => typeof entry.value === "string" && entry.value.length > 0)
 
     // Identity subject for the h1 -- "Optimisation of C2H4" / "Optimisation
     // of TS0". A species entry prefers its formula, rendered through the
