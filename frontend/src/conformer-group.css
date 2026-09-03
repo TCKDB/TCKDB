@@ -52,7 +52,8 @@
     overflow-wrap: anywhere;
     background: var(--accent-50);
     color: var(--accent-700);
-    font: .64rem var(--mono);
+    /* Accessibility-pass floor (11px / .6875rem) -- was .64rem (10.24px). */
+    font: .6875rem var(--mono);
     text-transform: uppercase;
 }
 
@@ -70,7 +71,8 @@
 .coverage-card span,
 .ledger-kicker {
     color: var(--muted);
-    font: .64rem var(--mono);
+    /* Accessibility-pass floor (11px / .6875rem) -- was .64rem (10.24px). */
+    font: .6875rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
 }
@@ -155,7 +157,10 @@ details.ledger-section ul {
     color: var(--ink-2);
     font-size: .85rem;
 }
-.ledger-heading { max-width: 43rem; }
+/* Was a hard-coded `43rem`; `--measure-prose` is the shared "genuine
+   multi-sentence prose" token (`index.css`) -- see calculation-detail.css's
+   own comment on `.record-header` for the matching header-side fix. */
+.ledger-heading { max-width: var(--measure-prose); }
 .ledger-section h2 { font-size: 2rem; }
 
 .ledger-heading > p:last-child,
@@ -253,7 +258,8 @@ details.ledger-section ul {
 
 .stage-table th {
     color: var(--muted);
-    font-size: .6rem;
+    /* Accessibility-pass floor (11px / .6875rem) -- was .6rem (9.6px). */
+    font-size: .6875rem;
     text-transform: uppercase;
     letter-spacing: .05em;
 }
@@ -399,6 +405,15 @@ details.ledger-section ul {
         border: 0;
     }
 
+    /* The desktop `th + th` / `td + td` rule above adds horizontal padding
+       meant for a table ROW's second-and-later CELLS. In this stacked
+       layout every `<td>` is already a full-width block on its own line,
+       so that leftover padding instead shifts every cell but the first
+       rightward -- a stair-step down the row (review finding: most
+       visible on the review-history table's three columns). Reset to 0
+       only in the stacked layout; the desktop rule is unchanged. */
+    .stage-table td + td { padding-left: 0; }
+
     .stage-table tr {
         padding: .85rem 0;
         border-bottom: 1px solid var(--line-2);
@@ -407,7 +422,8 @@ details.ledger-section ul {
     .stage-table td::before {
         display: block;
         color: var(--muted);
-        font-size: .58rem;
+        /* Accessibility-pass floor (11px / .6875rem) -- was .58rem (9.28px). */
+        font-size: .6875rem;
         text-transform: uppercase;
         content: attr(data-label);
     }

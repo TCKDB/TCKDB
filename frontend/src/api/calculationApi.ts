@@ -65,6 +65,7 @@ const speciesEntryOwnerSchema = z.object({
     species_ref: z.string(),
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    formula: z.string().nullable().optional(),
     canonical_smiles: z.string(),
     inchi_key: z.string(),
     charge: z.number(),
@@ -87,6 +88,20 @@ const ownerSchema = z.object({
     kind: z.enum(["species_entry", "transition_state_entry"]),
     species_entry: speciesEntryOwnerSchema.nullable().optional(),
     transition_state_entry: transitionStateEntryOwnerSchema.nullable().optional(),
+}).passthrough()
+
+// Eager, like `owner` -- never gated behind an `include` token. `null`
+// when this calculation has no recorded conformer observation (every
+// transition-state-owned calculation, and any species-owned one that
+// predates or skipped conformer linkage) -- see
+// `CalculationConformerSummary`'s own docstring server-side. Same shape
+// (`conformer_observation_ref` / `conformer_group_ref` /
+// `conformer_group_label`) as `ConformerContextBlock` on
+// `/scientific/species-calculations/search`.
+const conformerSchema = z.object({
+    conformer_observation_ref: z.string(),
+    conformer_group_ref: z.string(),
+    conformer_group_label: z.string().nullable().optional(),
 }).passthrough()
 
 const softwareReleaseSchema = z.object({
@@ -432,6 +447,7 @@ const imaginaryModeProjectionSchema = z.object({
 const calculationRecordSchema = z.object({
     calculation: calculationCoreSchema,
     owner: ownerSchema,
+    conformer: conformerSchema.nullable().optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
     software_release: softwareReleaseSchema.nullable().optional(),
     workflow_tool_release: workflowToolReleaseSchema.nullable().optional(),
@@ -464,6 +480,7 @@ const responseSchema = z.object({
 })
 
 export type CalculationRecord = z.infer<typeof calculationRecordSchema>
+export type CalculationConformer = z.infer<typeof conformerSchema>
 export type CalculationDependency = z.infer<typeof dependencySchema>
 export type CalculationGeometryLink = z.infer<typeof geometryLinkSchema>
 export type CalculationReviewEntry = z.infer<typeof reviewEntrySchema>

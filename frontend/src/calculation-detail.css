@@ -2,10 +2,13 @@
  * CalculationDetailPage. Imported alongside `conformer-group.css`, which
  * already supplies the shared "scientific record ledger" vocabulary this
  * page reuses verbatim: `.review-badge`, `.ledger-section`,
- * `.ledger-heading`, `.ledger-summary`, `.metric`, `.coverage-card`,
- * `.stage-table`, `.empty-projection`, `.geometry-links` / `.geometry-link`.
- * Only the page-root layout and a few calculation-specific patterns
- * (the owner card, the on-demand section affordances) live here.
+ * `.ledger-heading`, `.ledger-summary`, `.coverage-card`,
+ * `.stage-table`, `.empty-projection`, `.geometry-links` / `.geometry-link`,
+ * `.geometry-role-disclosure` (the "Further evidence" disclosure recipe).
+ * (`.metric` dropped from this list -- the count-tile summary strip that
+ * used it is gone; see the "no count tiles" test in this page's spec.)
+ * Only the page-root layout and a few calculation-specific patterns live
+ * here.
  */
 
 .calc-page {
@@ -14,7 +17,12 @@
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
 
-.record-header { max-width: 63rem; }
+/* Was a hard-coded `63rem`, giving the header a different right edge than
+   the evidence strip and tables below it (measured: ~1190px vs ~1470px at
+   1920) -- `--measure-note` is the same "short instructions/section
+   headings must not wrap while the page still has room" token every other
+   wide measure on this page already uses (`index.css`). */
+.record-header { max-width: var(--measure-note); }
 
 /* Houses the eyebrow label AND the review-status pill -- see the comment
    in CalculationDetailPage.tsx above this row's markup for why the pill
@@ -37,7 +45,6 @@
 .record-title { margin-top: 1.35rem; }
 
 .record-title h1,
-.owner-card h2,
 .ledger-section h2 {
     margin: 0;
     font-family: var(--serif);
@@ -50,6 +57,20 @@
     font-size: clamp(3rem, 8vw, 5.5rem);
 }
 
+/* At ~1100px wide the 8vw term above is already pinned to its 5.5rem
+   ceiling, which is wide enough for an identity h1 ("Optimisation of
+   C2H4") to wrap onto two lines and push the headline energy below it
+   down the page -- review finding. Only calculations that actually carry
+   a headline (`.has-headline`, set from `headline !== null`) get a
+   smaller ceiling, and only below the width where it matters; a page
+   without a headline keeps the original, larger title untouched at every
+   width. */
+@media (max-width: 75rem) {
+    .record-title h1.has-headline {
+        font-size: clamp(2.75rem, 6.5vw, 4.25rem);
+    }
+}
+
 .record-context {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -59,9 +80,19 @@
     border-block: 1px solid var(--line);
 }
 
+/* The compact stage/conformer note sits between the identity header and
+   the full provenance row -- same token vocabulary, no border of its own
+   (it is not a distinct provenance block, just two extra facts). */
+.record-context--compact {
+    grid-template-columns: repeat(2, 1fr);
+    margin: 1.25rem 0 0;
+    padding: 0;
+    border-block: 0;
+}
+
 .record-context dt {
     color: var(--muted);
-    font: .64rem var(--mono);
+    font: .6875rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
 }
@@ -73,53 +104,6 @@
 }
 
 .record-context a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
-
-.owner-card {
-    margin-top: 3.5rem;
-    padding: 1.4rem;
-    border-left: 3px solid var(--accent);
-    background: var(--surface);
-}
-
-.owner-card dl {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: .85rem 1.5rem;
-    margin: 1rem 0 0;
-}
-
-.owner-card dt {
-    color: var(--muted);
-    font: .64rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.owner-card dd {
-    margin: .3rem 0 0;
-    overflow-wrap: anywhere;
-    font: .8rem var(--mono);
-}
-
-.owner-card a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
-
-/* `.value-pill` -- categorical, bounded-vocabulary values (entry kind,
-   electronic state, charge, multiplicity, transition-state status) render
-   as a rounded pill -- the owner: "rather than the text we would use pills
-   for the values? makes it pop more". Reuses the visual recipe of the
-   deleted `RecordFacetChips`/`.record-facet-chip` (PR 325: border, radius,
-   colour) but as an inline `<span>` REPLACING a value's plain-text form
-   inside an EXISTING labelled `<dd>` -- never a second row alongside it.
-   That earlier component was removed specifically because it repeated a
-   fact already shown as labelled text elsewhere on the page (the owner
-   then: "no pill boxes... ffs" -- see `OwnerCard`'s own docstring above).
-   Identifiers -- refs, SMILES, InChIKey -- are never pills: a 30-char
-   base32 ref inside a rounded chip is worse to read and select than
-   plain monospace, not better.
-   Moved to `index.css` (the one stylesheet every route loads) once a
-   second page needed it -- defined there now, not here; kept out of this
-   file entirely rather than duplicated, so the two definitions cannot
-   drift apart. */
 
 /* A vertical checklist, one row per evidence check, "label: value" —
    replacing a single wrapping `<strong>` (the owner: "this should be a
@@ -154,18 +138,47 @@
     text-align: right;
 }
 
-/* On-demand ("behind a disclosure") sections. A section
-   `available_sections` already reports empty renders as a plain
-   `.ledger-section` with `.empty-projection` text and no `<details>` at
+/* One sentence per row, replacing the old Relationship/Role/Related-
+   calculation table -- see `dependencySentence`'s own docstring in
+   CalculationDetailPage.tsx for the "reads backwards" finding this
+   replaces. */
+.dependency-sentences {
+    display: flex;
+    flex-direction: column;
+    gap: .6rem;
+    margin: 1rem 1.1rem 1.1rem;
+    padding: 0;
+    list-style: none;
+    font: .82rem/1.5 var(--mono);
+}
+
+.dependency-sentences a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
+
+/* On-demand ("Further evidence") sections. A section
+   `available_sections` already reports empty renders no `<details>` at
    all — there is nothing to expand into, so nothing invites a click. A
-   section that may have data is a real `<details>`; the summary always
-   wraps a real `<h2>` (see `conformer-group.css`'s note on that) so
-   heading-navigation still finds it. */
+   section that may have data is a real `<details>`, styled with the
+   shared `.geometry-role-disclosure` bordered-list recipe
+   (`conformer-group.css`) rather than a full `.ledger-section` heading of
+   its own -- see `LazySection`'s own docstring for why. */
 .section-note {
     margin: .5rem 0 0;
     color: var(--muted);
     font-size: .8rem;
     line-height: 1.5;
+}
+
+/* The idle-state click affordance -- lives in `<summary>` itself, not
+   `.section-note`, since that's the one part of a closed `<details>` a
+   reader actually sees (see `LazySection`'s own comment). Styled as a
+   quiet trailing label, not a button: the whole `<summary>` row is
+   already the click target. */
+.lazy-section-affordance {
+    margin-left: .5rem;
+    color: var(--muted);
+    font: .6875rem var(--mono);
+    text-transform: uppercase;
+    letter-spacing: .06em;
 }
 
 .section-note[aria-busy="true"]::after { content: "…"; }
@@ -179,7 +192,7 @@
 
 .kv-list dt {
     color: var(--muted);
-    font: .64rem var(--mono);
+    font: .6875rem var(--mono);
     letter-spacing: .06em;
     text-transform: uppercase;
 }
@@ -192,6 +205,10 @@
 
 @media (max-width: 680px) {
     .record-context,
-    .owner-card dl,
+    .record-context--compact,
     .kv-list { grid-template-columns: 1fr; }
 }
+
+/* The evidence strip on this page is a single checklist card, not the
+   four-column tile row `.ledger-summary` lays out on entry pages. */
+.ledger-summary--single { grid-template-columns: 1fr; }

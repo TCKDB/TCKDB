@@ -32,7 +32,8 @@
 }
 
 .record-identity-facts dt {
-    font: .68rem var(--mono);
+    /* Accessibility-pass floor (11px / .6875rem) -- was .68rem (10.88px). */
+    font: .6875rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .05em;
     color: var(--muted);
@@ -97,7 +98,8 @@
 }
 
 .record-identity-provenance-label {
-    font: .68rem var(--mono);
+    /* Accessibility-pass floor (11px / .6875rem) -- was .68rem (10.88px). */
+    font: .6875rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .05em;
     color: var(--muted);

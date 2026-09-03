@@ -5,6 +5,7 @@ import "../calculation-detail.css"
 import { lotLabel } from "../api/scientificSchemas"
 import {
     type CalculationArtifact,
+    type CalculationConformer,
     type CalculationConstraint,
     type CalculationDependency,
     type CalculationEnergyCorrection,
@@ -24,13 +25,16 @@ import {
     type OnDemandSectionToken,
 } from "../api/calculationApi"
 import { EnergyDisplay } from "../components/EnergyDisplay"
+import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { QuantityValue } from "../components/QuantityValue"
+import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
-import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
+import { identityFromCalculationOwner } from "../domain/recordIdentity"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
 
@@ -59,17 +63,18 @@ import { useCalculationSection, type CalculationSectionState } from "../hooks/us
 //   already-loaded-elsewhere-on-this-surface link lists the IA trail
 //   depends on (owner entry / geometries), not separate heavy payloads.
 //
-// - ON DEMAND (14 remaining tokens): every other heavy section.
+// - ON DEMAND (14 remaining tokens): every other heavy section, grouped
+//   under one "Further evidence" disclosure group (review finding: ten
+//   individually-headed, individually-ToC-registered sections crowded out
+//   the two or three that actually carry data on most calculations).
 //   `available_sections` (18 booleans, one per token that has one — see
 //   `readSectionField`) tells the page which of these would return data
 //   *before* asking. A section known empty renders no request and no
-//   heading of its own — it is named, once, in the single shared line
-//   `MissingSectionsNote` renders after every section that DOES have
-//   something to show (review finding 8: this page used to give each
-//   empty section its own heading, ten in a row on some calculation
-//   types). A section that may have data renders as an expandable
-//   `<details>` disclosure that fetches its own token, and only its own
-//   token, the first time it opens.
+//   disclosure of its own — it is named, once, in the single shared line
+//   `MissingSectionsNote` renders after every disclosure that DOES have
+//   something to show. A section that may have data renders as an
+//   expandable `<details>` disclosure that fetches its own token, and only
+//   its own token, the first time it opens.
 //
 // `imaginary_mode_projections` has no `has_imaginary_mode_projections`
 // flag (it's a computed-at-read-time projection, not a stored table) —
@@ -92,77 +97,40 @@ const CALC_TYPE_LABELS: Record<string, string> = {
     conf: "Conformer",
 }
 
-const DEPENDENCY_ROLE_LABELS: Record<string, string> = {
-    optimized_from: "optimized from",
-    freq_on: "frequency on",
-    single_point_on: "single point on",
-    arkane_source: "Arkane source",
-    irc_start: "IRC start",
-    irc_followup: "IRC follow-up",
-    scan_parent: "scan parent",
-}
-
 const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_", " ")
-const roleLabel = (role: string) => DEPENDENCY_ROLE_LABELS[role] ?? role.replaceAll("_", " ")
+const roleLabel = (role: string) => role.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
 // The owner's own wording for a presence check with nothing recorded --
 // kept in this ONE place (not four separate ternaries) so a future
-// reversal (he's flagged "absent" itself as possibly ambiguous here) is a
-// one-line edit, not a hunt through the coverage checklist below.
+// reversal is a one-line edit, not a hunt through the coverage checklist
+// below.
 const EVIDENCE_ABSENT_LABEL = "absent"
 
 /**
  * The THIRD state, distinct from both "recorded" and `EVIDENCE_ABSENT_LABEL`
- * -- see the module-level design note above this checklist's own JSX for
- * the full three-state contract. Never say this for a check that could
- * apply to this calculation's type and simply hasn't been done; that is
- * still `EVIDENCE_ABSENT_LABEL`, and collapsing the two back together is
- * the exact bug this wording exists to keep fixed.
+ * -- never say this for a check that could apply to this calculation's
+ * type and simply hasn't been done; that is still `EVIDENCE_ABSENT_LABEL`,
+ * and collapsing the two back together is the exact bug this wording
+ * exists to keep fixed.
  */
 const EVIDENCE_NOT_APPLICABLE_LABEL = "not applicable"
 
-/**
- * Shared recorded/absent/not-applicable read for a checklist row whose
- * applicability is backend-computed (`provenance.*_applicable` -- see
- * `CalculationEvidenceProvenanceSummary`'s own docstring in
- * `scientific_calculation.py` for why the server, not this client, is
- * the one place that knows which calculation types can carry which
- * evidence). `applicable` is checked FIRST and short-circuits `recorded`
- * -- a type that cannot have this evidence is never described as
- * "absent" no matter what `recorded` says.
- */
-function applicabilityLabel(applicable: boolean, recorded: boolean): string {
+/** Geometry-validation outcome: not applicable / absent / the real verdict
+ * (`passed`/`warning`/`fail`), never a bare "recorded" that hides which. */
+function geometryValidationOutcomeLabel(status: string, applicable: boolean): string {
     if (!applicable) return EVIDENCE_NOT_APPLICABLE_LABEL
-    return recorded ? "recorded" : EVIDENCE_ABSENT_LABEL
+    if (status === "not_present") return EVIDENCE_ABSENT_LABEL
+    return statusLabel(status)
 }
 
-/**
- * `provenance.converged` genuinely has THREE presence states, and a
- * fourth axis (`convergence_applicable`) on top of them, and none of the
- * four may collapse into another:
- *
- * - `convergence_applicable === false` -- NOT APPLICABLE: this
- *   calculation's type (`sp`, `freq`, `scan`, `irc`, `conf`) does not
- *   model a convergence flag at all; only `opt` and `path_search` do
- *   (see `_TYPES_WITH_CONVERGENCE_FLAG` server-side). Checked first, and
- *   short-circuits everything below -- a non-opt/path_search calculation
- *   is never told it is "absent" a concept it cannot have.
- * - `converged === null`/`undefined` (with `convergence_applicable` true)
- *   -- ABSENT: the check could apply here and nobody has recorded a
- *   result yet.
- * - `converged === false` -- a SCIENTIFIC OUTCOME: the optimisation ran
- *   and failed to converge. Never rendered as "absent" or "not
- *   applicable" -- both would turn a real negative result into a missing
- *   record.
- * - `converged === true` -- converged.
- */
-function convergenceLabel(converged: boolean | null | undefined, applicable: boolean): string {
-    if (!applicable) return EVIDENCE_NOT_APPLICABLE_LABEL
-    if (converged === true) return "converged"
-    if (converged === false) return "not converged"
-    return EVIDENCE_ABSENT_LABEL
+/** SCF stability has no `*_applicable` flag -- per
+ * `CalculationSCFStability`'s own model docstring an absent row means "not
+ * checked" for ANY calculation type, never "cannot apply to this type". */
+function scfStabilityOutcomeLabel(status: string): string {
+    if (status === "not_present") return EVIDENCE_ABSENT_LABEL
+    return statusLabel(status)
 }
 
 /**
@@ -173,16 +141,26 @@ function convergenceLabel(converged: boolean | null | undefined, applicable: boo
  * `irc`/`path_search` results are multi-valued or process-shaped and get
  * no headline here, never a guessed stand-in.
  *
- * Reads `results.kind` (never `type`, see `ResultsSection`'s own
- * comment) so the headline and the "Result" section below always agree
- * about which calculation's result they are describing — this function
- * takes the SAME `calculation.results` object the page already fetched,
- * never a second, independently-selected record.
+ * Prefers `results.kind` (matching `ResultBody`'s own dispatch, so the two
+ * never disagree about which calculation's result they describe) but
+ * falls back to the calculation's own `type` when there is no result row
+ * at all — a calculation whose type promises a headline must still show
+ * the headline SLOT with "not recorded", never silently drop it because
+ * the row happens to be missing (review finding 2: `calc_u7j7…`, an opt
+ * with no result, rendered no headline at all).
  */
-function headlineEnergy(results: CalculationRecord["results"]): { label: string; valueHartree: number | null } | null {
-    if (!results) return null
-    if (results.kind === "sp") return { label: "Electronic energy", valueHartree: results.sp?.electronic_energy_hartree ?? null }
-    if (results.kind === "opt") return { label: "Final energy", valueHartree: results.opt?.final_energy_hartree ?? null }
+function headlineEnergy(
+    type: string,
+    results: CalculationRecord["results"],
+): { label: string; valueHartree: number | null } | null {
+    const kind = results?.kind ?? type
+    if (kind === "sp") return { label: "Electronic energy", valueHartree: results?.sp?.electronic_energy_hartree ?? null }
+    if (kind === "opt") {
+        return {
+            label: "Electronic energy at final geometry",
+            valueHartree: results?.opt?.final_energy_hartree ?? null,
+        }
+    }
     return null
 }
 
@@ -282,10 +260,25 @@ export default function CalculationDetailPage() {
     )
 }
 
+/**
+ * "Never been reviewed" is a genuine, common case (every calculation
+ * measured on the live archive, as of this writing) — the service layer
+ * synthesizes one `not_reviewed` row with no date and no note so
+ * `review_history`'s presence flag agrees with the always-present review
+ * badge. Rendered as a single line rather than a one-row table whose every
+ * cell reads "not recorded" (review finding: a 3-cell table of "not
+ * recorded" for a fact that is really one word, "unreviewed").
+ */
+function isNeverReviewed(entries: CalculationRecord["review_history"]): boolean {
+    const rows = entries ?? []
+    return rows.length === 1 && rows[0].status === "not_reviewed" && !rows[0].reviewed_at && !rows[0].note
+}
+
 function CalculationDetail({ calculation }: { calculation: CalculationRecord }) {
     const {
         calculation: core,
         owner,
+        conformer,
         level_of_theory: lot,
         software_release: software,
         workflow_tool_release: workflow,
@@ -307,7 +300,8 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 
     const ownerSpecies = owner.kind === "species_entry" ? (owner.species_entry ?? null) : null
     const ownerTS = owner.kind === "transition_state_entry" ? (owner.transition_state_entry ?? null) : null
-    const headline = headlineEnergy(calculation.results)
+    const identity = identityFromCalculationOwner(owner)
+    const headline = headlineEnergy(core.type, calculation.results)
     // `provenance.submission_ref` is `string | null | undefined` on the
     // wire: `undefined` means the KEY ITSELF was omitted (an anonymous
     // caller — see `CalculationEvidenceProvenanceSummary`'s own
@@ -316,6 +310,39 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // renders no row at all; `null` still renders as "not recorded" so
     // an authenticated reader can tell "checked, none" from "not told".
     const submissionRefKeyPresent = "submission_ref" in provenance
+
+    // Geometry validation's fetched state is lifted here, out of the
+    // "Further evidence" disclosure that would otherwise own it, so the
+    // Geometries section can show the same RMSD once it has been loaded --
+    // one shared fetch, not a second independent request path for the
+    // same on-demand token (see the Geometries section's own comment).
+    const [geometryValidationState, openGeometryValidation] = useCalculationSection<CalculationGeometryValidation[] | null>(
+        core.calculation_ref, "geometry_validation",
+    )
+
+    // The provenance refs are optional on the wire; a row is only a row
+    // when its ref is actually present (a label with nothing to copy is
+    // not a reference).
+    const refs: RefEntry[] = [
+        { label: "Calculation ref", value: core.calculation_ref },
+        { label: "Level of theory ref", value: lot?.level_of_theory_ref },
+        { label: "Software release ref", value: software?.software_release_ref },
+        { label: "Workflow tool release ref", value: workflow?.workflow_tool_release_ref },
+        { label: "Literature ref", value: literature?.literature_ref },
+    ].filter((entry): entry is RefEntry => typeof entry.value === "string" && entry.value.length > 0)
+
+    // Identity subject for the h1 -- "Optimisation of C2H4" / "Optimisation
+    // of TS0". A species entry prefers its formula, rendered through the
+    // SAME `Formula` component `RecordIdentityHeader`'s own identity tier
+    // uses (subscripted element counts), falling back to the plain
+    // canonical SMILES only when no formula was derived. A TS entry has
+    // no formula the way a species does, so it falls back through its own
+    // label/ref instead.
+    const titleSubject: ReactNode = identity.kind === "species_entry"
+        ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
+        : identity.kind === "transition_state_entry"
+            ? (identity.label ?? identity.transitionStateEntryRef ?? "this record")
+            : "this record"
 
     return (
         <section className="calc-page">
@@ -329,6 +356,20 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         <Link to={`/species-entries/${ownerSpecies.species_entry_ref}`}>Species entry</Link>
                     </>
                 )}
+                {/* Mirrors `TransitionStateEntryPage.tsx`'s own breadcrumb --
+                    that route exists now (`App.tsx:52`), so a TS-owned
+                    calculation's ancestor entry gets a real link, not the
+                    unlinked plain text this page used to fall back to. */}
+                {ownerTS && (
+                    <>
+                        <span aria-hidden="true">/</span>
+                        <Link to="/species?kind=transition_state">Browse</Link>
+                        <span aria-hidden="true">/</span>
+                        <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
+                            Transition state entry
+                        </Link>
+                    </>
+                )}
                 <span aria-hidden="true">/</span>
                 <span aria-current="page">Calculation</span>
             </nav>
@@ -336,156 +377,146 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
             <PageShell
                 identity={(
                     <header className="record-header">
-                        {/* The review-status pill used to sit beside the h1 inside
-                            `.record-title`, a `display:flex; align-items:baseline`
-                            row. At the giant serif sizes this heading renders at,
-                            "Optimisation calculation" alone is wide enough to wrap
-                            onto two lines even before the pill claims horizontal
-                            space -- and a `nowrap` flex row squeezes the h1 down
-                            further to keep the pill on the same line, pinning the
-                            pill to the far right of a mostly-empty row while the
-                            wrapped title sits on the left. Two reviewers read that
-                            as the pill floating loose from the record it describes,
-                            at both 1920px and 900px. Anchoring it to the eyebrow
-                            line instead sidesteps the h1's own wrapping entirely --
-                            "Calculation · deposited evidence" never wraps at any
-                            width this page supports, so the pill has a stable home
-                            immediately above the title it describes, always inside
-                            the same heading block. */}
+                        {/* The review-status pill sits beside the eyebrow, not the
+                            h1 -- see `.record-eyebrow-row` in
+                            calculation-detail.css for why: the eyebrow line
+                            never wraps at any width this page supports, so the
+                            pill has a stable home immediately above the title
+                            it describes. "Optimisation calculation" (the
+                            classification fact) lives here now too, since the
+                            h1 itself promotes IDENTITY ("Optimisation of
+                            C2H4") ahead of classification -- see
+                            `RecordIdentityHeader`'s own docstring for the
+                            shared header order every record page follows:
+                            identity, then classification, then provenance. */}
                         <div className="record-eyebrow-row">
-                            <p className="eyebrow">Calculation · deposited evidence</p>
+                            <p className="eyebrow">{typeLabel(core.type)} calculation · deposited evidence</p>
                             <span className="review-badge">{statusLabel(core.review.status)}</span>
                         </div>
                         <div className="record-title">
-                            <h1>{typeLabel(core.type)} calculation</h1>
+                            <h1 className={headline ? "has-headline" : undefined}>
+                                {typeLabel(core.type)} of {titleSubject}
+                            </h1>
                         </div>
                         {/* The answer this page exists to give, promoted to the
-                            largest weight on the page — previously it sat inside the
-                            "Result" section below at the same visual weight as the
-                            dependency graph and review history. Only sp/opt
-                            calculations have a single headline energy; every other
+                            largest weight on the page. Only sp/opt calculations
+                            have a single headline energy; every other
                             calculation type renders nothing here rather than a
-                            fabricated or misleading figure. */}
+                            fabricated or misleading figure. Rendered even when
+                            the value itself is null (see `headlineEnergy`'s own
+                            docstring) -- the SLOT is what a sp/opt calculation
+                            always gets, not only the ones with a result row. */}
                         {headline && (
                             <div className="calc-headline-energy">
                                 <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
                             </div>
                         )}
 
-                        {/* Shared header order: identity, then classification
-                            facets, then provenance — see `RecordIdentityHeader`'s
-                            own docstring. `OwnerCard` below is this page's identity
-                            tier (kept as its own component rather than folded into
-                            `RecordIdentityHeader` — it renders owner LINKS this
-                            endpoint does not model) and, since #322, is also where
-                            the classification facets live: an "Entry kind" row
-                            beside `OwnerCard`'s own "Electronic state" row, not a
-                            pill row repeating the same two facts a second time
-                            ("no pill boxes" — see `SpeciesEntrySummary.tsx`'s
-                            `EntryIdentity` for the report this fixes elsewhere on
-                            the same shared header pattern). */}
-                        <OwnerCard ownerSpecies={ownerSpecies} ownerTS={ownerTS} />
+                        <RecordIdentityHeader identity={identity} />
 
+                        {/* Item 1 (BLOCKING): the TS entry is now a real link to
+                            `/transition-state-entries/:ref` -- that route exists
+                            (`App.tsx:52`). `RecordIdentityHeader`'s own TS branch
+                            renders the ref as plain `<code>` (a shared component
+                            used by pages that don't all have this route), so the
+                            link lives here instead, right below it. */}
+                        {ownerTS && (
+                            <p className="record-identity-note">
+                                This calculation belongs to the transition-state entry{" "}
+                                <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
+                                    {ownerTS.label ?? ownerTS.transition_state_entry_ref}
+                                </Link>.
+                            </p>
+                        )}
+
+                        <StageAndConformerNote
+                            calcType={core.type}
+                            dependencies={dependencies}
+                            dependenciesAvailability={dependenciesAvailability}
+                            conformer={conformer ?? null}
+                        />
+
+                        {/* One row of human provenance, always shown -- software
+                            and workflow tool must never be hidden (house rule).
+                            Dispersion/Solvent/Literature are ADDITIONAL rows,
+                            rendered only when the archive actually recorded
+                            them -- see the invariant list: absence describes the
+                            request, null describes the data, and this page never
+                            claims "not recorded" for a field most calculations
+                            simply don't carry. */}
                         <dl className="record-context">
-                            <div><dt>Calculation ref</dt><dd>{core.calculation_ref}</dd></div>
-                            {/* `quality` and `review.status` (the badge beside the
-                                heading above) are two SEPARATE mechanisms -- one is how
-                                much to trust the record (`raw`/`curated`/`rejected`),
-                                the other is who has examined it (`not_reviewed`/
-                                `under_review`/`approved`/`rejected`/`deprecated`). They
-                                only look redundant today because every one of the 572
-                                calculations measured on the live archive is
-                                `(not_reviewed, raw)` -- neither mechanism has been used
-                                yet, not because they are the same axis. `raw` is also
-                                the column's own `server_default`, so showing it
-                                unconditionally distinguishes nothing on any record.
-                                `curated` and `rejected` DO carry information a reader
-                                needs (they change how this calculation is filtered/
-                                scored elsewhere -- see `services/scientific_read/
-                                artifacts_search.py` and `services/trust/rubrics.py`),
-                                so this only hides the uninformative default, never the
-                                field itself. */}
-                            {core.quality !== "raw" && (
-                                <div><dt>Quality</dt><dd>{core.quality}</dd></div>
-                            )}
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                             <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
-                            {/* The compact label above can be identical for two different rows —
-                                it omits dispersion, solvent and level_of_theory_ref on purpose (see
-                                the schema comment on `levelOfTheorySchema`). Those are the fields
-                                that actually distinguish them, so they get their own rows rather
-                                than being folded into the label. */}
-                            <div><dt>Level of theory ref</dt><dd>{lot?.level_of_theory_ref ?? "not recorded"}</dd></div>
-                            <div><dt>Dispersion</dt><dd>{lot?.dispersion ?? "not recorded"}</dd></div>
-                            <div><dt>Solvent</dt><dd>{lot?.solvent ?? "not recorded"}</dd></div>
                             <div>
                                 <dt>Software</dt>
                                 <dd>{softwareLabel(software) ?? "not recorded"}</dd>
                             </div>
-                            <div><dt>Software release ref</dt><dd>{software?.software_release_ref ?? "not recorded"}</dd></div>
                             <div>
                                 <dt>Workflow tool</dt>
                                 <dd>{toolReleaseLabel(workflow) ?? "not recorded"}</dd>
                             </div>
-                            <div><dt>Workflow tool release ref</dt><dd>{workflow?.workflow_tool_release_ref ?? "not recorded"}</dd></div>
+                            {lot?.dispersion && <div><dt>Dispersion</dt><dd>{lot.dispersion}</dd></div>}
+                            {lot?.solvent && <div><dt>Solvent</dt><dd>{lot.solvent}</dd></div>}
+                            {literature && (
+                                <div>
+                                    <dt>Literature</dt>
+                                    <dd>
+                                        {literature.title ?? literature.literature_ref}
+                                        {literature.year ? ` (${literature.year})` : ""}
+                                    </dd>
+                                </div>
+                            )}
                             {/* No row at all when the key itself is absent (anonymous
-                                caller) — see `submissionRefKeyPresent` above. An
-                                anonymous reader is never told "not recorded" for a
-                                question they were never allowed to ask. */}
+                                caller) — see `submissionRefKeyPresent` above. */}
                             {submissionRefKeyPresent && (
                                 <div><dt>Submission ref</dt><dd>{provenance.submission_ref ?? "not recorded"}</dd></div>
                             )}
-                            <div>
-                                <dt>Literature</dt>
-                                <dd>{literature ? `${literature.title ?? literature.literature_ref}${literature.year ? ` (${literature.year})` : ""}` : "not recorded"}</dd>
-                            </div>
-                            <div><dt>Literature ref</dt><dd>{literature?.literature_ref ?? "not recorded"}</dd></div>
+                            {/* `quality`'s own `server_default` is `raw`, so showing
+                                it unconditionally would distinguish nothing on any
+                                record -- see the schema comment this carries
+                                forward. `curated`/`rejected` DO carry information a
+                                reader needs, so only the uninformative default is
+                                hidden, never the field itself. */}
+                            {core.quality !== "raw" && (
+                                <div><dt>Quality</dt><dd>{core.quality}</dd></div>
+                            )}
                         </dl>
+
+                        <RefsDisclosure refs={refs} />
                     </header>
                 )}
             >
-            <section className="ledger-summary" aria-label="Calculation evidence summary">
-                <Metric label="Input geometries" value={inputGeometries.length} />
-                <Metric label="Output geometries" value={outputGeometries.length} />
-                <Metric label="Dependency edges" value={dependencies.length} />
+            {/* No count tiles here (review finding): "Input geometries 1 /
+                Output geometries 1 / Dependency edges 3" rendered cardinalities
+                a reader never asks for at display size, each duplicating a
+                section directly below that shows the same one or three links.
+                The evidence checklist is the only card that carries a fact
+                with no other home on the page. */}
+            <section className="ledger-summary ledger-summary--single" aria-label="Calculation evidence summary">
                 <div className="coverage-card">
                     <span>Evidence on this calculation</span>
-                    {/* A vertical checklist, one row per check, label: value --
-                        replacing the single `<strong>` that joined four facts with
-                        "·" and wrapped mid-phrase at narrow widths (the owner: "this
-                        should be a going down list, not a wrap around text"). Real
-                        `<dl>` markup, not `<br>`-separated text, so each row is a
-                        term/value pair a screen reader announces as such. */}
+                    {/* Geometry validation and SCF stability only -- Result and
+                        Convergence are dropped from this checklist (review
+                        finding: each already has its own headline/Result-section
+                        home, so a THIRD "recorded"/"absent" line for the same
+                        fact stated nothing new). The two rows that remain have
+                        no section of their own when they come up empty, so this
+                        is the only place a reader learns whether they exist at
+                        all -- and each now shows the actual recorded OUTCOME
+                        (passed / failed / stable / ...), not just "recorded". */}
                     <dl className="coverage-checklist">
                         <div>
-                            <dt>Result</dt>
-                            <dd>{applicabilityLabel(provenance.result_applicable, provenance.has_result)}</dd>
-                        </div>
-                        <div>
                             <dt>Geometry validation</dt>
-                            <dd>{applicabilityLabel(provenance.geometry_validation_applicable, provenance.geometry_validation_status !== "not_present")}</dd>
+                            <dd>{geometryValidationOutcomeLabel(provenance.geometry_validation_status, provenance.geometry_validation_applicable)}</dd>
                         </div>
-                        {/* SCF stability has no `*_applicable` flag on purpose -- per
-                            `CalculationSCFStability`'s own model docstring an absent row
-                            means "not checked" for ANY calculation type, never
-                            "cannot apply to this type". See `provenanceSchema`'s comment
-                            in `calculationApi.ts`. */}
                         <div>
                             <dt>SCF stability</dt>
-                            <dd>{provenance.scf_stability_status === "not_present" ? EVIDENCE_ABSENT_LABEL : "recorded"}</dd>
-                        </div>
-                        {/* Convergence keeps all four states distinct -- see
-                            `convergenceLabel`'s own docstring for why "not applicable",
-                            "absent" and "not converged" must never render the same
-                            text. */}
-                        <div>
-                            <dt>Convergence</dt>
-                            <dd>{convergenceLabel(provenance.converged, provenance.convergence_applicable)}</dd>
+                            <dd>{scfStabilityOutcomeLabel(provenance.scf_stability_status)}</dd>
                         </div>
                     </dl>
                     <p>
-                        Presence says a check exists on this record, not that it passed — the actual outcome,
-                        where one was recorded, is in the matching section below.
+                        A recorded outcome here is the actual verdict; the full evidence, where the archive has
+                        more to show, is under Further evidence below.
                     </p>
                 </div>
             </section>
@@ -504,15 +535,20 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 inputContradicted={inputGeometriesAvailability === "empty" && available.has_input_geometries}
                 outputAvailability={outputGeometriesAvailability}
                 outputContradicted={outputGeometriesAvailability === "empty" && available.has_output_geometries}
+                geometryValidation={geometryValidationState}
             />
 
-            <OnDemandSections calculation={calculation} available={available} />
+            <OnDemandSections
+                calculation={calculation}
+                available={available}
+                geometryValidationState={geometryValidationState}
+                openGeometryValidation={openGeometryValidation}
+            />
 
             {/* Demoted below every evidence section (results, geometries,
-                the on-demand disclosures): the graph and the review log are
+                further evidence): the graph and the review log are
                 provenance ABOUT this record, not the scientific evidence
-                itself, and the owner's complaint was that they were
-                competing with the evidence for the same visual weight. */}
+                itself. */}
             <DependenciesSection
                 dependencies={dependencies}
                 ownRef={core.calculation_ref}
@@ -522,7 +558,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
 
             <ReviewHistorySection
                 entries={reviewHistory}
-                currentStatus={core.review.status}
                 availability={reviewAvailability}
             />
             </PageShell>
@@ -530,100 +565,82 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     )
 }
 
-function OwnerCard({
-    ownerSpecies, ownerTS,
-}: {
-    ownerSpecies: NonNullable<CalculationRecord["owner"]["species_entry"]> | null
-    ownerTS: NonNullable<CalculationRecord["owner"]["transition_state_entry"]> | null
+/**
+ * The dependency-derived stage sentence (for `opt` calculations) plus the
+ * conformer-context links (for species-entry-owned calculations), stacked
+ * as one small block right under the identity header. Both read the
+ * already-fetched eager data -- no extra request for either.
+ */
+function StageAndConformerNote({ calcType, dependencies, dependenciesAvailability, conformer }: {
+    calcType: string
+    dependencies: CalculationDependency[]
+    dependenciesAvailability: SectionAvailability
+    conformer: CalculationConformer | null
 }) {
-    if (ownerSpecies) {
-        return (
-            <section className="owner-card" aria-labelledby="owner-heading-species-entry">
-                <SectionHeading id="owner-heading-species-entry">Owner</SectionHeading>
-                <dl>
-                    <div>
-                        <dt>Species</dt>
-                        <dd><Link to={`/species/${ownerSpecies.species_ref}`}>{ownerSpecies.species_ref}</Link></dd>
-                    </div>
-                    <div>
-                        <dt>Species entry</dt>
-                        <dd>
-                            <Link to={`/species-entries/${ownerSpecies.species_entry_ref}`}>
-                                {ownerSpecies.species_entry_label ?? ownerSpecies.species_entry_ref}
-                            </Link>
-                        </dd>
-                    </div>
-                    {/* The linked text above prefers the human label; the stable ref
-                        gets its OWN row only when the label pushed it out of view --
-                        a label must never be the only way to see the ref. Measured:
-                        `species_entry_label` is null on all 200 entries sampled off
-                        the browse endpoint, so without this guard the ref row below
-                        repeated the link's own fallback text verbatim on every
-                        calculation page. The rule ("never label ?? ref") is
-                        unchanged; only the never-considered no-label branch is
-                        fixed. */}
-                    {ownerSpecies.species_entry_label && (
-                        <div><dt>Species entry ref</dt><dd>{ownerSpecies.species_entry_ref}</dd></div>
-                    )}
-                    <div><dt>Structure</dt><dd>{ownerSpecies.canonical_smiles}</dd></div>
-                    <div><dt>InChIKey</dt><dd>{ownerSpecies.inchi_key}</dd></div>
-                    {/* Categorical, bounded-vocabulary facts (entry kind, electronic
-                        state) render as pills, replacing their plain-text form (never
-                        alongside it -- see `.value-pill` in `calculation-detail.css`
-                        for why this is not the deleted `RecordFacetChips` come back).
-                        A charge is a number, not a bounded category, so it stays plain
-                        text -- the same "value / value" format the record hero uses
-                        for this same fact (see `RecordIdentityHeader.tsx`), so the two
-                        never disagree about how to write it. Identifiers above (species
-                        / species entry / structure / InChIKey) are never pills either
-                        -- they stay selectable monospace text. */}
-                    <div>
-                        <dt>Charge / multiplicity</dt>
-                        <dd>{chargeDisplay(ownerSpecies.charge)} / {spinDisplay(ownerSpecies.multiplicity)}</dd>
-                    </div>
-                    <div><dt>Entry kind</dt><dd><span className="value-pill">{statusLabel(ownerSpecies.species_entry_kind)}</span></dd></div>
-                    <div><dt>Electronic state</dt><dd><span className="value-pill">{ownerSpecies.electronic_state_kind}</span></dd></div>
-                </dl>
-            </section>
-        )
-    }
-    if (ownerTS) {
-        return (
-            <section className="owner-card" aria-labelledby="owner-heading-transition-state-entry">
-                <SectionHeading id="owner-heading-transition-state-entry">Owner</SectionHeading>
-                <p className="section-note">
-                    This calculation belongs to a transition-state entry. That record does not yet have a
-                    dedicated page on this archive projection, so its reference is shown without a link.
-                </p>
-                <dl>
-                    <div><dt>Transition state</dt><dd>{ownerTS.transition_state_ref}</dd></div>
-                    <div><dt>Transition state entry</dt><dd>{ownerTS.label ?? ownerTS.transition_state_entry_ref}</dd></div>
-                    {/* Same guard as the species branch above -- see its comment. */}
-                    {ownerTS.label && (
-                        <div><dt>Transition state entry ref</dt><dd>{ownerTS.transition_state_entry_ref}</dd></div>
-                    )}
-                    {/* Same plain-text rule as the species-entry branch above -- a
-                        charge is a number, not a bounded category. */}
-                    <div>
-                        <dt>Charge / multiplicity</dt>
-                        <dd>{chargeDisplay(ownerTS.charge)} / {spinDisplay(ownerTS.multiplicity)}</dd>
-                    </div>
-                    <div><dt>Status</dt><dd><span className="value-pill">{statusLabel(ownerTS.status)}</span></dd></div>
-                    <div><dt>Reaction entry</dt><dd>{ownerTS.reaction_entry_ref ?? "not recorded"}</dd></div>
-                </dl>
-            </section>
-        )
-    }
-    return null
+    // "empty" (the archive was asked and returned no edges) and
+    // "populated" with no matching edge both go through optimisationStage,
+    // which reads them as "No refinement stage recorded" -- an absence of
+    // evidence, not evidence of a single pass (review finding: the old
+    // text asserted a stage the archive never actually reported). Only
+    // "not-requested" (the wire key itself absent) skips the call
+    // entirely -- there the page never even asked, so it renders no Stage
+    // row at all rather than a "not recorded" one.
+    const stage = calcType === "opt" && dependenciesAvailability !== "not-requested"
+        ? optimisationStage(dependencies)
+        : null
+    if (!stage && !conformer) return null
+    return (
+        <dl className="record-context record-context--compact">
+            {stage && (
+                <div>
+                    <dt>Stage</dt>
+                    <dd>
+                        {stage.linkRef
+                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}>{stage.linkRef}</Link></>
+                            : stage.text}
+                    </dd>
+                </div>
+            )}
+            {conformer && (
+                <div>
+                    <dt>Conformer</dt>
+                    <dd>
+                        <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
+                            {conformer.conformer_observation_ref}
+                        </Link>
+                        {" · "}
+                        <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
+                            {conformer.conformer_group_label ?? conformer.conformer_group_ref}
+                        </Link>
+                    </dd>
+                </div>
+            )}
+        </dl>
+    )
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
-    return (
-        <div className="metric">
-            <span>{label}</span>
-            <strong>{value}</strong>
-        </div>
-    )
+/**
+ * "Which of N optimisations is this" for an opt calculation, read from the
+ * SAME `dependencies` payload the Related-calculations section renders
+ * below -- never a second, independently-derived graph read. A parent-side
+ * `optimized_from` edge means this calculation was later refined further
+ * (it is the coarse pass); a child-side one means this calculation IS the
+ * refinement.
+ *
+ * Neither present does NOT mean this is confidently a single pass -- review
+ * finding: the old "Single-pass optimisation" text asserted a stage from an
+ * absence of edges, including on a calculation with no dependency edges at
+ * all (nothing to read a stage from, one way or the other). An edge that
+ * doesn't exist in the archive is not evidence there is no refinement
+ * stage, only that this page has no evidence of one -- so the no-edge case
+ * says exactly that, and reads as "not recorded", not as an asserted fact.
+ */
+function optimisationStage(dependencies: CalculationDependency[]): { text: string; linkRef?: string } {
+    const parentEdge = dependencies.find((dep) => dep.direction === "parent" && dep.role === "optimized_from")
+    if (parentEdge) return { text: "Coarse pass; refined by", linkRef: parentEdge.child_calculation_ref }
+    const childEdge = dependencies.find((dep) => dep.direction === "child" && dep.role === "optimized_from")
+    if (childEdge) return { text: "Refinement of", linkRef: childEdge.parent_calculation_ref }
+    return { text: "No refinement stage recorded" }
 }
 
 // ---------------------------------------------------------------------------
@@ -644,7 +661,7 @@ function ResultsSection({ results, type, availability, contradicted }: {
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
             <div className="ledger-heading">
-                <p className="eyebrow">Deposited evidence</p>
+                <p className="eyebrow">Result</p>
                 <SectionHeading id="results-heading">Result</SectionHeading>
                 <p>The primary scientific result for this {kindLabel.toLowerCase()} calculation.</p>
             </div>
@@ -667,20 +684,16 @@ function ResultBody({ results }: { results: NonNullable<CalculationRecord["resul
         // electronic-energy precision the ported digits table actually
         // specifies. `unitOverride: null` because the label already says
         // "(hartree)". `Uncertainty` has no matching entry in that table,
-        // so it stays a raw pass-through rather than a guessed precision --
-        // same reason `zpe_hartree` below stays raw: it is a different
-        // quantity than `energy_hartree`/`final_energy_hartree` and
-        // `landing.py` never gives it a precision to port.
+        // so it stays a raw pass-through rather than a guessed precision.
         pairs.push(["Electronic energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.sp.electronic_energy_hartree, null)} />])
         pairs.push(["Uncertainty (hartree)", results.sp.electronic_energy_uncertainty_hartree ?? "not recorded"])
     } else if (results.kind === "opt" && results.opt) {
+        // Final energy is dropped here -- it is already the page's own
+        // headline (review finding: it used to appear a third time here,
+        // at the same visual weight as convergence and step count). Steps
+        // is relabelled to say plainly where the number came from.
         pairs.push(["Converged", boolLabel(results.opt.converged)])
-        pairs.push(["Steps", results.opt.n_steps ?? "not recorded"])
-        // Same physical quantity, same unit, as the sp branch's "Electronic
-        // energy" above -- an `opt` calculation's final energy is still an
-        // electronic energy in hartree, so it gets the same 6dp spec rather
-        // than a raw double under an identically-styled heading.
-        pairs.push(["Final energy (hartree)", <QuantityValue value={formatQuantity("calculation_electronic_energy_hartree", results.opt.final_energy_hartree, null)} />])
+        pairs.push(["Optimiser steps (parsed from log)", results.opt.n_steps ?? "not recorded"])
     } else if (results.kind === "freq" && results.freq) {
         pairs.push(["Imaginary modes (n_imag)", results.freq.n_imag ?? "not recorded"])
         pairs.push(["Imaginary frequency (cm-1)", results.freq.imag_freq_cm1 ?? "not recorded"])
@@ -722,13 +735,45 @@ function boolLabel(value: boolean | null | undefined) {
  * Renders exactly, and only, the edges the archive returned under
  * `include=dependencies`. No edge here is inferred from `type`, timestamps,
  * or ref ordering — see the module docstring above; this is the one rule
- * the whole slice is graded on. Each row's relationship, role and related
- * ref all come from that one row's own `dep` — see
- * `CalculationDetailPage.test.tsx`'s per-row binding test, which exists
- * specifically because a fixture with only one edge cannot tell a correct
- * per-row read apart from "always show the first row" or "guess the role
- * from the direction".
+ * the whole slice is graded on.
+ *
+ * One sentence per edge, with a FIXED subject (this calculation, or the
+ * related one), replacing the old Relationship/Role/Related-calculation
+ * columns -- review finding: "feeds into | optimized from | calc_j4my…"
+ * read as "this was optimized from calc_j4my", the inverse of the truth
+ * (a `role` names the CHILD's relation to the parent, so on a parent-side
+ * row it describes what the *other* calculation is, not this one). A
+ * parent-side row states what the related calculation IS relative to this
+ * geometry/result.
+ *
+ * Child-side dispatches on `role` too -- review finding: the live archive
+ * carries child-side `freq_on`, `single_point_on` and `irc_start` edges
+ * (a freq/sp/IRC calc's edge back to the opt it ran on), not only
+ * `optimized_from`, and every one of them used to read "This was
+ * optimized from <link>" regardless of what the edge actually was. Only
+ * `optimized_from` gets that sentence now; the other three each get a
+ * subject-fixed sentence naming what THIS calculation actually did on the
+ * parent's geometry, and an unrecognised role falls back to the raw role
+ * token -- never to "optimized from", which would silently re-introduce
+ * the same bug for a role this page doesn't know about yet.
  */
+function dependencySentence(dep: CalculationDependency): { linkRef: string; text: (linkNode: ReactNode) => ReactNode } {
+    if (dep.direction === "child") {
+        const ref = dep.parent_calculation_ref
+        if (dep.role === "optimized_from") return { linkRef: ref, text: (link) => <>This was optimized from {link}</> }
+        if (dep.role === "freq_on") return { linkRef: ref, text: (link) => <>This frequency calculation was run on the geometry from {link}</> }
+        if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>This single point was run on the geometry from {link}</> }
+        if (dep.role === "irc_start") return { linkRef: ref, text: (link) => <>This IRC started from the geometry of {link}</> }
+        return { linkRef: ref, text: (link) => <>This — {roleLabel(dep.role)} — {link}</> }
+    }
+    const ref = dep.child_calculation_ref
+    if (dep.role === "freq_on") return { linkRef: ref, text: (link) => <>{link} (frequency) was run on this geometry</> }
+    if (dep.role === "optimized_from") return { linkRef: ref, text: (link) => <>{link} was optimized from this result</> }
+    if (dep.role === "single_point_on") return { linkRef: ref, text: (link) => <>{link} single point was run on this geometry</> }
+    if (dep.role === "irc_start") return { linkRef: ref, text: (link) => <>{link} IRC started from this geometry</> }
+    return { linkRef: ref, text: (link) => <>{link} — {roleLabel(dep.role)}</> }
+}
+
 function DependenciesSection({ dependencies, ownRef, availability, contradicted }: {
     dependencies: CalculationDependency[]
     ownRef: string
@@ -738,35 +783,21 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
             <div className="ledger-heading">
-                <p className="eyebrow">Deposited provenance</p>
-                <SectionHeading id="dependencies-heading">Dependency graph</SectionHeading>
+                <p className="eyebrow">Related calculations</p>
+                <SectionHeading id="dependencies-heading">Related calculations</SectionHeading>
                 <p>Other calculations this one was built from, or that were built from it.</p>
             </div>
             {availability === "populated" ? (
-                <table className="stage-table" aria-label={`Dependency edges for ${ownRef}`}>
-                    <thead>
-                        <tr>
-                            <th scope="col">Relationship</th>
-                            <th scope="col">Role</th>
-                            <th scope="col">Related calculation</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {dependencies.map((dep, index) => {
-                            const otherRef = dep.direction === "parent" ? dep.child_calculation_ref : dep.parent_calculation_ref
-                            const relationship = dep.direction === "parent" ? "feeds into" : "depends on"
-                            return (
-                                <tr key={`${dep.role}-${dep.direction}-${otherRef}-${index}`}>
-                                    <td data-label="Relationship">{relationship}</td>
-                                    <td data-label="Role">{roleLabel(dep.role)}</td>
-                                    <td data-label="Related calculation">
-                                        <Link to={`/calculations/${otherRef}`}>{otherRef}</Link>
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+                <ul className="dependency-sentences" aria-label={`Dependency edges for ${ownRef}`}>
+                    {dependencies.map((dep, index) => {
+                        const { linkRef, text } = dependencySentence(dep)
+                        return (
+                            <li key={`${dep.role}-${dep.direction}-${linkRef}-${index}`}>
+                                {text(<Link to={`/calculations/${linkRef}`}>{linkRef}</Link>)}
+                            </li>
+                        )
+                    })}
+                </ul>
             ) : (
                 <SectionEmptyMessage
                     availability={availability}
@@ -779,7 +810,7 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
 }
 
 function GeometriesSection({
-    input, output, inputAvailability, inputContradicted, outputAvailability, outputContradicted,
+    input, output, inputAvailability, inputContradicted, outputAvailability, outputContradicted, geometryValidation,
 }: {
     input: CalculationGeometryLink[]
     output: CalculationGeometryLink[]
@@ -787,21 +818,63 @@ function GeometriesSection({
     inputContradicted: boolean
     outputAvailability: SectionAvailability
     outputContradicted: boolean
+    geometryValidation: CalculationSectionState<CalculationGeometryValidation[] | null>
 }) {
+    // A coarse optimisation stage stores its input and output as the SAME
+    // geometry row (measured: every coarse stage on the live archive) --
+    // rendering two identical cards side by side read as a bug, not a
+    // fact. Collapsed to one card with an explanatory note whenever both
+    // lists resolve to exactly one, identical, geometry ref. This is a
+    // rendering fix only -- see "Not addressed (data)" in the PR body for
+    // why input==output itself is out of scope here.
+    const sameGeometry = input.length === 1 && output.length === 1 && input[0].geometry_ref === output[0].geometry_ref
+    const validationRow = geometryValidation.status === "ready" ? (geometryValidation.data?.[0] ?? null) : null
     return (
         <section className="ledger-section geometry-ledger" aria-labelledby="geometries-heading">
-            <p className="eyebrow">Stored coordinates</p>
+            <p className="eyebrow">Geometries</p>
             <SectionHeading id="geometries-heading">Geometries</SectionHeading>
             <p>Links to the full coordinate records this calculation consumed and produced.</p>
-            <GeometryLinkList
-                title="Input" links={input} emptyText="No input geometries are recorded."
-                availability={inputAvailability} contradicted={inputContradicted}
-            />
-            <GeometryLinkList
-                title="Output" links={output} emptyText="No output geometries are recorded."
-                availability={outputAvailability} contradicted={outputContradicted}
-            />
+            {sameGeometry ? (
+                <div>
+                    <h3 className="ledger-kicker">Input and output</h3>
+                    <p className="section-note">Input and output are the same stored geometry.</p>
+                    <div className="geometry-links">
+                        <div className="geometry-link" key={input[0].geometry_ref}>
+                            <Link to={`/geometries/${input[0].geometry_ref}`}>{input[0].geometry_ref}</Link>
+                            <span>{input[0].natoms != null ? `${input[0].natoms} atoms` : "atom count not recorded"}</span>
+                        </div>
+                    </div>
+                    {validationRow && <GeometryValidationBanner row={validationRow} />}
+                </div>
+            ) : (
+                <>
+                    <GeometryLinkList
+                        title="Input" links={input} emptyText="No input geometries are recorded."
+                        availability={inputAvailability} contradicted={inputContradicted}
+                    />
+                    <GeometryLinkList
+                        title="Output" links={output} emptyText="No output geometries are recorded."
+                        availability={outputAvailability} contradicted={outputContradicted}
+                    />
+                    {/* Shown once the Further evidence -> Geometry validation
+                        disclosure has been opened -- this section does not fetch
+                        it independently (see the state lifted in
+                        `CalculationDetail`), so the RMSD appears here the moment
+                        that ONE shared fetch resolves, whichever section
+                        triggered it. */}
+                    {validationRow && outputAvailability === "populated" && <GeometryValidationBanner row={validationRow} />}
+                </>
+            )}
         </section>
+    )
+}
+
+function GeometryValidationBanner({ row }: { row: CalculationGeometryValidation }) {
+    return (
+        <p className="section-note">
+            Geometry validation: {statusLabel(row.validation_status)}
+            {row.rmsd != null ? ` · RMSD ${row.rmsd}` : ""}
+        </p>
     )
 }
 
@@ -832,20 +905,19 @@ function GeometryLinkList({ title, links, emptyText, availability, contradicted 
     )
 }
 
-function ReviewHistorySection({ entries, currentStatus, availability }: {
+function ReviewHistorySection({ entries, availability }: {
     entries: CalculationRecord["review_history"]
-    currentStatus: string
     availability: SectionAvailability
 }) {
     const rows = entries ?? []
+    const neverReviewed = isNeverReviewed(entries)
     return (
         <section className="ledger-section" aria-labelledby="review-heading">
             <div className="ledger-heading">
-                <p className="eyebrow">Review &amp; trust</p>
+                <p className="eyebrow">Review</p>
                 <SectionHeading id="review-heading">Review history</SectionHeading>
-                <p>The current status is {statusLabel(currentStatus)}. This is the record of how it got there.</p>
             </div>
-            {availability === "populated" ? (
+            {availability === "populated" && !neverReviewed ? (
                 <table className="stage-table" aria-label="Review history">
                     <thead>
                         <tr>
@@ -864,6 +936,8 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
                         ))}
                     </tbody>
                 </table>
+            ) : availability === "populated" ? (
+                <p className="empty-projection">Not yet reviewed.</p>
             ) : (
                 // No `has_review` flag exists on `available_sections` (unlike
                 // the other four eager sections), so there is nothing to
@@ -878,54 +952,45 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
 }
 
 // ---------------------------------------------------------------------------
-// On-demand sections
+// On-demand sections ("Further evidence")
 // ---------------------------------------------------------------------------
 
 /**
  * One disclosure gated on an `available_sections` flag (or, for
- * `imaginary_mode_projections`, on `has_hessian` — see the module
- * docstring). Renders an expandable `<details>` that fetches its own
- * token, once, the first time it opens.
+ * `imaginary_mode_projections`, on `freq_modes_applicable` -- see the
+ * module docstring). Renders an expandable `<details>` that fetches its
+ * own token, once, the first time it opens.
  *
- * This is the first surface in the project where content arrives after a
- * user gesture rather than on page load, so there is no accessible-live-
- * region precedent to inherit here. The live region is a short status
- * *sentence*, not a wrapper around the fetched payload:
- * `role="status"` carries an implicit `aria-atomic="true"`, so a live
- * region that contained the payload itself would have an assistive
- * technology re-speak the *entire* region on every change — for
- * `freq_modes` on a large molecule, that is dozens of rows of numbers
- * read aloud unprompted the moment a fetch resolves. Announcing "<heading>
- * loaded." and rendering the actual table/list as an ordinary sibling
- * (outside the live region) gives the same "something happened" signal
- * without forcing a full read-out of a payload the user is about to
- * navigate as a table on their own terms.
+ * Styled with the SAME bordered-list recipe as
+ * `TransitionStateEntryPage.tsx`'s per-role geometry disclosures
+ * (`.geometry-role-disclosure`) rather than a full `.ledger-section` of
+ * its own -- review finding 8/10: ten individually-headed, individually-
+ * ToC-registered sections crowded out the two or three that carry data on
+ * most calculations. Every disclosure below is grouped under the ONE
+ * "Further evidence" section that registers a single ToC entry; a plain
+ * `<summary>` here (not `SectionHeading`) is what keeps it from
+ * registering a second one per disclosure. `id` is an explicit, stable
+ * prop -- never derived from the heading text -- so a future heading
+ * rewrite cannot silently move the anchor.
  *
- * The error state also uses `role="status"` (polite), not `role="alert"`
- * (assertive) nested inside it: nesting a live region inside another is
- * discouraged — announcement behaviour is implementation-defined across
- * assistive technologies and double-announcement is a common outcome —
- * and an assertive interrupt is not warranted here anyway, since the user
- * just requested this section and is already attending to it.
+ * The live region is a short status *sentence*, not a wrapper around the
+ * fetched payload: `role="status"` carries an implicit `aria-atomic="true"`,
+ * so a live region that contained the payload itself would have an
+ * assistive technology re-speak the *entire* region on every change.
+ * Announcing "<heading> loaded." and rendering the actual table/list as an
+ * ordinary sibling (outside the live region) gives the same "something
+ * happened" signal without forcing a full read-out of a payload the user
+ * is about to navigate as a table on their own terms.
  *
  * `applicable` (default `true`) is a SEPARATE axis from `available`, and
  * checked first: `available` says "does this record have data for a
  * section its type COULD have"; `applicable` says "can a calculation of
- * this type have this section AT ALL". Both `applicable === false` and
- * `available === false` render NOTHING here — not the section, not its
- * heading, not its own "not present" line. A heading is what registers a
- * table-of-contents entry (`SectionHeading`'s own docstring in
- * `PageSections.tsx`), and a page with ten sections that each have
- * nothing to show is ten headings the reader has to read past to find the
- * two that do (review finding 8). `OnDemandSections` is the one place
- * that knows the full roster of tokens for this calculation, so it is
- * also the one place responsible for saying, once, which of them came up
- * empty — see `MissingSectionsNote` below. This component only ever
- * renders real content.
+ * this type have this section AT ALL". Both render NOTHING here.
  */
 function LazySection<T>({
-    heading, available, state, onOpen, children, applicable = true,
+    id, heading, available, state, onOpen, children, applicable = true,
 }: {
+    id: string
     heading: string
     available: boolean
     state: CalculationSectionState<T>
@@ -933,18 +998,34 @@ function LazySection<T>({
     children: (data: T) => ReactNode
     applicable?: boolean
 }) {
-    const headingId = `section-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
     if (!applicable || !available) return null
     return (
         <details
-            className="ledger-section"
+            className="ledger-section geometry-role-disclosure"
+            id={id}
             onToggle={(event) => {
                 if ((event.target as HTMLDetailsElement).open) onOpen()
             }}
         >
-            <summary><SectionHeading id={headingId}>{heading}</SectionHeading></summary>
+            {/*
+             * The idle-state affordance lives HERE, not in the `role="status"`
+             * paragraph below -- review finding (nit): a closed `<details>`
+             * natively hides every child except `<summary>`, so a "Show" line
+             * in that paragraph was never visible while idle, which is the
+             * ONLY state a reader sees before opening it. `<summary>` is the
+             * one element a closed `<details>` still renders, so a visible
+             * affordance has to sit inside it. The heading text stays its own
+             * span so `getByText(heading)` keeps matching it exactly, rather
+             * than the combined "heading + affordance" text of the whole
+             * `<summary>`.
+             */}
+            <summary>
+                <span>{heading}</span>
+                {state.status === "idle" && (
+                    <span className="lazy-section-affordance" aria-hidden="true">Show</span>
+                )}
+            </summary>
             <p className="section-note" role="status">
-                {state.status === "idle" && "Expand to load this section from the archive."}
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}
@@ -965,8 +1046,8 @@ function KVList({ pairs }: { pairs: [string, ReactNode][] }) {
 // the full roster, so `OnDemandSections` can compute "what's missing"
 // without asking each section component to report on itself. `heading`
 // must match the string each section component below passes to its own
-// `LazySection` exactly, since that string is also the table-of-contents
-// label a rendered section registers.
+// `LazySection` exactly, since that string is also the summary text a
+// reader sees.
 const ON_DEMAND_SECTION_SPECS: {
     heading: string
     applicable: (a: CalculationRecord["available_sections"]) => boolean
@@ -975,17 +1056,26 @@ const ON_DEMAND_SECTION_SPECS: {
     { heading: "Energy corrections", applicable: () => true, available: (a) => a.has_energy_corrections },
     { heading: "Geometry validation", applicable: (a) => a.geometry_validation_applicable, available: (a) => a.has_geometry_validation },
     { heading: "SCF stability", applicable: () => true, available: (a) => a.has_scf_stability },
-    { heading: "Wavefunction diagnostic", applicable: () => true, available: (a) => a.has_wavefunction_diagnostic },
+    // Never listed as "missing": no `wavefunction_diagnostic_applicable`
+    // flag exists server-side (the concept applies only to certain
+    // correlated-wavefunction methods, which this client cannot derive
+    // from `type` alone), so the honest move is to say nothing rather
+    // than call it "missing" on, say, a plain DFT opt (review finding).
+    // The disclosure below still renders normally whenever the archive
+    // DOES have one.
+    { heading: "Wavefunction diagnostic", applicable: () => false, available: (a) => a.has_wavefunction_diagnostic },
     { heading: "Spin diagnostic", applicable: () => true, available: (a) => a.has_spin_diagnostic },
     { heading: "Parsed parameters", applicable: () => true, available: (a) => a.has_parameters },
     { heading: "Constraints", applicable: (a) => a.constraints_applicable, available: (a) => a.has_constraints },
     { heading: "Vibrational modes", applicable: (a) => a.freq_modes_applicable, available: (a) => a.has_freq_modes },
-    // Gated on `has_hessian`, not a dedicated flag -- see the module
-    // docstring. Folded into the same missing-or-not list as every other
-    // on-demand section (review finding 8): the finer "not merely absent,
-    // not determinable" distinction stays live in the evidence panel
-    // above, which this note does not touch.
-    { heading: "Imaginary-mode projections", applicable: () => true, available: (a) => a.has_hessian },
+    // Gated on `freq_modes_applicable`, not a dedicated flag of its own --
+    // an imaginary-mode projection presupposes vibrational modes exist at
+    // all, so it inherits that same applicability rather than the
+    // permissive `() => true` every other always-applicable row above
+    // uses (review finding: this used to claim "missing" even on a
+    // calculation type that cannot have frequency modes in the first
+    // place).
+    { heading: "Imaginary-mode projections", applicable: (a) => a.freq_modes_applicable, available: (a) => a.has_hessian },
     { heading: "Scan trajectory", applicable: (a) => a.scan_applicable, available: (a) => a.has_scan },
     { heading: "IRC trajectory", applicable: (a) => a.irc_applicable, available: (a) => a.has_irc },
     { heading: "Path-search trajectory", applicable: (a) => a.path_search_applicable, available: (a) => a.has_path_search },
@@ -993,59 +1083,68 @@ const ON_DEMAND_SECTION_SPECS: {
     { heading: "Execution environment", applicable: () => true, available: (a) => a.has_execution_environment },
 ]
 
-function OnDemandSections({ calculation, available }: {
+function OnDemandSections({ calculation, available, geometryValidationState, openGeometryValidation }: {
     calculation: CalculationRecord
     available: CalculationRecord["available_sections"]
+    geometryValidationState: CalculationSectionState<CalculationGeometryValidation[] | null>
+    openGeometryValidation: () => void
 }) {
     const ref = calculation.calculation.calculation_ref
     // Applicable to this calculation's TYPE, but nothing recorded -- the
-    // ten-empty-headings defect (review finding 8). Collected once here
-    // instead of each section rendering its own heading over one line of
-    // "not recorded" prose, and read the same way regardless of
-    // calculation type: a section is either applicable-and-missing (named
-    // here) or it is not applicable at all (never named anywhere on the
-    // page below the evidence panel -- the type stated at the top already
-    // explains that).
+    // ten-empty-headings defect. Collected once here instead of each
+    // section rendering its own heading over one line of "not recorded"
+    // prose.
     const missing = ON_DEMAND_SECTION_SPECS
         .filter((spec) => spec.applicable(available) && !spec.available(available))
         .map((spec) => spec.heading)
 
     return (
-        <>
-            <EnergyCorrectionsSection calculationRef={ref} available={available.has_energy_corrections} />
-            <GeometryValidationSection calculationRef={ref} available={available.has_geometry_validation} applicable={available.geometry_validation_applicable} />
-            <SCFStabilitySection calculationRef={ref} available={available.has_scf_stability} />
-            <WavefunctionDiagnosticSection calculationRef={ref} available={available.has_wavefunction_diagnostic} />
-            <SpinDiagnosticSection calculationRef={ref} available={available.has_spin_diagnostic} />
-            <ParametersSection calculationRef={ref} available={available.has_parameters} />
-            <ConstraintsSection calculationRef={ref} available={available.has_constraints} applicable={available.constraints_applicable} />
-            <FreqModesSection calculationRef={ref} available={available.has_freq_modes} applicable={available.freq_modes_applicable} />
-            <ImaginaryModeProjectionsSection calculationRef={ref} hessianAvailable={available.has_hessian} />
-            <ScanSection calculationRef={ref} available={available.has_scan} applicable={available.scan_applicable} />
-            <IRCSection calculationRef={ref} available={available.has_irc} applicable={available.irc_applicable} />
-            <PathSearchSection calculationRef={ref} available={available.has_path_search} applicable={available.path_search_applicable} />
-            <ArtifactsSection calculationRef={ref} available={available.has_artifacts} />
-            <ExecutionEnvironmentSection calculationRef={ref} available={available.has_execution_environment} />
+        <section className="ledger-section" aria-labelledby="further-evidence-heading">
+            <div className="ledger-heading">
+                <p className="eyebrow">Further evidence</p>
+                <SectionHeading id="further-evidence-heading">Further evidence</SectionHeading>
+                <p>Machine-parsed detail and additional checks, loaded from the archive on request.</p>
+            </div>
+            <div className="geometry-groups">
+                <EnergyCorrectionsSection calculationRef={ref} available={available.has_energy_corrections} />
+                <GeometryValidationSection
+                    available={available.has_geometry_validation}
+                    applicable={available.geometry_validation_applicable}
+                    state={geometryValidationState}
+                    onOpen={openGeometryValidation}
+                />
+                <SCFStabilitySection calculationRef={ref} available={available.has_scf_stability} />
+                <WavefunctionDiagnosticSection calculationRef={ref} available={available.has_wavefunction_diagnostic} />
+                <SpinDiagnosticSection calculationRef={ref} available={available.has_spin_diagnostic} />
+                <ParametersSection calculationRef={ref} available={available.has_parameters} />
+                <ConstraintsSection calculationRef={ref} available={available.has_constraints} applicable={available.constraints_applicable} />
+                <FreqModesSection calculationRef={ref} available={available.has_freq_modes} applicable={available.freq_modes_applicable} />
+                <ImaginaryModeProjectionsSection calculationRef={ref} hessianAvailable={available.has_hessian} applicable={available.freq_modes_applicable} />
+                <ScanSection calculationRef={ref} available={available.has_scan} applicable={available.scan_applicable} />
+                <IRCSection calculationRef={ref} available={available.has_irc} applicable={available.irc_applicable} />
+                <PathSearchSection calculationRef={ref} available={available.has_path_search} applicable={available.path_search_applicable} />
+                <ArtifactsSection calculationRef={ref} available={available.has_artifacts} />
+                <ExecutionEnvironmentSection calculationRef={ref} available={available.has_execution_environment} />
+            </div>
+            {/* Folded into this same section as a trailing paragraph, not a
+                separate `<section aria-label>` landmark of its own (review
+                finding: a one-line region announced as its own navigable
+                landmark for assistive tech was overkill for a single
+                sentence). */}
             <MissingSectionsNote headings={missing} />
-        </>
+        </section>
     )
 }
 
 /**
  * The one line every applicable-but-empty on-demand section collapses
- * into, replacing ten separate empty headings (review finding 8). No
- * `SectionHeading` here on purpose -- this note is not itself a section
- * with content to navigate to, so it registers no table-of-contents
- * entry; the evidence panel at the top of the page is where a reader
- * already learned which checks this calculation carries.
+ * into, replacing ten separate empty headings. Renders as a plain
+ * paragraph inside the "Further evidence" section it now always sits in
+ * (see `OnDemandSections`) -- never its own landmark.
  */
 function MissingSectionsNote({ headings }: { headings: string[] }) {
     if (headings.length === 0) return null
-    return (
-        <section className="ledger-section" aria-label="Sections with nothing recorded">
-            <p className="empty-projection">Not recorded on this calculation: {headings.join(", ")}.</p>
-        </section>
-    )
+    return <p className="empty-projection">Not recorded on this calculation: {headings.join(", ")}.</p>
 }
 
 function useSection<T>(calculationRef: string, token: OnDemandSectionToken) {
@@ -1055,12 +1154,7 @@ function useSection<T>(calculationRef: string, token: OnDemandSectionToken) {
 function EnergyCorrectionsSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationEnergyCorrection[] | null>(calculationRef, "energy_corrections")
     return (
-        <LazySection
-            heading="Energy corrections"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-energy-corrections" heading="Energy corrections" available={available} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
                 <table className="stage-table" aria-label="Applied energy corrections">
                     <thead>
@@ -1091,16 +1185,14 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
     )
 }
 
-function GeometryValidationSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
-    const [state, open] = useSection<CalculationGeometryValidation[] | null>(calculationRef, "geometry_validation")
+function GeometryValidationSection({ available, applicable, state, onOpen }: {
+    available: boolean
+    applicable: boolean
+    state: CalculationSectionState<CalculationGeometryValidation[] | null>
+    onOpen: () => void
+}) {
     return (
-        <LazySection
-            heading="Geometry validation"
-            available={available}
-            applicable={applicable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-geometry-validation" heading="Geometry validation" available={available} applicable={applicable} state={state} onOpen={onOpen}>
             {(rows) => {
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no validation row.</p>
@@ -1142,12 +1234,7 @@ function GeometryValidationSection({ calculationRef, available, applicable }: { 
 function SCFStabilitySection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationSCFStability[] | null>(calculationRef, "scf_stability")
     return (
-        <LazySection
-            heading="SCF stability"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-scf-stability" heading="SCF stability" available={available} state={state} onOpen={open}>
             {(rows) => {
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no stability row.</p>
@@ -1181,12 +1268,7 @@ function SCFStabilitySection({ calculationRef, available }: { calculationRef: st
 function WavefunctionDiagnosticSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationWavefunctionDiagnostic[] | null>(calculationRef, "wavefunction_diagnostic")
     return (
-        <LazySection
-            heading="Wavefunction diagnostic"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-wavefunction-diagnostic" heading="Wavefunction diagnostic" available={available} state={state} onOpen={open}>
             {(rows) => {
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no diagnostic row.</p>
@@ -1204,12 +1286,7 @@ function WavefunctionDiagnosticSection({ calculationRef, available }: { calculat
 function SpinDiagnosticSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationSpinDiagnostic[] | null>(calculationRef, "spin_diagnostic")
     return (
-        <LazySection
-            heading="Spin diagnostic"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-spin-diagnostic" heading="Spin diagnostic" available={available} state={state} onOpen={open}>
             {(rows) => {
                 const row = rows?.[0]
                 if (!row) return <p className="empty-projection">The archive returned no diagnostic row.</p>
@@ -1226,12 +1303,7 @@ function SpinDiagnosticSection({ calculationRef, available }: { calculationRef: 
 function ParametersSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationParameter[] | null>(calculationRef, "parameters")
     return (
-        <LazySection
-            heading="Parsed parameters"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-parsed-parameters" heading="Parsed parameters" available={available} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
                 <table className="stage-table" aria-label="Parsed execution parameters">
                     <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col">Section</th></tr></thead>
@@ -1253,13 +1325,7 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
 function ConstraintsSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationConstraint[] | null>(calculationRef, "constraints")
     return (
-        <LazySection
-            heading="Constraints"
-            available={available}
-            applicable={applicable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-constraints" heading="Constraints" available={available} applicable={applicable} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
                 <table className="stage-table" aria-label="Calculation constraints">
                     <thead><tr><th scope="col">Kind</th><th scope="col">Atoms</th><th scope="col">Target value</th></tr></thead>
@@ -1281,13 +1347,7 @@ function ConstraintsSection({ calculationRef, available, applicable }: { calcula
 function FreqModesSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationFreqMode[] | null>(calculationRef, "freq_modes")
     return (
-        <LazySection
-            heading="Vibrational modes"
-            available={available}
-            applicable={applicable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-vibrational-modes" heading="Vibrational modes" available={available} applicable={applicable} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
                 <table className="stage-table" aria-label="Vibrational modes">
                     <thead><tr><th scope="col">Mode</th><th scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
@@ -1306,15 +1366,10 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
     )
 }
 
-function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable }: { calculationRef: string; hessianAvailable: boolean }) {
+function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable, applicable }: { calculationRef: string; hessianAvailable: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationImaginaryModeProjection | null>(calculationRef, "imaginary_mode_projections")
     return (
-        <LazySection
-            heading="Imaginary-mode projections"
-            available={hessianAvailable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-imaginary-mode-projections" heading="Imaginary-mode projections" available={hessianAvailable} applicable={applicable} state={state} onOpen={open}>
             {(projection) => {
                 if (!projection) return <p className="empty-projection">The archive returned no projection.</p>
                 const modes = projection.modes ?? []
@@ -1359,13 +1414,7 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable }: {
 function ScanSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationScan | null>(calculationRef, "scan")
     return (
-        <LazySection
-            heading="Scan trajectory"
-            available={available}
-            applicable={applicable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-scan-trajectory" heading="Scan trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
             {(scan) => (!scan ? <p className="empty-projection">The archive returned no scan summary.</p> : (
                 <KVList pairs={[
                     ["Dimension", scan.dimension],
@@ -1383,13 +1432,7 @@ function ScanSection({ calculationRef, available, applicable }: { calculationRef
 function IRCSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationIRC | null>(calculationRef, "irc")
     return (
-        <LazySection
-            heading="IRC trajectory"
-            available={available}
-            applicable={applicable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-irc-trajectory" heading="IRC trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
             {(irc) => (!irc ? <p className="empty-projection">The archive returned no IRC summary.</p> : (
                 <KVList pairs={[
                     ["Direction", statusLabel(irc.direction)],
@@ -1407,13 +1450,7 @@ function IRCSection({ calculationRef, available, applicable }: { calculationRef:
 function PathSearchSection({ calculationRef, available, applicable }: { calculationRef: string; available: boolean; applicable: boolean }) {
     const [state, open] = useSection<CalculationPathSearch | null>(calculationRef, "path_search")
     return (
-        <LazySection
-            heading="Path-search trajectory"
-            available={available}
-            applicable={applicable}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-path-search-trajectory" heading="Path-search trajectory" available={available} applicable={applicable} state={state} onOpen={open}>
             {(pathSearch) => (!pathSearch ? <p className="empty-projection">The archive returned no path-search summary.</p> : (
                 <KVList pairs={[
                     ["Method", statusLabel(pathSearch.method)],
@@ -1430,12 +1467,7 @@ function PathSearchSection({ calculationRef, available, applicable }: { calculat
 function ArtifactsSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationArtifact[] | null>(calculationRef, "artifacts")
     return (
-        <LazySection
-            heading="Artifacts"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-artifacts" heading="Artifacts" available={available} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
                 <table className="stage-table" aria-label="Calculation artifacts">
                     <thead>
@@ -1470,12 +1502,7 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
 function ExecutionEnvironmentSection({ calculationRef, available }: { calculationRef: string; available: boolean }) {
     const [state, open] = useSection<CalculationExecutionEnvironment | null>(calculationRef, "execution_environment")
     return (
-        <LazySection
-            heading="Execution environment"
-            available={available}
-            state={state}
-            onOpen={open}
-        >
+        <LazySection id="section-execution-environment" heading="Execution environment" available={available} state={state} onOpen={open}>
             {(env) => (!env ? <p className="empty-projection">The archive returned no manifest.</p> : (
                 <KVList pairs={[
                     ["Environment ref", env.environment_ref],

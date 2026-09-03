@@ -137,6 +137,7 @@ export type CalculationOwnerWire = {
         species_ref: string
         species_entry_ref: string
         species_entry_label?: string | null
+        formula?: string | null
         canonical_smiles: string
         inchi_key: string
         charge: number
@@ -157,10 +158,10 @@ export function identityFromCalculationOwner(owner: CalculationOwnerWire | null 
         const entry = owner.species_entry
         return {
             kind: "species_entry",
-            // Not served on this endpoint's owner summary -- see
-            // `SpeciesEntryOwnerSummary`, which has no `formula` field.
-            // Left `null` rather than guessed from `canonical_smiles`.
-            formula: null,
+            // `SpeciesEntryOwnerSummary.formula` -- RDKit-derived Hill
+            // notation, same field the geometry identity surface already
+            // serves. `null` only when the stored SMILES failed to parse.
+            formula: entry.formula ?? null,
             canonicalSmiles: entry.canonical_smiles,
             inchiKey: entry.inchi_key,
             charge: entry.charge,

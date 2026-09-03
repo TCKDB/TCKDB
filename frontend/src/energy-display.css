@@ -53,7 +53,8 @@
 
 .energy-toggle legend {
     padding: 0 .5rem 0 0;
-    font: .64rem var(--mono);
+    /* Accessibility-pass floor (11px / .6875rem) -- was .64rem (10.24px). */
+    font: .6875rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .05em;
     color: var(--muted);

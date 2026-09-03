@@ -3839,6 +3839,36 @@
         "title": "CalculationArtifactSummary",
         "type": "object"
       },
+      "CalculationConformerSummary": {
+        "description": "Which conformer this calculation observed, when one is recorded.\n\nPopulated only when ``Calculation.conformer_observation_id`` is set —\nthe service never fabricates a conformer association from the\ncalculation's owner or level of theory. Always ``None`` for a\ntransition-state-owned calculation (a TS has no conformer basin to\nanchor to) and for a species-owned calculation that was never linked\nto a specific observation. Same shape (``conformer_observation_ref`` /\n``conformer_group_ref`` / ``conformer_group_label``) as\n``ConformerContextBlock`` on\n``/scientific/species-calculations/search``, so a client already\nreading that endpoint recognises this block on sight.",
+        "properties": {
+          "conformer_group_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conformer Group Label"
+          },
+          "conformer_group_ref": {
+            "title": "Conformer Group Ref",
+            "type": "string"
+          },
+          "conformer_observation_ref": {
+            "title": "Conformer Observation Ref",
+            "type": "string"
+          }
+        },
+        "required": [
+          "conformer_observation_ref",
+          "conformer_group_ref"
+        ],
+        "title": "CalculationConformerSummary",
+        "type": "object"
+      },
       "CalculationConstraintCreate": {
         "additionalProperties": false,
         "properties": {
@@ -32465,6 +32495,16 @@
           "calculation": {
             "$ref": "#/components/schemas/app__schemas__reads__scientific_calculation__CalculationCoreBlock"
           },
+          "conformer": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CalculationConformerSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "constraints": {
             "anyOf": [
               {
@@ -36922,7 +36962,7 @@
         "type": "object"
       },
       "SpeciesEntryOwnerSummary": {
-        "description": "Compact species/species-entry owner shape for a calculation.\n\nMirrors ``SpeciesCalculationsSpeciesContext`` but only carries the\nfields the calculation-detail endpoint reliably has on hand without\nadditional heavy joins. ``species_id`` / ``species_entry_id`` are\nstripped by the Phase D internal-ids policy when not allowed.\n\n``species_entry_label`` says *which* entry of that species owns\nthe calculation. ``canonical_smiles`` is the species' and is\nshared by every entry under it, so without the label two\ncalculations on two stereoisomers report the same owner.\n``None`` for the plain ground-state, stereo-unlabelled entry.",
+        "description": "Compact species/species-entry owner shape for a calculation.\n\nMirrors ``SpeciesCalculationsSpeciesContext`` but only carries the\nfields the calculation-detail endpoint reliably has on hand without\nadditional heavy joins. ``species_id`` / ``species_entry_id`` are\nstripped by the Phase D internal-ids policy when not allowed.\n\n``species_entry_label`` says *which* entry of that species owns\nthe calculation. ``canonical_smiles`` is the species' and is\nshared by every entry under it, so without the label two\ncalculations on two stereoisomers report the same owner.\n``None`` for the plain ground-state, stereo-unlabelled entry.\n\n``formula`` is derived server-side (RDKit cartridge, Hill notation)\nfrom ``canonical_smiles`` — ``species`` has no stored formula column,\nsame derivation as ``GeometrySpeciesIdentity.formula`` — and is\n``None`` only when the stored SMILES fails to parse.",
         "properties": {
           "canonical_smiles": {
             "title": "Canonical Smiles",
@@ -36934,6 +36974,17 @@
           },
           "electronic_state_kind": {
             "$ref": "#/components/schemas/SpeciesEntryStateKind"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
           },
           "inchi_key": {
             "title": "Inchi Key",

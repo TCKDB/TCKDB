@@ -10,7 +10,7 @@ that do nothing. See ``backend/docs/specs/scientific_calculation_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import exists, false, func, select
+from sqlalchemy import Text, exists, false, func, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import NotFoundError, not_found
@@ -58,7 +58,7 @@ from app.db.models.literature import Literature
 from app.db.models.reaction import ReactionEntry
 from app.db.models.record_review import RecordReview
 from app.db.models.software import Software, SoftwareRelease
-from app.db.models.species import Species, SpeciesEntry
+from app.db.models.species import ConformerGroup, ConformerObservation, Species, SpeciesEntry
 from app.db.models.submission import Submission, SubmissionRecordLink
 from app.db.models.transition_state import TransitionState, TransitionStateEntry
 from app.db.models.workflow import WorkflowTool, WorkflowToolRelease
@@ -67,6 +67,7 @@ from app.schemas.reads.scientific_calculation import (
     AppliedEnergyCorrectionSummary,
     AvailableCalculationSections,
     CalculationArtifactSummary,
+    CalculationConformerSummary,
     CalculationConstraintSummary,
     CalculationCoreBlock,
     CalculationDependencySummary,
@@ -315,6 +316,7 @@ def build_record(
     includes: set[str],
     *,
     badge: RecordReviewBadge | None = None,
+    conformer_map: dict[int, CalculationConformerSummary] | None = None,
 ) -> ScientificCalculationRecord:
     """Construct a public ``ScientificCalculationRecord`` for *calc*.
 
@@ -326,11 +328,27 @@ def build_record(
     post-Phase-D internal-ids policy) — this builder does not validate
     it. *badge* may be supplied by callers that already loaded badges
     in bulk; otherwise this builder fetches the calc's badge itself.
+
+    *conformer_map* may be supplied by callers that already bulk-loaded
+    conformer summaries for a page (keyed by ``conformer_observation_id``,
+    via :func:`load_conformer_summaries`) — otherwise this builder fetches
+    the calc's own conformer summary itself. ``None`` is a legitimate
+    per-record value (a transition-state-owned calculation has no basin
+    at all), so unlike *badge* this can't default-trigger on ``None``;
+    the map's mere presence (even empty) is what signals "already loaded".
     """
     if badge is None:
         badge = _load_review_badge(session, calc.id)
 
     owner = _build_owner(session, calc)
+    if conformer_map is not None:
+        conformer_summary = (
+            conformer_map.get(calc.conformer_observation_id)
+            if calc.conformer_observation_id is not None
+            else None
+        )
+    else:
+        conformer_summary = _build_conformer_summary(session, calc)
     lot_summary = _build_lot_summary(session, calc.lot_id)
     software_summary = _build_software_summary(session, calc.software_release_id)
     workflow_summary = _build_workflow_summary(
@@ -447,6 +465,7 @@ def build_record(
             review=badge,
         ),
         owner=owner,
+        conformer=conformer_summary,
         level_of_theory=lot_summary,
         software_release=software_summary,
         workflow_tool_release=workflow_summary,
@@ -539,6 +558,22 @@ def _build_owner(
     )
 
 
+def _owner_formula_expr(smiles_column):
+    """Hill-notation formula for *smiles_column*, via the RDKit cartridge.
+
+    Same expression as ``app.services.scientific_read.species._formula_expr``
+    / ``app.services.scientific_read.geometry._formula_expr`` (see either
+    docstring for the full rationale), redefined locally rather than
+    imported across a private (leading-underscore) module boundary — the
+    same "one expression, redefined at each call site" precedent
+    ``geometry.py`` already established for this exact string. ``species``
+    has no stored formula column; ``mol_from_smiles()`` returns SQL NULL
+    for an unparseable SMILES, so an unparseable owner yields a NULL
+    formula rather than raising.
+    """
+    return func.mol_formula(func.mol_from_smiles(smiles_column)).cast(Text)
+
+
 def _build_species_owner(
     session: Session, species_entry_id: int
 ) -> SpeciesEntryOwnerSummary:
@@ -558,6 +593,7 @@ def _build_species_owner(
             SpeciesEntry.electronic_state_label,
             SpeciesEntry.term_symbol,
             SpeciesEntry.isotope_key,
+            _owner_formula_expr(Species.smiles).label("formula"),
         )
         .join(Species, Species.id == SpeciesEntry.species_id)
         .where(SpeciesEntry.id == species_entry_id)
@@ -574,6 +610,7 @@ def _build_species_owner(
             term_symbol=row.term_symbol,
             isotope_key=row.isotope_key,
         ),
+        formula=row.formula,
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,
@@ -622,6 +659,82 @@ def _build_ts_owner(
         reaction_entry_id=row.reaction_entry_id,
         reaction_entry_ref=row.reaction_entry_ref,
     )
+
+
+def _build_conformer_summary(
+    session: Session, calc: Calculation
+) -> CalculationConformerSummary | None:
+    """Build the conformer block for *calc*, or ``None`` when unlinked.
+
+    Never fabricated: only reads ``Calculation.conformer_observation_id``,
+    the one load-bearing anchor (see the calculation-DAG design note) —
+    no inference from ``species_entry_id``, ``lot_id``, or dependency
+    edges. A transition-state-owned calculation has no conformer basin at
+    all, so ``conformer_observation_id`` is always unset there and this
+    returns ``None`` without a query.
+    """
+    if calc.conformer_observation_id is None:
+        return None
+    row = session.execute(
+        select(
+            ConformerObservation.public_ref.label("observation_ref"),
+            ConformerGroup.public_ref.label("group_ref"),
+            ConformerGroup.label.label("group_label"),
+        )
+        .join(
+            ConformerGroup,
+            ConformerGroup.id == ConformerObservation.conformer_group_id,
+        )
+        .where(ConformerObservation.id == calc.conformer_observation_id)
+    ).one_or_none()
+    if row is None:  # pragma: no cover — FK guarantees the row exists
+        return None
+    return CalculationConformerSummary(
+        conformer_observation_ref=row.observation_ref,
+        conformer_group_ref=row.group_ref,
+        conformer_group_label=row.group_label,
+    )
+
+
+def load_conformer_summaries(
+    session: Session, observation_ids: list[int]
+) -> dict[int, CalculationConformerSummary]:
+    """Bulk-build conformer summaries for a page, keyed by observation id.
+
+    A search page used to call :func:`_build_conformer_summary` once per
+    record inside :func:`build_record`, which is one
+    ``conformer_observation JOIN conformer_group`` round trip per
+    conformer-linked calculation — a per-record fan-out that moved the
+    page's statement slope from 3 to 4 (measured on
+    ``test_record_builder_statement_cost.py``). Bulk-loading with one
+    ``IN`` here, the same shape as the badge bulk-load beside it in
+    ``calculations_search.py``, keeps the slope flat regardless of how
+    many of the page's records are conformer-linked.
+    """
+    ids = {oid for oid in observation_ids if oid is not None}
+    if not ids:
+        return {}
+    rows = session.execute(
+        select(
+            ConformerObservation.id.label("observation_id"),
+            ConformerObservation.public_ref.label("observation_ref"),
+            ConformerGroup.public_ref.label("group_ref"),
+            ConformerGroup.label.label("group_label"),
+        )
+        .join(
+            ConformerGroup,
+            ConformerGroup.id == ConformerObservation.conformer_group_id,
+        )
+        .where(ConformerObservation.id.in_(ids))
+    ).all()
+    return {
+        row.observation_id: CalculationConformerSummary(
+            conformer_observation_ref=row.observation_ref,
+            conformer_group_ref=row.group_ref,
+            conformer_group_label=row.group_label,
+        )
+        for row in rows
+    }
 
 
 # ---------------------------------------------------------------------------
