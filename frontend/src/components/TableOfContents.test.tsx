@@ -172,7 +172,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 900)
         stubTop("section-3", 1300)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 1" })).not.toHaveAttribute("aria-current")
 
         // Scroll section 1's heading up past the active-offset threshold;
@@ -183,7 +183,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-3", 1200)
         fireEvent.scroll(window)
 
-        expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 1" })).toHaveClass("page-toc-active")
         expect(screen.getByRole("link", { name: "Section 0" })).not.toHaveAttribute("aria-current")
         expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
@@ -197,7 +197,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 20)
         stubTop("section-3", 900)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 1" })).not.toHaveAttribute("aria-current")
     })
 
@@ -212,7 +212,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-3", 750)
         stubAtBottom(1550)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 3" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 3" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 0" })).not.toHaveAttribute("aria-current")
     })
 
@@ -225,19 +225,19 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 1200)
         stubTop("section-3", 1500)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "location")
 
         // Clicking "Section 2" (not the last, and not yet reachable by the
         // offset computation above) must mark it active immediately.
         fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 0" })).not.toHaveAttribute("aria-current")
         expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
     })
 
     it("resolves a #fragment to the right section even with a query string present", () => {
         render(<Harness count={4} initialEntries={["/species-entries/spe_demo/statmech?conformer=cg_1#section-2"]} />)
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
     })
 
     it("a click lands on that section immediately, survives the WHOLE burst of scroll events the anchor-jump fires, and only resumes normal scroll-spying once that burst has settled", () => {
@@ -255,17 +255,17 @@ describe("TableOfContents: active-section marking", () => {
             stubTop("section-2", 1200)
             stubTop("section-3", 1500)
             fireEvent.scroll(window)
-            expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "location")
 
             // Click "Section 2" -- not yet reachable by the offset computation.
             fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
 
             // The incidental scroll event the browser's own anchor-jump fires
             // right after the click, with the geometry unchanged -- this must
             // NOT immediately recompute and revert to Section 0.
             fireEvent.scroll(window)
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
 
             // Let the settle window elapse with no further scroll event --
             // suppression lifts, but WITHOUT recomputing (see
@@ -274,7 +274,7 @@ describe("TableOfContents: active-section marking", () => {
             act(() => {
                 vi.advanceTimersByTime(SCROLL_SETTLE_MS)
             })
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
 
             // A REAL further scroll, under the reader's own control, must
             // resume normal scroll-spying rather than staying pinned forever.
@@ -283,7 +283,7 @@ describe("TableOfContents: active-section marking", () => {
             stubTop("section-2", 800)
             stubTop("section-3", 1100)
             fireEvent.scroll(window)
-            expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 1" })).toHaveAttribute("aria-current", "location")
             expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
         } finally {
             vi.useRealTimers()
@@ -302,7 +302,7 @@ describe("TableOfContents: active-section marking", () => {
         // test above, a genuinely non-scrollable document.
         stubAtBottom(700)
         fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
 
         // The first scroll event after the click is the incidental one
         // the anchor-jump itself fires -- suppressed regardless of the
@@ -312,7 +312,7 @@ describe("TableOfContents: active-section marking", () => {
         // behaviour rather than only the one-event suppression.
         fireEvent.scroll(window)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 0" })).not.toHaveAttribute("aria-current")
         expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
     })
@@ -337,7 +337,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 1450 - 900)
         stubTop("section-3", 1600 - 900)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
 
         // Scrolling further within that same final screenful (scrollY
@@ -350,7 +350,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 1450 - 1050)
         stubTop("section-3", 1600 - 1050)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 3" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 3" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
     })
 
@@ -387,7 +387,7 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 900)
         stubTop("section-3", 1300)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "location")
         expect(screen.getByRole("link", { name: "Section 1" })).not.toHaveAttribute("aria-current")
         expect(screen.getByRole("link", { name: "Section 2" })).not.toHaveAttribute("aria-current")
         expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
@@ -410,7 +410,7 @@ describe("TableOfContents: active-section marking", () => {
             docPositions.forEach((pos, i) => stubTop(`section-${i}`, pos - scrollY))
             fireEvent.scroll(window)
             const activeIndex = docPositions.findIndex(
-                (_, i) => screen.getByRole("link", { name: `Section ${i}` }).getAttribute("aria-current") === "true",
+                (_, i) => screen.getByRole("link", { name: `Section ${i}` }).getAttribute("aria-current") === "location",
             )
             activeIndices.push(activeIndex)
         }
@@ -441,13 +441,13 @@ describe("TableOfContents: active-section marking", () => {
         stubTop("section-2", 1800)
         stubTop("section-3", 2700)
         fireEvent.scroll(window)
-        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "location")
 
         // Click "Section 2", roughly two-thirds down a page that is
         // genuinely scrollable -- unlike the non-scrollable-page test
         // above, `computeActive` is fully exercised by every event below.
         fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
-        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+        expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
 
         // The animated scrollIntoView a real browser performs does not
         // jump straight to its resting position -- it fires a scroll
@@ -467,7 +467,7 @@ describe("TableOfContents: active-section marking", () => {
             stubTop("section-2", 1800 - scrollY)
             stubTop("section-3", 2700 - scrollY)
             fireEvent.scroll(window)
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
         }
     })
 
@@ -494,10 +494,10 @@ describe("TableOfContents: active-section marking", () => {
             stubTop("section-2", 2600)
             stubTop("section-3", 2900)
             fireEvent.scroll(window)
-            expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 0" })).toHaveAttribute("aria-current", "location")
 
             fireEvent.click(screen.getByRole("link", { name: "Section 2" }))
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
 
             // Two events landing at the scroll's resting position -- the
             // shape a real anchor-jump's last events take as it arrives.
@@ -508,7 +508,7 @@ describe("TableOfContents: active-section marking", () => {
             stubTop("section-3", 300)
             fireEvent.scroll(window)
             fireEvent.scroll(window)
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
             expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
 
             // Let the scroll settle fully -- the clicked section must
@@ -517,7 +517,7 @@ describe("TableOfContents: active-section marking", () => {
             act(() => {
                 vi.advanceTimersByTime(SCROLL_SETTLE_MS)
             })
-            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "true")
+            expect(screen.getByRole("link", { name: "Section 2" })).toHaveAttribute("aria-current", "location")
             expect(screen.getByRole("link", { name: "Section 3" })).not.toHaveAttribute("aria-current")
         } finally {
             vi.useRealTimers()

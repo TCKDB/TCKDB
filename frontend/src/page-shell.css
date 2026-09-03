@@ -131,12 +131,20 @@
     }
 
     .page-toc {
-        /* `order: 1` (set above, unchanged here) still applies in a column
-           layout: the ToC strip stacks BELOW the content, not above it --
-           matching the wide-viewport "content, then ToC" order rather than
-           the pre-fix behaviour of a nav strip pushing content down before
-           a reader sees any of it. */
+        /* Review finding: `order: 1` (set above, for the wide two-column
+           layout) left the chip strip AFTER the last section in this
+           column layout too, off the bottom of a long page with its
+           overflow clipped by the viewport -- a reader had to scroll PAST
+           the whole page to find navigation meant to jump them around it.
+           `order: -1` puts it first in the column instead, ahead of the
+           content, matching where a sighted reader actually needs it at
+           this width. This is a DELIBERATE departure from the wide-layout
+           "content, then ToC" DOM-order rationale above -- that reasoning
+           was about visual placement beside a sighted user's already-
+           visible content; here, in a stacked column, "after the content"
+           means "off-screen below it" instead. */
         position: static;
+        order: -1;
         width: 100%;
         max-height: none;
         overflow-y: visible;
@@ -181,9 +189,16 @@
         letter-spacing: .08em;
     }
 
+    /* Was `display: grid; grid-auto-flow: column`, which never wraps --
+       past a handful of chips the row ran off the right edge with its
+       overflow clipped (review finding, same root cause as the ordering
+       fix above: nothing below this width was letting the strip grow
+       taller instead of wider). `flex-wrap` lets a page with many
+       sections wrap onto a second row instead of hiding its later
+       entries. */
     .page-toc ul {
-        grid-auto-flow: column;
-        grid-auto-columns: max-content;
+        display: flex;
+        flex-wrap: wrap;
         gap: .6rem;
     }
 

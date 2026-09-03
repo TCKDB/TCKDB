@@ -240,7 +240,7 @@ export function TableOfContents() {
                             return (
                                 <li key={section.id}>
                                     <a
-                                        aria-current={isActive ? "true" : undefined}
+                                        aria-current={isActive ? "location" : undefined}
                                         className={isActive ? "page-toc-active" : undefined}
                                         href={`#${section.id}`}
                                         onClick={() => {
