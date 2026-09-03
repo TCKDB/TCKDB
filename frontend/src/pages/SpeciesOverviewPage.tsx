@@ -81,10 +81,6 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     SMILES fallback is not chemistry-formula text, so it is
                     never run through `Formula`. */}
                 <h1>{species.formula ? <Formula value={species.formula} /> : species.canonical_smiles}</h1>
-                <p className="species-intro">
-                    This identity may have more than one electronic-state entry. Select the entry you mean before
-                    reading its conformer or calculation evidence.
-                </p>
                 <dl className="species-identity-grid">
                     <Identity label="Species ref" value={species.species_ref} />
                     <Identity label="SMILES" value={species.canonical_smiles} />
@@ -96,23 +92,41 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                 </dl>
             </header>
             <section className="entry-index" aria-labelledby="electronic-state-entries">
+                {/* Was two headings saying the same thing, stacked (an
+                    "eyebrow" reading "State-specific records" directly
+                    above an <h2> reading "Electronic-state entries") --
+                    the owner quoted this exact nesting as noise. One
+                    heading carries it; the eyebrow pattern elsewhere on
+                    this page pairs a CATEGORY with a more specific
+                    heading ("Species record · chemical identity" above
+                    "CH3"), which this pairing never was.
+
+                    The section used to ALSO show its own entry count here
+                    ("N entries") right beside a per-state-group count just
+                    below ("N entry"/"N entries" on each `<h3>`) -- for a
+                    species with one group the two counts read the same
+                    number twice for the same fact. The per-group count is
+                    the more useful of the two (it says how many records
+                    share a given state, which the section-level total
+                    cannot), so it is the one that survives; this heading
+                    no longer repeats it. */}
                 <div className="entry-index-heading">
-                    {/* Was two headings saying the same thing, stacked (an
-                        "eyebrow" reading "State-specific records" directly
-                        above an <h2> reading "Electronic-state entries") --
-                        the owner quoted this exact nesting as noise. One
-                        heading carries it; the eyebrow pattern elsewhere on
-                        this page pairs a CATEGORY with a more specific
-                        heading ("Species record · chemical identity" above
-                        "CH3"), which this pairing never was. */}
-                    <div>
-                        <h2 id="electronic-state-entries">Electronic-state entries</h2>
-                    </div>
-                    <p>{species.entries.length} {species.entries.length === 1 ? "entry" : "entries"}</p>
+                    <h2 id="electronic-state-entries">Electronic-state entries</h2>
                 </div>
+                {/* Single explanatory sentence for the whole section. This
+                    used to be THREE: this paragraph, an near-identical
+                    "select the entry you mean" sentence in the page header,
+                    and a per-state-group "Each row is a separate record..."
+                    sentence repeated inside every `EntryStateGroup`'s
+                    `<details>`. The owner flagged three paragraphs
+                    explaining one row as noise; this is the one that stays,
+                    because it is the only one that explains the grouping
+                    itself (why records with the same state classification
+                    are not merged) rather than restating "read the row". */}
                 <p className="entry-index-intro">
-                    Entries are separate deposited records. They are grouped by electronic state so that repeated
-                    ground-state records stay distinct without reading as interchangeable duplicates.
+                    Entries are separate deposited records, grouped by electronic state so that repeated
+                    ground-state records stay distinct without reading as interchangeable duplicates. Each row links
+                    to its own state-specific record.
                 </p>
                 {species.entries.length ? (
                     <ul className="entry-state-groups">
@@ -150,10 +164,6 @@ function EntryStateGroup({
                 <summary aria-describedby={groupId}>
                     Deposited records
                 </summary>
-                <p>
-                    Each row is a separate record. Review status, available data, and its stable entry reference
-                    help distinguish records with the same state classification.
-                </p>
                 <ul className="entry-rows">
                     {entries.map((entry) => (
                         <EntryCard entry={entry} groupHeadingId={groupId} key={entry.species_entry_ref} />
@@ -222,9 +232,14 @@ function EntryCard({ entry, groupHeadingId }: { entry: ScientificSpeciesEntrySum
                         <dd>{available.length ? available.join(" · ") : "None projected"}</dd>
                     </div>
                 </dl>
-                <Link className="entry-card-action" to={`/species-entries/${entry.species_entry_ref}`}>
-                    Open state-specific record <span aria-hidden="true">→</span>
-                </Link>
+                {/* Used to also render a second, "Open state-specific record
+                    →" link to this same destination, right below the
+                    heading link above -- the owner flagged the row as
+                    linking twice to the same page. The heading link is the
+                    one that survives: it already carries the row's
+                    accessible name, so a second link added no reachable
+                    destination, only a second stop for anyone tabbing
+                    through the row. */}
                 <code>{entry.species_entry_ref}</code>
             </article>
         </li>

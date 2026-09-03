@@ -36,3 +36,33 @@ describe("ArchiveHomePage: no structure/SMILES search on the front page", () => 
         expect(screen.getByRole("link", { name: /Browse species/ })).toHaveAttribute("href", "/species")
     })
 })
+
+// Reactions and Methods used to end in the same "Open index →" text as
+// Browse species, then land on a page reading "This public record view is
+// being prepared..." -- presented as equals of a working index when
+// neither is one. The action text must now say so, in words, before a
+// reader ever clicks through.
+describe("ArchiveHomePage: unbuilt destinations are labelled, not presented as equals of Browse species", () => {
+    it("marks Reactions and Methods as coming soon, with a visible label, not colour alone", () => {
+        page()
+        const reactions = screen.getByRole("link", { name: /Browse reactions/ })
+        const methods = screen.getByRole("link", { name: /Methods/ })
+        expect(reactions).toHaveTextContent("Coming soon")
+        expect(methods).toHaveTextContent("Coming soon")
+        expect(reactions).toHaveAttribute("href", "/reactions")
+        expect(methods).toHaveAttribute("href", "/methods")
+    })
+
+    it("keeps Browse species as the one working index, still saying 'Open index'", () => {
+        page()
+        const species = screen.getByRole("link", { name: /Browse species/ })
+        expect(species).toHaveTextContent("Open index")
+        expect(species).not.toHaveTextContent("Coming soon")
+    })
+
+    it("does not remove the Reactions and Methods destinations -- they stay real links, not dead ends", () => {
+        page()
+        expect(screen.getByRole("link", { name: /Browse reactions/ })).toBeInTheDocument()
+        expect(screen.getByRole("link", { name: /Methods/ })).toBeInTheDocument()
+    })
+})

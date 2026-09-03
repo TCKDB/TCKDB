@@ -160,7 +160,7 @@ describe("ConformerObservationPage", () => {
         expect(within(siblingMetric as HTMLElement).getByText("1")).toBeVisible()
     })
 
-    it("pairs each level of theory to its own stage, not a flattened method", async () => {
+    it("states each stage's level of theory once, in the calculation table, not in a separate by-stage block", async () => {
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
             HttpResponse.json({ record: mockRecord() })
         )))
@@ -168,22 +168,20 @@ describe("ConformerObservationPage", () => {
         page()
         await screen.findByRole("heading", { name: "Computed observation" })
 
-        // Scoped to the by-stage section (not the calculation table, which
-        // repeats the same levels per-row) so this can only pass if "opt"
-        // and "freq" are each paired with their own <dd>, not merged.
-        const stageSection = screen.getByRole("heading", { name: "Levels of theory by stage" }).closest("section")
-        expect(stageSection).not.toBeNull()
-        const withinStages = within(stageSection as HTMLElement)
-        const optRow = withinStages.getByText("opt").closest("div")
-        const freqRow = withinStages.getByText("freq").closest("div")
+        // The standalone "Levels of theory by stage" section is gone -- it
+        // duplicated the Stage/Level-of-theory columns of the calculation
+        // table immediately below it.
+        expect(screen.queryByRole("heading", { name: "Levels of theory by stage" })).not.toBeInTheDocument()
+
+        // The calculation table is still the one place carrying this: each
+        // row pairs its own stage with its own level of theory.
+        const calcTable = screen.getByRole("table", { name: "Calculations for co_one" })
+        const optRow = within(calcTable).getByText("opt").closest("tr")
+        const freqRow = within(calcTable).getByText("freq").closest("tr")
         expect(optRow).not.toBeNull()
         expect(freqRow).not.toBeNull()
         expect(within(optRow as HTMLElement).getByText("b3lyp/def2tzvp")).toBeVisible()
         expect(within(freqRow as HTMLElement).getByText("wb97xd/def2tzvp")).toBeVisible()
-        // And the pairing is not merely coincidental adjacency: freq's row
-        // must not also contain the opt-stage level.
-        expect(within(freqRow as HTMLElement).queryByText("b3lyp/def2tzvp")).not.toBeInTheDocument()
-        expect(within(optRow as HTMLElement).queryByText("wb97xd/def2tzvp")).not.toBeInTheDocument()
     })
 
     it("links breadcrumbs and provenance rows, and surfaces stable public refs", async () => {
@@ -244,6 +242,47 @@ describe("ConformerObservationPage", () => {
         expect(screen.getByRole("link", { name: "cg_demo" })).toHaveAttribute("href", "/conformer-groups/cg_demo")
         expect(screen.getAllByText("cg_demo")).toHaveLength(1)
         expect(screen.queryByText("Group ref")).not.toBeInTheDocument()
+    })
+
+    it("collapses review history to one line when its only entry carries no real event", async () => {
+        // A `review_history` row whose `reviewed_at` and `note` are both
+        // null mirrors the observation's current status without recording
+        // an actual status-change event -- the owner's report: a one-row
+        // table reading "not reviewed / not recorded / not recorded" that
+        // said nothing the hero badge hadn't already said.
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    conformer_observation: {
+                        conformer_observation_ref: "co_one",
+                        scientific_origin: "computed",
+                        note: "Coarse pre-optimisation basin",
+                        created_at: "2026-07-21T12:06:50.748258",
+                        review: { status: "not_reviewed" },
+                    },
+                    review_history: [{ status: "not_reviewed", reviewed_at: null, note: null }],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
+        expect(screen.queryByRole("table", { name: /Review history for/ })).not.toBeInTheDocument()
+        expect(screen.getByText("No review events are recorded for this observation.")).toBeVisible()
+        // The intro sentence no longer restates the raw status value --
+        // that already lives once, in the hero badge.
+        expect(screen.queryByText(/The current status is/)).not.toBeInTheDocument()
+    })
+
+    it("still renders the review-history table when a real event is recorded", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+        expect(screen.getByRole("table", { name: "Review history for co_one" })).toBeVisible()
+        expect(screen.getByText("Looks consistent")).toBeVisible()
     })
 
     it("reports a check as 'recorded', never as a pass/fail verdict", async () => {

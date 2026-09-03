@@ -39,12 +39,37 @@ function Ledger({ group }: { group: ConformerGroup }) {
 
     return (
         <section className="conformer-page">
+            {/* Every other record page in this app carries this breadcrumb --
+                this was the only one missing it. Species/species-entry links
+                come from this endpoint's own `species` context, same source
+                the "Species entry" row in the identity block below already
+                reads from. */}
+            <nav className="record-breadcrumbs" aria-label="Breadcrumb">
+                <Link to="/">TCKDB</Link>
+                <span aria-hidden="true">/</span>
+                <Link to={`/species/${species.species_ref}`}>Species</Link>
+                <span aria-hidden="true">/</span>
+                <Link to={`/species-entries/${species.species_entry_ref}`}>Species entry</Link>
+                <span aria-hidden="true">/</span>
+                <span aria-current="page">Conformer basin</span>
+            </nav>
             <PageShell
                 identity={(
                     <header className="basin-header">
                         <p className="eyebrow">Conformer basin · evidence ledger</p>
+                        {/* Was titled by `basin.label` -- e.g. "conformer_1" --
+                            at this header's 120px h1 size. That label is an
+                            ARC-assigned producer string (the value this
+                            component's own comment elsewhere calls out as "not
+                            TCKDB semantics"), not a description of what this
+                            record IS. The h1 now states what the record is;
+                            the producer's own label, when one was deposited,
+                            moves into the identity list below as a plain
+                            secondary fact next to the stable ref -- same
+                            treatment `species_entry_label` gets everywhere
+                            else in this app. */}
                         <div className="basin-title">
-                            <h1>{basin.label ?? basin.conformer_group_ref}</h1>
+                            <h1>Conformer basin</h1>
                             <span className="review-badge">{statusLabel(basin.review.status)}</span>
                         </div>
                         <p className="basin-intro">
@@ -52,13 +77,9 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             are evidence attached to those observations; they are not separate conformers.
                         </p>
                         <dl className="basin-context">
-                            {/* Separate ref row only when the heading above shows the
-                                label, not the ref itself -- see
-                                `CalculationDetailPage.tsx`'s `OwnerCard` for the
-                                measured defect (a null label duplicating the ref)
-                                this same shape was fixed for. */}
+                            <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
                             {basin.label && (
-                                <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
+                                <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
                             )}
                             <div>
                                 <dt>Species entry</dt>
@@ -76,7 +97,20 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             neither `species_entry_kind` nor `electronic_state_kind`
                             to build one from (unlike the species entry surface),
                             and no `submission_ref` provenance tier either -- both
-                            omitted rather than fabricated. */}
+                            omitted rather than fabricated.
+
+                            No rigid/basin rotor statement follows either, even
+                            though the species-entry conformer picker
+                            (`ConformerSelector.tsx`'s `ConformerCard`) shows one
+                            for this same basin. That card's statement is built
+                            from `conformer_group.fingerprint`, fetched only via
+                            `conformers/search?include=fingerprints` -- a
+                            different endpoint than this page's own
+                            `loadConformerGroup` (`api/conformerGroupApi.ts`),
+                            which does not request or type that field today.
+                            Surfacing it here needs that fetch, which is outside
+                            this change's file scope; flagged rather than
+                            guessed at. */}
                     </header>
                 )}
             >
@@ -144,13 +178,16 @@ function Ledger({ group }: { group: ConformerGroup }) {
  * `details.ledger-section summary` / `summary h2` / `summary:focus-visible`
  * rules already style exactly this shape.
  *
- * Default CLOSED, matching every one of those existing disclosures. The
- * `.ledger-summary` metrics strip above this section already answers "a
- * number" (observation count, calculation-row count, coverage) without
- * requiring this box open at all; a reader who wants the underlying
- * per-observation provenance opens it deliberately. The `<summary>` names
- * what is inside, WITH the count, so that decision can be made without
- * opening it first.
+ * Default OPEN on this page (a later reviewer pass reversed the original
+ * "default closed, matching every other disclosure" call below). This is
+ * the SINGLE deposited-evidence section this whole record page has to
+ * offer -- unlike `ConformerObservationPage`'s "Curation selections"
+ * disclosure, which is one optional extra among several always-open
+ * sections, collapsing the only substantive content on a conformer-basin
+ * record left visitors looking at a metrics strip and nothing else until
+ * they clicked. The metrics strip above still answers "a number"
+ * (observation count, calculation-row count, coverage) at a glance; the
+ * `<summary>` remains a real toggle a reader can still close.
  *
  * `open` is controlled (not left to the browser) so `aria-expanded` can be
  * set explicitly alongside it -- the native `<details>`/`<summary>` pair
@@ -178,7 +215,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
  * empty result would tell a reader there might be something to find.
  */
 function EvidenceDisclosure({ observations }: { observations: Observation[] }) {
-    const [open, setOpen] = useState(false)
+    const [open, setOpen] = useState(true)
     const count = observations.length
 
     if (count === 0) {

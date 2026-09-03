@@ -1,3 +1,4 @@
+import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import type { TransitionStateBrowseRecord } from "../api/browseApi"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
@@ -13,7 +14,39 @@ function token(value: string) {
  * family rather than a molecular headline. Links to `/reactions/:ref`,
  * the existing (placeholder-for-now) reaction route, rather than to a
  * transition-state detail page -- no such page exists yet on this
- * frontend, and this row does not invent one.
+ * frontend, and this row does not invent one. (That target route is a
+ * separate, ongoing piece of work -- this file only decides WHETHER a
+ * link exists and what it wraps, never what URL it points at.)
+ *
+ * Two presentation fixes from the same owner report as the species row's
+ * pill split:
+ *
+ * - The label/status/review facts used to render as one run of plain text
+ *   ("TS0 · optimized · review not reviewed") where `SpeciesBrowseRow.tsx`
+ *   already uses pills for the equivalent facts -- same kind of
+ *   information, two different treatments, and the literal word "review"
+ *   glued onto its own status read as awkward. This row now reuses the
+ *   EXACT SAME classes as the species row's entry chip
+ *   (`browse-row-entries` / `browse-entry-chip` / `value-pill
+ *   browse-entry-kind-pill` / `value-pill value-pill--muted
+ *   browse-entry-review`) rather than inventing new styling: label+status
+ *   combine into one pill (the species row's own kind+state pairing), and
+ *   review status gets its own pill, unprefixed -- both parallel the
+ *   species row fact-for-fact.
+ * - Only the equation text used to be clickable. The whole row is the
+ *   click target now, when a reaction ref exists: every other element in
+ *   this row is non-interactive (no nested pill links, unlike the species
+ *   row's per-entry links -- there is no transition-state detail route to
+ *   send one to yet), so wrapping the full row content in one `<Link>` is
+ *   valid HTML and does not create a nested-anchor conflict. The headline
+ *   text itself can therefore no longer be its OWN nested link; it keeps
+ *   its exact prior look (`.browse-row-title`'s emphasized, underlined
+ *   style vs. the muted `span.browse-row-title` fallback already defined
+ *   in `browse.css`) by choosing `<strong>` instead of `<a>` for the
+ *   linked case -- `browse.css`'s override selector is written as
+ *   `span.browse-row-title`, tag-specific, so any element with the class
+ *   OTHER than a bare `<span>` still gets the emphasized rule. No new CSS
+ *   needed or added.
  */
 export function TransitionStateBrowseRow({ record }: { record: TransitionStateBrowseRecord }) {
     const evidence = [
@@ -27,12 +60,13 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
     ].filter((label): label is string => Boolean(label))
 
     const equation = record.reaction.equation ?? "Equation not recorded"
+    const target = record.reaction.reaction_ref ? `/reactions/${record.reaction.reaction_ref}` : null
 
-    return (
-        <li className="browse-row ts-browse-row">
+    const content: ReactNode = (
+        <>
             <div className="browse-row-headline">
-                {record.reaction.reaction_ref
-                    ? <Link className="browse-row-title" to={`/reactions/${record.reaction.reaction_ref}`}>{equation}</Link>
+                {target
+                    ? <strong className="browse-row-title">{equation}</strong>
                     : <span className="browse-row-title">{equation}</span>}
                 <span className="browse-row-meta">
                     {record.reaction.family ? token(record.reaction.family) : "family not recorded"}
@@ -40,16 +74,31 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                     charge {chargeDisplay(record.transition_state_entry.charge)} · spin {spinDisplay(record.transition_state_entry.multiplicity)}
                 </span>
             </div>
-            <p className="browse-row-ts-label">
-                {record.transition_state.label ?? "Unlabeled transition state"} · {token(record.transition_state_entry.status)}
-                {" · review "}{token(record.transition_state_entry.review.status)}
-            </p>
+            <ul className="browse-row-entries">
+                <li className="browse-entry-chip">
+                    <span className="value-pill browse-entry-kind-pill">
+                        {record.transition_state.label ?? "Unlabeled transition state"}
+                        {" · "}{token(record.transition_state_entry.status)}
+                    </span>
+                    <span className="value-pill value-pill--muted browse-entry-review">
+                        {token(record.transition_state_entry.review.status)}
+                    </span>
+                </li>
+            </ul>
             <p className="browse-row-evidence">
                 {evidence.length
                     ? `Evidence: ${evidence.join(" · ")} (${record.evidence_summary.calculation_count} calculations)`
                     : "No calculation evidence recorded"}
             </p>
             <code className="browse-row-ref">{record.transition_state_entry.transition_state_entry_ref}</code>
+        </>
+    )
+
+    return (
+        <li className="browse-row ts-browse-row">
+            {target
+                ? <Link aria-label={`Reaction ${equation}`} className="browse-row-link" to={target}>{content}</Link>
+                : content}
         </li>
     )
 }

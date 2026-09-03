@@ -77,7 +77,14 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
     // the array itself is the only trustworthy signal here.
     const selections = observation.selections ?? []
 
-    const stages = Object.entries(evidence.levels_of_theory)
+    // A real timestamped or annotated status change, as opposed to a
+    // placeholder row the archive returns even when nothing has happened
+    // yet (status mirroring the observation's current status, with
+    // `reviewed_at`/`note` both null). Only the former counts as an
+    // "event" worth a table -- see the review-ledger section below, whose
+    // owner-reported defect was a one-row table saying nothing beyond what
+    // the hero badge already says.
+    const hasReviewEvents = reviewHistory.some((entry) => entry.reviewed_at != null || entry.note != null)
 
     return (
         <section className="conformer-page">
@@ -173,26 +180,14 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 </div>
             </section>
 
-            <section className="ledger-section" aria-labelledby="lot-by-stage">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Deposited provenance</p>
-                    <SectionHeading id="lot-by-stage">Levels of theory by stage</SectionHeading>
-                    <p>Each stage keeps its own method. Differing levels across stages are never flattened.</p>
-                </div>
-                {stages.length ? (
-                    <dl className="basin-context">
-                        {stages.map(([stage, levels]) => (
-                            <div key={stage}>
-                                <dt>{stage}</dt>
-                                <dd>{levels.map((level) => lotLabel(level)).join(", ") || "not recorded"}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                ) : (
-                    <p className="empty-projection">No levels of theory were recorded for this observation.</p>
-                )}
-            </section>
-
+            {/* The "Levels of theory by stage" section that used to sit here
+                showed exactly the same (stage, level of theory) pairs as the
+                "Stage" and "Level of theory" columns of the calculation
+                table immediately below -- the owner flagged this as the
+                same fact stated twice back to back. The table is the more
+                complete of the two (it also carries software/workflow,
+                review, and the calculation's own record link per row), so
+                it is the one that stays. */}
             <section className="ledger-section" aria-labelledby="calc-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Machine detail</p>
@@ -267,9 +262,17 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <div className="ledger-heading">
                     <p className="eyebrow">Review &amp; trust</p>
                     <SectionHeading id="review-ledger">Review history</SectionHeading>
-                    <p>The current status is {statusLabel(core.review.status)}. This is the record of how it got there.</p>
+                    {/* Used to restate the current status here as prose
+                        ("The current status is not reviewed.") -- the hero
+                        badge above already carries it, and the owner
+                        counted this page showing review status in five
+                        places (hero pill, this sentence, every calculation
+                        row, every sibling pill, and the history table
+                        itself). This sentence describes the TABLE now,
+                        without repeating the status value. */}
+                    <p>This is the record of how the current status was reached.</p>
                 </div>
-                {reviewAvailability === "populated" ? (
+                {reviewAvailability === "populated" && hasReviewEvents ? (
                     <table className="stage-table" aria-label={`Review history for ${core.conformer_observation_ref}`}>
                         <thead>
                             <tr>
@@ -289,9 +292,15 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         </tbody>
                     </table>
                 ) : (
+                    // No table when review history carries no real events --
+                    // a one-row table of "not reviewed / not recorded / not
+                    // recorded" said nothing the hero badge hadn't already
+                    // said. `reviewAvailability` is remapped to "empty" for
+                    // the populated-but-eventless case so this renders the
+                    // same single line as a genuinely empty response.
                     <SectionEmptyMessage
-                        availability={reviewAvailability}
-                        emptyText="No review history was returned for this observation."
+                        availability={reviewAvailability === "populated" ? "empty" : reviewAvailability}
+                        emptyText="No review events are recorded for this observation."
                         contradicted={reviewAvailability === "empty" && available.has_review}
                     />
                 )}
