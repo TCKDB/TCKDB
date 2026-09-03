@@ -348,9 +348,15 @@ class TransitionStateSaddlePointEvidence(BaseModel):
     == entry.id``) with ``type == freq`` and a ``calc_freq_result`` row,
     picking the latest by ``created_at`` with ``calculation.id`` as the
     tie-break — the same deterministic rule the trust rubric's
-    ``_ts_representative_freq_result`` uses (spec §8.5), so this block and
-    ``include=trust`` never cite two different freq calculations for the
-    same entry.
+    ``_ts_representative_freq_result`` uses (spec §8.5). That rule agrees
+    with this block whenever the representative freq calc is directly
+    attached to the entry, which is the common case — but the rubric's own
+    source-calculation discovery additionally walks one dependency hop
+    (e.g. a ``freq_on`` edge), so a freq calc the rubric reaches only that
+    way is invisible to this block, and the two surfaces CAN disagree on
+    which freq result is "representative" in that case. See
+    ``app.services.scientific_read.transition_states._build_saddle_point_index``
+    for the exact scope this block uses.
 
     ``None`` on the parent record exactly when the entry carries no freq
     calculation with a result row — a real absence, not a zeroed-out

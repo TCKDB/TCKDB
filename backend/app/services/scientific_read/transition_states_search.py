@@ -87,6 +87,7 @@ from app.services.scientific_read.transition_states import (
 from app.services.scientific_read.transition_states import (
     TRANSITION_STATE_ENTRY_TRUST_EAGER_LOADS,
     _build_reaction_context,
+    _build_saddle_point_index,
     _build_ts_core_block,
     build_entry_record,
     build_sibling_entry_records,
@@ -634,6 +635,14 @@ def _materialize_records(
         session, page_ids
     )
 
+    # Same bargain, for ``saddle_point``: one statement for the whole page
+    # rather than one per record. See ``_build_saddle_point_index``'s own
+    # docstring — this is the exact regression
+    # ``test_the_saddle_point_map_costs_a_ts_search_page_one_statement``
+    # exists to catch (measured before this fix: +1 statement per record,
+    # 169 → 189 at ``limit=20``).
+    saddle_point_index = _build_saddle_point_index(session, page_ids)
+
     # ``include=entries`` gives every record its parent's entry list. Built
     # once per distinct parent on the page and shared, because search pages
     # cluster: several entries of one transition state routinely match the
@@ -679,6 +688,7 @@ def _materialize_records(
                 includes=includes,
                 entries_block=entries_block,
                 levels_index=levels_index,
+                saddle_point_index=saddle_point_index,
             )
         )
     return records

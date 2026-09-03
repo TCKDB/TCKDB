@@ -590,6 +590,142 @@ def test_the_levels_map_costs_a_ts_search_page_one_statement(db_session):
     )
 
 
+# ---------------------------------------------------------------------------
+# What ``record.saddle_point`` costs on ``/transition-states/search``
+# ---------------------------------------------------------------------------
+
+#: One statement for the whole page, mirroring ``_LEVELS_STATEMENTS_PER_PAGE``
+#: above. Measured regression before ``_build_saddle_point_index`` existed:
+#: a per-record implementation cost +1 statement per record (169 -> 189
+#: statements at ``limit=20`` on this fixture).
+_SADDLE_POINT_STATEMENTS_PER_PAGE = 1
+
+#: A statement joining ``calc_freq_result`` to resolve the saddle-point
+#: block, and nothing else. No other query in this codepath selects
+#: columns from ``calc_freq_result`` (the evidence-coverage counts group by
+#: ``calculation.type`` alone, with no join to this table).
+_SADDLE_POINT_MARKER = "calc_freq_result"
+
+_SADDLE_POINT_SMALL_PAGE = 4
+_SADDLE_POINT_LARGE_PAGE = 20
+
+
+def _saddle_point_statements(session: Session, run) -> tuple[int, int]:
+    """Return (statements resolving saddle_point, statements in total)."""
+    saddle = 0
+    total = 0
+    engine = session.connection().engine
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def _before(conn, cursor, statement, parameters, context, executemany):
+        nonlocal saddle, total
+        total += 1
+        if _SADDLE_POINT_MARKER in statement:
+            saddle += 1
+
+    try:
+        run()
+    finally:
+        event.remove(engine, "before_cursor_execute", _before)
+    return saddle, total
+
+
+def _ts_entries_page_with_freq_results(db_session, *, label: str, entries: int):
+    """Like ``_ts_entries_page``, but every freq calc also carries a result.
+
+    A saddle-point-cost test over calcs with no ``calc_freq_result`` row
+    would prove nothing: the join would find zero rows on every page size,
+    and a per-record N+1 would look identical to the flat batched query
+    (both issue statements that return nothing). Every entry needs a real
+    result row for the slope to be measurable at all.
+    """
+    species = [
+        make_species(db_session, inchi_key=next_inchi_key(f"SP{label[:2]}{i}"))
+        for i in range(4)
+    ]
+    species_entries = [make_species_entry(db_session, s) for s in species]
+    chem = make_chem_reaction(
+        db_session, reactants=species[:2], products=species[2:]
+    )
+    rxe = make_reaction_entry(
+        db_session,
+        reaction=chem,
+        reactant_entries=species_entries[:2],
+        product_entries=species_entries[2:],
+    )
+    ts = make_transition_state(db_session, reaction_entry=rxe, label=label)
+    lot = make_lot(db_session, method="b3lyp", basis="def2tzvp")
+    for _ in range(entries):
+        entry = make_transition_state_entry(
+            db_session,
+            transition_state=ts,
+            status=TransitionStateEntryStatus.optimized,
+        )
+        freq_calc = make_calculation(
+            db_session,
+            type=CalculationType.freq,
+            transition_state_entry_id=entry.id,
+            lot_id=lot.id,
+        )
+        attach_freq_result(
+            db_session,
+            calculation=freq_calc,
+            frequencies_cm1=[-550.0, 220.0, 340.0],
+        )
+    return ts
+
+
+def test_the_saddle_point_map_costs_a_ts_search_page_one_statement(db_session):
+    """Flat in ``limit`` on ``/transition-states/search``.
+
+    The regression this guards: ``saddle_point`` resolved inside the
+    per-record builder rather than batched over the page -- see BLOCKING
+    finding #d on PR #357 (measured 169 -> 189 statements at ``limit=20``
+    before ``_build_saddle_point_index`` was introduced).
+    """
+    ts = _ts_entries_page_with_freq_results(
+        db_session,
+        label="saddle-cost-ts",
+        entries=_SADDLE_POINT_LARGE_PAGE + 5,
+    )
+
+    def page(limit: int):
+        def run():
+            response = search_transition_states(
+                db_session,
+                TransitionStatesSearchRequest(
+                    transition_state_ref=ts.public_ref, limit=limit
+                ),
+            )
+            assert len(response.records) == limit, (
+                "the page must be full to be comparable"
+            )
+            assert response.records[0].saddle_point is not None, (
+                "the block must actually be populated -- a cost assertion "
+                "over an always-null block proves nothing"
+            )
+
+        return run
+
+    small_saddle, small_total = _saddle_point_statements(
+        db_session, page(_SADDLE_POINT_SMALL_PAGE)
+    )
+    large_saddle, large_total = _saddle_point_statements(
+        db_session, page(_SADDLE_POINT_LARGE_PAGE)
+    )
+
+    assert small_saddle >= 1, (
+        "no statement resolved a saddle-point block: either the marker "
+        "stopped matching or the block stopped being built"
+    )
+    assert small_saddle == large_saddle == _SADDLE_POINT_STATEMENTS_PER_PAGE, (
+        f"{small_saddle} saddle-point statements for "
+        f"{_SADDLE_POINT_SMALL_PAGE} records against {large_saddle} for "
+        f"{_SADDLE_POINT_LARGE_PAGE}: the block is resolving per record "
+        f"(totals {small_total} and {large_total})"
+    )
+
+
 def _conformer_groups_page(db_session, *, tag: str, groups: int):
     """One species entry carrying *groups* basins, each at two levels."""
     species = make_species(db_session, inchi_key=next_inchi_key(f"CG{tag}"))
