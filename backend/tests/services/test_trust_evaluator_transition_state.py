@@ -682,6 +682,34 @@ def test_irc_raises_completeness(db_session: Session):
     assert with_irc.checks["irc_evidence_present"] is EvidenceOutcome.passed
 
 
+def test_irc_evidence_present_check_label_names_calculation_not_validation(
+    db_session: Session,
+):
+    """The check's human text must not read as a validation verdict.
+
+    ``irc_evidence_present`` only checks that an IRC *calculation* is in
+    the source set -- it says nothing about structured pass/fail
+    validation evidence (`TransitionStateValidationEvidence`), which no
+    ARC upload has ever deposited. The old text ("IRC evidence should be
+    linked when available") was easy to misread as the latter; this
+    pins the corrected wording without touching the stored check key.
+    """
+    ts_entry = _make_ts_entry(db_session)
+    opt = _attach_ts_opt_calc(db_session, ts_entry)
+    _attach_ts_freq_calc(db_session, ts_entry, opt)
+    _attach_ts_irc_calc(db_session, ts_entry, opt)
+    db_session.refresh(ts_entry)
+
+    result = evaluate_loaded_transition_state_entry(ts_entry)
+    (irc_check,) = [
+        c for c in result.check_results if c.name == "irc_evidence_present"
+    ]
+    assert irc_check.name == "irc_evidence_present"  # stored key: unchanged
+    assert irc_check.explain is not None
+    assert "IRC calculation present" in irc_check.explain
+    assert "validation" in irc_check.explain.lower()
+
+
 def test_path_search_raises_completeness(db_session: Session):
     ts_entry_base = _make_ts_entry(db_session)
     opt_base = _attach_ts_opt_calc(db_session, ts_entry_base)
