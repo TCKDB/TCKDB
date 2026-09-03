@@ -768,6 +768,7 @@ def _materialize_records(
             includes=includes,
             entries_block=entries_block,
             levels_index=levels_index,
+            saddle_point_index=saddle_point_index,
         )
         software_map = software_index.get(cid, {})
         if software_map:
