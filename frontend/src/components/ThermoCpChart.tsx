@@ -157,7 +157,7 @@ function ChartControls({ mode, unit, onModeChange, onUnitChange }: {
                 the stored unit plainly rather than let the converted column
                 imply that's how the archive holds it. */}
             <p className="cp-chart-unit-note">
-                Always stored in J/mol·K (<code>cp_j_mol_k</code> on the wire); cal/mol·K here is a display
+                Always stored in J/mol·K; cal/mol·K here is a display
                 conversion only, at 1 cal = {JOULES_PER_CALORIE} J exactly.
             </p>
         </div>

@@ -556,7 +556,7 @@ describe("species-entry page: conformer picker", () => {
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         expect(await screen.findByRole("heading", { name: "Conformers" })).toBeVisible()
-        expect(screen.getByText("No conformer basins are projected for this entry.")).toBeVisible()
+        expect(screen.getByText("No conformers are recorded for this entry.")).toBeVisible()
         expect(screen.getByText("No conformers are recorded for this entry, so there is no geometry evidence to show.")).toBeVisible()
         // Thermo/statmech/transport are entry-scoped lists, independent of
         // whether any conformer basin is projected -- they still render.
