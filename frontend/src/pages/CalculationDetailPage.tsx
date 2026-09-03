@@ -59,20 +59,22 @@ import { useCalculationSection, type CalculationSectionState } from "../hooks/us
 //   already-loaded-elsewhere-on-this-surface link lists the IA trail
 //   depends on (owner entry / geometries), not separate heavy payloads.
 //
-// - ON DEMAND (14 remaining tokens, one `<details>` each): every other
-//   heavy section. `available_sections` (18 booleans, one per token that
-//   has one — see `readSectionField`) tells the page which of these would
-//   return data *before* asking, so a section known empty renders a
-//   static "not present" line with no request at all, and a section that
-//   may have data renders as an expandable disclosure that fetches its
-//   own token, and only its own token, the first time it opens.
+// - ON DEMAND (14 remaining tokens): every other heavy section.
+//   `available_sections` (18 booleans, one per token that has one — see
+//   `readSectionField`) tells the page which of these would return data
+//   *before* asking. A section known empty renders no request and no
+//   heading of its own — it is named, once, in the single shared line
+//   `MissingSectionsNote` renders after every section that DOES have
+//   something to show (review finding 8: this page used to give each
+//   empty section its own heading, ten in a row on some calculation
+//   types). A section that may have data renders as an expandable
+//   `<details>` disclosure that fetches its own token, and only its own
+//   token, the first time it opens.
 //
 // `imaginary_mode_projections` has no `has_imaginary_mode_projections`
 // flag (it's a computed-at-read-time projection, not a stored table) —
 // `available_sections.has_hessian` is used instead, per its own docstring
-// in the service layer: without a Hessian the projection is not merely
-// absent, it is not determinable, and that is a different, and more
-// honest, message than "not present".
+// in the service layer.
 //
 // `trust` is excluded from this slice entirely: it is not one of the 19
 // tokens `CALCULATION_RECORD_SECTIONS` gates, and unlike every token
@@ -182,6 +184,32 @@ function headlineEnergy(results: CalculationRecord["results"]): { label: string;
     if (results.kind === "sp") return { label: "Electronic energy", valueHartree: results.sp?.electronic_energy_hartree ?? null }
     if (results.kind === "opt") return { label: "Final energy", valueHartree: results.opt?.final_energy_hartree ?? null }
     return null
+}
+
+/**
+ * `EnergyDisplay` itself drops the label entirely for a `null` value (a
+ * bare, unlabelled "not recorded" -- correct for an inline value sitting
+ * next to other already-labelled evidence, but wrong at headline size,
+ * where this IS the answer the reader came for: an unlabelled absence
+ * there reads as a layout bug, not as "no value recorded"). This wrapper
+ * is headline-only and keeps the label (and, implicitly, the fact that
+ * this row is an energy at all) visible even when there is no number --
+ * see finding 2 of the review this fixes. `EnergyDisplay`'s own
+ * null-handling is unchanged and still applies to every inline use
+ * elsewhere on the archive.
+ */
+function HeadlineEnergy({ label, valueHartree }: { label: string; valueHartree: number | null }) {
+    if (valueHartree === null) {
+        return (
+            <div className="energy-display energy-display--headline">
+                <span className="energy-display-label">{label}</span>
+                <span className="energy-display-value energy-display-value--headline energy-display-absent">
+                    not recorded
+                </span>
+            </div>
+        )
+    }
+    return <EnergyDisplay valueHartree={valueHartree} label={label} size="headline" />
 }
 
 // Three states an include-gated eager section can be in, kept distinct per
@@ -313,12 +341,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             <h1>{typeLabel(core.type)} calculation</h1>
                             <span className="review-badge">{statusLabel(core.review.status)}</span>
                         </div>
-                        <p className="record-intro">
-                            One calculation record. Its heavy sections — results, dependencies, artifacts, per-mode
-                            and per-point data — are opt-in on this endpoint; this page loads a few small ones up
-                            front and leaves the rest behind disclosures you can open.
-                        </p>
-
                         {/* The answer this page exists to give, promoted to the
                             largest weight on the page — previously it sat inside the
                             "Result" section below at the same visual weight as the
@@ -328,7 +350,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             fabricated or misleading figure. */}
                         {headline && (
                             <div className="calc-headline-energy">
-                                <EnergyDisplay valueHartree={headline.valueHartree} label={headline.label} size="headline" />
+                                <HeadlineEnergy label={headline.label} valueHartree={headline.valueHartree} />
                             </div>
                         )}
 
@@ -527,18 +549,19 @@ function OwnerCard({
                     )}
                     <div><dt>Structure</dt><dd>{ownerSpecies.canonical_smiles}</dd></div>
                     <div><dt>InChIKey</dt><dd>{ownerSpecies.inchi_key}</dd></div>
-                    {/* Categorical, bounded-vocabulary facts render as pills, replacing
-                        their plain-text form (never alongside it -- see `.value-pill`
-                        in `calculation-detail.css` for why this is not the deleted
-                        `RecordFacetChips` come back). Identifiers above (species /
-                        species entry / structure / InChIKey) are never pills -- they
-                        stay selectable monospace text. */}
+                    {/* Categorical, bounded-vocabulary facts (entry kind, electronic
+                        state) render as pills, replacing their plain-text form (never
+                        alongside it -- see `.value-pill` in `calculation-detail.css`
+                        for why this is not the deleted `RecordFacetChips` come back).
+                        A charge is a number, not a bounded category, so it stays plain
+                        text -- the same "value / value" format the record hero uses
+                        for this same fact (see `RecordIdentityHeader.tsx`), so the two
+                        never disagree about how to write it. Identifiers above (species
+                        / species entry / structure / InChIKey) are never pills either
+                        -- they stay selectable monospace text. */}
                     <div>
                         <dt>Charge / multiplicity</dt>
-                        <dd>
-                            <span className="value-pill">{chargeDisplay(ownerSpecies.charge)}</span>{" "}
-                            <span className="value-pill">{spinDisplay(ownerSpecies.multiplicity)}</span>
-                        </dd>
+                        <dd>{chargeDisplay(ownerSpecies.charge)} / {spinDisplay(ownerSpecies.multiplicity)}</dd>
                     </div>
                     <div><dt>Entry kind</dt><dd><span className="value-pill">{statusLabel(ownerSpecies.species_entry_kind)}</span></dd></div>
                     <div><dt>Electronic state</dt><dd><span className="value-pill">{ownerSpecies.electronic_state_kind}</span></dd></div>
@@ -561,12 +584,11 @@ function OwnerCard({
                     {ownerTS.label && (
                         <div><dt>Transition state entry ref</dt><dd>{ownerTS.transition_state_entry_ref}</dd></div>
                     )}
+                    {/* Same plain-text rule as the species-entry branch above -- a
+                        charge is a number, not a bounded category. */}
                     <div>
                         <dt>Charge / multiplicity</dt>
-                        <dd>
-                            <span className="value-pill">{chargeDisplay(ownerTS.charge)}</span>{" "}
-                            <span className="value-pill">{spinDisplay(ownerTS.multiplicity)}</span>
-                        </dd>
+                        <dd>{chargeDisplay(ownerTS.charge)} / {spinDisplay(ownerTS.multiplicity)}</dd>
                     </div>
                     <div><dt>Status</dt><dd><span className="value-pill">{statusLabel(ownerTS.status)}</span></dd></div>
                     <div><dt>Reaction entry</dt><dd>{ownerTS.reaction_entry_ref ?? "not recorded"}</dd></div>
@@ -700,10 +722,7 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
             <div className="ledger-heading">
                 <p className="eyebrow">Deposited provenance</p>
                 <SectionHeading id="dependencies-heading">Dependency graph</SectionHeading>
-                <p>
-                    Every edge here comes from a stored <code>calculation_dependency</code> row. Nothing is
-                    inferred from calculation type, timestamps, or reference ordering.
-                </p>
+                <p>Other calculations this one was built from, or that were built from it.</p>
             </div>
             {availability === "populated" ? (
                 <table className="stage-table" aria-label={`Dependency edges for ${ownRef}`}>
@@ -847,9 +866,8 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
 /**
  * One disclosure gated on an `available_sections` flag (or, for
  * `imaginary_mode_projections`, on `has_hessian` — see the module
- * docstring). `available === false` renders a static, request-free "not
- * present" line; otherwise renders an expandable `<details>` that fetches
- * its own token, once, the first time it opens.
+ * docstring). Renders an expandable `<details>` that fetches its own
+ * token, once, the first time it opens.
  *
  * This is the first surface in the project where content arrives after a
  * user gesture rather than on page load, so there is no accessible-live-
@@ -875,42 +893,30 @@ function ReviewHistorySection({ entries, currentStatus, availability }: {
  * `applicable` (default `true`) is a SEPARATE axis from `available`, and
  * checked first: `available` says "does this record have data for a
  * section its type COULD have"; `applicable` says "can a calculation of
- * this type have this section AT ALL". `applicable === false` renders
- * NOTHING — not the section, not its heading, not a "not present" line —
- * because a heading is what registers a table-of-contents entry
- * (`SectionHeading`'s own docstring in `PageSections.tsx`), and a ToC
- * entry for a concept this calculation's type structurally cannot have
- * (an IRC trajectory on a single-point calculation) is exactly the bug
- * this prop exists to fix: the calculation's type is already stated at
- * the top of the page and fully explains the absence, so a dozen
- * per-section "not applicable" rows would be noise the reader has to
- * read past, not information. A section that IS applicable but has no
- * data for THIS record (`applicable=true, available=false` — e.g.
- * imaginary-mode projections with no stored Hessian) still renders its
- * heading and explanation exactly as before: that absence is not
- * explained by the type, and a reader deserves the reason.
+ * this type have this section AT ALL". Both `applicable === false` and
+ * `available === false` render NOTHING here — not the section, not its
+ * heading, not its own "not present" line. A heading is what registers a
+ * table-of-contents entry (`SectionHeading`'s own docstring in
+ * `PageSections.tsx`), and a page with ten sections that each have
+ * nothing to show is ten headings the reader has to read past to find the
+ * two that do (review finding 8). `OnDemandSections` is the one place
+ * that knows the full roster of tokens for this calculation, so it is
+ * also the one place responsible for saying, once, which of them came up
+ * empty — see `MissingSectionsNote` below. This component only ever
+ * renders real content.
  */
 function LazySection<T>({
-    heading, available, notAvailableText, state, onOpen, children, applicable = true,
+    heading, available, state, onOpen, children, applicable = true,
 }: {
     heading: string
     available: boolean
-    notAvailableText: string
     state: CalculationSectionState<T>
     onOpen: () => void
     children: (data: T) => ReactNode
     applicable?: boolean
 }) {
     const headingId = `section-${heading.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
-    if (!applicable) return null
-    if (!available) {
-        return (
-            <section className="ledger-section" aria-labelledby={headingId}>
-                <SectionHeading id={headingId}>{heading}</SectionHeading>
-                <p className="empty-projection">{notAvailableText}</p>
-            </section>
-        )
-    }
+    if (!applicable || !available) return null
     return (
         <details
             className="ledger-section"
@@ -936,27 +942,91 @@ function KVList({ pairs }: { pairs: [string, ReactNode][] }) {
     ))}</dl>
 }
 
+// One entry per on-demand section, independent of whether this particular
+// calculation happens to have data for it -- the single place that knows
+// the full roster, so `OnDemandSections` can compute "what's missing"
+// without asking each section component to report on itself. `heading`
+// must match the string each section component below passes to its own
+// `LazySection` exactly, since that string is also the table-of-contents
+// label a rendered section registers.
+const ON_DEMAND_SECTION_SPECS: {
+    heading: string
+    applicable: (a: CalculationRecord["available_sections"]) => boolean
+    available: (a: CalculationRecord["available_sections"]) => boolean
+}[] = [
+    { heading: "Energy corrections", applicable: () => true, available: (a) => a.has_energy_corrections },
+    { heading: "Geometry validation", applicable: (a) => a.geometry_validation_applicable, available: (a) => a.has_geometry_validation },
+    { heading: "SCF stability", applicable: () => true, available: (a) => a.has_scf_stability },
+    { heading: "Wavefunction diagnostic", applicable: () => true, available: (a) => a.has_wavefunction_diagnostic },
+    { heading: "Spin diagnostic", applicable: () => true, available: (a) => a.has_spin_diagnostic },
+    { heading: "Parsed parameters", applicable: () => true, available: (a) => a.has_parameters },
+    { heading: "Constraints", applicable: (a) => a.constraints_applicable, available: (a) => a.has_constraints },
+    { heading: "Vibrational modes", applicable: (a) => a.freq_modes_applicable, available: (a) => a.has_freq_modes },
+    // Gated on `has_hessian`, not a dedicated flag -- see the module
+    // docstring. Folded into the same missing-or-not list as every other
+    // on-demand section (review finding 8): the finer "not merely absent,
+    // not determinable" distinction stays live in the evidence panel
+    // above, which this note does not touch.
+    { heading: "Imaginary-mode projections", applicable: () => true, available: (a) => a.has_hessian },
+    { heading: "Scan trajectory", applicable: (a) => a.scan_applicable, available: (a) => a.has_scan },
+    { heading: "IRC trajectory", applicable: (a) => a.irc_applicable, available: (a) => a.has_irc },
+    { heading: "Path-search trajectory", applicable: (a) => a.path_search_applicable, available: (a) => a.has_path_search },
+    { heading: "Artifacts", applicable: () => true, available: (a) => a.has_artifacts },
+    { heading: "Execution environment", applicable: () => true, available: (a) => a.has_execution_environment },
+]
+
 function OnDemandSections({ calculation, available }: {
     calculation: CalculationRecord
     available: CalculationRecord["available_sections"]
 }) {
+    const ref = calculation.calculation.calculation_ref
+    // Applicable to this calculation's TYPE, but nothing recorded -- the
+    // ten-empty-headings defect (review finding 8). Collected once here
+    // instead of each section rendering its own heading over one line of
+    // "not recorded" prose, and read the same way regardless of
+    // calculation type: a section is either applicable-and-missing (named
+    // here) or it is not applicable at all (never named anywhere on the
+    // page below the evidence panel -- the type stated at the top already
+    // explains that).
+    const missing = ON_DEMAND_SECTION_SPECS
+        .filter((spec) => spec.applicable(available) && !spec.available(available))
+        .map((spec) => spec.heading)
+
     return (
         <>
-            <EnergyCorrectionsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_energy_corrections} />
-            <GeometryValidationSection calculationRef={calculation.calculation.calculation_ref} available={available.has_geometry_validation} applicable={available.geometry_validation_applicable} />
-            <SCFStabilitySection calculationRef={calculation.calculation.calculation_ref} available={available.has_scf_stability} />
-            <WavefunctionDiagnosticSection calculationRef={calculation.calculation.calculation_ref} available={available.has_wavefunction_diagnostic} />
-            <SpinDiagnosticSection calculationRef={calculation.calculation.calculation_ref} available={available.has_spin_diagnostic} />
-            <ParametersSection calculationRef={calculation.calculation.calculation_ref} available={available.has_parameters} />
-            <ConstraintsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_constraints} applicable={available.constraints_applicable} />
-            <FreqModesSection calculationRef={calculation.calculation.calculation_ref} available={available.has_freq_modes} applicable={available.freq_modes_applicable} />
-            <ImaginaryModeProjectionsSection calculationRef={calculation.calculation.calculation_ref} hessianAvailable={available.has_hessian} />
-            <ScanSection calculationRef={calculation.calculation.calculation_ref} available={available.has_scan} applicable={available.scan_applicable} />
-            <IRCSection calculationRef={calculation.calculation.calculation_ref} available={available.has_irc} applicable={available.irc_applicable} />
-            <PathSearchSection calculationRef={calculation.calculation.calculation_ref} available={available.has_path_search} applicable={available.path_search_applicable} />
-            <ArtifactsSection calculationRef={calculation.calculation.calculation_ref} available={available.has_artifacts} />
-            <ExecutionEnvironmentSection calculationRef={calculation.calculation.calculation_ref} available={available.has_execution_environment} />
+            <EnergyCorrectionsSection calculationRef={ref} available={available.has_energy_corrections} />
+            <GeometryValidationSection calculationRef={ref} available={available.has_geometry_validation} applicable={available.geometry_validation_applicable} />
+            <SCFStabilitySection calculationRef={ref} available={available.has_scf_stability} />
+            <WavefunctionDiagnosticSection calculationRef={ref} available={available.has_wavefunction_diagnostic} />
+            <SpinDiagnosticSection calculationRef={ref} available={available.has_spin_diagnostic} />
+            <ParametersSection calculationRef={ref} available={available.has_parameters} />
+            <ConstraintsSection calculationRef={ref} available={available.has_constraints} applicable={available.constraints_applicable} />
+            <FreqModesSection calculationRef={ref} available={available.has_freq_modes} applicable={available.freq_modes_applicable} />
+            <ImaginaryModeProjectionsSection calculationRef={ref} hessianAvailable={available.has_hessian} />
+            <ScanSection calculationRef={ref} available={available.has_scan} applicable={available.scan_applicable} />
+            <IRCSection calculationRef={ref} available={available.has_irc} applicable={available.irc_applicable} />
+            <PathSearchSection calculationRef={ref} available={available.has_path_search} applicable={available.path_search_applicable} />
+            <ArtifactsSection calculationRef={ref} available={available.has_artifacts} />
+            <ExecutionEnvironmentSection calculationRef={ref} available={available.has_execution_environment} />
+            <MissingSectionsNote headings={missing} />
         </>
+    )
+}
+
+/**
+ * The one line every applicable-but-empty on-demand section collapses
+ * into, replacing ten separate empty headings (review finding 8). No
+ * `SectionHeading` here on purpose -- this note is not itself a section
+ * with content to navigate to, so it registers no table-of-contents
+ * entry; the evidence panel at the top of the page is where a reader
+ * already learned which checks this calculation carries.
+ */
+function MissingSectionsNote({ headings }: { headings: string[] }) {
+    if (headings.length === 0) return null
+    return (
+        <section className="ledger-section" aria-label="Sections with nothing recorded">
+            <p className="empty-projection">Not recorded on this calculation: {headings.join(", ")}.</p>
+        </section>
     )
 }
 
@@ -970,7 +1040,6 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
         <LazySection
             heading="Energy corrections"
             available={available}
-            notAvailableText="No applied energy correction cites this calculation as its source."
             state={state}
             onOpen={open}
         >
@@ -1011,7 +1080,6 @@ function GeometryValidationSection({ calculationRef, available, applicable }: { 
             heading="Geometry validation"
             available={available}
             applicable={applicable}
-            notAvailableText="No geometry-validation check is recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1059,7 +1127,6 @@ function SCFStabilitySection({ calculationRef, available }: { calculationRef: st
         <LazySection
             heading="SCF stability"
             available={available}
-            notAvailableText="No SCF stability analysis is recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1099,7 +1166,6 @@ function WavefunctionDiagnosticSection({ calculationRef, available }: { calculat
         <LazySection
             heading="Wavefunction diagnostic"
             available={available}
-            notAvailableText="No wavefunction diagnostic (T1/D1) is recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1123,7 +1189,6 @@ function SpinDiagnosticSection({ calculationRef, available }: { calculationRef: 
         <LazySection
             heading="Spin diagnostic"
             available={available}
-            notAvailableText="No spin-contamination diagnostic is recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1146,7 +1211,6 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
         <LazySection
             heading="Parsed parameters"
             available={available}
-            notAvailableText="No execution parameters were parsed for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1175,7 +1239,6 @@ function ConstraintsSection({ calculationRef, available, applicable }: { calcula
             heading="Constraints"
             available={available}
             applicable={applicable}
-            notAvailableText="No geometry constraints are recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1204,7 +1267,6 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
             heading="Vibrational modes"
             available={available}
             applicable={applicable}
-            notAvailableText="No per-mode vibrational frequencies are recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1232,7 +1294,6 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable }: {
         <LazySection
             heading="Imaginary-mode projections"
             available={hessianAvailable}
-            notAvailableText="Not determinable — no Hessian is stored for this calculation, so imaginary modes cannot be projected."
             state={state}
             onOpen={open}
         >
@@ -1284,7 +1345,6 @@ function ScanSection({ calculationRef, available, applicable }: { calculationRef
             heading="Scan trajectory"
             available={available}
             applicable={applicable}
-            notAvailableText="This calculation has no scan result."
             state={state}
             onOpen={open}
         >
@@ -1309,7 +1369,6 @@ function IRCSection({ calculationRef, available, applicable }: { calculationRef:
             heading="IRC trajectory"
             available={available}
             applicable={applicable}
-            notAvailableText="This calculation has no IRC result."
             state={state}
             onOpen={open}
         >
@@ -1334,7 +1393,6 @@ function PathSearchSection({ calculationRef, available, applicable }: { calculat
             heading="Path-search trajectory"
             available={available}
             applicable={applicable}
-            notAvailableText="This calculation has no path-search result."
             state={state}
             onOpen={open}
         >
@@ -1357,7 +1415,6 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
         <LazySection
             heading="Artifacts"
             available={available}
-            notAvailableText="No artifact metadata is recorded for this calculation."
             state={state}
             onOpen={open}
         >
@@ -1398,7 +1455,6 @@ function ExecutionEnvironmentSection({ calculationRef, available }: { calculatio
         <LazySection
             heading="Execution environment"
             available={available}
-            notAvailableText="No revalidated execution-environment manifest is recorded for this calculation."
             state={state}
             onOpen={open}
         >

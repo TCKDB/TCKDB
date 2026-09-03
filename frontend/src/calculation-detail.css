@@ -36,12 +36,6 @@
     font-size: clamp(3rem, 8vw, 5.5rem);
 }
 
-.record-intro {
-    max-width: 44rem;
-    color: var(--ink-2);
-    font: 1.15rem/1.55 var(--serif);
-}
-
 .record-context {
     display: grid;
     grid-template-columns: repeat(3, 1fr);

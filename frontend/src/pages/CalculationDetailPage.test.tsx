@@ -317,7 +317,11 @@ describe("CalculationDetailPage", () => {
         expect(within(workflowRow).getByText("ARC 1.1.0")).toBeVisible()
     })
 
-    it("renders the owner species' charge and multiplicity through the shared chemistry-format rules, not raw numbers", async () => {
+    // Review finding 18: a charge is a number, not a bounded category, so
+    // it must not render as a pill -- and the owner card must agree with
+    // the record hero (`RecordIdentityHeader.tsx`), which has always
+    // written this same fact as plain "0 / doublet (2)" text.
+    it("renders the owner species' charge and multiplicity through the shared chemistry-format rules, as plain text matching the record hero -- not pills", async () => {
         // mockRecord's owner species carries charge: 0, multiplicity: 2 —
         // a raw render would show "0 / 2"; the shared rules render the
         // charge as a signed quantity ("0" for neutral) and the
@@ -328,12 +332,11 @@ describe("CalculationDetailPage", () => {
 
         const ownerSection = screen.getByRole("heading", { name: "Owner" }).closest("section") as HTMLElement
         const chargeRow = within(ownerSection).getByText("Charge / multiplicity").closest("div") as HTMLElement
-        // Charge and multiplicity each render as their own pill (item 5 of
-        // the design brief) rather than one joined "0 / doublet (2)"
-        // string -- the two values are still both there, just as two
-        // adjacent elements under the one "Charge / multiplicity" label.
-        const pills = within(chargeRow).getAllByText((_, el) => el?.classList.contains("value-pill") === true)
-        expect(pills.map((el) => el.textContent)).toEqual(["0", "doublet (2)"])
+        const value = chargeRow.querySelector("dd") as HTMLElement
+        expect(value.textContent).toBe("0 / doublet (2)")
+        // Never a pill -- a charge is a number, not a bounded category
+        // (unlike "Entry kind" / "Electronic state" on this same card).
+        expect(value.querySelector(".value-pill")).toBeNull()
     })
 
     it("renders the literature citation and its own stable ref, never dropping it silently", async () => {
@@ -788,27 +791,85 @@ describe("CalculationDetailPage", () => {
         expect(within(section).queryByText("Parsed parameters loaded.")).not.toBeInTheDocument()
     })
 
-    it("renders a section available_sections marks empty as a static line, with no disclosure to open", async () => {
+    // Review finding 8: an on-demand section `available_sections` marks
+    // empty must not get its own heading (ten of those in a row on some
+    // calculation types was the defect) -- it is named, once, in a single
+    // shared line alongside every other empty-but-applicable section.
+    it("folds a section available_sections marks empty into the shared missing-sections line, with no heading or disclosure of its own", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await screen.findByRole("heading", { name: "Frequency calculation" })
 
-        // This fixture is a `freq` calculation: has_scan is false.
-        const heading = screen.getByRole("heading", { name: "Scan trajectory" })
-        expect(heading.closest("details")).toBeNull()
-        const section = heading.closest("section") as HTMLElement
-        expect(within(section).getByText("This calculation has no scan result.")).toBeVisible()
+        // This fixture is a `freq` calculation: has_scan, has_irc,
+        // has_path_search and has_execution_environment are all false, and
+        // (the fixture leaves every `*_applicable` flag at its schema
+        // default of `true`) all four are structurally applicable.
+        expect(screen.queryByRole("heading", { name: "Scan trajectory" })).not.toBeInTheDocument()
+        expect(screen.queryByText("This calculation has no scan result.")).not.toBeInTheDocument()
+
+        const note = screen.getByText(/^Not recorded on this calculation:/)
+        expect(note.className).toBe("empty-projection")
+        for (const missing of ["Scan trajectory", "IRC trajectory", "Path-search trajectory", "Execution environment"]) {
+            expect(note.textContent).toContain(missing)
+        }
+        // A section this fixture DOES have data for keeps its own heading
+        // and disclosure -- the merge only ever swallows empty sections.
+        expect(screen.getByRole("heading", { name: "SCF stability" }).closest("details")).not.toBeNull()
+        expect(note.textContent).not.toContain("SCF stability")
     })
 
-    it("gates imaginary-mode projections on has_hessian, not on a dedicated available flag", async () => {
+    // `imaginary_mode_projections` is gated on `has_hessian`, not a
+    // dedicated `has_imaginary_mode_projections` flag (see the module
+    // docstring) -- folded into the exact same shared line as every other
+    // empty on-demand section, so the page reads the same way regardless
+    // of which flag happened to gate a given section.
+    it("folds imaginary-mode projections (gated on has_hessian) into the same shared missing-sections line", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({ available_sections: { ...mockRecord().available_sections, has_hessian: false } }),
         })))
         page()
         await screen.findByRole("heading", { name: "Frequency calculation" })
-        const heading = screen.getByRole("heading", { name: "Imaginary-mode projections" })
-        expect(heading.closest("details")).toBeNull()
-        expect(screen.getByText(/Not determinable — no Hessian is stored/)).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Imaginary-mode projections" })).not.toBeInTheDocument()
+        const note = screen.getByText(/^Not recorded on this calculation:/)
+        expect(note.textContent).toContain("Imaginary-mode projections")
+    })
+
+    // Sections structurally impossible for this calculation's TYPE never
+    // appear, not even in the shared missing-sections line -- the type is
+    // already stated at the top of the page and explains their absence
+    // (review finding 8's explicit carve-out, same rule the ToC
+    // applicability tests below already cover for headings).
+    it("omits a structurally inapplicable section from the missing-sections line, but keeps an applicable-and-missing one", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "sp" },
+                results: {
+                    kind: "sp",
+                    sp: { electronic_energy_hartree: -76.1, electronic_energy_uncertainty_hartree: null },
+                    opt: null, freq: null, scan: null, irc: null, path_search: null,
+                },
+                available_sections: {
+                    ...mockRecord().available_sections,
+                    has_geometry_validation: false, geometry_validation_applicable: false,
+                    has_constraints: false, constraints_applicable: false,
+                    has_freq_modes: false, freq_modes_applicable: false,
+                    has_scan: false, scan_applicable: false,
+                    has_irc: false, irc_applicable: false,
+                    has_path_search: false, path_search_applicable: false,
+                    has_execution_environment: false,
+                },
+            }),
+        })))
+        page()
+        await screen.findByRole("heading", { name: "Single-point calculation" })
+        const note = screen.getByText(/^Not recorded on this calculation:/)
+        for (const inapplicable of ["Geometry validation", "Constraints", "Vibrational modes", "Scan trajectory", "IRC trajectory", "Path-search trajectory"]) {
+            expect(note.textContent).not.toContain(inapplicable)
+        }
+        // `execution_environment` has no `*_applicable` flag at all (it is
+        // applicable to every type) -- so an sp calculation with none
+        // recorded still names it, unlike the six inapplicable checks above.
+        expect(note.textContent).toContain("Execution environment")
     })
 
     it("surfaces the provenance pointers on the on-demand sections, not just their headline fields", async () => {
@@ -1144,6 +1205,34 @@ describe("CalculationDetailPage", () => {
             page()
             await screen.findByRole("heading", { name: "Frequency calculation" })
             expect(screen.queryByTestId("energy-display-value")).not.toBeInTheDocument()
+        })
+
+        // Review finding 2: an `opt` calculation with no recorded final
+        // energy used to render a bare, unlabelled italic "not recorded" in
+        // the headline slot -- indistinguishable from a layout glitch. The
+        // label ("Final energy") must stay visible even with no number.
+        it("keeps the label on the headline slot for an opt calculation with no recorded final energy, instead of a bare unlabelled absence", async () => {
+            server.use(http.get(ENDPOINT, () => HttpResponse.json({
+                record: mockRecord({
+                    calculation: { ...mockRecord().calculation, type: "opt" },
+                    results: {
+                        kind: "opt",
+                        opt: { converged: null, n_steps: null, final_energy_hartree: null },
+                        sp: null, freq: null, scan: null, irc: null, path_search: null,
+                    },
+                }),
+            })))
+            page()
+            await screen.findByRole("heading", { name: "Optimisation calculation" })
+            // No energy VALUE testid -- there is no number to show...
+            expect(screen.queryByTestId("energy-display-value")).not.toBeInTheDocument()
+            // ...but the label is still there, in the headline slot, paired
+            // with the absence -- not silently dropped the way the shared
+            // `EnergyDisplay` component drops it for an inline (non-headline)
+            // use.
+            const headline = document.querySelector(".calc-headline-energy") as HTMLElement
+            expect(within(headline).getByText("Final energy")).toBeVisible()
+            expect(within(headline).getByText("not recorded")).toBeVisible()
         })
     })
 
