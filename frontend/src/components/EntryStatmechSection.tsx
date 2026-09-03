@@ -13,6 +13,7 @@ import {
 } from "../api/statmechApi"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import { conformerLabel, partitionByConformerLink, statmechConformerGroupRefs } from "../domain/conformerEvidence"
+import { groupByFingerprint, statmechRecordFingerprint } from "../domain/identicalRecordGroups"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { deriveStatmechConformer } from "../domain/statmechConformerDerivation"
@@ -135,6 +136,19 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
         openSourceCalcs()
     }, [openSourceCalcs])
 
+    // Frequencies too, and for the same reason `source_calculations` is
+    // eager: the vibrational-frequency evidence is the CONTENT of a
+    // statmech record, not an optional extra -- the owner's report was
+    // exactly this, seven ~500px cards showing point group and symmetry
+    // while the frequencies sat in a collapsed "Expand to load this
+    // section" disclosure ~6000px below all of them. `FrequenciesBlock`
+    // (on each card, below) now renders this by default, gated per-record
+    // by that record's own `available_sections.has_frequencies` -- never a
+    // separate global disclosure a reader has to find and open first.
+    useEffect(() => {
+        openFrequencies()
+    }, [openFrequencies])
+
     return (
         <>
             <section className="ledger-section" aria-labelledby="statmech-heading">
@@ -160,9 +174,10 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                         records={records}
                         conformersState={conformersState}
                         sourceCalcsState={sourceCalcsState}
+                        frequenciesState={frequenciesState}
                     />
                 ) : (
-                    records.map((record) => renderStatmechRecord(record, conformers, sourceCalcsState))
+                    renderStatmechRecords(records, conformers, sourceCalcsState, frequenciesState)
                 )}
             </section>
 
@@ -213,39 +228,6 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                         </tbody>
                     </table>
                 ) : <p className="empty-projection">The archive returned no electronic-level rows.</p>)}
-            </StatmechLazySection>
-
-            <StatmechLazySection
-                heading="Frequencies"
-                records={records}
-                available={records.some((record) => record.available_sections.has_frequencies)}
-                notAvailableText="No source frequency calculation is recorded for any statmech record on this entry."
-                state={frequenciesState}
-                onOpen={openFrequencies}
-                rowState={(record, data) => scalarRowState(record.available_sections.has_frequencies, data)}
-            >
-                {(_record, summary) => summary ? (
-                    <dl className="kv-list">
-                        <div>
-                            <dt>Source frequency calculations</dt>
-                            <dd>
-                                {(summary.source_freq_calculation_refs ?? []).length > 0
-                                    ? (summary.source_freq_calculation_refs ?? []).map((ref, index) => (
-                                        <span key={ref}>
-                                            {index > 0 && ", "}
-                                            <Link to={`/calculations/${ref}`}>{ref}</Link>
-                                        </span>
-                                    ))
-                                    : "not recorded"}
-                            </dd>
-                        </div>
-                        <div>
-                            <dt>Frequency scale factor</dt>
-                            <dd><QuantityValue value={formatQuantity("statmech_frequency_scale_factor", summary.frequency_scale_factor_value)} /></dd>
-                        </div>
-                        <div><dt>Note</dt><dd>{summary.note ?? "not recorded"}</dd></div>
-                    </dl>
-                ) : <p className="empty-projection">The archive returned no frequencies summary.</p>}
             </StatmechLazySection>
 
             <StatmechLazySection
@@ -312,12 +294,47 @@ function renderStatmechRecord(
     record: StatmechRecord,
     conformers: ConformerProjection[],
     sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>,
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>,
 ) {
     return (
         <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
-            <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} />
+            <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
         </SectionErrorBoundary>
     )
+}
+
+/**
+ * Renders a WHOLE bucket of records at once, grouping it -- LOCALLY, per
+ * call -- by scientific content (`groupByFingerprint`/
+ * `statmechRecordFingerprint`) rather than mapping one record to one card.
+ * Mirrors `EntryThermoSection.tsx`'s `makeThermoGroupedRenderer`: grouping
+ * happens per bucket (once for the flat no-conformer-selected list, once
+ * per `ConformerAttributionGroups` bucket) so a record traced to a
+ * different conformer is never folded into another bucket's
+ * identical-values card just because the two report the same numbers.
+ */
+function renderStatmechRecords(
+    records: StatmechRecord[],
+    conformers: ConformerProjection[],
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>,
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>,
+): ReactNode {
+    return groupByFingerprint(records, statmechRecordFingerprint).map((group) => {
+        if (group.records.length === 1) {
+            return renderStatmechRecord(group.records[0], conformers, sourceCalcsState, frequenciesState)
+        }
+        const representative = group.records[0]
+        return (
+            <SectionErrorBoundary key={representative.statmech.statmech_ref} fallback={statmechRecordFallback(representative)}>
+                <IdenticalStatmechRecordsCard
+                    records={group.records}
+                    conformers={conformers}
+                    sourceCalcsState={sourceCalcsState}
+                    frequenciesState={frequenciesState}
+                />
+            </SectionErrorBoundary>
+        )
+    })
 }
 
 /**
@@ -329,12 +346,13 @@ function renderStatmechRecord(
  * (identical to having no conformer selected) with a short status line
  * above it -- never zero records for a count line that says otherwise.
  */
-function ConformerScopedStatmechRecords({ conformer, conformers, records, conformersState, sourceCalcsState }: {
+function ConformerScopedStatmechRecords({ conformer, conformers, records, conformersState, sourceCalcsState, frequenciesState }: {
     conformer: ConformerProjection
     conformers: ConformerProjection[]
     records: StatmechRecord[]
     conformersState: EntryListSectionState<StatmechRecord["conformers"]>
     sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
 }) {
     if (conformersState.status !== "ready") {
         return (
@@ -344,7 +362,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
                         ? `${conformersState.message} Showing every record for this entry, ungrouped, until the conformer link resolves.`
                         : "Resolving conformer links… showing every record for this entry, ungrouped, in the meantime."}
                 </p>
-                {records.map((record) => renderStatmechRecord(record, conformers, sourceCalcsState))}
+                {renderStatmechRecords(records, conformers, sourceCalcsState, frequenciesState)}
             </>
         )
     }
@@ -357,7 +375,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
                 (record) => statmechConformerGroupRefs(conformersState.dataByRef.get(record.statmech.statmech_ref)),
             )}
             selectedLabel={conformerLabel(conformer)}
-            renderRecord={(record) => renderStatmechRecord(record, conformers, sourceCalcsState)}
+            renderRecords={(bucketRecords) => renderStatmechRecords(bucketRecords, conformers, sourceCalcsState, frequenciesState)}
             thisConformerNote="Computed against this conformer's own basin, per the archive's own conformer link."
             thisConformerEmptyText="No statmech record is linked to this conformer yet."
             otherConformerNote="Computed against a different conformer's basin than the one selected above."
@@ -367,10 +385,11 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
     )
 }
 
-function StatmechRecordCard({ record, conformers, sourceCalcsState }: {
+function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesState }: {
     record: StatmechRecord
     conformers: ConformerProjection[]
     sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
 }) {
     const core = record.statmech
     return (
@@ -380,7 +399,41 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState }: {
                 <span className="review-badge">{statusLabel(core.review.status)}</span>
                 <code>{core.statmech_ref}</code>
             </div>
+            <StatmechRecordBody record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
+        </article>
+    )
+}
 
+/**
+ * Everything under a statmech card's own heading -- shared by the normal
+ * one-record `StatmechRecordCard` above and `IdenticalStatmechRecordsCard`
+ * below (which shows this body ONCE, from a representative record, for a
+ * whole group of scientifically-identical deposits).
+ *
+ * `showRecordEvidence` is `false` only for the group's own shared body
+ * (`IdenticalStatmechRecordsCard`) -- the finding measured live: the
+ * representative's "Record software: Arkane · Workflow: ARC 1.1.0", its own
+ * source-calculation count, and its single freq-calculation ref were all
+ * printed as though they held for the whole group, when in fact six of the
+ * seven ethene records cite different freq calculations and different
+ * software. None of `evidence_summary`, `FrequenciesBlock`, or
+ * `software_release`/`workflow_tool_release` participates in
+ * `statmechRecordFingerprint` -- they are real per-record facts, not shared
+ * ones -- so the group body hides them and `IdenticalStatmechGroupRefs`
+ * lists every member's own opt/freq/sp source calculations, frequency
+ * calculation, software, and workflow tool per ref instead. Every other
+ * caller shows this, unchanged.
+ */
+function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesState, showRecordEvidence = true }: {
+    record: StatmechRecord
+    conformers: ConformerProjection[]
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
+    showRecordEvidence?: boolean
+}) {
+    const core = record.statmech
+    return (
+        <>
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
 
             <dl className="kv-list">
@@ -396,34 +449,283 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState }: {
                 <div><dt>External symmetry</dt><dd>{core.external_symmetry ?? "not recorded"}</dd></div>
                 <div><dt>Linear molecule</dt><dd>{boolLabel(core.is_linear)}</dd></div>
                 <div><dt>Optical isomers</dt><dd>{core.optical_isomers ?? "not recorded"}</dd></div>
-                <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
+                {/* `created_at` is excluded from `statmechRecordFingerprint` -- it's a
+                    real per-record fact, not a shared one, so the group's shared body
+                    (`showRecordEvidence={false}`) omits it rather than printing one
+                    member's deposit date as though it held for the whole group. */}
+                {showRecordEvidence && <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>}
             </dl>
 
             <SubjectLine record={record} />
             <DerivedConformerNote record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} />
 
-            <dl className="kv-list">
-                <div><dt>Source calculations</dt><dd>{record.evidence_summary.source_calculation_count}</dd></div>
-                <div>
-                    <dt>Has opt / freq / sp</dt>
-                    <dd>
-                        {boolLabel(record.evidence_summary.has_opt_calculation)} / {boolLabel(record.evidence_summary.has_freq_calculation)}
-                        {" / "}{boolLabel(record.evidence_summary.has_sp_calculation)}
-                    </dd>
-                </div>
-                <div><dt>SP from optimization</dt><dd>{boolLabel(record.evidence_summary.sp_from_optimization)}</dd></div>
-                <div><dt>Rotor scans</dt><dd>{boolLabel(record.evidence_summary.has_rotor_scans)} ({record.evidence_summary.torsion_count} torsions)</dd></div>
-            </dl>
+            {showRecordEvidence && (
+                <>
+                    <dl className="kv-list">
+                        <div><dt>Source calculations</dt><dd>{record.evidence_summary.source_calculation_count}</dd></div>
+                        <div>
+                            <dt>Has opt / freq / sp</dt>
+                            <dd>
+                                {boolLabel(record.evidence_summary.has_opt_calculation)} / {boolLabel(record.evidence_summary.has_freq_calculation)}
+                                {" / "}{boolLabel(record.evidence_summary.has_sp_calculation)}
+                            </dd>
+                        </div>
+                        <div><dt>SP from optimization</dt><dd>{boolLabel(record.evidence_summary.sp_from_optimization)}</dd></div>
+                        <div><dt>Rotor scans</dt><dd>{boolLabel(record.evidence_summary.has_rotor_scans)} ({record.evidence_summary.torsion_count} torsions)</dd></div>
+                    </dl>
+                    <FrequenciesBlock record={record} state={frequenciesState} />
+                    <p className="section-note">
+                        Record software:{" "}
+                        {softwareLabel(record.software_release) ?? "not recorded"}
+                        {" · "}Workflow:{" "}
+                        {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
+                    </p>
+                </>
+            )}
 
             <FrequencyScaleFactorDetail core={core} fsf={record.frequency_scale_factor} />
+        </>
+    )
+}
 
-            <p className="section-note">
-                Record software:{" "}
-                {softwareLabel(record.software_release) ?? "not recorded"}
-                {" · "}Workflow:{" "}
-                {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
+/**
+ * The archive's own frequency evidence for this record, on the card itself
+ * and loaded by default -- previously this lived ~6000px below all seven
+ * record cards, behind a "Expand to load this section" disclosure, while
+ * every card showed point group, symmetry, and provenance flags but never
+ * the frequencies themselves. `record.available_sections.has_frequencies`
+ * gates this per record -- `false` means genuinely nothing to show, so
+ * this renders nothing at all (never a heading over an empty box).
+ *
+ * The raw per-mode frequency NUMBERS are not on this wire shape at all:
+ * `frequencies` (`include=frequencies`) is a POINTER to the source freq
+ * calculation(s) plus the resolved scale factor -- see
+ * `StatmechFrequenciesSummary`'s own docstring in
+ * `backend/app/schemas/reads/scientific_statmech.py` ("Frequencies are not
+ * stored on statmech rows -- they live on calc_freq_result of the source
+ * freq calculation"). This block surfaces exactly what this record's own
+ * wire shape carries -- the source calculation(s) to follow for the
+ * numbers -- not a frequency list this endpoint never returns. Any `note`
+ * the server attaches is rendered as plain, reader-facing wording
+ * (`statmechNoteText` below), never the server's own API-path phrasing --
+ * a chemist reading this card should never see an endpoint URL.
+ */
+function FrequenciesBlock({ record, state }: {
+    record: StatmechRecord
+    state: EntryListSectionState<StatmechRecord["frequencies"]>
+}) {
+    if (!record.available_sections.has_frequencies) return null
+    const ref = record.statmech.statmech_ref
+    if (state.status === "idle" || state.status === "loading") {
+        return <p className="section-note" role="status">Loading frequency source…</p>
+    }
+    if (state.status === "error") {
+        return <p className="section-note" role="alert">{state.message}</p>
+    }
+    const summary = state.dataByRef.get(ref)
+    if (!summary) {
+        return (
+            <p className="empty-projection">
+                The archive marks this record as having frequency evidence; this view did not return it.
             </p>
+        )
+    }
+    const freqRefs = summary.source_freq_calculation_refs ?? []
+    return (
+        <section aria-labelledby={`freq-${ref}`}>
+            <h4 className="model-block-heading" id={`freq-${ref}`}>Frequencies</h4>
+            <dl className="kv-list">
+                <div>
+                    <dt>Source frequency calculations</dt>
+                    <dd>
+                        {freqRefs.length > 0
+                            ? freqRefs.map((freqRef, index) => (
+                                <span key={freqRef}>
+                                    {index > 0 && ", "}
+                                    <Link to={`/calculations/${freqRef}`}>{freqRef}</Link>
+                                </span>
+                            ))
+                            : "not recorded"}
+                    </dd>
+                </div>
+            </dl>
+            {/* The server's own `note` field carries developer-facing wording
+                (an API path to fetch per-mode arrays) meant for a client
+                author, not a chemist reading this card -- never rendered
+                verbatim. This fixed, reader-facing line says the same thing
+                in plain language instead. */}
+            {freqRefs.length > 0 && (
+                <p className="section-note">Per-mode frequency values are recorded on the source calculation, not summarized here.</p>
+            )}
+        </section>
+    )
+}
+
+// Suffix applied to the group card's own heading id, so it never collides
+// with the same representative record's plain `statmech-heading-<ref>` id
+// when that record is rendered a second time, unmodified, inside "Show
+// all" below.
+const STATMECH_GROUP_ID_SUFFIX = "-group"
+
+/**
+ * One card for N deposited statmech records that report IDENTICAL
+ * scientific content (`domain/identicalRecordGroups.ts`'s
+ * `statmechRecordFingerprint`) -- the finding measured live: seven ethene
+ * statmech records, all D2h, σ=4, 0.9990 fundamental, b3lyp/def2tzvp,
+ * rendered as seven full ~500px cards. The shared scientific content
+ * renders ONCE, from the group's first record; every member reports the
+ * identical body by construction of the fingerprint -- via the same
+ * `StatmechRecordBody` a single-record card uses. "Show all" mounts every
+ * member's own full, unmodified card on demand.
+ *
+ * Record-level evidence is NOT part of that shared display:
+ * `showRecordEvidence={false}` drops the representative's own source-
+ * calculation evidence, frequency-calculation pointer, and record
+ * software/workflow tool from the shared body (the live case this fix was
+ * written against: seven ethene records citing SEVEN DIFFERENT freq
+ * calculations, six with no recorded software and one Arkane -- printing
+ * the representative's would attribute them to all seven, which is
+ * false), and `IdenticalStatmechGroupRefs` prints every member's own
+ * source calculations, frequency calculation, software, and workflow
+ * tool, per ref, directly on the card -- never behind "Show all".
+ */
+function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, frequenciesState }: {
+    records: StatmechRecord[]
+    conformers: ConformerProjection[]
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
+}) {
+    const representative = records[0]
+    const anchorId = `statmech-heading-${representative.statmech.statmech_ref}${STATMECH_GROUP_ID_SUFFIX}`
+    return (
+        <article className="science-record identical-record-group" aria-labelledby={anchorId}>
+            <div className="science-record-heading">
+                <h3 id={anchorId}>{statusLabel(representative.statmech.scientific_origin)} statmech record</h3>
+                <span className="review-badge">{records.length} records with identical values</span>
+            </div>
+            <p className="section-note">
+                {records.length} deposited records report identical point group, symmetry, and frequency
+                scale factor values — shown once below. Each record's own ref and provenance -- including
+                which source calculations and frequency calculation it cites -- is listed per ref in the
+                table below, never collapsed into one; every record stays individually reachable, and none
+                was merged, averaged, or dropped in favor of another.
+            </p>
+            <StatmechRecordBody
+                record={representative}
+                conformers={conformers}
+                sourceCalcsState={sourceCalcsState}
+                frequenciesState={frequenciesState}
+                showRecordEvidence={false}
+            />
+            <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
+            <details className="identical-record-group-detail">
+                <summary>Show all {records.length} records individually</summary>
+                {records.map((record) => (
+                    <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
+                        <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
+                    </SectionErrorBoundary>
+                ))}
+            </details>
         </article>
+    )
+}
+
+/**
+ * One calculation-ref cell: every ref this record's own source-calculation
+ * or frequency evidence names for `role`/`kind`, linked, or "not recorded"
+ * once the backing include has resolved and genuinely found none. While
+ * the shared, entry-scoped `include` this cell depends on is still
+ * loading, this says so rather than falsely reading as "not recorded".
+ */
+function RecordCalcRefsCell({ refs }: { refs: string[] | "loading" }) {
+    if (refs === "loading") return <>loading…</>
+    if (refs.length === 0) return <>not recorded</>
+    return (
+        <>
+            {refs.map((ref, index) => (
+                <span key={ref}>
+                    {index > 0 && ", "}
+                    <Link to={`/calculations/${ref}`}>{ref}</Link>
+                </span>
+            ))}
+        </>
+    )
+}
+
+function sourceCalcRefsByRole(
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>,
+    statmechRef: string,
+    role: string,
+): string[] | "loading" {
+    if (sourceCalcsState.status !== "ready") return "loading"
+    return (sourceCalcsState.dataByRef.get(statmechRef) ?? [])
+        .filter((calc) => calc.role === role)
+        .map((calc) => calc.calculation_ref)
+}
+
+function freqCalcRefs(
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>,
+    statmechRef: string,
+): string[] | "loading" {
+    if (frequenciesState.status !== "ready") return "loading"
+    return frequenciesState.dataByRef.get(statmechRef)?.source_freq_calculation_refs ?? []
+}
+
+/**
+ * Every ref in an identical-values group, with its OWN provenance -- see
+ * `EntryThermoSection.tsx`'s `IdenticalThermoGroupRefs` for the identical
+ * rule: grouping on scientific content must never collapse provenance
+ * that genuinely differs record to record. The opt/freq/sp source
+ * calculations come from the entry-scoped `source_calculations` include
+ * (`sourceCalcsState`, filtered per record by `role`); the frequency
+ * calculation comes from the separate `frequencies` include
+ * (`frequenciesState`) -- both are fetched eagerly for the whole entry
+ * already (see `StatmechList`), so no extra request is made rendering this
+ * table.
+ */
+function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesState }: {
+    records: StatmechRecord[]
+    sourceCalcsState: EntryListSectionState<StatmechRecord["source_calculations"]>
+    frequenciesState: EntryListSectionState<StatmechRecord["frequencies"]>
+}) {
+    const headingId = `identical-refs-${records[0].statmech.statmech_ref}`
+    return (
+        <section aria-labelledby={headingId}>
+            <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
+            <div className="table-scroll table-scroll--compact">
+                <table className="stage-table" aria-label="Records sharing these identical values">
+                    <thead>
+                        <tr>
+                            <th scope="col">Ref</th>
+                            <th scope="col">Review</th>
+                            <th scope="col">Opt calc</th>
+                            <th scope="col">Freq calc</th>
+                            <th scope="col">SP calc</th>
+                            <th scope="col">Frequencies</th>
+                            <th scope="col">Record software</th>
+                            <th scope="col">Workflow tool</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {records.map((record) => {
+                            const ref = record.statmech.statmech_ref
+                            return (
+                                <tr key={ref}>
+                                    <td data-label="Ref"><code>{ref}</code></td>
+                                    <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
+                                    <td data-label="Opt calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
+                                    <td data-label="Freq calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
+                                    <td data-label="SP calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
+                                    <td data-label="Frequencies"><RecordCalcRefsCell refs={freqCalcRefs(frequenciesState, ref)} /></td>
+                                    <td data-label="Record software">{softwareLabel(record.software_release) ?? "not recorded"}</td>
+                                    <td data-label="Workflow tool">{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</td>
+                                </tr>
+                            )
+                        })}
+                    </tbody>
+                </table>
+            </div>
+        </section>
     )
 }
 
@@ -580,12 +882,6 @@ function arrayRowState<T>(hasFlag: boolean, data: T[] | null | undefined): "not-
     return "populated"
 }
 
-function scalarRowState<T>(hasFlag: boolean, data: T | null | undefined): "not-present" | "empty" | "populated" {
-    if (!hasFlag) return "not-present"
-    if (data === null || data === undefined) return "empty"
-    return "populated"
-}
-
 function StatmechLazySection<T>({
     heading, records, available, notAvailableText, state, onOpen, rowState, children,
 }: {
@@ -603,14 +899,13 @@ function StatmechLazySection<T>({
     // "No X are recorded…" sections to say beyond what the eager empty
     // message above already said once. Mirrors `TransportLazySection`.
     if (records.length === 0) return null
-    if (!available) {
-        return (
-            <section className="ledger-section" aria-labelledby={headingId}>
-                <SectionHeading id={headingId}>{heading}</SectionHeading>
-                <p className="empty-projection">{notAvailableText}</p>
-            </section>
-        )
-    }
+    // No record on the entry has this section at all -- `notAvailableText`
+    // already names what's missing ("No electronic levels are recorded for
+    // any statmech record on this entry."), so a full heading over a
+    // dashed empty box repeats that in two places for nothing. Collapses
+    // to the one line, unregistered with the ToC (no `SectionHeading`) --
+    // there is no destination behind it to jump to.
+    if (!available) return <p className="empty-projection">{notAvailableText}</p>
     return (
         <details
             className="ledger-section"

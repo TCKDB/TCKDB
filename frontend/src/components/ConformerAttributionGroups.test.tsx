@@ -12,7 +12,7 @@ function renderGroups(attribution: ConformerAttribution<Rec>) {
         <ConformerAttributionGroups
             attribution={attribution}
             selectedLabel="Conformer Group 2"
-            renderRecord={(record) => <p key={record.id} data-testid={`record-${record.id}`}>{record.id}</p>}
+            renderRecords={(records) => records.map((record) => <p key={record.id} data-testid={`record-${record.id}`}>{record.id}</p>)}
             thisConformerNote="Traced to this conformer's own primary calculation."
             thisConformerEmptyText="No thermo record traces to this conformer yet."
             otherConformerNote="Traced to a different conformer than the one selected above."
