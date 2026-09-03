@@ -7,6 +7,15 @@ function token(value: string) {
     return value.replaceAll("_", " ")
 }
 
+// Single named seam for this row's link target. The in-flight ROUTING batch
+// is repointing TS browse rows at a new `/transition-state-entries/:ref`
+// page instead of the reaction they belong to -- when that lands, this is
+// the only line it needs to change. Do not inline this expression anywhere
+// else in this file.
+function tsRowTarget(record: TransitionStateBrowseRecord): string | null {
+    return record.reaction.reaction_ref ? `/reactions/${record.reaction.reaction_ref}` : null
+}
+
 /**
  * A transition state has no formula of its own -- it is identified by the
  * REACTION it connects (see `TransitionStatesBrowseRequest`'s module
@@ -60,7 +69,14 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
     ].filter((label): label is string => Boolean(label))
 
     const equation = record.reaction.equation ?? "Equation not recorded"
-    const target = record.reaction.reaction_ref ? `/reactions/${record.reaction.reaction_ref}` : null
+    const target = tsRowTarget(record)
+
+    // Extracted (rather than re-derived inline) so the aria-label below and
+    // the visible pills stay byte-identical in wording.
+    const entryLabel = record.transition_state.label ?? "Unlabeled transition state"
+    const entryStatusText = token(record.transition_state_entry.status)
+    const entryReviewStatusText = token(record.transition_state_entry.review.status)
+    const entryRef = record.transition_state_entry.transition_state_entry_ref
 
     const content: ReactNode = (
         <>
@@ -77,11 +93,11 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
             <ul className="browse-row-entries">
                 <li className="browse-entry-chip">
                     <span className="value-pill browse-entry-kind-pill">
-                        {record.transition_state.label ?? "Unlabeled transition state"}
-                        {" · "}{token(record.transition_state_entry.status)}
+                        {entryLabel}
+                        {" · "}{entryStatusText}
                     </span>
                     <span className="value-pill value-pill--muted browse-entry-review">
-                        {token(record.transition_state_entry.review.status)}
+                        {entryReviewStatusText}
                     </span>
                 </li>
             </ul>
@@ -90,14 +106,30 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                     ? `Evidence: ${evidence.join(" · ")} (${record.evidence_summary.calculation_count} calculations)`
                     : "No calculation evidence recorded"}
             </p>
-            <code className="browse-row-ref">{record.transition_state_entry.transition_state_entry_ref}</code>
+            <code className="browse-row-ref">{entryRef}</code>
         </>
     )
 
     return (
         <li className="browse-row ts-browse-row">
+            {/* aria-label previously replaced the link's accessible name
+                with just "Reaction <equation>" -- the label/status pill,
+                review pill, evidence line and ref inside the link were
+                still visible but no longer announced as part of it.
+                Extended (not dropped) to fold in the label/status and the
+                ref, so a screen-reader user gets the two facts the plain
+                text content would otherwise bury under the evidence
+                sentence. */}
             {target
-                ? <Link aria-label={`Reaction ${equation}`} className="browse-row-link" to={target}>{content}</Link>
+                ? (
+                    <Link
+                        aria-label={`Reaction ${equation} — ${entryLabel} · ${entryStatusText}, review ${entryReviewStatusText}, ${entryRef}`}
+                        className="browse-row-link"
+                        to={target}
+                    >
+                        {content}
+                    </Link>
+                )
                 : content}
         </li>
     )

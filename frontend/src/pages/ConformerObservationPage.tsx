@@ -85,6 +85,11 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
     // owner-reported defect was a one-row table saying nothing beyond what
     // the hero badge already says.
     const hasReviewEvents = reviewHistory.some((entry) => entry.reviewed_at != null || entry.note != null)
+    // Whether the "Review history" table will actually render below. The
+    // intro sentence describes that table -- it should not appear when
+    // there is no table to describe (see the `<p>` right above the
+    // review-history section for the full history of this fix).
+    const showReviewTable = reviewAvailability === "populated" && hasReviewEvents
 
     return (
         <section className="conformer-page">
@@ -247,7 +252,11 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 {observationsAvailability === "populated" && siblings.length > 0 ? (
                     <ul className="observation-list">
                         {siblings.map((sibling) => (
-                            <SiblingRow key={sibling.conformer_observation.conformer_observation_ref} sibling={sibling} />
+                            <SiblingRow
+                                key={sibling.conformer_observation.conformer_observation_ref}
+                                sibling={sibling}
+                                currentStatus={core.review.status}
+                            />
                         ))}
                     </ul>
                 ) : (
@@ -265,14 +274,17 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                     {/* Used to restate the current status here as prose
                         ("The current status is not reviewed.") -- the hero
                         badge above already carries it, and the owner
-                        counted this page showing review status in five
+                        counted this page showing review status in eight
                         places (hero pill, this sentence, every calculation
                         row, every sibling pill, and the history table
                         itself). This sentence describes the TABLE now,
-                        without repeating the status value. */}
-                    <p>This is the record of how the current status was reached.</p>
+                        without repeating the status value -- and only
+                        renders when a table follows; when there is no
+                        table, the single empty-state line below speaks for
+                        itself. */}
+                    {showReviewTable && <p>This is the record of how the current status was reached.</p>}
                 </div>
-                {reviewAvailability === "populated" && hasReviewEvents ? (
+                {showReviewTable ? (
                     <table className="stage-table" aria-label={`Review history for ${core.conformer_observation_ref}`}>
                         <thead>
                             <tr>
@@ -324,14 +336,19 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
     )
 }
 
-function SiblingRow({ sibling }: { sibling: SiblingObservation }) {
+function SiblingRow({ sibling, currentStatus }: { sibling: SiblingObservation; currentStatus: string }) {
     const core = sibling.conformer_observation
+    // Review status is shown once, in this record's own hero pill. A
+    // sibling only gets its own pill when its status genuinely differs --
+    // otherwise this list would repeat the same "not reviewed" the hero
+    // already said, once per sibling.
+    const statusDiffers = core.review.status !== currentStatus
     return (
         <li>
             <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
                 {core.conformer_observation_ref}
             </Link>
-            <span className="review-badge">{statusLabel(core.review.status)}</span>
+            {statusDiffers && <span className="review-badge">{statusLabel(core.review.status)}</span>}
         </li>
     )
 }
@@ -384,6 +401,12 @@ function CalculationTable({ calculations, observationRef }: {
     calculations: CalculationEntry[]
     observationRef: string
 }) {
+    // No "Review" column here. These calculations are this observation's
+    // own; the observation's review status is the hero pill above, shown
+    // once. A per-row review column repeated that same value once per
+    // calculation (four extra "not reviewed"s on the record that surfaced
+    // this) without adding any calculation-specific fact -- calculations
+    // are not independently reviewed in this archive today.
     return (
         <table className="stage-table" aria-label={`Calculations for ${observationRef}`}>
             <thead>
@@ -391,7 +414,6 @@ function CalculationTable({ calculations, observationRef }: {
                     <th scope="col">Stage</th>
                     <th scope="col">Level of theory</th>
                     <th scope="col">Software / workflow</th>
-                    <th scope="col">Review</th>
                     <th scope="col">Record</th>
                 </tr>
             </thead>
@@ -409,11 +431,6 @@ function CalculationTable({ calculations, observationRef }: {
                             {calculation.workflow_tool_release?.workflow_tool
                                 ? ` · ${calculation.workflow_tool_release.workflow_tool}`
                                 : ""}
-                        </td>
-                        <td data-label="Review">
-                            {calculation.review
-                                ? statusLabel(calculation.review.status)
-                                : "not recorded"}
                         </td>
                         <td data-label="Record">
                             <Link to={`/calculations/${calculation.calculation_ref}`}>

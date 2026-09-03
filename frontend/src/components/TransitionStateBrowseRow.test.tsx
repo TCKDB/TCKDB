@@ -97,7 +97,7 @@ describe("TransitionStateBrowseRow: pills, not plain text", () => {
 describe("TransitionStateBrowseRow: the whole row is the click target", () => {
     it("wraps the entire row's content in one link to the reaction, not just the equation", () => {
         renderRow(record())
-        const link = screen.getByRole("link", { name: "Reaction A <=> B" })
+        const link = screen.getByRole("link", { name: "Reaction A <=> B — TS0 · optimized, review not reviewed, tse_one" })
         expect(link).toHaveAttribute("href", "/reactions/rxn_one")
 
         // Content far from the headline -- the review pill and the stable
@@ -109,7 +109,17 @@ describe("TransitionStateBrowseRow: the whole row is the click target", () => {
 
     it("does not change WHERE the row links -- still exactly reaction.reaction_ref, untouched", () => {
         renderRow(record({ reaction: { reaction_ref: "rxn_specific", reaction_entry_ref: "rxe_x", equation: "X <=> Y", reversible: null, family: null } }))
-        expect(screen.getByRole("link", { name: "Reaction X <=> Y" })).toHaveAttribute("href", "/reactions/rxn_specific")
+        expect(screen.getByRole("link", { name: "Reaction X <=> Y — TS0 · optimized, review not reviewed, tse_one" }))
+            .toHaveAttribute("href", "/reactions/rxn_specific")
+    })
+
+    it("extends (rather than replaces) the link's accessible name with the label, status and ref, so they are still announced", () => {
+        renderRow(record())
+        const link = screen.getByRole("link", { name: "Reaction A <=> B — TS0 · optimized, review not reviewed, tse_one" })
+        // The visible pill text and ref are unaffected by the aria-label --
+        // both are still real, visible text content inside the link.
+        expect(within(link).getByText("TS0 · optimized")).toBeVisible()
+        expect(within(link).getByText("tse_one")).toBeVisible()
     })
 
     it("renders no link at all when the archive gave no reaction ref -- the row is inert, matching the prior fallback", () => {

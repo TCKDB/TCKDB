@@ -421,4 +421,138 @@ describe("ConformerObservationPage", () => {
         expect(screen.getByText("No other deposited observations were returned for this basin.")).toBeVisible()
         expect(screen.queryByRole("link", { name: "co_two" })).not.toBeInTheDocument()
     })
+
+    // Reproduces the owner's exact report: the same "not reviewed" status
+    // showing up eight times on one record (hero pill, a Review column on
+    // every calculation row, and a pill on every sibling). Review status is
+    // now shown once, in the hero -- the calculation table drops its Review
+    // column entirely (calculations don't carry independent review states
+    // on this surface; their evidence is the observation's own), and a
+    // sibling only gets its own pill when its status genuinely differs from
+    // this record's.
+    it("shows review status once, in the hero, not per calculation row or per matching sibling", async () => {
+        const siblingObservation = (ref: string, createdAt: string) => ({
+            conformer_observation: {
+                conformer_observation_ref: ref,
+                scientific_origin: "computed",
+                note: null,
+                created_at: createdAt,
+                review: { status: "not_reviewed" },
+            },
+            conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
+            species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
+            evidence_summary: {
+                calculation_count: 1, geometry_count: 1, has_opt: true, has_freq: false, has_sp: false,
+                has_geometry_validation: false, has_scf_stability: false, levels_of_theory: {},
+            },
+            available_sections: {
+                has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
+            },
+        })
+
+        const record = mockRecord({
+            conformer_observation: {
+                conformer_observation_ref: "co_one",
+                scientific_origin: "computed",
+                note: null,
+                created_at: "2026-07-21T12:06:50.748258",
+                review: { status: "not_reviewed" },
+            },
+            observations: [
+                siblingObservation("co_one", "2026-07-21T12:06:50.748258"),
+                siblingObservation("co_two", "2026-07-21T12:14:32.845900"),
+                siblingObservation("co_three", "2026-07-21T12:15:00.000000"),
+                siblingObservation("co_four", "2026-07-21T12:16:00.000000"),
+            ],
+            calculations: [
+                { calculation_ref: "calc_opt", type: "opt", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: { method: "b3lyp", basis: "def2tzvp" }, software_release: { software: "Gaussian" } },
+                { calculation_ref: "calc_freq", type: "freq", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: { method: "wb97xd", basis: "def2tzvp" }, software_release: { software: "Gaussian" } },
+                { calculation_ref: "calc_sp", type: "sp", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: { method: "ccsd(t)", basis: "cbs" }, software_release: { software: "Molpro" } },
+                { calculation_ref: "calc_opt2", type: "opt", quality: "raw", review: { status: "not_reviewed" }, level_of_theory: { method: "b3lyp", basis: "def2tzvp" }, software_release: { software: "Gaussian" } },
+            ],
+        })
+
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record })
+        )))
+
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        // Positive assertion: the calculation table still renders all four
+        // rows (this is not an absence check -- the rows are there, just
+        // without their own Review column).
+        const calcTable = screen.getByRole("table", { name: "Calculations for co_one" })
+        expect(within(calcTable).getAllByRole("row")).toHaveLength(5) // header + 4 calculation rows
+        expect(within(calcTable).queryByRole("columnheader", { name: "Review" })).not.toBeInTheDocument()
+
+        // Exactly one "not reviewed" on the whole page -- the hero pill.
+        // The three siblings all share this observation's own status, so
+        // none of them gets its own pill.
+        expect(screen.getAllByText("not reviewed")).toHaveLength(1)
+    })
+
+    it("gives a sibling its own review pill only when its status differs from this observation's", async () => {
+        // This observation is "not_reviewed"; co_two is deliberately
+        // flipped to "reviewed" so it genuinely differs and must show its
+        // own pill.
+        const record = mockRecord({
+            conformer_observation: {
+                conformer_observation_ref: "co_one",
+                scientific_origin: "computed",
+                note: null,
+                created_at: "2026-07-21T12:06:50.748258",
+                review: { status: "not_reviewed" },
+            },
+            observations: [
+                {
+                    conformer_observation: {
+                        conformer_observation_ref: "co_one",
+                        scientific_origin: "computed",
+                        note: null,
+                        created_at: "2026-07-21T12:06:50.748258",
+                        review: { status: "not_reviewed" },
+                    },
+                    conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
+                    species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
+                    evidence_summary: {
+                        calculation_count: 3, geometry_count: 2, has_opt: true, has_freq: true, has_sp: false,
+                        has_geometry_validation: true, has_scf_stability: false, levels_of_theory: {},
+                    },
+                    available_sections: {
+                        has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
+                    },
+                },
+                {
+                    conformer_observation: {
+                        conformer_observation_ref: "co_two",
+                        scientific_origin: "computed",
+                        note: null,
+                        created_at: "2026-07-21T12:14:32.845900",
+                        review: { status: "reviewed" },
+                    },
+                    conformer_group: { conformer_group_ref: "cg_demo", label: "conformer_1", review: { status: "not_reviewed" } },
+                    species: { species_ref: "spc_demo", species_entry_ref: "spe_demo" },
+                    evidence_summary: {
+                        calculation_count: 1, geometry_count: 1, has_opt: true, has_freq: false, has_sp: false,
+                        has_geometry_validation: false, has_scf_stability: false, levels_of_theory: {},
+                    },
+                    available_sections: {
+                        has_observations: true, has_selections: false, has_calculations: true, has_geometries: true, has_review: true,
+                    },
+                },
+            ],
+        })
+
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record })
+        )))
+
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        const siblingRow = screen.getByRole("link", { name: "co_two" }).closest("li")
+        expect(siblingRow).not.toBeNull()
+        expect(within(siblingRow as HTMLElement).getByText("reviewed")).toBeVisible()
+    })
 })

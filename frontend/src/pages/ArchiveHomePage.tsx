@@ -29,7 +29,6 @@ function ArchiveHomePage() {
             {destinations.map(([title, detail, to, glyph, action]) => (
                 <Link
                     className="destination"
-                    data-status={action === "Open index →" ? undefined : "coming-soon"}
                     key={to}
                     to={to}
                 >
