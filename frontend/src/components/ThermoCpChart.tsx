@@ -2,7 +2,7 @@ import { useMemo, useState } from "react"
 import "../thermo-cp-chart.css"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { ThermoRecord } from "../api/thermoApi"
-import { formatTick, linearScale } from "../domain/chartScale"
+import { formatTicks, linearScale } from "../domain/chartScale"
 import {
     CHART_MARGIN,
     CP_CHART_HEIGHT,
@@ -216,21 +216,28 @@ function ChartAxes({ xTicks, yTicks, xScale, yScale, plotHeight, plotWidth, yTic
     yTickSuffix?: string
 }) {
     const { top, left } = CHART_MARGIN
+    // One decimal precision per AXIS, from that axis's own tick step -- see
+    // `formatTicks`'s own docstring for the finding this fixes ("8.50, 10.0,
+    // 100" on one axis). The x and y axes are formatted independently since
+    // they plot unrelated quantities (temperature vs. Cp) with unrelated
+    // steps.
+    const yTickLabels = formatTicks(yTicks)
+    const xTickLabels = formatTicks(xTicks)
     return (
         <>
-            {yTicks.map((tick) => (
+            {yTicks.map((tick, index) => (
                 <g key={`y-${tick}`}>
                     <line x1={left} x2={left + plotWidth} y1={yScale(tick)} y2={yScale(tick)} className="cp-chart-gridline" />
                     <text x={left - 8} y={yScale(tick)} className="cp-chart-tick-label cp-chart-tick-label--y">
-                        {formatTick(tick)}{yTickSuffix}
+                        {yTickLabels[index]}{yTickSuffix}
                     </text>
                 </g>
             ))}
-            {xTicks.map((tick) => (
+            {xTicks.map((tick, index) => (
                 <g key={`x-${tick}`}>
                     <line x1={xScale(tick)} x2={xScale(tick)} y1={top} y2={top + plotHeight} className="cp-chart-gridline" />
                     <text x={xScale(tick)} y={top + plotHeight + 16} className="cp-chart-tick-label cp-chart-tick-label--x">
-                        {formatTick(tick)}
+                        {xTickLabels[index]}
                     </text>
                 </g>
             ))}

@@ -215,10 +215,10 @@ function describeStaging(staging: OptimizationStaging, sightings: number): strin
         if (rawOptCount === 0) return "None of them have an optimisation calculation on file."
         if (stagedRowCount === 0) {
             return `${numberWord(rawOptCount)} optimisation ${pluralize(rawOptCount, "calculation")}`
-                + ` ${pluralize(rawOptCount, "is", "are")} on file, one per chain -- no chain was staged in more than one pass.`
+                + ` ${pluralize(rawOptCount, "is", "are")} on file, one per chain — no chain was staged in more than one pass.`
         }
         return `${numberWord(rawOptCount)} optimisation ${pluralize(rawOptCount, "calculation")} ${pluralize(rawOptCount, "is", "are")} on file across`
-            + ` ${numberWord(chainCount)} independent optimisation ${pluralize(chainCount, "chain")} --`
+            + ` ${numberWord(chainCount)} independent optimisation ${pluralize(chainCount, "chain")} —`
             + ` ${numberWord(stagedRowCount)} of those calculations ${pluralize(stagedRowCount, "is", "are")} a coarse pass later refined within the same`
             + " chain, though the archive does not say which sighting they belong to."
     }

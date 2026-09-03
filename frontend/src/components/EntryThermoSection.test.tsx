@@ -640,6 +640,47 @@ describe("EntryThermoSection", () => {
         expect(within(primaryGroup).getByText("thm_alpha")).toBeVisible()
         expect(document.querySelector(".conformer-attribution-other")).toBeNull()
     })
+
+    // Test gap the owner flagged: `renderThermoRecords` (built by
+    // `makeThermoGroupedRenderer`) groups by scientific fingerprint INSIDE
+    // whatever record list it's called with -- and `ConformerAttributionGroups`
+    // calls it once per bucket (this-conformer / other-conformer / no-link),
+    // never once over the whole entry. No test proved that a record traced
+    // to a DIFFERENT conformer than the selected one, but reporting
+    // IDENTICAL H298/S298/NASA-7 values, stays its own ungrouped card in
+    // its OWN bucket rather than being folded into a cross-bucket
+    // "2 records with identical values" group.
+    it("never groups two identical-value records together when they trace to DIFFERENT conformers -- each bucket groups its own records only", async () => {
+        const [alpha] = mockRecords()
+        const tracedToOne = { ...alpha, thermo_ref: "thm_g1", provenance: { ...alpha.provenance, conformer_group_ref: "cg_one" } }
+        const tracedToTwo = { ...alpha, thermo_ref: "thm_g2", provenance: { ...alpha.provenance, conformer_group_ref: "cg_two" } }
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: [tracedToOne, tracedToTwo] }))))
+        page(conformerGroups[0], conformerGroups) // conformer_1 selected
+
+        await screen.findByRole("heading", { name: "From Conformer Group 1" })
+
+        // The selected conformer's own bucket shows ONLY its own record,
+        // as a plain (ungrouped) card -- never the "N records with
+        // identical values" wrapper a same-bucket duplicate would get.
+        const primaryGroup = screen.getByRole("heading", { name: "From Conformer Group 1" }).closest(".conformer-evidence-group") as HTMLElement
+        expect(within(primaryGroup).getByText("thm_g1")).toBeVisible()
+        expect(within(primaryGroup).queryByText("thm_g2")).not.toBeInTheDocument()
+        expect(within(primaryGroup).queryByText(/records with identical values/)).not.toBeInTheDocument()
+
+        // The other-conformer record is demoted into its own collapsed
+        // disclosure, same as any other cross-conformer record -- not
+        // merged into the primary bucket's card just because the two
+        // report the same numbers.
+        const otherDetails = document.querySelector(".conformer-attribution-other") as HTMLDetailsElement
+        expect(otherDetails).not.toBeNull()
+        expect(within(otherDetails).getByText("thm_g2")).toBeInTheDocument()
+        expect(within(otherDetails).queryByText("thm_g1")).not.toBeInTheDocument()
+        expect(within(otherDetails).queryByText(/records with identical values/)).not.toBeInTheDocument()
+
+        // Nowhere on the page do the two get grouped under one card --
+        // the bug this test guards against would show exactly this text.
+        expect(screen.queryByText(/records with identical values/)).not.toBeInTheDocument()
+    })
 })
 
 // ---------------------------------------------------------------------------
@@ -890,6 +931,77 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         const provenanceHeadingsOutsideDetail = Array.from(groupCard.querySelectorAll("h4"))
             .filter((heading) => heading.textContent === "Provenance" && !detail.contains(heading))
         expect(provenanceHeadingsOutsideDetail).toHaveLength(0)
+    })
+
+    /**
+     * Owner report: the group-refs table showed the same calculation ref
+     * twice, once under "Primary calculation" and again under a second
+     * role's column. Measured against the live archive (every deposited
+     * thermo record across every species entry, 65 records / 8
+     * multi-record groups, curled 2026-09-03) before fixing: it is the SP
+     * column that always repeats the Primary ref (an SP-from-optimization
+     * record cites the same job for both roles — 65/65), never the Freq
+     * column (a frequency job is a structurally separate calculation run
+     * — 0/65). The fix is applied to BOTH columns identically rather than
+     * hard-coded to SP, so it stays correct if a future record's Freq ref
+     * ever does collapse onto Primary; this fixture exercises that Freq
+     * "same" branch directly since no live record does today.
+     */
+    function cloneWithMixedCalculationOverlap() {
+        const [alpha] = mockRecords()
+        // A second clone, identical in every fingerprinted (H298/S298/
+        // NASA-7) field to the first -- required for either row to reach
+        // the group-refs table at all (a lone record renders as a plain
+        // card with no such table, per the "never wraps a lone record"
+        // test above).
+        // Also carries a null Freq ref -- the group table's third branch
+        // (NIT: no test previously covered "not recorded" in this table).
+        const plain = { ...alpha, thermo_ref: "thm_plain", provenance: { ...alpha.provenance, freq_calculation_ref: null } }
+        const overlap = {
+            ...alpha,
+            thermo_ref: "thm_overlap",
+            provenance: {
+                ...alpha.provenance,
+                primary_calculation: { ...alpha.provenance.primary_calculation, calculation_ref: "calc_shared" },
+                // SAME as primary -- collapses to "same as primary".
+                freq_calculation_ref: "calc_shared",
+                // DIFFERENT from primary -- keeps its own ref/link.
+                sp_calculation_ref: "calc_distinct_sp",
+            },
+        }
+        return [plain, overlap]
+    }
+
+    it("collapses a Freq/SP calculation cell to 'same as primary' when it cites the SAME calculation as Primary, but keeps a differing ref linked in full", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: cloneWithMixedCalculationOverlap() }))))
+        page()
+        await screen.findByText("2 records with identical values")
+
+        const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+        const row = within(refsTable).getByText("thm_overlap").closest("tr") as HTMLElement
+
+        // Primary keeps its own ref, linked -- the anchor every other
+        // column is compared against.
+        expect(cellAt(row, "Primary calculation")).toBe("calc_shared")
+        expect(within(row).getByRole("link", { name: "calc_shared" })).toHaveAttribute("href", "/calculations/calc_shared")
+
+        // Freq cites the IDENTICAL ref -- collapsed to prose, never a
+        // second link to the same record, never the raw ref repeated.
+        expect(cellAt(row, "Freq calculation")).toBe("same as primary")
+        expect(within(row).queryAllByRole("link", { name: "calc_shared" })).toHaveLength(1)
+
+        // SP cites a DIFFERENT ref -- stays its own link, never hidden or
+        // collapsed just because a sibling column collapsed.
+        expect(cellAt(row, "SP calculation")).toBe("calc_distinct_sp")
+        expect(within(row).getByRole("link", { name: "calc_distinct_sp" })).toHaveAttribute("href", "/calculations/calc_distinct_sp")
+
+        // The sibling row's null Freq ref hits the cell's third branch --
+        // "not recorded", plain text, never a link and never confused with
+        // the "same as primary" collapse (a null ref is not a match).
+        const plainRow = within(refsTable).getByText("thm_plain").closest("tr") as HTMLElement
+        expect(cellAt(plainRow, "Freq calculation")).toBe("not recorded")
+        const plainFreqCell = plainRow.querySelector('td[data-label="Freq calculation"]') as HTMLElement
+        expect(within(plainFreqCell).queryByRole("link")).toBeNull()
     })
 
     it("shows the shared level of theory once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {

@@ -144,13 +144,42 @@ describe("TransitionStateEntryPage", () => {
             expect(link).toHaveAttribute("href", "/reactions/rxn_nu4c52up4c4hqtbtxufwbscq3a")
         }
 
-        // Review status -- the entry's own badge in the header, and the
-        // transition-state concept's (separately reviewable) status in the
-        // context row below it. Scoped to `.basin-header`, since "not
-        // reviewed" also legitimately repeats per-calculation and in the
-        // review-history row further down the page.
+        // Review status -- only the entry's own review-badge pill in the
+        // header. The header used to also carry a "Transition state
+        // review" row restating the transition-state concept's status,
+        // which the live archive's whole review pipeline (0 reviewed
+        // records total, per `review_summary`) always matched to the
+        // pill's value -- the same status shown twice back to back.
+        // Scoped to `.basin-header`, since "not reviewed" also legitimately
+        // repeats per-calculation and in the review-history row further
+        // down the page.
         const header = document.querySelector(".basin-header") as HTMLElement
-        expect(within(header).getAllByText("not reviewed")).toHaveLength(2)
+        expect(within(header).getAllByText("not reviewed")).toHaveLength(1)
+        expect(within(header).queryByText("Transition state review")).not.toBeInTheDocument()
+    })
+
+    it("states each stage's level of theory once, in the calculation table, not in a separate by-stage block", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "TS0" })
+
+        // The standalone "Levels of theory by stage" section is gone -- it
+        // duplicated the Stage/Level-of-theory columns of the calculation
+        // table immediately below it (same fix as `ConformerObservationPage`
+        // for the same finding).
+        expect(screen.queryByRole("heading", { name: "Levels of theory by stage" })).not.toBeInTheDocument()
+
+        // The calculation table is still the one place carrying this: each
+        // row pairs its own stage with its own level of theory.
+        const calcTable = screen.getByRole("table", { name: `Calculations for ${ENTRY_REF}` })
+        const optRow = within(calcTable).getByText("opt").closest("tr")
+        const ircRow = within(calcTable).getByText("irc").closest("tr")
+        expect(optRow).not.toBeNull()
+        expect(ircRow).not.toBeNull()
+        expect(within(optRow as HTMLElement).getByText("b3lyp/def2tzvp")).toBeVisible()
+        expect(within(ircRow as HTMLElement).getByText("b3lyp/def2tzvp")).toBeVisible()
     })
 
     it("distinguishes an IRC calculation existing from a passed IRC validation record", async () => {

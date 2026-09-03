@@ -40,13 +40,57 @@ export function evenTicks(domain: readonly [number, number], count = 5): number[
     return Array.from({ length: count }, (_, i) => d0 + ((d1 - d0) * i) / (count - 1))
 }
 
-/** A short, fixed-precision label for an axis tick -- never scientific
- * notation, so gridline labels stay readable at a glance regardless of the
- * chart's own value range. */
-export function formatTick(value: number): string {
-    const magnitude = Math.abs(value)
-    if (magnitude === 0) return "0"
-    if (magnitude >= 100) return value.toFixed(0)
-    if (magnitude >= 10) return value.toFixed(1)
-    return value.toFixed(2)
+/** Highest decimal count `formatTicks` will ever try before giving up and
+ * using it anyway -- keeps the search below bounded and terminating for
+ * every input, never a source of unbounded work. */
+const MAX_TICK_DECIMALS = 6
+
+/**
+ * Fixed-precision labels for a whole axis's worth of ticks -- never
+ * scientific notation, so gridline labels stay readable at a glance
+ * regardless of the chart's own value range.
+ *
+ * Precision is chosen ONCE per axis and applied to EVERY tick on it, never
+ * per value -- a review finding caught an axis reading "8.50, 10.0, 100":
+ * three different decimal counts on ticks that should read as one
+ * consistent scale.
+ *
+ * The precision itself is the SMALLEST decimal count `d` (0..6) at which
+ * every finite tick round-trips through `Number(t.toFixed(d))` back to
+ * (within float noise of) its own value -- the least precision that loses
+ * no tick's own digits, not a guess derived from the axis's tick STEP. An
+ * earlier version of this function derived `d` from
+ * `-floor(log10(step))`, which is only correct when the step is exactly
+ * {1, 2, 5}×10^n (`niceTicks`' own output shape) -- fed a step of 2.5, it
+ * silently rounded the step's own multiples to whole numbers ("0, 3, 5, 8,
+ * 10" for ticks 0/2.5/5/7.5/10, and "-8" for a tick at -7.5): a step-based
+ * guess about precision, not a check that the tick a reader sees is the
+ * tick that was actually plotted. The round-trip check has no such blind
+ * spot -- it is correct for any tick set, nice-stepped or not, by
+ * construction, and doubles as the guard for a non-finite tick (which
+ * never round-trips at any `d`, and is simply skipped when deciding
+ * precision -- see below) or an all-identical/degenerate tick set (each
+ * tick is still checked against itself, so nothing special is needed).
+ */
+export function formatTicks(ticks: readonly number[]): string[] {
+    if (ticks.length === 0) return []
+    const finiteTicks = ticks.filter((tick) => Number.isFinite(tick))
+    let decimals = MAX_TICK_DECIMALS
+    for (let candidate = 0; candidate <= MAX_TICK_DECIMALS; candidate++) {
+        const everyTickRoundTrips = finiteTicks.every((tick) => {
+            const normalized = Object.is(tick, -0) ? 0 : tick
+            const tolerance = 1e-9 * Math.max(1, Math.abs(normalized))
+            return Math.abs(Number(normalized.toFixed(candidate)) - normalized) <= tolerance
+        })
+        if (everyTickRoundTrips) { decimals = candidate; break }
+    }
+    return ticks.map((value) => {
+        // Avoid `(-0).toFixed(n)` printing a spurious leading minus sign --
+        // a tick that lands on exactly zero should always read "0"/"0.0"/…
+        // `toFixed` itself never throws on NaN/±Infinity (returns the
+        // "NaN"/"Infinity"/"-Infinity" string per spec), so a non-finite
+        // tick still gets a label here, just not one that shaped `decimals`.
+        const normalized = Object.is(value, -0) ? 0 : value
+        return normalized.toFixed(decimals)
+    })
 }

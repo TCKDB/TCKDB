@@ -140,7 +140,6 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const reviewAvailability = sectionAvailability(record.review_history)
     const reviewHistory = record.review_history ?? []
 
-    const stages = Object.entries(evidence.levels_of_theory)
     const refs = [
         { label: "Transition state entry", value: entry.transition_state_entry_ref },
         { label: "Transition state", value: ts.transition_state_ref },
@@ -177,10 +176,13 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             its own docstring. Restating it here duplicated
                             the exact same "0 / doublet (2)" text twice on
                             one page. */}
+                        {/* No "Transition state review" row here: the review-badge
+                            pill beside the `<h1>` above already states this entry's
+                            review status. Restating it here duplicated that status
+                            text twice on one page. */}
                         <dl className="basin-context">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
-                            <div><dt>Transition state review</dt><dd>{statusLabel(ts.review.status)}</dd></div>
                             {ts.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
                         </dl>
                         <RefsDisclosure refs={refs} />
@@ -240,26 +242,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 </div>
             </section>
 
-            <section className="ledger-section" aria-labelledby="lot-by-stage">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Deposited provenance</p>
-                    <SectionHeading id="lot-by-stage">Levels of theory by stage</SectionHeading>
-                    <p>Each stage keeps its own method. Differing levels across stages are never flattened.</p>
-                </div>
-                {stages.length ? (
-                    <dl className="basin-context">
-                        {stages.map(([stage, levels]) => (
-                            <div key={stage}>
-                                <dt>{stage}</dt>
-                                <dd>{levels.map((level) => lotLabel(level)).join(", ") || "not recorded"}</dd>
-                            </div>
-                        ))}
-                    </dl>
-                ) : (
-                    <p className="empty-projection">No levels of theory were recorded for this entry.</p>
-                )}
-            </section>
-
+            {/* The standalone "Levels of theory by stage" section that used
+                to sit here showed exactly the same (stage, level of theory)
+                pairs as the "Stage" and "Level of theory" columns of the
+                calculation table immediately below -- the same finding, and
+                the same fix, as `ConformerObservationPage`. The table is the
+                more complete of the two (it also carries software/workflow,
+                review, and the calculation's own record link per row), so
+                it is the one that stays. */}
             <section className="ledger-section" aria-labelledby="calc-ledger">
                 <div className="ledger-heading">
                     <p className="eyebrow">Machine detail</p>
@@ -281,7 +271,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 <p className="eyebrow">Stored coordinates</p>
                 <SectionHeading id="geometry-ledger">Geometry records</SectionHeading>
                 <p>
-                    These are stored geometry objects linked from this entry's calculation output -- the saddle
+                    These are stored geometry objects linked from this entry's calculation output — the saddle
                     point itself and, where an IRC ran, the reaction-path points either side of it.
                 </p>
                 {geometriesAvailability === "populated" ? (

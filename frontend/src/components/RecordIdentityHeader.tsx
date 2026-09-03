@@ -68,7 +68,7 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
             <div className="record-identity-ambiguous" role="status" data-testid="record-identity-ambiguous">
                 <p>
                     This record is reachable from more than one distinct owner. Rather than guess, the
-                    identity below is left unresolved -- see the owner list to disambiguate by calculation.
+                    identity below is left unresolved — see the owner list to disambiguate by calculation.
                 </p>
                 <ul className="record-identity-ambiguous-owners">
                     {identity.owners.map((owner) => (
