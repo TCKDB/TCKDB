@@ -8,7 +8,7 @@ import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
 import { RecordStatus } from "../components/RecordStatus"
 import { RefsDisclosure } from "../components/RefsDisclosure"
-import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -16,6 +16,20 @@ const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
 
 type Calculation = NonNullable<TransitionStateEntryRecord["calculations"]>[number]
+type Geometry = NonNullable<TransitionStateEntryRecord["geometries"]>[number]
+
+// "irc_forward"/"irc_reverse" get their conventional capitalised spelling
+// (matching the finding this section was rewritten against: "IRC forward
+// — 50 points"); any other role this archive has not been taught yet
+// falls back to the same underscore-to-space transcription every other
+// role/status token on this page gets, rather than inventing a label for
+// it.
+function geometryRoleSummaryLabel(role: string): string {
+    if (role === "irc_forward") return "IRC forward"
+    if (role === "irc_reverse") return "IRC reverse"
+    if (!role) return "Role not recorded"
+    return statusLabel(role)
+}
 
 // Three states an include-gated section can be in, kept distinct per the
 // house rule this app already applies on `ConformerObservationPage`:
@@ -93,6 +107,22 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const geometriesAvailability = sectionAvailability(record.geometries)
     const geometries = [...(record.geometries ?? [])]
         .sort((a, b) => (a.output_order ?? a.input_order ?? 0) - (b.output_order ?? b.input_order ?? 0))
+    // On the live record this section serves 1 `final` + 50 `irc_forward` +
+    // 33 `irc_reverse` -- an undifferentiated grid of 84 identical-looking
+    // cards buried the one geometry that matters (the saddle point itself)
+    // in ~1,900px of IRC trajectory points. `final` is split out and led
+    // with, prominently and linked; every other role is grouped and put
+    // behind one collapsed disclosure per role, showing its point count
+    // rather than one card per point.
+    const finalGeometries = geometries.filter((geometry) => geometry.role === "final")
+    const otherGeometriesByRole = new Map<string, Geometry[]>()
+    for (const geometry of geometries) {
+        if (geometry.role === "final") continue
+        const key = geometry.role ?? ""
+        const bucket = otherGeometriesByRole.get(key)
+        if (bucket) bucket.push(geometry)
+        else otherGeometriesByRole.set(key, [geometry])
+    }
 
     const reviewAvailability = sectionAvailability(record.review_history)
     const reviewHistory = record.review_history ?? []
@@ -128,9 +158,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             SMILES, the reaction it connects, and the evidence attached to this entry.
                         </p>
                         <RecordIdentityHeader identity={identity} />
+                        {/* No "Charge / multiplicity" row here: `RecordIdentityHeader`
+                            above already carries it as one of its identity
+                            facts for every `transition_state_entry` -- see
+                            its own docstring. Restating it here duplicated
+                            the exact same "0 / doublet (2)" text twice on
+                            one page. */}
                         <dl className="basin-context">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
-                            <div><dt>Charge / multiplicity</dt><dd>{chargeDisplay(entry.charge)} / {spinDisplay(entry.multiplicity)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
                             <div><dt>Transition state review</dt><dd>{statusLabel(ts.review.status)}</dd></div>
                             {ts.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
@@ -237,15 +272,37 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     point itself and, where an IRC ran, the reaction-path points either side of it.
                 </p>
                 {geometriesAvailability === "populated" ? (
-                    <div className="geometry-links">
-                        {geometries.map((geometry) => (
-                            <div className="geometry-link" key={geometry.geometry_ref}>
-                                <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
-                                <span>
-                                    {geometry.role ? statusLabel(geometry.role) : "role not recorded"}
-                                    {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
-                                </span>
+                    <div className="geometry-groups">
+                        {finalGeometries.length > 0 ? (
+                            <div className="geometry-final">
+                                <p className="geometry-final-label">Saddle-point geometry</p>
+                                <div className="geometry-links">
+                                    {finalGeometries.map((geometry) => (
+                                        <div className="geometry-link geometry-link--final" key={geometry.geometry_ref}>
+                                            <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                            <span>final{geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}</span>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
+                        ) : (
+                            <p className="empty-projection">No saddle-point (final) geometry was deposited for this entry.</p>
+                        )}
+                        {[...otherGeometriesByRole.entries()].map(([role, roleGeometries]) => (
+                            <details className="ledger-section geometry-role-disclosure" key={role || "role-not-recorded"}>
+                                <summary>
+                                    {geometryRoleSummaryLabel(role)}
+                                    {" — "}{roleGeometries.length} point{roleGeometries.length === 1 ? "" : "s"}
+                                </summary>
+                                <div className="geometry-links">
+                                    {roleGeometries.map((geometry) => (
+                                        <div className="geometry-link" key={geometry.geometry_ref}>
+                                            <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                            <span>{geometry.natoms != null ? `${geometry.natoms} atoms` : "atom count not recorded"}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </details>
                         ))}
                     </div>
                 ) : (
@@ -349,9 +406,9 @@ function CalculationTable({ calculations, entryRef }: { calculations: Calculatio
                             {calculation.level_of_theory ? lotLabel(calculation.level_of_theory) : "not recorded"}
                         </td>
                         <td data-label="Software / workflow">
-                            {calculation.software_release?.software ?? "not recorded"}
-                            {calculation.workflow_tool_release?.workflow_tool
-                                ? ` · ${calculation.workflow_tool_release.workflow_tool}`
+                            {softwareLabel(calculation.software_release) ?? "not recorded"}
+                            {toolReleaseLabel(calculation.workflow_tool_release)
+                                ? ` · ${toolReleaseLabel(calculation.workflow_tool_release)}`
                                 : ""}
                         </td>
                         <td data-label="Review">

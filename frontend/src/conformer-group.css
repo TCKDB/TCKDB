@@ -312,6 +312,47 @@ details.ledger-section ul {
 
 .geometry-link span { color: var(--muted); }
 
+/* TransitionStateEntryPage's geometry section: the saddle-point ("final")
+   geometry leads, prominently, ahead of any IRC trajectory -- see the
+   geometry-wall finding this replaces (undifferentiated 5-column grid of
+   `geom_` links, ~1,900px, the one saddle point indistinguishable from 83
+   IRC points). */
+.geometry-groups { margin-top: 1rem; display: grid; gap: 1.1rem; }
+
+.geometry-final-label {
+    margin: 0 0 .5rem;
+    color: var(--accent-700);
+    text-transform: uppercase;
+    font: 600 .68rem var(--mono);
+}
+
+.geometry-link--final {
+    border-color: var(--accent);
+    background: var(--accent-50);
+}
+
+/* One collapsed disclosure per non-final role (irc_forward, irc_reverse,
+   ...), showing its point count on the closed `<summary>` rather than
+   rendering one card per point at rest. */
+.geometry-role-disclosure {
+    border: 1px solid var(--line);
+    padding: .85rem 1rem;
+    background: var(--surface);
+}
+
+.geometry-role-disclosure summary {
+    cursor: pointer;
+    color: var(--accent-700);
+    font: 600 .75rem var(--mono);
+}
+
+.geometry-role-disclosure summary:focus-visible {
+    outline: 3px solid var(--accent-300);
+    outline-offset: 3px;
+}
+
+.geometry-role-disclosure .geometry-links { margin-top: .85rem; }
+
 @media (max-width: 680px) {
     .basin-context,
     .ledger-summary { grid-template-columns: 1fr; }

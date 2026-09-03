@@ -107,12 +107,20 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
     // transition_state_entry -- deliberately no "SMILES" or "InChIKey"
     // row here at all: a transition state has neither the way a species
     // does (see `TransitionStateIdentity`'s own docstring), so there is
-    // no field that could render as an empty "SMILES" row.
+    // no field that could render as an empty "SMILES" row. Likewise no
+    // formula slot: a TS never carries `formula` on this endpoint (see
+    // `TransitionStateEntryCoreBlock`), and the label this used to fall
+    // back to is already the page's own `<h1>` (`TransitionStateEntryPage`'s
+    // `basin-title`) -- rendering it a second time here read as the same
+    // fact stated twice. The page's `<h1>` keeps the label; this header
+    // renders nothing in the formula slot's place rather than an empty box.
     return (
         <div className="record-identity-known">
-            <p className="record-identity-formula">
-                {identity.formula ? <Formula value={identity.formula} /> : (identity.label ?? "Transition state")}
-            </p>
+            {identity.formula && (
+                <p className="record-identity-formula">
+                    <Formula value={identity.formula} />
+                </p>
+            )}
             <p className="record-identity-note">
                 Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
                 where deposited, is a depositor-supplied label, not a deduped identity key.

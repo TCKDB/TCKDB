@@ -180,10 +180,15 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByRole("link", { name: "calc_heds3dt3dsqxmqkcchibvbtwi4" }))
             .toHaveAttribute("href", "/calculations/calc_heds3dt3dsqxmqkcchibvbtwi4")
 
+        // The final (saddle-point) geometry is always visible, led with its
+        // own label. The single `irc_reverse` point sits behind its
+        // direction's disclosure (see the dedicated geometry-wall test
+        // below for the collapsed/expanded behaviour itself) -- named on
+        // the closed summary by role and count, not opened by default.
         expect(screen.getByRole("link", { name: "geom_mtihqs7ac7btur4efqushl7aoy" }))
             .toHaveAttribute("href", "/geometries/geom_mtihqs7ac7btur4efqushl7aoy")
         expect(screen.getByText(/^final/)).toBeVisible()
-        expect(screen.getByText(/^irc reverse/)).toBeVisible()
+        expect(screen.getByText(/IRC reverse.*1 point/)).toBeVisible()
     })
 
     it("keeps the transition-state ref behind a References disclosure, collapsed by default", async () => {
@@ -217,5 +222,102 @@ describe("TransitionStateEntryPage", () => {
         )))
         page("tse_missing")
         expect(await screen.findByText("Transition state entry not found")).toBeVisible()
+    })
+
+    // Owner report: 'TS0' appeared in the page's own `<h1>` AND again in
+    // `RecordIdentityHeader`'s formula slot (which used to fall back to the
+    // label when `formula` was null, since a TS never carries one), and
+    // 'Charge / multiplicity — 0 / doublet (2)' appeared once in the
+    // header's own identity facts and again in the page's `basin-context`.
+    // Fixed by dropping the identity header's label fallback (a TS has no
+    // formula; the page's `<h1>` already carries the label) and dropping
+    // the page's own duplicate charge/multiplicity row (the identity
+    // header already carries it). Every fact now renders exactly once.
+    it("states the label and the charge/multiplicity fact exactly once each", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "TS0" })
+
+        expect(screen.getAllByText("TS0")).toHaveLength(1)
+        expect(screen.getAllByText((_, node) => node?.tagName === "DD" && node.textContent === "0 / doublet (2)"))
+            .toHaveLength(1)
+    })
+
+    // Owner report: the geometry section rendered every served geometry as
+    // an undifferentiated 5-column grid of `geom_` links -- on the live
+    // record, 1 `final` + 50 `irc_forward` + 33 `irc_reverse`, ~1,900px in
+    // which the one saddle-point geometry was indistinguishable from the
+    // IRC trajectory around it. Fixed by leading with `final`, prominently
+    // and linked, then collapsing each IRC direction behind its own
+    // disclosure showing a point count rather than one card per point.
+    it("leads with the final geometry and collapses each IRC direction behind a disclosure showing its point count", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_final", input_order: null, output_order: 1, role: "final", natoms: 18, geom_hash: "a" },
+                        { geometry_ref: "geom_fwd_1", input_order: null, output_order: 2, role: "irc_forward", natoms: 18, geom_hash: "b" },
+                        { geometry_ref: "geom_fwd_2", input_order: null, output_order: 3, role: "irc_forward", natoms: 18, geom_hash: "c" },
+                        { geometry_ref: "geom_fwd_3", input_order: null, output_order: 4, role: "irc_forward", natoms: 18, geom_hash: "d" },
+                        { geometry_ref: "geom_rev_1", input_order: null, output_order: 5, role: "irc_reverse", natoms: 18, geom_hash: "e" },
+                        { geometry_ref: "geom_rev_2", input_order: null, output_order: 6, role: "irc_reverse", natoms: 18, geom_hash: "f" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "TS0" })
+
+        // The final geometry is rendered prominently -- under its own
+        // "Saddle-point geometry" label -- and linked to its record page.
+        expect(screen.getByText("Saddle-point geometry")).toBeVisible()
+        expect(screen.getByRole("link", { name: "geom_final" })).toHaveAttribute("href", "/geometries/geom_final")
+
+        // The two IRC directions are two disclosures, each naming its own
+        // point count -- not six individual geometry cards.
+        expect(screen.getByText(/IRC forward.*3 points/)).toBeVisible()
+        expect(screen.getByText(/IRC reverse.*2 points/)).toBeVisible()
+
+        // Their contents are collapsed at rest...
+        expect(screen.getByRole("link", { name: "geom_fwd_1" })).not.toBeVisible()
+        expect(screen.getByRole("link", { name: "geom_rev_1" })).not.toBeVisible()
+
+        // ...but present in the DOM, and become visible once opened.
+        for (const summary of screen.getAllByText(/IRC (forward|reverse)/)) {
+            await userEvent.setup().click(summary)
+        }
+        expect(screen.getByRole("link", { name: "geom_fwd_1" })).toBeVisible()
+        expect(screen.getByRole("link", { name: "geom_rev_1" })).toBeVisible()
+    })
+
+    // Owner report: `software_release.version` and `workflow_tool_release
+    // .version` ('Gaussian 16', 'ARC 1.1.0') are served by this endpoint and
+    // are load-bearing provenance in this archive, but the calculation
+    // table showed only the bare names ('Gaussian', 'ARC'). Fixed by
+    // parsing the version through `softwareLabel`/`toolReleaseLabel`, the
+    // same helpers every other record page already uses for this.
+    it("shows the software and workflow-tool versions in the calculation table", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    calculations: [{
+                        calculation_ref: "calc_versioned",
+                        type: "opt",
+                        quality: "raw",
+                        review: { status: "not_reviewed" },
+                        level_of_theory: { method: "b3lyp", basis: "def2tzvp", display: "b3lyp/def2tzvp" },
+                        software_release: { software: "Gaussian", version: "16" },
+                        workflow_tool_release: { workflow_tool: "ARC", version: "1.1.0" },
+                    }],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "TS0" })
+
+        expect(screen.getByText(/Gaussian 16/)).toBeVisible()
+        expect(screen.getByText(/ARC 1\.1\.0/)).toBeVisible()
     })
 })

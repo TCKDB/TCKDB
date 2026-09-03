@@ -23,7 +23,7 @@ export default function NotFoundPage() {
 
     return (
         <section className="record-placeholder" role="alert">
-            <p className="eyebrow">Archive record</p>
+            <p className="eyebrow">Not found</p>
             <h1>No page at this address</h1>
             <code>{attemptedPath}</code>
             <p>Nothing in this archive is served at this address. Check the link, or go back to the archive home.</p>

@@ -20,3 +20,14 @@ export const DEFAULT_SECTION: EntrySection = "geometry"
 export function isEntrySection(section: string | undefined): section is EntrySection {
     return section !== undefined && Object.hasOwn(sectionLabels, section)
 }
+
+// Stale `:section` segments from the earlier chapter-nav design that this
+// app still recognises and canonicalizes to `DEFAULT_SECTION`, rather than
+// treating as a genuine 404. The ONE place this set is named -- `App.tsx`'s
+// `SpeciesEntrySectionRoute` (which alias reaches `SpeciesEntryPage` at all
+// vs. gets the not-found page) and `SpeciesEntryPage`'s own canonicalisation
+// effect (which alias gets redirected to `DEFAULT_SECTION`) both read it
+// from here instead of each spelling out `"calculations"` on its own --
+// two copies of the same literal that would silently drift the moment a
+// second legacy alias was added to only one of them.
+export const LEGACY_ENTRY_SECTION_ALIASES: ReadonlySet<string> = new Set(["calculations"])

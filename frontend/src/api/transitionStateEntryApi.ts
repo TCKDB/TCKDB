@@ -80,8 +80,13 @@ const calculationSchema = z.object({
     quality: z.string().optional(),
     review: recordReviewSchema.optional(),
     level_of_theory: levelOfTheorySchema.nullable().optional(),
-    software_release: z.object({ software: z.string() }).passthrough().nullable().optional(),
-    workflow_tool_release: z.object({ workflow_tool: z.string() }).passthrough().nullable().optional(),
+    // `version` is served alongside the name ('Gaussian' + '16', 'ARC' +
+    // '1.1.0') and is load-bearing provenance in this archive -- an ESS/
+    // workflow-tool version pins the exact behaviour that produced this
+    // entry. Previously only the name reached this schema, so the page
+    // had no version to show even though the API served one.
+    software_release: z.object({ software: z.string(), version: z.string().nullable().optional() }).passthrough().nullable().optional(),
+    workflow_tool_release: z.object({ workflow_tool: z.string(), version: z.string().nullable().optional() }).passthrough().nullable().optional(),
 }).passthrough()
 
 // `role`/`input_order`/`output_order` -- see `CalculationGeometryLinkSummary`'s

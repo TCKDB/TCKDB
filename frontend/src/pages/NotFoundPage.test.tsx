@@ -27,4 +27,13 @@ describe("NotFoundPage", () => {
         page("/species-entries/spe_demo/single-point?conformer=cg_1#detail")
         expect(screen.getByText("/species-entries/spe_demo/single-point?conformer=cg_1#detail")).toBeVisible()
     })
+
+    // Owner report: the eyebrow above the heading read 'Archive record' --
+    // the one label this page can least honestly claim, since a not-found
+    // page is precisely NOT an archive record.
+    it("labels itself 'Not found', not 'Archive record'", () => {
+        page("/this-route-does-not-exist")
+        expect(screen.getByText("Not found")).toBeVisible()
+        expect(screen.queryByText("Archive record")).not.toBeInTheDocument()
+    })
 })

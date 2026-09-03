@@ -3,7 +3,7 @@ import { BrowserRouter, Route, Routes, useParams } from "react-router-dom"
 import MachineReviewInspectionPage from "./pages/MachineReviewInspectionPage"
 import { AppShell } from "./components/AppShell"
 import { LoadingPage } from "./components/LoadingPage"
-import { isEntrySection } from "./domain/speciesEntrySections"
+import { isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "./domain/speciesEntrySections"
 
 const ArchiveHomePage = lazy(() => import("./pages/ArchiveHomePage"))
 const BrowsePage = lazy(() => import("./pages/BrowsePage"))
@@ -73,7 +73,7 @@ function App() {
 // #12's silent-Geometry-tab bug and gets the not-found page instead.
 function SpeciesEntrySectionRoute() {
   const { section } = useParams<{ section?: string }>()
-  if (section !== undefined && !isEntrySection(section) && section !== "calculations") {
+  if (section !== undefined && !isEntrySection(section) && !LEGACY_ENTRY_SECTION_ALIASES.has(section)) {
     return <NotFoundPage />
   }
   return <SpeciesEntryPage />
