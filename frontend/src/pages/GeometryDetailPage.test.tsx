@@ -140,7 +140,7 @@ describe("GeometryDetailPage identity (#321)", () => {
         await screen.findByRole("heading", { name: "CH4 geometry" })
         expect(screen.queryByText("SMILES")).not.toBeInTheDocument()
         expect(screen.queryByText("InChIKey")).not.toBeInTheDocument()
-        expect(screen.getByText("Unmapped SMILES")).toBeVisible()
+        expect(screen.getByText("Reaction SMILES (unmapped)")).toBeVisible()
     })
 
     it("renders no submission row when the key is absent (anonymous caller)", async () => {

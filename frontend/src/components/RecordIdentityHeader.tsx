@@ -8,6 +8,24 @@ import type { RecordIdentity } from "../domain/recordIdentity"
 import { Formula } from "./Formula"
 
 /**
+ * Breaks a SMILES-shaped string at `>>` (reaction arrow) and `.`
+ * (disconnected-fragment separator) boundaries with `<wbr>` -- the
+ * punctuation that already marks a sensible break point in this
+ * vocabulary, so a long unmapped-SMILES string wraps at a token
+ * boundary instead of `overflow-wrap: anywhere` picking an arbitrary
+ * character mid-fragment.
+ */
+function withSmilesBreaks(value: string): ReactNode {
+    const parts = value.split(/(>>|\.)/)
+    const nodes: ReactNode[] = []
+    parts.forEach((part, index) => {
+        nodes.push(part)
+        if (part === ">>" || part === ".") nodes.push(<wbr key={`smiles-wbr-${index}`} />)
+    })
+    return nodes
+}
+
+/**
  * The shared header block every record page (species entry, geometry,
  * calculation, conformer group, conformer observation) renders through:
  * identity, then classification facets, then provenance -- top to
@@ -110,10 +128,22 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
     // no field that could render as an empty "SMILES" row. Likewise no
     // formula slot: a TS never carries `formula` on this endpoint (see
     // `TransitionStateEntryCoreBlock`), and the label this used to fall
-    // back to is already the page's own `<h1>` (`TransitionStateEntryPage`'s
-    // `basin-title`) -- rendering it a second time here read as the same
-    // fact stated twice. The page's `<h1>` keeps the label; this header
-    // renders nothing in the formula slot's place rather than an empty box.
+    // back to is now a facet on `TransitionStateEntryPage`'s own `<h1>`
+    // row (the reaction equation, per the h1 rework) rather than this
+    // header's job to restate.
+    //
+    // No "no canonical SMILES" note here either. It used to duplicate,
+    // almost word for word, `TransitionStateEntryPage`'s own Reaction-
+    // section lede ("A transition state is identified by the reaction it
+    // connects, not a molecular graph of its own.") -- the two sentences
+    // sat ~900px apart on the same page saying the same thing. The page's
+    // Reaction section keeps the explanation; this header stays silent
+    // rather than restate it. A caller reaching a `transition_state_entry`
+    // identity from a page with no Reaction section of its own (a TS-
+    // owned geometry, say) currently gets no substitute for that lost
+    // sentence -- flagged rather than fixed here, since growing this
+    // component's contract to cover pages outside this branch's remit is
+    // its own change.
     return (
         <div className="record-identity-known">
             {identity.formula && (
@@ -121,13 +151,9 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
                     <Formula value={identity.formula} />
                 </p>
             )}
-            <p className="record-identity-note">
-                Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
-                where deposited, is a depositor-supplied label, not a deduped identity key.
-            </p>
             <dl className="record-identity-facts">
-                <IdentityFact label="Unmapped SMILES">
-                    {identity.unmappedSmiles ? <code>{identity.unmappedSmiles}</code> : <span className="record-identity-absent-inline">not recorded</span>}
+                <IdentityFact label="Reaction SMILES (unmapped)" wide>
+                    {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                 </IdentityFact>
                 <IdentityFact label="Charge / multiplicity">
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
@@ -140,6 +166,6 @@ function IdentityTier({ identity }: { identity: RecordIdentity }) {
     )
 }
 
-function IdentityFact({ label, children }: { label: string; children: ReactNode }) {
-    return <div><dt>{label}</dt><dd>{children}</dd></div>
+function IdentityFact({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
+    return <div className={wide ? "record-identity-fact-wide" : undefined}><dt>{label}</dt><dd>{children}</dd></div>
 }
