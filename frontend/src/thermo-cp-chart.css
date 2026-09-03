@@ -108,12 +108,25 @@
     font-size: .64rem;
 }
 
+/* Grid, not the plain block box this used to be: `.cp-chart-axis-title--y`
+   needs a column of its OWN, reserved in real layout, not a slice of empty
+   space it has to hope is there. The old layout (`position: relative` panel,
+   `position: absolute; left: -2.1rem` title) pushed the rotated title
+   entirely to the LEFT of the panel's own box -- painted space this
+   component never owns, clipped by the page's own left edge on every real
+   page (a review finding: the title never rendered at all, screenshotted
+   at 1920px). The grid's first column IS owned space, so the title can
+   never be cut off by a neighbour it doesn't control. */
 .cp-chart-panel {
-    position: relative;
+    display: grid;
+    grid-template-columns: 1.3rem 1fr;
+    column-gap: .3rem;
     margin: 0 0 1.5rem;
 }
 
 .cp-chart-svg {
+    grid-column: 2;
+    grid-row: 1;
     display: block;
     width: 100%;
     height: auto;
@@ -154,15 +167,22 @@
 }
 
 .cp-chart-axis-title--x {
+    grid-column: 2;
+    grid-row: 2;
     text-align: center;
 }
 
 .cp-chart-axis-title--y {
-    position: absolute;
-    top: 50%;
-    left: -2.1rem;
-    transform-origin: left center;
-    transform: rotate(-90deg) translateX(-50%);
+    /* Spans both rows so it stays centred against the FULL panel height
+       (plot + x-axis title beneath it), matching what the old
+       `top: 50%`-of-the-whole-panel positioning centred against. */
+    grid-column: 1;
+    grid-row: 1 / span 2;
+    align-self: center;
+    justify-self: center;
+    margin: 0;
+    writing-mode: vertical-rl;
+    transform: rotate(180deg);
     white-space: nowrap;
 }
 
@@ -200,5 +220,18 @@
 @media (max-width: 680px) {
     .cp-chart-axis-title--y {
         display: none;
+    }
+
+    /* Reclaim the column the (now-hidden) title reserved -- without this,
+       a fixed `1.3rem` grid track would sit empty as a visible gap on a
+       narrow screen, where every pixel of chart width already matters. */
+    .cp-chart-panel {
+        grid-template-columns: 1fr;
+        column-gap: 0;
+    }
+
+    .cp-chart-svg,
+    .cp-chart-axis-title--x {
+        grid-column: 1;
     }
 }
