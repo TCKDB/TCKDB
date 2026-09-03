@@ -180,3 +180,20 @@ def test_family_and_reaction_family_row_created_get_or_reused(client, db_session
         .count()
     )
     assert count == 1
+
+
+def test_blank_participant_smiles_alone_does_not_satisfy_the_meaningful_filter_check(client, db_session):
+    """``?participant_smiles=`` is no filter: the route must 422 with
+    ``missing_filter`` exactly as a bare request does, not serve the whole
+    corpus while echoing an empty-string filter (review of #356)."""
+    resp = client.get(_search_url(participant_smiles=""))
+    assert resp.status_code == 422, resp.text
+    assert resp.json()["code"] == "missing_filter"
+
+
+def test_blank_family_is_normalised_to_no_filter_in_the_echo(client, db_session):
+    """With a real filter alongside, a blank ``family`` must neither
+    narrow the result nor be echoed back as an applied filter."""
+    resp = client.get(_search_url(family="   ", status="optimized"))
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["request"]["filter"].get("family") is None

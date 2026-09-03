@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.db.models.common import (
     RecordReviewStatus,
@@ -119,6 +119,19 @@ class TransitionStatesSearchRequest(BaseModel):
         default=None, max_length=_MAX_SMILES_LENGTH
     )
 
+    @field_validator("family", "participant_smiles", mode="before")
+    @classmethod
+    def _blank_text_filter_is_no_filter(cls, value: object) -> object:
+        """``?family=`` / ``?participant_smiles=`` is *no* filter, not a
+        filter for the empty string. Normalising here (rather than at the
+        predicate) keeps two things honest at once: the search route's
+        "at least one meaningful filter" gate cannot be satisfied by an
+        empty value, and the echoed ``filter`` never claims a filter that
+        was not applied."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
+
     # --- review filters --------------------------------------------------
     min_review_status: RecordReviewStatus | None = None
     include_rejected: bool = False
@@ -202,6 +215,19 @@ class TransitionStatesBrowseRequest(BaseModel):
     participant_smiles: str | None = Field(
         default=None, max_length=_MAX_SMILES_LENGTH
     )
+
+    @field_validator("family", "participant_smiles", mode="before")
+    @classmethod
+    def _blank_text_filter_is_no_filter(cls, value: object) -> object:
+        """``?family=`` / ``?participant_smiles=`` is *no* filter, not a
+        filter for the empty string. Normalising here (rather than at the
+        predicate) keeps two things honest at once: the search route's
+        "at least one meaningful filter" gate cannot be satisfied by an
+        empty value, and the echoed ``filter`` never claims a filter that
+        was not applied."""
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # --- review filters --------------------------------------------------
     min_review_status: RecordReviewStatus | None = None
