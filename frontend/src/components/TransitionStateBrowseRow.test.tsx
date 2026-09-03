@@ -97,7 +97,14 @@ describe("TransitionStateBrowseRow: pills, not plain text", () => {
 describe("TransitionStateBrowseRow: the whole row is the click target", () => {
     it("wraps the entire row's content in one link to the reaction, not just the equation", () => {
         renderRow(record())
-        const link = screen.getByRole("link", { name: "Reaction A <=> B — TS0 · optimized, review not reviewed, tse_one" })
+        // The link has NO aria-label, so its accessible name is its full text
+        // content. Pin the pieces an aria-label once silenced: charge and the
+        // ref (a re-review found family, charge, spin and the evidence line
+        // unannounced). Restoring any aria-label that omits these fails here.
+        const link = screen.getByRole("link", { name: /tse_one/ })
+        expect(link).toHaveAccessibleName(expect.stringContaining("charge 0"))
+        expect(link).toHaveAccessibleName(expect.stringContaining("tse_one"))
+        expect(link).not.toHaveAttribute("aria-label")
         expect(link).toHaveAttribute("href", "/reactions/rxn_one")
 
         // Content far from the headline -- the review pill and the stable

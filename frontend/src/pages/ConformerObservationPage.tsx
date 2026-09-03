@@ -247,7 +247,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <div className="ledger-heading">
                     <p className="eyebrow">Deposited provenance</p>
                     <SectionHeading id="sibling-ledger">Sibling observations</SectionHeading>
-                    <p>Each sibling is an independent deposition; none of them is this observation.</p>
+                    <p>Each sibling is an independent deposition; none of them is this observation. Review status is shown only where it differs from this observation's.</p>
                 </div>
                 {observationsAvailability === "populated" && siblings.length > 0 ? (
                     <ul className="observation-list">

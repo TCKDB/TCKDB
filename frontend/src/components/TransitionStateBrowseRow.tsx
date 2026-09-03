@@ -112,18 +112,14 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
 
     return (
         <li className="browse-row ts-browse-row">
-            {/* aria-label previously replaced the link's accessible name
-                with just "Reaction <equation>" -- the label/status pill,
-                review pill, evidence line and ref inside the link were
-                still visible but no longer announced as part of it.
-                Extended (not dropped) to fold in the label/status and the
-                ref, so a screen-reader user gets the two facts the plain
-                text content would otherwise bury under the evidence
-                sentence. */}
+            {/* No aria-label: the link wraps the whole row, so its text content
+                -- equation, family/charge/spin, status pills, evidence line, ref
+                -- IS its accessible name. A label here silenced everything it
+                did not repeat (a re-review found family, charge, spin and the
+                evidence line unannounced). */}
             {target
                 ? (
                     <Link
-                        aria-label={`Reaction ${equation} — ${entryLabel} · ${entryStatusText}, review ${entryReviewStatusText}, ${entryRef}`}
                         className="browse-row-link"
                         to={target}
                     >
