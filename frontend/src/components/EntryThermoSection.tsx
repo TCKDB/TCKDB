@@ -442,6 +442,17 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
                 another.
             </p>
             <ThermoRecordBody record={representative} idSuffix={GROUP_ID_SUFFIX} showProvenance={false} />
+            {/* Level of theory is part of the identity fingerprint, so every
+                record in this group shares it -- showing it once here is
+                safe, and a chemist reading H298 needs the LoT beside it. The
+                rest of provenance differs per record and lives in the table
+                below; never lift it up here. */}
+            <dl className="kv-list" aria-label="Shared level of theory">
+                <div>
+                    <dt>Level of theory</dt>
+                    <dd>{representative.provenance?.level_of_theory ? lotLabel(representative.provenance.level_of_theory) : "not recorded"}</dd>
+                </div>
+            </dl>
             <IdenticalThermoGroupRefs records={records} />
             <details className="identical-record-group-detail">
                 <summary>Show all {records.length} records individually</summary>

@@ -534,6 +534,7 @@ describe("EntryThermoSection", () => {
         expect(ddFor(card, "Single-point calculation")).toBe("calc_sp")
     })
 
+
     it("renders the thermo's OWN software/workflow-tool provenance when populated — never 'not recorded' for a served value (issue #284)", async () => {
         // Every other fixture in this file carries `software_release: null` /
         // `workflow_tool_release: null`, which would render "not recorded"
@@ -883,6 +884,22 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         const provenanceHeadingsOutsideDetail = Array.from(groupCard.querySelectorAll("h4"))
             .filter((heading) => heading.textContent === "Provenance" && !detail.contains(heading))
         expect(provenanceHeadingsOutsideDetail).toHaveLength(0)
+    })
+
+    it("shows the shared level of theory once on the group card -- it is in the identity fingerprint, so every grouped record has it", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse({ records: clonesWithDifferentCalculations() }))))
+        page()
+        await screen.findByText("3 records with identical values")
+        const groupCard = document.querySelector("article.identical-record-group") as HTMLElement
+        // Positive: the LoT row is ON the group card, outside the collapsed
+        // per-record detail -- not merely "no Provenance heading".
+        // Query the row by its own label: the collapsed per-record detail also
+        // contains a <dt>Level of theory</dt> inside each ProvenanceBlock, so a
+        // text query would match twice.
+        const shared = groupCard.querySelector('dl[aria-label="Shared level of theory"]') as HTMLElement | null
+        expect(shared).not.toBeNull()
+        expect(within(shared as HTMLElement).getByText("Level of theory", { selector: "dt" })).toBeInTheDocument()
+        expect((shared as HTMLElement).closest(".identical-record-group-detail")).toBeNull()
     })
 
     it("never mints a duplicate DOM id between the group card's own elements and the same representative record's card inside 'Show all'", async () => {
