@@ -105,8 +105,21 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
     const calculations = record.calculations ?? []
 
     const geometriesAvailability = sectionAvailability(record.geometries)
+    // One geometry object can be linked from several of this entry's
+    // calculations -- on the live archive `tse_4fzvo2qpovgytr5yduytj3mmh4`
+    // returns its single saddle point three times (opt, freq and sp all
+    // cite it), which rendered as three identical "final" cards and three
+    // colliding React keys. Rows are deduplicated by ref, first occurrence
+    // in output order winning, so the count below is of geometries, not of
+    // calculation-to-geometry links.
+    const seenGeometryRefs = new Set<string>()
     const geometries = [...(record.geometries ?? [])]
         .sort((a, b) => (a.output_order ?? a.input_order ?? 0) - (b.output_order ?? b.input_order ?? 0))
+        .filter((geometry) => {
+            if (seenGeometryRefs.has(geometry.geometry_ref)) return false
+            seenGeometryRefs.add(geometry.geometry_ref)
+            return true
+        })
     // On the live record this section serves 1 `final` + 50 `irc_forward` +
     // 33 `irc_reverse` -- an undifferentiated grid of 84 identical-looking
     // cards buried the one geometry that matters (the saddle point itself)

@@ -292,6 +292,53 @@ describe("TransitionStateEntryPage", () => {
         expect(screen.getByRole("link", { name: "geom_rev_1" })).toBeVisible()
     })
 
+    // Observed on the live archive (tse_4fzvo2qpovgytr5yduytj3mmh4): one
+    // saddle-point geometry object cited by three calculations (opt, freq,
+    // sp) came back as three rows sharing a geometry_ref and rendered as
+    // three identical "final" cards -- one saddle point shown as three,
+    // with colliding React keys, and a "Stored geometries" count of 3.
+    it("shows a geometry cited by several calculations once, and counts it once", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_shared", input_order: null, output_order: 1, role: "final", natoms: 6, geom_hash: "a" },
+                        { geometry_ref: "geom_shared", input_order: null, output_order: 2, role: "final", natoms: 6, geom_hash: "a" },
+                        { geometry_ref: "geom_shared", input_order: null, output_order: 3, role: "final", natoms: 6, geom_hash: "a" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "TS0" })
+
+        expect(screen.getAllByRole("link", { name: "geom_shared" })).toHaveLength(1)
+        expect(screen.getByText("Stored geometries").parentElement).toHaveTextContent(/^Stored geometries1$/)
+    })
+
+    // No entry on the live archive lacks a `final` geometry today, so this
+    // branch is reachable only from here: the saddle-point block must say
+    // plainly that none was deposited rather than render an empty label,
+    // while the other roles still get their disclosures.
+    it("says when no saddle-point geometry was deposited, and still lists the other roles", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    geometries: [
+                        { geometry_ref: "geom_fwd_1", input_order: null, output_order: 1, role: "irc_forward", natoms: 18, geom_hash: "b" },
+                        { geometry_ref: "geom_fwd_2", input_order: null, output_order: 2, role: "irc_forward", natoms: 18, geom_hash: "c" },
+                    ],
+                }),
+            })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "TS0" })
+
+        expect(screen.getByText("No saddle-point (final) geometry was deposited for this entry.")).toBeVisible()
+        expect(screen.queryByText("Saddle-point geometry")).not.toBeInTheDocument()
+        expect(screen.getByText(/IRC forward.*2 points/)).toBeVisible()
+    })
+
     // Owner report: `software_release.version` and `workflow_tool_release
     // .version` ('Gaussian 16', 'ARC 1.1.0') are served by this endpoint and
     // are load-bearing provenance in this archive, but the calculation

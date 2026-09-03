@@ -335,6 +335,10 @@ details.ledger-section ul {
    ...), showing its point count on the closed `<summary>` rather than
    rendering one card per point at rest. */
 .geometry-role-disclosure {
+    /* Sits inside the `.geometry-groups` grid, whose gap is the spacing;
+       without this the `.ledger-section` margin-top stacks on top of it
+       and consecutive disclosures land ~80px apart. */
+    margin: 0;
     border: 1px solid var(--line);
     padding: .85rem 1rem;
     background: var(--surface);
