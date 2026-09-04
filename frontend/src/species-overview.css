@@ -34,6 +34,15 @@
     border-bottom: 1px solid var(--line);
 }
 
+/* The species ref and InChIKey carry `.kv-list--wide` so that at phone widths
+   they get a full row instead of wrapping mid-identifier inside a ~12rem
+   cell. At desktop the four-column strip has room for them, and letting the
+   span apply there turned one header row into four stacked rows (PR D
+   review). So the span is scoped to the narrow layout only. */
+@media (min-width: 681px) {
+    .species-identity-grid .kv-list--wide { grid-column: auto; }
+}
+
 .entry-index {
     margin-top: 3.7rem;
 }

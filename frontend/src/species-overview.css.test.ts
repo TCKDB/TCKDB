@@ -158,3 +158,14 @@ describe("dead CSS removed", () => {
         expect(css).not.toMatch(/\.entry-index-heading\s*>\s*p/)
     })
 })
+
+describe("identity strip: the wide span is narrow-only", () => {
+    // `.kv-list--wide` on the ref/InChIKey pairs exists for the 680px layout;
+    // at desktop it stacked the four-column strip into four rows (PR D review).
+    it("resets the wide span to a normal cell above 680px", () => {
+        const block = css.match(/@media \(min-width: 681px\) \{([\s\S]*?)\n\}/)
+        expect(block, "a min-width: 681px media block").not.toBeNull()
+        expect(block![1]).toMatch(/\.species-identity-grid \.kv-list--wide \{ grid-column: auto; \}/)
+    })
+})
+
