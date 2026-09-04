@@ -84,9 +84,9 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     never run through `Formula`. */}
                 <h1>{species.formula ? <Formula value={species.formula} /> : species.canonical_smiles}</h1>
                 <dl className="kv-list species-identity-grid">
-                    <Identity identifier label="Species ref" value={species.species_ref} />
+                    <Identity identifier wide label="Species ref" value={species.species_ref} />
                     <Identity identifier label="SMILES" value={species.canonical_smiles} />
-                    <Identity identifier label="InChIKey" value={species.inchi_key} />
+                    <Identity identifier wide label="InChIKey" value={species.inchi_key} />
                     <Identity
                         label="Charge / multiplicity"
                         value={`${chargeDisplay(species.charge)} / ${spinDisplay(species.multiplicity)}`}
@@ -162,7 +162,7 @@ function EntryStateGroup({
                 {stateLabel(state)}
                 <span>{count} {count === 1 ? "entry" : "entries"}</span>
             </h3>
-            <Disclosure defaultOpen summary="Deposited records">
+            <Disclosure defaultOpen summary="Deposited records" summaryProps={{ "aria-describedby": groupId }}>
                 <ul className="entry-rows">
                     {entries.map((entry) => (
                         <EntryCard entry={entry} groupHeadingId={groupId} key={entry.species_entry_ref} />
@@ -178,8 +178,17 @@ function EntryStateGroup({
 // picks them up at the data step -- mono, non-reflowing. Charge/multiplicity
 // is a formatted phrase, not a raw identifier, so it stays plain text at the
 // list's own value step.
-function Identity({ label, value, identifier }: { label: string; value: string; identifier?: boolean }) {
-    return <div><dt>{label}</dt><dd>{identifier ? <code>{value}</code> : value}</dd></div>
+//
+// `wide` (post-review, PR D): the species ref and InChIKey are long enough
+// (30+ characters) that at narrow widths -- where `.kv-list`'s `auto-fit`
+// grid settles on 3 columns for these 4 pairs -- they wrapped mid-token
+// inside a ~12rem cell. `.kv-list--wide` spans the pair across the full row
+// instead, the same primitive an unusually long value anywhere else in a
+// `.kv-list` would reach for. SMILES is left in the narrow column: shorter
+// on this species and, unlike the other two, not itself the thing the
+// reader copy-pastes to look this record up elsewhere.
+function Identity({ label, value, identifier, wide }: { label: string; value: string; identifier?: boolean; wide?: boolean }) {
+    return <div className={wide ? "kv-list--wide" : undefined}><dt>{label}</dt><dd>{identifier ? <code>{value}</code> : value}</dd></div>
 }
 
 /**
