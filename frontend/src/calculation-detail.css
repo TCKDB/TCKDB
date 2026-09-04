@@ -19,10 +19,12 @@
 
 /* Was a hard-coded `63rem`, giving the header a different right edge than
    the evidence strip and tables below it (measured: ~1190px vs ~1470px at
-   1920) -- `--measure-note` is the same "short instructions/section
-   headings must not wrap while the page still has room" token every other
-   wide measure on this page already uses (`index.css`). */
-.record-header { max-width: var(--measure-note); }
+   1920). `--measure-wide` (`design-system.css`) is the CONTAINER measure,
+   not the prose one: `--measure-note` covers a line of reading text
+   (narrowed to 44rem in design/foundations) and would put this header's
+   right edge right back out of alignment with the wide content below it
+   -- exactly the bug this rule exists to fix. */
+.record-header { max-width: var(--measure-wide); }
 
 /* Houses the eyebrow label AND the review-status pill -- see the comment
    in CalculationDetailPage.tsx above this row's markup for why the pill
