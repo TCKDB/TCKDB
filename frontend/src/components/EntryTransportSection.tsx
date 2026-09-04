@@ -107,7 +107,7 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
                     </p>
                 </div>
-                <p className="records-note">
+                <p className="note records-note">
                     {pagination.total} record{pagination.total === 1 ? "" : "s"}
                     {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                     {" · review: "}{reviewSummaryText(reviewSummary)}
@@ -185,7 +185,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
             <div className="science-record-heading">
                 <h3 id={`transport-heading-${core.transport_ref}`}>{statusLabel(core.scientific_origin)} transport record</h3>
                 <span className="value-pill--muted">{statusLabel(core.review.status)}</span>
-                <code>{core.transport_ref}</code>
+                <code className="data">{core.transport_ref}</code>
             </div>
 
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}

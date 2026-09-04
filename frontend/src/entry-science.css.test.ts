@@ -40,9 +40,22 @@ describe("`.review-badge`/`.evidence-chip` are fully retired (one pill style: `.
     })
 })
 
-describe("`.evidence-full-checklist`/dead `.section-heading` are retired onto shared primitives", () => {
-    it("declares no `.evidence-full-checklist` rule -- the disclosure box/chevron/summary chrome is the shared `Disclosure` component's `.disclosure` now", () => {
-        expect(stripComments(css)).not.toMatch(/\.evidence-full-checklist/)
+describe("`.evidence-full-checklist` keeps only spacing; dead `.section-heading` is retired", () => {
+    // Review finding (NIT, PR 366): dropping `.evidence-full-checklist`
+    // ENTIRELY (this test's own original assertion) left the disclosure's
+    // now-visible border sitting flush against `ProvenanceBlock`'s "Level
+    // of theory" row immediately below it once `Disclosure` gave it a
+    // real box -- harmless as plain text flow before that box existed,
+    // visibly broken once it did. The rule stays, margin-only.
+    it("keeps a margin-only `.evidence-full-checklist` rule -- no summary/colour/font styling (that's `Disclosure`'s job now), just the spacing `Disclosure` has no opinion on", () => {
+        const rule = /\.evidence-full-checklist\s*\{([^}]*)\}/.exec(stripComments(css))
+        expect(rule).not.toBeNull()
+        expect(rule![1]).toMatch(/margin:/)
+        expect(rule![1]).not.toMatch(/color|font|cursor/)
+    })
+
+    it("declares no `.evidence-full-checklist summary` rule -- that chrome is `.disclosure > summary`'s job now, not a page-local override", () => {
+        expect(stripComments(css)).not.toMatch(/\.evidence-full-checklist\s+summary/)
     })
 
     it("declares no dead `.section-heading` rule (unused by any component in this file's scope)", () => {

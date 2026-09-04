@@ -206,6 +206,19 @@ describe("EntryTransportSection: design-system adoption (design/species-entry)",
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
+    // Review finding (SHOULD-FIX 1, PR 366): this tab's own "N records ·
+    // review: …" line was missed by the `.note` migration -- it kept
+    // `.records-note` (now margin-only) but never gained `.note` itself,
+    // so it silently fell back to unstyled 16px body text.
+    it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        const recordsNote = document.querySelector(".records-note")
+        expect(recordsNote).not.toBeNull()
+        expect(recordsNote!.className.split(" ")).toContain("note")
+    })
+
     it("every <details> on this tab is the shared Disclosure component -- carries the `disclosure` class", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

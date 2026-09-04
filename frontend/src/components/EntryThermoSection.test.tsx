@@ -1053,6 +1053,22 @@ describe("EntryThermoSection: design-system adoption (design/species-entry)", ()
         expect(headingsInsideSummaries).toHaveLength(0)
     })
 
+    // Review finding (SHOULD-FIX 1, PR 366): the "N records · review: …"
+    // line carries `.records-note` (layout-only, entry-science.css) at
+    // every call site, but must ALSO carry `.note` (design-system.css) --
+    // `.records-note` was stripped down to margin-only, so without `.note`
+    // this line silently falls back to 16px unstyled body ink with no
+    // max-width, on exactly the two tabs (statmech, transport) where the
+    // migration was missed.
+    it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const recordsNote = document.querySelector(".records-note")
+        expect(recordsNote).not.toBeNull()
+        expect(recordsNote!.className.split(" ")).toContain("note")
+    })
+
     it("every <details> on this tab (Full checklist, evidence-completeness) is the shared Disclosure component -- carries the `disclosure` class", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()

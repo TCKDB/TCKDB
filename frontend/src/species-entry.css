@@ -605,10 +605,18 @@
    near-duplicate of that primitive (muted, capped prose width, small
    sans text); one shared style now, per the same "one canonical style per
    role" consolidation the rest of this page follows.
-   `.evidence-linkage-detail` is RETIRED onto the shared `Disclosure`
-   component -- collapsed-by-default box/chevron/summary chrome now comes
-   from `.disclosure` (design-system.css) rather than a local summary rule
-   that had drifted to its own mono, uncoloured-chevron style. */
+   `.evidence-linkage-detail`'s own summary styling is RETIRED onto the
+   shared `Disclosure` component -- collapsed-by-default box/chevron/
+   summary chrome now comes from `.disclosure` (design-system.css) rather
+   than a local summary rule that had drifted to its own mono,
+   uncoloured-chevron style. It keeps ONE rule of its own: pure spacing
+   above the box (this is the last child inside `.evidence-linkage`, so
+   there is nothing below it to leave flush) -- the original top value,
+   preserved, so the disclosure's now-visible border doesn't sit flush
+   against `.evidence-linkage-story` immediately above it. */
+.evidence-linkage-detail {
+    margin-top: 1.1rem;
+}
 
 .linkage-flow {
     display: flex;
@@ -737,38 +745,10 @@
 
 .tab-panel { margin-top: 2rem; }
 
-/* ---------------------------------------------------------------------
-   Geometry tab: distinct stored geometries, then a per-observation list.
-   --------------------------------------------------------------------- */
-
-.geometry-list {
-    display: grid;
-    gap: .6rem;
-    margin: 1.2rem 0 0;
-    padding: 0;
-    list-style: none;
-}
-
-.geometry-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: .3rem 1rem;
-    padding: .7rem .9rem;
-    border: 1px solid var(--line-2);
-    border-radius: .4rem;
-}
-
-.geometry-item a {
-    overflow-wrap: anywhere;
-    color: var(--accent);
-    font: 600 .82rem var(--mono);
-}
-
-.geometry-meta {
-    color: var(--muted-2);
-    font: .72rem var(--mono);
-}
+/* `.geometry-list`/`.geometry-item`/`.geometry-meta` (review finding,
+   NIT, PR 366): DELETED -- dead, no component in this page's scope
+   renders these classes; `ConformerGeometryTab.tsx` renders the geometry
+   tab through `.checklist` (entry-science.css) instead. */
 
 /* ---------------------------------------------------------------------
    Records grouped by whether they trace to the selected conformer's own

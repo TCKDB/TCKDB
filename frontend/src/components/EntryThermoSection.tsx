@@ -103,7 +103,7 @@ function thermoRecordFallback(record: ThermoRecord) {
     return (
         <article className="science-record card" role="alert">
             <p className="empty-projection">
-                Record <code>{record.thermo_ref}</code> could not be displayed. Other
+                Record <code className="data">{record.thermo_ref}</code> could not be displayed. Other
                 records on this page are unaffected.
             </p>
         </article>
@@ -306,7 +306,7 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
             <div className="science-record-heading">
                 <h3 id={`thermo-heading-${record.thermo_ref}`}>{modelKindLabel(record.model_kind)} thermo record</h3>
                 <span className="value-pill--muted">{statusLabel(record.review.status)}</span>
-                <code>{record.thermo_ref}</code>
+                <code className="data">{record.thermo_ref}</code>
             </div>
             <ThermoRecordBody record={record} />
         </article>
@@ -502,7 +502,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                             const primaryRef = provenance?.primary_calculation?.calculation_ref ?? null
                             return (
                                 <tr key={record.thermo_ref}>
-                                    <td data-label="Ref"><code>{record.thermo_ref}</code></td>
+                                    <td data-label="Ref"><code className="data">{record.thermo_ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.review.status)}</td>
                                     <td data-label="Primary calculation">
                                         <CalculationRefCell calculationRef={primaryRef} />

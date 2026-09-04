@@ -161,7 +161,7 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                         deposits are never merged, averaged, or reduced to one preferred value on this page.
                     </p>
                 </div>
-                <p className="records-note">
+                <p className="note records-note">
                     {pagination.total} record{pagination.total === 1 ? "" : "s"}
                     {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                     {" · review: "}{reviewSummaryText(reviewSummary)}
@@ -402,7 +402,7 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
             <div className="science-record-heading">
                 <h3 id={`statmech-heading-${core.statmech_ref}`}>{statusLabel(core.scientific_origin)} statmech record</h3>
                 <span className="value-pill--muted">{statusLabel(core.review.status)}</span>
-                <code>{core.statmech_ref}</code>
+                <code className="data">{core.statmech_ref}</code>
             </div>
             <StatmechRecordBody record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
         </article>

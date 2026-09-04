@@ -21,12 +21,7 @@
  * site) — both used to be near-duplicates of that primitive (muted, capped
  * width, small sans/mono text) with their own slightly different numbers;
  * one shared primitive removes the "which of three near-identical grey
- * caption styles is this" question this file used to leave open. The
- * `aria-busy="true"` loading-ellipsis behaviour several of those callers
- * relied on (`.section-note[aria-busy="true"]::after`) moves down to the
- * `.note[aria-busy]` rule below, so it still applies to every note thay
- * carries that attribute regardless of which of the two retired classes it
- * used to be.
+ * caption styles is this" question this file used to leave open.
  *
  * `.table-scroll { overflow-x: auto }` USED to be redefined here too, for
  * the same reason -- gone now (design/foundations, post-review): that
@@ -41,15 +36,30 @@
  * carries no forced `width: calc(100% - ...)` the way `.stage-table` did,
  * so a wide table (the 12-column NASA-9 grid) sizes to its own natural
  * content width instead of being shrunk to fit its container and having
- * every cell wrap mid-token -- `.table-scroll`'s `overflow-x: auto` alone
- * is what makes it scroll now, with no min-width hack needed to force
- * that overflow in the first place. The narrow-viewport stacked-row
- * fallback this file used to reset to `min-width: 0` under 680px is gone
- * for the same reason: there is no stacked fallback to protect any more
- * (that was `conformer-group.css`'s `.stage-table` mobile behaviour,
- * never reached by `.data-table` at all) -- a wide table now scrolls
- * horizontally at every viewport, including 680px, rather than clipping
- * a coefficient mid-digit the way the old stacked layout did.
+ * every cell wrap mid-token -- `.table-scroll`'s `overflow-x: auto` is
+ * what makes it scroll, with no min-width hack needed to force that
+ * overflow in the first place. There is no narrow-viewport stacked-row
+ * fallback to protect any more either (that was `conformer-group.css`'s
+ * `.stage-table` mobile behaviour, never reached by `.data-table` at
+ * all).
+ *
+ * `overflow-x: auto` on `.table-scroll` only has something to scroll
+ * WITHIN if its own containing block has a definite width to overflow
+ * against -- it is not, by itself, sufficient (review finding, PR 366:
+ * measured `document.documentElement.scrollWidth` at 680px was up to
+ * 1176px on this page before the actual fix, `.table-scroll` itself
+ * reporting `scrollWidth == clientWidth` throughout -- the PAGE was
+ * widening around the table, not the table scrolling inside a
+ * fixed-width page). The real fix lives in `page-shell.css`'s narrow
+ * media query (`.page-shell-content { align-self: stretch; width: 100% }`
+ * -- see that rule's own comment): `.page-shell-layout` switches to a
+ * column flex layout below 62rem, and its `align-items: flex-start`
+ * (correct for the WIDE row layout, never reset for the column one)
+ * let `.page-shell-content` shrink to its own max-content width, which
+ * a wide `.data-table` happily supplied. This file's own rules were
+ * never wrong on their own terms; they just cannot deliver "scrolls
+ * horizontally at every viewport" without a definite-width ancestor to
+ * scroll inside of, which this file does not control.
  *
  * `.kv-list` used to be defined here too (scoped the same way, for the
  * same route-chunk-leakage reason) — that rule, and the competing one in
@@ -59,8 +69,6 @@
  * stylesheet regardless of route-visit order, which is what makes the
  * leakage risk moot for it specifically.
  */
-
-.note[aria-busy="true"]::after { content: "…"; }
 
 /* Layout-only companion class for the "N records · review: …" line above
    each of the three tabs' record lists -- typography comes from `.note`
@@ -99,9 +107,13 @@
     letter-spacing: var(--type-heading-2-tracking);
 }
 
-.science-record-heading code {
+/* Review finding (NIT, PR 366): was a bespoke `.72rem var(--mono)` size
+   next to `.data`'s own `--type-data` step -- a second mono size for the
+   same "raw identifier" role. The ref itself is `.data` now (className
+   at each call site); this rule keeps only the muted colour `.data` has
+   no opinion on. */
+.science-record-heading .data {
     color: var(--muted);
-    font: .72rem var(--mono);
 }
 
 /* A correction notice — present only on a superseded record. Never a
@@ -169,10 +181,21 @@
     font: var(--type-value-font);
 }
 
-/* `.evidence-chip`/`.evidence-full-checklist` are RETIRED: the chip now
-   renders through `.value-pill--muted` (design-system.css) and the
-   disclosure through the shared `Disclosure` component -- both bring
-   their own chrome, so neither needs a local rule here any more. */
+/* `.evidence-chip` is RETIRED: the chip now renders through
+   `.value-pill--muted` (design-system.css). `.evidence-full-checklist`
+   keeps ONE rule -- pure spacing, since `Disclosure` brings its own box/
+   chevron/summary chrome but has no opinion on the space around that box
+   in a caller's own layout. Review finding (NIT, PR 366): dropping this
+   rule entirely (both properties, not just the summary styling
+   `Disclosure` now supplies) left the box's visible border sitting flush
+   against `ProvenanceBlock`'s "Level of theory" row immediately below it
+   -- harmless as plain text flow before this box had a border to butt up
+   against, visibly broken once it did. Margin on both sides now: the
+   original top value, preserved, plus a bottom value the bare `<details>`
+   never needed before it had a border to clear. */
+.evidence-full-checklist {
+    margin: .6rem 0;
+}
 
 /* ---------------------------------------------------------------------
  * Conformer-first pass (design/species-entry-conformer-first) — reskin of
