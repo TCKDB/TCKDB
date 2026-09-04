@@ -12,18 +12,24 @@
  * `geometry-detail.css`) is that a page's own styling should not depend on
  * another page's stylesheet having loaded first.
  *
- * `.kv-list` — and the later `.table-scroll .stage-table { min-width }`
- * addition below it — are NOT byte-identical to their counterparts in
- * `calculation-detail.css` / `geometry-detail.css`, and Vite never unloads
- * a route chunk's CSS once injected — so redefining either bare selector
+ * `.table-scroll .stage-table { min-width }` below is NOT byte-identical
+ * to its counterpart in other pages' stylesheets, and Vite never unloads
+ * a route chunk's CSS once injected — so redefining it as a bare selector
  * here with a different value would make whichever page loaded last win
- * the cascade for BOTH routes, on every route after the first cross-visit.
- * (`.kv-list` was caught in review before it shipped; the `min-width` rule
- * shipped once already scoped to `.table-scroll .stage-table` — still bare
- * enough to reach `GeometryDetailPage.tsx`'s own `.stage-table`s, live on
- * the Pi — and was caught in the round after.) Both are scoped under
- * `.science-record` instead, which every `.kv-list` and `.table-scroll` on
+ * the cascade for BOTH routes, on every route after the first cross-visit
+ * (the `min-width` rule shipped once already scoped to `.table-scroll
+ * .stage-table` — still bare enough to reach `GeometryDetailPage.tsx`'s
+ * own `.stage-table`s, live on the Pi — and was caught in review). It
+ * stays scoped under `.science-record`, which every `.table-scroll` on
  * these three tabs is nested inside.
+ *
+ * `.kv-list` used to be defined here too (scoped the same way, for the
+ * same route-chunk-leakage reason) — that rule, and the competing one in
+ * `calculation-detail.css`, are both gone now (design/foundations): the
+ * ONE canonical `.kv-list` lives in `design-system.css`, imported first
+ * from `index.css` so it is always loaded before any page's own
+ * stylesheet regardless of route-visit order, which is what makes the
+ * leakage risk moot for it specifically.
  */
 
 .records-note {
@@ -95,29 +101,14 @@
 
 .section-note[aria-busy="true"]::after { content: "…"; }
 
-/* Scoped under `.science-record` — see the file header for why the bare
-   `.kv-list` selector is not redefined here. Every `<dl className="kv-list">`
-   on these three tabs is nested inside a `.science-record` card or row, so
-   this scoping changes nothing about which elements are styled. */
-.science-record .kv-list {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: .7rem 1.5rem;
-    margin: 1rem 0 0;
-}
-
-.science-record .kv-list dt {
-    color: var(--muted);
-    font: .64rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.science-record .kv-list dd {
-    margin: .3rem 0 0;
-    overflow-wrap: anywhere;
-    font: .78rem var(--mono);
-}
+/* `.kv-list`'s own scoped-under-`.science-record` rules (formerly
+   redefined here at .64rem -- a SECOND `.kv-list dt` size, different
+   from `calculation-detail.css`'s .6875rem, for the same semantic role)
+   are gone: the ONE canonical `.kv-list` now lives in `design-system.css`,
+   loaded before any page stylesheet, which is exactly what removes the
+   route-chunk-leakage risk this file's header comment used to explain --
+   there is no longer a second bare-or-scoped definition for a
+   later-loaded page to race against. */
 
 .table-scroll {
     overflow-x: auto;
@@ -217,9 +208,12 @@
     cursor: pointer;
 }
 
-@media (max-width: 680px) {
-    .science-record .kv-list { grid-template-columns: 1fr; }
-}
+/* The 680px kv-list column-collapse override that used to live here,
+   scoped under `.science-record`, is gone along with the scoped base
+   rule it adjusted -- `design-system.css`'s canonical kv-list already
+   collapses on its own via `auto-fit, minmax(12rem, 1fr)` once two
+   columns no longer fit, so a fixed breakpoint override is redundant
+   for it now. */
 
 /*
  * ---------------------------------------------------------------------
