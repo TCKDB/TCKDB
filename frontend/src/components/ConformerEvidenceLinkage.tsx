@@ -2,6 +2,7 @@ import type { ReactNode } from "react"
 import type { ConformerProjection } from "../api/speciesEntryApi"
 import type { CalculationTypeCount } from "../domain/conformerEvidence"
 import { calculationTypeCounts, conformerLabel, describeConformerEvidence, geometryConvergence } from "../domain/conformerEvidence"
+import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
 
 // The published `calculation_count` and the per-stage breakdown come from
@@ -73,7 +74,7 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
     const staging = stagingSentence(conformer)
 
     return (
-        <section className="evidence-linkage" aria-labelledby="evidence-linkage-heading">
+        <section className="evidence-linkage card card--sunken" aria-labelledby="evidence-linkage-heading">
             {/* No separate "Evidence" eyebrow here -- the conformer picker
                 right above already carries one, and the tab strip below
                 carries its own "Evidence for this conformer" eyebrow too.
@@ -81,17 +82,23 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                 alone doesn't; the heading is enough. */}
             <SectionHeading id="evidence-linkage-heading" label={`Evidence for ${label}`}>Evidence for {label}</SectionHeading>
             {staging && <p className="evidence-linkage-story">{staging}</p>}
-            <details className="evidence-linkage-detail">
-                {/* The count in the summary is the "References (4)" lesson applied
-                    here: a bare "How this evidence connects" gave a reader no reason
-                    to open it. Both figures are already published elsewhere on this
-                    card/panel, so this repeats nothing new -- it previews what's
-                    behind the click. */}
-                <summary>
-                    How this evidence connects ({evidence.calculation_count} calculation row{evidence.calculation_count === 1 ? "" : "s"}
-                    {", "}{evidence.geometry_count} distinct geometr{evidence.geometry_count === 1 ? "y" : "ies"})
-                </summary>
-                <p className="evidence-linkage-note">
+            {/* The count in the summary is the "References (4)" lesson applied
+                here: a bare "How this evidence connects" gave a reader no reason
+                to open it. Both figures are already published elsewhere on this
+                card/panel, so this repeats nothing new -- it previews what's
+                behind the click. Rendered through the shared `Disclosure`
+                component so this box/chevron/summary matches every other
+                disclosure on the page, not its own drifted mono variant. */}
+            <Disclosure
+                className="evidence-linkage-detail"
+                summary={(
+                    <>
+                        How this evidence connects ({evidence.calculation_count} calculation row{evidence.calculation_count === 1 ? "" : "s"}
+                        {", "}{evidence.geometry_count} distinct geometr{evidence.geometry_count === 1 ? "y" : "ies"})
+                    </>
+                )}
+            >
+                <p className="note">
                     Three different units, not three counts of the same thing — the card above abbreviates the
                     first two as "obs" and "calc": an observation is a deposited sighting of this basin; a
                     calculation row is one piece of evidence attached to an observation; a stored geometry is a
@@ -136,12 +143,12 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
                         )}
                     </LinkageStep>
                 </div>
-                <p className="linkage-coverage">
+                <p className="note linkage-coverage">
                     <strong>Stage coverage</strong> — of the {total} observation{total === 1 ? "" : "s"}: opt{" "}
                     {coverage.opt}/{total} · freq {coverage.freq}/{total} · sp {coverage.sp}/{total}. This counts which
                     observations have at least one calculation of that stage, not the number of calculation rows.
                 </p>
-            </details>
+            </Disclosure>
         </section>
     )
 }

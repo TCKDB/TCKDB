@@ -102,7 +102,7 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                         ))}
                     </fieldset>
                     <div className="table-scroll table-scroll--compact">
-                        <table className="stage-table" aria-label="Single-point energies">
+                        <table className="data-table" aria-label="Single-point energies">
                             <thead>
                                 <tr>
                                     <th scope="col">Observation</th>
@@ -120,14 +120,14 @@ export function ConformerSinglePointTab({ conformer, spEnergies }: {
                                     return (
                                         <tr key={row.key}>
                                             <td data-label="Observation">
-                                                <Link to={`/conformer-observations/${row.observationRef}`}>{row.observationRef}</Link>
+                                                <Link className="data" to={`/conformer-observations/${row.observationRef}`}>{row.observationRef}</Link>
                                             </td>
                                             <td data-label="Calculation">
                                                 {row.calculation
-                                                    ? <Link to={`/calculations/${row.calculation.calculation_ref}`}>{row.calculation.calculation_ref}</Link>
+                                                    ? <Link className="data" to={`/calculations/${row.calculation.calculation_ref}`}>{row.calculation.calculation_ref}</Link>
                                                     : "not recorded"}
                                             </td>
-                                            <td data-label="Energy">
+                                            <td className="num" data-label="Energy">
                                                 {!row.calculation ? (
                                                     <span className="energy-display-absent">no single-point calculation recorded</span>
                                                 ) : valueHartree === null ? (

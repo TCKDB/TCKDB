@@ -97,6 +97,18 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
             {observations.length === 0 ? (
                 <p className="empty-projection">No stored geometry is projected for this conformer.</p>
             ) : (
+                // `.checklist` (entry-science.css) is sans/value-weight text now,
+                // not the blanket mono it used to be -- MEASURED: this tab was
+                // 81% monospace before this pass, because that one rule mono'd
+                // every word here indiscriminately (the observation summary
+                // sentence, "N optimization calculations", level-of-theory
+                // labels, atom counts) along with the refs it actually needed
+                // to. Only the genuine identifiers below -- the observation
+                // ref, calculation refs, geometry refs, the truncated hash --
+                // opt back INTO mono via `.data` (design-system.css) at their
+                // own span; everything else (the sentence fragments around
+                // them) now reads in the same sans face as the rest of the
+                // page's prose.
                 <ul className="checklist">
                     {observations.map((observation) => {
                         const ref = observation.conformer_observation.conformer_observation_ref
@@ -105,7 +117,7 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                         return (
                             <Fragment key={ref}>
                                 <li>
-                                    <Link to={`/conformer-observations/${ref}`} style={linkStyle}>{ref}</Link>
+                                    <Link className="data" to={`/conformer-observations/${ref}`} style={linkStyle}>{ref}</Link>
                                     {" — "}{optCalcs.length} optimization calculation{optCalcs.length === 1 ? "" : "s"}
                                 </li>
                                 {groups.map((group) => {
@@ -115,7 +127,7 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                                             {group.calcRefs.map((calculation, index) => (
                                                 <Fragment key={calculation.calculation_ref}>
                                                     {index > 0 && ", "}
-                                                    <Link to={`/calculations/${calculation.calculation_ref}`} style={linkStyle}>
+                                                    <Link className="data" to={`/calculations/${calculation.calculation_ref}`} style={linkStyle}>
                                                         {calculation.calculation_ref}
                                                     </Link>
                                                     {calculation.level_of_theory ? ` (${lotLabel(calculation.level_of_theory)})` : " (level of theory not recorded)"}
@@ -124,11 +136,11 @@ export function ConformerGeometryTab({ conformer }: { conformer: ConformerProjec
                                             {" → "}
                                             {geometry ? (
                                                 <>
-                                                    <Link to={`/geometries/${geometry.geometry_ref}`} style={linkStyle}>
+                                                    <Link className="data" to={`/geometries/${geometry.geometry_ref}`} style={linkStyle}>
                                                         {geometry.geometry_ref}
                                                     </Link>
                                                     {geometry.natoms != null ? ` · ${geometry.natoms} atoms` : ""}
-                                                    {geometry.geom_hash ? ` · ${geometry.geom_hash.slice(0, 12)}…` : ""}
+                                                    {geometry.geom_hash ? <> · <span className="data">{geometry.geom_hash.slice(0, 12)}…</span></> : ""}
                                                 </>
                                             ) : "geometry not recorded"}
                                         </li>

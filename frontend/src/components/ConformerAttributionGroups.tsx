@@ -1,5 +1,6 @@
 import type { ReactNode } from "react"
 import type { ConformerAttribution } from "../domain/conformerEvidence"
+import { Disclosure } from "./Disclosure"
 
 /**
  * Shared three-way conformer-attribution layout for `EntryThermoSection`
@@ -93,10 +94,10 @@ export function ConformerAttributionGroups<T>({
                 primary
             />
             {otherRecordCount > 0 && (
-                <details className="conformer-attribution-other">
-                    <summary>
-                        {otherRecordCount} record{otherRecordCount === 1 ? "" : "s"} from other conformers
-                    </summary>
+                <Disclosure
+                    className="conformer-attribution-other"
+                    summary={`${otherRecordCount} record${otherRecordCount === 1 ? "" : "s"} from other conformers`}
+                >
                     {[...otherGroupsByLabel.entries()].map(([labelKey, records]) => (
                         <AttributionGroup
                             key={labelKey}
@@ -107,7 +108,7 @@ export function ConformerAttributionGroups<T>({
                             renderRecords={renderRecords}
                         />
                     ))}
-                </details>
+                </Disclosure>
             )}
             {/* Rendered only when it HOLDS something. An empty "No conformer
                 link" bucket printed a heading and an explanation for nothing,
@@ -141,7 +142,7 @@ function AttributionGroup<T>({ title, note, records, emptyText, renderRecords, p
     return (
         <div className="conformer-evidence-group">
             <h3 className="conformer-evidence-group-heading">{title}</h3>
-            <p className="section-note">{note}</p>
+            <p className="note">{note}</p>
             {records.length === 0
                 ? <p className={primary ? "conformer-attribution-answer" : "empty-projection"}>{emptyText}</p>
                 : renderRecords(records)}

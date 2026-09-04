@@ -89,7 +89,7 @@ export function EntryIdentity({ entry }: { entry: SpeciesEntryProjection }) {
 function IdentifierItem({ label, value }: { label: string; value: string }) {
     return <li className="identifier-chip">
         <span className="identifier-chip-label">{label}</span>
-        <code>{value}</code>
+        <code className="data">{value}</code>
         <CopyButton value={value} label={label} />
     </li>
 }
