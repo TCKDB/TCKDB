@@ -36,38 +36,14 @@ code, pre, kbd, samp { font-family: var(--mono); }
 h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
 
-/* `.value-pill` -- the site-wide convention for a categorical, bounded-
-   vocabulary value (entry kind, electronic state, review status, scale
-   kind): a rounded pill REPLACING a value's plain-text form, never sitting
-   alongside it. Originated in `calculation-detail.css` for
-   `CalculationDetailPage.tsx` (see that file's own comment for the fuller
-   history: "rather than the text we would use pills for the values? makes
-   it pop more") and moved here, into the ONE stylesheet every route loads
-   (`main.tsx`), once a second page (`SpeciesBrowseRow.tsx`) needed the same
-   pill without importing that page's whole stylesheet. Identifiers -- refs,
-   SMILES, InChIKey -- are never pills; a quantity with a unit (an energy, a
-   frequency scale factor) is never a pill either -- both stay plain text so
-   they read and select cleanly.
-   `--muted` is for a DIFFERENT axis shown as its own, visually distinct
-   pill next to a `.value-pill` -- e.g. curation/review status beside
-   classification -- so two pills that are deliberately not the same kind of
-   fact do not also look like the same kind of fact. */
-.value-pill {
-    display: inline-block;
-    padding: .2rem .6rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--accent-50);
-    color: var(--accent-700);
-    font: 600 .72rem/1.3 var(--sans);
-    white-space: nowrap;
-}
-
-/* `.value-pill--muted`'s rules moved to `design-system.css` -- it used
-   to be its own mono .62rem uppercase form, visually a different kind of
-   pill from `.value-pill` above it rather than the same pill on a muted
-   axis. Now defined once, alongside `.value-pill`'s canonical box/size,
-   with only colour swapped -- see that file's own comment. */
+/* `.value-pill` / `.value-pill--muted` moved to `design-system.css`
+   (post-review, PR D): both must live in ONE file, in the right order, for
+   the cascade to resolve correctly on an element carrying both classes --
+   see that file's own comment above `.value-pill` for the bug this fixes
+   (a route-dependent cascade flip measured between `.value-pill` here and
+   `.value-pill--muted` there, made worse by `Disclosure.tsx` re-importing
+   `design-system.css` into its own chunk). `index.css` no longer defines
+   either class. */
 
 /*
  * `.archive-shell` is the top-level wrapper in `AppShell.tsx` around
@@ -259,8 +235,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 }
 
 .record-breadcrumbs a:focus-visible,
-.entry-card h4 a:focus-visible,
-.entry-card-action:focus-visible {
+.entry-card h4 a:focus-visible {
     outline: 3px solid var(--accent-300);
     outline-offset: 3px;
 }
@@ -295,17 +270,23 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 
 /*
  * Accessibility pass, finding 10 -- font-size floor for a handful of
- * classes owned by `browse.css` and `species-entry.css`, two files this
- * pass is not allowed to touch (other agents own their layout rules in
- * parallel). Both sit at 9-10px today: `.ref-item-label` .6rem (9.6px),
- * `.copy-button` .58rem (9.28px), `.browse-row-ref` .68rem (10.88px) --
- * all below the 11px floor this finding asks for.
+ * classes owned by `species-entry.css`, a file this pass is not allowed to
+ * touch (other agents own their layout rules in parallel). Both sit at
+ * 9-10px today: `.ref-item-label` .6rem (9.6px), `.copy-button` .58rem
+ * (9.28px) -- below the 11px floor this finding asks for.
  *
  * `.refs-disclosure summary` DROPPED from this list (design/foundations):
  * `RefsDisclosure.tsx` now composes `components/Disclosure.tsx`, whose
  * `.disclosure > summary` rule (`design-system.css`) sets `--type-ui`
  * (.8125rem / 13px) directly -- already above this floor, so the
  * override has nothing left to raise.
+ *
+ * `.browse-row-ref` DROPPED from this list too (PR D): the class was
+ * retired outright -- `browse.css`'s ref now renders through `.browse-ref`
+ * plus the shared `.data` step (.8125rem / 13px), already above this
+ * floor -- rather than renamed here, since PR D owns `browse.css` and
+ * could fix the size at its source instead of overriding it from a file
+ * it doesn't own.
  *
  * This file (`index.css`) is loaded once, globally, before any page's own
  * stylesheet mounts, so a same-specificity `.ref-item-label { font-size:
@@ -320,7 +301,6 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
  * owning file already declares.
  */
 .archive-shell .ref-item-label,
-.archive-shell .copy-button,
-.archive-shell .browse-row-ref {
+.archive-shell .copy-button {
     font-size: .6875rem; /* 11px */
 }

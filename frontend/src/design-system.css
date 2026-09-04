@@ -32,9 +32,11 @@
  * This PR defines the primitives and, where the canonical component is
  * ALREADY in use (`RefsDisclosure`, the ToC), wires them in. It does not
  * migrate `.stage-table`, `.review-badge`, `.tse-trust-badge`,
- * `.evidence-chip`, `.browse-entry-chip`, `.entry-review`, or
- * `.identifier-chip-label` -- those are PR B/C/D's job; the "to retire"
- * list below exists so that work has a fixed target.
+ * `.evidence-chip`, `.browse-entry-chip`, or `.identifier-chip-label` --
+ * those are PR B/C's job; the "to retire" list below exists so that work
+ * has a fixed target. (`.entry-review` migrated in PR D --
+ * `SpeciesOverviewPage.tsx` now renders `.value-pill.value-pill--muted`,
+ * same as the browse rows.)
  */
 
 :root {
@@ -285,22 +287,62 @@
     font: var(--type-data-font);
 }
 
-/* A `<div>` wrapping one dt/dd pair that should span the full row width
-   (a long value that would otherwise fight its neighbour column for
-   room) rather than sit in the auto-fit grid like every other pair. */
-.kv-list--wide > div {
+/* Put on the `<div>` wrapping one dt/dd pair that should span the full row
+   width (a long value that would otherwise fight its neighbour column for
+   room) rather than sit in the auto-fit grid like every other pair -- that
+   div IS the grid item (a direct child of `.kv-list`), so this targets it
+   directly rather than a `> div` descendant of it. First real consumer:
+   `SpeciesOverviewPage.tsx`'s species-ref/InChIKey identity pairs, both
+   long enough to wrap mid-token in a narrow `auto-fit` column at 680px. */
+.kv-list--wide {
     grid-column: 1 / -1;
 }
 
 /* ---------------------------------------------------------------------
- * Pill -- `.value-pill` (index.css) stays canonical. `.value-pill--muted`
- * used to be its own mono 9.92px uppercase form (index.css:35-40,
- * pre-existing); made here to match `.value-pill`'s face/size exactly,
- * only the colours swapped to sunken/muted -- so two pills next to each
- * other read as the same KIND of thing (a pill) differing only in which
- * axis they report, not as two unrelated typographic systems.
+ * Pill -- `.value-pill` is the site-wide convention for a categorical,
+ * bounded-vocabulary value (entry kind, electronic state, review status,
+ * scale kind): a rounded pill REPLACING a value's plain-text form, never
+ * sitting alongside it. Originated in `calculation-detail.css` for
+ * `CalculationDetailPage.tsx`, then moved to `index.css` (the one
+ * stylesheet every route loads) once a second page needed it, then here
+ * (post-review, PR D) once BOTH it and `.value-pill--muted` needed to live
+ * in the same file for the cascade below to hold.
+ *
+ * `.value-pill--muted` is a DIFFERENT axis shown as its own, visually
+ * distinct pill next to a `.value-pill` -- e.g. curation/review status
+ * beside classification -- so two pills that are deliberately not the same
+ * kind of fact do not also look like the same kind of fact.
+ *
+ * BUG this fixed (measured post-review): `.value-pill` used to live in
+ * `index.css`, loaded AFTER this file's `@import` -- so on an element
+ * carrying both classes, `index.css`'s `.value-pill` (equal specificity,
+ * later in the cascade) won over this file's `.value-pill--muted`, and the
+ * "muted" pill rendered identically to the base pill. Worse: `Disclosure.
+ * tsx` used to `import "../design-system.css"` itself, so Vite emitted a
+ * SECOND copy of this file into whichever route chunk imported Disclosure
+ * -- once that chunk's stylesheet loaded (e.g. after navigating to the
+ * species-overview page), its `.value-pill--muted` copy landed AFTER
+ * `index.css`'s `.value-pill` in the DOCUMENT, flipping the cascade back
+ * the other way. Two independent fixes, so neither a future reordering nor
+ * a future duplicate-chunk regression can reintroduce this: (1) both
+ * classes now live in ONE file, `.value-pill` declared BEFORE
+ * `.value-pill--muted`; (2) the muted rule's own selector,
+ * `.value-pill.value-pill--muted`, carries HIGHER specificity than a bare
+ * `.value-pill` regardless of source order. `Disclosure.tsx` no longer
+ * imports this file at all (`index.css` already does, once, globally).
  * ------------------------------------------------------------------- */
-.value-pill--muted {
+.value-pill {
+    display: inline-block;
+    padding: .2rem .6rem;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--accent-50);
+    color: var(--accent-700);
+    font: 600 .72rem/1.3 var(--sans);
+    white-space: nowrap;
+}
+
+.value-pill.value-pill--muted {
     display: inline-block;
     padding: .2rem .6rem;
     border: 1px solid var(--line-2);
@@ -311,10 +353,10 @@
     white-space: nowrap;
 }
 
-/* Pill classes NOT migrated in this PR -- PR B/C/D's job. Listed here so
+/* Pill classes NOT migrated in this PR -- PR B/C's job. Listed here so
    the consolidation has a fixed target rather than needing rediscovery:
    `.review-badge`, `.tse-trust-badge`, `.evidence-chip`,
-   `.browse-entry-chip`, `.entry-review`, `.identifier-chip-label`. */
+   `.browse-entry-chip`, `.identifier-chip-label`. */
 
 /* ---------------------------------------------------------------------
  * Note -- a short muted explanatory line, capped to the (now narrower)
