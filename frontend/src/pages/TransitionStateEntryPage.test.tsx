@@ -173,6 +173,32 @@ describe("TransitionStateEntryPage", () => {
         expect(within(header).queryByText("Transition state review")).not.toBeInTheDocument()
     })
 
+    // Item 5/7, design/foundations PR B: mutation check for disclosure
+    // adoption (`.disclosure`, never the retired `.geometry-role-
+    // disclosure`) and the table primitive (`.data-table`, never
+    // `.stage-table`) -- see the identical checks on the other four
+    // record pages' own test files.
+    it("renders per-role geometry groups as .disclosure and every table as .data-table, never the retired classes", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        const { container } = page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        expect(container.querySelector(".geometry-role-disclosure")).toBeNull()
+        const roleDisclosure = screen.getByText(/IRC reverse/).closest("details") as HTMLElement
+        expect(roleDisclosure).not.toBeNull()
+        expect(roleDisclosure).toHaveClass("disclosure")
+
+        expect(container.querySelector(".stage-table")).toBeNull()
+        const tables = Array.from(container.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThan(0)
+        for (const table of tables) {
+            expect(table).toHaveClass("data-table")
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
+    })
+
     it("saddle-point: states the imaginary-mode verdict first, under the identity block, when a freq result exists", async () => {
         server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
             HttpResponse.json({

@@ -5,6 +5,7 @@ import "../transition-state-entry.css"
 import type { TransitionStateEntryRecord, TransitionStateSiblingRecord } from "../api/transitionStateEntryApi"
 import { loadTransitionStateEntry, loadTransitionStateSiblings } from "../api/transitionStateEntryApi"
 import { lotLabel } from "../api/scientificSchemas"
+import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordIdentityHeader } from "../components/RecordIdentityHeader"
@@ -17,6 +18,10 @@ import { useScientificRecord } from "../hooks/useScientificRecord"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
+// The one canonical pill rule every record page follows now (item 6,
+// design/foundations PR B) -- see `CalculationDetailPage.tsx`'s own copy
+// of this helper for the fuller rationale.
+const reviewPillClass = (status: string) => (status === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill")
 
 type Calculation = NonNullable<TransitionStateEntryRecord["calculations"]>[number]
 type Geometry = NonNullable<TransitionStateEntryRecord["geometries"]>[number]
@@ -274,27 +279,39 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             <PageShell
                 identity={(
                     <header className="basin-header">
-                        <p className="eyebrow">Transition state entry · deposited scientific record</p>
-                        <div className="tse-title-row">
-                            <h1 className="tse-equation-heading">
-                                {reaction.equation ? renderEquationWithBreaks(reaction.equation) : "Reaction not recorded"}
-                            </h1>
-                            <div className="tse-title-badges">
-                                <span className="review-badge">{statusLabel(entry.review.status)}</span>
-                                {trust && (
-                                    <span className="tse-trust-badge">
-                                        trust {statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}
-                                    </span>
-                                )}
-                                <span className="tse-label-facet">label {ts.label ?? "not recorded"}</span>
-                            </div>
-                        </div>
-                        {/* explainTransitionStateIdentity=false: the Reaction
+                        {/* Kicker + h1 (the reaction equation, `titleVariant=
+                            "display-2"`: the shared "wrapping" step, since
+                            this title is a computed sentence-length string,
+                            not a short label) + identity now all live in
+                            `RecordIdentityHeader` (item 1, design/foundations
+                            PR B). The review pill is the header's ONE pill
+                            slot; the TS label facet (`.tse-label-facet`,
+                            "not a pill itself" -- see that class's own
+                            comment in `transition-state-entry.css`) travels
+                            alongside it in that same slot, since this page
+                            has no second slot to give it. The trust verdict
+                            is NOT a second pill either -- it is a plain
+                            fact in the provenance `.kv-list` below, the same
+                            treatment every other computed verdict on these
+                            five pages gets.
+                            explainTransitionStateIdentity=false: the Reaction
                             section's own lede below is this page's one
                             "no canonical SMILES" sentence -- see that
                             section and `RecordIdentityHeader`'s own
                             docstring for the duplication this avoids. */}
-                        <RecordIdentityHeader identity={identity} explainTransitionStateIdentity={false} />
+                        <RecordIdentityHeader
+                            kicker="Transition state entry · deposited scientific record"
+                            pill={(
+                                <>
+                                    <span className={reviewPillClass(entry.review.status)}>{statusLabel(entry.review.status)}</span>
+                                    <span className="tse-label-facet">label {ts.label ?? "not recorded"}</span>
+                                </>
+                            )}
+                            title={reaction.equation ? renderEquationWithBreaks(reaction.equation) : "Reaction not recorded"}
+                            titleVariant="display-2"
+                            identity={identity}
+                            explainTransitionStateIdentity={false}
+                        />
                         <SaddlePointStatement saddlePoint={record.saddle_point} evidence={evidence} />
                         {/* No "Charge / multiplicity" row here: `RecordIdentityHeader`
                             above already carries it as one of its identity
@@ -302,29 +319,36 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             its own docstring. Restating it here duplicated
                             the exact same "0 / doublet (2)" text twice on
                             one page. */}
-                        {/* No "Transition state review" row here: the review-badge
-                            pill beside the h1 above already states this entry's
+                        {/* No "Transition state review" row here: the review pill
+                            beside the h1 above already states this entry's
                             review status. Restating it here duplicated that status
                             text twice on one page. */}
-                        <dl className="basin-context">
+                        <dl className="kv-list">
                             <div><dt>Entry status</dt><dd>{statusLabel(entry.status)}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(entry.created_at)}</dd></div>
                             {ts.note && <div><dt>Transition state note</dt><dd>{ts.note}</dd></div>}
+                            {/* A plain fact, not a second pill -- see the
+                                comment on `RecordIdentityHeader`'s `pill`
+                                prop above. */}
+                            {trust && (
+                                <div>
+                                    <dt>Trust</dt>
+                                    <dd>{statusLabel(trust.trust_status)} · {trust.evidence.passed_count}/{trust.evidence.possible_count}</dd>
+                                </div>
+                            )}
                         </dl>
                         <RefsDisclosure refs={refs} />
                     </header>
                 )}
             >
             <section className="ledger-section" aria-labelledby="reaction-context">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Reaction context</p>
-                    <SectionHeading id="reaction-context">Reaction</SectionHeading>
-                    <p>A transition state is identified by the reaction it connects, not a molecular graph of its own.</p>
-                </div>
+                <SectionHeading id="reaction-context" kicker="Reaction context" intro="A transition state is identified by the reaction it connects, not a molecular graph of its own.">
+                    Reaction
+                </SectionHeading>
                 {/* No "Equation" fact here: the h1 above already IS the
                     rendered equation (see the h1 rework). Restating it
                     here duplicated the exact same text twice on one page. */}
-                <dl className="basin-context">
+                <dl className="kv-list">
                     <div><dt>Family</dt><dd>{reaction.family ? statusLabel(reaction.family) : "not recorded"}</dd></div>
                     <div><dt>Reversible</dt><dd>{reaction.reversible === null || reaction.reversible === undefined ? "not recorded" : (reaction.reversible ? "yes" : "no")}</dd></div>
                     {reaction.reaction_ref && (
@@ -332,7 +356,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             <dt>Reaction record</dt>
                             <dd>
                                 <Link to={`/reactions/${reaction.reaction_ref}`}>{reaction.reaction_ref}</Link>
-                                <span className="tse-placeholder-note"> (record view not yet available)</span>
+                                <span className="note tse-placeholder-note"> (record view not yet available)</span>
                             </dd>
                         </div>
                     )}
@@ -341,11 +365,13 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
 
             {siblings.length > 0 && (
                 <section className="ledger-section" aria-labelledby="siblings-ledger">
-                    <div className="ledger-heading">
-                        <p className="eyebrow">Reaction context</p>
-                        <SectionHeading id="siblings-ledger">Other saddle points deposited for this reaction</SectionHeading>
-                        <p>Other candidate transition-state entries attached to the same reaction as this one.</p>
-                    </div>
+                    <SectionHeading
+                        id="siblings-ledger"
+                        kicker="Reaction context"
+                        intro="Other candidate transition-state entries attached to the same reaction as this one."
+                    >
+                        Other saddle points deposited for this reaction
+                    </SectionHeading>
                     <ul className="tse-siblings-list">
                         {siblings.map((sibling) => {
                             const primary = pickPrimaryCalcSummary(sibling.calculations ?? [])
@@ -365,7 +391,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
-                                    <span className={reviewStatus === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill"}>
+                                    <span className={reviewPillClass(reviewStatus)}>
                                         {statusLabel(reviewStatus)}
                                     </span>
                                 </li>
@@ -376,18 +402,15 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             )}
             {siblingsFailed && (
                 <section className="ledger-section" aria-labelledby="siblings-ledger-error">
-                    <div className="ledger-heading">
-                        <p className="eyebrow">Reaction context</p>
-                        <SectionHeading id="siblings-ledger-error">Other saddle points deposited for this reaction</SectionHeading>
-                    </div>
+                    <SectionHeading id="siblings-ledger-error" kicker="Reaction context">
+                        Other saddle points deposited for this reaction
+                    </SectionHeading>
                     <p className="empty-projection">Could not load sibling saddle points for this reaction.</p>
                 </section>
             )}
 
             <section className="ledger-section" aria-labelledby="calc-ledger">
-                <div className="ledger-heading">
-                    <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
-                </div>
+                <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
                 <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
                 {calculationsAvailability === "populated" ? (
                     <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
@@ -400,14 +423,18 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                 )}
             </section>
 
-            <section className="ledger-section geometry-ledger" aria-labelledby="geometry-ledger">
-                <p className="eyebrow">Stored coordinates</p>
-                <SectionHeading id="geometry-ledger">Geometry records</SectionHeading>
-                <p>
-                    These are stored geometry objects linked from this entry's calculation output — the saddle
-                    point itself and, where an IRC ran, the reaction-path points either side of it.
-                </p>
-                <div className="tse-irc-summary">
+            <section className="ledger-section" aria-labelledby="geometry-ledger">
+                <SectionHeading
+                    id="geometry-ledger"
+                    kicker="Stored coordinates"
+                    intro="These are stored geometry objects linked from this entry's calculation output — the saddle point itself and, where an IRC ran, the reaction-path points either side of it."
+                >
+                    Geometry records
+                </SectionHeading>
+                {/* `.card--derived` -- a computed summary (point counts read
+                    from this entry's own geometry rows), the same rule
+                    `.coverage-card`/other pages' aggregate cards follow. */}
+                <div className="card card--derived tse-irc-summary">
                     <IrcStatus
                         validation={validation}
                         evidence={evidence}
@@ -420,7 +447,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                     <div className="geometry-groups">
                         {finalGeometries.length > 0 ? (
                             <div className="geometry-final">
-                                <p className="geometry-final-label">Saddle-point geometry</p>
+                                <h3 className="t-heading-2">Saddle-point geometry</h3>
                                 <div className="geometry-links">
                                     {finalGeometries.map((geometry) => (
                                         <div className="geometry-link geometry-link--final" key={geometry.geometry_ref}>
@@ -436,14 +463,19 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                         {[...otherGeometriesByRole.entries()].map(([role, roleGeometries]) => {
                             const natoms = roleGeometries[0]?.natoms ?? null
                             return (
-                                <details className="ledger-section geometry-role-disclosure" key={role || "role-not-recorded"}>
-                                    <summary>
-                                        {geometryRoleSummaryLabel(role)}
-                                        {" — "}{roleGeometries.length} point{roleGeometries.length === 1 ? "" : "s"}
-                                        {natoms != null ? ` · ${natoms} atoms` : ""}
-                                    </summary>
+                                <Disclosure
+                                    key={role || "role-not-recorded"}
+                                    id={`geometry-role-${role || "role-not-recorded"}`}
+                                    summary={(
+                                        <>
+                                            {geometryRoleSummaryLabel(role)}
+                                            {" — "}{roleGeometries.length} point{roleGeometries.length === 1 ? "" : "s"}
+                                            {natoms != null ? ` · ${natoms} atoms` : ""}
+                                        </>
+                                    )}
+                                >
                                     {ircCalc && (role === "irc_forward" || role === "irc_reverse") && (
-                                        <p className="section-note">
+                                        <p className="note">
                                             From <Link to={`/calculations/${ircCalc.calculation_ref}`}>{ircCalc.calculation_ref}</Link>.
                                         </p>
                                     )}
@@ -455,7 +487,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                             </li>
                                         ))}
                                     </ol>
-                                </details>
+                                </Disclosure>
                             )
                         })}
                     </div>
@@ -469,32 +501,31 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             </section>
 
             <section className="ledger-section" aria-labelledby="review-ledger">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Review &amp; trust</p>
-                    <SectionHeading id="review-ledger">Review history</SectionHeading>
-                </div>
+                <SectionHeading id="review-ledger" kicker="Review & trust">Review history</SectionHeading>
                 {reviewAvailability === "populated" ? (
                     onlyDefaultReviewRow ? (
                         <p className="empty-projection">Not yet reviewed — no review events recorded.</p>
                     ) : (
-                        <table className="stage-table" aria-label={`Review history for ${entry.transition_state_entry_ref}`}>
-                            <thead>
-                                <tr>
-                                    <th scope="col">Status</th>
-                                    <th scope="col">Reviewed at</th>
-                                    <th scope="col">Note</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {reviewHistory.map((historyEntry, index) => (
-                                    <tr key={`review-entry-${index}`}>
-                                        <td data-label="Status">{statusLabel(historyEntry.status)}</td>
-                                        <td data-label="Reviewed at">{isoDate(historyEntry.reviewed_at)}</td>
-                                        <td data-label="Note">{historyEntry.note ?? "not recorded"}</td>
+                        <div className="table-scroll">
+                            <table className="data-table" aria-label={`Review history for ${entry.transition_state_entry_ref}`}>
+                                <thead>
+                                    <tr>
+                                        <th scope="col">Status</th>
+                                        <th scope="col">Reviewed at</th>
+                                        <th scope="col">Note</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    {reviewHistory.map((historyEntry, index) => (
+                                        <tr key={`review-entry-${index}`}>
+                                            <td data-label="Status">{statusLabel(historyEntry.status)}</td>
+                                            <td data-label="Reviewed at">{isoDate(historyEntry.reviewed_at)}</td>
+                                            <td data-label="Note">{historyEntry.note ?? "not recorded"}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )
                 ) : (
                     <SectionEmptyMessage
@@ -662,7 +693,7 @@ function EvidencePills({ evidence, entryRef }: { evidence: EvidenceSummary; entr
                     )
                 })}
             </ul>
-            <p className="section-note">Presence says this entry carries that stage, not that its result was favourable.</p>
+            <p className="note">Presence says this entry carries that stage, not that its result was favourable.</p>
         </>
     )
 }
@@ -726,7 +757,8 @@ function SectionEmptyMessage({ availability, emptyText, contradicted }: {
 
 function CalculationTable({ calculations, entryRef }: { calculations: Calculation[]; entryRef: string }) {
     return (
-        <table className="stage-table" aria-label={`Calculations for ${entryRef}`}>
+        <div className="table-scroll">
+        <table className="data-table" aria-label={`Calculations for ${entryRef}`}>
             <thead>
                 <tr>
                     <th scope="col">Stage</th>
@@ -765,5 +797,6 @@ function CalculationTable({ calculations, entryRef }: { calculations: Calculatio
                 ))}
             </tbody>
         </table>
+        </div>
     )
 }
