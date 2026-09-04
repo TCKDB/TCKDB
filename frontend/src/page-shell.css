@@ -82,15 +82,25 @@
 /* Was its own one-off mono .74rem/1.4 -- one more page-specific label
    style in the same "58% of all text carries mono" measurement this pass
    exists to correct. A section-jump link is UI chrome, not a piece of
-   scientific data, so it takes `--type-ui` (sans 600 .8125rem) rather
-   than a data-band size. Site-wide, single component (`TableOfContents.
-   tsx`), no page restructuring. */
+   scientific data, so it takes `--type-ui` (sans .8125rem) rather than a
+   data-band size.
+
+   `--type-ui-font` bakes in weight 600 (the step's own default), but an
+   INACTIVE link must not start at 600 -- post-review fix: it did, which
+   made `.page-toc-active`'s own `font-weight: 600` below a no-op and
+   left every link on the page, active or not, rendering at the same
+   weight (MEASURED 600/600 across four ToC pages, vs main's 400/600).
+   `font-weight: 400` after the shorthand keeps the shared face/size but
+   overrides the step's weight back down for the resting state, so the
+   active link's bold is a real, visible step up again. Site-wide, single
+   component (`TableOfContents.tsx`), no page restructuring. */
 .page-toc a {
     display: block;
     padding: .3rem .5rem;
     border-left: 2px solid transparent;
     color: var(--muted);
     font: var(--type-ui-font);
+    font-weight: 400;
     letter-spacing: var(--type-ui-tracking);
     text-decoration: none;
 }
