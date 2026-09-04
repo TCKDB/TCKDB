@@ -28,14 +28,41 @@ export function PageSectionsProvider({ children }: { children: ReactNode }) {
  * `children` must be the heading's own visible text (a string) -- it
  * doubles as the ToC entry's label. A heading built from richer markup
  * should pass an explicit `label` instead.
+ *
+ * `kicker` and `intro` are additive, optional pieces (design/foundations
+ * PR B, "record pages" consolidation): `kicker` renders as a `.t-kicker`
+ * eyebrow line immediately above the `<h2>` -- callers that used to
+ * render their own `<p className="eyebrow">` immediately before this
+ * component now pass that same text here instead, so the eyebrow is part
+ * of the heading's own markup rather than a sibling a caller could drop
+ * or reorder independently. `intro` renders as a `--type-body` paragraph
+ * capped to `--measure-prose`, replacing a caller's own trailing
+ * `<p>` description that used to follow the `<h2>` outside this
+ * component. Neither prop is required, and a caller that never passes
+ * them (every consumer outside the record pages, as of this writing)
+ * renders exactly the bare `<h2>` it always did -- this is a strictly
+ * additive change to a component used far outside those five pages.
+ *
+ * `className` (default none) is composed alongside the canonical
+ * `t-heading-1` step (`design-system.css`) rather than replacing it, so
+ * a caller can add a page-scoped modifier without having to re-specify
+ * the base heading typography.
  */
-export function SectionHeading({ id, children, label, className }: {
+export function SectionHeading({ id, children, label, className, kicker, intro }: {
     id: string
     children: ReactNode
     label?: string
     className?: string
+    kicker?: ReactNode
+    intro?: ReactNode
 }) {
     const resolvedLabel = label ?? (typeof children === "string" ? children : id)
     useRegisteredSection(id, resolvedLabel)
-    return <h2 className={className} id={id}>{children}</h2>
+    return (
+        <>
+            {kicker && <p className="t-kicker section-kicker">{kicker}</p>}
+            <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>
+            {intro && <p className="t-body section-intro">{intro}</p>}
+        </>
+    )
 }
