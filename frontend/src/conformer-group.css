@@ -1,13 +1,21 @@
 /*
- * Shared between ConformerGroupPage (the basin evidence ledger) and
- * ConformerObservationPage (one deposition drilled into from that
- * ledger). Both render the same review-badge / metric / coverage-card /
- * stage-table / geometry-link vocabulary, so the observation page reuses
- * this stylesheet rather than forking a near-duplicate copy that would
- * drift the moment one of the two pages' visuals changed and the other
- * didn't. Page-root classes stay named after the group page
- * (`.conformer-page`, `.basin-header`, ...) for historical reasons; treat
- * them as the shared "conformer record" layout, not group-only.
+ * Shared "scientific record ledger" stylesheet -- loaded by all five
+ * record pages (`ConformerGroupPage`/`ConformerObservationPage`, and (via
+ * their own page stylesheets) `CalculationDetailPage`/`GeometryDetailPage`/
+ * `TransitionStateEntryPage`), which is why several rules below stay
+ * page-agnostic even though they read as "conformer" (`.conformer-page`,
+ * `.basin-header`) for historical reasons -- treat them as the shared
+ * layout, not group-only. Several classes here (`.review-badge`,
+ * `.stage-table`, `.basin-context`, `.metric`, `.coverage-card`, ...) are
+ * ALSO still relied on by species-entry-page components this PR does not
+ * own (`entry-science.css` depends on `.review-badge`'s and
+ * `.stage-table`'s base rules directly, including its OWN mobile
+ * stacked-row behaviour) -- those rules are kept exactly as they were
+ * even where this PR's own five pages stopped using the class, and are
+ * called out inline below wherever that applies. Design/foundations PR B
+ * moved these five pages onto the shared `.kv-list`/`.card`/`.value-pill`/
+ * `.data-table`/`Disclosure` primitives (`design-system.css`); see this
+ * PR's body for the full per-item list.
  */
 
 .conformer-page {
@@ -16,34 +24,25 @@
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
 
+/* Was a hard-coded `63rem`, giving this header a different right edge
+   than the wide ledger content below it -- the same defect
+   `calculation-detail.css`'s own `.record-header` comment describes and
+   fixes the same way; see that comment for the fuller explanation of why
+   `--measure-wide` (a CONTAINER measure), not `--measure-note` (a prose
+   measure), is the right token here. */
 .basin-header {
-    max-width: 63rem;
+    max-width: var(--measure-wide);
 }
 
-.basin-title {
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
-}
-
-.basin-title h1,
-.ledger-section h2 {
-    margin: 0;
-    font-family: var(--serif);
-    letter-spacing: -.04em;
-}
-
-.basin-title h1 {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    font-size: clamp(3rem, 8vw, 5.5rem);
-}
-
-.basin-intro {
-    max-width: 44rem;
-    color: var(--ink-2);
-    font: 1.15rem/1.55 var(--serif);
-}
+/* `.basin-title`/`.basin-title h1`/`.basin-intro` retired (design/
+   foundations PR B): `ConformerGroupPage`/`ConformerObservationPage` now
+   render the SAME kicker-row + h1 markup `RecordIdentityHeader` renders
+   for the other three record pages (`record-identity-header.css`'s
+   `.record-identity-kicker-row` / `.t-display-1`, imported directly by
+   both pages) rather than a second, page-local h1 recipe at a different
+   size. `GeometryDetailPage` and `TransitionStateEntryPage` dropped their
+   own `.basin-title` usage the same way, so nothing in this app still
+   reads this selector -- see the retirement list in this PR's body. */
 
 .review-badge {
     flex: 0 1 auto;
@@ -57,31 +56,15 @@
     text-transform: uppercase;
 }
 
-.basin-context {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin: 2rem 0 0;
-    padding: 1rem 0;
-    border-block: 1px solid var(--line);
-}
-
-.basin-context dt,
-.metric span,
-.coverage-card span,
-.ledger-kicker {
-    color: var(--muted);
-    /* Accessibility-pass floor (11px / .6875rem) -- was .64rem (10.24px). */
-    font: .6875rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.basin-context dd {
-    margin: .35rem 0 0;
-    overflow-wrap: anywhere;
-    font: .75rem var(--mono);
-}
+/* `.basin-context` retired as a page-header identity/provenance grid
+   (design/foundations PR B): `ConformerGroupPage`/`ConformerObservationPage`
+   now render those facts through the shared `.kv-list` primitive
+   (`design-system.css`) like every other record page's identity/
+   provenance tier -- see item 4 ("all `dl`s use `.kv-list`") in this PR's
+   body. `.basin-context` itself is retired outright (nothing left in this
+   app renders it): the Reaction section on `TransitionStateEntryPage`
+   used the same class for an unrelated fact grid and was migrated to
+   `.kv-list` in the same pass. */
 
 .basin-context a,
 .stage-table a,
@@ -95,78 +78,76 @@
 .ledger-summary {
     display: grid;
     grid-template-columns: repeat(3, 1fr) 1.8fr;
-    margin: 2rem 0 3.5rem;
-    border: 1px solid var(--line);
-    background: var(--surface);
+    gap: var(--s-3);
+    margin: var(--s-6) 0 3.5rem;
 }
 
-.metric,
-.coverage-card {
+/* `.metric` -- a plain number tile, bordered like a `.card` but without
+   that primitive's radius/background swap options: this row reads as a
+   set of small, equal-weight facts, not a set of derived/selected
+   records. */
+.metric {
     min-height: 8.5rem;
-    padding: 1rem;
-    border-right: 1px solid var(--line);
+    padding: var(--s-4);
+    border: 1px solid var(--line);
+}
+
+.metric span {
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .metric strong {
     display: block;
-    margin-top: .55rem;
-    color: var(--accent-700);
+    margin-top: var(--s-2);
+    color: var(--ink);
     font: 600 2.1rem var(--serif);
 }
 
-.metric small,
-.coverage-card p {
+.metric small {
     display: block;
-    margin: .4rem 0 0;
-    color: var(--muted);
-    font: .68rem/1.45 var(--mono);
-}
-
-.coverage-card strong {
-    display: block;
-    margin-top: .55rem;
-    color: var(--accent-700);
-    font: .75rem/1.55 var(--mono);
+    margin-top: var(--s-2);
 }
 
 .ledger-section { margin-top: 3.5rem; }
 
-details.ledger-section summary {
-    cursor: pointer;
-}
+/* `details.ledger-section` (the collapsible-section-as-a-details-with-an-
+   h2-in-its-summary pattern) is retired -- every disclosure on these
+   pages now composes `components/Disclosure.tsx` instead (see item 5 in
+   this PR's body): `ConformerGroupPage`'s observation-evidence
+   disclosure, `ConformerObservationPage`'s curation-selections
+   disclosure, `CalculationDetailPage`'s `LazySection` ("Further
+   evidence"), and `TransitionStateEntryPage`'s per-role geometry
+   disclosures. A section is never itself a `<details>` any more; a
+   section that must collapse wraps a `Disclosure` INSIDE a plain
+   `<section>`. `.geometry-role-disclosure` (the old per-role geometry
+   bordered-list recipe) is retired the same way -- `.disclosure` (the
+   shared primitive) replaces it everywhere it was used. */
 
-/* A real <h2> lives inside <summary> so heading-navigation (screen
-   reader "jump by heading") does not skip this disclosure, but it must
-   not inherit the 2rem section-heading size below — it is an inline
-   toggle label, not a section title. */
-details.ledger-section summary h2 {
-    display: inline;
-    margin: 0;
-    color: var(--accent-700);
-    font: 600 .78rem var(--mono);
-}
-
-details.ledger-section summary:focus-visible {
-    outline: 3px solid var(--accent-300);
-    outline-offset: 3px;
-}
-
-details.ledger-section ul {
-    margin: .85rem 0 0;
-    padding-left: 1.2rem;
-    color: var(--ink-2);
-    font-size: .85rem;
-}
 /* Was a hard-coded `43rem`; `--measure-prose` is the shared "genuine
    multi-sentence prose" token (`index.css`) -- see calculation-detail.css's
    own comment on `.record-header` for the matching header-side fix. */
 .ledger-heading { max-width: var(--measure-prose); }
-.ledger-section h2 { font-size: 2rem; }
+/* `.ledger-section h2` size/weight rule retired -- `SectionHeading` now
+   sets its own `--type-heading-1` step directly (`components/
+   PageSections.tsx`), the same step every other record-page section
+   heading uses, rather than a second `2rem` figure defined here. */
 
-.ledger-heading > p:last-child,
-.geometry-ledger > p:not(.eyebrow) {
+/* `.section-kicker`/`.section-intro` -- `SectionHeading`'s own optional
+   kicker/intro pieces (`components/PageSections.tsx`). Sized here rather
+   than in that component's (nonexistent) own stylesheet, since every
+   current caller that supplies them is one of the five record pages that
+   already import this file. */
+.section-kicker {
+    color: var(--accent);
+}
+
+.section-intro {
+    max-width: var(--measure-prose);
+    margin: 0;
     color: var(--ink-2);
-    line-height: 1.6;
 }
 
 .observation-list {
@@ -202,17 +183,25 @@ details.ledger-section ul {
     font-weight: 600;
 }
 
+/* `.observation-card` -- `.card` (`design-system.css`) now supplies the
+   border/background/radius/padding; plain `.card`, not `--derived`, since
+   this represents ONE deposited observation (a record), not a computed
+   aggregate -- see the `.card--derived` decision recorded on
+   `.coverage-card`/`.tse-irc-summary` below and in this PR's body. The
+   header/note layout below is additive to `.card`, not a replacement for
+   it -- `.card`'s own padding is undone on the header/table/note rows
+   below via negative margins so they can still run edge to edge inside
+   the card the way they did inside the old bespoke box. */
 .observation-card {
-    border: 1px solid var(--line);
-    background: var(--surface);
+    padding: 0;
 }
 
 .observation-card > header {
     display: flex;
     justify-content: space-between;
     gap: 1rem;
-    padding: 1rem 1.1rem;
-    border-left: 3px solid var(--accent);
+    padding: var(--s-4) var(--s-5);
+    border-bottom: 1px solid var(--line);
 }
 
 .observation-card header > div:first-child {
@@ -222,7 +211,7 @@ details.ledger-section ul {
 
 .observation-card header a {
     color: var(--accent-700);
-    font: 600 1rem var(--mono);
+    font: var(--type-heading-3-font);
 }
 
 .observation-card header > div:last-child {
@@ -230,14 +219,32 @@ details.ledger-section ul {
     justify-items: end;
     gap: .35rem;
     color: var(--muted);
-    font: .66rem var(--mono);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .observation-note {
     margin: 0;
-    padding: 0 1.1rem 1rem;
+    padding: var(--s-3) var(--s-5) 0;
     color: var(--ink-2);
     line-height: 1.5;
+}
+
+/* An additional modifier class, not a `.observation-card .table-scroll`
+   descendant rule -- `design-system.css.test.ts` pins exactly one BARE
+   `.table-scroll` selector app-wide, and a regex-based guard like that
+   cannot tell a descendant-scoped override apart from a second bare
+   definition just by reading the selector text. A second, page-scoped
+   class sidesteps the ambiguity entirely rather than relying on a reader
+   (or that regex) parsing selector structure correctly. */
+.observation-card-table-scroll {
+    margin-top: var(--s-3);
+    padding: 0 var(--s-5);
+}
+
+.observation-card .empty-stage {
+    margin: var(--s-3) var(--s-5) var(--s-4);
 }
 
 .stage-table {
@@ -278,23 +285,35 @@ details.ledger-section ul {
     font-size: .9rem;
 }
 
+/* Was `color: var(--tint-text)` -- an off-token grey with no other user
+   in the app (MEASURED, see this PR's "why"). This is prose ("Geometry
+   output: <link> from <ref>"), not a raw data run, so it takes the
+   shared `--ink-2`/`--type-note-font` treatment every other muted
+   sentence on these pages uses rather than a one-off colour invented for
+   this single rule. */
 .observation-geometries {
     display: flex;
     flex-wrap: wrap;
     gap: .4rem;
     margin: 0;
-    padding: .85rem 1.1rem;
+    padding: var(--s-3) var(--s-5);
     border-top: 1px solid var(--line);
     background: var(--surface-sunken);
-    color: var(--tint-text);
-    font: .68rem var(--mono);
+    color: var(--ink-2);
+    font: var(--type-note-font);
 }
 
-.geometry-ledger {
-    padding: 1.4rem;
-    border-left: 3px solid var(--accent);
-    background: var(--surface);
-}
+/* `.geometry-ledger`'s own box treatment (a left accent bar + padded
+   surface) is retired -- MEASURED finding: it was the only `.ledger-
+   section` on these pages boxed at all, its bare siblings (Result,
+   Related calculations, Further evidence, Review history, ...) getting
+   no such treatment, which read as arbitrary rather than a signal.
+   `ConformerGroupPage`/`ConformerObservationPage`/`TransitionStateEntryPage`/
+   `CalculationDetailPage` all now render this section as a plain
+   `.ledger-section`, like every other section on the page -- see this
+   PR's body for the "one rule, applied everywhere" card decision this is
+   half of (the other half: `.card`/`.card--derived` for the evidence
+   SUMMARY cards, which this section-level box was never one of). */
 
 .geometry-links {
     display: flex;
@@ -325,53 +344,23 @@ details.ledger-section ul {
    IRC points). */
 .geometry-groups { margin-top: 1rem; display: grid; gap: 1.1rem; }
 
-.geometry-final-label {
-    margin: 0 0 .5rem;
-    color: var(--accent-700);
-    text-transform: uppercase;
-    font: 600 .68rem var(--mono);
-}
+/* `.geometry-final-label`/`.geometry-role-disclosure` retired -- the
+   "Saddle-point geometry"/"Input"/"Output" group labels are now real
+   `<h3 className="t-heading-2">` sub-headings (item 3: "retire
+   `.geometry-final-label`, make it a real h3 in heading-2"), and every
+   per-role geometry disclosure now composes `components/Disclosure.tsx`
+   (`.disclosure`, `design-system.css`) instead of this page-local
+   bordered-`<details>` recipe -- see the retirement note above
+   `.ledger-section`. `.disclosure`'s own margin composes with this grid's
+   `gap` the same way this rule's `margin: 0` used to. */
 
 .geometry-link--final {
     border-color: var(--accent);
     background: var(--accent-50);
 }
 
-/* One collapsed disclosure per non-final role (irc_forward, irc_reverse,
-   ...), showing its point count on the closed `<summary>` rather than
-   rendering one card per point at rest. */
-.geometry-role-disclosure {
-    /* Sits inside the `.geometry-groups` grid, whose gap is the spacing;
-       without this the `.ledger-section` margin-top stacks on top of it
-       and consecutive disclosures land ~80px apart. */
-    margin: 0;
-    border: 1px solid var(--line);
-    padding: .85rem 1rem;
-    background: var(--surface);
-}
-
-.geometry-role-disclosure summary {
-    cursor: pointer;
-    color: var(--accent-700);
-    font: 600 .75rem var(--mono);
-}
-
-.geometry-role-disclosure summary:focus-visible {
-    outline: 3px solid var(--accent-300);
-    outline-offset: 3px;
-}
-
-.geometry-role-disclosure .geometry-links { margin-top: .85rem; }
-
 @media (max-width: 680px) {
-    .basin-context,
     .ledger-summary { grid-template-columns: 1fr; }
-
-    .metric,
-    .coverage-card {
-        border-right: 0;
-        border-bottom: 1px solid var(--line);
-    }
 
     .observation-card > header {
         align-items: flex-start;
