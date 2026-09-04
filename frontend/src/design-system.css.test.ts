@@ -331,3 +331,17 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
         expect(rule![1]).not.toMatch(/var\(--mono\)/)
     })
 })
+
+describe(".data inside .data-table stays unbreakable", () => {
+    // `.data` is breakable (`overflow-wrap: anywhere`) so a long ref wraps
+    // inside a narrow key/value cell; inside a table the `.table-scroll`
+    // wrapper scrolls instead, and a breakable ref let auto table layout
+    // shrink its column to three characters wide (PR C review).
+    it("overrides overflow-wrap and forbids wrapping for td .data / td code", () => {
+        const m = designSystemCss.match(/\.data-table td code,\s*\.data-table td \.data \{([^}]*)\}/)
+        expect(m, ".data-table td code, .data-table td .data rule").not.toBeNull()
+        expect(m![1]).toMatch(/overflow-wrap:\s*normal/)
+        expect(m![1]).toMatch(/white-space:\s*nowrap/)
+    })
+})
+
