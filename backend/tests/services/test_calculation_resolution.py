@@ -4,9 +4,15 @@ import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.orm import Session
+from tckdb_schemas.stationary_point import (
+    TAU_ANALYTIC_DEFAULT_CM1,
+    TAU_FINITE_DIFFERENCE_ENERGY_CM1,
+    TAU_PROTOCOL_NOT_RECORDED_CM1,
+    TauBasis,
+)
 
 from app.db.models.app_user import AppUser
-from app.db.models.calculation import Calculation, CalculationConstraint
+from app.db.models.calculation import Calculation, CalculationConstraint, CalculationFreqResult
 from app.db.models.common import (
     AppUserRole,
     CalculationDependencyRole,
@@ -533,6 +539,107 @@ def test_resolve_and_persist_no_constraints_writes_no_rows(db_conn) -> None:
                 )
             ).all()
             assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# ADR 0012's 2026-09-04 amendment: assumed Hessian method at persistence
+# ---------------------------------------------------------------------------
+
+
+def _freq_calc_upload(*, software_release: dict, method: str, parameters=None):
+    return CalculationWithResultsPayload(
+        type="freq",
+        software_release=software_release,
+        level_of_theory={"method": method, "basis": "def2-TZVP"},
+        freq_result={"n_imag": 0},
+        parameters=parameters,
+    )
+
+
+def _persist_freq(session, calc_upload) -> CalculationFreqResult:
+    species_id = _create_species(
+        session.connection(), inchi_key=_next_inchi_key("TAUWIRE")
+    )
+    species_entry_id = _create_species_entry(session.connection(), species_id)
+    calc = resolve_and_persist_calculation_with_results(
+        session, calc_upload, species_entry_id=species_entry_id
+    )
+    session.flush()
+    return session.get(CalculationFreqResult, calc.id)
+
+
+def test_a_recorded_hessian_method_is_never_overridden_by_an_assumption(db_conn) -> None:
+    """A recorded ``freq.hessian_method`` always wins over the table.
+
+    Gaussian + CCSD(T) would otherwise be assumed
+    ``assumed_finite_difference_energy``; recording the method explicitly
+    (here, as an analytic statement -- unrealistic chemistry, deliberately,
+    so the assertion cannot be confused with what the table would have
+    assumed anyway) must leave the *recorded* basis in place untouched.
+    """
+    with Session(db_conn) as session:
+        with session.begin():
+            calc_upload = _freq_calc_upload(
+                software_release={"name": "Gaussian", "version": "16"},
+                method="ccsd(t)",
+                parameters=[
+                    {
+                        "raw_key": "freq",
+                        "raw_value": "analytic",
+                        "canonical_key": "freq.hessian_method",
+                        "canonical_value": "analytic",
+                    }
+                ],
+            )
+            stored = _persist_freq(session, calc_upload)
+            assert stored.imaginary_mode_tau_basis == TauBasis.analytic_default.value
+            assert stored.imaginary_mode_tau_cm1 == TAU_ANALYTIC_DEFAULT_CM1
+
+
+def test_absent_gaussian_b3lyp_assumes_analytic_default(db_conn) -> None:
+    with Session(db_conn) as session:
+        with session.begin():
+            calc_upload = _freq_calc_upload(
+                software_release={"name": "Gaussian", "version": "16"},
+                method="b3lyp",
+            )
+            stored = _persist_freq(session, calc_upload)
+            assert (
+                stored.imaginary_mode_tau_basis
+                == TauBasis.assumed_analytic_default.value
+            )
+            assert stored.imaginary_mode_tau_cm1 == TAU_ANALYTIC_DEFAULT_CM1
+
+
+def test_absent_gaussian_ccsd_t_assumes_finite_difference_energy(db_conn) -> None:
+    with Session(db_conn) as session:
+        with session.begin():
+            calc_upload = _freq_calc_upload(
+                software_release={"name": "Gaussian", "version": "16"},
+                method="ccsd(t)",
+            )
+            stored = _persist_freq(session, calc_upload)
+            assert (
+                stored.imaginary_mode_tau_basis
+                == TauBasis.assumed_finite_difference_energy.value
+            )
+            assert stored.imaginary_mode_tau_cm1 == TAU_FINITE_DIFFERENCE_ENERGY_CM1
+
+
+def test_absent_molpro_stays_protocol_not_recorded(db_conn) -> None:
+    """Molpro is not in the assumption table, so nothing is assumed."""
+    with Session(db_conn) as session:
+        with session.begin():
+            calc_upload = _freq_calc_upload(
+                software_release={"name": "Molpro", "version": "2022.1"},
+                method="b3lyp",
+            )
+            stored = _persist_freq(session, calc_upload)
+            assert (
+                stored.imaginary_mode_tau_basis
+                == TauBasis.protocol_not_recorded.value
+            )
+            assert stored.imaginary_mode_tau_cm1 == TAU_PROTOCOL_NOT_RECORDED_CM1
 
 
 class _DummyCalc:

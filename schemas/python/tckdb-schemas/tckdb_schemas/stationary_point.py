@@ -178,6 +178,21 @@ class TauBasis(str, Enum):
     can re-decide a borderline mode later, and "τ was 50" is not
     re-decidable without "…because nothing recorded says how the Hessian
     was built".
+
+    **The ``assumed_*`` members** are ADR 0012's 2026-09-04 amendment.
+    Measured live: 0 of 132 frequency results carry
+    ``freq.hessian_method``, because Gaussian never names its analytic
+    default in the output and the parser records only explicit
+    statements — so ``protocol_not_recorded`` was, in practice, every
+    Gaussian record ever written. When the method is not recorded,
+    TCKDB now assumes the producing program's documented default for the
+    level-of-theory's method family (see
+    ``app/services/hessian_method_inference.py`` on the backend), records
+    that it was *assumed*, and gives the assumed method the same τ as its
+    recorded counterpart. An assumption must never be confusable with a
+    recorded statement — hence the separate member rather than reusing
+    ``analytic_default`` et al. — and a later upload that states the
+    method wins over an assumption made here.
     """
 
     #: Analytic second derivatives, tight grid, tight optimisation.
@@ -190,6 +205,18 @@ class TauBasis(str, Enum):
     finite_difference_energy = "finite_difference_energy"
     #: The frequency job's Hessian method is not in the record.
     protocol_not_recorded = "protocol_not_recorded"
+    #: Not recorded, but assumed analytic from the producing program's
+    #: documented default for the level-of-theory's method family. Same
+    #: τ as :data:`TAU_ANALYTIC_DEFAULT_CM1`.
+    assumed_analytic_default = "assumed_analytic_default"
+    #: Not recorded, but assumed finite-difference-from-gradients from
+    #: the producing program's documented default. Same τ as
+    #: :data:`TAU_FINITE_DIFFERENCE_GRADIENT_CM1`.
+    assumed_finite_difference_gradient = "assumed_finite_difference_gradient"
+    #: Not recorded, but assumed finite-difference-from-energies from
+    #: the producing program's documented default. Same τ as
+    #: :data:`TAU_FINITE_DIFFERENCE_ENERGY_CM1`.
+    assumed_finite_difference_energy = "assumed_finite_difference_energy"
 
 
 @dataclass(frozen=True)

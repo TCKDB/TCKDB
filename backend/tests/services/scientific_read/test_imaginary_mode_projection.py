@@ -682,6 +682,37 @@ def test_a_record_judged_before_adr_0012_reports_no_tau_rather_than_a_default(db
     assert [mode.is_designated_reaction_coordinate for mode in tau.modes] == [False, False, False]
 
 
+def test_an_assumed_basis_renders_verbatim_and_stays_distinguishable(db_session):
+    """ADR 0012's 2026-09-04 amendment, read back.
+
+    An assumed basis is read straight off the stored row exactly like
+    every other basis -- this block does no basis-specific branching --
+    but it must remain *distinguishable* from a recorded one: the basis
+    itself says "assumed_analytic_default" rather than "analytic_default",
+    and the recorded ``freq.hessian_method`` parameter beside it is
+    genuinely absent (``None``), because nothing about the assumption
+    manufactures a parameter row that was never observed.
+    """
+    calc = _judged_record_without_a_hessian(
+        db_session,
+        reaction_coordinate_mode_index=1,
+        imaginary_mode_tau_cm1=30.0,
+        imaginary_mode_tau_basis="assumed_analytic_default",
+        imaginary_mode_structural_flag=False,
+    )
+
+    tau = build_imaginary_mode_projection(db_session, calc.id).tau_context
+    assert tau is not None
+    assert tau.tau_basis == "assumed_analytic_default"
+    assert tau.tau_basis != "analytic_default"
+    assert tau.tau_cm1 == 30.0
+    assert [(p.canonical_key, p.canonical_value) for p in tau.protocol_parameters] == [
+        ("freq.hessian_method", None),
+        ("grid.quality", None),
+        ("opt.convergence", None),
+    ]
+
+
 def test_every_way_of_failing_to_determine_carries_the_tau_judgement(db_session):
     """Not just the no-Hessian case.
 
