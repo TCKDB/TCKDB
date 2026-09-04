@@ -36,38 +36,14 @@ code, pre, kbd, samp { font-family: var(--mono); }
 h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
 
-/* `.value-pill` -- the site-wide convention for a categorical, bounded-
-   vocabulary value (entry kind, electronic state, review status, scale
-   kind): a rounded pill REPLACING a value's plain-text form, never sitting
-   alongside it. Originated in `calculation-detail.css` for
-   `CalculationDetailPage.tsx` (see that file's own comment for the fuller
-   history: "rather than the text we would use pills for the values? makes
-   it pop more") and moved here, into the ONE stylesheet every route loads
-   (`main.tsx`), once a second page (`SpeciesBrowseRow.tsx`) needed the same
-   pill without importing that page's whole stylesheet. Identifiers -- refs,
-   SMILES, InChIKey -- are never pills; a quantity with a unit (an energy, a
-   frequency scale factor) is never a pill either -- both stay plain text so
-   they read and select cleanly.
-   `--muted` is for a DIFFERENT axis shown as its own, visually distinct
-   pill next to a `.value-pill` -- e.g. curation/review status beside
-   classification -- so two pills that are deliberately not the same kind of
-   fact do not also look like the same kind of fact. */
-.value-pill {
-    display: inline-block;
-    padding: .2rem .6rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--accent-50);
-    color: var(--accent-700);
-    font: 600 .72rem/1.3 var(--sans);
-    white-space: nowrap;
-}
-
-/* `.value-pill--muted`'s rules moved to `design-system.css` -- it used
-   to be its own mono .62rem uppercase form, visually a different kind of
-   pill from `.value-pill` above it rather than the same pill on a muted
-   axis. Now defined once, alongside `.value-pill`'s canonical box/size,
-   with only colour swapped -- see that file's own comment. */
+/* `.value-pill` / `.value-pill--muted` moved to `design-system.css`
+   (post-review, PR D): both must live in ONE file, in the right order, for
+   the cascade to resolve correctly on an element carrying both classes --
+   see that file's own comment above `.value-pill` for the bug this fixes
+   (a route-dependent cascade flip measured between `.value-pill` here and
+   `.value-pill--muted` there, made worse by `Disclosure.tsx` re-importing
+   `design-system.css` into its own chunk). `index.css` no longer defines
+   either class. */
 
 /*
  * `.archive-shell` is the top-level wrapper in `AppShell.tsx` around
@@ -102,8 +78,21 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    tracking of any label-band style on the site, an outlier next to
    every other kicker/label use, not a deliberate design choice). */
 .eyebrow { margin: 0 0 1.35rem; color: var(--accent); font: var(--type-kicker-font); letter-spacing: var(--type-kicker-tracking); text-transform: var(--type-kicker-transform); }
-.archive-hero h1, .record-placeholder h1 { margin: 0; font: 600 clamp(4.1rem, 11vw, 5rem)/.95 var(--serif); letter-spacing: -.045em; }.tagline { max-width: 41rem; margin: 1.4rem auto 0; color: var(--ink-2); font: 400 1.22rem/1.55 var(--serif); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: .66rem var(--mono); text-transform: uppercase; letter-spacing: .1em; }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
-.identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font-weight: 600; cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { margin: .65rem 0 0; color: var(--muted-2); font-size: .75rem; }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
+/* The home hero and the record-placeholder/not-found h1 used to share one
+   clamped size (5rem, the site's largest, and its only 102px-equivalent
+   step once the species-overview h1 below is separately reduced). They now
+   diverge onto two different type-scale steps: the hero is the site's one
+   true display headline (`--type-display-1`); a placeholder page is a
+   secondary "nothing here yet" state, not the front door, and drops one
+   step to `--type-display-2` -- the same step `.browse-header h1` uses. */
+.archive-hero h1 { margin: 0; font: var(--type-display-1-font); letter-spacing: var(--type-display-1-tracking); }
+.record-placeholder h1 { margin: 0; font: var(--type-display-2-font); letter-spacing: var(--type-display-2-tracking); }
+/* The one editorial intro on the site: `--type-body`'s size/weight/line-
+   height, serif rather than the step's own sans -- an explicit, named
+   exception (not a new one-off size) because this sentence is read as
+   prose, not UI copy. */
+.tagline { max-width: var(--measure-prose); margin: 1.4rem auto 0; color: var(--ink-2); font: var(--type-body-font); font-family: var(--serif); letter-spacing: var(--type-body-tracking); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
+.identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { max-width: var(--measure-note); margin: .65rem 0 0; color: var(--muted-2); font-size: .75rem; }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
 .identifier-choice { display: flex; gap: .6rem; align-items: center; margin: .8rem 0 0; padding: .7rem; border: 1px solid var(--line); background: var(--surface); }.identifier-choice legend { padding: 0 .25rem; color: var(--ink-2); font-size: .78rem; }.identifier-choice button { border: 1px solid var(--accent); border-radius: .25rem; padding: .35rem .55rem; background: var(--surface); color: var(--accent-700); font-weight: 600; cursor: pointer; }.identifier-choice button:hover { background: var(--accent-50); }
 
 /*
@@ -211,7 +200,19 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     overflow-wrap: anywhere;
     user-select: all;
 }
-.destination-grid { display: grid; max-width: 65rem; margin: 0 auto; padding: 1.4rem 1.25rem 4.5rem; grid-template-columns: repeat(3,1fr); gap: 1rem; }.destination { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; padding: 1.35rem; border: 1px solid var(--line); border-radius: .75rem; background: var(--surface); transition: transform .15s, box-shadow .15s, border-color .15s; }.destination:hover { transform: translateY(-2px); border-color: var(--accent-300); box-shadow: 0 8px 28px -12px var(--shadow-color); }.destination-icon { display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .55rem; background: var(--accent-50); color: var(--accent); }.destination h2 { margin: 1rem 0 .45rem; font-size: .98rem; }.destination p { margin: 0; color: var(--muted-2); font-size: .8rem; line-height: 1.5; }.destination > span:last-child { margin-top: auto; padding-top: 1rem; color: var(--accent); font: .7rem var(--mono); }.archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font-size: .72rem; }.record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }.record-placeholder h1 { font-size: 3.6rem; }.record-placeholder code { display: inline-block; margin: 1.25rem 0; padding: .35rem .5rem; color: var(--accent-700); background: var(--accent-50); font: .75rem var(--mono); }.record-placeholder p:last-child { max-width: 40rem; color: var(--ink-2); line-height: 1.6; }
+/* Box styling (border/radius/background) comes from the shared `.card`
+   primitive now (`.destination card` in `ArchiveHomePage.tsx`); this rule
+   keeps only the flex layout and hover motion a destination card needs on
+   top of it. */
+.destination-grid { display: grid; max-width: 65rem; margin: 0 auto; padding: 1.4rem 1.25rem 4.5rem; grid-template-columns: repeat(3,1fr); gap: 1rem; }.destination { display: flex; min-height: 12rem; flex-direction: column; align-items: flex-start; transition: transform .15s, box-shadow .15s, border-color .15s; }.destination:hover { transform: translateY(-2px); border-color: var(--accent-300); box-shadow: 0 8px 28px -12px var(--shadow-color); }.destination-icon { display: grid; width: 2.1rem; height: 2.1rem; place-items: center; border-radius: .55rem; background: var(--accent-50); color: var(--accent); }
+/* `--type-heading-2`, serif -- these titles sit beside the eyebrow/hero's
+   own serif voice (`.species-header h1`, `.entry-card h4`), so a card
+   naming one of three top-level destinations reads as a heading in the
+   same house style, not a smaller sans UI label. */
+.destination h2 { margin: 1rem 0 .45rem; font: var(--type-heading-2-font); letter-spacing: var(--type-heading-2-tracking); color: var(--ink); }.destination p { margin: 0; color: var(--muted-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }.destination > span:last-child { margin-top: auto; padding-top: 1rem; color: var(--accent); font: .7rem var(--mono); }.archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font-size: .72rem; }.record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }
+/* The path/ref chip is an identifier, not an accent-tinted UI chip -- data
+   step, plain colour, same treatment `.entry-card code`/`.browse-ref` get. */
+.record-placeholder code { display: inline-block; margin: 1.25rem 0; overflow-wrap: anywhere; color: var(--muted); font: var(--type-data-font); }.record-placeholder p:last-child { max-width: var(--measure-prose); color: var(--ink-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
 .record-breadcrumbs {
     display: flex;
     flex-wrap: wrap;
@@ -234,8 +235,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 }
 
 .record-breadcrumbs a:focus-visible,
-.entry-card h4 a:focus-visible,
-.entry-card-action:focus-visible {
+.entry-card h4 a:focus-visible {
     outline: 3px solid var(--accent-300);
     outline-offset: 3px;
 }
@@ -270,17 +270,23 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 
 /*
  * Accessibility pass, finding 10 -- font-size floor for a handful of
- * classes owned by `browse.css` and `species-entry.css`, two files this
- * pass is not allowed to touch (other agents own their layout rules in
- * parallel). Both sit at 9-10px today: `.ref-item-label` .6rem (9.6px),
- * `.copy-button` .58rem (9.28px), `.browse-row-ref` .68rem (10.88px) --
- * all below the 11px floor this finding asks for.
+ * classes owned by `species-entry.css`, a file this pass is not allowed to
+ * touch (other agents own their layout rules in parallel). Both sit at
+ * 9-10px today: `.ref-item-label` .6rem (9.6px), `.copy-button` .58rem
+ * (9.28px) -- below the 11px floor this finding asks for.
  *
  * `.refs-disclosure summary` DROPPED from this list (design/foundations):
  * `RefsDisclosure.tsx` now composes `components/Disclosure.tsx`, whose
  * `.disclosure > summary` rule (`design-system.css`) sets `--type-ui`
  * (.8125rem / 13px) directly -- already above this floor, so the
  * override has nothing left to raise.
+ *
+ * `.browse-row-ref` DROPPED from this list too (PR D): the class was
+ * retired outright -- `browse.css`'s ref now renders through `.browse-ref`
+ * plus the shared `.data` step (.8125rem / 13px), already above this
+ * floor -- rather than renamed here, since PR D owns `browse.css` and
+ * could fix the size at its source instead of overriding it from a file
+ * it doesn't own.
  *
  * This file (`index.css`) is loaded once, globally, before any page's own
  * stylesheet mounts, so a same-specificity `.ref-item-label { font-size:
@@ -295,7 +301,6 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
  * owning file already declares.
  */
 .archive-shell .ref-item-label,
-.archive-shell .copy-button,
-.archive-shell .browse-row-ref {
+.archive-shell .copy-button {
     font-size: .6875rem; /* 11px */
 }

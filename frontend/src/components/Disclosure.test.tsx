@@ -1,6 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
+// `Disclosure.tsx` no longer imports `design-system.css` itself (post-
+// review, PR D -- see that file's own comment: the component's production
+// callers all already get it via `index.css`'s single global `@import`).
+// This test file DOES need it, though: the "never uppercases" test below
+// asserts a real computed style, and without an actual `.disclosure >
+// summary` rule loaded, `getComputedStyle` would fall back to the
+// browser's own initial value for `text-transform` ("none") regardless of
+// what the rule says -- passing that assertion without ever having
+// exercised the rule at all.
+import "../design-system.css"
 import { Disclosure } from "./Disclosure"
 
 afterEach(cleanup)
@@ -92,5 +102,39 @@ describe("Disclosure", () => {
         render(<Disclosure summary="References" className="refs-disclosure"><p>ref body</p></Disclosure>)
         const details = screen.getByText("References", { exact: false }).closest("details") as HTMLDetailsElement
         expect(details.className.split(" ")).toEqual(expect.arrayContaining(["disclosure", "refs-disclosure"]))
+    })
+
+    // Post-review (PR D): a caller whose disclosure sits beside another
+    // heading it does not itself render (`SpeciesOverviewPage.tsx`'s
+    // per-state-group `EntryStateGroup`, associating "Deposited records"
+    // back to that group's own `<h3>`) needs a way to set attributes on the
+    // `<summary>` element itself -- `className`/`id` above reach the outer
+    // `<details>`, not the summary a screen-reader user actually lands on.
+    it("spreads summaryProps onto the <summary> element", () => {
+        render(
+            <Disclosure summary="Deposited records" summaryProps={{ "aria-describedby": "group-heading-1" }}>
+                <p>body</p>
+            </Disclosure>,
+        )
+        const summary = screen.getByText("Deposited records", { exact: false })
+        expect(summary.tagName).toBe("SUMMARY")
+        expect(summary).toHaveAttribute("aria-describedby", "group-heading-1")
+    })
+
+    it("still renders the summary text and count correctly when summaryProps is also given -- the prop adds attributes, it does not replace the content", () => {
+        render(
+            <Disclosure count={3} summary="Deposited records" summaryProps={{ "aria-describedby": "group-heading-1" }}>
+                <p>body</p>
+            </Disclosure>,
+        )
+        const summary = screen.getByText("Deposited records", { exact: false })
+        expect(summary).toHaveTextContent("Deposited records (3)")
+        expect(summary).toHaveAttribute("aria-describedby", "group-heading-1")
+    })
+
+    it("omitting summaryProps still renders a plain <summary> with no stray attribute", () => {
+        render(<Disclosure summary="References"><p>body</p></Disclosure>)
+        const summary = screen.getByText("References", { exact: false })
+        expect(summary).not.toHaveAttribute("aria-describedby")
     })
 })

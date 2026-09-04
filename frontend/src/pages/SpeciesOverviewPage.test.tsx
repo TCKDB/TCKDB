@@ -272,3 +272,105 @@ describe("species overview: card heading (the bare-'R' bug, no pill boxes)", () 
         expect(within(card).queryByText(/ground/i)).not.toBeInTheDocument()
     })
 })
+
+// PR D (design-system adoption on the index/record pages): this page used
+// to render its own bespoke `<details class="entry-state-disclosure">`, its
+// own one-off `.entry-review` pill, and its own `.species-identity-grid`/
+// `.entry-facts` dt/dd typography. All three now route through shared
+// design-system primitives (`Disclosure`, `.value-pill`/`.value-pill--muted`,
+// `.kv-list`) -- these tests pin the DOM shape that adoption produces, so a
+// later edit that quietly reverts one back to a page-local implementation
+// fails here instead of shipping unnoticed.
+describe("species overview: shared design-system primitives", () => {
+    it("each state group's records sit behind the shared Disclosure primitive (a <details class=\"disclosure\">), open by default", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "CH3" })
+
+        const disclosures = document.querySelectorAll("li.entry-state-group > .disclosure")
+        expect(disclosures).toHaveLength(2)
+        for (const disclosure of disclosures) {
+            expect(disclosure.tagName).toBe("DETAILS")
+            expect(disclosure).toHaveAttribute("open")
+        }
+        // The old bespoke box/summary class this replaced is gone.
+        expect(document.querySelector(".entry-state-disclosure")).not.toBeInTheDocument()
+    })
+
+    it("review status renders through the shared .value-pill/.value-pill--muted primitive, not the retired .entry-review pill", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        const groundCard = await cardFor(entryRef)
+
+        const reviewPill = within(groundCard).getByText("not reviewed")
+        expect(reviewPill).toHaveClass("value-pill")
+        expect(reviewPill).toHaveClass("value-pill--muted")
+        expect(document.querySelector(".entry-review")).not.toBeInTheDocument()
+    })
+
+    it("the species identity grid and each entry's facts render through the shared .kv-list primitive", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "CH3" })
+
+        expect(document.querySelector("dl.species-identity-grid.kv-list")).toBeInTheDocument()
+        expect(document.querySelector("dl.entry-facts.kv-list")).toBeInTheDocument()
+    })
+
+    // Post-review (PR D): at narrow widths the identity grid's auto-fit
+    // columns settle at 3-wide for these 4 pairs, and the two longest
+    // values (the species ref, the InChIKey -- both 30+ characters) wrapped
+    // mid-token inside a ~12rem column. Both now span the full row via
+    // `.kv-list--wide`; SMILES and Charge/multiplicity stay in the narrow
+    // columns.
+    it("the species ref and InChIKey pairs carry .kv-list--wide; SMILES and charge/multiplicity do not", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "CH3" })
+
+        const refPair = screen.getByText("Species ref").closest("div") as HTMLElement
+        const inchiPair = screen.getByText("InChIKey").closest("div") as HTMLElement
+        const smilesPair = screen.getByText("SMILES").closest("div") as HTMLElement
+        const chargePair = screen.getByText("Charge / multiplicity").closest("div") as HTMLElement
+
+        expect(refPair).toHaveClass("kv-list--wide")
+        expect(inchiPair).toHaveClass("kv-list--wide")
+        expect(smilesPair).not.toHaveClass("kv-list--wide")
+        expect(chargePair).not.toHaveClass("kv-list--wide")
+    })
+
+    // Post-review (PR D): the old bespoke `<details>` carried `aria-
+    // describedby` linking its "Deposited records" summary back to the
+    // group's own `<h3>` ("ground electronic state") -- the migration to
+    // the shared `Disclosure` primitive dropped that association at first
+    // (the primitive had no attribute hook for `<summary>`). Restored via
+    // `Disclosure`'s new `summaryProps` passthrough. Without it, a screen-
+    // reader user tabbing between this species' TWO identically-worded
+    // "Deposited records" summaries hears no way to tell them apart.
+    it("each Disclosure's summary is aria-describedby its own state group's heading, not the other group's", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "CH3" })
+
+        const groundHeading = screen.getByRole("heading", { name: /ground electronic state/i })
+        const excitedHeading = screen.getByRole("heading", { name: /excited electronic state/i })
+        expect(groundHeading).toHaveAttribute("id")
+        expect(excitedHeading).toHaveAttribute("id")
+        expect(groundHeading.id).not.toBe(excitedHeading.id)
+
+        const groundGroup = groundHeading.closest("li.entry-state-group") as HTMLElement
+        const excitedGroup = excitedHeading.closest("li.entry-state-group") as HTMLElement
+        const groundSummary = within(groundGroup).getByText("Deposited records", { exact: false })
+        const excitedSummary = within(excitedGroup).getByText("Deposited records", { exact: false })
+
+        expect(groundSummary).toHaveAttribute("aria-describedby", groundHeading.id)
+        expect(excitedSummary).toHaveAttribute("aria-describedby", excitedHeading.id)
+        // Each summary is tied to ITS OWN group's heading, never the other one.
+        expect(groundSummary.getAttribute("aria-describedby")).not.toBe(excitedHeading.id)
+    })
+})

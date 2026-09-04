@@ -4,22 +4,23 @@
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
 
+/* The 4px accent bar this header used to carry is retired: this is the
+   page's own primary heading, not `.card--derived` content, so a left
+   accent rule was borrowing that primitive's meaning without adopting its
+   semantics -- same call as `.species-header`'s. */
 .browse-header {
     max-width: 65rem;
-    border-left: 4px solid var(--accent);
-    padding-left: clamp(1rem, 3vw, 2rem);
 }
 
 .browse-header h1 {
     margin: 0;
     color: var(--ink);
-    font-family: var(--serif);
-    font-size: clamp(2.4rem, 5.5vw, 3.6rem);
-    letter-spacing: -.03em;
+    font: var(--type-display-2-font);
+    letter-spacing: var(--type-display-2-tracking);
 }
 
 .browse-intro {
-    max-width: 48rem;
+    max-width: var(--measure-prose);
     margin: 1rem 0 0;
     color: var(--ink-2);
     font: 1rem/1.6 var(--serif);
@@ -35,9 +36,9 @@
     margin: 0 0 .6rem;
     padding: 0;
     color: var(--muted);
-    font: .68rem var(--mono);
-    letter-spacing: .08em;
-    text-transform: uppercase;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .browse-kind-options {
@@ -69,7 +70,7 @@
 .browse-filters {
     margin: 1.5rem 0 0;
     padding: 1.1rem 1.2rem;
-    border: 1px solid var(--divider);
+    border: 1px solid var(--line);
     border-radius: .6rem;
     background: var(--surface-sunken);
 }
@@ -89,19 +90,34 @@
 
 .browse-filter-field label {
     color: var(--muted);
-    font: .68rem var(--mono);
-    letter-spacing: .04em;
-    text-transform: uppercase;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
-.browse-filter-field input,
+/* A typed value (charge, formula, SMILES...) reads at the `--type-value`
+   step -- it is the reader's own data, not UI chrome. A `<select>` picks
+   from a fixed, bounded vocabulary the same way a button does, so it takes
+   `--type-ui` instead -- the same distinction `.browse-pagination button`
+   and a text field draw elsewhere on this page. */
+.browse-filter-field input {
+    padding: .4rem .5rem;
+    border: 1px solid var(--control-border);
+    border-radius: .35rem;
+    background: var(--surface);
+    color: var(--ink);
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
+}
+
 .browse-filter-field select {
     padding: .4rem .5rem;
     border: 1px solid var(--control-border);
     border-radius: .35rem;
     background: var(--surface);
     color: var(--ink);
-    font-size: .84rem;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
 }
 
 .browse-filter-field input:focus-visible,
@@ -116,9 +132,10 @@
 }
 
 .browse-filter-hint {
+    max-width: var(--measure-note);
     margin: 0;
-    color: var(--faint);
-    font-size: .74rem;
+    color: var(--muted);
+    font: var(--type-note-font);
 }
 
 .browse-filter-field-check {
@@ -154,9 +171,9 @@
 .browse-filter-evidence-group legend {
     padding: 0;
     color: var(--muted);
-    font: .68rem var(--mono);
-    letter-spacing: .04em;
-    text-transform: uppercase;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .browse-filter-evidence-checks {
@@ -187,7 +204,7 @@
 .browse-empty {
     margin: 2rem 0;
     padding: 1.1rem 1.2rem;
-    border: 1px solid var(--divider);
+    border: 1px solid var(--line);
     border-radius: .5rem;
     background: var(--surface-sunken);
     color: var(--ink-2);
@@ -198,9 +215,9 @@
 .browse-count {
     margin: 1.6rem 0 .8rem;
     color: var(--muted);
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .browse-rows {
@@ -211,12 +228,11 @@
     list-style: none;
 }
 
-.browse-row {
-    padding: 1rem 1.1rem;
-    border: 1px solid var(--line);
-    border-radius: .5rem;
-    background: var(--surface);
-}
+/* Box styling (padding/border/radius/background) comes from the shared
+   `.card` primitive (design-system.css) now -- both row components add it
+   alongside their own kind-specific class (`species-browse-row`/
+   `ts-browse-row`), so `.browse-row` itself carries no box rule of its own
+   any more; it survives only as the shared marker the two share. */
 
 /* Stretched-link pattern for the TS browse row: the <Link> in
    `TransitionStateBrowseRow.tsx` wraps ONLY the equation text (its
@@ -275,7 +291,8 @@
 
 .browse-row-title {
     color: var(--accent-700);
-    font: 600 1.15rem var(--serif);
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
     text-decoration: underline;
     text-decoration-color: var(--accent-underline);
     text-underline-offset: .16em;
@@ -311,8 +328,7 @@ span.browse-row-title {
 }
 
 .browse-row-smiles,
-.browse-row-ts-label,
-.browse-row-evidence {
+.browse-row-ts-label {
     margin: .35rem 0 0;
     color: var(--ink-2);
     font-size: .84rem;
@@ -320,14 +336,20 @@ span.browse-row-title {
 
 /* Level-of-theory + software line (item 1): the two headline stages
    (opt/sp, falling back to whichever stages exist) plus the software that
-   ran them -- see `TransitionStateBrowseRow.tsx`'s `provenanceSummary`.
-   Same visual weight as `.browse-row-evidence` (a fact about the record,
-   not the headline), kept as its own class rather than folded into that
-   selector so the two can be reordered or restyled independently later. */
+   ran them -- see `TransitionStateBrowseRow.tsx`'s `provenanceSummary`. */
 .browse-row-provenance {
     margin: .35rem 0 0;
     color: var(--ink-2);
-    font-size: .82rem;
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
+}
+
+/* Evidence summary line ("Evidence: opt · freq · sp ..."): a note about the
+   record, same step every other explanatory aside on the site uses. */
+.browse-row-evidence {
+    color: var(--ink-2);
+    font: var(--type-note-font);
+    letter-spacing: var(--type-note-tracking);
 }
 
 .browse-row-smiles {
@@ -363,23 +385,30 @@ span.browse-row-title {
     color: var(--accent-700);
 }
 
-.browse-row-ref {
+/* The row's own stable ref -- an identifier, styled at the shared data step
+   (`.data`, applied alongside this class in both row components) rather
+   than its own one-off 11px mono run. Named apart from the old ref class on
+   purpose: `index.css`'s accessibility-floor pass sets a floor font-size on
+   that exact old class name (prefixed `.archive-shell`, targeting the same
+   element), and this PR does not own that section of `index.css` to
+   retarget it -- a fresh class name means the migrated ref actually renders
+   at the data step instead of being pulled back down to the old floor by a
+   rule this PR cannot edit. */
+.browse-ref {
     display: block;
     margin-top: .6rem;
     color: var(--faint);
-    font: .68rem var(--mono);
 }
 
 /* TS row only: the evidence text and the ref code used to be two separate
    `<p>`s at different sizes; nothing about either needs its own line, so
-   they now share one row at the ref's smaller 11px (`.68rem`) size. Flex
-   rather than plain inline text so the ref (`.browse-row-ref`, reused
-   as-is for its color) can still wrap onto its own line at narrow widths
-   without the evidence text truncating. See the painting-order comment
-   above `.ts-browse-row .browse-row-footer` for why this element needs
-   its own `position: relative` (declared there, not here -- that rule is
-   scoped to `.ts-browse-row` specifically, this one is the shared layout
-   the species row does not use). */
+   they now share one row. Flex rather than plain inline text so the ref
+   (`.browse-ref`, reused as-is for its color) can still wrap onto its own
+   line at narrow widths without the evidence text truncating. See the
+   painting-order comment above `.ts-browse-row .browse-row-footer` for why
+   this element needs its own `position: relative` (declared there, not
+   here -- that rule is scoped to `.ts-browse-row` specifically, this one is
+   the shared layout the species row does not use). */
 .browse-row-footer {
     display: flex;
     flex-wrap: wrap;
@@ -387,10 +416,9 @@ span.browse-row-title {
     gap: .25rem .7rem;
     margin-top: .6rem;
     color: var(--ink-2);
-    font: .68rem var(--mono);
 }
 
-.browse-row-footer .browse-row-ref {
+.browse-row-footer .browse-ref {
     margin-top: 0;
 }
 
@@ -414,7 +442,8 @@ span.browse-row-title {
     border-radius: .4rem;
     background: var(--surface);
     color: var(--ink);
-    font-size: .84rem;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     cursor: pointer;
 }
 
