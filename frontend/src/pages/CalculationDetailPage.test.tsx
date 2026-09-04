@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CalculationDetailPage from "./CalculationDetailPage"
+import { bySummaryText } from "../test/disclosureQueries"
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
@@ -360,7 +361,7 @@ describe("CalculationDetailPage", () => {
         expect(screen.getByRole("link", { name: "ground state" })).toHaveAttribute("href", "/species-entries/spe_demo")
 
         // The calculation's own ref is inside the (collapsed) references disclosure.
-        fireEvent.click(screen.getByText(/References \(/))
+        fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
         expect(screen.getByText("calc_freq_one")).toBeVisible()
     })
 
@@ -413,7 +414,7 @@ describe("CalculationDetailPage", () => {
         // ref/literature ref/calculation ref all moved into RefsDisclosure.
         expect(within(context).queryByText("Level of theory ref")).not.toBeInTheDocument()
 
-        fireEvent.click(screen.getByText(/References \(/))
+        fireEvent.click(screen.getByText(bySummaryText(/References \(/)))
         expect(screen.getByText("lot_1")).toBeVisible()
         expect(screen.getByText("srel_1")).toBeVisible()
         expect(screen.getByText("wfr_1")).toBeVisible()

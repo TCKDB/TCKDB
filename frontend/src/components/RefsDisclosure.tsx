@@ -1,5 +1,6 @@
 import { useState, type CSSProperties } from "react"
 import { Link } from "react-router-dom"
+import { Disclosure } from "./Disclosure"
 import "../refs-disclosure.css"
 
 export type RefEntry = { label: string; value: string; to?: string }
@@ -22,12 +23,9 @@ export type RefEntry = { label: string; value: string; to?: string }
  */
 export function RefsDisclosure({ refs, label = "References" }: { refs: RefEntry[]; label?: string }) {
     return (
-        <details className="refs-disclosure">
-            <summary>{label} ({refs.length})</summary>
-            <div className="refs-disclosure-body">
-                {refs.map((ref) => <RefRow key={ref.label} {...ref} />)}
-            </div>
-        </details>
+        <Disclosure summary={label} count={refs.length} className="refs-disclosure">
+            {refs.map((ref) => <RefRow key={ref.label} {...ref} />)}
+        </Disclosure>
     )
 }
 

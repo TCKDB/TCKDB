@@ -1,21 +1,39 @@
 /*
- * RefsDisclosure — base styling for the `<details className="refs-
- * disclosure">` / `.ref-item` / `.copy-button` markup `components/
- * RefsDisclosure.tsx` renders, imported by the component itself so every
- * consumer gets it regardless of which page-level stylesheet (if any) is
- * loaded.
+ * RefsDisclosure — base styling for the `.refs-disclosure` / `.ref-item`
+ * / `.copy-button` markup `components/RefsDisclosure.tsx` renders,
+ * imported by the component itself so every consumer gets it regardless
+ * of which page-level stylesheet (if any) is loaded.
  *
- * MEASURED gap this fixes: these rules used to live only in
+ * MEASURED gap this fixed originally: these rules used to live only in
  * `species-entry.css`, which only `SpeciesEntryPage` imports. Any other
  * page rendering `RefsDisclosure` (`TransitionStateEntryPage`,
  * `ConformerObservationPage`, `GeometryDetailPage`-style record pages)
  * got the raw `<details>`/`<summary>` — 11px unstyled sans, ref rows
  * running together ("Transition state entrytse_aq5…"), and UA default
- * outset borders on the Copy buttons. `species-entry.css` keeps only its
- * own species-specific overrides (the `.conformer-card .refs-disclosure`
- * border/margin reset, `.identifier-chip .copy-button`) — those are
- * more specific selectors and still win the cascade regardless of import
- * order.
+ * outset borders on the Copy buttons.
+ *
+ * design/foundations: `RefsDisclosure` now composes `components/
+ * Disclosure.tsx` (`<Disclosure className="refs-disclosure" …>`), so the
+ * box chrome, chevron, and summary typography (review finding: SEVEN
+ * different jobs — kicker, field label, table header, disclosure
+ * summary, pill, button, legend — done by one uppercase-tracked mono
+ * style; this was one of those seven) all come from `.disclosure` in
+ * `design-system.css`. What stays here is `.refs-disclosure`'s OWN box
+ * override (a slightly different border colour, `--line-2` not `--line`
+ * — read on) and the ref-row/copy-button internals, plus the
+ * `.conformer-card`-scoped overrides `species-entry.css` still needs
+ * (kept, not retired: `species-entry.css.test.ts` and
+ * `ConformerSelector.test.tsx` both pin `.conformer-card .refs-
+ * disclosure`'s exact CSS and DOM shape).
+ *
+ * `.refs-disclosure` keeps its own border/radius/background here rather
+ * than relying on `.disclosure`'s (same shape, `--line-2` instead of
+ * `--line`) — this file loads AFTER `design-system.css` for every
+ * consumer (component-level import order), so these declarations win
+ * the cascade for the properties they share; `species-entry.css.test.ts`
+ * pins the exact `--line-2` value on the `.conformer-card`-scoped
+ * variant of this same border, so this file keeps that token rather
+ * than silently drifting to `--line` when `.disclosure` was adopted.
  */
 
 .refs-disclosure {
@@ -25,23 +43,20 @@
     background: var(--surface-sunken);
 }
 
-.refs-disclosure summary {
-    padding: .6rem 1rem;
-    color: var(--muted-2);
-    font: .68rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-    cursor: pointer;
-}
-
+/* `.refs-disclosure summary`'s own typography rule (the retired
+ * uppercase .68rem mono form) is gone — `.disclosure > summary` in
+ * `design-system.css` now sets it, since `RefsDisclosure` always
+ * carries both classes. The base `[open] summary` border-bottom stays
+ * here: `species-entry.css.test.ts` reads this exact rule (border drawn
+ * in the hero-applicable, non-conformer-card case) directly from this
+ * file. */
 .refs-disclosure[open] summary { border-bottom: 1px solid var(--line-2); }
 
-.refs-disclosure-body {
+.refs-disclosure .disclosure-body {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: .5rem 1.4rem;
-    padding: .8rem 1rem;
 }
 
 .ref-item {

@@ -5,6 +5,7 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import TransitionStateEntryPage from "./TransitionStateEntryPage"
+import { bySummaryText } from "../test/disclosureQueries"
 
 const ENTRY_REF = "tse_aq5ktxlu27nvul3hmdwpuyuz4e"
 
@@ -552,7 +553,7 @@ describe("TransitionStateEntryPage", () => {
         // The reaction-record link now lives ONCE (the Reaction section),
         // so References drops from 4 to 3 rows: entry, TS, reaction entry.
         expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).not.toBeVisible()
-        await userEvent.setup().click(screen.getByText(/References \(3\)/))
+        await userEvent.setup().click(screen.getByText(bySummaryText(/References \(3\)/)))
         expect(screen.getByText("ts_uql5lf3xeqnehtostrilmns5yi")).toBeVisible()
         // No second "rxn_..." link inside the (now open) disclosure -- only
         // the Reaction section's own link exists anywhere on the page.
