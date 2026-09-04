@@ -150,6 +150,24 @@
     color: var(--ink-2);
 }
 
+/* `.coverage-card` -- the evidence-completeness summary strip's own
+   `.card--derived` cell (`CalculationDetailPage`/`ConformerGroupPage`/
+   `ConformerObservationPage`). `.card` supplies the box; this is the
+   internal `<span>` label / `<strong>` headline value / `<p class="note">`
+   stack layout that box does not own an opinion on. Without `display:
+   block` here the label and value sit on one run-on line -- MEASURED
+   regression caught in this PR's own screenshot pass. */
+.coverage-card span {
+    display: block;
+}
+
+.coverage-card strong {
+    display: block;
+    margin-top: var(--s-2);
+    color: var(--ink);
+    font: var(--type-value-font);
+}
+
 .observation-list {
     display: grid;
     gap: 1rem;

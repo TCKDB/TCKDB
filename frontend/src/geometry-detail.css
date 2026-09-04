@@ -136,6 +136,10 @@
    geometry, not a computed aggregate) -- this file keeps only its
    pointer-sentence typography, which `.card`/`.note` do not already
    cover. */
+.validation-card span {
+    display: block;
+}
+
 .validation-card p {
     margin: var(--s-2) 0 0;
 }
