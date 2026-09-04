@@ -113,8 +113,8 @@ describe("EntryTransportSection — a broken Source calculations row", () => {
         await screen.findByText("trn_bad")
         expect(screen.getByText("trn_good")).toBeVisible()
 
-        fireEvent.click(screen.getByRole("heading", { name: "Source calculations" }))
-        const section = screen.getByRole("heading", { name: "Source calculations" }).closest("details") as HTMLElement
+        fireEvent.click(screen.getByText("Source calculations", { selector: "summary" }))
+        const section = screen.getByText("Source calculations", { selector: "summary" }).closest("details") as HTMLElement
         await within(section).findByText("Source calculations loaded.")
 
         const badRow = within(section).getByText("trn_bad").closest("div.science-record") as HTMLElement
@@ -134,7 +134,7 @@ describe("EntryTransportSection — a broken Source calculations row", () => {
         expect(within(recordsSection).getByText("trn_bad")).toBeVisible()
         expect(within(recordsSection).getByText("trn_good")).toBeVisible()
         expect(screen.getByText("2 records · review: 2 not reviewed")).toBeVisible()
-        expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
+        expect(screen.getByText("Review history", { selector: "summary" })).toBeVisible()
 
         consoleSpy.mockRestore()
     })

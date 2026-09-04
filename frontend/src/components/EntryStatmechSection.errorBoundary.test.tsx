@@ -170,8 +170,8 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         await screen.findByText("sm_bad")
         expect(screen.getByText("sm_good")).toBeVisible()
 
-        fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
-        const torsionsSection = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLElement
+        fireEvent.click(screen.getByText("Torsions", { selector: "summary" }))
+        const torsionsSection = screen.getByText("Torsions", { selector: "summary" }).closest("details") as HTMLElement
         await within(torsionsSection).findByText("Torsions loaded.")
 
         // The failing row's own fallback — not a page-wide crash message.
@@ -197,7 +197,7 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         expect(within(recordsSection).getByText("sm_bad")).toBeVisible()
         expect(within(recordsSection).getByText("sm_good")).toBeVisible()
         expect(screen.getByText("2 records · review: 2 not reviewed")).toBeVisible()
-        expect(screen.getByRole("heading", { name: "Source calculations" })).toBeVisible()
+        expect(screen.getByText("Source calculations", { selector: "summary" })).toBeVisible()
         // "Electronic levels" has no record on this entry (both fixtures
         // set `has_electronic_levels: false`) -- it collapses to one line,
         // no heading (finding 6), not a full section over a dashed empty
@@ -221,8 +221,8 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         const goodFreqHeading = within(goodCard).getByRole("heading", { name: "Frequencies" })
         expect(goodFreqHeading.closest("details")).toBeNull()
         expect(screen.getAllByRole("heading", { name: "Frequencies" })).toHaveLength(2)
-        expect(screen.getByRole("heading", { name: "Conformer context" })).toBeVisible()
-        expect(screen.getByRole("heading", { name: "Review history" })).toBeVisible()
+        expect(screen.getByText("Conformer context", { selector: "summary" })).toBeVisible()
+        expect(screen.getByText("Review history", { selector: "summary" })).toBeVisible()
 
         consoleSpy.mockRestore()
     })
