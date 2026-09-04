@@ -17,7 +17,7 @@ function token(value: string) {
  */
 export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
     return (
-        <li className="browse-row species-browse-row">
+        <li className="browse-row card species-browse-row">
             <div className="browse-row-headline">
                 <Link className="browse-row-title" to={`/species/${record.species_ref}`}>
                     {record.formula ? <Formula value={record.formula} /> : record.canonical_smiles}
@@ -45,7 +45,7 @@ export function SpeciesBrowseRow({ record }: { record: SpeciesBrowseRecord }) {
                     </li>
                 ))}
             </ul>
-            <code className="browse-row-ref">{record.species_ref}</code>
+            <code className="browse-ref data">{record.species_ref}</code>
         </li>
     )
 }

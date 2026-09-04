@@ -177,7 +177,7 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
         : "No calculation evidence recorded"
 
     return (
-        <li className="browse-row ts-browse-row">
+        <li className="browse-row card ts-browse-row">
             <div className="browse-row-headline">
                 {target
                     ? (
@@ -226,8 +226,8 @@ export function TransitionStateBrowseRow({ record }: { record: TransitionStateBr
                 </li>
             </ul>
             <p className="browse-row-footer">
-                <span>{evidenceText}</span>
-                <code className="browse-row-ref">{entryRef}</code>
+                <span className="browse-row-evidence">{evidenceText}</span>
+                <code className="browse-ref data">{entryRef}</code>
             </p>
         </li>
     )

@@ -342,3 +342,32 @@ describe("TransitionStateBrowseRow: unchanged behaviour", () => {
         expect(screen.getByText(/Evidence: opt · freq · sp · irc \(4 calculations\)/)).toBeVisible()
     })
 })
+
+// PR D (design-system adoption on the index/record pages): the row's box
+// (padding/border/radius/background) now comes from the shared `.card`
+// primitive, and the ref renders through the shared `.data` step instead of
+// its own one-off 11px mono run.
+describe("TransitionStateBrowseRow: design-system primitive adoption", () => {
+    it("the row carries the shared .card primitive alongside its own .ts-browse-row class", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        expect(row).toHaveClass("card")
+        expect(row).toHaveClass("browse-row")
+    })
+
+    it("the ref renders through .browse-ref and .data (the shared data step), not the retired .browse-row-ref", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const ref = within(row).getByText("tse_one")
+        expect(ref).toHaveClass("browse-ref")
+        expect(ref).toHaveClass("data")
+        expect(ref).not.toHaveClass("browse-row-ref")
+    })
+
+    it("the evidence line carries its own .browse-row-evidence class", () => {
+        renderRow(record())
+        const row = document.querySelector(".ts-browse-row") as HTMLElement
+        const evidence = within(row).getByText(/Evidence:/)
+        expect(evidence).toHaveClass("browse-row-evidence")
+    })
+})
