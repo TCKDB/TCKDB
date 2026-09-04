@@ -79,12 +79,19 @@
     list-style: none;
 }
 
+/* Was its own one-off mono .74rem/1.4 -- one more page-specific label
+   style in the same "58% of all text carries mono" measurement this pass
+   exists to correct. A section-jump link is UI chrome, not a piece of
+   scientific data, so it takes `--type-ui` (sans 600 .8125rem) rather
+   than a data-band size. Site-wide, single component (`TableOfContents.
+   tsx`), no page restructuring. */
 .page-toc a {
     display: block;
     padding: .3rem .5rem;
     border-left: 2px solid transparent;
     color: var(--muted);
-    font: .74rem/1.4 var(--mono);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     text-decoration: none;
 }
 
@@ -192,10 +199,14 @@
         display: block;
         margin: 0 0 .5rem;
         color: var(--muted);
-        /* Accessibility-pass floor (11px / .6875rem) -- was .68rem (10.88px). */
-        font: 600 .6875rem var(--mono);
-        text-transform: uppercase;
-        letter-spacing: .08em;
+        /* Was its own one-off 600 .6875rem/.08em mono -- now the shared
+           `--type-label` step (mono 400 .72rem, tracking .06em), the
+           same face/size every other repeated dt/th/legend label in the
+           app uses. .72rem (11.52px) still clears the accessibility-pass
+           11px floor the previous .6875rem value was hand-tuned to. */
+        font: var(--type-label-font);
+        text-transform: var(--type-label-transform);
+        letter-spacing: var(--type-label-tracking);
     }
 
     /* Was `display: grid; grid-auto-flow: column`, which never wraps --
