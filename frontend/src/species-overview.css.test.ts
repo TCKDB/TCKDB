@@ -132,3 +132,29 @@ describe("notes stay under the shared measure", () => {
         expect(rule).toMatch(/max-width:\s*var\(--measure-note\)/)
     })
 })
+
+// Post-review (PR D) fixes:
+describe(".entry-state-group h3 span (\"1 entry\") -- the shared --type-label step, not a hand-rolled 10.88px pair", () => {
+    it("uses var(--type-label-font)", () => {
+        const rule = extractRule(css, ".entry-state-group h3 span")
+        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
+        expect(rule).not.toMatch(/font:\s*\.68rem/)
+    })
+})
+
+describe(".entry-rows no longer double-rules the hairline the open .disclosure summary already draws", () => {
+    it("declares no border of its own", () => {
+        const rule = extractRule(css, ".entry-rows")
+        expect(rule).not.toMatch(/border/)
+    })
+})
+
+describe("dead CSS removed", () => {
+    it(".species-intro (never rendered by SpeciesOverviewPage.tsx) is gone", () => {
+        expect(css).not.toMatch(/\.species-intro\s*\{/)
+    })
+
+    it(".entry-index-heading > p (no <p> is ever a child of .entry-index-heading -- it's a sibling) is gone", () => {
+        expect(css).not.toMatch(/\.entry-index-heading\s*>\s*p/)
+    })
+})

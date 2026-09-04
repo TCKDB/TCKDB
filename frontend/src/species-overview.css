@@ -22,13 +22,6 @@
     word-break: break-word;
 }
 
-.species-intro {
-    max-width: 48rem;
-    margin: 1.3rem 0 0;
-    color: var(--ink-2);
-    font: 1.05rem/1.6 var(--serif);
-}
-
 /* Grid layout, dt/dd typography and gaps now come from the shared
    `.kv-list` primitive (design-system.css, `.kv-list` on the `<dl>` in
    `SpeciesOverviewPage.tsx`) -- this rule keeps only the top/bottom
@@ -58,13 +51,6 @@
     font: var(--type-heading-1-font);
     letter-spacing: var(--type-heading-1-tracking);
     color: var(--ink);
-}
-
-.entry-index-heading > p {
-    margin: 0;
-    color: var(--muted);
-    font: .72rem var(--mono);
-    white-space: nowrap;
 }
 
 .entry-index-intro {
@@ -108,9 +94,9 @@
 
 .entry-state-group h3 span {
     color: var(--muted);
-    font: .68rem var(--mono);
-    letter-spacing: .04em;
-    text-transform: uppercase;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
     white-space: nowrap;
 }
 
@@ -119,9 +105,13 @@
    (design-system.css) -- see `Disclosure`/`EntryStateGroup` in
    `SpeciesOverviewPage.tsx`. */
 
+/* No `border-top` here (post-review, PR D): the shared `.disclosure`
+   primitive already draws a `border-bottom` under its `[open]` summary
+   (design-system.css), directly above where this list sits inside
+   `.disclosure-body` -- a second hairline here duplicated it, two rules
+   16px apart at 1920px for what reads as one divider. */
 .entry-rows {
     display: grid;
-    border-top: 1px solid var(--line);
 }
 
 .entry-card {

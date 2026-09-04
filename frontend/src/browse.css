@@ -215,9 +215,9 @@
 .browse-count {
     margin: 1.6rem 0 .8rem;
     color: var(--muted);
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .browse-rows {

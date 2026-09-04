@@ -130,3 +130,12 @@ describe("no off-token divider colour", () => {
         expect(css).not.toMatch(/var\(--divider\)/)
     })
 })
+
+// Post-review (PR D) fix:
+describe(".browse-count -- the shared --type-label step, not a hand-rolled .72rem/.04em pair", () => {
+    it("uses var(--type-label-font)", () => {
+        const rule = extractRule(css, ".browse-count")
+        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
+        expect(rule).not.toMatch(/font:\s*\.72rem/)
+    })
+})
