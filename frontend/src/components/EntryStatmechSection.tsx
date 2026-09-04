@@ -401,7 +401,7 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
         <article className="science-record card" aria-labelledby={`statmech-heading-${core.statmech_ref}`}>
             <div className="science-record-heading">
                 <h3 id={`statmech-heading-${core.statmech_ref}`}>{statusLabel(core.scientific_origin)} statmech record</h3>
-                <span className="value-pill--muted">{statusLabel(core.review.status)}</span>
+                <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
                 <code className="data">{core.statmech_ref}</code>
             </div>
             <StatmechRecordBody record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
@@ -606,7 +606,7 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
                 <h3 id={anchorId}>{statusLabel(representative.statmech.scientific_origin)} statmech record</h3>
-                <span className="value-pill--muted">{records.length} records with identical values</span>
+                <span className="value-pill value-pill--muted">{records.length} records with identical values</span>
             </div>
             <p className="note">
                 {records.length} deposited records report identical point group, symmetry, and frequency

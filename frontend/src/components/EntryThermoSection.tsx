@@ -305,7 +305,7 @@ function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sect
         <article className="science-record card" aria-labelledby={`thermo-heading-${record.thermo_ref}`}>
             <div className="science-record-heading">
                 <h3 id={`thermo-heading-${record.thermo_ref}`}>{modelKindLabel(record.model_kind)} thermo record</h3>
-                <span className="value-pill--muted">{statusLabel(record.review.status)}</span>
+                <span className="value-pill value-pill--muted">{statusLabel(record.review.status)}</span>
                 <code className="data">{record.thermo_ref}</code>
             </div>
             <ThermoRecordBody record={record} />
@@ -433,7 +433,7 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
         <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
                 <h3 id={anchorId}>{modelKindLabel(representative.model_kind)} thermo record</h3>
-                <span className="value-pill--muted">{records.length} records with identical values</span>
+                <span className="value-pill value-pill--muted">{records.length} records with identical values</span>
             </div>
             <p className="note">
                 {records.length} deposited records report identical H298, S298 and model-form values — shown
@@ -792,7 +792,7 @@ function EvidenceCompletenessBlock({ completeness, thermoRef, idSuffix = "" }: {
             ) : (
                 <p className="evidence-missing">
                     Missing:{" "}
-                    {missing.map((key) => <span key={key} className="value-pill--muted">{evidenceCheckLabel(key)}</span>)}
+                    {missing.map((key) => <span key={key} className="value-pill value-pill--muted">{evidenceCheckLabel(key)}</span>)}
                 </p>
             )}
             <Disclosure className="evidence-full-checklist" summary={`Full checklist (${Object.keys(completeness.checklist).length})`}>

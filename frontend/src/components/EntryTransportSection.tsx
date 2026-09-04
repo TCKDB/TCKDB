@@ -184,7 +184,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
         <article className="science-record card" aria-labelledby={`transport-heading-${core.transport_ref}`}>
             <div className="science-record-heading">
                 <h3 id={`transport-heading-${core.transport_ref}`}>{statusLabel(core.scientific_origin)} transport record</h3>
-                <span className="value-pill--muted">{statusLabel(core.review.status)}</span>
+                <span className="value-pill value-pill--muted">{statusLabel(core.review.status)}</span>
                 <code className="data">{core.transport_ref}</code>
             </div>
 
