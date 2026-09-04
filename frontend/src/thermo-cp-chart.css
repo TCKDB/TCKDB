@@ -26,20 +26,23 @@
 
 .cp-chart-toggle legend {
     padding: 0;
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
     color: var(--muted);
 }
 
+/* `--type-ui` (design-system.css) -- these buttons are chart CONTROLS
+   (the same role a disclosure summary or an entry tab plays), not a data
+   value, so they read in the sans UI face now rather than an uppercase
+   mono label. */
 .cp-chart-toggle button {
     padding: .3rem .65rem;
     border: 1px solid var(--control-border);
     background: var(--surface);
     color: var(--accent);
-    font: .7rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     cursor: pointer;
 }
 
@@ -54,15 +57,15 @@
     color: var(--surface);
 }
 
-/* Same "never let the converted column imply otherwise" rule as the
-   Å/bohr note in geometry-detail.css: names the stored unit and the exact
-   conversion factor, rather than a bare "(converted)" badge near the
-   values. */
+/* Typography now comes from `.note` (design-system.css) at the call site
+   (`className="note cp-chart-unit-note"`) -- same "never let the
+   converted column imply otherwise" rule as the Å/bohr note in
+   geometry-detail.css, names the stored unit and the exact conversion
+   factor rather than a bare "(converted)" badge near the values. This
+   rule keeps only the grid placement `.note` has no opinion on. */
 .cp-chart-unit-note {
     flex-basis: 100%;
     margin: 0;
-    color: var(--muted);
-    font: .78rem/1.55 var(--mono);
 }
 
 .cp-chart-legend {
@@ -143,9 +146,13 @@
     stroke-width: 1.25;
 }
 
+/* Was `.62rem` (9.92px) -- below the 11px accessibility floor. `--type-data`
+   (design-system.css, .8125rem/13px mono) is the floor for this app's
+   smallest legitimate data face; axis ticks are real plotted numbers, so
+   this is the data step, not the (still smaller) label step. */
 .cp-chart-tick-label {
     fill: var(--muted);
-    font: .62rem var(--mono);
+    font: var(--type-data-font);
 }
 
 .cp-chart-tick-label--y {

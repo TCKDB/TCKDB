@@ -3,32 +3,53 @@
  * — the three species-entry tabs that render a LIST of records (never one
  * record standing in for the entry). Imported alongside `conformer-group.css`
  * for the shared "scientific record ledger" vocabulary (`.ledger-section`,
- * `.ledger-heading`, `.basin-context`, `.stage-table`, `.empty-projection`,
- * `.review-badge`, `.coverage-card`). `.section-note` is byte-identical to
- * the definitions in `geometry-detail.css` / `calculation-detail.css` and
- * is intentionally redefined here rather than imported from those files —
- * this project's stated convention (see the comment above `.section-note`
- * in `geometry-detail.css`) is that a page's own styling should not depend
- * on another page's stylesheet having loaded first.
+ * `.ledger-heading`, `.basin-context`, `.empty-projection`). `.stage-table`/
+ * `.review-badge`/`.evidence-chip` — this file's own former reskins of those
+ * `conformer-group.css` classes — are RETIRED (design/species-entry, PR C of
+ * the design-system consolidation): every record table in this file's three
+ * tabs now renders through `design-system.css`'s `.data-table` primitive
+ * (className on the `<table>` itself, not a CSS override reached down from
+ * here), and every "not reviewed"/"identical values" pill now renders
+ * through `.value-pill--muted` — see that file for the primitive and
+ * `design-system.css`'s own header comment for the review finding
+ * (`.stage-table`/`.review-badge`/`.evidence-chip` were three of the classes
+ * that PR explicitly left for "PR B/C/D's job"; this is that job, for this
+ * page's own three tabs).
+ *
+ * `.section-note`/`.records-note` are RETIRED THE SAME WAY, onto
+ * `design-system.css`'s `.note` primitive (`className="note"` at every call
+ * site) — both used to be near-duplicates of that primitive (muted, capped
+ * width, small sans/mono text) with their own slightly different numbers;
+ * one shared primitive removes the "which of three near-identical grey
+ * caption styles is this" question this file used to leave open. The
+ * `aria-busy="true"` loading-ellipsis behaviour several of those callers
+ * relied on (`.section-note[aria-busy="true"]::after`) moves down to the
+ * `.note[aria-busy]` rule below, so it still applies to every note thay
+ * carries that attribute regardless of which of the two retired classes it
+ * used to be.
  *
  * `.table-scroll { overflow-x: auto }` USED to be redefined here too, for
  * the same reason -- gone now (design/foundations, post-review): that
  * reasoning does not apply to a rule defined in `design-system.css`,
  * which loads globally before any page stylesheet regardless of route-
  * visit order, so there is no "whichever page loaded last wins" race for
- * a duplicate here to guard against. `.section-note` has no
- * `design-system.css` counterpart, so it keeps its own copy.
+ * a duplicate here to guard against.
  *
- * `.table-scroll .stage-table { min-width }` below is NOT byte-identical
- * to its counterpart in other pages' stylesheets, and Vite never unloads
- * a route chunk's CSS once injected — so redefining it as a bare selector
- * here with a different value would make whichever page loaded last win
- * the cascade for BOTH routes, on every route after the first cross-visit
- * (the `min-width` rule shipped once already scoped to `.table-scroll
- * .stage-table` — still bare enough to reach `GeometryDetailPage.tsx`'s
- * own `.stage-table`s, live on the Pi — and was caught in review). It
- * stays scoped under `.science-record`, which every `.table-scroll` on
- * these three tabs is nested inside.
+ * The scoped `.science-record .table-scroll(--compact)? .stage-table
+ * { min-width }` rules that used to live here are gone along with the
+ * `.stage-table` class itself in this file's own markup: `.data-table`
+ * carries no forced `width: calc(100% - ...)` the way `.stage-table` did,
+ * so a wide table (the 12-column NASA-9 grid) sizes to its own natural
+ * content width instead of being shrunk to fit its container and having
+ * every cell wrap mid-token -- `.table-scroll`'s `overflow-x: auto` alone
+ * is what makes it scroll now, with no min-width hack needed to force
+ * that overflow in the first place. The narrow-viewport stacked-row
+ * fallback this file used to reset to `min-width: 0` under 680px is gone
+ * for the same reason: there is no stacked fallback to protect any more
+ * (that was `conformer-group.css`'s `.stage-table` mobile behaviour,
+ * never reached by `.data-table` at all) -- a wide table now scrolls
+ * horizontally at every viewport, including 680px, rather than clipping
+ * a coefficient mid-digit the way the old stacked layout did.
  *
  * `.kv-list` used to be defined here too (scoped the same way, for the
  * same route-chunk-leakage reason) — that rule, and the competing one in
@@ -39,21 +60,24 @@
  * leakage risk moot for it specifically.
  */
 
+.note[aria-busy="true"]::after { content: "…"; }
+
+/* Layout-only companion class for the "N records · review: …" line above
+   each of the three tabs' record lists -- typography comes from `.note`
+   (design-system.css) at the call site (`className="note records-note"`);
+   this keeps only the extra bottom margin that line needs to separate it
+   from the chart/records below, which `.note` itself has no opinion on. */
 .records-note {
-    max-width: 44rem;
     margin: .6rem 0 2rem;
-    color: var(--muted);
-    font: .8rem/1.55 var(--mono);
 }
 
-/* One deposited record within a list. Bordered and spaced apart from its
-   siblings so three thermo records read as three separate cards, never one
-   merged answer — the acceptance rule this whole slice is graded on. */
+/* One deposited record within a list. `.card` (design-system.css) now
+   supplies the border/radius/background/padding every `.science-record`
+   article carries — this rule keeps only the list-spacing this page needs
+   ON TOP of that shared box, so there is exactly one place (`.card`) that
+   decides what a record card's own border/radius/padding look like. */
 .science-record {
     margin-top: 1.75rem;
-    padding: 1.5rem;
-    border: 1px solid var(--line);
-    background: var(--surface);
 }
 
 .science-record + .science-record {
@@ -71,8 +95,8 @@
 .science-record-heading h3 {
     margin: 0;
     overflow-wrap: anywhere;
-    font: 600 1.35rem var(--serif);
-    letter-spacing: -.03em;
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
 }
 
 .science-record-heading code {
@@ -99,82 +123,32 @@
     text-transform: uppercase;
 }
 
-.section-note {
-    margin: .5rem 0 0;
-    color: var(--muted);
-    font-size: .8rem;
-    line-height: 1.5;
-}
-
-.section-note[aria-busy="true"]::after { content: "…"; }
-
-/* `.kv-list`'s own scoped-under-`.science-record` rules (formerly
-   redefined here at .64rem -- a SECOND `.kv-list dt` size, different
-   from `calculation-detail.css`'s .6875rem, for the same semantic role)
-   are gone: the ONE canonical `.kv-list` now lives in `design-system.css`,
-   loaded before any page stylesheet, which is exactly what removes the
-   route-chunk-leakage risk this file's header comment used to explain --
-   there is no longer a second bare-or-scoped definition for a
-   later-loaded page to race against. The bare `.table-scroll { overflow-x:
-   auto }` rule that used to sit here is gone for the identical reason --
-   see the file header. */
-
-/* `.stage-table` (`conformer-group.css`) sets `width: calc(100% - 2.2rem)`
-   with `overflow-wrap: anywhere` on every cell — under auto table layout
-   that lets min-content collapse to about one character per cell, so a
-   wide table (the 12-column NASA-9 grid, the 8-column NASA-7 grid) shrinks
-   to fit its container instead of overflowing it, and numbers like
-   `-1.0308e-08` wrap mid-token rather than the container scrolling. A
-   minimum width forces the table back past its container so `.table-scroll`
-   has something real to scroll.
-   * SCOPED under `.science-record` — `GeometryDetailPage.tsx` wraps its own
-     `.stage-table`s in `.table-scroll` too (`geometry-detail.css`), and
-     that page is live on the Pi. A bare `.table-scroll .stage-table`
-     selector here would reach it the moment a reader visits any
-     species-entry record tab (Vite injects this chunk's CSS and never
-     removes it) — the exact `.kv-list` mistake this file's header already
-     warns about, just 30 lines further down. Every `.table-scroll` this
-     file renders is nested inside a `.science-record` card or lazy-section
-     row (verified: NASA-7/NASA-9/Wilhoit-points/group-additivity/source-
-     calculations/torsions tables all sit inside one), so scoping changes
-     nothing about which elements are styled here.
-   * RESET to `0` under 680px — `conformer-group.css` stacks `.stage-table`
-     into `display: block` label/value rows below that breakpoint precisely
-     so a phone doesn't need horizontal scroll at all; `min-width` still
-     applies to a block box, so leaving 48rem in place there would force
-     every stacked table (these three tabs' AND geometry's) to a phone-
-     unfriendly 768px inside its scroll container, defeating that stacking. */
-.science-record .table-scroll .stage-table {
-    min-width: 48rem;
-}
-
-/* Narrower minimum for the tables that only ever have five columns
-   (evaluated points, group-additivity components, source calculations) —
-   48rem is sized for the wide NASA grids and is more than these need even
-   on a narrow desktop window. */
-.science-record .table-scroll--compact .stage-table {
-    min-width: 30rem;
-}
-
-@media (max-width: 680px) {
-    .science-record .table-scroll .stage-table,
-    .science-record .table-scroll--compact .stage-table {
-        min-width: 0;
-    }
-}
-
+/* `.model-block-heading` is a real `<h4>` at every call site — the
+   design-system's `--type-heading-3` step (sans 600 .875rem), never mono:
+   "Temperature coverage", "NASA-7 polynomial", "Records in this group" and
+   the rest are block TITLES, the same role a card's own h3 or a page's own
+   h2 plays one level up, not a data value that belongs in the mono face. */
 .model-block-heading {
     margin: 1.5rem 0 .5rem;
-    font: 600 .8rem var(--mono);
-    letter-spacing: .03em;
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
 }
 
+/* Base list rows for a checklist -- sans, at the value step, not mono:
+   "Present — source calculations" and a geometry tab's "co_1 — 2
+   optimization calculations" are WORDS, not raw scientific data. A row
+   that does carry a real identifier (a calculation ref, a geometry hash)
+   wraps that one span in `.data` at its own call site instead -- the list
+   itself sets no blanket mono rule for its whole content the way it used
+   to. */
 .checklist {
     margin: .75rem 0 0;
     padding-left: 1.1rem;
     color: var(--ink-2);
-    font: .78rem/1.7 var(--mono);
+    font: var(--type-value-font);
 }
+
+.checklist li { margin: .3rem 0; }
 
 .checklist li::marker {
     color: var(--muted);
@@ -184,7 +158,7 @@
    checks passed, so only the FAILED checks are named by default -- named
    as chips, not a sentence, so a reader can find "uncertainty" without
    parsing eight lines that mostly say "Present". Full checklist stays
-   reachable behind a disclosure. */
+   reachable behind a disclosure (`Disclosure`, in `EntryThermoSection.tsx`). */
 .evidence-missing {
     display: flex;
     flex-wrap: wrap;
@@ -192,62 +166,43 @@
     gap: .4rem .5rem;
     margin: .6rem 0 0;
     color: var(--muted);
-    font: .78rem var(--mono);
+    font: var(--type-value-font);
 }
 
-.evidence-chip {
-    padding: .15rem .5rem;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    color: var(--ink-2);
-    font-size: .72rem;
-}
+/* `.evidence-chip`/`.evidence-full-checklist` are RETIRED: the chip now
+   renders through `.value-pill--muted` (design-system.css) and the
+   disclosure through the shared `Disclosure` component -- both bring
+   their own chrome, so neither needs a local rule here any more. */
 
-.evidence-full-checklist {
-    margin-top: .6rem;
-}
-
-.evidence-full-checklist summary {
-    color: var(--muted);
-    font: .74rem var(--mono);
-    cursor: pointer;
-}
-
-/* The 680px kv-list column-collapse override that used to live here,
-   scoped under `.science-record`, is gone along with the scoped base
-   rule it adjusted -- `design-system.css`'s canonical kv-list already
-   collapses on its own via `auto-fit, minmax(12rem, 1fr)` once two
-   columns no longer fit, so a fixed breakpoint override is redundant
-   for it now. */
-
-/*
- * ---------------------------------------------------------------------
- * Conformer-first pass (design/species-entry-conformer-first): reskin of
+/* ---------------------------------------------------------------------
+ * Conformer-first pass (design/species-entry-conformer-first) — reskin of
  * the vocabulary this file borrows from `conformer-group.css`
- * (`.ledger-section`, `.ledger-heading`, `.review-badge`, `.stage-table`,
- * bare `.empty-projection`) into the entry page's own token system. Every
- * rule below is scoped under `.entry-page` — this route's unique wrapper
- * (`SpeciesEntryPage.tsx`) — for the exact reason the file header above
- * already scopes `.kv-list`/`.table-scroll .stage-table` under
- * `.science-record`: Vite never unloads a route chunk's CSS, so a bare
- * redefinition of a `conformer-group.css` class here would win the
+ * (`.ledger-section`, `.ledger-heading`, bare `.empty-projection`) into
+ * the entry page's own token system. Every rule below is scoped under
+ * `.entry-page` — this route's unique wrapper (`SpeciesEntryPage.tsx`) —
+ * for the exact reason the file header above already scopes `.kv-list`
+ * under `.science-record`: Vite never unloads a route chunk's CSS, so a
+ * bare redefinition of a `conformer-group.css` class here would win the
  * cascade on ConformerGroupPage/ConformerObservationPage too, the moment
  * a reader visits this page first and then navigates there client-side.
  * `.entry-page` never exists in those pages' DOM (they render
  * `.conformer-page`), so these rules are structurally inert there
  * regardless of load order — conformer-group.css itself is untouched.
  *
- * The previous pass gave every `.science-record` card a rust
- * `box-shadow: inset 3px 0 0 var(--product)` rail and colored its
- * headings/badges/table headers the same rust — the "so many red links...
- * more CLI geared" the owner reviewed against. That token (`--product`)
- * is gone from `species-entry.css`; every fallback literal below that
- * used to repeat its hex value (`var(--product-700, ...)`) would
- * silently keep rendering that exact rust once the token disappeared, so
- * each one is replaced here, not left to fall back. One accent
- * (`--accent`, the house blue) for a link or an active state; everything
- * else -- headings, table headers, card borders -- is plain ink or a
- * hairline, because "this record has thermo" is a fact, not an alert.
+ * `.review-badge` is RETIRED from this scope (design/species-entry): every
+ * status pill this page's three tabs render — "not reviewed", "N records
+ * with identical values" — now renders through `.value-pill--muted`
+ * (design-system.css) at its own call site, so there is exactly one pill
+ * style on this page for that fact, not `.review-badge` PLUS this file's
+ * own `.entry-page` override of it. `.stage-table`'s three `.entry-page`
+ * overrides (header colour, zebra striping, numeric right-align) are
+ * RETIRED the same way -- `.data-table` needs none of them: its own `th`
+ * colour is already `--muted`, `design-system.css.test.ts` pins that this
+ * primitive is deliberately NOT zebra-striped ("rows are separated by a
+ * hairline, not a zebra background"), and numeric right-align is now an
+ * explicit `className="num"` per column at each call site rather than a
+ * blanket "every column but the first" rule that could not tell a numeric
+ * column from a ref or a level-of-theory string.
  *
  * Custom properties (--accent, --ink-2, --muted-2, --line, …) are declared
  * globally on `theme.css`'s `:root` (see that file); they cascade down to
@@ -261,8 +216,8 @@
 
 .entry-page .ledger-section h2 {
     margin: 0;
-    font: 600 1.9rem var(--serif);
-    letter-spacing: -.025em;
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
     color: var(--ink);
 }
 
@@ -270,13 +225,6 @@
     max-width: 42rem;
     color: var(--ink-2);
     line-height: 1.6;
-}
-
-.entry-page .review-badge {
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    background: var(--line-2);
-    color: var(--ink-2);
 }
 
 .entry-page .empty-projection {
@@ -287,25 +235,7 @@
     color: var(--muted-2);
 }
 
-.entry-page .science-record {
-    border-radius: .5rem;
-    border-color: var(--line);
-}
-
 .entry-page .science-record-heading h3 { color: var(--ink); }
-
-.entry-page .stage-table thead th {
-    color: var(--ink);
-}
-
-.entry-page .stage-table tbody tr:nth-child(even) td {
-    background: var(--line-2);
-}
-
-.entry-page .stage-table td:not(:first-child) {
-    text-align: right;
-    font-variant-numeric: tabular-nums;
-}
 
 .entry-page .supersession-notice {
     border-radius: .4rem;
