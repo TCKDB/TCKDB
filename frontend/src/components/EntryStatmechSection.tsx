@@ -20,6 +20,7 @@ import { deriveStatmechConformer } from "../domain/statmechConformerDerivation"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryStatmech } from "../hooks/useEntryStatmech"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
+import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
@@ -215,18 +216,20 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                 rowState={(record, data) => arrayRowState(record.available_sections.has_electronic_levels, data)}
             >
                 {(_record, rows) => (rows && rows.length > 0 ? (
-                    <table className="stage-table" aria-label="Electronic levels">
-                        <thead><tr><th scope="col">Level</th><th scope="col">Energy (cm⁻¹)</th><th scope="col">Degeneracy</th></tr></thead>
-                        <tbody>
-                            {rows.map((row) => (
-                                <tr key={`level-${row.level_index}`}>
-                                    <td data-label="Level">{row.level_index}</td>
-                                    <td data-label="Energy (cm⁻¹)">{row.energy_cm1}</td>
-                                    <td data-label="Degeneracy">{row.degeneracy}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="table-scroll table-scroll--compact">
+                        <table className="data-table" aria-label="Electronic levels">
+                            <thead><tr><th scope="col">Level</th><th scope="col">Energy (cm⁻¹)</th><th scope="col">Degeneracy</th></tr></thead>
+                            <tbody>
+                                {rows.map((row) => (
+                                    <tr key={`level-${row.level_index}`}>
+                                        <td className="num" data-label="Level">{row.level_index}</td>
+                                        <td className="num" data-label="Energy (cm⁻¹)">{row.energy_cm1}</td>
+                                        <td className="num" data-label="Degeneracy">{row.degeneracy}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 ) : <p className="empty-projection">The archive returned no electronic-level rows.</p>)}
             </StatmechLazySection>
 
@@ -261,18 +264,20 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                 rowState={(record, data) => arrayRowState(record.available_sections.has_review, data)}
             >
                 {(_record, rows) => (rows && rows.length > 0 ? (
-                    <table className="stage-table" aria-label="Review history">
-                        <thead><tr><th scope="col">Status</th><th scope="col">Reviewed at</th><th scope="col">Note</th></tr></thead>
-                        <tbody>
-                            {rows.map((row, index) => (
-                                <tr key={`review-${index}`}>
-                                    <td data-label="Status">{statusLabel(row.status)}</td>
-                                    <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
-                                    <td data-label="Note">{row.note ?? "not recorded"}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="table-scroll table-scroll--compact">
+                        <table className="data-table" aria-label="Review history">
+                            <thead><tr><th scope="col">Status</th><th scope="col">Reviewed at</th><th scope="col">Note</th></tr></thead>
+                            <tbody>
+                                {rows.map((row, index) => (
+                                    <tr key={`review-${index}`}>
+                                        <td data-label="Status">{statusLabel(row.status)}</td>
+                                        <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
+                                        <td data-label="Note">{row.note ?? "not recorded"}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 ) : <p className="empty-projection">The archive returned no review-history rows.</p>)}
             </StatmechLazySection>
         </>
@@ -281,7 +286,7 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
 
 function statmechRecordFallback(record: StatmechRecord) {
     return (
-        <article className="science-record" role="alert">
+        <article className="science-record card" role="alert">
             <p className="empty-projection">
                 Record <code>{record.statmech.statmech_ref}</code> could not be
                 displayed. Other records on this page are unaffected.
@@ -357,7 +362,7 @@ function ConformerScopedStatmechRecords({ conformer, conformers, records, confor
     if (conformersState.status !== "ready") {
         return (
             <>
-                <p className="section-note" role="status">
+                <p className="note" role="status">
                     {conformersState.status === "error"
                         ? `${conformersState.message} Showing every record for this entry, ungrouped, until the conformer link resolves.`
                         : "Resolving conformer links… showing every record for this entry, ungrouped, in the meantime."}
@@ -393,10 +398,10 @@ function StatmechRecordCard({ record, conformers, sourceCalcsState, frequenciesS
 }) {
     const core = record.statmech
     return (
-        <article className="science-record" aria-labelledby={`statmech-heading-${core.statmech_ref}`}>
+        <article className="science-record card" aria-labelledby={`statmech-heading-${core.statmech_ref}`}>
             <div className="science-record-heading">
                 <h3 id={`statmech-heading-${core.statmech_ref}`}>{statusLabel(core.scientific_origin)} statmech record</h3>
-                <span className="review-badge">{statusLabel(core.review.status)}</span>
+                <span className="value-pill--muted">{statusLabel(core.review.status)}</span>
                 <code>{core.statmech_ref}</code>
             </div>
             <StatmechRecordBody record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
@@ -474,7 +479,7 @@ function StatmechRecordBody({ record, conformers, sourceCalcsState, frequenciesS
                         <div><dt>Rotor scans</dt><dd>{boolLabel(record.evidence_summary.has_rotor_scans)} ({record.evidence_summary.torsion_count} torsions)</dd></div>
                     </dl>
                     <FrequenciesBlock record={record} state={frequenciesState} />
-                    <p className="section-note">
+                    <p className="note">
                         Record software:{" "}
                         {softwareLabel(record.software_release) ?? "not recorded"}
                         {" · "}Workflow:{" "}
@@ -517,10 +522,10 @@ function FrequenciesBlock({ record, state }: {
     if (!record.available_sections.has_frequencies) return null
     const ref = record.statmech.statmech_ref
     if (state.status === "idle" || state.status === "loading") {
-        return <p className="section-note" role="status">Loading frequency source…</p>
+        return <p className="note" role="status">Loading frequency source…</p>
     }
     if (state.status === "error") {
-        return <p className="section-note" role="alert">{state.message}</p>
+        return <p className="note" role="alert">{state.message}</p>
     }
     const summary = state.dataByRef.get(ref)
     if (!summary) {
@@ -542,7 +547,7 @@ function FrequenciesBlock({ record, state }: {
                             ? freqRefs.map((freqRef, index) => (
                                 <span key={freqRef}>
                                     {index > 0 && ", "}
-                                    <Link to={`/calculations/${freqRef}`}>{freqRef}</Link>
+                                    <Link className="data" to={`/calculations/${freqRef}`}>{freqRef}</Link>
                                 </span>
                             ))
                             : "not recorded"}
@@ -555,7 +560,7 @@ function FrequenciesBlock({ record, state }: {
                 verbatim. This fixed, reader-facing line says the same thing
                 in plain language instead. */}
             {freqRefs.length > 0 && (
-                <p className="section-note">Per-mode frequency values are recorded on the source calculation, not summarized here.</p>
+                <p className="note">Per-mode frequency values are recorded on the source calculation, not summarized here.</p>
             )}
         </section>
     )
@@ -598,12 +603,12 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
     const representative = records[0]
     const anchorId = `statmech-heading-${representative.statmech.statmech_ref}${STATMECH_GROUP_ID_SUFFIX}`
     return (
-        <article className="science-record identical-record-group" aria-labelledby={anchorId}>
+        <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
                 <h3 id={anchorId}>{statusLabel(representative.statmech.scientific_origin)} statmech record</h3>
-                <span className="review-badge">{records.length} records with identical values</span>
+                <span className="value-pill--muted">{records.length} records with identical values</span>
             </div>
-            <p className="section-note">
+            <p className="note">
                 {records.length} deposited records report identical point group, symmetry, and frequency
                 scale factor values — shown once below. Each record's own ref and provenance — including
                 which source calculations and frequency calculation it cites — is listed per ref in the
@@ -618,14 +623,13 @@ function IdenticalStatmechRecordsCard({ records, conformers, sourceCalcsState, f
                 showRecordEvidence={false}
             />
             <IdenticalStatmechGroupRefs records={records} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
-            <details className="identical-record-group-detail">
-                <summary>Show all {records.length} records individually</summary>
+            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.statmech.statmech_ref} fallback={statmechRecordFallback(record)}>
                         <StatmechRecordCard record={record} conformers={conformers} sourceCalcsState={sourceCalcsState} frequenciesState={frequenciesState} />
                     </SectionErrorBoundary>
                 ))}
-            </details>
+            </Disclosure>
         </article>
     )
 }
@@ -645,7 +649,7 @@ function RecordCalcRefsCell({ refs }: { refs: string[] | "loading" }) {
             {refs.map((ref, index) => (
                 <span key={ref}>
                     {index > 0 && ", "}
-                    <Link to={`/calculations/${ref}`}>{ref}</Link>
+                    <Link className="data" to={`/calculations/${ref}`}>{ref}</Link>
                 </span>
             ))}
         </>
@@ -693,7 +697,7 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
             <div className="table-scroll table-scroll--compact">
-                <table className="stage-table" aria-label="Records sharing these identical values">
+                <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
                         <tr>
                             <th scope="col">Ref</th>
@@ -818,7 +822,7 @@ function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
     // summary's own "Source calculations: 0" row below; no note needed.
     if (record.evidence_summary.source_calculation_count === 0) return null
     if (sourceCalcsState.status === "idle" || sourceCalcsState.status === "loading") {
-        return <p className="section-note" role="status">Deriving the conformer from this record's source calculations…</p>
+        return <p className="note" role="status">Deriving the conformer from this record's source calculations…</p>
     }
     if (sourceCalcsState.status === "error") return null
 
@@ -827,7 +831,7 @@ function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
 
     if (derived.kind === "unresolved") {
         return (
-            <p className="section-note">
+            <p className="note">
                 Conformer: this record's source calculations do not trace to any conformer observation loaded for
                 this entry.
             </p>
@@ -835,7 +839,7 @@ function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
     }
     if (derived.kind === "single") {
         return (
-            <p className="section-note">
+            <p className="note">
                 Conformer (derived from source calculations):{" "}
                 <Link to={`/conformer-groups/${derived.conformerGroupRef}`}>{derived.label}</Link>
             </p>
@@ -843,7 +847,7 @@ function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
     }
     // Disagreement: named individually, never collapsed to "the first one".
     return (
-        <p className="section-note" role="alert">
+        <p className="note" role="alert">
             Conformer: this record's source calculations span more than one conformer —{" "}
             {derived.conformers.map((entry, index) => (
                 <span key={entry.conformerGroupRef}>
@@ -859,15 +863,15 @@ function DerivedConformerNote({ record, conformers, sourceCalcsState }: {
 function SubjectLine({ record }: { record: StatmechRecord }) {
     if (record.species) {
         return (
-            <p className="section-note">
-                Species entry: <Link to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
+            <p className="note">
+                Species entry: <Link className="data" to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
                 {record.species.canonical_smiles ? ` (${record.species.canonical_smiles})` : ""}
             </p>
         )
     }
     if (record.transition_state) {
         return (
-            <p className="section-note">
+            <p className="note">
                 Transition-state entry: <code>{record.transition_state.transition_state_entry_ref}</code>
                 {" — no dedicated page exists yet for this record kind."}
             </p>
@@ -906,13 +910,26 @@ function StatmechLazySection<T>({
     // to the one line, unregistered with the ToC (no `SectionHeading`) --
     // there is no destination behind it to jump to.
     if (!available) return <p className="empty-projection">{notAvailableText}</p>
+    // Renders through the shared `Disclosure` component -- NOT
+    // `SectionHeading` inside `<summary>` the way this used to (a serif h2
+    // measured at 30.4px inside a `<summary>`, drawing the bare UA
+    // triangle on top of `.disclosure`'s own chevron once any box style
+    // was added around it). A `<summary>` is never a valid ToC destination
+    // for a shared, cross-record fetch trigger like this one anyway --
+    // "Torsions"/"Electronic levels"/etc. name a REQUEST this page can
+    // make, not a section of content that exists until requested -- so
+    // this plain-text summary intentionally does not register with the
+    // page's table of contents (no `SectionHeading`, no `id` matching a
+    // ToC anchor); `headingId` still labels the `<details>` element itself
+    // for any caller that needs to target it directly.
     return (
-        <details
+        <Disclosure
+            id={headingId}
             className="ledger-section"
-            onToggle={(event) => { if ((event.target as HTMLDetailsElement).open) onOpen() }}
+            summary={heading}
+            onToggle={(open) => { if (open) onOpen() }}
         >
-            <summary><SectionHeading id={headingId}>{heading}</SectionHeading></summary>
-            <p className="section-note" role="status">
+            <p className="note" role="status">
                 {state.status === "idle" && "Expand to load this section from the archive."}
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
@@ -923,7 +940,7 @@ function StatmechLazySection<T>({
                 const data = state.dataByRef.get(ref)
                 const status = rowState(record, data)
                 return (
-                    <div key={ref} className="science-record">
+                    <div key={ref} className="science-record card">
                         <div className="science-record-heading">
                             <h3>{ref}</h3>
                         </div>
@@ -950,6 +967,6 @@ function StatmechLazySection<T>({
                     </div>
                 )
             })}
-        </details>
+        </Disclosure>
     )
 }

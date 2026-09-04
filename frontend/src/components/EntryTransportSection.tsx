@@ -13,6 +13,7 @@ import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryListSection, type EntryListSectionState } from "../hooks/useEntryListSection"
 import { useEntryTransport } from "../hooks/useEntryTransport"
+import { Disclosure } from "./Disclosure"
 import { LazyRowBody } from "./LazyRowBody"
 import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
@@ -121,7 +122,7 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
                         <SectionErrorBoundary
                             key={record.transport.transport_ref}
                             fallback={(
-                                <article className="science-record" role="alert">
+                                <article className="science-record card" role="alert">
                                     <p className="empty-projection">
                                         Record <code>{record.transport.transport_ref}</code> could not be
                                         displayed. Other records on this page are unaffected.
@@ -157,18 +158,20 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
                 rowState={(record, data) => arrayRowState(record.available_sections.has_review, data)}
             >
                 {(_record, rows) => (rows && rows.length > 0 ? (
-                    <table className="stage-table" aria-label="Review history">
-                        <thead><tr><th scope="col">Status</th><th scope="col">Reviewed at</th><th scope="col">Note</th></tr></thead>
-                        <tbody>
-                            {rows.map((row, index) => (
-                                <tr key={`review-${index}`}>
-                                    <td data-label="Status">{statusLabel(row.status)}</td>
-                                    <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
-                                    <td data-label="Note">{row.note ?? "not recorded"}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                    <div className="table-scroll table-scroll--compact">
+                        <table className="data-table" aria-label="Review history">
+                            <thead><tr><th scope="col">Status</th><th scope="col">Reviewed at</th><th scope="col">Note</th></tr></thead>
+                            <tbody>
+                                {rows.map((row, index) => (
+                                    <tr key={`review-${index}`}>
+                                        <td data-label="Status">{statusLabel(row.status)}</td>
+                                        <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
+                                        <td data-label="Note">{row.note ?? "not recorded"}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 ) : <p className="empty-projection">The archive returned no review-history rows.</p>)}
             </TransportLazySection>
         </>
@@ -178,17 +181,17 @@ function TransportList({ entryRef, response }: { entryRef: string; response: Tra
 function TransportRecordCard({ record }: { record: TransportRecord }) {
     const core = record.transport
     return (
-        <article className="science-record" aria-labelledby={`transport-heading-${core.transport_ref}`}>
+        <article className="science-record card" aria-labelledby={`transport-heading-${core.transport_ref}`}>
             <div className="science-record-heading">
                 <h3 id={`transport-heading-${core.transport_ref}`}>{statusLabel(core.scientific_origin)} transport record</h3>
-                <span className="review-badge">{statusLabel(core.review.status)}</span>
+                <span className="value-pill--muted">{statusLabel(core.review.status)}</span>
                 <code>{core.transport_ref}</code>
             </div>
 
             {record.supersession && <SupersessionNotice supersession={record.supersession} />}
 
-            <p className="section-note">
-                Species entry: <Link to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
+            <p className="note">
+                Species entry: <Link className="data" to={`/species-entries/${record.species.species_entry_ref}`}>{record.species.species_entry_ref}</Link>
                 {record.species.canonical_smiles ? ` (${record.species.canonical_smiles})` : ""}
             </p>
 
@@ -215,7 +218,7 @@ function TransportRecordCard({ record }: { record: TransportRecord }) {
                 <div><dt>Literature source</dt><dd>{boolLabel(record.evidence_summary.has_literature_source)}</dd></div>
             </dl>
 
-            <p className="section-note">
+            <p className="note">
                 Software:{" "}
                 {softwareLabel(record.software_release) ?? "not recorded"}
                 {" · "}Workflow:{" "}
@@ -255,13 +258,20 @@ function TransportLazySection<T>({
             </section>
         )
     }
+    // Shared `Disclosure` component, plain-text summary -- see the
+    // matching note in `EntryStatmechSection.tsx`'s `StatmechLazySection`
+    // for why: "Source calculations" here names a shared, cross-record
+    // fetch trigger, not a section of already-present content, so it was
+    // never a valid `SectionHeading`/ToC destination even before this was
+    // fixed to stop nesting an `<h2>` inside a `<summary>`.
     return (
-        <details
+        <Disclosure
+            id={headingId}
             className="ledger-section"
-            onToggle={(event) => { if ((event.target as HTMLDetailsElement).open) onOpen() }}
+            summary={heading}
+            onToggle={(open) => { if (open) onOpen() }}
         >
-            <summary><SectionHeading id={headingId}>{heading}</SectionHeading></summary>
-            <p className="section-note" role="status">
+            <p className="note" role="status">
                 {state.status === "idle" && "Expand to load this section from the archive."}
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
@@ -272,7 +282,7 @@ function TransportLazySection<T>({
                 const data = state.dataByRef.get(ref)
                 const status = rowState(record, data)
                 return (
-                    <div key={ref} className="science-record">
+                    <div key={ref} className="science-record card">
                         <div className="science-record-heading">
                             <h3>{ref}</h3>
                         </div>
@@ -299,6 +309,6 @@ function TransportLazySection<T>({
                     </div>
                 )
             })}
-        </details>
+        </Disclosure>
     )
 }

@@ -24,7 +24,7 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
     }
     return (
         <div className="table-scroll">
-            <table className="stage-table" aria-label="Torsions">
+            <table className="data-table" aria-label="Torsions">
                 <thead>
                     <tr>
                         <th scope="col">Index</th>
@@ -39,14 +39,14 @@ export function TorsionsTable({ rows }: { rows: StatmechRecord["torsions"] }) {
                 <tbody>
                     {rows.map((row) => (
                         <tr key={`torsion-${row.torsion_index}`}>
-                            <td data-label="Index">{row.torsion_index}</td>
+                            <td className="num" data-label="Index">{row.torsion_index}</td>
                             <td data-label="Treatment">{row.treatment_kind ? statusLabel(row.treatment_kind) : "not recorded"}</td>
                             <td data-label="Top">{row.top_description ?? "not recorded"}</td>
-                            <td data-label="Dimension">{row.dimension}</td>
-                            <td data-label="Symmetry number">{row.symmetry_number ?? "not recorded"}</td>
+                            <td className="num" data-label="Dimension">{row.dimension}</td>
+                            <td className="num" data-label="Symmetry number">{row.symmetry_number ?? "not recorded"}</td>
                             <td data-label="Source scan">
                                 {row.source_scan_calculation_ref
-                                    ? <Link to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
+                                    ? <Link className="data" to={`/calculations/${row.source_scan_calculation_ref}`}>{row.source_scan_calculation_ref}</Link>
                                     : "not recorded"}
                             </td>
                             <td data-label="Invalidated">{row.invalidated_reason ?? "not invalidated"}</td>

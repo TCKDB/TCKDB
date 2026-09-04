@@ -12,6 +12,7 @@ import { formatQuantity } from "../domain/quantityFormat"
 import { useEntryThermo } from "../hooks/useEntryThermo"
 import { useRegisteredSection } from "../hooks/usePageSections"
 import { ConformerAttributionGroups } from "./ConformerAttributionGroups"
+import { Disclosure } from "./Disclosure"
 import { SectionHeading } from "./PageSections"
 import { QuantityValue } from "./QuantityValue"
 import { RecordStatus } from "./RecordStatus"
@@ -100,7 +101,7 @@ function reviewSummaryText(summary: ThermoListResponse["review_summary"]) {
 
 function thermoRecordFallback(record: ThermoRecord) {
     return (
-        <article className="science-record" role="alert">
+        <article className="science-record card" role="alert">
             <p className="empty-projection">
                 Record <code>{record.thermo_ref}</code> could not be displayed. Other
                 records on this page are unaffected.
@@ -237,7 +238,7 @@ function ThermoList({ response, conformer, conformers }: {
                     are never merged, averaged, or reduced to one preferred value on this page.
                 </p>
             </div>
-            <p className="records-note">
+            <p className="note records-note">
                 {pagination.total} record{pagination.total === 1 ? "" : "s"}
                 {pagination.total > pagination.returned ? ` (showing ${pagination.returned})` : ""}
                 {" · review: "}{reviewSummaryText(reviewSummary)}
@@ -301,10 +302,10 @@ function ThermoList({ response, conformer, conformers }: {
 function ThermoRecordCard({ record, sectionLabel }: { record: ThermoRecord; sectionLabel: string | null }) {
     useRegisteredSection(sectionLabel ? `thermo-heading-${record.thermo_ref}` : null, sectionLabel ?? "")
     return (
-        <article className="science-record" aria-labelledby={`thermo-heading-${record.thermo_ref}`}>
+        <article className="science-record card" aria-labelledby={`thermo-heading-${record.thermo_ref}`}>
             <div className="science-record-heading">
                 <h3 id={`thermo-heading-${record.thermo_ref}`}>{modelKindLabel(record.model_kind)} thermo record</h3>
-                <span className="review-badge">{statusLabel(record.review.status)}</span>
+                <span className="value-pill--muted">{statusLabel(record.review.status)}</span>
                 <code>{record.thermo_ref}</code>
             </div>
             <ThermoRecordBody record={record} />
@@ -429,12 +430,12 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
     const anchorId = `thermo-heading-${representative.thermo_ref}${GROUP_ID_SUFFIX}`
     useRegisteredSection(sectionLabel ? anchorId : null, sectionLabel ?? "")
     return (
-        <article className="science-record identical-record-group" aria-labelledby={anchorId}>
+        <article className="science-record identical-record-group card" aria-labelledby={anchorId}>
             <div className="science-record-heading">
                 <h3 id={anchorId}>{modelKindLabel(representative.model_kind)} thermo record</h3>
-                <span className="review-badge">{records.length} records with identical values</span>
+                <span className="value-pill--muted">{records.length} records with identical values</span>
             </div>
-            <p className="section-note">
+            <p className="note">
                 {records.length} deposited records report identical H298, S298 and model-form values — shown
                 once below. Each record's own ref and provenance — including which calculation and statmech
                 record it cites — is listed per ref in the table below, never collapsed into one; every
@@ -454,14 +455,13 @@ function IdenticalThermoRecordsCard({ records, sectionLabel }: { records: Thermo
                 </div>
             </dl>
             <IdenticalThermoGroupRefs records={records} />
-            <details className="identical-record-group-detail">
-                <summary>Show all {records.length} records individually</summary>
+            <Disclosure className="identical-record-group-detail" summary={`Show all ${records.length} records individually`}>
                 {records.map((record) => (
                     <SectionErrorBoundary key={record.thermo_ref} fallback={thermoRecordFallback(record)}>
                         <ThermoRecordCard record={record} sectionLabel={null} />
                     </SectionErrorBoundary>
                 ))}
-            </details>
+            </Disclosure>
         </article>
     )
 }
@@ -483,7 +483,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
             <div className="table-scroll table-scroll--compact">
-                <table className="stage-table" aria-label="Records sharing these identical values">
+                <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
                         <tr>
                             <th scope="col">Ref</th>
@@ -554,7 +554,7 @@ function CalculationRefCell({ calculationRef, primaryRef = null }: { calculation
     // cell has no calculation of its own to point at; the ref is already
     // linked from the Primary column in the same row.
     if (primaryRef && calculationRef === primaryRef) return <>same as primary</>
-    return <Link to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
+    return <Link className="data" to={`/calculations/${calculationRef}`}>{calculationRef}</Link>
 }
 
 /**
@@ -614,7 +614,7 @@ function NasaBlock({ nasa, thermoRef, idSuffix = "" }: { nasa: ThermoRecord["nas
                         <div><dt>T high (K)</dt><dd>{nasa.t_high ?? "not recorded"}</dd></div>
                     </dl>
                     <div className="table-scroll">
-                        <table className="stage-table" aria-label={`NASA-7 coefficients for ${thermoRef}`}>
+                        <table className="data-table" aria-label={`NASA-7 coefficients for ${thermoRef}`}>
                             <thead>
                                 <tr>
                                     <th scope="col">Range</th>
@@ -625,13 +625,13 @@ function NasaBlock({ nasa, thermoRef, idSuffix = "" }: { nasa: ThermoRecord["nas
                                 <tr>
                                     <td data-label="Range">Low</td>
                                     {(nasa.low_temperature_coefficients ?? []).map((coefficient, index) => (
-                                        <td data-label={`a${index + 1}`} key={`low-${index}`}>{coefficient ?? "not recorded"}</td>
+                                        <td className="num" data-label={`a${index + 1}`} key={`low-${index}`}>{coefficient ?? "not recorded"}</td>
                                     ))}
                                 </tr>
                                 <tr>
                                     <td data-label="Range">High</td>
                                     {(nasa.high_temperature_coefficients ?? []).map((coefficient, index) => (
-                                        <td data-label={`a${index + 1}`} key={`high-${index}`}>{coefficient ?? "not recorded"}</td>
+                                        <td className="num" data-label={`a${index + 1}`} key={`high-${index}`}>{coefficient ?? "not recorded"}</td>
                                     ))}
                                 </tr>
                             </tbody>
@@ -649,7 +649,7 @@ function Nasa9Block({ nasa9, thermoRef, idSuffix = "" }: { nasa9: ThermoRecord["
             <h4 className="model-block-heading" id={`nasa9-${thermoRef}${idSuffix}`}>NASA-9 polynomial</h4>
             {nasa9 && nasa9.length > 0 ? (
                 <div className="table-scroll">
-                    <table className="stage-table" aria-label={`NASA-9 intervals for ${thermoRef}`}>
+                    <table className="data-table" aria-label={`NASA-9 intervals for ${thermoRef}`}>
                         <thead>
                             <tr>
                                 <th scope="col">Interval</th>
@@ -661,18 +661,18 @@ function Nasa9Block({ nasa9, thermoRef, idSuffix = "" }: { nasa9: ThermoRecord["
                         <tbody>
                             {nasa9.map((interval) => (
                                 <tr key={`nasa9-${thermoRef}-${interval.interval_index}`}>
-                                    <td data-label="Interval">{interval.interval_index}</td>
-                                    <td data-label="T min (K)">{interval.t_min_k}</td>
-                                    <td data-label="T max (K)">{interval.t_max_k}</td>
-                                    <td data-label="a1">{interval.a1}</td>
-                                    <td data-label="a2">{interval.a2}</td>
-                                    <td data-label="a3">{interval.a3}</td>
-                                    <td data-label="a4">{interval.a4}</td>
-                                    <td data-label="a5">{interval.a5}</td>
-                                    <td data-label="a6">{interval.a6}</td>
-                                    <td data-label="a7">{interval.a7}</td>
-                                    <td data-label="a8">{interval.a8}</td>
-                                    <td data-label="a9">{interval.a9}</td>
+                                    <td className="num" data-label="Interval">{interval.interval_index}</td>
+                                    <td className="num" data-label="T min (K)">{interval.t_min_k}</td>
+                                    <td className="num" data-label="T max (K)">{interval.t_max_k}</td>
+                                    <td className="num" data-label="a1">{interval.a1}</td>
+                                    <td className="num" data-label="a2">{interval.a2}</td>
+                                    <td className="num" data-label="a3">{interval.a3}</td>
+                                    <td className="num" data-label="a4">{interval.a4}</td>
+                                    <td className="num" data-label="a5">{interval.a5}</td>
+                                    <td className="num" data-label="a6">{interval.a6}</td>
+                                    <td className="num" data-label="a7">{interval.a7}</td>
+                                    <td className="num" data-label="a8">{interval.a8}</td>
+                                    <td className="num" data-label="a9">{interval.a9}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -706,10 +706,9 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
         <section aria-labelledby={`points-${thermoRef}${idSuffix}`}>
             <h4 className="model-block-heading" id={`points-${thermoRef}${idSuffix}`}>Evaluated points</h4>
             {points && points.length > 0 ? (
-                <details>
-                    <summary>{points.length} temperature point{points.length === 1 ? "" : "s"}</summary>
+                <Disclosure summary={`${points.length} temperature point${points.length === 1 ? "" : "s"}`}>
                     <div className="table-scroll table-scroll--compact">
-                        <table className="stage-table" aria-label={`Evaluated thermo points for ${thermoRef}`}>
+                        <table className="data-table" aria-label={`Evaluated thermo points for ${thermoRef}`}>
                             <thead>
                                 <tr>
                                     <th scope="col">T (K)</th>
@@ -722,17 +721,17 @@ function PointsBlock({ points, thermoRef, idSuffix = "" }: { points: ThermoRecor
                             <tbody>
                                 {points.map((point, index) => (
                                     <tr key={`${thermoRef}-point-${index}`}>
-                                        <td data-label="T (K)">{point.temperature_k}</td>
-                                        <td data-label="Cp (J/mol·K)">{point.cp_j_mol_k ?? "not recorded"}</td>
-                                        <td data-label="H (kJ/mol)">{point.h_kj_mol ?? "not recorded"}</td>
-                                        <td data-label="S (J/mol·K)">{point.s_j_mol_k ?? "not recorded"}</td>
-                                        <td data-label="G (kJ/mol)">{point.g_kj_mol ?? "not recorded"}</td>
+                                        <td className="num" data-label="T (K)">{point.temperature_k}</td>
+                                        <td className="num" data-label="Cp (J/mol·K)">{point.cp_j_mol_k ?? "not recorded"}</td>
+                                        <td className="num" data-label="H (kJ/mol)">{point.h_kj_mol ?? "not recorded"}</td>
+                                        <td className="num" data-label="S (J/mol·K)">{point.s_j_mol_k ?? "not recorded"}</td>
+                                        <td className="num" data-label="G (kJ/mol)">{point.g_kj_mol ?? "not recorded"}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
                     </div>
-                </details>
+                </Disclosure>
             ) : <p className="empty-projection">No evaluated points recorded for this record.</p>}
         </section>
     )
@@ -789,21 +788,20 @@ function EvidenceCompletenessBlock({ completeness, thermoRef, idSuffix = "" }: {
                 Evidence completeness ({completeness.score} / {completeness.max})
             </h4>
             {missing.length === 0 ? (
-                <p className="section-note">Every evidence-completeness check is satisfied.</p>
+                <p className="note">Every evidence-completeness check is satisfied.</p>
             ) : (
                 <p className="evidence-missing">
                     Missing:{" "}
-                    {missing.map((key) => <span key={key} className="evidence-chip">{evidenceCheckLabel(key)}</span>)}
+                    {missing.map((key) => <span key={key} className="value-pill--muted">{evidenceCheckLabel(key)}</span>)}
                 </p>
             )}
-            <details className="evidence-full-checklist">
-                <summary>Full checklist ({Object.keys(completeness.checklist).length})</summary>
+            <Disclosure className="evidence-full-checklist" summary={`Full checklist (${Object.keys(completeness.checklist).length})`}>
                 <ul className="checklist">
                     {Object.entries(completeness.checklist).map(([key, value]) => (
                         <li key={key}>{value ? "Present" : "Absent"} — {evidenceCheckLabel(key)}</li>
                     ))}
                 </ul>
-            </details>
+            </Disclosure>
         </section>
     )
 }
@@ -847,7 +845,7 @@ function CalculationProvenanceRows({ provenance }: { provenance: NonNullable<The
             {rows.map((row) => (
                 <div key={row.ref}>
                     <dt>{row.labels.join(" / ")}</dt>
-                    <dd><Link to={`/calculations/${row.ref}`}>{row.ref}</Link></dd>
+                    <dd><Link className="data" to={`/calculations/${row.ref}`}>{row.ref}</Link></dd>
                 </div>
             ))}
             {missing.map((label) => (
@@ -898,7 +896,7 @@ function ProvenanceBlock({ provenance, thermoRef, idSuffix = "" }: {
                     <dt>Conformer</dt>
                     <dd>
                         {provenance.conformer_group_ref
-                            ? <Link to={`/conformer-groups/${provenance.conformer_group_ref}`}>{provenance.conformer_group_ref}</Link>
+                            ? <Link className="data" to={`/conformer-groups/${provenance.conformer_group_ref}`}>{provenance.conformer_group_ref}</Link>
                             : "not recorded"}
                     </dd>
                 </div>
@@ -936,7 +934,7 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
             </dl>
             {groupAdditivity.components && groupAdditivity.components.length > 0 && (
                 <div className="table-scroll table-scroll--compact">
-                    <table className="stage-table" aria-label="Group-additivity components">
+                    <table className="data-table" aria-label="Group-additivity components">
                         <thead>
                             <tr>
                                 <th scope="col">Group</th>
@@ -951,9 +949,9 @@ function GroupAdditivityBlock({ groupAdditivity, thermoRef, idSuffix = "" }: {
                                 <tr key={`${thermoRef}-ga-${index}`}>
                                     <td data-label="Group">{component.group_label}</td>
                                     <td data-label="Kind">{component.component_kind}</td>
-                                    <td data-label="Count">{component.count}</td>
-                                    <td data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "not recorded"}</td>
-                                    <td data-label="S298 contribution (J/mol·K)">{component.s298_contribution_j_mol_k ?? "not recorded"}</td>
+                                    <td className="num" data-label="Count">{component.count}</td>
+                                    <td className="num" data-label="H298 contribution (kJ/mol)">{component.h298_contribution_kj_mol ?? "not recorded"}</td>
+                                    <td className="num" data-label="S298 contribution (J/mol·K)">{component.s298_contribution_j_mol_k ?? "not recorded"}</td>
                                 </tr>
                             ))}
                         </tbody>
