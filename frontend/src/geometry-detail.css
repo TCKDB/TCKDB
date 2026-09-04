@@ -24,14 +24,20 @@
     line-height: 1.5;
 }
 
-/* Wide numeric tables scroll inside their own container rather than
-   forcing the page body to scroll horizontally — the coordinate table's
-   own `.stage-table` mobile rule additionally stacks it into label/value
-   rows below 680px, so this only matters between that breakpoint and a
-   genuinely narrow desktop window. */
-.table-scroll {
-    overflow-x: auto;
-}
+/* `.table-scroll { overflow-x: auto }` used to be redefined here (byte-
+   identical to `entry-science.css`'s own copy) because this project's
+   stated convention was that a page's own styling should not depend on
+   another page's stylesheet having loaded first -- see `entry-
+   science.css`'s file header for the fuller version of that reasoning.
+   Post-review (design/foundations): that reasoning does not apply to a
+   rule defined in `design-system.css`, which loads globally BEFORE any
+   page stylesheet (`index.css`'s `@import` at the top, itself imported
+   first in `main.tsx`) regardless of route-visit order -- there is no
+   "whichever page loaded last wins" race for it to lose. Removed here
+   in favour of that one definition; the coordinate table's own
+   `.stage-table` mobile rule additionally stacks it into label/value
+   rows below 680px, so scrolling only matters between that breakpoint
+   and a genuinely narrow desktop window either way. */
 
 .xyz-block {
     max-width: 100%;

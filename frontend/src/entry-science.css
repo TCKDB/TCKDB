@@ -4,13 +4,20 @@
  * record standing in for the entry). Imported alongside `conformer-group.css`
  * for the shared "scientific record ledger" vocabulary (`.ledger-section`,
  * `.ledger-heading`, `.basin-context`, `.stage-table`, `.empty-projection`,
- * `.review-badge`, `.coverage-card`). The bare `.table-scroll { overflow-x:
- * auto }` rule and `.section-note` are byte-identical to the definitions in
- * `geometry-detail.css` / `calculation-detail.css` and are intentionally
- * redefined here rather than imported from those files — this project's
- * stated convention (see the comment above `.section-note` in
- * `geometry-detail.css`) is that a page's own styling should not depend on
- * another page's stylesheet having loaded first.
+ * `.review-badge`, `.coverage-card`). `.section-note` is byte-identical to
+ * the definitions in `geometry-detail.css` / `calculation-detail.css` and
+ * is intentionally redefined here rather than imported from those files —
+ * this project's stated convention (see the comment above `.section-note`
+ * in `geometry-detail.css`) is that a page's own styling should not depend
+ * on another page's stylesheet having loaded first.
+ *
+ * `.table-scroll { overflow-x: auto }` USED to be redefined here too, for
+ * the same reason -- gone now (design/foundations, post-review): that
+ * reasoning does not apply to a rule defined in `design-system.css`,
+ * which loads globally before any page stylesheet regardless of route-
+ * visit order, so there is no "whichever page loaded last wins" race for
+ * a duplicate here to guard against. `.section-note` has no
+ * `design-system.css` counterpart, so it keeps its own copy.
  *
  * `.table-scroll .stage-table { min-width }` below is NOT byte-identical
  * to its counterpart in other pages' stylesheets, and Vite never unloads
@@ -108,11 +115,9 @@
    loaded before any page stylesheet, which is exactly what removes the
    route-chunk-leakage risk this file's header comment used to explain --
    there is no longer a second bare-or-scoped definition for a
-   later-loaded page to race against. */
-
-.table-scroll {
-    overflow-x: auto;
-}
+   later-loaded page to race against. The bare `.table-scroll { overflow-x:
+   auto }` rule that used to sit here is gone for the identical reason --
+   see the file header. */
 
 /* `.stage-table` (`conformer-group.css`) sets `width: calc(100% - 2.2rem)`
    with `overflow-wrap: anywhere` on every cell — under auto table layout
