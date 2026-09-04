@@ -391,7 +391,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
-                                    <span className={reviewPillClass(reviewStatus)}>
+                                    <span className={`${reviewPillClass(reviewStatus)} tse-sibling-pill`}>
                                         {statusLabel(reviewStatus)}
                                     </span>
                                 </li>

@@ -116,7 +116,18 @@
 
 .tse-siblings-list a { color: var(--accent); font-weight: 600; }
 
-.tse-siblings-list .value-pill { font-size: .68rem; }
+/* A new modifier class, composed alongside `.value-pill`/`.value-pill--
+   muted` in `TransitionStateEntryPage.tsx` (never a selector ending in
+   `.value-pill` itself) -- PR D review finding: a page stylesheet
+   reaching into a shared primitive selector, even scoped by an ancestor
+   class, restyles that primitive wherever this page's markup happens to
+   put it, and Vite never unloads a route's CSS once injected, so the
+   risk is not hypothetical. This class carries only the size override;
+   `.value-pill`'s own box/colour rules (`index.css`) still apply in
+   full. */
+.tse-sibling-pill {
+    font-size: .68rem;
+}
 
 .tse-siblings-list code { font: var(--type-data-font); color: var(--muted-2); }
 
