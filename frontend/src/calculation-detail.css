@@ -19,10 +19,12 @@
 
 /* Was a hard-coded `63rem`, giving the header a different right edge than
    the evidence strip and tables below it (measured: ~1190px vs ~1470px at
-   1920) -- `--measure-note` is the same "short instructions/section
-   headings must not wrap while the page still has room" token every other
-   wide measure on this page already uses (`index.css`). */
-.record-header { max-width: var(--measure-note); }
+   1920). `--measure-wide` (`design-system.css`) is the CONTAINER measure,
+   not the prose one: `--measure-note` covers a line of reading text
+   (narrowed to 44rem in design/foundations) and would put this header's
+   right edge right back out of alignment with the wide content below it
+   -- exactly the bug this rule exists to fix. */
+.record-header { max-width: var(--measure-wide); }
 
 /* Houses the eyebrow label AND the review-status pill -- see the comment
    in CalculationDetailPage.tsx above this row's markup for why the pill
@@ -183,25 +185,9 @@
 
 .section-note[aria-busy="true"]::after { content: "…"; }
 
-.kv-list {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: .7rem 1.5rem;
-    margin: 1rem 1.1rem 1.1rem;
-}
-
-.kv-list dt {
-    color: var(--muted);
-    font: .6875rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.kv-list dd {
-    margin: .3rem 0 0;
-    overflow-wrap: anywhere;
-    font: .78rem var(--mono);
-}
+/* `.kv-list`'s base grid/dt/dd rules moved to `design-system.css` (the
+   ONE canonical definition every page now inherits, loaded before any
+   page stylesheet) -- this page keeps only its own additive rule below. */
 
 /* Short muted line under a `.kv-list dd` value -- currently just the τ row's
    basis explanation ("analytic, tight convergence" / "assumed from the
@@ -223,9 +209,15 @@
 
 @media (max-width: 680px) {
     .record-context,
-    .record-context--compact,
-    .kv-list { grid-template-columns: 1fr; }
+    .record-context--compact { grid-template-columns: 1fr; }
 }
+/* `.kv-list` dropped from the rule above: the canonical `.kv-list`
+   (`design-system.css`) already uses `auto-fit, minmax(12rem, 1fr)`,
+   which collapses to one column on its own once two 12rem columns plus
+   their gap no longer fit -- a fixed breakpoint override is redundant
+   for it now (and would have needed a bare, empty `.kv-list` rule here,
+   which `design-system.css.test.ts` guards against so a second
+   definition of this selector cannot creep back in). */
 
 /* The evidence strip on this page is a single checklist card, not the
    four-column tile row `.ledger-summary` lays out on entry pages. */

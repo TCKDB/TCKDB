@@ -681,7 +681,11 @@
 .entry-tabs a {
     padding: .1rem 0 .9rem;
     color: var(--ink-2);
-    font: 500 .88rem var(--sans);
+    /* Was a literal 500 -- this app loads only Plex 400/600 (`index.css`'s
+       @font-face block), so a 500 rendered as a browser-synthesised
+       weight between the two real ones. 400 here reads as the inactive
+       tab against the selected tab's explicit 600 immediately below. */
+    font: 400 .88rem var(--sans);
     white-space: nowrap;
 }
 

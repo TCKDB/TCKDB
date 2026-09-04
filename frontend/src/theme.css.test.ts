@@ -129,12 +129,21 @@ describe("no raw colour literals outside theme.css", () => {
 describe("every var(--x) referenced is defined at :root somewhere", () => {
     // :root custom properties are global regardless of which file declares
     // them -- theme.css owns the colour tokens, index.css separately
-    // declares the font tokens (--serif/--sans/--mono), which do not vary
-    // by theme and so have no dark-mode block of their own. Both count.
-    const rootDeclaredNames = new Set<string>([
-        ...declaredCustomProperties(extractBlock(themeCss, /^:root \{/m)),
-        ...declaredCustomProperties(extractBlock(NON_TOKEN_STYLESHEETS["index.css"], /^:root \{/m)),
-    ])
+    // declares the font/measure tokens (--serif/--sans/--mono/--measure-*),
+    // and design-system.css declares the type-scale/spacing tokens
+    // (--type-*/--s-*) -- none of these vary by theme and so none has a
+    // dark-mode block of its own. All three count. Discovered rather than
+    // naming a fixed pair: any NON_TOKEN_STYLESHEETS entry that happens to
+    // declare a top-level `:root {` block contributes its names, so a
+    // FOURTH file adding its own root tokens later is picked up here
+    // automatically instead of silently failing every var(--x) it defines
+    // (exactly the gap that broke when design-system.css was added and
+    // this description named only two files).
+    const rootDeclaredNames = new Set<string>(declaredCustomProperties(extractBlock(themeCss, /^:root \{/m)))
+    for (const css of Object.values(NON_TOKEN_STYLESHEETS)) {
+        if (!/^:root \{/m.test(css)) continue
+        for (const name of declaredCustomProperties(extractBlock(css, /^:root \{/m))) rootDeclaredNames.add(name)
+    }
 
     for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
         const referenced = referencedCustomProperties(css)

@@ -353,6 +353,16 @@ describe("the basin differences comparison is removed (item 5)", () => {
 // `species-entry.css.test.ts` for what CAN be checked about the CSS
 // itself without a browser), but it CAN show that the DOM the CSS acts on
 // stays uniform across 1 rotor, 7 rotors, and 0.
+//
+// className below is `"disclosure refs-disclosure"`, not the bare
+// `"refs-disclosure"` this file pinned before design/foundations:
+// `RefsDisclosure` now composes `components/Disclosure.tsx`, which adds
+// its own `.disclosure` class ALONGSIDE the caller's `refs-disclosure`
+// (never in place of it) so both the shared chevron/box/typography and
+// this page's own `.conformer-card`-scoped override still apply. Class-
+// selector matching (`.refs-disclosure`, `.conformer-card >
+// .refs-disclosure`) is unaffected by an element carrying an EXTRA class
+// -- only this exact-string DOM assertion needed updating.
 describe("conformer card DOM structure feeds the CSS row-track pinning (design/conformer-card-alignment)", () => {
     function rotorFingerprint(count: number) {
         return {
@@ -385,7 +395,7 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
             // relies on to keep every card's references toggle on the same
             // line, whether the basin box above it holds 1 rotor or 7.
             expect(Array.from(card.children).map((el) => el.className)).toEqual([
-                "conformer-card-select", "conformer-basin-identity", "refs-disclosure",
+                "conformer-card-select", "conformer-basin-identity", "disclosure refs-disclosure",
             ])
         }
 
@@ -407,7 +417,7 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
         renderSelector([rigid])
         const card = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
         expect(Array.from(card.children).map((el) => el.className)).toEqual([
-            "conformer-card-select", "conformer-basin-rigid", "refs-disclosure",
+            "conformer-card-select", "conformer-basin-rigid", "disclosure refs-disclosure",
         ])
     })
 
@@ -429,6 +439,6 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
         })
         renderSelector([noFingerprint])
         const card = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
-        expect(Array.from(card.children).map((el) => el.className)).toEqual(["conformer-card-select", "refs-disclosure"])
+        expect(Array.from(card.children).map((el) => el.className)).toEqual(["conformer-card-select", "disclosure refs-disclosure"])
     })
 })

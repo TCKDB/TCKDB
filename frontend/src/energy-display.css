@@ -32,7 +32,10 @@
 
 .energy-display-value--headline {
     font-size: clamp(1.6rem, 3vw, 2.4rem);
-    font-weight: 700;
+    /* Was a literal 700 -- browser-synthesised, since only Plex 400/600
+       are loaded (`index.css`'s @font-face block); 600 is the heaviest
+       weight this app actually ships a font file for. */
+    font-weight: 600;
 }
 
 .energy-display-absent {

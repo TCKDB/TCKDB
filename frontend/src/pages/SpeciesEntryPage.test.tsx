@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
+import { bySummaryText } from "../test/disclosureQueries"
 
 // ---------------------------------------------------------------------------
 // Two DISTINCT conformer groups, each with its own observations and its own
@@ -392,11 +393,11 @@ describe("species-entry page: identity and errors", () => {
         // refs (species, entry) live here now -- InChIKey moved to the
         // always-visible identifiers row above, not duplicated here.
         expect(screen.queryByText("spc_atp56uqux2ajao7hvckx7gx7ca")).not.toBeVisible()
-        await user.click(screen.getByText("References (2)"))
+        await user.click(screen.getByText(bySummaryText("References (2)")))
         expect(screen.getByRole("link", { name: "spc_atp56uqux2ajao7hvckx7gx7ca" })).toHaveAttribute(
             "href", "/species/spc_atp56uqux2ajao7hvckx7gx7ca",
         )
-        const refsPanel = screen.getByText("References (2)").closest("details") as HTMLElement
+        const refsPanel = screen.getByText(bySummaryText("References (2)")).closest("details") as HTMLElement
         expect(within(refsPanel).queryByText("InChIKey")).not.toBeInTheDocument()
 
         // The availability card grid ("Available in this entry" / "View
@@ -570,9 +571,9 @@ describe("species-entry page: conformer picker", () => {
         await screen.findByText("Choose a conformer")
         const conformerOne = screen.getByText("Conformer Group 1").closest(".conformer-card") as HTMLElement
         expect(within(conformerOne).getByText("Conformer Group 1")).toBeVisible()
-        expect(within(conformerOne).getByText("References (1)")).toBeInTheDocument()
+        expect(within(conformerOne).getByText(bySummaryText("References (1)"))).toBeInTheDocument()
         expect(within(conformerOne).queryByText(groupOneRef)).not.toBeVisible()
-        await user.click(within(conformerOne).getByText("References (1)"))
+        await user.click(within(conformerOne).getByText(bySummaryText("References (1)")))
         expect(within(conformerOne).getByRole("link", { name: groupOneRef })).toBeVisible()
     })
 

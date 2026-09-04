@@ -6,6 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import App from "./App"
+import { bySummaryText } from "./test/disclosureQueries"
 
 const speciesRef = "spc_abcde234567abcde234567abcd"
 const speciesRefTwo = "spc_bcdef234567bcdef234567abcde"
@@ -132,7 +133,7 @@ describe("public archive shell", () => {
         // not just present-but-hidden in the DOM. Only Species + Entry live
         // here now (2, not 3) -- InChIKey moved to the always-visible
         // chemistry-identifiers row above, alongside SMILES.
-        await user.click(screen.getByText("References (2)"))
+        await user.click(screen.getByText(bySummaryText("References (2)")))
         expect(screen.getByText(entryRef)).toBeVisible()
     })
 
@@ -403,7 +404,7 @@ describe.each(publicRoutes)("route shell %s", (path, heading, ref) => {
         // References disclosure (item 3 of the calculation-page rework) --
         // present in the DOM, but not VISIBLE until opened.
         if (path.startsWith("/calculations/")) {
-            const summary = screen.getByText(/References \(/)
+            const summary = screen.getByText(bySummaryText(/References \(/))
             summary.closest("details")?.setAttribute("open", "")
         }
         if (ref) expect(screen.getByText(ref)).toBeVisible()
