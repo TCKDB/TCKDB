@@ -272,3 +272,51 @@ describe("species overview: card heading (the bare-'R' bug, no pill boxes)", () 
         expect(within(card).queryByText(/ground/i)).not.toBeInTheDocument()
     })
 })
+
+// PR D (design-system adoption on the index/record pages): this page used
+// to render its own bespoke `<details class="entry-state-disclosure">`, its
+// own one-off `.entry-review` pill, and its own `.species-identity-grid`/
+// `.entry-facts` dt/dd typography. All three now route through shared
+// design-system primitives (`Disclosure`, `.value-pill`/`.value-pill--muted`,
+// `.kv-list`) -- these tests pin the DOM shape that adoption produces, so a
+// later edit that quietly reverts one back to a page-local implementation
+// fails here instead of shipping unnoticed.
+describe("species overview: shared design-system primitives", () => {
+    it("each state group's records sit behind the shared Disclosure primitive (a <details class=\"disclosure\">), open by default", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "CH3" })
+
+        const disclosures = document.querySelectorAll("li.entry-state-group > .disclosure")
+        expect(disclosures).toHaveLength(2)
+        for (const disclosure of disclosures) {
+            expect(disclosure.tagName).toBe("DETAILS")
+            expect(disclosure).toHaveAttribute("open")
+        }
+        // The old bespoke box/summary class this replaced is gone.
+        expect(document.querySelector(".entry-state-disclosure")).not.toBeInTheDocument()
+    })
+
+    it("review status renders through the shared .value-pill/.value-pill--muted primitive, not the retired .entry-review pill", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        const groundCard = await cardFor(entryRef)
+
+        const reviewPill = within(groundCard).getByText("not reviewed")
+        expect(reviewPill).toHaveClass("value-pill")
+        expect(reviewPill).toHaveClass("value-pill--muted")
+        expect(document.querySelector(".entry-review")).not.toBeInTheDocument()
+    })
+
+    it("the species identity grid and each entry's facts render through the shared .kv-list primitive", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => HttpResponse.json(speciesPayload())))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await screen.findByRole("heading", { name: "CH3" })
+
+        expect(document.querySelector("dl.species-identity-grid.kv-list")).toBeInTheDocument()
+        expect(document.querySelector("dl.entry-facts.kv-list")).toBeInTheDocument()
+    })
+})

@@ -4,25 +4,20 @@
     padding: clamp(2rem, 5vw, 4.5rem) 1.25rem 5rem;
 }
 
+/* The 4px accent bar this header used to carry (matching `.browse-header`)
+   is retired: this identity block is not `.card--derived` content -- it is
+   the page's own primary heading, not something derived from another
+   record -- so a left accent rule was borrowing `.card--derived`'s meaning
+   without adopting its semantics. */
 .species-header {
     max-width: 65rem;
-    border-left: 4px solid var(--accent);
-    padding-left: clamp(1rem, 3vw, 2rem);
-}
-
-.species-header h1,
-.entry-index h2,
-.entry-state-group h3,
-.entry-card h4 {
-    font-family: var(--serif);
 }
 
 .species-header h1 {
     margin: 0;
     color: var(--ink);
-    font-size: clamp(3.5rem, 8vw, 6.4rem);
-    letter-spacing: -.055em;
-    line-height: .94;
+    font: var(--type-display-1-font);
+    letter-spacing: var(--type-display-1-tracking);
     overflow-wrap: anywhere;
     word-break: break-word;
 }
@@ -34,33 +29,16 @@
     font: 1.05rem/1.6 var(--serif);
 }
 
+/* Grid layout, dt/dd typography and gaps now come from the shared
+   `.kv-list` primitive (design-system.css, `.kv-list` on the `<dl>` in
+   `SpeciesOverviewPage.tsx`) -- this rule keeps only the top/bottom
+   hairline framing this identity block sat inside, which `.kv-list` itself
+   does not opine on. */
 .species-identity-grid {
-    display: grid;
-    grid-template-columns: repeat(4, minmax(0, 1fr));
     margin: 2rem 0 0;
+    padding: 1rem 0;
     border-top: 1px solid var(--line);
     border-bottom: 1px solid var(--line);
-}
-
-.species-identity-grid div {
-    min-width: 0;
-    padding: .9rem .9rem .9rem 0;
-}
-
-.species-identity-grid dt,
-.entry-facts dt {
-    color: var(--muted);
-    font: .64rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.species-identity-grid dd,
-.entry-facts dd {
-    overflow-wrap: anywhere;
-    margin: .35rem 0 0;
-    color: var(--ink);
-    font: .76rem/1.45 var(--mono);
 }
 
 .entry-index {
@@ -72,14 +50,14 @@
     justify-content: space-between;
     gap: 1rem;
     align-items: end;
-    border-bottom: 2px solid var(--accent);
     padding-bottom: .8rem;
 }
 
 .entry-index-heading h2 {
     margin: 0;
-    font-size: clamp(2rem, 4vw, 3rem);
-    letter-spacing: -.035em;
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
+    color: var(--ink);
 }
 
 .entry-index-heading > p {
@@ -90,7 +68,7 @@
 }
 
 .entry-index-intro {
-    max-width: 51rem;
+    max-width: var(--measure-note);
     margin: 1rem 0 1.6rem;
     color: var(--ink-2);
     line-height: 1.55;
@@ -108,8 +86,12 @@
     gap: 1.6rem;
 }
 
+/* `--line`, not the page-local `--divider-strong` token this rule used to
+   carry (an off-token hairline colour, roughly 20 units/channel outside
+   the shared hairline scale) -- one hairline colour for a rule doing the
+   same divider job every other `--line` use on the site does. */
 .entry-state-group {
-    border-top: 1px solid var(--divider-strong);
+    border-top: 1px solid var(--line);
 }
 
 .entry-state-group h3 {
@@ -120,8 +102,8 @@
     margin: 0;
     padding: 1rem 0 .7rem;
     color: var(--ink);
-    font-size: clamp(1.25rem, 2.5vw, 1.65rem);
-    letter-spacing: -.02em;
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
 }
 
 .entry-state-group h3 span {
@@ -132,27 +114,10 @@
     white-space: nowrap;
 }
 
-.entry-state-disclosure {
-    border: 1px solid var(--divider);
-    background: var(--surface);
-}
-
-.entry-state-disclosure summary {
-    cursor: pointer;
-    padding: .75rem 1rem;
-    color: var(--accent-700);
-    font-size: .83rem;
-    font-weight: 600;
-}
-
-.entry-state-disclosure > p {
-    max-width: 52rem;
-    margin: 0;
-    padding: .1rem 1rem 1rem;
-    color: var(--ink-2);
-    font-size: .88rem;
-    line-height: 1.55;
-}
+/* The bordered box, chevron and summary typography this disclosure used to
+   define for itself now come from the shared `.disclosure` primitive
+   (design-system.css) -- see `Disclosure`/`EntryStateGroup` in
+   `SpeciesOverviewPage.tsx`. */
 
 .entry-rows {
     display: grid;
@@ -176,75 +141,42 @@
 
 .entry-card h4 {
     margin: 0;
-    font-size: 1.55rem;
-    letter-spacing: -.025em;
-}
-
-.entry-card-action {
-    color: var(--accent-700);
-    text-decoration: underline;
-    text-decoration-color: var(--accent-underline);
-    text-underline-offset: .16em;
-}
-
-.entry-card-action:hover {
-    color: var(--accent);
-    text-decoration-color: currentColor;
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
 }
 
 /* The heading link is plain text now (no more pill row inside it -- see
    `SpeciesOverviewPage.tsx`'s `EntryCard`), so it gets the same underline
-   affordance every other link on this card uses. */
+   affordance every other link on this card uses -- house link style: accent
+   colour, no underline at rest, underlined only on hover. */
 .entry-card h4 a {
     color: var(--ink);
+    text-decoration: none;
+}
+
+.entry-card h4 a:hover {
+    color: var(--accent);
     text-decoration: underline;
     text-decoration-color: var(--accent-underline);
     text-underline-offset: .16em;
 }
 
-.entry-card h4 a:hover {
-    color: var(--accent);
-    text-decoration-color: currentColor;
-}
-
-.entry-review {
-    height: fit-content;
-    padding: .25rem .4rem;
-    background: var(--accent-50);
-    color: var(--accent-700);
-    font: .62rem var(--mono);
-    text-transform: uppercase;
-    white-space: nowrap;
-}
-
+/* Grid layout, dt/dd typography and gaps now come from `.kv-list`
+   (`SpeciesOverviewPage.tsx`'s `EntryCard`); this rule keeps only the flex-
+   basis this list needs to sit correctly inside `.entry-card`'s flex row. */
 .entry-facts {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(7rem, 1fr));
     flex: 1 1 25rem;
-    gap: .7rem 1rem;
-    margin: 0;
 }
 
-.entry-card-action {
-    margin-left: auto;
-    padding-top: .3rem;
-    font-size: .84rem;
-    font-weight: 600;
-}
-
+/* The entry's own stable ref -- an identifier, styled at the shared data
+   step rather than its own one-off .62rem run. */
 .entry-card code {
-    overflow-wrap: anywhere;
     flex: 1 0 100%;
     margin: 0;
     color: var(--muted);
-    font: .62rem/1.4 var(--mono);
 }
 
 @media (max-width: 680px) {
-    .species-identity-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
     .entry-index-heading {
         align-items: start;
         flex-direction: column;
@@ -256,11 +188,6 @@
     }
 
     .entry-facts {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
         flex-basis: 100%;
-    }
-
-    .entry-card-action {
-        margin-left: 0;
     }
 }

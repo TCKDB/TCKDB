@@ -2,8 +2,10 @@ import { Link, useParams } from "react-router-dom"
 import "../species-overview.css"
 import type { SpeciesOverview } from "../api/speciesOverviewApi"
 import type { ScientificSpeciesEntrySummary } from "../api/scientificSpeciesSchemas"
+import { Disclosure } from "../components/Disclosure"
 import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
+import { SectionHeading } from "../components/PageSections"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
@@ -81,10 +83,10 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     SMILES fallback is not chemistry-formula text, so it is
                     never run through `Formula`. */}
                 <h1>{species.formula ? <Formula value={species.formula} /> : species.canonical_smiles}</h1>
-                <dl className="species-identity-grid">
-                    <Identity label="Species ref" value={species.species_ref} />
-                    <Identity label="SMILES" value={species.canonical_smiles} />
-                    <Identity label="InChIKey" value={species.inchi_key} />
+                <dl className="kv-list species-identity-grid">
+                    <Identity identifier label="Species ref" value={species.species_ref} />
+                    <Identity identifier label="SMILES" value={species.canonical_smiles} />
+                    <Identity identifier label="InChIKey" value={species.inchi_key} />
                     <Identity
                         label="Charge / multiplicity"
                         value={`${chargeDisplay(species.charge)} / ${spinDisplay(species.multiplicity)}`}
@@ -111,7 +113,7 @@ function SpeciesDocument({ species }: { species: SpeciesOverview }) {
                     cannot), so it is the one that survives; this heading
                     no longer repeats it. */}
                 <div className="entry-index-heading">
-                    <h2 id="electronic-state-entries">Electronic-state entries</h2>
+                    <SectionHeading id="electronic-state-entries">Electronic-state entries</SectionHeading>
                 </div>
                 {/* Single explanatory sentence for the whole section. This
                     used to be THREE: this paragraph, an near-identical
@@ -160,22 +162,24 @@ function EntryStateGroup({
                 {stateLabel(state)}
                 <span>{count} {count === 1 ? "entry" : "entries"}</span>
             </h3>
-            <details className="entry-state-disclosure" open>
-                <summary aria-describedby={groupId}>
-                    Deposited records
-                </summary>
+            <Disclosure defaultOpen summary="Deposited records">
                 <ul className="entry-rows">
                     {entries.map((entry) => (
                         <EntryCard entry={entry} groupHeadingId={groupId} key={entry.species_entry_ref} />
                     ))}
                 </ul>
-            </details>
+            </Disclosure>
         </li>
     )
 }
 
-function Identity({ label, value }: { label: string; value: string }) {
-    return <div><dt>{label}</dt><dd>{value}</dd></div>
+// `identifier` values (a species ref, a SMILES string, an InChIKey) render
+// through `<code>` so the shared `.kv-list dd code` rule (design-system.css)
+// picks them up at the data step -- mono, non-reflowing. Charge/multiplicity
+// is a formatted phrase, not a raw identifier, so it stays plain text at the
+// list's own value step.
+function Identity({ label, value, identifier }: { label: string; value: string; identifier?: boolean }) {
+    return <div><dt>{label}</dt><dd>{identifier ? <code>{value}</code> : value}</dd></div>
 }
 
 /**
@@ -223,9 +227,9 @@ function EntryCard({ entry, groupHeadingId }: { entry: ScientificSpeciesEntrySum
                     <h4>
                         <Link to={`/species-entries/${entry.species_entry_ref}`}>{heading}</Link>
                     </h4>
-                    <span className="entry-review">{token(entry.review.status)}</span>
+                    <span className="value-pill value-pill--muted">{token(entry.review.status)}</span>
                 </div>
-                <dl className="entry-facts">
+                <dl className="kv-list entry-facts">
                     <div><dt>Calculations</dt><dd>{entry.availability.calculation_count}</dd></div>
                     <div>
                         <dt>Available data</dt>
@@ -240,7 +244,7 @@ function EntryCard({ entry, groupHeadingId }: { entry: ScientificSpeciesEntrySum
                     accessible name, so a second link added no reachable
                     destination, only a second stop for anyone tabbing
                     through the row. */}
-                <code>{entry.species_entry_ref}</code>
+                <code className="data">{entry.species_entry_ref}</code>
             </article>
         </li>
     )
