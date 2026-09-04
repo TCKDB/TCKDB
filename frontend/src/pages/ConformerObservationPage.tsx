@@ -1,7 +1,9 @@
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
+import "../record-identity-header.css"
 import type { ConformerObservation } from "../api/conformerObservationApi"
 import { lotLabel } from "../api/scientificSchemas"
+import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -12,6 +14,10 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 const originTitle = (origin?: string | null) => (
     origin ? `${origin.charAt(0).toUpperCase()}${origin.slice(1)} observation` : "Conformer observation"
 )
+// The one canonical pill rule every record page follows now (item 6,
+// design/foundations PR B) -- see `CalculationDetailPage.tsx`'s own copy
+// of this helper for the fuller rationale.
+const reviewPillClass = (status: string) => (status === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill")
 type CalculationEntry = NonNullable<ConformerObservation["calculations"]>[number]
 type GeometryLink = NonNullable<ConformerObservation["geometries"]>[number]
 type SiblingObservation = NonNullable<ConformerObservation["observations"]>[number]
@@ -107,17 +113,31 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             <PageShell
                 identity={(
                     <header className="basin-header">
-                        <p className="eyebrow">Conformer observation · deposited evidence</p>
-                        <div className="basin-title">
-                            <h1>{originTitle(core.scientific_origin)}</h1>
-                            <span className="review-badge">{statusLabel(core.review.status)}</span>
+                        {/* Same shared kicker-row/h1/identity `.kv-list` markup
+                            `RecordIdentityHeader` renders for the other record
+                            pages, rendered by hand -- see `ConformerGroupPage.tsx`'s
+                            identical comment for why this page cannot use that
+                            component directly (its `species` context carries no
+                            charge/multiplicity/InChIKey/formula in the shape
+                            `RecordIdentity` needs). */}
+                        <div className="record-identity-kicker-row">
+                            <span className="t-kicker record-identity-kicker">Conformer observation · deposited evidence</span>
+                            <span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>
                         </div>
-                        <p className="basin-intro">
+                        <h1 className="t-display-1 record-identity-title">{originTitle(core.scientific_origin)}</h1>
+                        <p className="t-body section-intro">
                             One deposition of evidence for this torsional basin, and the provenance boundary to the
                             calculations and geometries derived from it. This is one observation, not the basin
                             itself.
                         </p>
-                        <dl className="basin-context">
+                        <dl className="kv-list">
+                            {/* Plain text, not `<code>`, for the ref rows
+                                below -- see `ConformerGroupPage.tsx`'s
+                                identical comment on its own "Group ref"
+                                row: `getByText(..., { selector: "dd" })`
+                                only matches a node's own direct text, and
+                                nesting the ref one element deeper breaks
+                                that query. */}
                             <div><dt>Observation ref</dt><dd>{core.conformer_observation_ref}</dd></div>
                             <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
@@ -146,7 +166,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 </dd>
                             </div>
                             <div><dt>Species ref</dt><dd>{species.species_ref}</dd></div>
-                            <div><dt>Structure</dt><dd>{species.canonical_smiles ?? "not projected"}</dd></div>
+                            <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
                             {/* InChIKey and charge/multiplicity complete this page's
                                 identity tier -- served here (unlike the conformer
                                 basin surface, which does not carry them), so shown
@@ -156,7 +176,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 no `species_entry_kind`/`electronic_state_kind` to
                                 build one from, and no `submission_ref` provenance
                                 tier either -- both omitted rather than fabricated. */}
-                            {species.inchi_key && <div><dt>InChIKey</dt><dd>{species.inchi_key}</dd></div>}
+                            {species.inchi_key && <div><dt>InChIKey</dt><dd><code>{species.inchi_key}</code></dd></div>}
                             {(species.charge !== null && species.charge !== undefined
                                 && species.multiplicity !== null && species.multiplicity !== undefined) && (
                                 <div><dt>Charge / multiplicity</dt><dd>{species.charge} / {species.multiplicity}</dd></div>
@@ -170,15 +190,17 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <Metric label="Calculation rows" value={evidence.calculation_count} />
                 <Metric label="Distinct stored geometries" value={evidence.geometry_count} />
                 <Metric label="Other observations in this basin" value={siblings.length} />
-                <div className="coverage-card">
-                    <span>Evidence present on this observation</span>
+                {/* `.card--derived` -- see `ConformerGroupPage.tsx`'s identical
+                    comment on its own coverage card (item 8). */}
+                <div className="card card--derived coverage-card">
+                    <span className="t-label">Evidence present on this observation</span>
                     <strong>
                         opt {evidence.has_opt ? "yes" : "no"} · freq {evidence.has_freq ? "yes" : "no"} · sp
                         {` ${evidence.has_sp ? "yes" : "no"}`} · geometry validation
                         {` ${evidence.has_geometry_validation ? "recorded" : "not recorded"}`} · SCF stability
                         {` ${evidence.has_scf_stability ? "recorded" : "not recorded"}`}
                     </strong>
-                    <p>
+                    <p className="note">
                         Presence says this observation carries that check, not that the result was favourable —
                         "SCF stability recorded" means a stability test ran, not that the wavefunction was stable.
                     </p>
@@ -194,14 +216,13 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 review, and the calculation's own record link per row), so
                 it is the one that stays. */}
             <section className="ledger-section" aria-labelledby="calc-ledger">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Machine detail</p>
-                    <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
-                    <p>
-                        Rows are listed in the order the archive returned them. No dependency ordering is drawn
-                        between rows here — that relationship is only shown when explicit dependency data backs it.
-                    </p>
-                </div>
+                <SectionHeading
+                    id="calc-ledger"
+                    kicker="Machine detail"
+                    intro="Rows are listed in the order the archive returned them. No dependency ordering is drawn between rows here — that relationship is only shown when explicit dependency data backs it."
+                >
+                    Calculation evidence
+                </SectionHeading>
                 {calculationsAvailability === "populated" ? (
                     <CalculationTable calculations={calculations} observationRef={core.conformer_observation_ref} />
                 ) : (
@@ -213,13 +234,14 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 )}
             </section>
 
-            <section className="ledger-section geometry-ledger" aria-labelledby="geometry-ledger">
-                <p className="eyebrow">Stored coordinates</p>
-                <SectionHeading id="geometry-ledger">Geometry records</SectionHeading>
-                <p>
-                    These are stored geometry objects linked from this observation's calculation output. Their
-                    count is not a conformer count and is tracked separately from the calculation-row count above.
-                </p>
+            <section className="ledger-section" aria-labelledby="geometry-ledger">
+                <SectionHeading
+                    id="geometry-ledger"
+                    kicker="Stored coordinates"
+                    intro="These are stored geometry objects linked from this observation's calculation output. Their count is not a conformer count and is tracked separately from the calculation-row count above."
+                >
+                    Geometry records
+                </SectionHeading>
                 {geometriesAvailability === "populated" ? (
                     <div className="geometry-links">
                         {geometries.map(({ geometry, calculationRefs }) => (
@@ -244,11 +266,13 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             </section>
 
             <section className="ledger-section" aria-labelledby="sibling-ledger">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Deposited provenance</p>
-                    <SectionHeading id="sibling-ledger">Sibling observations</SectionHeading>
-                    <p>Each sibling is an independent deposition; none of them is this observation. Review status is shown only where it differs from this observation's.</p>
-                </div>
+                <SectionHeading
+                    id="sibling-ledger"
+                    kicker="Deposited provenance"
+                    intro="Each sibling is an independent deposition; none of them is this observation. Review status is shown only where it differs from this observation's."
+                >
+                    Sibling observations
+                </SectionHeading>
                 {observationsAvailability === "populated" && siblings.length > 0 ? (
                     <ul className="observation-list">
                         {siblings.map((sibling) => (
@@ -268,41 +292,45 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             </section>
 
             <section className="ledger-section" aria-labelledby="review-ledger">
-                <div className="ledger-heading">
-                    <p className="eyebrow">Review &amp; trust</p>
-                    <SectionHeading id="review-ledger">Review history</SectionHeading>
-                    {/* Used to restate the current status here as prose
-                        ("The current status is not reviewed.") -- the hero
-                        badge above already carries it, and the owner
-                        counted this page showing review status in eight
-                        places (hero pill, this sentence, every calculation
-                        row, every sibling pill, and the history table
-                        itself). This sentence describes the TABLE now,
-                        without repeating the status value -- and only
-                        renders when a table follows; when there is no
-                        table, the single empty-state line below speaks for
-                        itself. */}
-                    {showReviewTable && <p>This is the record of how the current status was reached.</p>}
-                </div>
+                <SectionHeading
+                    id="review-ledger"
+                    kicker="Review & trust"
+                    // Used to restate the current status here as prose
+                    // ("The current status is not reviewed.") -- the hero
+                    // badge above already carries it, and the owner
+                    // counted this page showing review status in eight
+                    // places (hero pill, this sentence, every calculation
+                    // row, every sibling pill, and the history table
+                    // itself). This intro describes the TABLE now,
+                    // without repeating the status value -- and only
+                    // renders when a table follows; when there is no
+                    // table, the single empty-state line below speaks for
+                    // itself.
+                    intro={showReviewTable ? "This is the record of how the current status was reached." : undefined}
+                >
+                    Review history
+                </SectionHeading>
                 {showReviewTable ? (
-                    <table className="stage-table" aria-label={`Review history for ${core.conformer_observation_ref}`}>
-                        <thead>
-                            <tr>
-                                <th scope="col">Status</th>
-                                <th scope="col">Reviewed at</th>
-                                <th scope="col">Note</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {reviewHistory.map((entry, index) => (
-                                <tr key={`review-entry-${index}`}>
-                                    <td data-label="Status">{statusLabel(entry.status)}</td>
-                                    <td data-label="Reviewed at">{isoDate(entry.reviewed_at)}</td>
-                                    <td data-label="Note">{entry.note ?? "not recorded"}</td>
+                    <div className="table-scroll">
+                        <table className="data-table" aria-label={`Review history for ${core.conformer_observation_ref}`}>
+                            <thead>
+                                <tr>
+                                    <th scope="col">Status</th>
+                                    <th scope="col">Reviewed at</th>
+                                    <th scope="col">Note</th>
                                 </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody>
+                                {reviewHistory.map((entry, index) => (
+                                    <tr key={`review-entry-${index}`}>
+                                        <td data-label="Status">{statusLabel(entry.status)}</td>
+                                        <td data-label="Reviewed at">{isoDate(entry.reviewed_at)}</td>
+                                        <td data-label="Note">{entry.note ?? "not recorded"}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
                 ) : (
                     // No table when review history carries no real events --
                     // a one-row table of "not reviewed / not recorded / not
@@ -319,17 +347,25 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
             </section>
 
             {selections.length > 0 && (
-                <details className="ledger-section">
-                    <summary><SectionHeading id="curation-selections" label={`Curation selections (${selections.length})`}>Curation selections ({selections.length})</SectionHeading></summary>
-                    <ul>
-                        {selections.map((selection, index) => (
-                            <li key={`${selection.selection_kind}-${index}`}>
-                                {selection.selection_kind}
-                                {selection.assignment_scheme ? ` · ${selection.assignment_scheme.name}` : ""}
-                            </li>
-                        ))}
-                    </ul>
-                </details>
+                <section className="ledger-section">
+                    <Disclosure
+                        id="curation-selections-disclosure"
+                        summary={(
+                            <SectionHeading id="curation-selections" label={`Curation selections (${selections.length})`}>
+                                Curation selections ({selections.length})
+                            </SectionHeading>
+                        )}
+                    >
+                        <ul>
+                            {selections.map((selection, index) => (
+                                <li key={`${selection.selection_kind}-${index}`}>
+                                    {selection.selection_kind}
+                                    {selection.assignment_scheme ? ` · ${selection.assignment_scheme.name}` : ""}
+                                </li>
+                            ))}
+                        </ul>
+                    </Disclosure>
+                </section>
             )}
             </PageShell>
         </section>
@@ -348,7 +384,7 @@ function SiblingRow({ sibling, currentStatus }: { sibling: SiblingObservation; c
             <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
                 {core.conformer_observation_ref}
             </Link>
-            {statusDiffers && <span className="review-badge">{statusLabel(core.review.status)}</span>}
+            {statusDiffers && <span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>}
         </li>
     )
 }
@@ -408,38 +444,40 @@ function CalculationTable({ calculations, observationRef }: {
     // this) without adding any calculation-specific fact -- calculations
     // are not independently reviewed in this archive today.
     return (
-        <table className="stage-table" aria-label={`Calculations for ${observationRef}`}>
-            <thead>
-                <tr>
-                    <th scope="col">Stage</th>
-                    <th scope="col">Level of theory</th>
-                    <th scope="col">Software / workflow</th>
-                    <th scope="col">Record</th>
-                </tr>
-            </thead>
-            <tbody>
-                {calculations.map((calculation) => (
-                    <tr key={calculation.calculation_ref}>
-                        <td data-label="Stage">{calculation.type}</td>
-                        <td data-label="Level of theory">
-                            {calculation.level_of_theory
-                                ? lotLabel(calculation.level_of_theory)
-                                : "not recorded"}
-                        </td>
-                        <td data-label="Software / workflow">
-                            {calculation.software_release?.software ?? "not recorded"}
-                            {calculation.workflow_tool_release?.workflow_tool
-                                ? ` · ${calculation.workflow_tool_release.workflow_tool}`
-                                : ""}
-                        </td>
-                        <td data-label="Record">
-                            <Link to={`/calculations/${calculation.calculation_ref}`}>
-                                {calculation.calculation_ref}
-                            </Link>
-                        </td>
+        <div className="table-scroll">
+            <table className="data-table" aria-label={`Calculations for ${observationRef}`}>
+                <thead>
+                    <tr>
+                        <th scope="col">Stage</th>
+                        <th scope="col">Level of theory</th>
+                        <th scope="col">Software / workflow</th>
+                        <th scope="col">Record</th>
                     </tr>
-                ))}
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    {calculations.map((calculation) => (
+                        <tr key={calculation.calculation_ref}>
+                            <td data-label="Stage">{calculation.type}</td>
+                            <td data-label="Level of theory">
+                                {calculation.level_of_theory
+                                    ? lotLabel(calculation.level_of_theory)
+                                    : "not recorded"}
+                            </td>
+                            <td data-label="Software / workflow">
+                                {calculation.software_release?.software ?? "not recorded"}
+                                {calculation.workflow_tool_release?.workflow_tool
+                                    ? ` · ${calculation.workflow_tool_release.workflow_tool}`
+                                    : ""}
+                            </td>
+                            <td data-label="Record">
+                                <Link to={`/calculations/${calculation.calculation_ref}`}>
+                                    {calculation.calculation_ref}
+                                </Link>
+                            </td>
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
+        </div>
     )
 }

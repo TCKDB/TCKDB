@@ -160,6 +160,34 @@ describe("ConformerObservationPage", () => {
         expect(within(siblingMetric as HTMLElement).getByText("1")).toBeVisible()
     })
 
+    // Item 1/6/7, design/foundations PR B: mutation check for header order,
+    // the review pill's `.value-pill` primitive, and the calculation
+    // table's `.data-table` primitive -- see the identical check on
+    // `ConformerGroupPage.test.tsx`.
+    it("renders the kicker row before the h1, the review pill as .value-pill, and the calculation table as .data-table", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        const h1 = await screen.findByRole("heading", { name: "Computed observation" })
+        const header = h1.closest(".basin-header") as HTMLElement
+        expect(header).not.toBeNull()
+        const kickerRow = header.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(kickerRow).not.toBeNull()
+        const order = Array.from(header.children)
+        expect(order.indexOf(kickerRow)).toBeLessThan(order.indexOf(h1))
+
+        const pill = within(kickerRow).getByText("reviewed")
+        expect(pill).toHaveClass("value-pill")
+        expect(pill).not.toHaveClass("value-pill--muted")
+        expect(document.querySelector(".review-badge")).toBeNull()
+
+        expect(document.querySelector(".stage-table")).toBeNull()
+        const table = screen.getByRole("table", { name: "Calculations for co_one" })
+        expect(table).toHaveClass("data-table")
+        expect(table.closest(".table-scroll")).not.toBeNull()
+    })
+
     it("states each stage's level of theory once, in the calculation table, not in a separate by-stage block", async () => {
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
             HttpResponse.json({ record: mockRecord() })

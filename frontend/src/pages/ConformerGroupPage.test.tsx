@@ -122,6 +122,15 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByText(/Their count is not a conformer count/)).toBeVisible()
     })
 
+    // Design/foundations PR B (item 5): this disclosure now composes the
+    // shared `Disclosure` primitive (`.disclosure`, `design-system.css`)
+    // instead of a page-local `<details className="ledger-section">`
+    // recipe. `Disclosure` is deliberately UNCONTROLLED -- it does not set
+    // `aria-expanded` itself (native `<details>`/`<summary>` already
+    // conveys expanded state to real assistive tech on its own) -- so this
+    // test now asserts the native `open` attribute and content visibility
+    // directly, the same mechanism `CalculationDetailPage`'s `LazySection`
+    // tests already rely on for the identical primitive.
     it("opens the observation-scoped evidence ledger by default, naming its count, and still collapses it via the keyboard", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
@@ -132,27 +141,25 @@ describe("ConformerGroupPage", () => {
         const summary = heading.closest("summary")
         expect(details).not.toBeNull()
         expect(summary).not.toBeNull()
+        // Mutation check: rename the class away and this fails.
+        expect(details).toHaveClass("disclosure")
 
         // Open by default: this is the only deposited-evidence section this
         // record page has, so a reader lands with it already expanded.
         expect(heading).toBeVisible()
         expect(details).toHaveAttribute("open")
-        expect(summary).toHaveAttribute("aria-expanded", "true")
         expect(screen.getByText("b3lyp/def2tzvp")).toBeVisible()
 
         // <summary> is still a real, native, keyboard-operable disclosure
         // control -- a reader who wants it collapsed can still close it.
-        // The native `open` DOM attribute flips synchronously on click
-        // (content visibility depends only on that, so it's already
-        // asserted below without waiting); the `toggle` EVENT that drives
-        // this component's controlled `aria-expanded` — via `onToggle` ->
-        // `setOpen` — fires as its own task per spec (MEASURED in jsdom
-        // too), landing one tick after the click returns, hence `waitFor`.
+        // The native `open` DOM attribute flips synchronously on click, and
+        // jsdom implements native `<details>` toggle behaviour (the same
+        // mechanism `LazySection`'s own tests rely on), so no `waitFor` is
+        // needed for either assertion below.
         fireEvent.click(heading)
 
         expect(details).not.toHaveAttribute("open")
         expect(screen.getByText("b3lyp/def2tzvp")).not.toBeVisible()
-        await waitFor(() => expect(summary).toHaveAttribute("aria-expanded", "false"))
     })
 
     it("keeps the evidence-ledger heading registered in the table of contents", async () => {
@@ -178,6 +185,33 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByText("cg_demo", { selector: "dd" })).toBeVisible()
         expect(screen.getByText("Producer label")).toBeVisible()
         expect(screen.getByText("conformer_1", { selector: "dd" })).toBeVisible()
+    })
+
+    // Item 1/6/7, design/foundations PR B: the kicker-row/h1 order, the
+    // review-status pill's `.value-pill` primitive (muted for
+    // "not reviewed"), and the calculation table's `.data-table` primitive
+    // are all mutation-checked here -- rename any of these classes and this
+    // test fails.
+    it("renders the kicker row before the h1, the review pill as .value-pill--muted, and the calculation table as .data-table", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        const h1 = await screen.findByRole("heading", { name: "Conformer basin" })
+        const header = h1.closest(".basin-header") as HTMLElement
+        expect(header).not.toBeNull()
+        const kickerRow = header.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(kickerRow).not.toBeNull()
+        const order = Array.from(header.children)
+        expect(order.indexOf(kickerRow)).toBeLessThan(order.indexOf(h1))
+
+        const pill = within(kickerRow).getByText("not reviewed")
+        expect(pill).toHaveClass("value-pill")
+        expect(pill).toHaveClass("value-pill--muted")
+        expect(document.querySelector(".review-badge")).toBeNull()
+
+        expect(document.querySelector(".stage-table")).toBeNull()
+        const table = document.querySelector("table") as HTMLElement
+        expect(table).toHaveClass("data-table")
+        expect(table.closest(".table-scroll")).not.toBeNull()
     })
 
     it("omits the 'Producer label' row when the group has no deposited label, but still shows the ref", async () => {
@@ -225,7 +259,7 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByText("No deposited observations were returned for this conformer basin."))
             .toBeVisible()
         // No disclosure control offered over an empty section.
-        expect(document.querySelector("details.ledger-section")).toBeNull()
+        expect(document.querySelector("details.disclosure")).toBeNull()
     })
 
     // This page renders exactly 2 sections at runtime (observation-scoped
