@@ -80,6 +80,20 @@
     --type-label-tracking: .06em;
     --type-label-transform: uppercase;
 
+    /* `--type-label-strong` -- same face/size/tracking as `--type-label`,
+       weight 600 instead of 400. Post-review addition: `.data-table th`
+       needed the label step at a heavier weight (a table header has to
+       stand out from the label-weight `dt`s around it), and an inline
+       `font-weight: 600` override bolted onto `--type-label-font` would
+       have been a 14th ad-hoc style outside the scale -- the exact
+       pattern this file exists to stop. Named here instead, so any
+       future "bold label" need (a second table header, PR B's
+       `.stage-table` migration) reaches for this step rather than
+       reinventing its own override. */
+    --type-label-strong-font: 600 .72rem/1.3 var(--mono);
+    --type-label-strong-tracking: .06em;
+    --type-label-strong-transform: uppercase;
+
     --type-body-font: 400 1rem/1.6 var(--sans);
     --type-body-tracking: 0em;
     --type-body-transform: none;
@@ -119,6 +133,24 @@
     --s-6: 2rem;
     --s-7: 3rem;
     --s-8: 4rem;
+
+    /* ---------------------------------------------------------------
+     * `--measure-wide` -- for CONTAINERS, not text. `index.css`'s
+     * `--measure-prose`/`--measure-note` cap a LINE of reading text (40/
+     * 44rem); this caps a CONTAINER that holds other content -- a
+     * header block that needs to line its right edge up with the wide
+     * evidence strip/tables rendered below it, not with a sentence's
+     * readable width. Post-review fix: `.record-header`
+     * (`calculation-detail.css`) was on `--measure-note` when that
+     * token was still 92rem and happened to match the page's other wide
+     * elements; narrowing `--measure-note` to a genuine prose width
+     * (44rem) for PR A's text-measure fix silently narrowed this
+     * container too, breaking the alignment the rule exists for. A
+     * second, purpose-named token is what keeps "prose gets narrower"
+     * and "this container stays wide" independently adjustable instead
+     * of coupled by accident.
+     * ------------------------------------------------------------- */
+    --measure-wide: 92rem;
 }
 
 /* ---------------------------------------------------------------------
@@ -132,6 +164,7 @@
 .t-heading-3 { font: var(--type-heading-3-font); letter-spacing: var(--type-heading-3-tracking); text-transform: var(--type-heading-3-transform); }
 .t-kicker { font: var(--type-kicker-font); letter-spacing: var(--type-kicker-tracking); text-transform: var(--type-kicker-transform); }
 .t-label { font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }
+.t-label-strong { font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
 .t-body { font: var(--type-body-font); letter-spacing: var(--type-body-tracking); text-transform: var(--type-body-transform); }
 .t-value { font: var(--type-value-font); letter-spacing: var(--type-value-tracking); text-transform: var(--type-value-transform); }
 .t-data { font: var(--type-data-font); letter-spacing: var(--type-data-tracking); text-transform: var(--type-data-transform); }
@@ -213,6 +246,21 @@
  * loaded first, removes the reason either page needed its own copy.
  * ------------------------------------------------------------------- */
 .kv-list {
+    /* Post-review fix: the two deleted per-page rules this consolidates
+       (`calculation-detail.css`'s old `margin: 1rem 1.1rem 1.1rem` and
+       `entry-science.css`'s scoped `margin: 1rem 0 0`) each zeroed the
+       UA default for their own page and imposed their own -- neither
+       carried over here, so a bare `<dl class="kv-list">` fell back to
+       the browser's default `dl` margin (block ~1em, inline 0),
+       different from BOTH prior values and different top vs. bottom.
+       Zeroing it here instead of picking one of the two old asymmetric
+       values makes the primitive itself carry no opinion on external
+       spacing -- the caller's own layout (card padding, a preceding
+       heading's margin, `PageShell`'s section rhythm) already supplies
+       it, and a component that owns no margin composes predictably
+       wherever it's dropped, which two DIFFERENT hand-tuned margins
+       never did in the first place. */
+    margin: 0;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
     gap: var(--s-3) var(--s-5);
@@ -259,7 +307,7 @@
     border-radius: 999px;
     background: var(--surface-sunken);
     color: var(--muted);
-    font: 600 .72rem var(--sans);
+    font: 600 .72rem/1.3 var(--sans);
     white-space: nowrap;
 }
 
@@ -330,10 +378,9 @@
 
 .data-table th {
     color: var(--muted);
-    font: var(--type-label-font);
-    font-weight: 600;
-    letter-spacing: var(--type-label-tracking);
-    text-transform: var(--type-label-transform);
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: var(--type-label-strong-transform);
     text-align: left;
     padding: var(--s-3);
     border-bottom: 1px solid var(--line-2);

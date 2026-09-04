@@ -45,6 +45,11 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         "heading-3": { font: "600 .875rem/1.4 var(--sans)", tracking: "0em", transform: "none" },
         "kicker": { font: "400 .72rem/1.3 var(--mono)", tracking: ".10em", transform: "uppercase" },
         "label": { font: "400 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
+        // Post-review addition: the label step at weight 600, for a
+        // table header that must stand out from the surrounding
+        // label-weight dt/th text -- see design-system.css's own
+        // comment above --type-label-strong-font.
+        "label-strong": { font: "600 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
         "body": { font: "400 1rem/1.6 var(--sans)", tracking: "0em", transform: "none" },
         "value": { font: "400 .9375rem/1.45 var(--sans)", tracking: "0em", transform: "none" },
         "data": { font: "400 .8125rem/1.5 var(--mono)", tracking: "0em", transform: "none" },
@@ -53,7 +58,7 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         "data-large": { font: "600 1.5rem/1.2 var(--mono)", tracking: "0em", transform: "none" },
     }
 
-    it("declares exactly the 13 steps named in the brief, no more, no fewer", () => {
+    it("declares exactly the 14 named steps (the brief's original 13 plus post-review's --type-label-strong), no more, no fewer", () => {
         const fontVarNames = new Set(
             [...designSystemCss.matchAll(/--(type-[a-z0-9-]+)-font:/g)].map((m) => m[1]),
         )
@@ -102,6 +107,26 @@ describe("measures narrowed for a readable line length", () => {
     })
     it("--measure-note is 44rem (was 92rem)", () => {
         expect(customProperty(indexCss, "measure-note")).toBe("44rem")
+    })
+})
+
+describe("--measure-wide: a separate CONTAINER measure, not a text one (post-review)", () => {
+    // MEASURED (the finding this guards): `.record-header`
+    // (`calculation-detail.css`) used `--measure-note` back when that
+    // token was still 92rem, to line its right edge up with the wide
+    // evidence strip/tables below it. Narrowing `--measure-note` to a
+    // genuine prose width (44rem, above) silently narrowed that
+    // container too. `--measure-wide` keeps "prose gets narrower" and
+    // "this container stays wide" independently adjustable.
+    it("design-system.css declares --measure-wide as 92rem", () => {
+        expect(customProperty(designSystemCss, "measure-wide")).toBe("92rem")
+    })
+
+    it("calculation-detail.css's .record-header uses --measure-wide, not --measure-note", () => {
+        const rule = /\.record-header\s*\{([^}]*)\}/.exec(ALL_STYLESHEETS["calculation-detail.css"])
+        expect(rule, ".record-header rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/max-width:\s*var\(--measure-wide\)/)
+        expect(rule![1]).not.toMatch(/max-width:\s*var\(--measure-note\)/)
     })
 })
 
@@ -181,6 +206,16 @@ describe("the kv-list primitive is defined exactly once, globally", () => {
         expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(12rem,\s*1fr\)\)/)
     })
 
+    // Post-review fix: the two deleted per-page rules each zeroed the UA
+    // `dl` default margin with their OWN value (1rem 1.1rem 1.1rem vs.
+    // 1rem 0 0) and neither carried over -- a bare `<dl class="kv-list">`
+    // was falling back to the browser default, different from both.
+    it("margin is reset to 0 -- the primitive carries no external-spacing opinion of its own", () => {
+        const rule = /\.kv-list\s*\{([^}]*)\}/.exec(designSystemCss)
+        expect(rule).not.toBeNull()
+        expect(rule![1]).toMatch(/margin:\s*0\b/)
+    })
+
     it("calculation-detail.css no longer defines its own bare .kv-list rule", () => {
         expect(ALL_STYLESHEETS["calculation-detail.css"]).not.toMatch(/(?<![\w.-])\.kv-list\s*\{/)
     })
@@ -190,12 +225,35 @@ describe("the kv-list primitive is defined exactly once, globally", () => {
     })
 })
 
+describe("exactly one bare .table-scroll rule across src/**/*.css (post-review)", () => {
+    // MEASURED (the finding this guards): design-system.css, entry-
+    // science.css and geometry-detail.css each defined a byte-identical
+    // `.table-scroll { overflow-x: auto }` -- the exact "duplicate bare
+    // selector, only safe because Vite never unloads a route's CSS"
+    // pattern this PR's own header comment names as the bug being fixed
+    // for .kv-list. Scoped/compound selectors like `.science-record
+    // .table-scroll .stage-table` are a DIFFERENT rule (a different
+    // property, min-width, on a different element) and are not counted
+    // here -- only a rule whose selector is the bare class alone.
+    it("only design-system.css declares a bare .table-scroll rule", () => {
+        const names: string[] = []
+        for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
+            if (/(?<![\w.-])\.table-scroll\s*\{/.test(stripComments(css))) names.push(name)
+        }
+        expect(names).toEqual(["design-system.css"])
+    })
+})
+
 describe("the data-table primitive (NOT yet wired to any page -- PR B's job; defined and tested here so PR B has a fixed target)", () => {
-    it("th uses the label step at 600 weight, muted colour, left-aligned", () => {
+    // Post-review fix: this used to be `font: var(--type-label-font)`
+    // plus a bolted-on `font-weight: 600` -- a 14th ad-hoc style outside
+    // the scale. It now reaches for the named `--type-label-strong` step
+    // instead (added to the scale for exactly this "bold label" case).
+    it("th uses the named --type-label-strong step, muted colour, left-aligned", () => {
         const rule = /\.data-table\s+th\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
-        expect(rule![1]).toMatch(/font:\s*var\(--type-label-font\)/)
-        expect(rule![1]).toMatch(/font-weight:\s*600/)
+        expect(rule![1]).toMatch(/font:\s*var\(--type-label-strong-font\)/)
+        expect(rule![1]).not.toMatch(/font-weight:\s*600/)
         expect(rule![1]).toMatch(/color:\s*var\(--muted\)/)
         expect(rule![1]).toMatch(/text-align:\s*left/)
     })
@@ -260,11 +318,15 @@ describe("the note primitive", () => {
     })
 })
 
-describe("value-pill--muted matches .value-pill's face and size", () => {
-    it("is sans 600 .72rem, not the retired mono uppercase form", () => {
+describe("value-pill--muted matches .value-pill's face and size EXACTLY, including line-height", () => {
+    // Post-review fix: the first cut of this rule omitted the base
+    // `.value-pill`'s `/1.3` line-height from the `font:` shorthand --
+    // pin the FULL shorthand, not just weight/size/face, so a future
+    // edit can't silently drop it again.
+    it("is 600 .72rem/1.3 sans, not the retired mono uppercase form", () => {
         const rule = /\.value-pill--muted\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
-        expect(rule![1]).toMatch(/font:\s*600\s*\.72rem\s*var\(--sans\)/)
+        expect(rule![1]).toMatch(/font:\s*600\s*\.72rem\/1\.3\s*var\(--sans\)/)
         expect(rule![1]).not.toMatch(/text-transform/)
         expect(rule![1]).not.toMatch(/var\(--mono\)/)
     })
