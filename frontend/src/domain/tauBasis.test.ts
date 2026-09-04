@@ -106,3 +106,26 @@ describe("the word \"assumed\"", () => {
         }
     })
 })
+
+describe("basis tokens that name inherited Object properties", () => {
+    // A bare `TABLE[basis]` lookup finds inherited keys, so "constructor"
+    // resolved to a function and both label functions threw -- while their
+    // docstrings promised they never would. Own-property lookups only.
+    const inherited = ["constructor", "toString", "__proto__", "valueOf", "hasOwnProperty"]
+
+    it("shows an inherited-property token raw instead of throwing", () => {
+        for (const basis of inherited) {
+            expect(() => hessianMethodLabel(basis)).not.toThrow()
+            expect(() => tauBasisNote(basis)).not.toThrow()
+            expect(hessianMethodLabel(basis)).toBe(basis)
+            expect(tauBasisNote(basis)).toBe(basis)
+        }
+    })
+
+    it("does not call an inherited-property token assumed", () => {
+        for (const basis of inherited) {
+            expect(isAssumedTauBasis(basis)).toBe(false)
+            expect(hessianMethodLabel(basis)).not.toContain("assumed")
+        }
+    })
+})

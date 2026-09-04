@@ -52,7 +52,18 @@ const ASSUMED_METHOD_SUFFIX = " (assumed: the program's default for this method)
 
 /** True only for the three `assumed_*` tokens -- the one predicate `CalculationDetailPage.tsx` needs to decide "is this row an assumption". */
 export function isAssumedTauBasis(basis: string | null | undefined): boolean {
-    return typeof basis === "string" && Object.prototype.hasOwnProperty.call(ASSUMED_TO_RECORDED, basis)
+    return typeof basis === "string" && own(ASSUMED_TO_RECORDED, basis)
+}
+
+/**
+ * Own-property lookup. A bare `TABLE[basis]` finds INHERITED keys too, so a
+ * basis token of "constructor" or "toString" resolved to a function and the
+ * label functions below threw on it -- contradicting their own promise never
+ * to throw on an unrecognised token. The archive is unlikely to ship such a
+ * token, but "unlikely" is not the contract these functions state.
+ */
+function own<T extends object>(table: T, key: string): key is Extract<keyof T, string> {
+    return Object.prototype.hasOwnProperty.call(table, key)
 }
 
 /**
@@ -64,10 +75,10 @@ export function isAssumedTauBasis(basis: string | null | undefined): boolean {
  */
 export function hessianMethodLabel(basis: string | null | undefined): string {
     if (basis === null || basis === undefined || basis === "protocol_not_recorded") return NOT_RECORDED
-    const recordedKey = ASSUMED_TO_RECORDED[basis]
-    if (recordedKey) return `${RECORDED[recordedKey].method}${ASSUMED_METHOD_SUFFIX}`
-    const recorded = RECORDED[basis]
-    if (recorded) return recorded.method
+    if (own(ASSUMED_TO_RECORDED, basis)) {
+        return `${RECORDED[ASSUMED_TO_RECORDED[basis]].method}${ASSUMED_METHOD_SUFFIX}`
+    }
+    if (own(RECORDED, basis)) return RECORDED[basis].method
     return basis
 }
 
@@ -83,9 +94,9 @@ export function hessianMethodLabel(basis: string | null | undefined): string {
  */
 export function tauBasisNote(basis: string | null | undefined): string {
     if (basis === null || basis === undefined || basis === "protocol_not_recorded") return NOT_RECORDED
-    const recordedKey = ASSUMED_TO_RECORDED[basis]
-    if (recordedKey) return `assumed from the program's default (${RECORDED[recordedKey].note})`
-    const recorded = RECORDED[basis]
-    if (recorded) return recorded.note
+    if (own(ASSUMED_TO_RECORDED, basis)) {
+        return `assumed from the program's default (${RECORDED[ASSUMED_TO_RECORDED[basis]].note})`
+    }
+    if (own(RECORDED, basis)) return RECORDED[basis].note
     return basis
 }
