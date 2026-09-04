@@ -1,3 +1,4 @@
+@import "./design-system.css";
 @font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex/IBMPlexSerif-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
 @font-face { font-family: "IBM Plex Serif"; src: url("/fonts/ibm-plex/IBMPlexSerif-SemiBold.woff2") format("woff2"); font-weight: 600; font-display: swap; }
 @font-face { font-family: "IBM Plex Sans"; src: url("/fonts/ibm-plex/IBMPlexSans-Regular.woff2") format("woff2"); font-weight: 400; font-display: swap; }
@@ -11,9 +12,28 @@
        140 characters, on one line); genuine multi-sentence prose keeps a
        narrower measure, since a 250-character line is hard to read
        however wide the page is. */
-    --measure-note: 92rem;
-    --measure-prose: 64rem; }
+    --measure-note: 44rem;
+    --measure-prose: 40rem; }
 * { box-sizing: border-box; } body { margin: 0; min-width: 320px; background: var(--page-bg); } a { color: inherit; text-decoration: none; } button, input { font: inherit; }
+
+/* Kills the UA `monospace` fallback: MEASURED ~100 `<code>` elements
+   across 6 pages with no global `code` rule of their own, rendering
+   whatever generic monospace face the OS/browser substitutes rather
+   than the loaded Plex Mono every other mono run on the site uses.
+   `pre`/`kbd`/`samp` get the same face for the same reason -- none of
+   the four has a page-level rule setting `font-family` today. */
+code, pre, kbd, samp { font-family: var(--mono); }
+
+/* Every `font-weight: 700` measured across the live site was browser-
+   SYNTHESISED, not real: only Plex 400/600 are loaded (the @font-face
+   block above), so an `<h1>`-`<h4>`/`<th>`/`<strong>`/`<b>` that never
+   set its own weight rendered the UA default `bold` (700) as a faux-
+   bold the browser fabricated on the fly, never the actual typeface.
+   This sets the honest weight this app actually ships a font file for.
+   Any page rule that already sets its own weight (`font: 600 …` or a
+   bare `font-weight:`) still wins the cascade for that property, same
+   value either way -- this only changes elements that never set one. */
+h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 .skip-link { position: fixed; z-index: 3; top: -4rem; left: 1rem; padding: .65rem .9rem; background: var(--surface); color: var(--accent-700); border: 1px solid var(--accent); } .skip-link:focus { top: 1rem; }
 
 /* `.value-pill` -- the site-wide convention for a categorical, bounded-
@@ -43,13 +63,11 @@
     white-space: nowrap;
 }
 
-.value-pill--muted {
-    border-color: var(--line-2);
-    background: var(--surface-sunken);
-    color: var(--muted);
-    font: .62rem var(--mono);
-    text-transform: uppercase;
-}
+/* `.value-pill--muted`'s rules moved to `design-system.css` -- it used
+   to be its own mono .62rem uppercase form, visually a different kind of
+   pill from `.value-pill` above it rather than the same pill on a muted
+   axis. Now defined once, alongside `.value-pill`'s canonical box/size,
+   with only colour swapped -- see that file's own comment. */
 
 /*
  * `.archive-shell` is the top-level wrapper in `AppShell.tsx` around
@@ -76,7 +94,15 @@
 .archive-shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 .archive-shell > main { flex: 1; }
 .utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }.brand { display: flex; gap: .55rem; align-items: center; font: 600 .76rem var(--mono); color: var(--ink-2); letter-spacing: .03em; }.brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: 600 .85rem var(--serif); }.utility-bar-end { display: flex; align-items: center; gap: clamp(.75rem, 2.5vw, 1.5rem); }.utility-bar nav { display: flex; gap: clamp(.75rem, 2.5vw, 1.5rem); }.utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font-size: .82rem; font-weight: 600; }.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
-.archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }.eyebrow { margin: 0 0 1.35rem; color: var(--accent); font: 400 .72rem var(--mono); letter-spacing: .19em; text-transform: uppercase; }.archive-hero h1, .record-placeholder h1 { margin: 0; font: 600 clamp(4.1rem, 11vw, 5rem)/.95 var(--serif); letter-spacing: -.045em; }.tagline { max-width: 41rem; margin: 1.4rem auto 0; color: var(--ink-2); font: 400 1.22rem/1.55 var(--serif); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: .66rem var(--mono); text-transform: uppercase; letter-spacing: .1em; }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
+.archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }
+/* `.eyebrow` -- the site's standalone kicker (as opposed to `.t-label`'s
+   repeated dt/th/legend role). Was its own one-off .72rem/.19em pair;
+   now sized and tracked off the shared `--type-kicker` step (still
+   .72rem, tracking narrowed .19em -> .10em -- MEASURED as the widest
+   tracking of any label-band style on the site, an outlier next to
+   every other kicker/label use, not a deliberate design choice). */
+.eyebrow { margin: 0 0 1.35rem; color: var(--accent); font: var(--type-kicker-font); letter-spacing: var(--type-kicker-tracking); text-transform: var(--type-kicker-transform); }
+.archive-hero h1, .record-placeholder h1 { margin: 0; font: 600 clamp(4.1rem, 11vw, 5rem)/.95 var(--serif); letter-spacing: -.045em; }.tagline { max-width: 41rem; margin: 1.4rem auto 0; color: var(--ink-2); font: 400 1.22rem/1.55 var(--serif); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: .66rem var(--mono); text-transform: uppercase; letter-spacing: .1em; }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
 .identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font-weight: 600; cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { margin: .65rem 0 0; color: var(--muted-2); font-size: .75rem; }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
 .identifier-choice { display: flex; gap: .6rem; align-items: center; margin: .8rem 0 0; padding: .7rem; border: 1px solid var(--line); background: var(--surface); }.identifier-choice legend { padding: 0 .25rem; color: var(--ink-2); font-size: .78rem; }.identifier-choice button { border: 1px solid var(--accent); border-radius: .25rem; padding: .35rem .55rem; background: var(--surface); color: var(--accent-700); font-weight: 600; cursor: pointer; }.identifier-choice button:hover { background: var(--accent-50); }
 
@@ -247,9 +273,14 @@
  * classes owned by `browse.css` and `species-entry.css`, two files this
  * pass is not allowed to touch (other agents own their layout rules in
  * parallel). Both sit at 9-10px today: `.ref-item-label` .6rem (9.6px),
- * `.copy-button` .58rem (9.28px), `.browse-row-ref` .68rem (10.88px),
- * `.refs-disclosure summary` .68rem (10.88px) -- all below the 11px floor
- * this finding asks for.
+ * `.copy-button` .58rem (9.28px), `.browse-row-ref` .68rem (10.88px) --
+ * all below the 11px floor this finding asks for.
+ *
+ * `.refs-disclosure summary` DROPPED from this list (design/foundations):
+ * `RefsDisclosure.tsx` now composes `components/Disclosure.tsx`, whose
+ * `.disclosure > summary` rule (`design-system.css`) sets `--type-ui`
+ * (.8125rem / 13px) directly -- already above this floor, so the
+ * override has nothing left to raise.
  *
  * This file (`index.css`) is loaded once, globally, before any page's own
  * stylesheet mounts, so a same-specificity `.ref-item-label { font-size:
@@ -265,7 +296,6 @@
  */
 .archive-shell .ref-item-label,
 .archive-shell .copy-button,
-.archive-shell .browse-row-ref,
-.archive-shell .refs-disclosure summary {
+.archive-shell .browse-row-ref {
     font-size: .6875rem; /* 11px */
 }
