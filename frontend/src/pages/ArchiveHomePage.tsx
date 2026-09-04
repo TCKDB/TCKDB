@@ -28,7 +28,7 @@ function ArchiveHomePage() {
         <section className="destination-grid" aria-label="Archive destinations">
             {destinations.map(([title, detail, to, glyph, action]) => (
                 <Link
-                    className="destination"
+                    className="destination card"
                     key={to}
                     to={to}
                 >
