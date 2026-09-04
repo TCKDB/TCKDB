@@ -203,6 +203,24 @@
     font: .78rem var(--mono);
 }
 
+/* Short muted line under a `.kv-list dd` value -- currently just the τ row's
+   basis explanation ("analytic, tight convergence" / "assumed from the
+   program's default (...)"). */
+.kv-list dd .kv-note {
+    margin-top: .2rem;
+    color: var(--muted);
+    font-size: .7rem;
+}
+
+/* Marks an ADR 0012 Hessian-method/τ value that TCKDB assumed rather than
+   read from a recorded protocol (the `assumed_*` tau-basis tokens) -- the
+   underline is a secondary visual cue, never a substitute for the "assumed"
+   word every such value already carries in its own text. */
+.tau-assumed {
+    text-decoration: underline dotted var(--muted);
+    text-underline-offset: .15em;
+}
+
 @media (max-width: 680px) {
     .record-context,
     .record-context--compact,
