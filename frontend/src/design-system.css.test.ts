@@ -200,10 +200,10 @@ describe("the disclosure primitive", () => {
 })
 
 describe("the kv-list primitive is defined exactly once, globally", () => {
-    it("design-system.css declares the base grid with an auto-fit column track", () => {
+    it("design-system.css declares the base grid with an auto-fit column track, 16rem (SHOULD-FIX-3, widened from 12rem)", () => {
         const rule = /\.kv-list\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
-        expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(12rem,\s*1fr\)\)/)
+        expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(16rem,\s*1fr\)\)/)
     })
 
     // Post-review fix: the two deleted per-page rules each zeroed the UA
@@ -329,6 +329,49 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
         expect(rule![1]).toMatch(/font:\s*600\s*\.72rem\/1\.3\s*var\(--sans\)/)
         expect(rule![1]).not.toMatch(/text-transform/)
         expect(rule![1]).not.toMatch(/var\(--mono\)/)
+    })
+})
+
+describe(".kv-list dd .data / code prefer a real break boundary, with a safety fallback (SHOULD-FIX-3)", () => {
+    // MEASURED (the finding this guards): with `.kv-list dd`'s own bare
+    // `overflow-wrap: anywhere` in force, a long ref broke at an
+    // arbitrary character once its (now-widened) column still wasn't
+    // wide enough -- one orphaned character on its own line
+    // ("tse_aq5ktxlu27nvul3hmdwp / uyuz4e"). `word-break: keep-all` makes
+    // an existing break opportunity (a hyphen, or a `<wbr>` inserted by
+    // `domain/refBreaks.tsx` after every `_`) win FIRST. `overflow-wrap:
+    // anywhere` deliberately STAYS as the fallback -- a mutation check
+    // below pins the regression an earlier version of this fix shipped:
+    // switching it to `normal` made a bare-`<code>` value with no break
+    // opportunity at all (a 64-char geometry/software hash, no `_`, no
+    // `-`) overflow into the NEXT `.kv-list` column instead of wrapping,
+    // caught screenshotting `/geometries/:ref`.
+    it("declares overflow-wrap: anywhere (fallback) and word-break: keep-all (preferred) for .data/code inside dd", () => {
+        const rule = /\.kv-list dd \.data,\s*\.kv-list dd code \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule, ".kv-list dd .data, .kv-list dd code rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/overflow-wrap:\s*anywhere/)
+        expect(rule![1]).toMatch(/word-break:\s*keep-all/)
+    })
+
+    it("mutation check: overflow-wrap: normal here is the caught regression, not the fix", () => {
+        // A hash-shaped run has no space, no hyphen, no <wbr> -- keep-all
+        // finds no break opportunity for it either way, so `normal`
+        // leaves it completely unbreakable (real regression); `anywhere`
+        // is what still wraps it as a last resort.
+        const trap = ".kv-list dd .data,\n.kv-list dd code {\n    overflow-wrap: normal;\n    word-break: keep-all;\n}"
+        const rule = /\.kv-list dd \.data,\s*\.kv-list dd code \{([^}]*)\}/.exec(trap)
+        expect(rule![1]).not.toMatch(/overflow-wrap:\s*anywhere/)
+    })
+})
+
+describe(".data-table td.num never wraps (SHOULD-FIX-3)", () => {
+    // MEASURED: a NASA-7 coefficient in scientific notation broke as
+    // "-5.91781e- / 8" at 680px -- a numeric column has nothing to
+    // legitimately wrap at.
+    it("declares white-space: nowrap", () => {
+        const rule = /\.data-table td\.num \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule, ".data-table td.num rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/white-space:\s*nowrap/)
     })
 })
 

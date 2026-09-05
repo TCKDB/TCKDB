@@ -264,7 +264,15 @@
        never did in the first place. */
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    /* Widened 12rem -> 16rem (design/foundations PR E, "record-page
+       residuals" re-review, SHOULD-FIX-3): 12rem (192px) was narrower
+       than a typical 26-30 char ref at --type-data-font (13px mono,
+       ~7.8px/char, ~200-235px) -- combined with `dd`'s own `overflow-wrap:
+       anywhere` below, that squeeze broke refs mid-token with a single
+       orphaned character ("tse_aq5ktxlu27nvul3hmdwp / uyuz4e",
+       "lot_…76hj76 / u", MEASURED at 1920 across calc/geometry/TS/
+       conformer pages). 16rem (256px) comfortably fits those refs whole. */
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
     gap: var(--s-3) var(--s-5);
 }
 
@@ -285,6 +293,32 @@
 .kv-list dd code,
 .kv-list dd .data {
     font: var(--type-data-font);
+}
+
+/* Companion fix to the column widening above: a ref that is STILL wider
+   than its column (a 30+ char id) should wrap at a natural token boundary
+   (`_`/`-`) FIRST, never at an arbitrary character the way `dd`'s own
+   bare `overflow-wrap: anywhere` picks eagerly. `word-break: keep-all`
+   stops non-CJK text breaking outside an existing break opportunity; a
+   hyphen already is one (an InChIKey wrapped cleanly at its own `-` even
+   before this fix, e.g. "VGGSQFUCUMXWEO- / UHFFFAOYSA-N" -- correct, if
+   narrow), but `_` is not, which is why the ref renderer additionally
+   inserts a `<wbr>` after every `_` it prints (`domain/refBreaks.tsx`).
+   `overflow-wrap: anywhere` STAYS here, deliberately, as the fallback for
+   a run with NO break opportunity at all (a bare `<code>` geometry/
+   software hash, `GeometryDetailPage.tsx`'s "Geometry hash" row --
+   64 hex characters, no `_`, no `-`, never passed through
+   `refWithBreaks`): per spec, `overflow-wrap: anywhere` is only
+   consulted once `word-break`'s own rule finds no fitting break, so a
+   ref WITH a `<wbr>`/hyphen breaks there first (no more single-character
+   orphans), and a hash with none still wraps instead of overflowing into
+   the next column -- MEASURED regression, caught screenshotting this fix:
+   an unconditional `overflow-wrap: normal` here made the geometry-hash
+   row overlap the FORMAT column beside it. */
+.kv-list dd .data,
+.kv-list dd code {
+    overflow-wrap: anywhere;
+    word-break: keep-all;
 }
 
 /* Put on the `<div>` wrapping one dt/dd pair that should span the full row
@@ -438,6 +472,11 @@
 .data-table td.num {
     text-align: right;
     font: var(--type-data-font);
+    /* MEASURED at 680 (SHOULD-FIX-3, "record-page residuals" re-review):
+       a NASA-7 coefficient in scientific notation ("-5.91781e-08") broke
+       across two lines as "-5.91781e- / 8" -- a numeric column has no
+       word to break at in the first place, so it never needs to wrap. */
+    white-space: nowrap;
 }
 
 .data-table td code,
