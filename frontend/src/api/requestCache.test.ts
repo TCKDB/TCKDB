@@ -118,4 +118,28 @@ describe("dedupedFetch: concurrent subscribers share one request", () => {
         dedupedFetch(scope, "key", load)
         expect(loadCalls).toBe(2) // a fresh subscription after genuine abandonment starts a NEW request, not a resurrected one
     })
+
+    // The cache has a 5-minute TTL (review of #370: a long-lived tab should
+    // eventually see a curation change). Without this test, CACHE_TTL_MS =
+    // Infinity passes the whole suite.
+    it("serves a completed response for five minutes, then refetches", async () => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date("2026-09-05T10:00:00Z"))
+        const scope = {}
+        let loadCalls = 0
+        const load = async () => { loadCalls += 1; return `value-${loadCalls}` }
+
+        const first = dedupedFetch(scope, "key", load)
+        await expect(first.promise).resolves.toBe("value-1")
+
+        await vi.advanceTimersByTimeAsync(4 * 60 * 1000 + 59 * 1000) // 4:59 later
+        const second = dedupedFetch(scope, "key", load)
+        await expect(second.promise).resolves.toBe("value-1")
+        expect(loadCalls).toBe(1) // still within the TTL: served from cache
+
+        await vi.advanceTimersByTimeAsync(2 * 1000) // 5:01 after the original response
+        const third = dedupedFetch(scope, "key", load)
+        await expect(third.promise).resolves.toBe("value-2")
+        expect(loadCalls).toBe(2) // expired: a fresh request
+    })
 })
