@@ -11,23 +11,34 @@ function extractRule(source: string, selector: string): string {
 }
 
 /**
- * SHOULD-FIX-5 ("record-page residuals" re-review): `.coverage-checklist
- * > div` used `justify-content: space-between`, which pushed the value up
- * to 1,200px away from its own label at 1920 (the CARD's width, not the
- * label's, decided the gap) -- MEASURED. `flex-start` + an explicit gap
- * keeps the value directly beside its label.
+ * Item 3 ("record-page residuals" re-review): `.coverage-checklist` used
+ * to declare its OWN `dt`/`dd`/`> div` rules (a same-line "label: value"
+ * flex row, superseding SHOULD-FIX-5's `flex-start` fix below it) -- a
+ * small uppercase label and a larger value on one line with different
+ * baselines, MEASURED as visually mismatched with every other fact on
+ * this page (the identity block's own `.kv-list`, label above value).
+ * Fixed by dropping those bespoke rules entirely and letting the `<dl>`
+ * (now `className="kv-list coverage-checklist"` in
+ * `CalculationDetailPage.tsx`) fall through to `.kv-list`'s own
+ * `dt`/`dd` rules (`design-system.css`) -- this file keeps only the
+ * card-spacing rule. This guards against the bespoke rules creeping
+ * back in, which would win the cascade over `.kv-list`'s (equal
+ * specificity, this file loads after `design-system.css`).
  */
-describe(".coverage-checklist row: label and value sit together (SHOULD-FIX-5)", () => {
-    it(".coverage-checklist > div uses flex-start, not space-between", () => {
-        const rule = extractRule(css, ".coverage-checklist > div")
-        expect(rule).toMatch(/justify-content:\s*flex-start/)
-        expect(rule).not.toMatch(/justify-content:\s*space-between/)
-        expect(rule).toMatch(/gap:\s*var\(--s-3\)/)
+describe(".coverage-checklist defers its label/value layout to .kv-list (item 3)", () => {
+    it("declares no dt/dd/> div rules of its own any more", () => {
+        expect(css).not.toMatch(/\.coverage-checklist\s*>\s*div\s*\{/)
+        expect(css).not.toMatch(/\.coverage-checklist\s+dt\s*\{/)
+        expect(css).not.toMatch(/\.coverage-checklist\s+dd\s*\{/)
     })
 
-    it(".coverage-checklist dd is left-aligned to match the new flex-start row", () => {
-        const rule = extractRule(css, ".coverage-checklist dd")
-        expect(rule).toMatch(/text-align:\s*left/)
+    it("no longer appends a trailing colon to the label", () => {
+        expect(css).not.toMatch(/\.coverage-checklist\s+dt::after/)
+    })
+
+    it("keeps only its own top margin", () => {
+        const rule = extractRule(css, ".coverage-checklist")
+        expect(rule).toMatch(/margin:\s*var\(--s-3\)\s+0\s+0/)
     })
 })
 

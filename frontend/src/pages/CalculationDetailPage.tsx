@@ -519,7 +519,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                         is the only place a reader learns whether they exist at
                         all -- and each now shows the actual recorded OUTCOME
                         (passed / failed / stable / ...), not just "recorded". */}
-                    <dl className="coverage-checklist">
+                    <dl className="kv-list coverage-checklist">
                         <div>
                             <dt>Geometry validation</dt>
                             <dd>{geometryValidationOutcomeLabel(provenance.geometry_validation_status, provenance.geometry_validation_applicable)}</dd>
