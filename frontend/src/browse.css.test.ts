@@ -139,3 +139,59 @@ describe(".browse-count -- the shared --type-label step, not a hand-rolled .72re
         expect(rule).not.toMatch(/font:\s*\.72rem/)
     })
 })
+
+// ---------------------------------------------------------------------------
+// SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): the
+// browse page carried its own bespoke sizes -- `.76rem`/`.78rem`/`.84rem`/
+// `.86rem`/`.92rem`, none matching a named type-scale step -- across the
+// row meta line, the kind selector, the filter checkboxes, and the status/
+// empty lines. Each maps onto a named step now.
+// ---------------------------------------------------------------------------
+describe(".browse-row-meta -- --type-note, not a bare mono .76rem", () => {
+    it("uses var(--type-note-font)", () => {
+        const rule = extractRule(css, ".browse-row-meta")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+        expect(rule).not.toMatch(/var\(--mono\)/)
+    })
+})
+
+describe(".browse-row-smiles -- --type-data (mono), consolidated from two split rules", () => {
+    it("uses var(--type-data-font), and the class is declared exactly once", () => {
+        const rule = extractRule(css, ".browse-row-smiles")
+        expect(rule).toMatch(/font:\s*var\(--type-data-font\)/)
+        const occurrences = css.match(/\.browse-row-smiles\s*\{/g) ?? []
+        expect(occurrences).toHaveLength(1)
+    })
+})
+
+describe(".browse-kind-option -- --type-value, not a bare .86rem", () => {
+    it("uses var(--type-value-font)", () => {
+        const rule = extractRule(css, ".browse-kind-option")
+        expect(rule).toMatch(/font:\s*var\(--type-value-font\)/)
+        expect(rule).not.toMatch(/font-size:\s*\.86rem/)
+    })
+})
+
+describe("filter checkbox labels -- --type-value, not a bare .84rem", () => {
+    it(".browse-filter-field-check label uses var(--type-value-font)", () => {
+        const rule = extractRule(css, ".browse-filter-field-check label")
+        expect(rule).toMatch(/font:\s*var\(--type-value-font\)/)
+    })
+
+    it(".browse-filter-evidence-check uses var(--type-value-font)", () => {
+        const rule = extractRule(css, ".browse-filter-evidence-check")
+        expect(rule).toMatch(/font:\s*var\(--type-value-font\)/)
+    })
+})
+
+describe("status/empty lines -- --type-note, not a bare .92rem", () => {
+    it(".browse-status uses var(--type-note-font)", () => {
+        const rule = extractRule(css, ".browse-status")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+    })
+
+    it(".browse-empty uses var(--type-note-font)", () => {
+        const rule = extractRule(css, ".browse-empty")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+    })
+})
