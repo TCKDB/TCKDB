@@ -1,7 +1,8 @@
+import { StrictMode } from "react"
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerGroupPage from "./ConformerGroupPage"
 
@@ -10,6 +11,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
     server.resetHandlers()
     cleanup()
+    vi.useRealTimers()
 })
 afterAll(() => server.close())
 
@@ -20,6 +22,28 @@ function page() {
                 <Route path="/conformer-groups/:groupRef" element={<ConformerGroupPage />} />
             </Routes>
         </MemoryRouter>,
+    )
+}
+
+// `main.tsx` wraps the whole app in `<React.StrictMode>`, which in dev
+// double-invokes every effect: mount -> run cleanup -> mount again, all
+// synchronously, before the real (surviving) mount's effect has any
+// chance to observe a response. `useScientificRecord`/`useSpeciesEntry`
+// route their fetch through `api/requestCache.ts`'s `dedupedFetch`, which
+// used to run the FIRST mount's own `AbortSignal` into the shared
+// request -- so the discarded probe mount's cleanup aborted the one real
+// request before the surviving mount ever got a response of its own. See
+// `requestCache.ts`'s module docstring for the fix (subscriber counting
+// with a deferred abort).
+function strictPage() {
+    return render(
+        <StrictMode>
+            <MemoryRouter initialEntries={["/conformer-groups/cg_demo"]}>
+                <Routes>
+                    <Route path="/conformer-groups/:groupRef" element={<ConformerGroupPage />} />
+                </Routes>
+            </MemoryRouter>
+        </StrictMode>,
     )
 }
 
@@ -315,6 +339,34 @@ describe("ConformerGroupPage", () => {
         expect(await screen.findByRole("heading", { name: "Conformer basin not found" })).toBeVisible()
     })
 
+    // Regression test for the requestCache StrictMode bug (see the module
+    // docstring on `strictPage`): the SAME 404 handler as the test above,
+    // under StrictMode, still has to reach the real "not found"
+    // classification -- not the generic "unavailable" a misattributed
+    // AbortError used to produce (the discarded probe mount's own cleanup
+    // aborted the ONE real request before the surviving mount's effect
+    // ever received the 404).
+    it("shows the same specific not-found state under React.StrictMode's double-invoked effects", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => {
+            return HttpResponse.json({}, { status: 404 })
+        }))
+        strictPage()
+        expect(await screen.findByRole("heading", { name: "Conformer basin not found" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Conformer basin unavailable" })).not.toBeInTheDocument()
+    })
+
+    // Same bug, the OTHER failure mode: a page that renders successfully
+    // never resolves at all under StrictMode -- stuck on its loading state
+    // forever, because the discarded probe mount's cleanup aborted the one
+    // real (successful) request before the surviving mount could observe
+    // it.
+    it("renders real data under React.StrictMode's double-invoked effects, never stuck loading", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        strictPage()
+        expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
+        expect(screen.queryByText("Loading conformer basin…")).not.toBeInTheDocument()
+    })
+
     it("gives a malformed-ref 422 (code invalid_handle) its own non-retryable state", async () => {
         // This surface previously had no 422 coverage at all. `invalid_handle`
         // (distinct from `handle_type_mismatch`, the only code every other
@@ -331,5 +383,66 @@ describe("ConformerGroupPage", () => {
         expect(await screen.findByRole("heading", { name: "Not a conformer basin reference" })).toBeVisible()
         expect(screen.getByText(/not a recognised conformer_group handle/)).toBeVisible()
         expect(screen.getByRole("alert")).toBeVisible()
+    })
+
+    // Review follow-up (SHOULD-FIX #1): the automatic `Retry-After` wait
+    // (`requestScientificJson`) can run up to a minute
+    // (`rate_limit_anon_read_per_minute`, `backend/app/api/config.py`) --
+    // during it, the page must say "the archive is busy, retrying
+    // automatically", not sit on a plain, indefinite "Loading …" a reader
+    // has no way to tell apart from a stuck page.
+    it("shows a distinct 'archive is busy' state during the automatic Retry-After wait, then renders real data once the retry succeeds", async () => {
+        vi.useFakeTimers()
+        let attempt = 0
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => {
+            attempt += 1
+            if (attempt === 1) {
+                return HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "8" } })
+            }
+            return HttpResponse.json(payload)
+        }))
+        page()
+
+        // Let the first (429) response and its synchronous onRateLimited
+        // notification land, without yet advancing past the retry delay.
+        await act(async () => { await vi.advanceTimersByTimeAsync(0) })
+        expect(screen.getByRole("heading", { name: "Loading conformer basin…" })).toBeVisible()
+        const waitingMessage = () => screen.getByText(/receiving too many requests right now/)
+        expect(waitingMessage()).toBeVisible()
+        expect(waitingMessage().textContent).toMatch(/retrying automatically in about 8 seconds…/i)
+        // Never the terminal states while still waiting on the automatic retry.
+        expect(screen.queryByRole("heading", { name: "Conformer basin unavailable" })).not.toBeInTheDocument()
+        expect(screen.queryByRole("heading", { name: "Archive is busy" })).not.toBeInTheDocument()
+
+        // The countdown ticks down locally (RetryCountdown), independent
+        // of the retry itself actually firing.
+        await act(async () => { await vi.advanceTimersByTimeAsync(3000) })
+        expect(waitingMessage().textContent).toMatch(/retrying automatically in about 5 seconds…/i)
+
+        // The retry itself fires at the full Retry-After delay and succeeds.
+        await act(async () => { await vi.advanceTimersByTimeAsync(5000) })
+        expect(screen.getByRole("heading", { name: "Conformer basin" })).toBeVisible()
+        expect(attempt).toBe(2)
+    })
+
+    // Wording pin (SHOULD-FIX #3): plain language, not operator vocabulary
+    // -- "about 30 seconds", never the abbreviated "30s" the pre-fix copy
+    // used ("Wait about 2s and try again").
+    it("uses plain-language wording for the terminal rate-limited state, spelling out the wait", async () => {
+        vi.useFakeTimers()
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => (
+            HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "30" } })
+        )))
+        page()
+        await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // first attempt lands, retry scheduled
+        await act(async () => { await vi.advanceTimersByTimeAsync(30_000) }) // the retry itself lands, also 429
+
+        expect(screen.getByRole("heading", { name: "Archive is busy" })).toBeVisible()
+        const message = screen.getByText(/receiving too many requests right now/)
+        expect(message).toHaveTextContent(
+            "The archive is receiving too many requests right now. Wait about 30 seconds and reload the page.",
+        )
+        // Never the abbreviated, operator-vocabulary form.
+        expect(message.textContent).not.toMatch(/\d+s\b/)
     })
 })

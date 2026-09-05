@@ -116,12 +116,16 @@ const response = z.object({
     record: observationRecordSchema,
 })
 
-export async function loadConformerObservation(ref: string, signal?: AbortSignal): Promise<ConformerObservation> {
+export async function loadConformerObservation(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ConformerObservation> {
     const query = new URLSearchParams()
     for (const include of ["observations", "selections", "calculations", "geometries", "review"]) {
         query.append("include", include)
     }
     const endpoint = `/api/v1/scientific/conformer-observations/${encodeURIComponent(ref)}?${query}`
-    const payload = await requestScientificJson(endpoint, signal)
+    const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(response, payload, "conformer observation").record
 }

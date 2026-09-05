@@ -181,8 +181,12 @@ function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
  * module docstring on the live zero-record case. `useScientificRecord`
  * -shaped: `(ref, signal) => Promise<T>`.
  */
-export async function loadEntryTransport(entryRef: string, signal?: AbortSignal): Promise<TransportListResponse> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal)
+export async function loadEntryTransport(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<TransportListResponse> {
+    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal, onRateLimited)
     return parseScientificResponse(transportListResponseSchema, payload, "transport")
 }
 

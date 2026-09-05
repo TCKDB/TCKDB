@@ -16,6 +16,7 @@ import { PageShell } from "../components/PageShell"
 import { SpeciesBrowseRow } from "../components/SpeciesBrowseRow"
 import { TransitionStateBrowseRow } from "../components/TransitionStateBrowseRow"
 import { archiveEmptyMessage, filteredEmptyMessage, pagedPastEndMessage } from "../domain/browseEmptyState"
+import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import type { BrowseState } from "../hooks/useBrowse"
 import { useBrowse } from "../hooks/useBrowse"
 
@@ -128,6 +129,13 @@ function BrowseResults({ kind, filters, offset, setOffset, state }: {
             <p className="browse-status" role="alert">
                 The archive responded, but this listing could not be validated. That is an archive-side issue, not a
                 connection problem.
+            </p>
+        )
+    }
+    if (state.status === "rate-limited") {
+        return (
+            <p className="browse-status" role="alert">
+                The archive is receiving too many requests right now. Wait {formatWaitSeconds(state.retryAfterSeconds)} and reload the page.
             </p>
         )
     }

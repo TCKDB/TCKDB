@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { act, cleanup, render, screen, within } from "@testing-library/react"
 import App from "../App"
 
 const speciesRef = "spc_atp56uqux2ajao7hvckx7gx7ca"
@@ -65,7 +65,7 @@ function secondGroundEntry() {
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
+afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/"); vi.useRealTimers() })
 afterAll(() => server.close())
 
 /** Scopes queries to one entry card, identified by its stable `<code>` ref
@@ -181,6 +181,30 @@ describe("species overview", () => {
         )))
         render(<App />)
         expect(await screen.findByRole("alert")).toHaveTextContent("Species unavailable")
+    })
+
+    // Review follow-up (SHOULD-FIX #2): `useSpeciesOverview` used to
+    // collapse a double 429 (both automatic-retry attempts exhausted) into
+    // the same generic "Species unavailable" as a real 5xx. Distinct
+    // state, plain-language wording -- same as every other rate-limited
+    // surface (`RecordStatus`, `SpeciesEntryPage`).
+    it("gives a double 429 its own rate-limited state, in plain language, distinct from 'unavailable'", async () => {
+        vi.useFakeTimers()
+        server.use(http.get("/api/v1/scientific/species/search", () => (
+            HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "45" } })
+        )))
+        window.history.replaceState({}, "", `/species/${speciesRef}`)
+        render(<App />)
+        await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // first attempt
+        await act(async () => { await vi.advanceTimersByTimeAsync(45_000) }) // the retry, also 429
+
+        expect(screen.getByRole("heading", { name: "Archive is busy" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Species unavailable" })).not.toBeInTheDocument()
+        const message = screen.getByRole("alert")
+        expect(message).toHaveTextContent(
+            "The archive is receiving too many requests right now. Wait about 45 seconds and reload the page.",
+        )
+        expect(message.textContent).not.toMatch(/\d+s\b/)
     })
 })
 

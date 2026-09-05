@@ -27,6 +27,15 @@ import { ScientificApiError, ScientificRateLimitError } from "../api/scientificT
  * - `malformed`     — the archive answered 200 but the payload failed our
  *   own schema validation. An archive-side bug, distinct from all of the
  *   above.
+ * - `retrying`      — a 429 was seen and `requestScientificJson` is in the
+ *   middle of its own automatic `Retry-After` wait (which can be up to a
+ *   minute — `rate_limit_anon_read_per_minute`, `backend/app/api/config.py`).
+ *   Never terminal: this always resolves into either `ready` (the retry
+ *   worked) or `rate-limited` (it didn't). Distinct from `loading` so the
+ *   reader sees an honest "the archive is busy, retrying automatically"
+ *   instead of an indefinite spinner for however long that wait takes —
+ *   see `requestCache.ts`'s `onWaiting` for how this reaches every
+ *   subscriber of a shared request, not just the one that started it.
  * - `rate-limited`  — the anonymous-read budget
  *   (`rate_limit_anon_read_per_minute`, `backend/app/api/config.py`) is
  *   exhausted. `requestScientificJson` already retries once automatically
@@ -48,6 +57,7 @@ import { ScientificApiError, ScientificRateLimitError } from "../api/scientificT
  */
 export type ScientificRecordState<T> =
     | { ref: string; status: "loading" }
+    | { ref: string; status: "retrying"; retryAfterSeconds: number }
     | { ref: string; status: "missing" }
     | { ref: string; status: "invalid"; detail: string }
     | { ref: string; status: "unprocessable"; detail: string }
@@ -60,13 +70,13 @@ const INVALID_HANDLE_CODES = new Set(["handle_type_mismatch", "invalid_handle"])
 
 export function useScientificRecord<T>(
     ref: string,
-    load: (ref: string, signal: AbortSignal) => Promise<T>,
+    load: (ref: string, signal: AbortSignal, onRateLimited?: (retryAfterSeconds: number) => void) => Promise<T>,
 ): ScientificRecordState<T> {
     const [state, setState] = useState<ScientificRecordState<T>>({ ref, status: "loading" })
     const visibleState = state.ref === ref ? state : { ref, status: "loading" as const }
 
     useEffect(() => {
-        const controller = new AbortController()
+        let mounted = true
         // `load` (e.g. `loadEntryThermo`) is a stable, module-level export
         // for every caller of this hook -- see `requestCache.ts` -- so it
         // doubles as the cache's namespace. Remounting into the same tab
@@ -74,10 +84,27 @@ export function useScientificRecord<T>(
         // unmount on every section switch, per `SpeciesEntryPage`'s
         // `TabPanelBody`) or navigating Back to a page this hook already
         // loaded reuses the cached response instead of refiring the request.
-        dedupedFetch(load, ref, () => load(ref, controller.signal))
-            .then((record) => setState({ ref, status: "ready", record }))
+        //
+        // `dedupedFetch` owns the request's `AbortSignal`, never this
+        // effect -- see the module docstring on `requestCache.ts` for why
+        // (in short: a signal this effect owned could be aborted by an
+        // UNRELATED subscriber's cleanup, e.g. React StrictMode's dev-only
+        // double-invoke, silently starving this one of any response at
+        // all). This effect only tracks its OWN `mounted` flag, and an
+        // `AbortError` here always means "the shared request was cancelled
+        // because every subscriber left" -- never "someone else's cleanup
+        // ran" -- so treating it as "do nothing" is always correct.
+        const subscription = dedupedFetch(load, ref, (signal, onRateLimited) => load(ref, signal, onRateLimited))
+        const stopWaiting = subscription.onWaiting((retryAfterSeconds) => {
+            if (mounted) setState({ ref, status: "retrying", retryAfterSeconds })
+        })
+        subscription.promise
+            .then((record) => {
+                if (mounted) setState({ ref, status: "ready", record })
+            })
             .catch((error: unknown) => {
-                if (controller.signal.aborted) return
+                if (!mounted) return
+                if (error instanceof DOMException && error.name === "AbortError") return
                 if (error instanceof ScientificRateLimitError) {
                     setState({ ref, status: "rate-limited", retryAfterSeconds: error.retryAfterSeconds })
                     return
@@ -100,7 +127,11 @@ export function useScientificRecord<T>(
                 }
                 setState({ ref, status: "unavailable" })
             })
-        return () => controller.abort()
+        return () => {
+            mounted = false
+            stopWaiting()
+            subscription.unsubscribe()
+        }
     }, [ref, load])
     return visibleState
 }

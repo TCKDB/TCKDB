@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { ScientificApiError, searchSpeciesExact, type SearchMatch } from "../api/scientificApi"
+import { ScientificApiError, ScientificRateLimitError, searchSpeciesExact, type SearchMatch } from "../api/scientificApi"
 import { classifyIdentifier, resultPath, type IdentifierClassification } from "../domain/recordModel"
 import { chargeDisplay, entryCountDisplay, spinDisplay } from "../domain/chemistryFormat"
+import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { Formula } from "./Formula"
 import { SectionErrorBoundary } from "./SectionErrorBoundary"
 
@@ -47,7 +48,16 @@ export function IdentifierSearch() {
             // answer this fix exists to stop giving. The archive's own `code`
             // (`app/api/error_contract.py`) distinguishes the two; see
             // `structure_search.py`'s `invalid_structure_query` raises.
-            if (error instanceof ScientificApiError && error.code === "invalid_structure_query") {
+            if (error instanceof ScientificRateLimitError) {
+                // Distinct from the generic "could not complete that
+                // search" below -- `requestScientificJson` already
+                // retried once automatically, and this only fires when
+                // the archive was STILL over its anonymous-read budget a
+                // `Retry-After` window later. Same plain-language wording
+                // as every other rate-limited surface (`RecordStatus`,
+                // `SpeciesEntryPage`, `SpeciesOverviewPage`, `BrowsePage`).
+                setMessage(`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(error.retryAfterSeconds)} and reload the page.`)
+            } else if (error instanceof ScientificApiError && error.code === "invalid_structure_query") {
                 setMessage(`"${classified.identifier.value}" could not be parsed as a valid ${classified.label} — check the syntax and try again.`)
             } else {
                 setMessage("The archive could not complete that search. Check the identifier and try again.")

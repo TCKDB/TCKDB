@@ -249,8 +249,12 @@ export type ThermoListResponse = z.infer<typeof thermoListResponseSchema>
  * tokens are sent — see the module docstring: nothing on this surface is
  * gated by one. `useScientificRecord`-shaped: `(ref, signal) => Promise<T>`.
  */
-export async function loadEntryThermo(entryRef: string, signal?: AbortSignal): Promise<ThermoListResponse> {
+export async function loadEntryThermo(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ThermoListResponse> {
     const endpoint = `/api/v1/scientific/species-entries/${encodeURIComponent(entryRef)}/thermo`
-    const payload = await requestScientificJson(endpoint, signal)
+    const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(thermoListResponseSchema, payload, "thermo")
 }

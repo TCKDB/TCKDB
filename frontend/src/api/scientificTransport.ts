@@ -46,31 +46,53 @@ export class ScientificRateLimitError extends ScientificApiError {
     }
 }
 
-/** Used when a 429 response carries no usable `Retry-After` header (should not happen against the live API, which always sets one — see `backend/app/api/rate_limit.py:391` — but a fallback keeps the retry from firing with a 0ms or NaN delay against a misbehaving proxy or a test that forgets the header). */
+/** Used when a 429 response carries no `Retry-After` header at all, or one this function cannot parse in either of its two legal forms (should not happen against the live API, which always sends the integer-seconds form — see `backend/app/api/rate_limit.py:391` — but a fallback keeps the retry from firing with a 0ms or NaN delay against a misbehaving proxy or a test that forgets the header). */
 const FALLBACK_RETRY_AFTER_SECONDS = 5
 
+/**
+ * `Retry-After` is legally EITHER an integer seconds count (what the live
+ * API sends) OR an HTTP-date (RFC 9110 §10.2.3, e.g. "Wed, 21 Oct 2015
+ * 07:28:00 GMT") -- a plain `Number.parseInt` on the date form silently
+ * returns `NaN` (`parseInt` on a string starting with a weekday name), so
+ * every date-form response used to fall back to
+ * `FALLBACK_RETRY_AFTER_SECONDS` regardless of what the header actually
+ * said. Both forms are parsed here; the date form is converted to a
+ * seconds-from-now count so callers only ever deal with one shape.
+ */
 function parseRetryAfterSeconds(response: Response): number {
     const header = response.headers.get("Retry-After")
-    const seconds = header === null ? NaN : Number.parseInt(header, 10)
-    return Number.isFinite(seconds) && seconds > 0 ? seconds : FALLBACK_RETRY_AFTER_SECONDS
+    if (header !== null) {
+        const trimmed = header.trim()
+        if (/^\d+$/.test(trimmed)) {
+            const seconds = Number.parseInt(trimmed, 10)
+            if (seconds > 0) return seconds
+        } else {
+            const asDateMs = Date.parse(trimmed)
+            if (!Number.isNaN(asDateMs)) {
+                const seconds = Math.ceil((asDateMs - Date.now()) / 1000)
+                if (seconds > 0) return seconds
+            }
+        }
+    }
+    return FALLBACK_RETRY_AFTER_SECONDS
 }
 
-/** Rejects with `AbortError` immediately if already aborted, or as soon as `signal` aborts mid-wait, so a component that unmounts while this is sleeping doesn't leave a dangling retry. */
+/** Rejects with `AbortError` immediately if already aborted, or as soon as `signal` aborts mid-wait, so a component that unmounts while this is sleeping doesn't leave a dangling retry. Removes its own `abort` listener on a normal resolve too -- not just on the abort path -- so a `signal` that outlives this one call (as `dedupedFetch`'s per-entry signal does) doesn't accumulate listeners across every wait it's used for. */
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
         if (signal?.aborted) {
             reject(new DOMException("Aborted", "AbortError"))
             return
         }
-        const timer = setTimeout(resolve, ms)
-        signal?.addEventListener(
-            "abort",
-            () => {
-                clearTimeout(timer)
-                reject(new DOMException("Aborted", "AbortError"))
-            },
-            { once: true },
-        )
+        const onAbort = () => {
+            clearTimeout(timer)
+            reject(new DOMException("Aborted", "AbortError"))
+        }
+        const timer = setTimeout(() => {
+            signal?.removeEventListener("abort", onAbort)
+            resolve()
+        }, ms)
+        signal?.addEventListener("abort", onAbort, { once: true })
     })
 }
 
@@ -138,7 +160,23 @@ function fetchOnce(path: string, signal?: AbortSignal): Promise<Response> {
  * not one burst -- ever sees `ScientificRateLimitError`, so callers can
  * treat it as "genuinely still limited" rather than "flaky".
  */
-export async function requestScientificJson(path: string, signal?: AbortSignal): Promise<unknown> {
+export async function requestScientificJson(
+    path: string,
+    signal?: AbortSignal,
+    /**
+     * Called synchronously, once, the instant a 429 is seen -- BEFORE the
+     * `Retry-After` wait starts, never after. The live window can be up to
+     * a minute (`rate_limit_anon_read_per_minute`,
+     * `backend/app/api/config.py`); without this, a caller has no way to
+     * tell "waiting on an automatic retry" apart from an ordinary slow
+     * load; both rendered the exact same generic "Loading …" for however
+     * long the wait took. See `RecordStatus`/`SpeciesEntryPage`'s
+     * `"retrying"` status, and `requestCache.ts`'s `onWaiting` -- the
+     * mechanism that gets this callback's value to every subscriber of a
+     * shared request, not just the one that happened to start it.
+     */
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<unknown> {
     const first = await fetchOnce(path, signal)
     if (first.status !== 429) {
         if (!first.ok) return throwForFailedResponse(first)
@@ -146,6 +184,7 @@ export async function requestScientificJson(path: string, signal?: AbortSignal):
     }
 
     const retryAfterSeconds = parseRetryAfterSeconds(first)
+    onRateLimited?.(retryAfterSeconds)
     await sleep(retryAfterSeconds * 1000, signal)
 
     const second = await fetchOnce(path, signal)

@@ -54,10 +54,14 @@ export type SpeciesCalculationEnergyRecord = z.infer<typeof recordSchema>
  * that otherwise renders fine without it (the calculation ref link still
  * works), so a failure here must not take down the whole entry page.
  */
-export async function loadSpeciesSinglePointEnergies(entryRef: string, signal?: AbortSignal): Promise<SpeciesCalculationEnergyRecord[]> {
+export async function loadSpeciesSinglePointEnergies(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<SpeciesCalculationEnergyRecord[]> {
     const query = new URLSearchParams({ species_entry_ref: entryRef, calculation_type: "sp", limit: "100" })
     try {
-        const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal)
+        const payload = await requestScientificJson(`/api/v1/scientific/species-calculations/search?${query}`, signal, onRateLimited)
         return parseScientificResponse(responseSchema, payload, "species calculation energy").records
     } catch {
         // A caller-initiated abort (route navigated away) is not a failure
