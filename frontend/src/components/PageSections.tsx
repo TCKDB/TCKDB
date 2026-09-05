@@ -49,15 +49,27 @@ export function PageSectionsProvider({ children }: { children: ReactNode }) {
  * the base heading typography.
  *
  * `kicker` is suppressed when it case-insensitively equals `children`'s
- * own text (design/foundations PR E, "record-page residuals" re-review,
- * SHOULD-FIX-6): a kicker earns its place only when it names a category
- * the title itself lacks ("Deposited provenance" above "Structure view",
- * say) -- four callers across this app's record pages used to pass the
- * heading's own title straight back in as its kicker ("Result" / "Result",
- * "Geometries" / "Geometries", ...), MEASURED as a plain restatement with
- * no added information. Enforced HERE, once, rather than trusted to every
- * call site getting it right on its own -- a caller that still passes a
- * redundant kicker (today or in the future) renders correctly regardless.
+ * own text, OR is a case-insensitive PREFIX of it (design/foundations PR
+ * E, "record-page residuals" re-review, SHOULD-FIX-6, widened on the
+ * re-review pass): a kicker earns its place only when it names a
+ * category the title itself lacks ("Deposited provenance" above
+ * "Structure view", say) -- four callers across this app's record pages
+ * used to pass the heading's own title straight back in as its kicker
+ * ("Result" / "Result", "Geometries" / "Geometries", ...), MEASURED as a
+ * plain restatement with no added information. The equality-only version
+ * of this rule missed the near-restatement case a reviewer caught next:
+ * "Structure" / "Structure view", "Raw" / "Raw XYZ", "Review" / "Review
+ * history" -- a kicker that is just the title's own leading words reads
+ * exactly the same as a full restatement once stacked visually. `prefix`
+ * (not `includes`/substring anywhere) is deliberately narrow: it must
+ * catch "Review" ahead of "Review history" without also catching an
+ * unrelated kicker that merely shares a word with the title midway
+ * through it ("Reaction context" ahead of "Reaction", say, is NOT a
+ * restatement -- "Reaction" is a prefix of "Reaction context", the
+ * OPPOSITE direction, and stays legitimate). Enforced HERE, once, rather
+ * than trusted to every call site getting it right on its own -- a
+ * caller that still passes a redundant kicker (today or in the future)
+ * renders correctly regardless.
  */
 export function SectionHeading({ id, children, label, className, kicker, intro }: {
     id: string
@@ -71,7 +83,7 @@ export function SectionHeading({ id, children, label, className, kicker, intro }
     useRegisteredSection(id, resolvedLabel)
     const titleText = typeof children === "string" ? children : undefined
     const kickerIsRedundant = typeof kicker === "string" && titleText !== undefined
-        && kicker.trim().toLowerCase() === titleText.trim().toLowerCase()
+        && titleText.trim().toLowerCase().startsWith(kicker.trim().toLowerCase())
     const showKicker = kicker != null && kicker !== "" && !kickerIsRedundant
     return (
         <>
