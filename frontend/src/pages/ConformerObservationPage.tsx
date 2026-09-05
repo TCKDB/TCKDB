@@ -7,6 +7,7 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerObservation } from "../hooks/useConformerObservation"
 
@@ -161,9 +162,21 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                 <div>
                                     <dt>Species entry</dt>
                                     <dd>
-                                        <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                            {species.species_entry_label ?? species.species_entry_ref}
-                                        </Link>
+                                        {/* Item 4/5 ("record-page residuals" re-review): no
+                                            longer shows `species_entry_label` ALONE as
+                                            link text -- see `SpeciesEntryLink`'s own
+                                            docstring for why that field is a computed
+                                            discriminator, not depositor free text, and why
+                                            the fix is to always pair it with the formula
+                                            rather than suppress it. This endpoint's
+                                            `species` context carries no `formula` field at
+                                            all, so the base text always falls back to the
+                                            literal "Species entry"; the label, when
+                                            present, still rides along after it. */}
+                                        <SpeciesEntryLink
+                                            speciesEntryRef={species.species_entry_ref}
+                                            speciesEntryLabel={species.species_entry_label}
+                                        />
                                     </dd>
                                 </div>
                                 <div><dt>Species ref</dt><dd><code className="data">{species.species_ref}</code></dd></div>

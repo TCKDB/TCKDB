@@ -21,10 +21,23 @@
  * colour follow the page's theme, which is the wrong coupling.
  */
 
+/* Owner report ("record-page residuals" re-review, item 1): `margin: 0
+   auto` centred this panel in the FULL content column (~1288px at
+   1920), not inside `.viewer-stage` (the 36rem card the canvas and
+   toolbar live in, a sibling of this element -- see
+   `GeometryViewer.tsx`'s return) -- MEASURED at x=536 w=576 while the
+   stage sat at x=180 w=576, a ~40px gap below the canvas but no shared
+   left edge with it. `.viewer-stage` is now `align-items: flex-start`
+   (see that rule's comment in `geometry-detail.css`), so the canvas and
+   toolbar left-align inside their box instead of centring in it --
+   `margin: 0` here (was `0 auto`) makes this panel left-align to that
+   SAME box: same `max-width: 36rem`, no auto margin, so both elements
+   start flush with `.geometry-viewer`'s left edge and this panel now
+   sits directly under the stage card, sharing its left edge and width. */
 .viewer-measurements {
     width: 100%;
     max-width: 36rem;
-    margin: 0 auto;
+    margin: 0;
     padding: 1rem 1.5rem 1.5rem;
     border: 1px solid var(--line);
     background: var(--surface);

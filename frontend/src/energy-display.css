@@ -30,15 +30,30 @@
     margin: .75rem 0;
 }
 
-/* The headline energy -- the calculation page's promoted answer -- takes
-   the shared `--type-data-large` step (`design-system.css`: 600 1.5rem
-   mono) rather than its own one-off `clamp(1.6rem, 3vw, 2.4rem)`/700
-   figure. That old weight was browser-synthesised anyway (only Plex
-   400/600 are loaded, `index.css`'s @font-face block); `--type-data-large`
-   already specifies the real 600 this app ships a font file for. */
+/* Owner report ("record-page residuals" re-review, item 2): this used to
+   take the shared `--type-data-large` step (`design-system.css`: 600
+   1.5rem mono), rendering "-348.435045 hartree" at roughly 1.5x the
+   size of every other value on the page next to a small label -- the
+   owner's word for it was "iffy". `--type-data-large` earned that
+   promotion once (replacing an even bigger one-off `clamp(1.6rem, 3vw,
+   2.4rem)`/700 figure), but at THIS size, next to a `--type-label`
+   caption, it read as mismatched rather than "the answer" -- the
+   headline is already the largest thing on the page via placement (top
+   of the header, its own row) and the `.energy-display-label` caption
+   beside it, not via a size jump the other data values on this page
+   don't get. Dropped to the ordinary `--type-data` step -- the same one
+   `.energy-display-value` (the non-headline class, just above) already
+   uses, and the same one every other value on this page (refs, level of
+   theory, software) renders at. The unit toggle (`.energy-toggle` below)
+   is unrelated to either step and is unchanged.
+
+   `--type-data-large` itself is NOT orphaned by this change: it is still
+   the active step for `species-entry.css`'s big per-entry figures and
+   `conformer-group.css`'s basin digit count -- this file just no longer
+   uses it. */
 .energy-display-value--headline {
-    font: var(--type-data-large-font);
-    letter-spacing: var(--type-data-large-tracking);
+    font: var(--type-data-font);
+    letter-spacing: var(--type-data-tracking);
 }
 
 .energy-display-absent {

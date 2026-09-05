@@ -64,56 +64,43 @@
     border-block: 1px solid var(--line);
 }
 
-/* A vertical checklist, one row per evidence check, "label: value" —
-   replacing a single wrapping `<strong>` (the owner: "this should be a
-   going down list, not a wrap around text"). Not a `.kv-list` (its rows
-   are a fixed label/value PAIR read left-to-right, not an auto-fit fact
-   grid), but its typography now comes from the same token steps every
-   other label/value pair on this page uses, and the verdict itself is a
-   plain VALUE (`--ink`), not an accent-emphasised one -- MEASURED finding:
-   the old `--accent-700`/600-weight treatment made "recorded"/"absent"
-   read as if it were a clickable or selected state, which it is not. */
+/* Owner report ("record-page residuals" re-review, item 3): this used to
+   be its own bespoke "label: value" flex row (`display: flex` on each
+   `> div`, `dt`/`dd` on the same line via `justify-content: flex-start`)
+   -- a small uppercase `--type-label-font` term next to a larger
+   `--type-value-font` value, both sat on the SAME baseline. MEASURED:
+   that put the two on visually different scales side by side rather
+   than the label-above-value shape the rest of this page's facts (the
+   identity block's own `.kv-list`, `record-context` just above this
+   card) already use.
+
+   The JSX (`CalculationDetailPage.tsx`, the coverage card) now renders
+   this `<dl>` with BOTH `kv-list` and `coverage-checklist` classes --
+   `kv-list` (`design-system.css`) supplies the label-above-value
+   layout and the same `dt`/`dd` typography every other fact list on
+   this page renders at; `coverage-checklist` stays as a stable
+   selector for this file's own spacing/column override below and for
+   the existing RTL tests that query it. No bespoke `dt`/`dd`/`> div`
+   rules remain here -- letting them fall through to `.kv-list`'s own
+   rules IS the fix; redeclaring them here would just reintroduce the
+   same specificity fight (`.coverage-checklist dt` and `.kv-list dt`
+   are equal specificity, and this file loads after `design-system.css`,
+   so a local override here would keep winning the cascade). The
+   trailing colon after each label (`dt::after { content: ":" }`) is
+   also gone -- no other `.kv-list` label on this page carries one.
+
+   ONE column, always -- `kv-list`'s own `auto-fit, minmax(16rem, 1fr)`
+   grid would otherwise put these two rows side by side at any width
+   comfortably over ~32rem (MEASURED at 1920: x=207 and x=837, two
+   columns). That is the SAME layout the original owner report on this
+   card asked to get away from ("this should be a going down list, not
+   a wrap around text") -- `kv-list`'s auto-fit is the right primitive
+   for a multi-column fact grid elsewhere on this page, but wrong for a
+   short, always-two-row checklist that reads as a sequence. Pinned by
+   `calculation-detail.css.test.ts`. */
 .coverage-checklist {
-    display: flex;
-    flex-direction: column;
-    gap: var(--s-1);
     margin: var(--s-3) 0 0;
-}
-
-.coverage-checklist > div {
-    display: flex;
-    /* SHOULD-FIX-5 ("record-page residuals" re-review): `space-between`
-       pushed the value 1,200px away from its own label at 1920 (the
-       card's own width, not the label's, decided how far apart the two
-       ends up), reading as unrelated content rather than one label/value
-       pair. `flex-start` + an explicit gap keeps the value directly
-       beside the label it belongs to, matching how every other label/
-       value pair on this page (`.kv-list`) already reads. */
-    justify-content: flex-start;
-    gap: var(--s-3);
-}
-
-.coverage-checklist dt {
-    color: var(--muted);
-    font: var(--type-label-font);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: var(--type-label-transform);
-}
-
-.coverage-checklist dt::after {
-    content: ":";
-}
-
-.coverage-checklist dd {
-    margin: 0;
-    color: var(--ink);
-    font: var(--type-value-font);
-    /* Was `right`, sensible only under the retired `space-between` layout
-       (a right-aligned value made sense flush against the row's own
-       right edge). Now that the row is `flex-start` (see the comment on
-       `.coverage-checklist > div`), the value sits directly after its
-       label -- left-aligned like every other value on this page. */
-    text-align: left;
+    grid-template-columns: 1fr;
 }
 
 /* One sentence per row, replacing the old Relationship/Role/Related-

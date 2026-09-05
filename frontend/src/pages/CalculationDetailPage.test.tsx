@@ -718,6 +718,22 @@ describe("CalculationDetailPage", () => {
         expect(within(checklist).queryByText("Convergence")).not.toBeInTheDocument()
     })
 
+    // Item 3 (post-review): the `<dl>` must carry the shared `kv-list`
+    // class, not just its own `coverage-checklist` marker class -- without
+    // `kv-list`, this element has NO layout rules of its own any more
+    // (`calculation-detail.css`'s `.coverage-checklist` is bare margin
+    // since this fix), so a revert of the className alone left this suite
+    // green with no visible layout. This assertion is what makes that
+    // revert fail.
+    it("the evidence checklist <dl> carries the shared kv-list class", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+        const checklist = document.querySelector(".coverage-checklist") as HTMLElement
+        expect(checklist.tagName).toBe("DL")
+        expect(checklist).toHaveClass("kv-list")
+    })
+
     it("reads geometry validation as 'not applicable' for a type that cannot have it, 'absent' when applicable but unrecorded", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({
