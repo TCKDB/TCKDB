@@ -157,6 +157,27 @@ provenance and machine detail live on dedicated linked pages.
     energies on one entry look mis-united; hydrazine reactions have no
     family.
 
+15. Visual consistency programme. Two reviewers measured the live site
+    through headless Chrome, computed styles over 25 routes: 49 distinct
+    font sizes, monospace carrying 58 percent of all text, one
+    uppercase-tracked mono voice doing seven jobs, six h1 rules, seven
+    disclosure styles, headings fake-bold because only the 400 and 600
+    faces are loaded, notes at up to 198 characters per line. The answer
+    was a diet, not a redesign: keep the three Plex faces and the tokens,
+    define a twelve-step type scale, an eight-step spacing scale and one
+    primitive per role (key/value list, data table, disclosure, pill,
+    card, note, data run), then move every page onto them. Four PRs:
+    foundations (#364), index pages (#365), species entry and its
+    sections (#366), record pages (#367). Two shared defects surfaced
+    only under review: route-chunk CSS leakage (a component importing
+    the design-system sheet emitted a second copy, so pill colour
+    depended on which page loaded first), and the narrow layout's
+    content column taking its max-content width, so tables widened the
+    page instead of scrolling. Both were fixed at the root and pinned by
+    tests that measure rendered style or emitted CSS, not class names.
+    The one deliberate visible change is the h1 cap, 88 to 102px down to
+    64px, one token to revisit.
+
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
 standards/spec review, CI, PR merge, image build, and Pi verification.
