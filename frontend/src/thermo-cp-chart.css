@@ -77,6 +77,13 @@
     list-style: none;
 }
 
+/* SHOULD-FIX-12 (species-entry/browse/chrome residuals re-review): was a
+   bare `.74rem` -- `--type-data` (mono, .8125rem, no case transform) is
+   the named step here, not `--type-label` (which would force this
+   ALL-CAPS): the legend text is `groupLegendLabel`'s own mixed-case
+   phrase, "Conformer Group 1 (thm_a1) — 2 identical records" -- a real
+   ref can sit inside it in parentheses, and upper-casing a ref would
+   misrepresent it as something other than what a reader would look up. */
 .cp-chart-legend-item {
     display: flex;
     align-items: center;
@@ -85,7 +92,7 @@
     border: 1px solid var(--line);
     border-radius: 999px;
     background: var(--surface);
-    font: .74rem var(--mono);
+    font: var(--type-data-font);
     color: var(--ink-2);
 }
 
@@ -103,12 +110,15 @@
     flex: none;
 }
 
+/* SHOULD-FIX-12 (re-review): was `.64rem` (10.24px) -- the smallest text
+   on the site, below the 11px accessibility floor. `--type-label-strong`
+   (mono, uppercase, 600 .72rem) is the named step for a short, weighted
+   status flag like "selected". */
 .cp-chart-legend-flag {
     color: var(--accent-700);
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-    font-size: .64rem;
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: var(--type-label-strong-transform);
 }
 
 /* Grid, not the plain block box this used to be: `.cp-chart-axis-title--y`
@@ -165,12 +175,15 @@
     dominant-baseline: hanging;
 }
 
+/* SHOULD-FIX-12 (re-review): was `.68rem` (10.88px), below the 11px
+   floor -- `--type-label` (mono, uppercase, .72rem) is the named step
+   for a short axis-title label. */
 .cp-chart-axis-title {
     margin: .3rem 0 0;
     color: var(--muted);
-    font: .68rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .cp-chart-axis-title--x {
