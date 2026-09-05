@@ -202,13 +202,26 @@
    even setting the centring issue aside this treatment should not have
    been reused. */
 /* Left-aligned (`margin: 0`, was `0 auto`), same SHOULD-FIX-11 fix as
-   `.viewer-caption` just above -- see that rule's comment. Still centres
-   its OWN children (`align-items: center`), just no longer centred
-   itself inside the page column. */
+   `.viewer-caption` just above -- see that rule's comment.
+
+   Owner report ("record-page residuals" re-review, item 1): `align-items:
+   center` here centred the canvas (and the toolbar/display-controls rows
+   above it) INSIDE this 36rem card, while `.viewer-measurements` below
+   (a sibling of this element, not a descendant -- see
+   `GeometryViewer.tsx`'s return) used its own `max-width: 36rem; margin:
+   0 auto` to centre itself in the full ~1288px content column instead.
+   MEASURED at 1920 on the unpatched build: this box at x=180 w=576
+   (canvas centred inside it at x=228 w=480), the panel at x=536 w=576 --
+   floating to the right of and below the picture, not under it. Now
+   `flex-start`: the canvas (and every row above it -- toolbar, display
+   controls) left-aligns to this card's own padding edge instead, the
+   same edge `.viewer-measurements` now anchors to (see that rule in
+   `geometry-measure.css`) -- toolbar, canvas and measurements panel
+   share one left edge and one 36rem-wide box, stacked top to bottom. */
 .viewer-stage {
     display: flex;
     flex-direction: column;
-    align-items: center;
+    align-items: flex-start;
     gap: .9rem;
     max-width: 36rem;
     margin: 0;
