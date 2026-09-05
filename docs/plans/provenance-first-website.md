@@ -177,6 +177,30 @@ provenance and machine detail live on dedicated linked pages.
     tests that measure rendered style or emitted CSS, not class names.
     The one deliberate visible change is the h1 cap, 88 to 102px down to
     64px, one token to revisit.
+16. Re-review and residuals. The same two reviewers re-measured the
+    site after the four PRs: font sizes 49 to 36, monospace 58 to 47
+    percent of text, one disclosure style, weights 400 and 600 only.
+    What remained was fixed in two PRs, record pages (#371) and species
+    entry, browse and chrome (#372), each verified by a reviewer who
+    rebuilt main and the branch and measured both. Two lessons worth
+    keeping. Wrapping fixes must be measured, not reasoned: a break
+    opportunity after every underscore and a keep-all rule both looked
+    right in the diff and were inert or harmful on the page; the real
+    fix for a reference wrapping mid-token was a wider key/value
+    column. And a guard has to be watched failing: three tests in this
+    round passed with their rule deleted, an allowlist grew silently,
+    and a class named only in a comment counted as used. Each was
+    proven red under mutation before merge. On the way, a user report
+    turned out to be a route remount introduced in slice 12: the entry
+    page and its section routes rendered different element types, so
+    every tab click unmounted the page, refetched three requests, and
+    tripped the anonymous rate limit on Back. Fixed by rendering one
+    element for both routes and deduplicating in-flight requests with
+    a five-minute cache (#370), verified live: a tab click now issues
+    no request at all. Open for the design owner: the conformer card's
+    references box keeps a third disclosure style because it is the
+    tested fix for a double border, and a reviewer proposed promoting
+    it to a named inset modifier.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
