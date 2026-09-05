@@ -426,6 +426,13 @@
    IRC points). */
 .geometry-groups { margin-top: 1rem; display: grid; gap: 1.1rem; }
 
+/* Grid items default to `min-width: auto`, so an opened disclosure whose
+   table is wider than the column made the whole page ~900px wide at 680
+   instead of scrolling inside its `.table-scroll` (PR B review) -- the same
+   mechanism fixed on `.card.observation-card`. Items may shrink; the
+   wrapper scrolls. */
+.geometry-groups > * { min-width: 0; }
+
 /* `.geometry-final-label`/`.geometry-role-disclosure` retired -- the
    "Saddle-point geometry"/"Input"/"Output" group labels are now real
    `<h3 className="t-heading-2">` sub-headings (item 3: "retire

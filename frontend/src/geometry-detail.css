@@ -431,7 +431,7 @@
     border: 1px solid var(--control-border);
     background: var(--surface);
     color: var(--accent);
-    font: .7rem var(--mono);
+    font: .72rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .04em;
     cursor: pointer;
