@@ -14,6 +14,7 @@ import { RefsDisclosure } from "../components/RefsDisclosure"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
+import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -381,7 +382,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         read "TS4 · MRCI+Davidson/... · Molpro (version not
                                         recorded) · NOT REVIEWED", indistinguishable without
                                         these two facts. */}
-                                    <code>{siblingRef}</code>
+                                    <code>{refWithBreaks(siblingRef)}</code>
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
@@ -404,7 +405,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             )}
 
             <section className="ledger-section" aria-labelledby="calc-ledger">
-                <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
+                {/* SHOULD-FIX-6 ("record-page residuals" re-review): every
+                    OTHER section on this page carries a kicker; this one
+                    didn't, which read as arbitrary rather than a signal.
+                    "Machine detail" matches the kicker
+                    `ConformerObservationPage` uses for the same section
+                    (its own "Calculation evidence" heading) -- the same
+                    category, worded the same way, on both pages. */}
+                <SectionHeading id="calc-ledger" kicker="Machine detail">Calculation evidence</SectionHeading>
                 <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
                 {calculationsAvailability === "populated" ? (
                     <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />
@@ -477,7 +485,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         {roleGeometries.map((geometry, index) => (
                                             <li key={geometry.geometry_ref}>
                                                 <span>{index + 1}</span>
-                                                <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
+                                                <Link to={`/geometries/${geometry.geometry_ref}`}>{refWithBreaks(geometry.geometry_ref)}</Link>
                                             </li>
                                         ))}
                                     </ol>
