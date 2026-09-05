@@ -155,3 +155,41 @@ describe(".record-placeholder p:last-child -- body copy under the shared prose m
         expect(rule).toMatch(/font:\s*var\(--type-body-font\)/)
     })
 })
+
+/**
+ * SHOULD-FIX-10 ("record-page residuals" re-review): three more one-off
+ * sizes off the 13-step scale -- `.destination span .7rem`, `.archive-
+ * footer .72rem`, `.search-help/.search-message .75rem`.
+ */
+describe("destination/footer/search-help use the named type scale (SHOULD-FIX-10)", () => {
+    it(".destination > span:last-child uses --type-label-font, not a literal .7rem", () => {
+        const rule = extractRule(css, ".destination > span:last-child")
+        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
+        expect(rule).not.toMatch(/\.7rem/)
+    })
+
+    it(".archive-footer uses --type-note-font, not a literal .72rem", () => {
+        const rule = extractRule(css, ".archive-footer")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+        expect(rule).not.toMatch(/font-size:\s*\.72rem/)
+    })
+
+    it(".search-help, .search-message use --type-note-font, not a literal .75rem", () => {
+        const rule = extractRule(css, ".search-help, .search-message")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+        expect(rule).not.toMatch(/\.75rem/)
+    })
+})
+
+/**
+ * SHOULD-FIX-14 (re-review): the `.archive-shell .ref-item-label,
+ * .archive-shell .copy-button` accessibility-pass floor override is
+ * retired now that both classes are fixed at source in
+ * `refs-disclosure.css` itself.
+ */
+describe("the retired .archive-shell .ref-item-label / .copy-button floor override is gone", () => {
+    it("index.css no longer declares this rule", () => {
+        expect(css).not.toMatch(/\.archive-shell\s+\.ref-item-label/)
+        expect(css).not.toMatch(/\.archive-shell\s+\.copy-button/)
+    })
+})
