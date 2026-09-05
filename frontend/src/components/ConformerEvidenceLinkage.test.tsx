@@ -101,6 +101,18 @@ describe("ConformerEvidenceLinkage", () => {
         expect(document.querySelector(".evidence-linkage .eyebrow")).not.toBeInTheDocument()
     })
 
+    // SHOULD-FIX-7 (species-entry/browse/chrome residuals re-review): this
+    // section used to carry `.card.card--sunken` -- a sunken box between
+    // the bare conformer picker above it and the bare tab strip below it,
+    // the only boxed section on the page. Bare now, matching both
+    // neighbours.
+    it("renders as a bare section, not a boxed card -- the ONE box was inconsistent with both its neighbours", () => {
+        render(<ConformerEvidenceLinkage conformer={conformer()} />)
+        const section = document.querySelector(".evidence-linkage") as HTMLElement
+        expect(section.className.split(" ")).not.toContain("card")
+        expect(section.className.split(" ")).not.toContain("card--sunken")
+    })
+
     // Finding 14: the card above prints "11 obs" / "opt 7/11 obs" with no
     // expansion anywhere on the page -- this mechanics note is the one
     // place "obs" (and "calc") ever gets tied back to its full word, so it

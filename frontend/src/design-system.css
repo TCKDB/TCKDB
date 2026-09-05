@@ -100,6 +100,24 @@
     --type-body-tracking: 0em;
     --type-body-transform: none;
 
+    /* SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): a
+       named step for a PAGE LEDE -- `.tagline` (index.css, already
+       commented "the one editorial intro on the site"), `.browse-intro`,
+       `.evidence-linkage-story` -- three places that deliberately set
+       serif prose where `--type-body` (sans) is the default, each with
+       its own slightly different bespoke size (1rem, all three, but three
+       separate declarations rather than one shared step). A lede reads as
+       distinct from body copy on PURPOSE (the sentence a reader's eye
+       lands on first) -- one step up in size (1.15rem vs body's 1rem)
+       makes that distinction real rather than "the same size, but serif",
+       and a slightly tighter 1.5 line-height (vs body's 1.6) suits a
+       short 1-2 sentence lede rather than a multi-paragraph read. Named,
+       not a fourth ad hoc bespoke declaration -- exactly the "one style
+       per role" rule every other step in this file already follows. */
+    --type-lede-font: 400 1.15rem/1.5 var(--serif);
+    --type-lede-tracking: 0em;
+    --type-lede-transform: none;
+
     --type-value-font: 400 .9375rem/1.45 var(--sans);
     --type-value-tracking: 0em;
     --type-value-transform: none;
@@ -168,6 +186,7 @@
 .t-label { font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }
 .t-label-strong { font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
 .t-body { font: var(--type-body-font); letter-spacing: var(--type-body-tracking); text-transform: var(--type-body-transform); }
+.t-lede { font: var(--type-lede-font); letter-spacing: var(--type-lede-tracking); text-transform: var(--type-lede-transform); }
 .t-value { font: var(--type-value-font); letter-spacing: var(--type-value-tracking); text-transform: var(--type-value-transform); }
 .t-data { font: var(--type-data-font); letter-spacing: var(--type-data-tracking); text-transform: var(--type-data-transform); }
 .t-note { font: var(--type-note-font); letter-spacing: var(--type-note-tracking); text-transform: var(--type-note-transform); }

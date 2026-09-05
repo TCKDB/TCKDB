@@ -95,3 +95,23 @@ describe("science-record card: one border/radius/padding, owned by `.card` (desi
         expect(rule![1]).not.toMatch(/border|padding|background|border-radius/)
     })
 })
+
+// BLOCKING-2 (species-entry/browse/chrome residuals re-review): the
+// "Software"/"Workflow tool" provenance row `IdenticalStatmechGroupRefs`
+// (EntryStatmechSection.tsx) renders beneath each record's own row in the
+// "Records in this group" table -- moved out of the table's own columns
+// so it fits at 1920 without clipping (see that component's own comment).
+// Pinned here: reverting this file's own rule to `main` (leaving the
+// TSX's `.data-table-provenance-row` class with no styling) is otherwise
+// invisible to this test suite -- no other test in this repo reads
+// `entry-science.css`'s declarations for this class.
+describe(".data-table-provenance-row: the demoted Software/Workflow-tool line under each grouped record", () => {
+    it("styles the row at --type-note (muted), with its own bottom border so the two-row group reads as one unit", () => {
+        const rule = /\.data-table-provenance-row td\s*\{([^}]*)\}/.exec(css)
+        expect(rule).not.toBeNull()
+        expect(rule![1]).toMatch(/font:\s*var\(--type-note-font\)/)
+        expect(rule![1]).toMatch(/color:\s*var\(--muted-2\)/)
+        expect(rule![1]).toMatch(/border-bottom:\s*1px solid var\(--line-2\)/)
+        expect(rule![1]).toMatch(/padding-top:\s*0/)
+    })
+})

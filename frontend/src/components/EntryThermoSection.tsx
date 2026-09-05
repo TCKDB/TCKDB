@@ -513,7 +513,7 @@ function IdenticalThermoGroupRefs({ records }: { records: ThermoRecord[] }) {
                                     <td data-label="SP calculation">
                                         <CalculationRefCell calculationRef={provenance?.sp_calculation_ref ?? null} primaryRef={primaryRef} />
                                     </td>
-                                    <td data-label="Statmech ref">{provenance?.statmech_ref ?? "not recorded"}</td>
+                                    <td data-label="Statmech ref">{provenance?.statmech_ref ? <code className="data">{provenance.statmech_ref}</code> : "not recorded"}</td>
                                     <td data-label="Software">{softwareLabel(provenance?.software_release) ?? "not recorded"}</td>
                                     <td data-label="Workflow tool">{toolReleaseLabel(provenance?.workflow_tool_release) ?? "not recorded"}</td>
                                 </tr>
@@ -879,7 +879,11 @@ function ProvenanceBlock({ provenance, thermoRef, idSuffix = "" }: {
                     <dt>Level of theory</dt>
                     <dd>{provenance.level_of_theory ? lotLabel(provenance.level_of_theory) : "not recorded"}</dd>
                 </div>
-                <div><dt>Level of theory ref</dt><dd>{provenance.level_of_theory?.level_of_theory_ref ?? "not recorded"}</dd></div>
+                {/* SHOULD-FIX-9 (species-entry/browse/chrome residuals re-review):
+                    these two rendered as plain 15px sans text next to `.data`
+                    calc refs two rows below -- a ref is a ref regardless of
+                    whether this page happens to link it. */}
+                <div><dt>Level of theory ref</dt><dd>{provenance.level_of_theory?.level_of_theory_ref ? <span className="data">{provenance.level_of_theory.level_of_theory_ref}</span> : "not recorded"}</dd></div>
                 <div>
                     <dt>Software</dt>
                     <dd>{softwareLabel(provenance.software_release) ?? "not recorded"}</dd>
@@ -891,7 +895,7 @@ function ProvenanceBlock({ provenance, thermoRef, idSuffix = "" }: {
                 <CalculationProvenanceRows provenance={provenance} />
                 {/* No dedicated statmech detail page exists in this project (see the
                     module docstring), so this stays plain text rather than a dead link. */}
-                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ?? "not recorded"}</dd></div>
+                <div><dt>Statmech ref</dt><dd>{provenance.statmech_ref ? <span className="data">{provenance.statmech_ref}</span> : "not recorded"}</dd></div>
                 <div>
                     <dt>Conformer</dt>
                     <dd>

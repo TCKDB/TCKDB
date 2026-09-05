@@ -69,7 +69,24 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
  */
 .archive-shell { display: flex; flex-direction: column; min-height: 100vh; min-height: 100dvh; }
 .archive-shell > main { flex: 1; }
-.utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }.brand { display: flex; gap: .55rem; align-items: center; font: 600 .76rem var(--mono); color: var(--ink-2); letter-spacing: .03em; }.brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: 600 .85rem var(--serif); }.utility-bar-end { display: flex; align-items: center; gap: clamp(.75rem, 2.5vw, 1.5rem); }.utility-bar nav { display: flex; gap: clamp(.75rem, 2.5vw, 1.5rem); }.utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font-size: .82rem; font-weight: 600; }.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
+.utility-bar { height: 48px; padding: 0 clamp(1rem, 4vw, 2.5rem); display: flex; align-items: center; justify-content: space-between; background: var(--surface); border-bottom: 1px solid var(--line); }
+/* SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): `.brand`
+   was `600 .76rem var(--mono)` (12.16px) and its icon square `600 .85rem
+   var(--serif)` (13.6px) -- two more off-scale sizes on the one piece of
+   chrome every route renders. `--type-label-strong` (mono, uppercase,
+   .72rem/600) is the named step for a short, all-caps UI label -- both the
+   wordmark text ("TCKDB", already uppercase, so the transform is a no-op
+   there) and the icon glyph ("T") take it now. */
+.brand { display: flex; gap: .55rem; align-items: center; font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); color: var(--ink-2); }
+.brand span { display: grid; width: 1.25rem; height: 1.25rem; place-items: center; border-radius: .25rem; background: var(--accent); color: var(--surface); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
+.utility-bar-end { display: flex; align-items: center; gap: clamp(.75rem, 2.5vw, 1.5rem); }
+.utility-bar nav { display: flex; gap: clamp(.75rem, 2.5vw, 1.5rem); }
+/* Was `font-size: .82rem; font-weight: 600` (13.12px) -- `--type-ui` (sans
+   600 .8125rem/1.3, 13px) is the named step this primary-nav link's own
+   role already matches everywhere else "a short, weighted UI control
+   label" appears (tab strips, disclosure summaries). */
+.utility-bar nav a { padding: .3rem 0; color: var(--ink-2); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
+.utility-bar nav a[aria-current="page"], .utility-bar nav a:hover { color: var(--accent); }.utility-bar a:focus-visible, button:focus-visible, input:focus-visible, .search-results a:focus-visible { outline: 3px solid var(--accent-300); outline-offset: 3px; }
 .archive-hero { max-width: 53rem; margin: 0 auto; padding: clamp(4rem, 11vw, 7rem) 1.25rem 4rem; text-align: center; }
 /* `.eyebrow` -- the site's standalone kicker (as opposed to `.t-label`'s
    repeated dt/th/legend role). Was its own one-off .72rem/.19em pair;
@@ -90,9 +107,42 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 /* The one editorial intro on the site: `--type-body`'s size/weight/line-
    height, serif rather than the step's own sans -- an explicit, named
    exception (not a new one-off size) because this sentence is read as
-   prose, not UI copy. */
-.tagline { max-width: var(--measure-prose); margin: 1.4rem auto 0; color: var(--ink-2); font: var(--type-body-font); font-family: var(--serif); letter-spacing: var(--type-body-tracking); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
-.identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { max-width: var(--measure-note); margin: .65rem 0 0; color: var(--muted-2); font: var(--type-note-font); }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
+   prose, not UI copy.
+
+   SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): now
+   uses the named `--type-lede` step (design-system.css) instead of
+   `--type-body` plus a local `font-family: var(--serif)` override -- this
+   sentence, `.browse-intro`, and `.evidence-linkage-story`
+   (species-entry.css) were three separate bespoke "serif body copy" spots
+   with the same intent; one named step for the role now, one size up
+   from body copy so a lede reads as visually distinct on purpose, not
+   merely re-fonted. */
+.tagline { max-width: var(--measure-prose); margin: 1.4rem auto 0; color: var(--ink-2); font: var(--type-lede-font); letter-spacing: var(--type-lede-tracking); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
+.identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }
+/* SHOULD-FIX-13 (species-entry/browse/chrome residuals re-review): was
+   `600 .78rem var(--mono)` -- `--type-label-strong` (mono, uppercase,
+   600 .72rem) is the named step for a short, weighted field label like
+   this one ("Exact species identifier"). */
+.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: var(--type-label-strong-font); letter-spacing: var(--type-label-strong-tracking); text-transform: var(--type-label-strong-transform); }
+.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }
+.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }
+/* The search-icon glyph ("⌕") -- a decorative symbol sized to sit
+   comfortably inside the input row, not text carrying a type-scale role
+   (the same "icon glyph, not prose" call `.linkage-connector`'s arrow
+   makes) -- left as its own literal size rather than mapped onto a step
+   with no icon-sized member. */
+.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }
+.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }
+.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); cursor: pointer; }
+.search-row button:hover:not(:disabled) { background: var(--accent-700); }
+.search-row button:disabled { opacity: .72; cursor: wait; }
+/* Was `font-size: .75rem` -- `--type-note` is the named step for a short
+   muted helper/status line under a form control. */
+.search-help, .search-message { max-width: var(--measure-note); margin: .65rem 0 0; color: var(--muted-2); font: var(--type-note-font); }
+.search-message { color: var(--accent-700); font-weight: 600; }
+.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }
+.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }
+.search-results ul { margin: 0; padding: 0; list-style: none; }
 .identifier-choice { display: flex; gap: .6rem; align-items: center; margin: .8rem 0 0; padding: .7rem; border: 1px solid var(--line); background: var(--surface); }.identifier-choice legend { padding: 0 .25rem; color: var(--ink-2); font-size: .78rem; }.identifier-choice button { border: 1px solid var(--accent); border-radius: .25rem; padding: .35rem .55rem; background: var(--surface); color: var(--accent-700); font-weight: 600; cursor: pointer; }.identifier-choice button:hover { background: var(--accent-50); }
 
 /*
@@ -121,10 +171,18 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     color: var(--muted-2);
     /* .68rem (10.88px) raised to .6875rem (11px) -- accessibility pass
        finding 10's font-size floor for the smallest, most-repeated UI
-       text; the token fix above (--muted-2) covers contrast, this covers
-       the "9-11px" size half of the same finding. */
-    font: 600 .6875rem var(--mono);
-    letter-spacing: .03em;
+       text; the token fix above (--muted-2) covers contrast, this covered
+       the "9-11px" size half of the same finding.
+
+       SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review):
+       11px was still its own bespoke size next to `--type-label-strong`
+       (.72rem/11.52px), the same "brand/toggle" step item 10 maps this
+       chrome onto -- "Light"/"Dark"/"System" render upper-cased now, the
+       same all-caps-label treatment every other `--type-label`-family
+       step on the site already carries (e.g. `.kv-list dt`). */
+    font: var(--type-label-strong-font);
+    letter-spacing: var(--type-label-strong-tracking);
+    text-transform: var(--type-label-strong-transform);
     cursor: pointer;
 }
 
@@ -209,17 +267,53 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    own serif voice (`.species-header h1`, `.entry-card h4`), so a card
    naming one of three top-level destinations reads as a heading in the
    same house style, not a smaller sans UI label. */
-.destination h2 { margin: 1rem 0 .45rem; font: var(--type-heading-2-font); letter-spacing: var(--type-heading-2-tracking); color: var(--ink); }.destination p { margin: 0; color: var(--muted-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }.destination > span:last-child { margin-top: auto; padding-top: 1rem; color: var(--accent); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font: var(--type-note-font); }.record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }
+/* SHOULD-FIX-13 (species-entry/browse/chrome residuals re-review): item
+   13 asks this file to decide the destination-card title step and say
+   why, since a page's OWN section `<h2>` (`SectionHeading`, e.g.
+   `.conformer-picker h2`/`.evidence-linkage h2`) renders at
+   `--type-heading-1`, one step above this card title. Decision: KEEP
+   `--type-heading-2` here, unchanged -- this `<h2>` plays a different
+   role than a page's section heading. It identifies ONE card among three
+   siblings in a grid, the same "title of one item in a list" role
+   `.browse-row-title` and `.conformer-card-label` already use
+   `--type-heading-2` for -- not "this page has a new major section",
+   which is what `--type-heading-1` marks. Promoting it to heading-1 would
+   make three destination cards read as three competing page sections
+   rather than three peers in one grid. */
+.destination h2 { margin: 1rem 0 .45rem; font: var(--type-heading-2-font); letter-spacing: var(--type-heading-2-tracking); color: var(--ink); }
+.destination p { margin: 0; color: var(--muted-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
+/* Was `.7rem var(--mono)` -- `--type-label` (mono, uppercase, .72rem) is
+   the named step for a short call-to-action label ("Coming soon", "Open
+   catalogue"). Landed independently on `main` at 400 weight (matching
+   the original's own unweighted `.7rem` rule) rather than
+   `--type-label-strong`'s 600 -- kept as-is on rebase rather than
+   re-bolding a step this file did not originally set a weight on. */
+.destination > span:last-child { margin-top: auto; padding-top: 1rem; color: var(--accent); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }
+/* Was `font-size: .72rem` (11.52px), inheriting the page's default sans
+   family -- `--type-note` (sans .8125rem/1.5) is the named step for a
+   short muted line, the same role this footer already plays. */
+.archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font: var(--type-note-font); }
+.record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }
 /* The path/ref chip is an identifier, not an accent-tinted UI chip -- data
    step, plain colour, same treatment `.entry-card code`/`.browse-ref` get. */
 .record-placeholder code { display: inline-block; margin: 1.25rem 0; overflow-wrap: anywhere; color: var(--muted); font: var(--type-data-font); }.record-placeholder p:last-child { max-width: var(--measure-prose); color: var(--ink-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
+/* SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): was
+   `.72rem var(--mono)` (11.52px, mono) -- a mixed-case trail of category
+   labels ("Species", "Species entry", "Calculation", …), never a raw
+   identifier, so mono here was never earning its "this is an identifier"
+   meaning. `--type-note` (sans, .8125rem/1.5) is the named step for a
+   short muted line; grepped every `.record-breadcrumbs` consumer in this
+   codebase and none renders a ref as breadcrumb text (each crumb is
+   always a category word or an entity name), so there is no `.data` span
+   to carve out here today -- a future breadcrumb that does cite a ref
+   directly should wrap that one crumb in `.data`, not revert this rule. */
 .record-breadcrumbs {
     display: flex;
     flex-wrap: wrap;
     gap: .5rem;
     margin-bottom: 2.2rem;
     color: var(--muted);
-    font: .72rem var(--mono);
+    font: var(--type-note-font);
 }
 
 .record-breadcrumbs a {
@@ -261,9 +355,20 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
     /* No margin here: `QuantityValue.tsx` already puts a literal space in
        the text node before the unit (`<span className="unit"> {unit}</span>`)
        so that plain-text reads (`.textContent`, screen readers, copy/paste)
-       keep a real space -- adding margin on top would double the gap. */
-    color: var(--muted-2);
-    font-size: .92em;
+       keep a real space -- adding margin on top would double the gap.
+
+       SHOULD-FIX-12 (species-entry/browse/chrome residuals re-review):
+       `.92em` shrank the unit BELOW whatever size the value it follows
+       already renders at -- on a `--type-data-large` headline number
+       (24px) that put the unit under 22px, its own small size next to a
+       compact table cell's 13px value; `.unit` had no single size of its
+       own that was right in every context it appears in. `font-size:
+       inherit` matches the surrounding value's own size in every one of
+       them; `--muted` (not `--muted-2`) is the site's one "this is
+       secondary, not the number itself" colour, so the unit still reads
+       as de-emphasized without a font-size mismatch doing that job too. */
+    color: var(--muted);
+    font-size: inherit;
 }
 
 @media (max-width: 680px) { .utility-bar { height: auto; min-height: 48px; gap: .8rem; padding-block: .65rem; align-items: flex-start; }.utility-bar-end { flex-wrap: wrap; justify-content: flex-end; gap: .5rem .8rem; }.utility-bar nav { flex-wrap: wrap; justify-content: flex-end; gap: .35rem .8rem; }.archive-hero { padding-top: 4rem; }.search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.destination-grid { grid-template-columns: 1fr; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }

@@ -19,11 +19,16 @@
     letter-spacing: var(--type-display-2-tracking);
 }
 
+/* SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): was a
+   bespoke `1rem/1.6 var(--serif)` -- one of three near-identical serif
+   "lede" declarations across the site (`.tagline`, index.css;
+   `.evidence-linkage-story`, species-entry.css). Now the named
+   `--type-lede` step (design-system.css). */
 .browse-intro {
     max-width: var(--measure-prose);
     margin: 1rem 0 0;
     color: var(--ink-2);
-    font: 1rem/1.6 var(--serif);
+    font: var(--type-lede-font);
 }
 
 .browse-kind-selector {
@@ -47,6 +52,12 @@
     gap: .6rem;
 }
 
+/* SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): was a
+   bare `.86rem` -- `--type-value` (sans 400 .9375rem) is the named step
+   for a plain content label a reader picks between ("Species"/
+   "Reaction"/"Transition state"), matching a filter field's own typed
+   value one row down. The selected state's own `font-weight: 600`
+   override below still wins on its own, more specific selector. */
 .browse-kind-option {
     display: flex;
     align-items: center;
@@ -56,7 +67,8 @@
     border-radius: .5rem;
     background: var(--surface);
     color: var(--ink-2);
-    font-size: .86rem;
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
     cursor: pointer;
 }
 
@@ -144,9 +156,14 @@
     gap: .5rem;
 }
 
+/* SHOULD-FIX-11 (re-review): was a bare `.84rem var(--sans)` -- `--type-
+   value` is the named step for a checkbox's own plain-text label (already
+   sans; `text-transform: none`/`letter-spacing: normal` stay explicit so
+   this never inherits a `--type-label`-family uppercase/tracking rule by
+   mistake if the token's own definition ever changes). */
 .browse-filter-field-check label {
     color: var(--ink-2);
-    font: .84rem var(--sans);
+    font: var(--type-value-font);
     text-transform: none;
     letter-spacing: normal;
 }
@@ -182,19 +199,25 @@
     gap: .5rem 1.1rem;
 }
 
+/* SHOULD-FIX-11 (re-review): was a bare `.84rem var(--sans)`, same fix as
+   `.browse-filter-field-check label` above -- `--type-value`. */
 .browse-filter-evidence-check {
     display: flex;
     align-items: center;
     gap: .4rem;
     color: var(--ink-2);
-    font: .84rem var(--sans);
+    font: var(--type-value-font);
     cursor: pointer;
 }
 
+/* SHOULD-FIX-11 (re-review): was a bare `.92rem` on both -- `--type-note`
+   is the named step for a short status/empty-state line. `.browse-empty`
+   keeps its own wider `line-height` (a dashed box can run to two lines;
+   `--type-note`'s own 1.5 is close but this was tuned slightly looser). */
 .browse-status {
     margin: 2rem 0;
     color: var(--ink-2);
-    font-size: .92rem;
+    font: var(--type-note-font);
 }
 
 .browse-status[role="alert"] {
@@ -208,7 +231,7 @@
     border-radius: .5rem;
     background: var(--surface-sunken);
     color: var(--ink-2);
-    font-size: .92rem;
+    font: var(--type-note-font);
     line-height: 1.55;
 }
 
@@ -308,9 +331,17 @@ span.browse-row-title {
     text-decoration: none;
 }
 
+/* SHOULD-FIX-11 (species-entry/browse/chrome residuals re-review): was
+   `.76rem var(--mono)` -- "charge 0 · spin doublet (2)" (species rows) and
+   the TS row's family/absence text ("family not recorded") are prose
+   summaries, not identifiers. `--type-note` (sans) is the named step; a
+   ref that ever lands inside this line (none does today -- neither row's
+   `.browse-row-meta` call site embeds one, see `SpeciesBrowseRow.tsx`/
+   `TransitionStateBrowseRow.tsx`) should wrap that span in `.data`
+   instead of reverting this rule to mono wholesale. */
 .browse-row-meta {
     color: var(--muted);
-    font: .76rem var(--mono);
+    font: var(--type-note-font);
 }
 
 /* `nowrap` only above 900px. Below that, the TS row's meta text (label ·
@@ -327,11 +358,19 @@ span.browse-row-title {
     }
 }
 
-.browse-row-smiles,
-.browse-row-ts-label {
+/* SHOULD-FIX-11/15 (species-entry/browse/chrome residuals re-review):
+   `.browse-row-ts-label` was RETIRED from this selector -- grepped, zero
+   `.tsx` consumers (not even a test). This class was also split across
+   TWO separate rules in this file (this one and a second, further down,
+   overriding `color`/`font-size`/`font-family` on the SAME selector) --
+   consolidated into the one rule below. The content is a species' own
+   SMILES string (`SpeciesBrowseRow.tsx`) -- an identifier, not prose --
+   so it takes `--type-data-font` (mono, the named step for exactly this
+   role) rather than either rule's own bespoke `.84rem`/`.78rem`. */
+.browse-row-smiles {
     margin: .35rem 0 0;
-    color: var(--ink-2);
-    font-size: .84rem;
+    color: var(--muted-2);
+    font: var(--type-data-font);
 }
 
 /* Level-of-theory + software line (item 1): the two headline stages
@@ -350,12 +389,6 @@ span.browse-row-title {
     color: var(--ink-2);
     font: var(--type-note-font);
     letter-spacing: var(--type-note-tracking);
-}
-
-.browse-row-smiles {
-    font-family: var(--mono);
-    font-size: .78rem;
-    color: var(--muted-2);
 }
 
 .browse-row-entries {

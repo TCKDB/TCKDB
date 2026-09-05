@@ -233,53 +233,12 @@ function StatmechList({ entryRef, response, conformer, conformers }: {
                 ) : <p className="empty-projection">The archive returned no electronic-level rows.</p>)}
             </StatmechLazySection>
 
-            <StatmechLazySection
-                heading="Conformer context"
+            <ConformerAndReviewSection
                 records={records}
-                available={records.some((record) => record.available_sections.has_conformers)}
-                notAvailableText="No conformer-basin context is recorded for any statmech record on this entry."
-                state={conformersState}
-                onOpen={openConformers}
-                rowState={(record, data) => arrayRowState(record.available_sections.has_conformers, data)}
-            >
-                {(_record, rows) => (rows && rows.length > 0 ? (
-                    <ul className="checklist">
-                        {rows.map((row) => (
-                            <li key={row.conformer_group_ref}>
-                                <Link to={`/conformer-groups/${row.conformer_group_ref}`}>{row.label ?? row.conformer_group_ref}</Link>
-                                {" "}(<code>{row.conformer_group_ref}</code>)
-                            </li>
-                        ))}
-                    </ul>
-                ) : <p className="empty-projection">The archive returned no conformer-context rows.</p>)}
-            </StatmechLazySection>
-
-            <StatmechLazySection
-                heading="Review history"
-                records={records}
-                available={records.some((record) => record.available_sections.has_review)}
-                notAvailableText="No review history is recorded for any statmech record on this entry."
-                state={reviewState}
-                onOpen={openReview}
-                rowState={(record, data) => arrayRowState(record.available_sections.has_review, data)}
-            >
-                {(_record, rows) => (rows && rows.length > 0 ? (
-                    <div className="table-scroll table-scroll--compact">
-                        <table className="data-table" aria-label="Review history">
-                            <thead><tr><th scope="col">Status</th><th scope="col">Reviewed at</th><th scope="col">Note</th></tr></thead>
-                            <tbody>
-                                {rows.map((row, index) => (
-                                    <tr key={`review-${index}`}>
-                                        <td data-label="Status">{statusLabel(row.status)}</td>
-                                        <td data-label="Reviewed at">{isoDate(row.reviewed_at)}</td>
-                                        <td data-label="Note">{row.note ?? "not recorded"}</td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                ) : <p className="empty-projection">The archive returned no review-history rows.</p>)}
-            </StatmechLazySection>
+                conformersState={conformersState}
+                reviewState={reviewState}
+                onOpen={() => { openConformers(); openReview() }}
+            />
         </>
     )
 }
@@ -697,6 +656,15 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
         <section aria-labelledby={headingId}>
             <h4 className="model-block-heading" id={headingId}>Records in this group</h4>
             <div className="table-scroll table-scroll--compact">
+                {/* BLOCKING-2 (species-entry/browse/chrome residuals re-review):
+                    this table used to carry 8 nowrap-ref columns -- at 1920 the
+                    last one clipped at the `.table-scroll` edge ("WORKFL / TOOL",
+                    "not recorde", MEASURED, no scrollbar affordance visible).
+                    "Record software" and "Workflow tool" move to a second row per
+                    record (spanning the 6 remaining columns, same `.note` weight
+                    as every other secondary provenance line on this page) rather
+                    than a 7th/8th column -- the table itself now fits at 1920 and
+                    still scrolls, rather than clips, at 680. */}
                 <table className="data-table" aria-label="Records sharing these identical values">
                     <thead>
                         <tr>
@@ -706,25 +674,27 @@ function IdenticalStatmechGroupRefs({ records, sourceCalcsState, frequenciesStat
                             <th scope="col">Freq calc</th>
                             <th scope="col">SP calc</th>
                             <th scope="col">Frequencies</th>
-                            <th scope="col">Record software</th>
-                            <th scope="col">Workflow tool</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {records.map((record) => {
+                        {records.flatMap((record) => {
                             const ref = record.statmech.statmech_ref
-                            return (
+                            return [
                                 <tr key={ref}>
-                                    <td data-label="Ref"><code>{ref}</code></td>
+                                    <td data-label="Ref"><code className="data">{ref}</code></td>
                                     <td data-label="Review">{statusLabel(record.statmech.review.status)}</td>
                                     <td data-label="Opt calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "opt")} /></td>
                                     <td data-label="Freq calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "freq")} /></td>
                                     <td data-label="SP calc"><RecordCalcRefsCell refs={sourceCalcRefsByRole(sourceCalcsState, ref, "sp")} /></td>
                                     <td data-label="Frequencies"><RecordCalcRefsCell refs={freqCalcRefs(frequenciesState, ref)} /></td>
-                                    <td data-label="Record software">{softwareLabel(record.software_release) ?? "not recorded"}</td>
-                                    <td data-label="Workflow tool">{toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}</td>
-                                </tr>
-                            )
+                                </tr>,
+                                <tr key={`${ref}-provenance`} className="data-table-provenance-row">
+                                    <td colSpan={6}>
+                                        Software: {softwareLabel(record.software_release) ?? "not recorded"}
+                                        {" · "}Workflow tool: {toolReleaseLabel(record.workflow_tool_release) ?? "not recorded"}
+                                    </td>
+                                </tr>,
+                            ]
                         })}
                     </tbody>
                 </table>
@@ -942,7 +912,17 @@ function StatmechLazySection<T>({
                 return (
                     <div key={ref} className="science-record card">
                         <div className="science-record-heading">
-                            <h3>{ref}</h3>
+                            {/* SHOULD-FIX-9 (species-entry/browse/chrome residuals
+                                re-review): this used to be `<h3>{ref}</h3>` -- the
+                                raw ref alone, at the 20px SERIF heading step, as
+                                though a scientific identifier were a title. A real
+                                title (the same "<origin> statmech record" phrase
+                                `StatmechRecordCard`'s own heading above already
+                                uses for the primary card) plus the ref in `.data`
+                                (mono, muted -- `entry-science.css`'s own rule for
+                                this exact class) matches every other heading on
+                                this page. */}
+                            <h3>{statusLabel(record.statmech.scientific_origin)} statmech record <span className="data">{ref}</span></h3>
                         </div>
                         {status === "populated" && data !== undefined
                             ? (
@@ -967,6 +947,110 @@ function StatmechLazySection<T>({
                     </div>
                 )
             })}
+        </Disclosure>
+    )
+}
+
+/**
+ * SHOULD-FIX-6 (species-entry/browse/chrome residuals re-review): this used
+ * to be two separate `StatmechLazySection`s -- "Conformer context" and
+ * "Review history" -- each rendering one FULL `.science-record card` per
+ * record (a whole card for one bullet, a whole card for "not reviewed /
+ * not recorded / not recorded", seven times over on a seven-record entry;
+ * MEASURED, this page ran 12,700px tall at 1920 with every `<details>`
+ * open). Neither section carries evidence a reader compares side by side
+ * with the record's own full card above -- "which conformer, what review
+ * state" is exactly the shape a table row answers, not a card. One
+ * disclosure now, opening BOTH `conformers`/`review` include tokens
+ * together, with one row per record: ref, conformer, review, reviewed at,
+ * note. A record can carry more than one conformer-context row or more
+ * than one review-history entry (both are arrays on the wire) -- multiple
+ * values join with " · " in the same cell rather than each becoming its
+ * own row, so "one row per record" holds even for a record with an audit
+ * trail of several reviews.
+ */
+function ConformerAndReviewSection({ records, conformersState, reviewState, onOpen }: {
+    records: StatmechRecord[]
+    conformersState: EntryListSectionState<StatmechRecord["conformers"]>
+    reviewState: EntryListSectionState<StatmechRecord["review_history"]>
+    onOpen: () => void
+}) {
+    if (records.length === 0) return null
+    const available = records.some((record) => record.available_sections.has_conformers || record.available_sections.has_review)
+    if (!available) {
+        return <p className="empty-projection">No conformer context or review history is recorded for any statmech record on this entry.</p>
+    }
+    // Combined status line: an error on EITHER fetch is reported (never
+    // silently dropped by the other one being fine); "ready" only once
+    // BOTH are ready, since the table below reads both maps at once.
+    const status = conformersState.status === "error"
+        ? conformersState
+        : reviewState.status === "error"
+            ? reviewState
+            : conformersState.status === "loading" || reviewState.status === "loading"
+                ? { status: "loading" as const }
+                : conformersState.status === "ready" && reviewState.status === "ready"
+                    ? { status: "ready" as const }
+                    : { status: "idle" as const }
+    return (
+        <Disclosure
+            id="section-conformer-context-review-history"
+            className="ledger-section"
+            summary="Conformer context & review history"
+            onToggle={(open) => { if (open) onOpen() }}
+        >
+            <p className="note" role="status">
+                {status.status === "idle" && "Expand to load this section from the archive."}
+                {status.status === "loading" && "Loading…"}
+                {status.status === "error" && status.message}
+                {status.status === "ready" && "Conformer context & review history loaded."}
+            </p>
+            {status.status === "ready" && (
+                <div className="table-scroll table-scroll--compact">
+                    <table className="data-table" aria-label="Conformer context and review history">
+                        <thead>
+                            <tr>
+                                <th scope="col">Ref</th>
+                                <th scope="col">Conformer</th>
+                                <th scope="col">Review</th>
+                                <th scope="col">Reviewed at</th>
+                                <th scope="col">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {records.map((record) => {
+                                const ref = record.statmech.statmech_ref
+                                const conformerRows = (conformersState.status === "ready" ? conformersState.dataByRef.get(ref) : undefined) ?? []
+                                const reviewRows = (reviewState.status === "ready" ? reviewState.dataByRef.get(ref) : undefined) ?? []
+                                return (
+                                    <tr key={ref}>
+                                        <td data-label="Ref"><code className="data">{ref}</code></td>
+                                        <td data-label="Conformer">
+                                            {conformerRows.length > 0
+                                                ? conformerRows.map((row, index) => (
+                                                    <span key={row.conformer_group_ref}>
+                                                        {index > 0 && " · "}
+                                                        <Link to={`/conformer-groups/${row.conformer_group_ref}`}>{row.label ?? row.conformer_group_ref}</Link>
+                                                    </span>
+                                                ))
+                                                : "not recorded"}
+                                        </td>
+                                        <td data-label="Review">
+                                            {reviewRows.length > 0 ? reviewRows.map((row) => statusLabel(row.status)).join(" · ") : "not recorded"}
+                                        </td>
+                                        <td data-label="Reviewed at">
+                                            {reviewRows.length > 0 ? reviewRows.map((row) => isoDate(row.reviewed_at)).join(" · ") : "not recorded"}
+                                        </td>
+                                        <td data-label="Note">
+                                            {reviewRows.length > 0 ? reviewRows.map((row) => row.note ?? "not recorded").join(" · ") : "not recorded"}
+                                        </td>
+                                    </tr>
+                                )
+                            })}
+                        </tbody>
+                    </table>
+                </div>
+            )}
         </Disclosure>
     )
 }

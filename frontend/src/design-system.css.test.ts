@@ -51,6 +51,14 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         // comment above --type-label-strong-font.
         "label-strong": { font: "600 .72rem/1.3 var(--mono)", tracking: ".06em", transform: "uppercase" },
         "body": { font: "400 1rem/1.6 var(--sans)", tracking: "0em", transform: "none" },
+        // Post-review addition (species-entry/browse/chrome residuals
+        // re-review, item 14): a named step for a page LEDE -- serif,
+        // one size up from --type-body and a touch tighter in line-height
+        // (a lede is a short 1-2 sentence read, not multi-paragraph body
+        // copy) -- see design-system.css's own comment above
+        // --type-lede-font for the three bespoke serif declarations this
+        // replaces.
+        "lede": { font: "400 1.15rem/1.5 var(--serif)", tracking: "0em", transform: "none" },
         "value": { font: "400 .9375rem/1.45 var(--sans)", tracking: "0em", transform: "none" },
         "data": { font: "400 .8125rem/1.5 var(--mono)", tracking: "0em", transform: "none" },
         "note": { font: "400 .8125rem/1.5 var(--sans)", tracking: "0em", transform: "none" },
@@ -58,7 +66,7 @@ describe("type scale: every step declares the exact font/tracking/transform", ()
         "data-large": { font: "600 1.5rem/1.2 var(--mono)", tracking: "0em", transform: "none" },
     }
 
-    it("declares exactly the 14 named steps (the brief's original 13 plus post-review's --type-label-strong), no more, no fewer", () => {
+    it("declares exactly the 15 named steps (the brief's original 13, plus post-review's --type-label-strong and --type-lede), no more, no fewer", () => {
         const fontVarNames = new Set(
             [...designSystemCss.matchAll(/--(type-[a-z0-9-]+)-font:/g)].map((m) => m[1]),
         )

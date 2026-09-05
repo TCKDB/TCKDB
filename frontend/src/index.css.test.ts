@@ -22,6 +22,16 @@ import css from "./index.css?raw"
  * description that introduced this file, not anything checkable here.
  */
 
+/** Strips `/* ... *\/` block comments -- needed before `extractRule` below
+ *  for any selector whose comment happens to contain a literal `}` (e.g.
+ *  `.unit`'s own doc comment quotes `<span className="unit"> {unit}</span>`),
+ *  which would otherwise end `extractRule`'s naive `[^}]*` capture early.
+ *  Same helper `species-entry.css.test.ts`/`design-system.css.test.ts` each
+ *  carry their own copy of, for the same reason. */
+function stripComments(source: string): string {
+    return source.replace(/\/\*[\s\S]*?\*\//g, "")
+}
+
 /** Extracts the declaration block for a single, non-nested selector (not
  *  inside an `@media` block) as raw text, e.g. `extractRule(css, ".archive-shell")`
  *  returns everything between `.archive-shell {` and its matching `}`. */
@@ -92,11 +102,17 @@ describe(".record-placeholder h1 -- display-2, one step down from the hero", () 
     })
 })
 
-describe(".tagline -- the one editorial intro, --type-body sized/weighted but serif", () => {
-    it("uses var(--type-body-font) capped at --measure-prose", () => {
+// SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): this
+// used to be `--type-body` plus a local `font-family: var(--serif)`
+// override -- one of three near-identical bespoke "serif prose lede"
+// declarations across the site (with `.browse-intro`/`.evidence-linkage-
+// story`). Now the named `--type-lede` step (design-system.css).
+describe(".tagline -- the one editorial intro, the named --type-lede step", () => {
+    it("uses var(--type-lede-font) capped at --measure-prose, with no local font-family override", () => {
         const rule = extractRule(css, ".tagline")
-        expect(rule).toMatch(/font:\s*var\(--type-body-font\)/)
+        expect(rule).toMatch(/font:\s*var\(--type-lede-font\)/)
         expect(rule).toMatch(/max-width:\s*var\(--measure-prose\)/)
+        expect(rule).not.toMatch(/font-family:\s*var\(--serif\)/)
     })
 })
 
@@ -156,40 +172,100 @@ describe(".record-placeholder p:last-child -- body copy under the shared prose m
     })
 })
 
-/**
- * SHOULD-FIX-10 ("record-page residuals" re-review): three more one-off
- * sizes off the 13-step scale -- `.destination span .7rem`, `.archive-
- * footer .72rem`, `.search-help/.search-message .75rem`.
- */
-describe("destination/footer/search-help use the named type scale (SHOULD-FIX-10)", () => {
-    it(".destination > span:last-child uses --type-label-font, not a literal .7rem", () => {
-        const rule = extractRule(css, ".destination > span:last-child")
-        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
-        expect(rule).not.toMatch(/\.7rem/)
+// ---------------------------------------------------------------------------
+// SHOULD-FIX-10 (species-entry/browse/chrome residuals re-review): the site
+// chrome every route renders (nav, brand, theme toggle, footer,
+// breadcrumbs) carried five more off-scale sizes -- 13.12px/12.16px/13.6px/
+// 11px/11.52px -- none matching a named type-scale step. Each maps onto a
+// named step now; this locks the mapping so a future one-off size cannot
+// silently creep back in. `.destination`/`.archive-footer`/`.search-help`
+// were ALSO independently flagged by an earlier "record-page residuals"
+// re-review pass and fixed on `main` before this branch rebased onto it --
+// those three are re-asserted here (matching the values `main` landed,
+// not re-litigated) rather than duplicated under two different describe
+// blocks.
+// ---------------------------------------------------------------------------
+describe("site chrome maps onto the named type scale, not bespoke sizes (item 10)", () => {
+    it(".utility-bar nav a uses --type-ui, not a bare .82rem/600", () => {
+        const rule = extractRule(css, ".utility-bar nav a")
+        expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
+        expect(rule).not.toMatch(/font-size:\s*\.82rem/)
     })
 
-    it(".archive-footer uses --type-note-font, not a literal .72rem", () => {
+    it(".brand and its icon square both use --type-label-strong, not bespoke mono/serif sizes", () => {
+        const brand = extractRule(css, ".brand")
+        expect(brand).toMatch(/font:\s*var\(--type-label-strong-font\)/)
+        const brandIcon = extractRule(css, ".brand span")
+        expect(brandIcon).toMatch(/font:\s*var\(--type-label-strong-font\)/)
+    })
+
+    it(".theme-toggle-option uses --type-label-strong, not a bare .6875rem", () => {
+        const rule = extractRule(css, ".theme-toggle-option")
+        expect(rule).toMatch(/font:\s*var\(--type-label-strong-font\)/)
+        expect(rule).not.toMatch(/font:\s*600 \.6875rem/)
+    })
+
+    it(".archive-footer uses --type-note, not a bare .72rem", () => {
         const rule = extractRule(css, ".archive-footer")
         expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
         expect(rule).not.toMatch(/font-size:\s*\.72rem/)
     })
 
-    it(".search-help, .search-message use --type-note-font, not a literal .75rem", () => {
-        const rule = extractRule(css, ".search-help, .search-message")
+    it(".record-breadcrumbs uses --type-note (sans), not mono", () => {
+        const rule = extractRule(css, ".record-breadcrumbs")
         expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
-        expect(rule).not.toMatch(/\.75rem/)
+        expect(rule).not.toMatch(/var\(--mono\)/)
+    })
+
+    // Landed on `main` at --type-label (400 weight, matching the
+    // original's own unweighted `.7rem` rule) before this branch rebased
+    // -- kept as `main` left it rather than re-bolding to
+    // --type-label-strong.
+    it(".destination > span:last-child uses --type-label, not a bare .7rem", () => {
+        const rule = extractRule(css, ".destination > span:last-child")
+        expect(rule).toMatch(/font:\s*var\(--type-label-font\)/)
+        expect(rule).not.toMatch(/font:\s*\.7rem/)
     })
 })
 
 /**
- * SHOULD-FIX-14 (re-review): the `.archive-shell .ref-item-label,
- * .archive-shell .copy-button` accessibility-pass floor override is
- * retired now that both classes are fixed at source in
+ * SHOULD-FIX-14 ("record-page residuals" re-review): the `.archive-shell
+ * .ref-item-label, .archive-shell .copy-button` accessibility-pass floor
+ * override is retired now that both classes are fixed at source in
  * `refs-disclosure.css` itself.
  */
 describe("the retired .archive-shell .ref-item-label / .copy-button floor override is gone", () => {
     it("index.css no longer declares this rule", () => {
         expect(css).not.toMatch(/\.archive-shell\s+\.ref-item-label/)
         expect(css).not.toMatch(/\.archive-shell\s+\.copy-button/)
+    })
+})
+
+describe("home page own sizes map onto the named type scale (item 13)", () => {
+    it(".identifier-search label uses --type-label-strong, not a bare .78rem", () => {
+        const rule = extractRule(css, ".identifier-search label")
+        expect(rule).toMatch(/font:\s*var\(--type-label-strong-font\)/)
+        expect(rule).not.toMatch(/font:\s*600 \.78rem/)
+    })
+
+    it(".search-help/.search-message use --type-note, not a bare .75rem", () => {
+        const rule = extractRule(css, ".search-help, .search-message")
+        expect(rule).toMatch(/font:\s*var\(--type-note-font\)/)
+        expect(rule).not.toMatch(/\.75rem/)
+    })
+
+    it(".destination h2 stays at --type-heading-2 (a card title among siblings, not a page section heading)", () => {
+        const rule = extractRule(css, ".destination h2")
+        expect(rule).toMatch(/font:\s*var\(--type-heading-2-font\)/)
+    })
+})
+
+describe(".unit inherits its size from context rather than shrinking below it (item 12)", () => {
+    it("uses font-size: inherit and --muted, not .92em/--muted-2", () => {
+        const rule = extractRule(stripComments(css), ".unit")
+        expect(rule).toMatch(/font-size:\s*inherit/)
+        expect(rule).toMatch(/color:\s*var\(--muted\)/)
+        expect(rule).not.toMatch(/color:\s*var\(--muted-2\)/)
+        expect(rule).not.toMatch(/\.92em/)
     })
 })

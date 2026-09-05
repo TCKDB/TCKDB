@@ -239,3 +239,84 @@ describe("References disclosure border removal is scoped to the conformer card, 
         expect(rule).toMatch(/border-bottom:\s*none/)
     })
 })
+
+// ---------------------------------------------------------------------------
+// SHOULD-FIX-5 (species-entry/browse/chrome residuals re-review): the
+// linkage connector arrow used to be `align-self: center`, vertically
+// centred against the WHOLE 350px-tall column -- against a short tile it
+// hung ~150px below the number it points away from (MEASURED). It also
+// only hid/rotated below the 880px VIEWPORT breakpoint, which never fired
+// at 1100px where the ToC rail alone narrows the row below the ~836px
+// three steps need -- MEASURED, the third tile wraps with no arrow there.
+// ---------------------------------------------------------------------------
+describe("linkage connector alignment and wrap-safe hiding", () => {
+    it(".linkage-flow is a named inline-size container, so a container query can key off its own rendered width rather than the viewport's", () => {
+        const rule = extractRule(css, ".linkage-flow")
+        expect(rule).toMatch(/container-type:\s*inline-size/)
+        expect(rule).toMatch(/container-name:\s*linkage-flow/)
+    })
+
+    it(".linkage-connector aligns to the start of its column with a top margin, not centered against the whole column", () => {
+        const rule = extractRule(css, ".linkage-connector")
+        expect(rule).toMatch(/align-self:\s*start/)
+        expect(rule).not.toMatch(/align-self:\s*center/)
+        // Pinned to the actual value (not just "some value") -- `\S+`
+        // alone would have accepted a regression to `margin-top: 0`,
+        // which is exactly `align-self: center`'s own effective
+        // top-offset on this element (no explicit margin there at all)
+        // and would have silently un-done the baseline-approximating fix.
+        expect(rule).toMatch(/margin-top:\s*\.55rem/)
+    })
+
+    it("hides the connector via a container query scoped to widths ABOVE the 880px column breakpoint, so it never suppresses the intentional rotated arrow in column layout", () => {
+        const gate = extractBlock(css, /@media \(min-width: 881px\) \{/)
+        expect(gate).toMatch(/@container linkage-flow \(max-width: 836px\)/)
+        const hideRule = extractRule(gate, ".linkage-connector")
+        expect(hideRule).toMatch(/display:\s*none/)
+    })
+
+    it("the 880px-and-below column layout keeps its own rotated, always-visible connector, untouched by the new hide rule", () => {
+        const columnBlock = extractBlock(css, /@media \(max-width: 880px\) \{/)
+        const rule = extractRule(columnBlock, ".linkage-connector")
+        expect(rule).toMatch(/rotate\(90deg\)/)
+        expect(rule).not.toMatch(/display:\s*none/)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// SHOULD-FIX-3 (species-entry/browse/chrome residuals re-review): MEASURED,
+// the entry/statmech/thermo tabs ran 51-68% mono by visible character
+// count -- these rules were most of it: full prose sentences and metric
+// summaries set in monospace, the face this house's own type scale
+// reserves for an identifier or number. Locks each one onto a named sans
+// step (never `var(--mono)`) so a future edit cannot silently revert it.
+// ---------------------------------------------------------------------------
+describe("mono is reserved for identifiers and numbers, not prose (item 3)", () => {
+    it.each([
+        ".conformer-card-meta, .conformer-card-coverage",
+        ".conformer-basin-rigid",
+        ".linkage-step-detail",
+        ".linkage-geometry-list",
+        ".conformer-attribution-answer",
+        ".conformer-attribution-other .conformer-evidence-group-heading",
+    ])("%s: a prose/summary rule never sets a mono font", (selector) => {
+        const rule = extractRule(css, selector)
+        expect(rule).not.toMatch(/var\(--mono\)/)
+    })
+
+    // The geometry ref INSIDE the (now sans) list item is the one thing in
+    // that list that must stay mono -- it is an identifier, not prose.
+    it(".linkage-geometry-list code stays mono -- it renders a geometry ref, an identifier", () => {
+        const rule = extractRule(css, ".linkage-geometry-list code")
+        expect(rule).toMatch(/var\(--type-data-font\)/)
+    })
+
+    // The step count is a NUMBER ("18", "7", "11") -- `--type-data-large`
+    // is mono deliberately; this is the one rule in this group that
+    // should NOT lose its mono face, pinned so a future "make everything
+    // sans" pass does not overcorrect it.
+    it(".linkage-step-count stays mono via --type-data-large -- it renders a number, not prose", () => {
+        const rule = extractRule(css, ".linkage-step-count")
+        expect(rule).toMatch(/var\(--type-data-large-font\)/)
+    })
+})

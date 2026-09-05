@@ -263,3 +263,18 @@
 .entry-page .supersession-notice {
     border-radius: .4rem;
 }
+
+/* BLOCKING-2 (species-entry/browse/chrome residuals re-review): the second
+   row `IdenticalStatmechGroupRefs` renders per record -- "Record software"
+   and "Workflow tool", demoted out of the table's own columns (see that
+   component's own comment for why) into one `.note`-weight line spanning
+   the row beneath it. `border-bottom` here is the row's own separator
+   (`.data-table td` already carries one; this keeps the two-row group
+   visually one unit rather than doubling the hairline between them, so
+   only the SECOND row's own bottom border shows). */
+.data-table-provenance-row td {
+    padding-top: 0;
+    border-bottom: 1px solid var(--line-2);
+    color: var(--muted-2);
+    font: var(--type-note-font);
+}
