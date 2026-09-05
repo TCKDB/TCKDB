@@ -67,3 +67,70 @@ describe("data-table first column does not wrap mid-word, scoped to this page on
         expect(stripped).not.toMatch(/\.stage-table/)
     })
 })
+
+/**
+ * BLOCKING-1 ("record-page residuals" re-review): the IRC point list's
+ * grid cells (176px, `minmax(11rem, 1fr)`) were narrower than a 31-char
+ * mono ref, printing column 1 over column 2 -- MEASURED `scrollWidth` 714
+ * at a 680px viewport. Widened to `minmax(18rem, 1fr)`, plus an explicit
+ * single-column breakpoint below 62rem (rather than relying on auto-fill
+ * to happen to resolve to one column on its own) and `min-width: 0` on
+ * each item so a still-too-wide ref shrinks/wraps inside its own cell
+ * instead of widening the grid.
+ */
+describe("IRC point list: wide-enough cells, forced single column below 62rem, shrinkable items", () => {
+    const stripped = stripComments(css)
+
+    it("widened the grid cell to 18rem (was 11rem)", () => {
+        expect(stripped).toMatch(/\.tse-irc-point-list\s*\{[^}]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(18rem,\s*1fr\)\)/)
+        expect(stripped).not.toMatch(/minmax\(11rem,\s*1fr\)/)
+    })
+
+    it("forces a single column below 62rem", () => {
+        expect(stripped).toMatch(/@media \(max-width: 62rem\) \{\s*\.tse-irc-point-list\s*\{\s*grid-template-columns:\s*1fr;/)
+    })
+
+    it("lets each list item shrink below its content's min-content width", () => {
+        expect(stripped).toMatch(/\.tse-irc-point-list li\s*\{[^}]*min-width:\s*0/)
+    })
+})
+
+/**
+ * SHOULD-FIX-2 ("record-page residuals" re-review): the saddle-point
+ * verdict box had a top margin only (`var(--s-4) 0 0`); the `.kv-list`
+ * immediately following it owns no top margin of its own (the shared
+ * primitive's contract), so the two sat 10px apart -- MEASURED. It also
+ * carried a one-off `.92rem/1.55 serif` face outside the 13-step scale.
+ */
+describe("saddle-point box: owns spacing on both sides, on-scale typography", () => {
+    const stripped = stripComments(css)
+    const rule = /\.tse-saddle-point\s*\{([^}]*)\}/.exec(stripped)
+
+    it("rule exists", () => {
+        expect(rule, ".tse-saddle-point rule not found").not.toBeNull()
+    })
+
+    it("margin sets both a top AND a bottom gap", () => {
+        expect(rule![1]).toMatch(/margin:\s*var\(--s-4\)\s+0\s+var\(--s-5\)/)
+    })
+
+    it("uses the shared --type-body-font step, not a one-off size/face", () => {
+        expect(rule![1]).toMatch(/font:\s*var\(--type-body-font\)/)
+        expect(rule![1]).not.toMatch(/\.92rem/)
+        expect(rule![1]).not.toMatch(/var\(--serif\)/)
+    })
+})
+
+/**
+ * SHOULD-FIX-4 ("record-page residuals" re-review): 126 characters per
+ * line, no cap -- the IRC summary paragraph never composed the shared
+ * `--measure-note` token every other genuine-prose block on this page's
+ * ledger vocabulary uses.
+ */
+describe("IRC summary paragraph is capped to --measure-note", () => {
+    it("declares max-width: var(--measure-note)", () => {
+        const rule = /\.tse-irc-summary p\s*\{([^}]*)\}/.exec(stripComments(css))
+        expect(rule, ".tse-irc-summary p rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/max-width:\s*var\(--measure-note\)/)
+    })
+})

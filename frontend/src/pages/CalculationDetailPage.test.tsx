@@ -403,6 +403,46 @@ describe("CalculationDetailPage", () => {
         expect(within(breadcrumb).queryByRole("link", { name: "Reaction entry" })).not.toBeInTheDocument()
     })
 
+    // SHOULD-FIX-8 (re-review pass): the only TS-owner fixture above
+    // always carries `label: "TS0"`, so `titleSubject`'s OTHER branch --
+    // a TS-owned calculation whose transition state has no depositor
+    // label at all -- was never actually exercised by a test, even
+    // though it is the one path that renders a raw ref inside the h1.
+    it("falls back to the raw ref, wrapped as a data run, when the TS owner has no label", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                owner: {
+                    kind: "transition_state_entry",
+                    species_entry: null,
+                    transition_state_entry: {
+                        transition_state_ref: "ts_demo",
+                        transition_state_entry_ref: "tse_demo2",
+                        label: null,
+                        charge: 0,
+                        multiplicity: 1,
+                        status: "candidate",
+                        reaction_entry_ref: null,
+                    },
+                },
+            }),
+        })))
+        page()
+        const h1 = await findLoaded("Frequency")
+        expect(h1).toHaveTextContent("Frequency of tse_demo2")
+
+        // The ref renders as a `.data` run inside the h1, not plain text --
+        // `.calc-headline-ref` is what keeps its font-size tracking the
+        // h1 around it (`calculation-detail.css`) rather than dropping to
+        // `.data`'s own 13px baseline.
+        const ref = within(h1).getByText("tse_demo2")
+        expect(ref.tagName).toBe("CODE")
+        expect(ref).toHaveClass("data", "calc-headline-ref")
+        // Not a link inside the h1 -- the clickable path to the TS entry
+        // is the separate "This calculation belongs to..." sentence below
+        // the identity header, unaffected by this fallback.
+        expect(within(h1).queryByRole("link")).not.toBeInTheDocument()
+    })
+
     it("surfaces level_of_theory_ref, dispersion and solvent in the provenance row, and moves the refs into the collapsed disclosure", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()

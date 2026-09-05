@@ -28,8 +28,12 @@
 .section-note {
     margin: .5rem 0 0;
     color: var(--muted);
-    font-size: .8rem;
-    line-height: 1.5;
+    /* Was a one-off `.8rem` (12.8px) -- mapped onto the shared
+       `--type-note-font` step (SHOULD-FIX-10, "record-page residuals"
+       re-review), matching `calculation-detail.css`'s byte-identical
+       copy of this same fix (kept in sync for the same load-order
+       reason the header comment above describes). */
+    font: var(--type-note-font);
 }
 
 /* `.table-scroll { overflow-x: auto }` used to be redefined here (byte-
@@ -165,9 +169,16 @@
     gap: .9rem;
 }
 
+/* SHOULD-FIX-11 ("record-page residuals" re-review): `margin: 0 auto`
+   centred this caption AND the picture below it (`.viewer-stage`) inside
+   the page while every OTHER block on this page (identity header,
+   `.kv-list`s, `.ledger-section`s) sits flush left -- MEASURED as a
+   ~350px gutter at 1920 with no other content ever using it. Left-
+   aligned now, like everything around it; `max-width` still caps the
+   caption's own line length. */
 .viewer-caption {
     max-width: 46rem;
-    margin: 0 auto;
+    margin: 0;
 }
 
 /* Centred mid-page ("i also expect the struct view to may be middle"),
@@ -190,13 +201,17 @@
    lists "accent bar/rail on cards" as a generic default to avoid, so
    even setting the centring issue aside this treatment should not have
    been reused. */
+/* Left-aligned (`margin: 0`, was `0 auto`), same SHOULD-FIX-11 fix as
+   `.viewer-caption` just above -- see that rule's comment. Still centres
+   its OWN children (`align-items: center`), just no longer centred
+   itself inside the page column. */
 .viewer-stage {
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: .9rem;
     max-width: 36rem;
-    margin: 0 auto;
+    margin: 0;
     padding: 1.5rem;
     border: 1px solid var(--line);
     background: var(--surface);
@@ -321,15 +336,22 @@
     }
 }
 
+/* SHOULD-FIX-10 ("record-page residuals" re-review): was `.72rem
+   uppercase var(--mono)` -- a button vocabulary used nowhere else on
+   this page (the chart-style toggles elsewhere use sans `--type-ui`).
+   Mapped onto `--type-ui-font` (600 .8125rem sans, no transform): the
+   button labels are already sentence case in JSX ("Rotate left", "Zoom
+   in", "Reset view", `components/GeometryViewer.tsx`), so dropping the
+   forced uppercase/letter-spacing renders them as written rather than
+   fighting the markup with CSS. */
 .viewer-controls button,
 .viewer-style-choice button {
     padding: .4rem .75rem;
     border: 1px solid var(--control-border);
     background: var(--surface);
     color: var(--accent);
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     cursor: pointer;
 }
 
@@ -362,9 +384,8 @@
 
 .viewer-style-choice legend {
     padding: 0;
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     color: var(--muted);
 }
 
@@ -378,9 +399,8 @@
     display: flex;
     align-items: center;
     gap: .4rem;
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     color: var(--muted);
 }
 
@@ -389,9 +409,8 @@
     border: 1px solid var(--control-border);
     background: var(--surface);
     color: var(--accent);
-    font: .72rem var(--mono);
-    text-transform: none;
-    letter-spacing: normal;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
 }
 
 /* Coordinate table display controls: unit (Å/bohr) and element (symbol/
@@ -426,14 +445,18 @@
     color: var(--muted);
 }
 
+/* SHOULD-FIX-10: was `.72rem uppercase var(--mono)`, the same retired
+   button vocabulary `.viewer-controls button` above used to carry --
+   mapped onto `--type-ui-font` for the same reason. Button text ("Å" /
+   "bohr" / "Symbol", `GeometryDetailPage.tsx`) is already written the
+   way it should display. */
 .coordinate-toggle button {
     padding: .3rem .65rem;
     border: 1px solid var(--control-border);
     background: var(--surface);
     color: var(--accent);
-    font: .72rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     cursor: pointer;
 }
 

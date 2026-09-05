@@ -333,7 +333,18 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateU
     const rows = atoms ?? []
     return (
         <section className="ledger-section" aria-labelledby="viewer-heading">
-            <SectionHeading id="viewer-heading" kicker="Structure">Structure view</SectionHeading>
+            {/* Post-review pass (item 4): "Structure" was correctly dropped
+                as a kicker (SHOULD-FIX-6) for restating "Structure view",
+                but that left this page 3-of-5 kickered -- MEASURED and
+                flagged as inconsistent ("either every section on a page
+                has a category kicker or none does"). "Deposited evidence"
+                fits for real (not a restatement of "Structure view", and
+                accurate: this section, the coordinate table below, and
+                the raw XYZ block further down all render the SAME
+                deposited atom coordinates in three different forms) --
+                matching `.coordinates-heading`'s own kicker below rather
+                than inventing a fourth wording for the same category. */}
+            <SectionHeading id="viewer-heading" kicker="Deposited evidence">Structure view</SectionHeading>
             {atomsAvailability === "populated" ? (
                 <SectionErrorBoundary
                     fallback={(
@@ -482,7 +493,16 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
 function RawXyzSection({ xyzText }: { xyzText: string | null }) {
     return (
         <section className="ledger-section" aria-labelledby="xyz-heading">
-            <SectionHeading id="xyz-heading" kicker="Raw" intro="The archive's own XYZ-format text block for this geometry, selectable as deposited.">
+            {/* Post-review pass (item 4): "Raw" was correctly dropped as a
+                kicker (SHOULD-FIX-6) for restating "Raw XYZ" -- see the
+                matching comment on `viewer-heading` above for why
+                "Deposited evidence" (not a restatement of "Raw XYZ", and
+                the same category the Structure-view/Coordinate-table
+                sections above share -- all three render the same
+                deposited coordinates) is what makes this page's kickers
+                consistent again rather than removing the two that were
+                never redundant in the first place. */}
+            <SectionHeading id="xyz-heading" kicker="Deposited evidence" intro="The archive's own XYZ-format text block for this geometry, selectable as deposited.">
                 Raw XYZ
             </SectionHeading>
             {xyzText ? (

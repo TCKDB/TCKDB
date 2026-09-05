@@ -341,10 +341,25 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // canonical SMILES only when no formula was derived. A TS entry has
     // no formula the way a species does, so it falls back through its own
     // label/ref instead.
+    // SHOULD-FIX-8 ("record-page residuals" re-review): when a TS-owned
+    // calculation's transition state has no depositor label, this used to
+    // fall back to the RAW ref, printed straight into the h1 as plain
+    // serif display text ("Optimisation of tse_aq5…") -- an identifier
+    // with no data-run styling at all, MEASURED as the one raw ref on
+    // these pages rendered in the wrong face. `.data` (mono, the same
+    // step every other ref on this page uses) is the honest treatment for
+    // a ref, even when it happens to sit inside an h1 -- `font-size:
+    // inherit` on `.calc-headline-ref` (`calculation-detail.css`) is what
+    // keeps it at the h1's own 52px serif-adjacent scale rather than
+    // dropping to `--type-data-font`'s bare 13px baseline-aligned inside
+    // it (post-review fix: MEASURED, a 13px mono ref sitting on the
+    // baseline of a 52px heading).
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
-            ? (identity.label ?? identity.transitionStateEntryRef ?? "this record")
+            ? (identity.label ?? (identity.transitionStateEntryRef
+                ? <code className="data calc-headline-ref">{identity.transitionStateEntryRef}</code>
+                : "this record"))
             : "this record"
 
     return (
@@ -670,7 +685,13 @@ function ResultsSection({ results, type, availability, contradicted }: {
     const kindLabel = results ? typeLabel(results.kind) : typeLabel(type)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
-            <SectionHeading id="results-heading" kicker="Result" intro={`The primary scientific result for this ${kindLabel.toLowerCase()} calculation.`}>
+            {/* No kicker here (SHOULD-FIX-6, "record-page residuals"
+                re-review): it used to repeat this section's own title
+                verbatim ("Result" / "Result") -- a kicker earns its place
+                only when it adds a category the title lacks, the same
+                rule "Review"'s kicker below satisfies and this one
+                didn't. */}
+            <SectionHeading id="results-heading" intro={`The primary scientific result for this ${kindLabel.toLowerCase()} calculation.`}>
                 Result
             </SectionHeading>
             {availability === "populated" && results ? <ResultBody results={results} /> : (
@@ -836,7 +857,8 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
 }) {
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
-            <SectionHeading id="dependencies-heading" kicker="Related calculations" intro="Other calculations this one was built from, or that were built from it.">
+            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            <SectionHeading id="dependencies-heading" intro="Other calculations this one was built from, or that were built from it.">
                 Related calculations
             </SectionHeading>
             {availability === "populated" ? (
@@ -883,7 +905,8 @@ function GeometriesSection({
     const validationRow = geometryValidation.status === "ready" ? (geometryValidation.data?.[0] ?? null) : null
     return (
         <section className="ledger-section" aria-labelledby="geometries-heading">
-            <SectionHeading id="geometries-heading" kicker="Geometries" intro="Links to the full coordinate records this calculation consumed and produced.">
+            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            <SectionHeading id="geometries-heading" intro="Links to the full coordinate records this calculation consumed and produced.">
                 Geometries
             </SectionHeading>
             {sameGeometry ? (
@@ -965,7 +988,16 @@ function ReviewHistorySection({ entries, availability }: {
     const neverReviewed = isNeverReviewed(entries)
     return (
         <section className="ledger-section" aria-labelledby="review-heading">
-            <SectionHeading id="review-heading" kicker="Review">Review history</SectionHeading>
+            {/* No kicker (SHOULD-FIX-6, re-review pass): "Review" is a
+                prefix of "Review history" -- the same near-restatement
+                case as "Structure"/"Structure view" and "Raw"/"Raw XYZ",
+                which the component itself now suppresses regardless (see
+                `PageSections.tsx`'s own doc comment), but dropped here at
+                the call site too so this file has no dead prop left over.
+                This was previously the ONE kicker of five on this page's
+                own sections -- an inconsistency the re-review flagged
+                directly ("one stray kicker in five"). */}
+            <SectionHeading id="review-heading">Review history</SectionHeading>
             {availability === "populated" && !neverReviewed ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Review history">
@@ -1130,7 +1162,8 @@ function OnDemandSections({ calculation, available, geometryValidationState, ope
 
     return (
         <section className="ledger-section" aria-labelledby="further-evidence-heading">
-            <SectionHeading id="further-evidence-heading" kicker="Further evidence" intro="Machine-parsed detail and additional checks, loaded from the archive on request.">
+            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            <SectionHeading id="further-evidence-heading" intro="Machine-parsed detail and additional checks, loaded from the archive on request.">
                 Further evidence
             </SectionHeading>
             <div className="geometry-groups">

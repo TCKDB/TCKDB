@@ -359,7 +359,21 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                         text (it is a fixed fact about the section, not
                         state that changes with open/closed); `Disclosure`'s
                         own `summary` is separate, plain text. */}
-                    <SectionHeading id="curation-selections" label={`Curation selections (${selections.length})`}>
+                    {/* Post-review pass (item 4): this was the one section
+                        on this page with no kicker while its four
+                        siblings all had one (calc-ledger/geometry-ledger/
+                        sibling-ledger/review-ledger) -- MEASURED as the
+                        same "either every section on a page has a
+                        category kicker or none does" inconsistency
+                        flagged on `GeometryDetailPage`. "Derived
+                        selections" fits for real: this section is the
+                        curation system's OWN picks over the deposited
+                        observations, not deposited evidence itself (the
+                        register `Machine detail`/`Deposited provenance`
+                        above cover) -- and it is not a prefix of "Curation
+                        selections (N)", so it does not trip the
+                        near-restatement guard either. */}
+                    <SectionHeading id="curation-selections" kicker="Derived selections" label={`Curation selections (${selections.length})`}>
                         Curation selections ({selections.length})
                     </SectionHeading>
                     <Disclosure

@@ -39,6 +39,16 @@
 
 .calc-headline-energy { margin: var(--s-4) 0 0; }
 
+/* Post-review fix (SHOULD-FIX-2 on the re-review pass): the label-less
+   TS fallback in the h1 (`CalculationDetailPage.tsx`'s `titleSubject`,
+   `<code className="data calc-headline-ref">`) was rendering at
+   `.data`'s own `--type-data-font` size (13px mono) sitting on the
+   baseline of the surrounding `--type-display-1` h1 (52px serif) --
+   MEASURED, a mismatched-scale ref inside a display headline. `.data`'s
+   face/weight (mono, 400) is still correct here -- only the size should
+   track the heading around it, not the shared data-run default. */
+.calc-headline-ref { font-size: inherit; }
+
 /* The compact stage/conformer note sits between the identity header and
    the full provenance row -- same shared `.kv-list` primitive underneath
    (see `StageAndConformerNote` in `CalculationDetailPage.tsx`), just a
@@ -72,7 +82,14 @@
 
 .coverage-checklist > div {
     display: flex;
-    justify-content: space-between;
+    /* SHOULD-FIX-5 ("record-page residuals" re-review): `space-between`
+       pushed the value 1,200px away from its own label at 1920 (the
+       card's own width, not the label's, decided how far apart the two
+       ends up), reading as unrelated content rather than one label/value
+       pair. `flex-start` + an explicit gap keeps the value directly
+       beside the label it belongs to, matching how every other label/
+       value pair on this page (`.kv-list`) already reads. */
+    justify-content: flex-start;
     gap: var(--s-3);
 }
 
@@ -91,7 +108,12 @@
     margin: 0;
     color: var(--ink);
     font: var(--type-value-font);
-    text-align: right;
+    /* Was `right`, sensible only under the retired `space-between` layout
+       (a right-aligned value made sense flush against the row's own
+       right edge). Now that the row is `flex-start` (see the comment on
+       `.coverage-checklist > div`), the value sits directly after its
+       label -- left-aligned like every other value on this page. */
+    text-align: left;
 }
 
 /* One sentence per row, replacing the old Relationship/Role/Related-
@@ -108,6 +130,14 @@
     list-style: none;
     font: var(--type-body-font);
     color: var(--ink-2);
+}
+
+/* MEASURED (SHOULD-FIX-4, "record-page residuals" re-review): 87
+   characters per line, no cap -- each row is a genuine sentence
+   ("Coarse pass; refined by <ref>."), the same "readable prose measure"
+   case `--measure-note` exists for. */
+.dependency-sentences li {
+    max-width: var(--measure-note);
 }
 
 .dependency-sentences a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
@@ -127,8 +157,14 @@
 .section-note {
     margin: .5rem 0 0;
     color: var(--muted);
-    font-size: .8rem;
-    line-height: 1.5;
+    /* Was a one-off `.8rem` (12.8px) -- mapped onto the shared
+       `--type-note-font` step (SHOULD-FIX-10, "record-page residuals"
+       re-review): `--type-note-font` already IS this exact "muted
+       explanatory line" register (see `design-system.css`'s `.note`
+       primitive), just never named for this class. `geometry-detail.css`
+       carries a byte-identical copy of this rule for its own load-order
+       reason (see that file's own comment) -- kept in sync here. */
+    font: var(--type-note-font);
 }
 
 /* `.lazy-section-affordance` (the redundant "SHOW" span) is retired --

@@ -264,7 +264,15 @@
        never did in the first place. */
     margin: 0;
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    /* Widened 12rem -> 16rem (design/foundations PR E, "record-page
+       residuals" re-review, SHOULD-FIX-3): 12rem (192px) was narrower
+       than a typical 26-30 char ref at --type-data-font (13px mono,
+       ~7.8px/char, ~200-235px) -- combined with `dd`'s own `overflow-wrap:
+       anywhere` below, that squeeze broke refs mid-token with a single
+       orphaned character ("tse_aq5ktxlu27nvul3hmdwp / uyuz4e",
+       "lot_…76hj76 / u", MEASURED at 1920 across calc/geometry/TS/
+       conformer pages). 16rem (256px) comfortably fits those refs whole. */
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
     gap: var(--s-3) var(--s-5);
 }
 
@@ -286,6 +294,29 @@
 .kv-list dd .data {
     font: var(--type-data-font);
 }
+
+/* Companion note to the column widening above (post-review pass): the
+   12rem -> 16rem widening above is what actually fixes all six required
+   routes -- `.data`/`code` need no rule of their own beyond what
+   `.kv-list dd` already declares. A prior draft of this fix also tried
+   inserting a `<wbr>` after every `_` in a rendered ref, plus a
+   `word-break: keep-all` rule here, on the theory that a still-too-wide
+   ref should prefer breaking at that `<wbr>`/a hyphen over an arbitrary
+   character. Retired (re-review): `word-break: keep-all` only ever
+   affects CJK line breaking, so it changed nothing for these Latin/
+   underscore refs, and a controlled before/after on the six required
+   routes showed the `<wbr>` insertion was neutral-to-harmful -- it could
+   split a ref ("tse_" / "aq5ktxlu27nvul3hmdwpuyuz" / "4e") that had room
+   to sit whole, and did split one on
+   `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/1100 that
+   `origin/main` rendered unbroken. `overflow-wrap: anywhere` on
+   `.kv-list dd` (above) is still what a too-wide value (a 64-hex-
+   character geometry/software hash, no `_`, no `-`,
+   `GeometryDetailPage.tsx`'s "Geometry hash" row) falls back on to wrap
+   instead of overflowing into the next column -- switching it to
+   `normal` was a real, MEASURED regression caught screenshotting this
+   fix (the hash row overlapped the FORMAT column beside it), which is
+   why this stays `anywhere`, not `normal`. */
 
 /* Put on the `<div>` wrapping one dt/dd pair that should span the full row
    width (a long value that would otherwise fight its neighbour column for
@@ -438,6 +469,11 @@
 .data-table td.num {
     text-align: right;
     font: var(--type-data-font);
+    /* MEASURED at 680 (SHOULD-FIX-3, "record-page residuals" re-review):
+       a NASA-7 coefficient in scientific notation ("-5.91781e-08") broke
+       across two lines as "-5.91781e- / 8" -- a numeric column has no
+       word to break at in the first place, so it never needs to wrap. */
+    white-space: nowrap;
 }
 
 .data-table td code,

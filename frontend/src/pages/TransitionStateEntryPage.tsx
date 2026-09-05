@@ -404,7 +404,14 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
             )}
 
             <section className="ledger-section" aria-labelledby="calc-ledger">
-                <SectionHeading id="calc-ledger">Calculation evidence</SectionHeading>
+                {/* SHOULD-FIX-6 ("record-page residuals" re-review): every
+                    OTHER section on this page carries a kicker; this one
+                    didn't, which read as arbitrary rather than a signal.
+                    "Machine detail" matches the kicker
+                    `ConformerObservationPage` uses for the same section
+                    (its own "Calculation evidence" heading) -- the same
+                    category, worded the same way, on both pages. */}
+                <SectionHeading id="calc-ledger" kicker="Machine detail">Calculation evidence</SectionHeading>
                 <EvidencePills evidence={evidence} entryRef={entry.transition_state_entry_ref} />
                 {calculationsAvailability === "populated" ? (
                     <CalculationTable calculations={calculations} entryRef={entry.transition_state_entry_ref} />

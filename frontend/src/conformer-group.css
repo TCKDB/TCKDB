@@ -81,11 +81,32 @@
     text-underline-offset: .16em;
 }
 
+/* `align-items: start` (NIT, re-review pass): grid items default to
+   `stretch`, so at desktop the three `.metric` tiles were being pulled
+   up to the evidence/coverage card's own (taller, multi-line) content
+   height in the same row -- MEASURED 188/160/201px, `.metric`'s own
+   `min-height: 5rem` (below) only ever binding at 680px where the row
+   collapses to one column and there is no taller sibling left to
+   stretch to. Each card now sizes to its own content instead. */
 .ledger-summary {
     display: grid;
+    align-items: start;
     grid-template-columns: repeat(3, 1fr) 1.8fr;
     gap: var(--s-3);
     margin: var(--s-6) 0 3.5rem;
+}
+
+/* SHOULD-FIX-9: at ~1100px the 4-column desktop template squeezed each
+   metric's own label onto three lines -- MEASURED. 72rem (1152px) covers
+   the measured 1100px with margin (viewport chrome/scrollbar/DPR
+   rounding can all shave a few px off the reported figure); a 2x2 grid
+   gives each tile roughly double the width at the SAME viewport, well
+   before the 680px breakpoint below (which already goes to a single
+   column) is reached. */
+@media (max-width: 72rem) {
+    .ledger-summary {
+        grid-template-columns: repeat(2, 1fr);
+    }
 }
 
 /* `.metric` -- a plain number tile, now composing `.card` in JSX
@@ -97,8 +118,13 @@
    remove. `.card` supplies border/radius/padding; this rule keeps only
    the row-height consistency and the label/digit typography `.card`
    itself has no opinion on. */
+/* SHOULD-FIX-9 ("record-page residuals" re-review): `8.5rem` left ~70px
+   of empty space below the digit in the common case (a short label, a
+   short number) -- MEASURED. Dropped to `5rem`, just enough to keep the
+   row's three/four tiles the same height as each other without reserving
+   space nothing renders into. */
 .metric {
-    min-height: 8.5rem;
+    min-height: 5rem;
 }
 
 .metric span {
@@ -156,7 +182,13 @@
 
 .section-intro {
     max-width: var(--measure-prose);
-    margin: 0;
+    /* SHOULD-FIX-7 ("record-page residuals" re-review): was `margin: 0` --
+       the next element (typically a `<dl class="kv-list">`, which owns no
+       top margin of its own by contract, see `design-system.css`) sat
+       20px above where it visually should, MEASURED. This intro now owns
+       the gap to whatever follows it, the same way `.tse-saddle-point`'s
+       own spacing fix does. */
+    margin: 0 0 var(--s-4);
     color: var(--ink-2);
 }
 
@@ -195,20 +227,38 @@
    ".review-badge" (0,1,2 beats 0,1,0) the moment the two combine on one
    element — exactly the collision class this codebase has been bitten
    by before, so it is never introduced even "just for now". */
+/* SHOULD-FIX-13 ("record-page residuals" re-review): was a bordered
+   `.78rem mono` box PER sibling -- ten single-line cards on end, each
+   holding exactly one ref, MEASURED as ten single-line bordered cards
+   rather than a list. A plain row (hairline divider, no box) with the
+   ref set at the shared `.data` step reads as a list of facts, not ten
+   repeated card frames around one line each. */
 .observation-list > li {
     display: flex;
     flex-wrap: wrap;
-    gap: .4rem;
+    gap: .4rem .75rem;
     align-items: baseline;
-    padding: .7rem .9rem;
-    border: 1px solid var(--line);
-    background: var(--surface);
-    font: .78rem var(--mono);
+    padding: .5rem 0;
+    border-bottom: 1px solid var(--line-2);
 }
 
+.observation-list > li:last-child {
+    border-bottom: 0;
+}
+
+/* Post-review fix (re-review pass): `font-weight: 600` was dead --
+   the `font:` shorthand below it resets EVERY sub-property it doesn't
+   name, weight included, so this link always rendered at 400 (the
+   commit that added `font: var(--type-data-font)` never removed the
+   now-redundant weight line it was superseding). 400 is also what was
+   actually promised: item 13's own intent was "the ref link uses
+   --type-data-font, the shared .data step" -- design-system.css's
+   `.data` primitive is 400 weight, not 600, so dropping the dead
+   declaration (rather than reordering to make it live) is what
+   matches that step exactly. */
 .observation-list > li a {
     color: var(--accent-700);
-    font-weight: 600;
+    font: var(--type-data-font);
 }
 
 /* `.observation-card` -- `.card` (`design-system.css`) now supplies the
@@ -264,6 +314,19 @@
 .observation-card header > div:first-child {
     display: grid;
     gap: .35rem;
+}
+
+/* SHOULD-FIX-12 ("record-page residuals" re-review): the "OBSERVATION"
+   card label used `.t-kicker` in JSX (`ConformerGroupPage.tsx`), which
+   carries no colour rule of its own -- it inherited plain `--ink` instead
+   of the `--muted` every OTHER field label on this page uses (`.kv-list
+   dt`, `.metric span`, `.observation-card header > div:last-child
+   small` below), MEASURED as the one outlier. The class changed to
+   `.t-label` (identical face/size/tracking) in the markup; colour is
+   scoped here rather than added to the bare `.t-label` utility, which
+   other callers use in contexts that want the inherited colour. */
+.observation-card header > div:first-child .t-label {
+    color: var(--muted);
 }
 
 .observation-card header a {
@@ -358,9 +421,16 @@
     font-size: .8rem;
 }
 
+/* SHOULD-FIX-4/10 ("record-page residuals" re-review): was `.9rem`
+   (14.4px, off-scale) with no width cap -- the `CalculationDetailPage`
+   "Not recorded on this calculation: …" instance of this same shared
+   class ran 140 characters per line, MEASURED. `--type-note-font` is the
+   shared muted-explanatory-line step (`.note`, `design-system.css`);
+   `--measure-note` caps the line the same way. */
 .empty-projection {
+    max-width: var(--measure-note);
     color: var(--muted);
-    font-size: .9rem;
+    font: var(--type-note-font);
 }
 
 /* Was `color: var(--tint-text)` -- an off-token grey with no other user
@@ -373,6 +443,10 @@
     display: flex;
     flex-wrap: wrap;
     gap: .4rem;
+    /* MEASURED (SHOULD-FIX-4, "record-page residuals" re-review): 154
+       characters per line, no cap, the widest of the five over-wide text
+       blocks this review found. */
+    max-width: var(--measure-note);
     margin: 0;
     padding: var(--s-3) var(--s-5);
     border-top: 1px solid var(--line);

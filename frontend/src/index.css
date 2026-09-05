@@ -92,7 +92,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    exception (not a new one-off size) because this sentence is read as
    prose, not UI copy. */
 .tagline { max-width: var(--measure-prose); margin: 1.4rem auto 0; color: var(--ink-2); font: var(--type-body-font); font-family: var(--serif); letter-spacing: var(--type-body-tracking); }.tagline em { color: var(--accent-700); }.accession-rail { display: flex; justify-content: center; align-items: center; gap: .65rem; margin: 2rem 0 .65rem; color: var(--muted-2); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.accession-rail i { width: 1.9rem; height: 1px; background: var(--accent-300); }
-.identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { max-width: var(--measure-note); margin: .65rem 0 0; color: var(--muted-2); font-size: .75rem; }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
+.identifier-search { margin: 0 auto; max-width: 45rem; text-align: left; }.identifier-search label { display: block; margin: 0 0 .5rem; color: var(--ink-2); font: 600 .78rem var(--mono); }.search-row { display: flex; align-items: center; overflow: hidden; border: 1.5px solid var(--line); border-radius: .75rem; background: var(--surface); box-shadow: 0 8px 28px -12px var(--shadow-color); }.search-row:focus-within { border-color: var(--accent-300); box-shadow: 0 0 0 4px var(--accent-50), 0 8px 28px -12px var(--shadow-color); }.search-row > span { padding-left: 1rem; color: var(--accent); font-size: 1.35rem; }.search-row input { width: 100%; min-width: 0; padding: 1rem .8rem; border: 0; outline: 0; color: var(--ink); background: none; font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); }.search-row button { align-self: stretch; border: 0; padding: 0 1.35rem; background: var(--accent); color: var(--surface); font: var(--type-ui-font); letter-spacing: var(--type-ui-tracking); cursor: pointer; }.search-row button:hover:not(:disabled) { background: var(--accent-700); }.search-row button:disabled { opacity: .72; cursor: wait; }.search-help, .search-message { max-width: var(--measure-note); margin: .65rem 0 0; color: var(--muted-2); font: var(--type-note-font); }.search-message { color: var(--accent-700); font-weight: 600; }.search-results { margin-top: 1.25rem; padding: 1rem; border: 1px solid var(--line); background: var(--surface); }.search-results h2 { margin: 0 0 .65rem; font: 600 .78rem var(--mono); }.search-results ul { margin: 0; padding: 0; list-style: none; }
 .identifier-choice { display: flex; gap: .6rem; align-items: center; margin: .8rem 0 0; padding: .7rem; border: 1px solid var(--line); background: var(--surface); }.identifier-choice legend { padding: 0 .25rem; color: var(--ink-2); font-size: .78rem; }.identifier-choice button { border: 1px solid var(--accent); border-radius: .25rem; padding: .35rem .55rem; background: var(--surface); color: var(--accent-700); font-weight: 600; cursor: pointer; }.identifier-choice button:hover { background: var(--accent-50); }
 
 /*
@@ -209,7 +209,7 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
    own serif voice (`.species-header h1`, `.entry-card h4`), so a card
    naming one of three top-level destinations reads as a heading in the
    same house style, not a smaller sans UI label. */
-.destination h2 { margin: 1rem 0 .45rem; font: var(--type-heading-2-font); letter-spacing: var(--type-heading-2-tracking); color: var(--ink); }.destination p { margin: 0; color: var(--muted-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }.destination > span:last-child { margin-top: auto; padding-top: 1rem; color: var(--accent); font: .7rem var(--mono); }.archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font-size: .72rem; }.record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }
+.destination h2 { margin: 1rem 0 .45rem; font: var(--type-heading-2-font); letter-spacing: var(--type-heading-2-tracking); color: var(--ink); }.destination p { margin: 0; color: var(--muted-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }.destination > span:last-child { margin-top: auto; padding-top: 1rem; color: var(--accent); font: var(--type-label-font); letter-spacing: var(--type-label-tracking); text-transform: var(--type-label-transform); }.archive-footer { display: flex; justify-content: space-between; gap: 1rem; padding: 1.5rem clamp(1rem,4vw,2.5rem); border-top: 1px solid var(--line); background: var(--surface); color: var(--muted-2); font: var(--type-note-font); }.record-placeholder, .loading-page { max-width: 52rem; margin: 0 auto; padding: 5rem 1.25rem; }
 /* The path/ref chip is an identifier, not an accent-tinted UI chip -- data
    step, plain colour, same treatment `.entry-card code`/`.browse-ref` get. */
 .record-placeholder code { display: inline-block; margin: 1.25rem 0; overflow-wrap: anywhere; color: var(--muted); font: var(--type-data-font); }.record-placeholder p:last-child { max-width: var(--measure-prose); color: var(--ink-2); font: var(--type-body-font); letter-spacing: var(--type-body-tracking); }
@@ -269,38 +269,14 @@ h1, h2, h3, h4, th, strong, b { font-weight: 600; }
 @media (max-width: 680px) { .utility-bar { height: auto; min-height: 48px; gap: .8rem; padding-block: .65rem; align-items: flex-start; }.utility-bar-end { flex-wrap: wrap; justify-content: flex-end; gap: .5rem .8rem; }.utility-bar nav { flex-wrap: wrap; justify-content: flex-end; gap: .35rem .8rem; }.archive-hero { padding-top: 4rem; }.search-row { flex-wrap: wrap; }.search-row input { flex: 1 1 13rem; }.search-row button { padding: .85rem 1.15rem; }.destination-grid { grid-template-columns: 1fr; }.archive-footer { flex-direction: column; } } @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
 
 /*
- * Accessibility pass, finding 10 -- font-size floor for a handful of
- * classes owned by `species-entry.css`, a file this pass is not allowed to
- * touch (other agents own their layout rules in parallel). Both sit at
- * 9-10px today: `.ref-item-label` .6rem (9.6px), `.copy-button` .58rem
- * (9.28px) -- below the 11px floor this finding asks for.
- *
- * `.refs-disclosure summary` DROPPED from this list (design/foundations):
- * `RefsDisclosure.tsx` now composes `components/Disclosure.tsx`, whose
- * `.disclosure > summary` rule (`design-system.css`) sets `--type-ui`
- * (.8125rem / 13px) directly -- already above this floor, so the
- * override has nothing left to raise.
- *
- * `.browse-row-ref` DROPPED from this list too (PR D): the class was
- * retired outright -- `browse.css`'s ref now renders through `.browse-ref`
- * plus the shared `.data` step (.8125rem / 13px), already above this
- * floor -- rather than renamed here, since PR D owns `browse.css` and
- * could fix the size at its source instead of overriding it from a file
- * it doesn't own.
- *
- * This file (`index.css`) is loaded once, globally, before any page's own
- * stylesheet mounts, so a same-specificity `.ref-item-label { font-size:
- * ... }` here would LOSE the cascade to the later-loaded page file's own
- * rule despite living in the file this pass is scoped to. Prefixing with
- * `.archive-shell` (the one wrapper every route already renders inside,
- * `AppShell.tsx`) adds a class to the selector -- (0,2,1) beats the
- * target rules' own (0,1,1)/(0,1,0) -- so the override wins on
- * SPECIFICITY, not load order, and needs no `!important`. Only
- * `font-size` is set: family, weight, colour, and every other declaration
- * in the shorthand `font:` rule those classes use stays exactly what the
- * owning file already declares.
+ * Accessibility pass, finding 10 -- font-size floor override, RETIRED
+ * (design/foundations PR E, "record-page residuals" re-review,
+ * SHOULD-FIX-14). The two classes this used to raise from a distance --
+ * `.ref-item-label` (was .6rem/9.6px) and `.copy-button` (was
+ * .58rem/9.28px) -- are fixed AT SOURCE now, in `refs-disclosure.css`
+ * itself (`--type-label-font` / `--type-ui-font`, both already above the
+ * 11px floor this finding asked for), so this specificity-trick override
+ * has nothing left to raise. `.refs-disclosure summary` and
+ * `.browse-row-ref` were dropped from this same list earlier for the
+ * same reason (see git history) -- this was the last of the three.
  */
-.archive-shell .ref-item-label,
-.archive-shell .copy-button {
-    font-size: .6875rem; /* 11px */
-}

@@ -230,7 +230,24 @@
                                    new --muted-2. */
 
         --line: #253241;
-        --line-2: #1c2732;
+        /* SHOULD-FIX-15 ("record-page residuals" re-review): nudged one
+           step lighter, #1c2732 -> #212d3a -- MEASURED near-invisible
+           inside table bodies and around the refs box (a hairline that
+           quiet is fine as a section divider, not fine as a row/box
+           boundary a reader actually needs to see). Contrast ratio
+           against the two backgrounds this token actually renders on
+           (`--surface-sunken`, `--surface`), computed from the live
+           values in this file the same way `theme.css.test.ts`'s own
+           `--faint`/`--muted-2` check does: 1.165:1 -> 1.262:1 vs
+           `--surface-sunken`, 1.085:1 -> 1.175:1 vs `--surface` (both
+           +8.3%). This is a NON-TEXT hairline, not body copy -- WCAG's
+           4.5:1 text floor does not apply, and a bigger jump toward
+           `--line`'s own 1.262:1-vs-`--surface` would have erased the
+           "second, even quieter hairline" role this token exists for
+           (see this file's own comment on `--line-2` above). Text
+           tokens (`--ink`/`--ink-2`/`--muted`/`--muted-2`/`--faint`) are
+           untouched. */
+        --line-2: #212d3a;
         --control-border: #435265;
         --divider: #2c3a49;
         --divider-strong: #3c4d60;
@@ -281,7 +298,13 @@
     --faint: #8393a5;
 
     --line: #253241;
-    --line-2: #1c2732;
+    /* Must match the `@media (prefers-color-scheme: dark)` block's value
+       exactly -- see that block's own comment (SHOULD-FIX-15) for the
+       full contrast-ratio rationale. Diverging here would mean the
+       in-app Dark toggle and an OS dark preference render this hairline
+       differently, the same invariant this file's own header comment
+       already holds `--muted-2` to. */
+    --line-2: #212d3a;
     --control-border: #435265;
     --divider: #2c3a49;
     --divider-strong: #3c4d60;

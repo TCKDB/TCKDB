@@ -27,13 +27,30 @@
    "no text block wider than `--measure-note`"). */
 .tse-saddle-point {
     max-width: var(--measure-note);
-    margin: var(--s-4) 0 0;
+    /* BLOCKING-2 ("record-page residuals" re-review): was `margin: var(--s-4)
+       0 0` -- no BOTTOM margin, and the `.kv-list` immediately following
+       (this page's Reaction-section facts) also owns no top margin of its
+       own (the primitive's own contract: it carries no external-spacing
+       opinion -- see `design-system.css`'s `.kv-list` comment), so the two
+       sat 10px apart, MEASURED. The box needs to own the gap on BOTH
+       sides since neither of its neighbours will. */
+    margin: var(--s-4) 0 var(--s-5);
     padding: var(--s-3) var(--s-4);
     border: 1px solid var(--line-2);
     border-radius: .4rem;
     background: var(--surface-sunken);
     color: var(--ink-2);
-    font: .92rem/1.55 var(--serif);
+    /* Was `.92rem/1.55 var(--serif)` -- a one-off size/face outside the
+       13-step scale. `--type-body-font` (400 1rem/1.6 sans), not
+       `--type-value-font`: this box states its verdict as a full
+       SENTENCE ("This is not a first-order saddle point...") read as
+       prose, not a bare fact-list value -- the same register
+       `.record-identity-ambiguous p` already uses for an explanatory
+       callout box elsewhere in this header/ledger vocabulary, and
+       `--type-body-font` in this design system is sans (not serif; serif
+       is reserved for headings/hero copy), so this also drops the
+       one-off serif face along with the one-off size. */
+    font: var(--type-body-font);
 }
 
 .tse-saddle-point strong { color: var(--ink); }
@@ -60,6 +77,11 @@
    other record pages follows; this file keeps only what `.card` does
    not already cover. */
 .tse-irc-summary p {
+    /* MEASURED (SHOULD-FIX-4, "record-page residuals" re-review): 126
+       characters per line with no cap -- the same "genuine prose needs a
+       readable measure" fix `--measure-note` already exists for; this
+       card just never composed it. */
+    max-width: var(--measure-note);
     margin: 0;
     color: var(--ink-2);
     font: var(--type-body-font);
@@ -72,9 +94,24 @@
 /* IRC trajectory points, hoisted out of one-card-per-point into a compact
    ordered list -- 2-3 text columns (index, ref, atom count), no card
    chrome. */
+/* BLOCKING-1 ("record-page residuals" re-review): `minmax(11rem, 1fr)`
+   (176px cells) against an index-plus-31-char-mono-ref item (~250px, no
+   wrap) meant column 1 printed OVER column 2 at every viewport this grid
+   ever showed more than one column at -- MEASURED `document.
+   documentElement.scrollWidth` 714 at a 680px viewport. `minmax(18rem,
+   1fr)` (288px) is wide enough for the widest ref this list renders (a
+   30-char `geom_…` ref is ~234px at `--type-data-font`) -- a controlled
+   before/after on the re-review pass confirmed the width alone is what
+   fixes all six required routes; an earlier version of this comment
+   credited a `<wbr>`-inserting ref renderer with "somewhere to break if
+   it still doesn't fit", which that pass retired as unneeded (see
+   `design-system.css`'s matching note on its own `.kv-list` fix). The
+   explicit `62rem` breakpoint below forces a single column below that
+   width rather than relying on auto-fill to happen to resolve to one on
+   its own. */
 .tse-irc-point-list {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
     gap: .3rem .9rem;
     margin: .85rem 0 0;
     padding: 0;
@@ -82,8 +119,21 @@
     font: var(--type-data-font);
 }
 
+@media (max-width: 62rem) {
+    .tse-irc-point-list {
+        grid-template-columns: 1fr;
+    }
+}
+
 .tse-irc-point-list li {
     display: flex;
+    /* Grid items default to `min-width: auto` (their content's min-content
+       size) -- the same mechanism `conformer-group.css`'s `.geometry-groups
+       > *` and `.card.observation-card` fixes address elsewhere in this
+       app. Without this, an item could refuse to shrink below its ref's
+       own min-content width and widen the whole grid/page instead of
+       wrapping the ref inside its own cell. */
+    min-width: 0;
     gap: .4rem;
     align-items: baseline;
     color: var(--muted-2);

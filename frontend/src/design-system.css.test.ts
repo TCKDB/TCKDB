@@ -200,10 +200,10 @@ describe("the disclosure primitive", () => {
 })
 
 describe("the kv-list primitive is defined exactly once, globally", () => {
-    it("design-system.css declares the base grid with an auto-fit column track", () => {
+    it("design-system.css declares the base grid with an auto-fit column track, 16rem (SHOULD-FIX-3, widened from 12rem)", () => {
         const rule = /\.kv-list\s*\{([^}]*)\}/.exec(designSystemCss)
         expect(rule).not.toBeNull()
-        expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(12rem,\s*1fr\)\)/)
+        expect(rule![1]).toMatch(/grid-template-columns:\s*repeat\(auto-fit,\s*minmax\(16rem,\s*1fr\)\)/)
     })
 
     // Post-review fix: the two deleted per-page rules each zeroed the UA
@@ -329,6 +329,60 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
         expect(rule![1]).toMatch(/font:\s*600\s*\.72rem\/1\.3\s*var\(--sans\)/)
         expect(rule![1]).not.toMatch(/text-transform/)
         expect(rule![1]).not.toMatch(/var\(--mono\)/)
+    })
+})
+
+describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable value (post-review pass)", () => {
+    // What is true now: the 16rem column width (below) is what fixes all
+    // six required routes, and `.data`/`code` inherit `overflow-wrap:
+    // anywhere` from `.kv-list dd` directly -- no rule of their own
+    // needed for that property (they still need their own `font:` rule,
+    // pinned separately above, since `code` carries a UA-stylesheet
+    // `font-family` that inheritance alone would not override).
+    //
+    // Retired: an earlier draft of this fix added a SECOND rule
+    // (`.kv-list dd .data, .kv-list dd code`) carrying `word-break:
+    // keep-all` plus a duplicate `overflow-wrap: anywhere`, on the theory
+    // that a ref should prefer breaking at a `<wbr>` (inserted by a
+    // ref-rendering helper) or hyphen over an arbitrary character.
+    // Reviewer finding: `word-break: keep-all` only ever affects CJK line
+    // breaking -- it changed nothing for these Latin/underscore refs --
+    // and a controlled before/after on the six required routes showed
+    // the `<wbr>` insertion itself was neutral-to-harmful (it split a ref
+    // on `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/1100 that
+    // `origin/main` rendered whole). Both the second rule and the helper
+    // are retired.
+    it("declares overflow-wrap: anywhere on the base .kv-list dd rule", () => {
+        const rule = /\.kv-list dd \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule, ".kv-list dd rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/overflow-wrap:\s*anywhere/)
+    })
+
+    it("does not narrow that fallback to overflow-wrap: normal (the caught regression: a 64-char hash with no _/- overflowed the next column instead of wrapping)", () => {
+        const rule = /\.kv-list dd \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule![1]).not.toMatch(/overflow-wrap:\s*normal/)
+    })
+
+    it("no longer declares a separate .kv-list dd .data, .kv-list dd code overflow-wrap/word-break override", () => {
+        expect(designSystemCss).not.toMatch(/\.kv-list dd \.data,\s*\n?\s*\.kv-list dd code \{[^}]*overflow-wrap/)
+    })
+
+    it("word-break: keep-all does not appear as a live declaration in design-system.css (retired -- inert for Latin/underscore refs)", () => {
+        // stripComments first: this file's own history comment quotes
+        // `word-break: keep-all` by name to explain what was retired and
+        // why -- prose mentioning a retired declaration is not a live one.
+        expect(stripComments(designSystemCss)).not.toMatch(/word-break:\s*keep-all/)
+    })
+})
+
+describe(".data-table td.num never wraps (SHOULD-FIX-3)", () => {
+    // MEASURED: a NASA-7 coefficient in scientific notation broke as
+    // "-5.91781e- / 8" at 680px -- a numeric column has nothing to
+    // legitimately wrap at.
+    it("declares white-space: nowrap", () => {
+        const rule = /\.data-table td\.num \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule, ".data-table td.num rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/white-space:\s*nowrap/)
     })
 })
 

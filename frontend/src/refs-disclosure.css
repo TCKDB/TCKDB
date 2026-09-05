@@ -66,18 +66,42 @@
     gap: .5rem;
 }
 
+/* SHOULD-FIX-14 ("record-page residuals" re-review): fixed AT SOURCE
+   instead of `index.css`'s `.archive-shell .ref-item-label,
+   .archive-shell .copy-button` accessibility-pass floor override --
+   `.ref-item-label` was `.6rem` (9.6px, floored to 11px there),
+   `.ref-item-value`/`.ref-item a` were `.72rem` with `overflow-wrap:
+   anywhere` (a long ref broke mid-token, "lot_…76hj76" / "u"), and
+   `.copy-button` was `.58rem` (9.28px, also floored). Mapped onto the
+   named steps this design system already has for exactly these roles --
+   `--type-label`, `--type-data`, `--type-ui` -- so the size is correct
+   here rather than patched at a distance by a specificity trick. The
+   `index.css` floor override for these two classes is retired below
+   (this file's own rule wins outright now, nothing left to raise). */
 .ref-item-label {
     flex: none;
     color: var(--faint);
-    font: .6rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .07em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .ref-item a,
 .ref-item-value {
+    /* `overflow-wrap: anywhere` kept as-is (was already declared before
+       this pass, just re-scaled to `--type-data-font` below) -- an
+       earlier version of this comment claimed a `word-break: keep-all`
+       addition was needed to prefer a real break point over an arbitrary
+       one; retired (re-review, same finding as `design-system.css`'s
+       matching `.kv-list dd` fix): `word-break: keep-all` only affects
+       CJK line breaking, so it changed nothing for these refs, and this
+       component's ref values were never run through a `<wbr>`-inserting
+       helper in the first place (`RefsDisclosure.tsx` is shared outside
+       this PR's scope), so there was no break opportunity for `keep-all`
+       to prefer. `anywhere` alone is what a value with no natural break
+       point wraps at instead of overflowing this box. */
     overflow-wrap: anywhere;
-    font: .72rem var(--mono);
+    font: var(--type-data-font);
 }
 
 .ref-item-value { color: var(--muted-2); }
@@ -97,9 +121,8 @@
     border-radius: .3rem;
     background: var(--surface);
     color: var(--muted-2);
-    font: .58rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     padding: .15rem .4rem;
     cursor: pointer;
 }

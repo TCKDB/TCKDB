@@ -261,3 +261,58 @@ describe("--faint and --muted-2 clear 4.5:1 on every background they render on",
         }
     }
 })
+
+/**
+ * SHOULD-FIX-15 ("record-page residuals" re-review): dark `--line-2`
+ * ("#1c2732" on "#111925"/"#16202c" -- 1.165:1 / 1.085:1) read as
+ * near-invisible inside table bodies and around the refs box. Nudged one
+ * step lighter to "#212d3a" -- NOT a WCAG 4.5:1 text-contrast claim (this
+ * is a non-text hairline, not body copy; that floor is what `--faint`/
+ * `--muted-2` above are held to), just a measured, checkable "strictly
+ * more visible than before, computed from the live token values" floor,
+ * so a future edit that quietly darkens this token back toward
+ * invisibility fails here instead of shipping.
+ */
+describe("dark --line-2 is strictly more visible than its pre-fix value (SHOULD-FIX-15)", () => {
+    function hexOf(block: string, name: string): [number, number, number] {
+        const match = new RegExp(`(?<!\\()--${name}:\\s*#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})\\b`).exec(block)
+        if (!match) throw new Error(`--${name} not found as a #rgb/#rrggbb declaration`)
+        const hex = match[1].length === 3 ? match[1].split("").map((c) => c + c).join("") : match[1]
+        return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+    }
+    function relativeLuminance([r, g, b]: [number, number, number]): number {
+        const channel = (c: number) => {
+            const s = c / 255
+            return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4
+        }
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    }
+    function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+        const [lighter, darker] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+
+    const PRE_FIX_LINE_2: [number, number, number] = [0x1c, 0x27, 0x32] // #1c2732, the retired value
+
+    it("[data-theme=dark] and the media-query dark block declare the same --line-2 value", () => {
+        const mediaBlock = extractBlock(themeCss, /^@media \(prefers-color-scheme: dark\) \{/m)
+        const darkFromMedia = hexOf(extractBlock(mediaBlock, /:root:not\(\[data-theme="light"]\) \{/), "line-2")
+        const darkExplicit = hexOf(extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m), "line-2")
+        expect(darkFromMedia).toEqual(darkExplicit)
+    })
+
+    it("clears a strictly higher contrast ratio than #1c2732 against both --surface-sunken and --surface", () => {
+        const darkBlock = extractBlock(themeCss, /^:root\[data-theme="dark"] \{/m)
+        const line2 = hexOf(darkBlock, "line-2")
+        const surfaceSunken = hexOf(darkBlock, "surface-sunken")
+        const surface = hexOf(darkBlock, "surface")
+
+        const newVsSunken = contrastRatio(line2, surfaceSunken)
+        const oldVsSunken = contrastRatio(PRE_FIX_LINE_2, surfaceSunken)
+        expect(newVsSunken, `new ${newVsSunken.toFixed(3)}:1 vs old ${oldVsSunken.toFixed(3)}:1`).toBeGreaterThan(oldVsSunken)
+
+        const newVsSurface = contrastRatio(line2, surface)
+        const oldVsSurface = contrastRatio(PRE_FIX_LINE_2, surface)
+        expect(newVsSurface, `new ${newVsSurface.toFixed(3)}:1 vs old ${oldVsSurface.toFixed(3)}:1`).toBeGreaterThan(oldVsSurface)
+    })
+})
