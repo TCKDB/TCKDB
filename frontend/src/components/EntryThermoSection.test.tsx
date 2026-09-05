@@ -684,6 +684,44 @@ describe("EntryThermoSection", () => {
 })
 
 // ---------------------------------------------------------------------------
+// SHOULD-FIX-9 (species-entry/browse/chrome residuals re-review): the
+// provenance block used to render "Level of theory ref"/"Statmech ref" as
+// plain 15px sans text, next to `.data` calc refs two rows below on the
+// same card -- a ref is a ref regardless of whether this page happens to
+// link it.
+// ---------------------------------------------------------------------------
+describe("EntryThermoSection: provenance refs render as .data, like every other ref on the card", () => {
+    it("Level of theory ref and Statmech ref are wrapped in .data when present", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const alphaCard = screen.getByText("thm_alpha").closest("article") as HTMLElement
+
+        const lotDt = Array.from(alphaCard.querySelectorAll("dt")).find((el) => el.textContent === "Level of theory ref")!
+        const lotDd = lotDt.nextElementSibling as HTMLElement
+        expect(lotDd).toHaveTextContent("lot_alpha")
+        expect(lotDd.querySelector(".data")).not.toBeNull()
+
+        const statmechDt = Array.from(alphaCard.querySelectorAll("dt")).find((el) => el.textContent === "Statmech ref")!
+        const statmechDd = statmechDt.nextElementSibling as HTMLElement
+        expect(statmechDd).toHaveTextContent("sm_alpha")
+        expect(statmechDd.querySelector(".data")).not.toBeNull()
+    })
+
+    it("renders plain 'not recorded' text (no empty .data span) when either ref is absent", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_beta")
+        const betaCard = screen.getByText("thm_beta").closest("article") as HTMLElement
+
+        const lotDt = Array.from(betaCard.querySelectorAll("dt")).find((el) => el.textContent === "Level of theory ref")!
+        const lotDd = lotDt.nextElementSibling as HTMLElement
+        expect(lotDd).toHaveTextContent("not recorded")
+        expect(lotDd.querySelector(".data")).toBeNull()
+    })
+})
+
+// ---------------------------------------------------------------------------
 // The owner: "in Thermochemistry tab, I expect the ToC to show NASA-7 Thermo
 // record (for example) if it exists as a point to go to." `thm_alpha` in
 // `mockRecords()` is nasa/NASA-7, `thm_beta` is nasa9/NASA-9, `thm_gamma` is
@@ -923,6 +961,10 @@ describe("EntryThermoSection: identical-value records group under one card", () 
             expect(cellAt(row, "Freq calculation")).toBe(`calc_${suffix}_freq`)
             expect(cellAt(row, "SP calculation")).toBe(`calc_${suffix}_sp`)
             expect(cellAt(row, "Statmech ref")).toBe(`sm_${suffix}`)
+            // SHOULD-FIX-9 (re-review): the Statmech ref cell renders as
+            // `.data` now, like every other ref column in this table.
+            const statmechCell = row.querySelector('td[data-label="Statmech ref"]') as HTMLElement
+            expect(statmechCell.querySelector(".data")).not.toBeNull()
         }
 
         // The shared body (outside the table, outside "Show all") never
