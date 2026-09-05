@@ -46,6 +46,17 @@ describe(".metric / .ledger-summary: no reserved empty space, 2x2 before 680 (SH
     it(".ledger-summary collapses to a 2x2 grid below 72rem (covers the 1100px MEASURED width), ahead of the 680px single-column breakpoint", () => {
         expect(css).toMatch(/@media \(max-width: 72rem\) \{\s*\.ledger-summary\s*\{\s*grid-template-columns:\s*repeat\(2,\s*1fr\);/)
     })
+
+    // NIT (re-review pass): grid items default to `align-items: stretch`,
+    // so at desktop the three `.metric` tiles were pulled up to the
+    // evidence/coverage card's own taller content in the same row --
+    // MEASURED 188/160/201px -- `.metric`'s `min-height: 5rem` above only
+    // ever bound at 680px, where the row is already single-column with no
+    // taller sibling to stretch to.
+    it(".ledger-summary uses align-items: start so a tile does not stretch to a taller sibling's height", () => {
+        const rule = extractRule(css, ".ledger-summary")
+        expect(rule).toMatch(/align-items:\s*start/)
+    })
 })
 
 /**

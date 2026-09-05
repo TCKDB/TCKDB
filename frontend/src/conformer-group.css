@@ -81,8 +81,16 @@
     text-underline-offset: .16em;
 }
 
+/* `align-items: start` (NIT, re-review pass): grid items default to
+   `stretch`, so at desktop the three `.metric` tiles were being pulled
+   up to the evidence/coverage card's own (taller, multi-line) content
+   height in the same row -- MEASURED 188/160/201px, `.metric`'s own
+   `min-height: 5rem` (below) only ever binding at 680px where the row
+   collapses to one column and there is no taller sibling left to
+   stretch to. Each card now sizes to its own content instead. */
 .ledger-summary {
     display: grid;
+    align-items: start;
     grid-template-columns: repeat(3, 1fr) 1.8fr;
     gap: var(--s-3);
     margin: var(--s-6) 0 3.5rem;
@@ -238,9 +246,18 @@
     border-bottom: 0;
 }
 
+/* Post-review fix (re-review pass): `font-weight: 600` was dead --
+   the `font:` shorthand below it resets EVERY sub-property it doesn't
+   name, weight included, so this link always rendered at 400 (the
+   commit that added `font: var(--type-data-font)` never removed the
+   now-redundant weight line it was superseding). 400 is also what was
+   actually promised: item 13's own intent was "the ref link uses
+   --type-data-font, the shared .data step" -- design-system.css's
+   `.data` primitive is 400 weight, not 600, so dropping the dead
+   declaration (rather than reordering to make it live) is what
+   matches that step exactly. */
 .observation-list > li a {
     color: var(--accent-700);
-    font-weight: 600;
     font: var(--type-data-font);
 }
 
