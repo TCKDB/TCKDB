@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react"
 import type { BrowseFilters, BrowseKind, BrowseResult } from "../api/browseApi"
 import { loadBrowse } from "../api/browseApi"
-import { ScientificApiError } from "../api/scientificTransport"
+import { ScientificApiError, ScientificRateLimitError } from "../api/scientificTransport"
 
 /**
  * A filter edit fires a request per keystroke (see `BrowseFilterForm`'s
@@ -36,6 +36,11 @@ export type BrowseState =
     | { status: "ready"; result: BrowseResult }
     | { status: "invalid"; detail: string }
     | { status: "malformed" }
+    // See `ScientificRateLimitError` -- distinct from `unavailable` because
+    // "try again later" is not honest here: `requestScientificJson` already
+    // retried once automatically, and this only fires when the archive was
+    // STILL over its anonymous-read budget a `Retry-After` window later.
+    | { status: "rate-limited"; retryAfterSeconds: number }
     | { status: "unavailable" }
 
 export function useBrowse(kind: BrowseKind, filters: BrowseFilters, offset: number, limit: number): BrowseState {
@@ -50,6 +55,10 @@ export function useBrowse(kind: BrowseKind, filters: BrowseFilters, offset: numb
                 .catch((error: unknown) => {
                     if (controller.signal.aborted) return
                     if (error instanceof DOMException && error.name === "AbortError") return
+                    if (error instanceof ScientificRateLimitError) {
+                        setState({ status: "rate-limited", retryAfterSeconds: error.retryAfterSeconds })
+                        return
+                    }
                     if (error instanceof ScientificApiError && error.status === 422) {
                         setState({ status: "invalid", detail: error.message })
                         return

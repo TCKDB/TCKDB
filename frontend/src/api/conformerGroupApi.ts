@@ -61,10 +61,14 @@ const response = z.object({
 
 export type ConformerGroup = z.infer<typeof response>["record"]
 
-export async function loadConformerGroup(ref: string, signal?: AbortSignal): Promise<ConformerGroup> {
+export async function loadConformerGroup(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ConformerGroup> {
     const query = new URLSearchParams()
     for (const include of ["observations", "calculations", "geometries"]) query.append("include", include)
     const endpoint = `/api/v1/scientific/conformer-groups/${encodeURIComponent(ref)}?${query}`
-    const payload = await requestScientificJson(endpoint, signal)
+    const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(response, payload, "conformer group").record
 }

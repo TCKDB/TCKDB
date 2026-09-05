@@ -1,6 +1,6 @@
 import { z } from "zod"
 import { parseScientificResponse, requestScientificJson } from "./scientificTransport"
-export { ScientificApiError } from "./scientificTransport"
+export { ScientificApiError, ScientificRateLimitError } from "./scientificTransport"
 
 const entrySchema = z.object({
     species_entry_ref: z.string(),

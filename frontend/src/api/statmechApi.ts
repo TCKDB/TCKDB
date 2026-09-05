@@ -289,8 +289,12 @@ function buildEndpoint(entryRef: string, tokens: readonly string[]): string {
  * summary, available_sections — is always present). `useScientificRecord`
  * -shaped: `(ref, signal) => Promise<T>`.
  */
-export async function loadEntryStatmech(entryRef: string, signal?: AbortSignal): Promise<StatmechListResponse> {
-    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal)
+export async function loadEntryStatmech(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<StatmechListResponse> {
+    const payload = await requestScientificJson(buildEndpoint(entryRef, []), signal, onRateLimited)
     return parseScientificResponse(statmechListResponseSchema, payload, "statmech")
 }
 

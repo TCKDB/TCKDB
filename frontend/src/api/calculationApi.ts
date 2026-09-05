@@ -510,9 +510,13 @@ function buildEndpoint(ref: string, includes: readonly string[]): string {
  * Load the calculation with the page's eager section set (see
  * `EAGER_SECTION_TOKENS`). This is the one call `useCalculation` makes.
  */
-export async function loadCalculation(ref: string, signal?: AbortSignal): Promise<CalculationRecord> {
+export async function loadCalculation(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<CalculationRecord> {
     const endpoint = buildEndpoint(ref, EAGER_SECTION_TOKENS)
-    const payload = await requestScientificJson(endpoint, signal)
+    const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(responseSchema, payload, "calculation").record
 }
 

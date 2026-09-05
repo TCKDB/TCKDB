@@ -8,6 +8,7 @@ import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
+import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { useSpeciesOverview } from "../hooks/useSpeciesOverview"
 
 function token(value: string) {
@@ -38,6 +39,16 @@ export default function SpeciesOverviewPage() {
         return <State title="Loading species record…" busy />
     }
     if (state.status === "missing") return <State title="Species not found" ref={speciesRef} />
+    if (state.status === "rate-limited") {
+        return (
+            <State
+                title="Archive is busy"
+                ref={speciesRef}
+                alert
+                message={`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(state.retryAfterSeconds)} and reload the page.`}
+            />
+        )
+    }
     if (state.status !== "ready") {
         const title = state.status === "malformed" ? "Species data could not be read" : "Species unavailable"
         return <State title={title} alert />
@@ -45,23 +56,24 @@ export default function SpeciesOverviewPage() {
     return <SpeciesDocument species={state.species} />
 }
 
-function State({ title, ref, busy, alert }: {
+function State({ title, ref, busy, alert, message }: {
     title: string
     ref?: string
     busy?: boolean
     alert?: boolean
+    message?: string
 }) {
-    const message = busy
+    const resolvedMessage = message ?? (busy
         ? "Retrieving the species identity and its electronic-state entries."
         : alert
             ? "The archive response could not be read. Try again later."
-            : "No species with this stable reference is available in this archive projection."
+            : "No species with this stable reference is available in this archive projection.")
     return (
         <section className="record-placeholder" aria-busy={busy} role={alert ? "alert" : undefined}>
             <p className="eyebrow">Archive record</p>
             <h1>{title}</h1>
             {ref && <code>{ref}</code>}
-            <p>{message}</p>
+            <p>{resolvedMessage}</p>
         </section>
     )
 }

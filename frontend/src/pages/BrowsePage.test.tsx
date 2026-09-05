@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, waitFor, within } from "@testing-library/react"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
 
@@ -190,7 +190,7 @@ function handlers(options: HandlerOptions = {}) {
 
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
-afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/") })
+afterEach(() => { server.resetHandlers(); cleanup(); window.history.replaceState({}, "", "/"); vi.useRealTimers() })
 afterAll(() => server.close())
 
 function renderAt(path: string) {
@@ -491,6 +491,29 @@ describe("browse page: the four empty/failure states are distinguishable", () =>
         expect(await screen.findByRole("alert")).toHaveTextContent("The archive service could not load this listing. Try again later.")
         expect(screen.queryByText(/deposited in this archive yet/)).not.toBeInTheDocument()
         expect(screen.queryByText(/match these filters/)).not.toBeInTheDocument()
+    })
+
+    // Review follow-up (SHOULD-FIX #2): `useBrowse` used to collapse a
+    // double 429 (both automatic-retry attempts exhausted) into the same
+    // generic "archive service could not load this listing" as a real
+    // 5xx. Distinct state, plain-language wording -- same as every other
+    // rate-limited surface.
+    it("reads a distinct, plain-language message for a double 429, not the generic 5xx wording", async () => {
+        vi.useFakeTimers()
+        server.use(http.get("/api/v1/scientific/species/browse", () => (
+            HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "15" } })
+        )))
+        renderAt("/species")
+        await act(async () => { await vi.advanceTimersByTimeAsync(200) }) // useBrowse's own request debounce
+        await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // first (429) attempt lands
+        await act(async () => { await vi.advanceTimersByTimeAsync(15_000) }) // the retry, also 429
+
+        const message = screen.getByRole("alert")
+        expect(message).toHaveTextContent(
+            "The archive is receiving too many requests right now. Wait about 15 seconds and reload the page.",
+        )
+        expect(message.textContent).not.toMatch(/\d+s\b/)
+        expect(message.textContent).not.toMatch(/could not load this listing/)
     })
 
     // Reproduces the review's second finding under item 1: a nonzero total

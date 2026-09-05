@@ -1,15 +1,23 @@
+import type { ReactNode } from "react"
 import type { ScientificRecordState } from "../hooks/useScientificRecord"
+import { formatWaitSeconds } from "../domain/rateLimitFormat"
+import { RetryCountdown } from "./RetryCountdown"
 
 /**
  * Shared non-ready rendering for every `/scientific/*` detail page built
- * on {@link useScientificRecord}. Each of the six non-ready states gets
+ * on {@link useScientificRecord}. Each of the non-ready states gets
  * its own title and message — a permanently-wrong reference (`invalid`,
  * HTTP 422) must never read the same as a possibly-transient outage
  * (`unavailable`), a schema mismatch on the archive's own response
- * (`malformed`) must never read the same as "not found" (`missing`), and
- * a *valid* reference the archive declined to fully serve
+ * (`malformed`) must never read the same as "not found" (`missing`), a
+ * *valid* reference the archive declined to fully serve
  * (`unprocessable`, e.g. `geometry_too_large`) must never read the same
- * as `invalid` — the reference is not the thing that's wrong there.
+ * as `invalid` — the reference is not the thing that's wrong there — and
+ * a rate limit (`retrying`, `rate-limited`) must never read the same as
+ * either an ordinary load or a real outage: it is neither absent nor
+ * null, it is "the archive is busy," with its own honest wording and (for
+ * `retrying`) a live countdown, since that wait can run up to a minute
+ * (`rate_limit_anon_read_per_minute`, `backend/app/api/config.py`).
  *
  * `kind` is the record's plain-English name in sentence case, e.g.
  * "conformer observation" — used to build every title and message so
@@ -25,6 +33,20 @@ export function RecordStatus({ state, ref, kind, loadingDetail }: {
 
     if (state.status === "loading") {
         return <Notice title={`Loading ${kind}…`} busy message={loadingDetail} />
+    }
+    if (state.status === "retrying") {
+        return (
+            <Notice
+                title={`Loading ${kind}…`}
+                busy
+                message={
+                    <>
+                        The archive is receiving too many requests right now. Retrying automatically in{" "}
+                        <RetryCountdown retryAfterSeconds={state.retryAfterSeconds} />…
+                    </>
+                }
+            />
+        )
     }
     if (state.status === "missing") {
         return (
@@ -65,6 +87,16 @@ export function RecordStatus({ state, ref, kind, loadingDetail }: {
             />
         )
     }
+    if (state.status === "rate-limited") {
+        return (
+            <Notice
+                title="Archive is busy"
+                ref={ref}
+                alert
+                message={`The archive is receiving too many requests right now. Wait ${formatWaitSeconds(state.retryAfterSeconds)} and reload the page.`}
+            />
+        )
+    }
     return (
         <Notice
             title={`${Kind} unavailable`}
@@ -80,7 +112,7 @@ function Notice({ title, ref, busy, alert, message }: {
     ref?: string
     busy?: boolean
     alert?: boolean
-    message: string
+    message: ReactNode
 }) {
     return (
         <section className="record-placeholder" aria-busy={busy} role={alert ? "alert" : undefined}>

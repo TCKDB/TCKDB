@@ -15,6 +15,8 @@ import { EntryTransportSection } from "../components/EntryTransportSection"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { EntryIdentity } from "../components/SpeciesEntrySummary"
+import { RetryCountdown } from "../components/RetryCountdown"
+import { formatWaitSeconds } from "../domain/rateLimitFormat"
 import { DEFAULT_SECTION, isEntrySection, LEGACY_ENTRY_SECTION_ALIASES } from "../domain/speciesEntrySections"
 import type { EntrySection } from "../domain/speciesEntrySections"
 import { useSpeciesEntry } from "../hooks/useSpeciesEntry"
@@ -43,8 +45,10 @@ export default function SpeciesEntryPage() {
     }, [entryRef, section])
 
     if (!state || state.entryRef !== entryRef) return <LoadingEntry />
+    if ("status" in state && state.status === "retrying") return <RetryingEntry retryAfterSeconds={state.retryAfterSeconds} />
     if ("status" in state && state.status === "missing") return <MissingEntry entryRef={entryRef} />
     if ("status" in state && state.status === "malformed") return <MalformedEntry />
+    if ("status" in state && state.status === "rate-limited") return <RateLimitedEntry retryAfterSeconds={state.retryAfterSeconds} />
     if ("status" in state) return <UnavailableEntry />
 
     const activeSection: EntrySection = isEntrySection(section) ? section : DEFAULT_SECTION
@@ -83,6 +87,43 @@ function UnavailableEntry() {
     return <section className="record-placeholder" role="alert">
         <p className="eyebrow">Archive record</p><h1>Entry unavailable</h1>
         <p>The archive service could not load this entry projection. Try again later.</p>
+    </section>
+}
+
+// A 429 was seen and `requestScientificJson` is in the middle of its own
+// automatic `Retry-After` wait -- up to a minute
+// (`rate_limit_anon_read_per_minute`, `backend/app/api/config.py`). Never
+// terminal: this state always resolves into either the loaded entry (the
+// retry worked) or `RateLimitedEntry` below (it didn't). Distinct from
+// `LoadingEntry` so a wait that can run a full minute reads as "the
+// archive is busy" with a live countdown, not an indefinite spinner a
+// reader has no way to distinguish from a stuck page.
+function RetryingEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) {
+    return <section className="record-placeholder" aria-busy="true">
+        <p className="eyebrow">Archive record</p><h1>Loading species entry…</h1>
+        <p>
+            The archive is receiving too many requests right now. Retrying automatically in{" "}
+            <RetryCountdown retryAfterSeconds={retryAfterSeconds} />…
+        </p>
+    </section>
+}
+
+// Distinct from `UnavailableEntry`: this only renders once `useSpeciesEntry`
+// has ALREADY retried automatically (see `ScientificRateLimitError` /
+// `requestScientificJson`) and the archive was still over its anonymous-read
+// budget a `Retry-After` window later. "Try again later" is honest for a
+// real outage; a rate limit that already tried once and is still throttled
+// deserves the actual wait time, not a generic apology -- absence describes
+// the request, null describes the data, and a rate limit is neither. Plain
+// language, not operator vocabulary: "Wait about 30 seconds", never "Wait
+// about 30s" -- see `formatWaitSeconds`.
+function RateLimitedEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) {
+    return <section className="record-placeholder" role="alert">
+        <p className="eyebrow">Archive record</p><h1>Archive is busy</h1>
+        <p>
+            The archive is receiving too many requests right now.
+            {" "}Wait {formatWaitSeconds(retryAfterSeconds)} and reload the page.
+        </p>
     </section>
 }
 

@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import CalculationDetailPage from "./CalculationDetailPage"
+import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
 
 const server = setupServer()
@@ -687,6 +688,13 @@ describe("CalculationDetailPage", () => {
         const notApplicableText = ddFor(document.querySelector(".coverage-checklist") as HTMLElement, "Geometry validation")
         notApplicable.unmount()
         cleanup()
+        // Same `calculationRef` ("calc_freq_one"), a second server scenario --
+        // `useCalculation`'s request is now cached across a remount (see
+        // `api/requestCache.ts`), which is correct for a real page visit but
+        // wrong for this test's technique of replaying two different server
+        // states against one ref. Clear it so the second `page()` below
+        // actually reaches its own handler instead of replaying the first.
+        resetAllRequestCaches()
 
         server.use(http.get(ENDPOINT, () => HttpResponse.json({
             record: mockRecord({

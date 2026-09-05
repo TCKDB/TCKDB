@@ -104,10 +104,14 @@ export type ConformerProjection = z.infer<typeof conformerResponseSchema>["recor
 export type ConformerGroupFingerprint = z.infer<typeof conformerGroupFingerprintSchema>
 export type ConformerRotorTorsion = z.infer<typeof conformerRotorTorsionSchema>
 
-export async function loadSpeciesEntry(entryRef: string, signal?: AbortSignal): Promise<SpeciesEntryProjection | null> {
+export async function loadSpeciesEntry(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<SpeciesEntryProjection | null> {
     const query = new URLSearchParams({ species_entry_ref: entryRef })
     for (const include of ["thermo", "statmech", "transport", "conformers"]) query.append("include", include)
-    const payload = await requestScientificJson(`/api/v1/scientific/species/search?${query}`, signal)
+    const payload = await requestScientificJson(`/api/v1/scientific/species/search?${query}`, signal, onRateLimited)
     const response = parseScientificResponse(scientificSpeciesSearchSchema, payload, "species entry")
     for (const species of response.records) {
         const entry = species.entries.find((candidate) => candidate.species_entry_ref === entryRef)
@@ -124,7 +128,11 @@ export async function loadSpeciesEntry(entryRef: string, signal?: AbortSignal): 
     return null
 }
 
-export async function loadEntryConformers(entryRef: string, signal?: AbortSignal): Promise<ConformerProjection[]> {
+export async function loadEntryConformers(
+    entryRef: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<ConformerProjection[]> {
     const query = new URLSearchParams({ species_entry_ref: entryRef, limit: "50" })
     // `fingerprints` populates `conformer_group.fingerprint` -- the numeric
     // basin identity (quantized torsion bins + representative angles) that
@@ -136,6 +144,6 @@ export async function loadEntryConformers(entryRef: string, signal?: AbortSignal
     for (const include of ["observations", "calculations", "geometries", "fingerprints"]) {
         query.append("include", include)
     }
-    const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal)
+    const payload = await requestScientificJson(`/api/v1/scientific/conformers/search?${query}`, signal, onRateLimited)
     return parseScientificResponse(conformerResponseSchema, payload, "conformer").records
 }

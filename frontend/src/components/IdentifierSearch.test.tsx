@@ -1,7 +1,7 @@
 import { http, HttpResponse } from "msw"
 import { setupServer } from "msw/node"
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
-import { cleanup, render, screen, within } from "@testing-library/react"
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest"
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { MemoryRouter } from "react-router-dom"
 import { IdentifierSearch } from "./IdentifierSearch"
@@ -11,6 +11,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
     server.resetHandlers()
     cleanup()
+    vi.useRealTimers()
 })
 afterAll(() => server.close())
 
@@ -220,6 +221,38 @@ describe("SMILES/InChI search routes through structure-search (chemical identity
         // Distinct wording from both other failure modes: a resolved
         // zero-record search, and an unclassified/network failure.
         expect(screen.queryByText(/No exact/)).not.toBeInTheDocument()
+        expect(screen.queryByText(/archive could not complete that search/i)).not.toBeInTheDocument()
+    })
+
+    // Review follow-up (SHOULD-FIX #2): a double 429 (both automatic-retry
+    // attempts exhausted) used to fall into the same generic "archive
+    // could not complete that search" as an unclassified failure. Distinct
+    // wording -- same plain-language message as every other rate-limited
+    // surface (`RecordStatus`, `SpeciesEntryPage`, `SpeciesOverviewPage`,
+    // `BrowsePage`).
+    it("reports a double 429 in the same plain-language wording as everywhere else, not the generic failure message", async () => {
+        server.use(http.get("/api/v1/scientific/species/search", () => (
+            HttpResponse.json({ code: "rate_limited" }, { status: 429, headers: { "Retry-After": "20" } })
+        )))
+        page()
+        // `fireEvent`, not `userEvent`: this test needs fake timers active
+        // for `requestScientificJson`'s retry wait, and `userEvent`'s own
+        // internal scheduling does not play well with fake timers even
+        // with `delay: null` (measured: hangs to the test timeout). Fake
+        // timers are switched on AFTER the form submits -- before that,
+        // nothing here depends on timers at all.
+        fireEvent.change(await screen.findByLabelText("Exact species identifier"), { target: { value: "CH3" } })
+        fireEvent.click(screen.getByRole("button", { name: "Search" }))
+
+        vi.useFakeTimers()
+        await act(async () => { await vi.advanceTimersByTimeAsync(0) }) // first (429) attempt lands
+        await act(async () => { await vi.advanceTimersByTimeAsync(20_000) }) // the retry, also 429
+
+        const message = screen.getByText(/receiving too many requests right now/)
+        expect(message).toHaveTextContent(
+            "The archive is receiving too many requests right now. Wait about 20 seconds and reload the page.",
+        )
+        expect(message.textContent).not.toMatch(/\d+s\b/)
         expect(screen.queryByText(/archive could not complete that search/i)).not.toBeInTheDocument()
     })
 

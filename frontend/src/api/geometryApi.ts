@@ -147,10 +147,14 @@ export type GeometryIdentityWire = z.infer<typeof geometryIdentitySchema>
  * module docstring for why not `review`); the response is the root object
  * itself, not `{ record: ... }`.
  */
-export async function loadGeometry(ref: string, signal?: AbortSignal): Promise<GeometryRecord> {
+export async function loadGeometry(
+    ref: string,
+    signal?: AbortSignal,
+    onRateLimited?: (retryAfterSeconds: number) => void,
+): Promise<GeometryRecord> {
     const query = new URLSearchParams()
     query.append("include", "provenance")
     const endpoint = `/api/v1/scientific/geometries/${encodeURIComponent(ref)}?${query}`
-    const payload = await requestScientificJson(endpoint, signal)
+    const payload = await requestScientificJson(endpoint, signal, onRateLimited)
     return parseScientificResponse(geometryRecordSchema, payload, "geometry")
 }

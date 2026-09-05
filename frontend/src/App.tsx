@@ -26,7 +26,35 @@ function App() {
             <Route path="/" element={<ArchiveHomePage />} />
             <Route path="/species" element={<BrowsePage />} />
             <Route path="/species/:speciesRef" element={<SpeciesOverviewPage />} />
-            <Route path="/species-entries/:entryRef" element={<SpeciesEntryPage />} />
+            {/* Both the sectionless and `:section` routes render the SAME
+                element type, `SpeciesEntrySectionRoute` -- this is not
+                cosmetic. React Router matches a Route by *config entry*,
+                and `<Routes>` reconciles the matched `element` like any
+                other React subtree: same type at the same position keeps
+                the component instance (and its state) across a navigation;
+                a different type unmounts the old instance and mounts a
+                fresh one. Before this fix, the sectionless route above
+                rendered `<SpeciesEntryPage />` directly while the `:section`
+                route below rendered the DIFFERENT `<SpeciesEntrySectionRoute
+                />` wrapper -- so the very first tab click (which moves the
+                URL from `/species-entries/:entryRef` to
+                `/species-entries/:entryRef/:section`) forced a full
+                unmount+remount of `SpeciesEntryPage`, throwing away
+                `useSpeciesEntry`'s already-loaded state and refiring its
+                three requests (entry, conformers, single-point energies)
+                from scratch -- visible to the user as the whole page
+                reloading, even though it never left the SPA. Every
+                SUBSEQUENT tab click stays within the `:section` route (same
+                element type both sides), so it never remounted -- matching
+                the reported "first click reloads, later clicks don't".
+                Sharing one element type here means neither route ever
+                remounts `SpeciesEntryPage` on its own account again; a
+                real re-fetch now only happens when `entryRef` itself
+                changes. `dedupedFetch` (`api/requestCache.ts`,
+                `hooks/useSpeciesEntry.ts`) is the second layer, covering
+                the case that DOES still remount the page (browser
+                Back/forward across an unrelated page in between). */}
+            <Route path="/species-entries/:entryRef" element={<SpeciesEntrySectionRoute />} />
             {/* The `:section` param is kept as a real route param -- not
                 flattened into literal per-tab routes -- because
                 `SpeciesEntryPage` itself reads it via `useParams` to pick
