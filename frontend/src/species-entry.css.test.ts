@@ -9,6 +9,11 @@ import css from "./species-entry.css?raw"
 // species-page-specific overrides (`.conformer-card`-scoped) stay in
 // `species-entry.css`; see the last `describe` block below.
 import refsDisclosureCss from "./refs-disclosure.css?raw"
+// The conformer card's inset-disclosure border fix now lives as the
+// shared `.disclosure--inset` modifier here ("header copy and inset
+// disclosure" PR), not as a `.conformer-card`-scoped override in THIS
+// file -- see the moved describe block below.
+import designSystemCss from "./design-system.css?raw"
 
 /**
  * Conformer card row-track alignment (design/conformer-card-alignment).
@@ -139,21 +144,43 @@ describe("conformer basin identity: exactly ONE separator per boundary, not two 
         expect(rule).not.toMatch(/border-bottom/)
     })
 
-    it(".conformer-card .refs-disclosure supplies the ONE separator before References, using the SAME token as the basin box (--line-2, not --line) -- deliberately one shade, not two", () => {
-        const rule = extractRule(css, ".conformer-card .refs-disclosure")
+    // MOVED (was `.conformer-card .refs-disclosure` in THIS file):
+    // `ConformerSelector.tsx` now renders `<RefsDisclosure inset ...>`,
+    // which composes the shared `.disclosure--inset` modifier in
+    // `design-system.css` instead of a page-scoped override -- see the
+    // modifier's own test coverage in `design-system.css.test.ts`
+    // ("the disclosure primitive: .disclosure--inset"). What stays
+    // pinned HERE is that `species-entry.css` no longer supplies this
+    // rule itself (the "not global / not a third page-scoped copy" half
+    // of the fix) -- see the last `describe` block in this file.
+    it("does not define its own .conformer-card .refs-disclosure (descendant-combinator, box-restyle) rule any more -- the fix moved to the shared .disclosure--inset modifier", () => {
+        // Comments stripped first: this file's own comments now narrate
+        // the retired rule BY NAME ("used to be a `.conformer-card
+        // .refs-disclosure` override"), which would otherwise satisfy this
+        // pattern without a live rule ever existing. Requires a SPACE
+        // combinator specifically (not `>`) so the legitimate
+        // `.conformer-card > .refs-disclosure { grid-row: 5 }` subgrid
+        // pin further down this file -- real layout, not a box restyle --
+        // is never mistaken for the retired override.
+        const noComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
+        expect(noComments).not.toMatch(/\.conformer-card\s+\.refs-disclosure(?![-\w])/)
+    })
+
+    it(".disclosure--inset (the modifier that replaced it) supplies the ONE separator before References, using the SAME token as the basin box (--line-2, not --line) -- deliberately one shade, not two", () => {
+        const rule = extractRule(designSystemCss, ".disclosure.disclosure--inset")
         expect(rule).toMatch(/border-top:\s*1px solid var\(--line-2\)/)
         expect(rule).not.toMatch(/border-bottom/)
     })
 
     // The third card shape (neither basin variant renders -- the
     // archive's own majority case, a null fingerprint) needs no CSS rule
-    // of its own: `.conformer-card .refs-disclosure`'s border-top above
-    // is unconditional on the CSS side (it does not depend on a basin
-    // element existing), so the same single rule is what separates
-    // References from the card-select button directly when nothing else
-    // sits between them. `ConformerSelector.test.tsx`'s DOM-structure
-    // tests pin the three actual DOM shapes (basin-identity, basin-rigid,
-    // neither) this reasoning depends on.
+    // of its own: `.disclosure--inset`'s border-top above is unconditional
+    // on the CSS side (it does not depend on a basin element existing), so
+    // the same single rule is what separates References from the
+    // card-select button directly when nothing else sits between them.
+    // `ConformerSelector.test.tsx`'s DOM-structure tests pin the three
+    // actual DOM shapes (basin-identity, basin-rigid, neither) this
+    // reasoning depends on.
 })
 
 describe("conformer card row-track sharing (subgrid, with a fallback)", () => {
@@ -226,17 +253,71 @@ describe("References disclosure border removal is scoped to the conformer card, 
     // conformer-only assertion -- both directions are asserted here so a
     // global deletion cannot slip through unnoticed.
     //
-    // The base rule itself now lives in `refs-disclosure.css` (moved out
-    // of this file so every page rendering `RefsDisclosure` gets it, not
-    // just this one) -- read from there rather than `species-entry.css`.
+    // The base rule itself lives in `refs-disclosure.css` (imported by
+    // `components/RefsDisclosure.tsx` itself, so every page rendering the
+    // component gets it, not just this one) -- read from there rather
+    // than `species-entry.css`.
     it("the base (hero-applicable) rule still draws the border when open", () => {
         const rule = extractRule(refsDisclosureCss, ".refs-disclosure[open] summary")
         expect(rule).toMatch(/border-bottom:\s*1px solid var\(--line-2\)/)
     })
 
-    it("a conformer-card-scoped override removes it, at higher specificity than the base rule", () => {
-        const rule = extractRule(css, ".conformer-card .refs-disclosure[open] summary")
+    // MOVED (was `.conformer-card .refs-disclosure[open] summary` in THIS
+    // file): the override now lives as the shared `.disclosure--inset`
+    // modifier in `design-system.css`, composed via `ConformerSelector.tsx`'s
+    // `<RefsDisclosure inset ...>` rather than a page-scoped CSS rule --
+    // "not scoped to the conformer card any more" in the CSS-selector
+    // sense, since `.disclosure--inset` applies wherever the `inset` prop
+    // is used, but still card-only in PRACTICE (the entry-hero's own
+    // `RefsDisclosure` never passes `inset`, so it still gets the base
+    // rule above, unchanged) -- see `RecordIdentityHeader`/`SpeciesEntrySummary`'s
+    // hero usage, which composes no `inset` prop.
+    it("does not define its own .conformer-card .refs-disclosure[open] summary rule any more -- the fix moved to the shared .disclosure--inset modifier", () => {
+        // Comments stripped -- same reasoning as the box-restyle check
+        // above.
+        const noComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
+        expect(noComments).not.toMatch(/\.conformer-card\s+\.refs-disclosure\[open]/)
+    })
+
+    it(".disclosure--inset[open] > summary (the modifier that replaced it) removes the border, at higher specificity than the base rule regardless of stylesheet load order", () => {
+        const rule = extractRule(designSystemCss, ".disclosure.disclosure--inset[open] > summary")
         expect(rule).toMatch(/border-bottom:\s*none/)
+    })
+})
+
+describe("species-entry.css no longer restyles the disclosure primitives directly (item 4, third box style retired)", () => {
+    // The target after this fix: exactly two sanctioned disclosure BOX
+    // styles site-wide -- the standard `.disclosure`/`.refs-disclosure`
+    // box, and the named `.disclosure--inset` modifier -- not a third,
+    // page-scoped restyle growing back here (or anywhere else) the next
+    // time a card needs this shape. `species-entry.css` used to be the
+    // one file doing that. This does NOT ban every rule that happens to
+    // target one of these two classes -- `.conformer-card > .refs-
+    // disclosure { grid-row: 5 }` (the subgrid row-track pin, further
+    // down this file) is legitimate LAYOUT, not a box restyle, and stays;
+    // what's checked is that no such rule sets a box-chrome property
+    // (border/background/radius/margin) any more. Comments are stripped
+    // first (this file's own comments now narrate the retired rule by
+    // name, e.g. "used to be a `.conformer-card .refs-disclosure`
+    // override") so prose mentioning the class can never be mistaken for
+    // a live declaration.
+    const noComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
+    const BOX_CHROME = /\b(?:border|background|border-radius|margin(?:-top)?)\s*:/
+
+    /** Every rule (bounded selector run, no `{`/`}`/`;` in between --
+     *  cannot cross into an unrelated later rule) whose selector mentions
+     *  `.disclosure` or `.refs-disclosure`, with its declaration body. */
+    function disclosureRuleBodies(source: string): string[] {
+        const bodies: string[] = []
+        const re = /(?<![\w.-])\.(?:disclosure|refs-disclosure)(?![-\w])[^{};]*\{([^}]*)\}/g
+        for (const match of source.matchAll(re)) bodies.push(match[1])
+        return bodies
+    }
+
+    it("no rule targeting .disclosure or .refs-disclosure sets a box-chrome property (border/background/radius/margin) any more", () => {
+        const bodies = disclosureRuleBodies(noComments)
+        expect(bodies.length, "expected at least one rule mentioning .disclosure/.refs-disclosure (the grid-row pin) -- none found").toBeGreaterThan(0)
+        for (const body of bodies) expect(body).not.toMatch(BOX_CHROME)
     })
 })
 

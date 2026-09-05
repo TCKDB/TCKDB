@@ -205,6 +205,39 @@ describe("the disclosure primitive", () => {
         expect(rule![1]).toMatch(/font:\s*var\(--type-ui-font\)/)
         expect(rule![1]).not.toMatch(/text-transform/)
     })
+
+    // `.disclosure--inset` -- the third disclosure box style, retired by
+    // NAMING it ("header copy and inset disclosure" PR): a disclosure
+    // inset inside an already-boxed card (border-top only, no radius, no
+    // background). Was `.conformer-card .refs-disclosure` /
+    // `.conformer-card .refs-disclosure[open] summary`, a page-scoped
+    // override in `species-entry.css`; `species-entry.css.test.ts` and
+    // `ConformerSelector.test.tsx` (which pinned the old rule/DOM shape)
+    // now assert THIS modifier and the absence of the page override
+    // instead of being deleted.
+    describe(".disclosure--inset", () => {
+        it("is a border-top-only, no-radius, no-background box, using --line-2 (the same token the conformer basin box's own border-top uses)", () => {
+            const rule = /\.disclosure\.disclosure--inset\s*\{([^}]*)\}/.exec(designSystemCss)
+            expect(rule, ".disclosure.disclosure--inset rule not found").not.toBeNull()
+            expect(rule![1]).toMatch(/margin-top:\s*0\b/)
+            expect(rule![1]).toMatch(/border:\s*0\b/)
+            expect(rule![1]).toMatch(/border-top:\s*1px solid var\(--line-2\)/)
+            expect(rule![1]).toMatch(/border-radius:\s*0\b/)
+            expect(rule![1]).toMatch(/background:\s*none\b/)
+            expect(rule![1]).not.toMatch(/border-bottom/)
+        })
+
+        it("removes the open-summary border-bottom the base .disclosure[open] > summary rule draws", () => {
+            const rule = /\.disclosure\.disclosure--inset\[open]\s*>\s*summary\s*\{([^}]*)\}/.exec(designSystemCss)
+            expect(rule, ".disclosure.disclosure--inset[open] > summary rule not found").not.toBeNull()
+            expect(rule![1]).toMatch(/border-bottom:\s*none/)
+        })
+
+        it("uses a compound .disclosure.disclosure--inset selector (two classes), not a bare .disclosure--inset -- so it outranks .refs-disclosure's own border-color override regardless of stylesheet load order", () => {
+            expect(designSystemCss).toMatch(/\.disclosure\.disclosure--inset\s*\{/)
+            expect(designSystemCss).not.toMatch(/(?<!\.disclosure)\.disclosure--inset\s*\{/)
+        })
+    })
 })
 
 describe("the kv-list primitive is defined exactly once, globally", () => {

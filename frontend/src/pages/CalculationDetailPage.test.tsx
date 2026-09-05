@@ -357,9 +357,15 @@ describe("CalculationDetailPage", () => {
         expect(within(breadcrumb).getByRole("link", { name: "Species entry" }))
             .toHaveAttribute("href", "/species-entries/spe_demo")
 
-        // The identity header prefers the human label, but the ref stays
-        // visible in the identity facts too.
-        expect(screen.getByRole("link", { name: "ground state" })).toHaveAttribute("href", "/species-entries/spe_demo")
+        // The identity header's "Species entry" fact links out using the
+        // entry's own formula as its text, followed by the served
+        // discriminator expanded via `recordFacets.ts`'s `stereoChip`
+        // (never the raw `species_entry_label` string alone) -- see
+        // `RecordIdentityHeader.tsx`'s "Species entry" fact comment.
+        // `mockRecord()`'s owner formula is "CH3", label "ground state"
+        // (not one of the four stereo tokens `stereoChip` expands, so it
+        // passes through unchanged).
+        expect(screen.getByRole("link", { name: "CH3 · ground state" })).toHaveAttribute("href", "/species-entries/spe_demo")
 
         // The calculation's own ref is inside the (collapsed) references disclosure.
         fireEvent.click(screen.getByText(bySummaryText(/References \(/)))

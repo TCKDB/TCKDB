@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import { CopyButton } from "./RefsDisclosure"
+import { MemoryRouter } from "react-router-dom"
+import { CopyButton, RefsDisclosure } from "./RefsDisclosure"
 
 /**
  * `CopyButton` is the riskiest edit in the "Unavailable" copy-state diff
@@ -87,5 +88,35 @@ describe("CopyButton", () => {
         cleanup()
         render(<CopyButton value="v" label="raw XYZ" srLabel="text" />)
         expect(screen.getByRole("button", { name: "Copy raw XYZ text" })).toBeVisible()
+    })
+})
+
+// `inset` -- retiring the third disclosure box style by naming it
+// ("header copy and inset disclosure" PR): a caller whose disclosure
+// sits inside an already-boxed card (`ConformerSelector.tsx`'s
+// `.conformer-card`, the one real consumer today) passes this to get the
+// shared `.disclosure--inset` modifier instead of a page-scoped CSS
+// override. See `ConformerSelector.test.tsx`'s "double-border fix still
+// holds" describe block for the rendered computed-style proof that this
+// class actually changes the box's borders.
+describe("RefsDisclosure inset prop", () => {
+    function renderRefs(inset?: boolean) {
+        return render(
+            <MemoryRouter>
+                <RefsDisclosure inset={inset} refs={[{ label: "Conformer group", value: "cg_demo", to: "/conformer-groups/cg_demo" }]} />
+            </MemoryRouter>,
+        )
+    }
+
+    it("adds disclosure--inset alongside the base classes when inset is true", () => {
+        renderRefs(true)
+        const details = document.querySelector("details") as HTMLDetailsElement
+        expect(details.className.split(" ")).toEqual(["disclosure", "refs-disclosure", "disclosure--inset"])
+    })
+
+    it("omits disclosure--inset by default -- the entry-hero's own usage never sets it", () => {
+        renderRefs()
+        const details = document.querySelector("details") as HTMLDetailsElement
+        expect(details.className.split(" ")).toEqual(["disclosure", "refs-disclosure"])
     })
 })

@@ -18,3 +18,23 @@ describe(".record-identity-known owns the gap between its children", () => {
         expect(rule![1]).toMatch(/gap:\s*var\(--s-3\)/)
     })
 })
+
+/**
+ * SF-3 (post-review, "header copy and inset disclosure" PR): this rule
+ * had no source test of its own. It's what keeps a copy button beside an
+ * identity fact's value (SMILES, InChIKey, ...) on the SAME line at
+ * 680px rather than pushed onto a line of its own -- `flex` +
+ * `align-items: baseline` lays the `<code>` value and the `.copy-button`
+ * out side by side, the same pattern `refs-disclosure.css`'s `.ref-item`
+ * already uses for a ref row.
+ */
+describe(".record-identity-fact-copyable lays a value and its copy button out on one line", () => {
+    it("is a flex row, baseline-aligned, that can shrink (min-width: 0) rather than force its column wide", () => {
+        const rule = /\.record-identity-fact-copyable\s*\{([^}]*)\}/.exec(css)
+        expect(rule, ".record-identity-fact-copyable rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/display:\s*flex/)
+        expect(rule![1]).toMatch(/align-items:\s*baseline/)
+        expect(rule![1]).toMatch(/gap:\s*\.5rem/)
+        expect(rule![1]).toMatch(/min-width:\s*0/)
+    })
+})

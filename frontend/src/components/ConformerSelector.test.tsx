@@ -354,15 +354,20 @@ describe("the basin differences comparison is removed (item 5)", () => {
 // itself without a browser), but it CAN show that the DOM the CSS acts on
 // stays uniform across 1 rotor, 7 rotors, and 0.
 //
-// className below is `"disclosure refs-disclosure"`, not the bare
-// `"refs-disclosure"` this file pinned before design/foundations:
-// `RefsDisclosure` now composes `components/Disclosure.tsx`, which adds
-// its own `.disclosure` class ALONGSIDE the caller's `refs-disclosure`
-// (never in place of it) so both the shared chevron/box/typography and
-// this page's own `.conformer-card`-scoped override still apply. Class-
-// selector matching (`.refs-disclosure`, `.conformer-card >
-// .refs-disclosure`) is unaffected by an element carrying an EXTRA class
-// -- only this exact-string DOM assertion needed updating.
+// className below is `"disclosure refs-disclosure disclosure--inset"`,
+// not the bare `"refs-disclosure"` this file pinned before
+// design/foundations: `RefsDisclosure` now composes `components/
+// Disclosure.tsx`, which adds its own `.disclosure` class ALONGSIDE the
+// caller's `refs-disclosure` (never in place of it) so both the shared
+// chevron/box/typography apply; `disclosure--inset` is added ON TOP by
+// this page's own `<RefsDisclosure inset ...>` ("header copy and inset
+// disclosure" PR), replacing what used to be a `.conformer-card`-scoped
+// CSS override in `species-entry.css` with the shared modifier
+// (`design-system.css`) -- see that modifier's own comment for the
+// double-border reasoning it still encodes. Class-selector matching
+// (`.refs-disclosure`, `.conformer-card > .refs-disclosure`) is
+// unaffected by an element carrying an EXTRA class -- only this
+// exact-string DOM assertion needed updating.
 describe("conformer card DOM structure feeds the CSS row-track pinning (design/conformer-card-alignment)", () => {
     function rotorFingerprint(count: number) {
         return {
@@ -395,7 +400,7 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
             // relies on to keep every card's references toggle on the same
             // line, whether the basin box above it holds 1 rotor or 7.
             expect(Array.from(card.children).map((el) => el.className)).toEqual([
-                "conformer-card-select", "conformer-basin-identity", "disclosure refs-disclosure",
+                "conformer-card-select", "conformer-basin-identity", "disclosure refs-disclosure disclosure--inset",
             ])
         }
 
@@ -417,7 +422,7 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
         renderSelector([rigid])
         const card = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
         expect(Array.from(card.children).map((el) => el.className)).toEqual([
-            "conformer-card-select", "conformer-basin-rigid", "disclosure refs-disclosure",
+            "conformer-card-select", "conformer-basin-rigid", "disclosure refs-disclosure disclosure--inset",
         ])
     })
 
@@ -439,6 +444,33 @@ describe("conformer card DOM structure feeds the CSS row-track pinning (design/c
         })
         renderSelector([noFingerprint])
         const card = screen.getByText("Conformer Group 1", { selector: ".conformer-card-label" }).closest(".conformer-card") as HTMLElement
-        expect(Array.from(card.children).map((el) => el.className)).toEqual(["conformer-card-select", "disclosure refs-disclosure"])
+        expect(Array.from(card.children).map((el) => el.className)).toEqual(["conformer-card-select", "disclosure refs-disclosure disclosure--inset"])
     })
 })
+
+// ---------------------------------------------------------------------------
+// Double-border fix (design/foundations, "header copy and inset
+// disclosure" PR) -- NOT proven here via `getComputedStyle`. That was
+// tried first (render a real card, read `borderTopWidth`/
+// `borderBottomWidth` off the basin box and the inset disclosure) and
+// DROPPED: MEASURED, jsdom's CSSOM does not resolve a `border`/
+// `border-top` shorthand whose color argument is a `var(--token)`
+// reference -- every border-*-width/style/color longhand came back `""`
+// (not the real browser's resolved value, not even the spec's initial
+// value) the moment the declaration involved a custom property, which is
+// every border rule in this app (`theme.css`'s whole point). A literal-
+// color shorthand (`border: 1px solid red`) resolved fine in isolation,
+// which is what made the gap easy to miss. This is the same class of
+// jsdom limitation `valuePillCascade.test.tsx` already documents for
+// cross-stylesheet specificity ("was tried here and dropped"); a test
+// asserting jsdom's wrong answer would not be evidence about the real
+// cascade this fix depends on.
+//
+// What's checked instead: the raw-CSS pinning tests above/in
+// `species-entry.css.test.ts`/`design-system.css.test.ts` (that
+// `.disclosure.disclosure--inset` declares border-top only, and that
+// `species-entry.css` no longer restyles either primitive), plus a
+// one-time headless-Chrome pixel measurement against the live record
+// page (`/species-entries/spe_5nr24y2ssxokxlhsvymdwbpwmm`) before and
+// after this change -- see the PR body for that measurement's result.
+// ---------------------------------------------------------------------------

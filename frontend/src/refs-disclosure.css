@@ -18,29 +18,26 @@
  * different jobs — kicker, field label, table header, disclosure
  * summary, pill, button, legend — done by one uppercase-tracked mono
  * style; this was one of those seven) all come from `.disclosure` in
- * `design-system.css`. What stays here is `.refs-disclosure`'s OWN box
- * override (a slightly different border colour, `--line-2` not `--line`
- * — read on) and the ref-row/copy-button internals, plus the
- * `.conformer-card`-scoped overrides `species-entry.css` still needs
- * (kept, not retired: `species-entry.css.test.ts` and
- * `ConformerSelector.test.tsx` both pin `.conformer-card .refs-
- * disclosure`'s exact CSS and DOM shape).
+ * `design-system.css`. What stays here is the ref-row/copy-button
+ * internals, plus the `.conformer-card`-scoped overrides
+ * `species-entry.css` still needs (kept, not retired:
+ * `species-entry.css.test.ts` and `ConformerSelector.test.tsx` both pin
+ * `.conformer-card .refs-disclosure`'s exact CSS and DOM shape).
  *
- * `.refs-disclosure` keeps its own border/radius/background here rather
- * than relying on `.disclosure`'s (same shape, `--line-2` instead of
- * `--line`) — this file loads AFTER `design-system.css` for every
- * consumer (component-level import order), so these declarations win
- * the cascade for the properties they share; `species-entry.css.test.ts`
- * pins the exact `--line-2` value on the `.conformer-card`-scoped
- * variant of this same border, so this file keeps that token rather
- * than silently drifting to `--line` when `.disclosure` was adopted.
+ * SF-2 (post-review, "header copy and inset disclosure" PR):
+ * `.refs-disclosure` NO LONGER overrides its own border colour. It used
+ * to set `border-color: var(--line-2)` here — a slightly different grey
+ * from `.disclosure`'s own `--line` — which meant the site still had
+ * THREE distinct computed disclosure boxes (the base `.disclosure` box,
+ * this `--line-2` variant, and the `.disclosure--inset` modifier) even
+ * after the inset modifier was named, one more than the two the owner
+ * wants (a standard box, and the inset variant). Dropped: this class now
+ * owns only `margin-top`, and gets its border colour — like every other
+ * property of the box — entirely from `.disclosure`.
  */
 
 .refs-disclosure {
     margin-top: 1.75rem;
-    border: 1px solid var(--line-2);
-    border-radius: .5rem;
-    background: var(--surface-sunken);
 }
 
 /* `.refs-disclosure summary`'s own typography rule (the retired

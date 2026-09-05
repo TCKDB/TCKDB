@@ -44,6 +44,22 @@
     grid-column: 1 / -1;
 }
 
+/* Copy affordance on an identity fact whose value the header renders as
+   `.data` (SMILES, InChIKey, an unmapped reaction SMILES, a TS entry
+   ref) -- laid out the same way `refs-disclosure.css`'s own `.ref-item`
+   lays out a ref row: flex, `align-items: baseline`, the button (its own
+   `.copy-button` class, imported alongside `CopyButton` from
+   `RefsDisclosure.tsx`) staying `flex: none` so it never gets pushed
+   onto a line of its own at 680px -- the value itself still wraps via
+   `.kv-list dd`'s own `overflow-wrap: anywhere` (design-system.css) when
+   it runs long, same as every other fact. */
+.record-identity-fact-copyable {
+    display: flex;
+    align-items: baseline;
+    gap: .5rem;
+    min-width: 0;
+}
+
 .record-identity-facets {
     margin: 0;
     color: var(--ink-2);

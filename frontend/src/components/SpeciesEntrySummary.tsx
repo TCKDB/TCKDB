@@ -38,13 +38,6 @@ function availabilityText(entry: SpeciesEntryProjection) {
  * so this page's hero finally matches every other record page's -- see
  * that component's own docstring for the shared header order.
  *
- * `RecordIdentityHeader`'s own identity tier renders no copy button on
- * SMILES/InChIKey (neither does any other page that composes it, e.g.
- * `GeometryDetailPage`) -- losing this page's own copy affordance there is
- * the direct cost of that consistency, not an oversight; the stable refs
- * below (species, entry) stay copyable via `RefsDisclosure`'s own
- * `CopyButton`, unchanged.
- *
  * What stays local to this page: the four classification axes
  * (`species_entry_kind`/`electronic_state_kind`/label/term symbol),
  * stereochemistry and isotopologue, and "Archive availability" -- none of

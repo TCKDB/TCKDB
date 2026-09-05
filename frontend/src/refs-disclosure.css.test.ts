@@ -71,3 +71,28 @@ describe("refs-disclosure.css: on-scale typography (SHOULD-FIX-14)", () => {
         expect(rule).not.toMatch(/\.58rem/)
     })
 })
+
+/**
+ * SF-2 (post-review, "header copy and inset disclosure" PR): `.refs-
+ * disclosure` used to override `border-color: var(--line-2)`, a
+ * slightly different grey from `.disclosure`'s own `--line` -- MEASURED,
+ * that meant the site still rendered THREE distinct disclosure boxes
+ * (the base `.disclosure`, this `--line-2` variant, and the
+ * `.disclosure--inset` modifier) even after the inset modifier was
+ * named, one more than the two the owner wants. Dropped: this class now
+ * owns only `margin-top`, and its border colour comes entirely from
+ * `.disclosure` -- pinned here (deleting the rule and reverting turns
+ * BOTH of these red, sha256-verified restore per the worktree brief).
+ */
+describe("SF-2: .refs-disclosure has no border-color divergence -- the References box uses the same --line as every other disclosure", () => {
+    it("declares no border-color (and no border shorthand) of its own", () => {
+        const rule = extractRule(css, ".refs-disclosure")
+        expect(rule).not.toMatch(/border-color/)
+        expect(rule).not.toMatch(/\bborder\s*:/)
+    })
+
+    it("its own rule is margin-top only -- nothing left to diverge from .disclosure's box on", () => {
+        const rule = extractRule(css, ".refs-disclosure")
+        expect(rule.replace(/\s+/g, " ").trim()).toBe("margin-top: 1.75rem;")
+    })
+})
