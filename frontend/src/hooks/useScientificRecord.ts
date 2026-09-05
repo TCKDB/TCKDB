@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
-import { ScientificApiError } from "../api/scientificTransport"
+import { dedupedFetch } from "../api/requestCache"
+import { ScientificApiError, ScientificRateLimitError } from "../api/scientificTransport"
 
 /**
  * Shared load-and-classify state behind every `/scientific/*` detail page.
@@ -26,6 +27,16 @@ import { ScientificApiError } from "../api/scientificTransport"
  * - `malformed`     — the archive answered 200 but the payload failed our
  *   own schema validation. An archive-side bug, distinct from all of the
  *   above.
+ * - `rate-limited`  — the anonymous-read budget
+ *   (`rate_limit_anon_read_per_minute`, `backend/app/api/config.py`) is
+ *   exhausted. `requestScientificJson` already retries once automatically
+ *   after the archive's own `Retry-After` wait, so this only shows up when
+ *   TWO consecutive attempts hit 429 — sustained pressure, not one burst.
+ *   Distinct from `unavailable`: absence describes the request, null
+ *   describes the data, and a rate limit is neither — it needs its own
+ *   wording (and `retryAfterSeconds`) rather than the generic "try again
+ *   later" that used to be shown here (and was wrong: the record was
+ *   never actually unavailable, just throttled).
  * - `unavailable`   — anything else (5xx, network failure, aborted
  *   request that still surfaced an error) — the one case where "try
  *   again later" is honest advice.
@@ -41,6 +52,7 @@ export type ScientificRecordState<T> =
     | { ref: string; status: "invalid"; detail: string }
     | { ref: string; status: "unprocessable"; detail: string }
     | { ref: string; status: "malformed" }
+    | { ref: string; status: "rate-limited"; retryAfterSeconds: number }
     | { ref: string; status: "unavailable" }
     | { ref: string; status: "ready"; record: T }
 
@@ -55,10 +67,21 @@ export function useScientificRecord<T>(
 
     useEffect(() => {
         const controller = new AbortController()
-        load(ref, controller.signal)
+        // `load` (e.g. `loadEntryThermo`) is a stable, module-level export
+        // for every caller of this hook -- see `requestCache.ts` -- so it
+        // doubles as the cache's namespace. Remounting into the same tab
+        // (`EntryStatmechSection`/`EntryThermoSection`/`EntryTransportSection`
+        // unmount on every section switch, per `SpeciesEntryPage`'s
+        // `TabPanelBody`) or navigating Back to a page this hook already
+        // loaded reuses the cached response instead of refiring the request.
+        dedupedFetch(load, ref, () => load(ref, controller.signal))
             .then((record) => setState({ ref, status: "ready", record }))
             .catch((error: unknown) => {
                 if (controller.signal.aborted) return
+                if (error instanceof ScientificRateLimitError) {
+                    setState({ ref, status: "rate-limited", retryAfterSeconds: error.retryAfterSeconds })
+                    return
+                }
                 if (error instanceof ScientificApiError && error.status === 404) {
                     setState({ ref, status: "missing" })
                     return

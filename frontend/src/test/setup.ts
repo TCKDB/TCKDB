@@ -1,5 +1,7 @@
 import "@testing-library/jest-dom/vitest"
+import { afterEach } from "vitest"
 import { configure } from "@testing-library/react"
+import { resetAllRequestCaches } from "../api/requestCache"
 
 /**
  * Testing Library's default `asyncUtilTimeout` is 1000ms, which is tuned for
@@ -25,3 +27,18 @@ import { configure } from "@testing-library/react"
  * cannot tell you.
  */
 configure({ asyncUtilTimeout: 5000 })
+
+/**
+ * `api/requestCache.ts` caches successful responses across component
+ * remounts by design (that's the point -- see its own docstring). In tests,
+ * most files reuse the same fixture ref (`entryRef`, `groupOneRef`, ...)
+ * across many `it()` blocks in the same file, each rendering fresh with its
+ * own MSW handlers. Without a reset here, only the first render per ref
+ * per file would ever reach those handlers -- every later one would
+ * silently replay whatever the first render cached, which is correct
+ * production behavior but wrong test isolation. Global, not per-file,
+ * because the cache itself is module-level/global in production.
+ */
+afterEach(() => {
+    resetAllRequestCaches()
+})

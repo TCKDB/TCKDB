@@ -65,6 +65,16 @@ export function RecordStatus({ state, ref, kind, loadingDetail }: {
             />
         )
     }
+    if (state.status === "rate-limited") {
+        return (
+            <Notice
+                title="Archive is rate-limiting requests"
+                ref={ref}
+                alert
+                message={`The archive is rate-limiting anonymous reads and is still over budget after one automatic retry. Wait about ${state.retryAfterSeconds}s and try again.`}
+            />
+        )
+    }
     return (
         <Notice
             title={`${Kind} unavailable`}

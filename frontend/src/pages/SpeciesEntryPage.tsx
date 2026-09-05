@@ -45,6 +45,7 @@ export default function SpeciesEntryPage() {
     if (!state || state.entryRef !== entryRef) return <LoadingEntry />
     if ("status" in state && state.status === "missing") return <MissingEntry entryRef={entryRef} />
     if ("status" in state && state.status === "malformed") return <MalformedEntry />
+    if ("status" in state && state.status === "rate-limited") return <RateLimitedEntry retryAfterSeconds={state.retryAfterSeconds} />
     if ("status" in state) return <UnavailableEntry />
 
     const activeSection: EntrySection = isEntrySection(section) ? section : DEFAULT_SECTION
@@ -83,6 +84,23 @@ function UnavailableEntry() {
     return <section className="record-placeholder" role="alert">
         <p className="eyebrow">Archive record</p><h1>Entry unavailable</h1>
         <p>The archive service could not load this entry projection. Try again later.</p>
+    </section>
+}
+
+// Distinct from `UnavailableEntry`: this only renders once `useSpeciesEntry`
+// has ALREADY retried automatically (see `ScientificRateLimitError` /
+// `requestScientificJson`) and the archive was still over its anonymous-read
+// budget a `Retry-After` window later. "Try again later" is honest for a
+// real outage; a rate limit that already tried once and is still throttled
+// deserves the actual wait time, not a generic apology -- absence describes
+// the request, null describes the data, and a rate limit is neither.
+function RateLimitedEntry({ retryAfterSeconds }: { retryAfterSeconds: number }) {
+    return <section className="record-placeholder" role="alert">
+        <p className="eyebrow">Archive record</p><h1>Archive is rate-limiting requests</h1>
+        <p>
+            The archive is rate-limiting anonymous reads and is still over budget after one automatic retry.
+            {" "}Wait about {retryAfterSeconds}s and try again.
+        </p>
     </section>
 }
 

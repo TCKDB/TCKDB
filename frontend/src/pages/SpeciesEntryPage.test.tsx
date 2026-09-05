@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import App from "../App"
+import { resetAllRequestCaches } from "../api/requestCache"
 import { bySummaryText } from "../test/disclosureQueries"
 
 // ---------------------------------------------------------------------------
@@ -434,16 +435,28 @@ describe("species-entry page: identity and errors", () => {
     })
 
     it("distinguishes empty, malformed-success, HTTP error, and loading states", async () => {
+        // Three separate simulated page loads for the SAME `entryRef` --
+        // `useSpeciesEntry`'s requests are cached across a real remount
+        // (see `api/requestCache.ts`, added for the tab/Back-navigation
+        // fix), which is exactly right for a browser session where the
+        // archive's answer for one ref doesn't change mid-visit. It is
+        // wrong for this test's technique of replaying THREE different
+        // server states against one ref, so each scenario below clears the
+        // cache first -- otherwise scenario 2 would just see scenario 1's
+        // cached (successful, empty) result and never reach its own
+        // handler.
         server.use(...handlers({ empty: true }))
         window.history.replaceState({}, "", `/species-entries/${entryRef}`)
         render(<App />)
         expect(screen.getByRole("heading", { name: "Loading species entry" })).toBeVisible()
         expect(await screen.findByRole("heading", { name: "Entry not found" })).toBeVisible()
         cleanup()
+        resetAllRequestCaches()
         server.use(...handlers({ malformed: true }))
         render(<App />)
         expect(await screen.findByRole("alert")).toHaveTextContent("Entry data could not be read")
         cleanup()
+        resetAllRequestCaches()
         server.use(...handlers({ status: 503 }))
         render(<App />)
         expect(await screen.findByRole("alert")).toHaveTextContent("Entry unavailable")
@@ -894,5 +907,207 @@ describe("species-entry page: selecting a conformer scopes geometry, single-poin
         expect(screen.getAllByText("sm_1").some((node) => node.tagName === "CODE")).toBe(true)
         expect(screen.getAllByText("sm_2").some((node) => node.tagName === "CODE")).toBe(true)
         expect(screen.getAllByText("sm_3").some((node) => node.tagName === "CODE")).toBe(true)
+    })
+})
+
+// ---------------------------------------------------------------------------
+// Bug #1 from the owner's report: clicking a tab used to make "the whole
+// page load" -- and only the FIRST tab click after landing on the
+// sectionless entry URL, never the ones after. Root cause (App.tsx): the
+// sectionless route (`/species-entries/:entryRef`) rendered `<SpeciesEntryPage
+// />` directly while the `:section` route rendered the DIFFERENT
+// `<SpeciesEntrySectionRoute />` wrapper, so the first tab click -- which
+// moves the URL from one route to the other -- forced React Router to
+// unmount and remount `SpeciesEntryPage`, throwing away `useSpeciesEntry`'s
+// already-loaded state and refiring its three requests from scratch. Every
+// later tab click stayed within the `:section` route (same element type on
+// both sides already), so it never remounted -- exactly the "first time
+// only" shape reported.
+//
+// Bug #2 compounds this: a burst of needless re-fetches (one per tab click,
+// plus one per Back navigation across the route boundary) was enough to trip
+// the anonymous-read budget (`rate_limit_anon_read_per_minute`,
+// `backend/app/api/config.py`), and a 429 rendered as the generic "Entry
+// unavailable" state with no retry (see `scientificTransport.rateLimit.test.ts`
+// for the 429-handling fix itself). Fewer redundant requests here is part of
+// making that budget hard to hit through ordinary browsing.
+// ---------------------------------------------------------------------------
+describe("species-entry page: tab clicks and Back are client-side, no re-fetch (bug #1 / #2 regression)", () => {
+    function countingHandlers(counts: { species: number; conformers: number }) {
+        return [
+            http.get("/api/v1/scientific/species/search", () => {
+                counts.species += 1
+                return HttpResponse.json({ records: [{
+                    species_ref: "spc_atp56uqux2ajao7hvckx7gx7ca",
+                    canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
+                    charge: 0, multiplicity: 2,
+                    entries: [{
+                        species_entry_ref: entryRef, species_entry_kind: "minimum", electronic_state_kind: "ground",
+                        review: { status: "not_reviewed" },
+                        availability: { has_thermo: true, has_statmech: true, has_transport: false, has_conformers: true, calculation_count: 10 },
+                    }],
+                }] })
+            }),
+            http.get("/api/v1/scientific/conformers/search", () => {
+                counts.conformers += 1
+                return HttpResponse.json({ records: conformerRecords() })
+            }),
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => HttpResponse.json({
+                species_entry_ref: entryRef,
+                review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
+                records: thermoRecords(),
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+            })),
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, () => HttpResponse.json({
+                species_entry_ref: entryRef,
+                review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
+                records: statmechRecords(false),
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+            })),
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/transport`, () => HttpResponse.json({
+                species_entry_ref: entryRef,
+                review_summary: { approved: 0, under_review: 0, not_reviewed: 0, deprecated: 0, rejected: 0, total: 0 },
+                records: [], pagination: { offset: 0, limit: 50, returned: 0, total: 0, post_collapse_total: 0 },
+            })),
+            http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ records: [] })),
+        ]
+    }
+
+    // `findByRole("heading", ...)`, not `findByText`: the picker's own
+    // heading text ("Choose a conformer") is ALSO the label the
+    // table-of-contents nav renders for that section once it registers
+    // (`components/TableOfContents.tsx`) -- a plain text query becomes
+    // ambiguous ("multiple elements") the moment both exist, which a test
+    // that waits any amount of time before its first query (as these two
+    // do, via the request-count assertions and tab clicks below) reliably
+    // hits. Scoping to the heading role sidesteps it.
+    const findConformerHeading = () => screen.findByRole("heading", { name: "Choose a conformer" })
+
+    it("does not re-show the full-page loading state or refetch the entry on the first tab click, or on any later one", async () => {
+        const user = userEvent.setup()
+        const counts = { species: 0, conformers: 0 }
+        server.use(...countingHandlers(counts))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await findConformerHeading()
+        expect(counts).toEqual({ species: 1, conformers: 1 })
+
+        // The request-count assertions below are necessary but NOT
+        // sufficient to catch the remount on their own: `dedupedFetch`
+        // (`api/requestCache.ts`) would mask a reintroduced remount by
+        // serving the SAME cached response instead of hitting the
+        // counting handlers again, letting `counts` stay `{1, 1}` even
+        // if `SpeciesEntryPage` were unmounted and remounted. The DOM
+        // node identity check below is what actually isolates the
+        // App.tsx routing fix: React only creates a NEW `.entry-page`
+        // element when the matched Route's element type changes (a
+        // remount); switching between two `:section` URLs that already
+        // share one element type never does, cache or no cache.
+        const entryPageNodeBefore = document.querySelector(".entry-page")
+        expect(entryPageNodeBefore).not.toBeNull()
+
+        // The FIRST click: sectionless URL -> `:section` URL. This is the one
+        // that used to remount the page.
+        await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
+        expect(await screen.findByRole("link", { name: "calc_sp_1" })).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
+        expect(counts).toEqual({ species: 1, conformers: 1 })
+        expect(document.querySelector(".entry-page")).toBe(entryPageNodeBefore)
+
+        // A LATER click: `:section` URL -> a different `:section` URL. This
+        // already worked before the fix -- kept here so a regression that
+        // reintroduces the asymmetry in the other direction is caught too.
+        await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
+        expect(await screen.findByText("thm_one")).toBeVisible()
+        expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
+        expect(counts).toEqual({ species: 1, conformers: 1 })
+        expect(document.querySelector(".entry-page")).toBe(entryPageNodeBefore)
+    })
+
+    it("does not refetch the entry when Back returns across the route boundary (sectioned -> sectionless)", async () => {
+        const user = userEvent.setup()
+        const counts = { species: 0, conformers: 0 }
+        server.use(...countingHandlers(counts))
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await findConformerHeading()
+        expect(counts).toEqual({ species: 1, conformers: 1 })
+
+        await user.click(screen.getByRole("tab", { name: "Single-point energy" }))
+        await screen.findByRole("link", { name: "calc_sp_1" })
+        expect(counts).toEqual({ species: 1, conformers: 1 })
+        // See the node-identity comment in the test above: this is what
+        // actually isolates the routing fix from the caching fix.
+        const entryPageNodeBeforeBack = document.querySelector(".entry-page")
+        expect(entryPageNodeBeforeBack).not.toBeNull()
+
+        // Back: `:section` URL -> the sectionless URL that pushed it.
+        window.history.back()
+        await waitFor(() => expect(window.location.pathname).toBe(`/species-entries/${entryRef}`))
+        await findConformerHeading()
+        expect(screen.queryByRole("heading", { name: "Loading species entry" })).not.toBeInTheDocument()
+        expect(counts).toEqual({ species: 1, conformers: 1 })
+        expect(document.querySelector(".entry-page")).toBe(entryPageNodeBeforeBack)
+    })
+
+    // Isolates `api/requestCache.ts` specifically, independent of the
+    // App.tsx routing fix above. `TabPanelBody` (`SpeciesEntryPage.tsx`)
+    // renders a DIFFERENT component per section, so `EntryThermoSection`
+    // itself genuinely unmounts when you switch away from Thermochemistry
+    // and remounts when you switch back -- no route-element mismatch
+    // needed to trigger it, and the App.tsx fix alone does nothing for
+    // this case. Without `dedupedFetch`, `useEntryThermo`'s own request
+    // (`GET .../thermo`) would refire on every revisit.
+    it("caches a per-section list request (thermo) across leaving and revisiting its own tab", async () => {
+        const user = userEvent.setup()
+        let thermoRequests = 0
+        server.use(
+            http.get("/api/v1/scientific/species/search", () => HttpResponse.json({ records: [{
+                species_ref: "spc_atp56uqux2ajao7hvckx7gx7ca",
+                canonical_smiles: "[CH3]", inchi_key: "WCYWZMWISLQXQU-UHFFFAOYSA-N", formula: "CH3",
+                charge: 0, multiplicity: 2,
+                entries: [{
+                    species_entry_ref: entryRef, species_entry_kind: "minimum", electronic_state_kind: "ground",
+                    review: { status: "not_reviewed" },
+                    availability: { has_thermo: true, has_statmech: true, has_transport: false, has_conformers: true, calculation_count: 10 },
+                }],
+            }] })),
+            http.get("/api/v1/scientific/conformers/search", () => HttpResponse.json({ records: conformerRecords() })),
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/thermo`, () => {
+                thermoRequests += 1
+                return HttpResponse.json({
+                    species_entry_ref: entryRef,
+                    review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
+                    records: thermoRecords(),
+                    pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+                })
+            }),
+            http.get(`/api/v1/scientific/species-entries/${entryRef}/statmech`, () => HttpResponse.json({
+                species_entry_ref: entryRef,
+                review_summary: { approved: 0, under_review: 0, not_reviewed: 3, deprecated: 0, rejected: 0, total: 3 },
+                records: statmechRecords(false),
+                pagination: { offset: 0, limit: 50, returned: 3, total: 3, post_collapse_total: 3 },
+            })),
+            http.get("/api/v1/scientific/species-calculations/search", () => HttpResponse.json({ records: [] })),
+        )
+        window.history.replaceState({}, "", `/species-entries/${entryRef}`)
+        render(<App />)
+        await findConformerHeading()
+
+        await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
+        await screen.findByText("thm_one")
+        expect(thermoRequests).toBe(1)
+
+        // Leave the tab -- `EntryThermoSection` unmounts (`TabPanelBody`
+        // renders a different component for "statmech").
+        await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
+        await screen.findByRole("heading", { name: "From Conformer Group 1" })
+        expect(screen.queryByText("thm_one")).not.toBeInTheDocument()
+
+        // Revisit Thermochemistry -- `EntryThermoSection` remounts. Without
+        // the cache, this is a second `GET .../thermo`.
+        await user.click(screen.getByRole("tab", { name: "Thermochemistry" }))
+        expect(await screen.findByText("thm_one")).toBeVisible()
+        expect(thermoRequests).toBe(1)
     })
 })
