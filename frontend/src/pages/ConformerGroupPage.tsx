@@ -7,6 +7,7 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
@@ -109,7 +110,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                     specifically so `getByText(..., { selector:
                                     "dd" })` kept matching, which is the test
                                     shape driving the markup, backwards). */}
-                                <div><dt>Group ref</dt><dd><code className="data">{basin.conformer_group_ref}</code></dd></div>
+                                <div><dt>Group ref</dt><dd><code className="data">{refWithBreaks(basin.conformer_group_ref)}</code></dd></div>
                                 {basin.label && (
                                     <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
                                 )}
@@ -348,9 +349,18 @@ function ObservationCard({ observation }: { observation: Observation }) {
         <article className="card observation-card">
             <header>
                 <div>
-                    <span className="t-kicker">Observation</span>
+                    {/* SHOULD-FIX-12 ("record-page residuals" re-review):
+                        was `.t-kicker` -- same mono/uppercase shape as
+                        every other field label on this page, but `.t-
+                        kicker` carries no colour rule of its own, so this
+                        one inherited plain `--ink` instead of the `--muted`
+                        every OTHER label uses (`.kv-list dt`, `.metric
+                        span`, ...), MEASURED as the one outlier. `.t-label`
+                        is the same face/size/tracking; the colour comes
+                        from the scoped rule below. */}
+                    <span className="t-label">Observation</span>
                     <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
-                        {core.conformer_observation_ref}
+                        {refWithBreaks(core.conformer_observation_ref)}
                     </Link>
                 </div>
                 <div>

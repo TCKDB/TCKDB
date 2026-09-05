@@ -7,6 +7,7 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerObservation } from "../hooks/useConformerObservation"
 
@@ -139,7 +140,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     query passing) and why that was backwards.
                                     The tests below now query the `code`
                                     element. */}
-                                <div><dt>Observation ref</dt><dd><code className="data">{core.conformer_observation_ref}</code></dd></div>
+                                <div><dt>Observation ref</dt><dd><code className="data">{refWithBreaks(core.conformer_observation_ref)}</code></dd></div>
                                 <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
                                 <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                                 <div>
@@ -156,7 +157,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                     measured defect (species_entry_label null on every
                                     sampled entry) this same shape was fixed for. */}
                                 {group.label && (
-                                    <div><dt>Group ref</dt><dd><code className="data">{group.conformer_group_ref}</code></dd></div>
+                                    <div><dt>Group ref</dt><dd><code className="data">{refWithBreaks(group.conformer_group_ref)}</code></dd></div>
                                 )}
                                 <div>
                                     <dt>Species entry</dt>
@@ -166,7 +167,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                         </Link>
                                     </dd>
                                 </div>
-                                <div><dt>Species ref</dt><dd><code className="data">{species.species_ref}</code></dd></div>
+                                <div><dt>Species ref</dt><dd><code className="data">{refWithBreaks(species.species_ref)}</code></dd></div>
                                 <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
                                 {/* InChIKey and charge/multiplicity complete this page's
                                     identity tier -- served here (unlike the conformer
@@ -392,7 +393,7 @@ function SiblingRow({ sibling, currentStatus }: { sibling: SiblingObservation; c
     return (
         <li>
             <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
-                {core.conformer_observation_ref}
+                {refWithBreaks(core.conformer_observation_ref)}
             </Link>
             {statusDiffers && <span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>}
         </li>
