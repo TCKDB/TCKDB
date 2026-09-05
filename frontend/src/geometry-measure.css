@@ -38,21 +38,30 @@
     gap: .75rem;
 }
 
+/* SHOULD-FIX-10 ("record-page residuals" re-review): was a one-off `600
+   .82rem mono` outside the 13-step scale. `--type-ui-font` (600 .8125rem
+   sans) is the closest named step -- same weight, same register (a small
+   panel heading paired with a button, "Clear measurements", right
+   beside it and mapped onto the same step below). */
 .viewer-measurements-header h3 {
     margin: 0;
-    font: 600 .82rem var(--mono, ui-monospace, monospace);
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     color: var(--ink);
 }
 
+/* SHOULD-FIX-10: was `.68rem` (10.88px), under the accessibility-pass
+   11px floor, and mono/uppercase -- mapped onto `--type-ui-font`, the
+   same step every other button on this page (`geometry-detail.css`'s
+   `.viewer-controls button` et al.) now uses. */
 .measure-clear-button {
     padding: .35rem .75rem;
     border: 1px solid var(--control-border);
     border-radius: .3rem;
     background: var(--surface);
     color: var(--accent);
-    font: .68rem var(--mono, ui-monospace, monospace);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     cursor: pointer;
 }
 
