@@ -39,6 +39,16 @@
 
 .calc-headline-energy { margin: var(--s-4) 0 0; }
 
+/* Post-review fix (SHOULD-FIX-2 on the re-review pass): the label-less
+   TS fallback in the h1 (`CalculationDetailPage.tsx`'s `titleSubject`,
+   `<code className="data calc-headline-ref">`) was rendering at
+   `.data`'s own `--type-data-font` size (13px mono) sitting on the
+   baseline of the surrounding `--type-display-1` h1 (52px serif) --
+   MEASURED, a mismatched-scale ref inside a display headline. `.data`'s
+   face/weight (mono, 400) is still correct here -- only the size should
+   track the heading around it, not the shared data-run default. */
+.calc-headline-ref { font-size: inherit; }
+
 /* The compact stage/conformer note sits between the identity header and
    the full provenance row -- same shared `.kv-list` primitive underneath
    (see `StageAndConformerNote` in `CalculationDetailPage.tsx`), just a
