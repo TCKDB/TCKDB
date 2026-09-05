@@ -137,8 +137,11 @@ describe("TransitionStateEntryPage", () => {
         page()
         expect(await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })).toBeVisible()
 
-        // The label is demoted to a facet beside the review pill, not the h1.
-        expect(document.querySelector(".tse-label-facet")).toHaveTextContent("label TS0")
+        // The label is demoted to a plain identity fact in the header's
+        // `.kv-list`, not the h1 and not a second pill beside the review one
+        // (BLOCKING-1, PR B review).
+        expect(screen.getByText("Label", { selector: "dt" })).toBeVisible()
+        expect(screen.getByText("TS0", { selector: "dd" })).toBeVisible()
 
         // The unmapped SMILES the API actually serves is shown, relabeled...
         const unmappedRow = screen.getByText("Reaction SMILES (unmapped)").closest("div")
@@ -601,11 +604,11 @@ describe("TransitionStateEntryPage", () => {
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
-        // "TS0" appears exactly once on the page now -- the label facet
-        // beside the review pill -- not also in the h1 (now the equation)
-        // or a formula-fallback slot in the identity header.
+        // "TS0" appears exactly once on the page now -- the "Label" identity
+        // fact in the header's `.kv-list` -- not also in the h1 (now the
+        // equation) or a formula-fallback slot in the identity header.
         expect(document.body.textContent?.match(/TS0/g)).toHaveLength(1)
-        expect(document.querySelector(".tse-label-facet")).toHaveTextContent("label TS0")
+        expect(screen.getByText("TS0", { selector: "dd" })).toBeVisible()
         expect(screen.getAllByText((_, node) => node?.tagName === "DD" && node.textContent === "0 / doublet (2)"))
             .toHaveLength(1)
     })

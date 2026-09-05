@@ -116,18 +116,16 @@
 
 .tse-siblings-list a { color: var(--accent); font-weight: 600; }
 
-/* A new modifier class, composed alongside `.value-pill`/`.value-pill--
-   muted` in `TransitionStateEntryPage.tsx` (never a selector ending in
-   `.value-pill` itself) -- PR D review finding: a page stylesheet
-   reaching into a shared primitive selector, even scoped by an ancestor
-   class, restyles that primitive wherever this page's markup happens to
-   put it, and Vite never unloads a route's CSS once injected, so the
-   risk is not hypothetical. This class carries only the size override;
-   `.value-pill`'s own box/colour rules (`index.css`) still apply in
-   full. */
-.tse-sibling-pill {
-    font-size: .68rem;
-}
+/* `.tse-sibling-pill` (a font-size override for the sibling-row review
+   pill) is retired -- SHOULD-FIX-3 (PR B review): `.68rem` (10.88px) sat
+   under the accessibility-pass 11px floor this whole app holds every
+   other label/pill/UI string to. The pill's SIZE is the shared
+   `.value-pill` primitive's to own (`index.css`); a page composes
+   `.value-pill`/`.value-pill--muted` for colour/state only now, with no
+   size override of its own. See the retired class's own former comment,
+   still relevant to any FUTURE page-scoped pill modifier: compose a new
+   class alongside `.value-pill`, never a selector ending in
+   `.value-pill` itself (PR D review finding on this same file). */
 
 .tse-siblings-list code { font: var(--type-data-font); color: var(--muted-2); }
 
@@ -136,11 +134,14 @@
    `overflow-wrap: anywhere` (`design-system.css`) breaking a short,
    never-long token mid-word once five columns had to share the width.
    Scoped to `.tse-page` (this page's own root class) rather than edited
-   on the shared rule -- `ConformerObservationPage`/`ConformerGroupPage`
-   still render their own older table class, whose first column may
-   legitimately need to wrap. This page's own tables were renamed to the
-   shared `.data-table` primitive alongside this fix (item 7); still
-   scoped under `.tse-page` for the same reason. */
+   on the shared `.data-table` rule itself -- `ConformerObservationPage`/
+   `ConformerGroupPage` also render `.data-table` now (item 7), but their
+   own first column ("Stage") is shorter and denser (up to 4 short rows
+   in `ConformerGroupPage`'s per-observation tables) and may legitimately
+   still need to wrap at a narrow width; a global `nowrap` there was never
+   measured and risks a different, unverified regression on those two
+   pages. This fix stays scoped to the one page and the one column width
+   it was actually measured on. */
 .tse-page .data-table th:first-child,
 .tse-page .data-table td:first-child {
     white-space: nowrap;

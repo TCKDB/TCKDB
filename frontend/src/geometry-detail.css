@@ -77,15 +77,18 @@
    rule (matching `.viewer-controls button` etc. below) rather than a
    reference to `species-entry.css`'s `.copy-button`, since this page
    still should not depend on that file loading at all. */
+/* NIT (PR B review): was `.64rem` (10.24px), under the accessibility-pass
+   11px floor -- raised to the shared `--type-ui-font` step, the same one
+   this page's other interactive controls (the energy-display unit
+   toggle, item 11) use. */
 .geometry-page .copy-button {
     flex: none;
     border: 1px solid var(--control-border);
     border-radius: .3rem;
     background: var(--surface);
     color: var(--muted);
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     padding: .3rem .6rem;
     cursor: pointer;
 }
@@ -413,11 +416,13 @@
     border: 0;
 }
 
+/* NIT (PR B review): was `.64rem` (10.24px), under the accessibility-pass
+   11px floor -- raised to the shared `--type-label-font` step. */
 .coordinate-toggle legend {
     padding: 0;
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
     color: var(--muted);
 }
 

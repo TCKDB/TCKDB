@@ -7,13 +7,10 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
-// The one canonical pill rule every record page follows now (item 6,
-// design/foundations PR B) -- see `CalculationDetailPage.tsx`'s own copy
-// of this helper for the fuller rationale.
-const reviewPillClass = (status: string) => (status === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill")
 type Observation = NonNullable<ConformerGroup["observations"]>[number]
 type GeometryLink = NonNullable<ConformerGroup["geometries"]>[number]
 
@@ -81,42 +78,52 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             secondary fact next to the stable ref -- same
                             treatment `species_entry_label` gets everywhere
                             else in this app. */}
-                        <div className="record-identity-kicker-row">
-                            <span className="t-kicker record-identity-kicker">Conformer basin · evidence ledger</span>
-                            <span className={reviewPillClass(basin.review.status)}>{statusLabel(basin.review.status)}</span>
-                        </div>
-                        <h1 className="t-display-1 record-identity-title">Conformer basin</h1>
-                        <p className="t-body section-intro">
-                            One torsional basin, shown through its deposited observations. Calculation rows
-                            are evidence attached to those observations; they are not separate conformers.
-                        </p>
-                        <dl className="kv-list">
-                            {/* Plain text, not `<code>`: `getByText(..., {
-                                selector: "dd" })` (this page's own test
-                                suite) matches a node's DIRECT text-node
-                                children only (`@testing-library/dom`'s
-                                `getNodeText`), not text belonging to a
-                                nested element -- wrapping this ref in
-                                `<code>` would move its text one level
-                                deeper and make that query find nothing.
-                                `.kv-list dd`'s own font is already the
-                                shared `--type-value` step; a bare ref
-                                still reads cleanly without the extra
-                                markup. */}
-                            <div><dt>Group ref</dt><dd>{basin.conformer_group_ref}</dd></div>
-                            {basin.label && (
-                                <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
-                            )}
-                            <div>
-                                <dt>Species entry</dt>
-                                <dd>
-                                    <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                        {species.species_entry_label ?? species.species_entry_ref}
-                                    </Link>
-                                </dd>
+                        {/* SHOULD-FIX-7 (PR B review): wrapped in the SAME
+                            `.record-identity-header` div `RecordIdentityHeader`
+                            itself renders, not left as bare siblings -- an
+                            earlier version of this markup skipped that
+                            wrapper, so this header had no `gap` between its
+                            kicker row and h1 (`.record-identity-header`'s own
+                            `display: grid; gap: var(--s-3)` never applied),
+                            reading roughly 1px apart instead of the ~13px
+                            gap every other record page's header has. */}
+                        <div className="record-identity-header">
+                            <div className="record-identity-kicker-row">
+                                <span className="t-kicker record-identity-kicker">Conformer basin · evidence ledger</span>
+                                <span className={reviewPillClass(basin.review.status)}>{statusLabel(basin.review.status)}</span>
                             </div>
-                            <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
-                        </dl>
+                            <h1 className="t-display-1 record-identity-title">Conformer basin</h1>
+                            <p className="t-body section-intro">
+                                One torsional basin, shown through its deposited observations. Calculation rows
+                                are evidence attached to those observations; they are not separate conformers.
+                            </p>
+                            <dl className="kv-list">
+                                {/* SHOULD-FIX-4 (PR B review): this ref is an
+                                    identifier and gets `<code className="data">`
+                                    like every other ref on these five pages --
+                                    the markup is not shaped around what the
+                                    test suite happens to find easiest to query;
+                                    the TEST queries the `code` element instead
+                                    (an earlier version of this file did the
+                                    reverse: kept the ref as plain `dd` text
+                                    specifically so `getByText(..., { selector:
+                                    "dd" })` kept matching, which is the test
+                                    shape driving the markup, backwards). */}
+                                <div><dt>Group ref</dt><dd><code className="data">{basin.conformer_group_ref}</code></dd></div>
+                                {basin.label && (
+                                    <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
+                                )}
+                                <div>
+                                    <dt>Species entry</dt>
+                                    <dd>
+                                        <Link to={`/species-entries/${species.species_entry_ref}`}>
+                                            {species.species_entry_label ?? species.species_entry_ref}
+                                        </Link>
+                                    </dd>
+                                </div>
+                                <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
+                            </dl>
+                        </div>
                         {/* Identity-first header, matching the shared record-page
                             order (identity -> facets -> provenance). No facets tier
                             follows: this endpoint's `species` context carries
@@ -204,15 +211,24 @@ function Ledger({ group }: { group: ConformerGroup }) {
 }
 
 /**
- * The observation-scoped evidence ledger, made collapsible. Previously an
- * always-open `<section>` -- with one `ObservationCard` per deposited
- * observation, each carrying its own `CalculationTable`, this was the
- * single largest block on the page and the owner's own "big box"
- * complaint. Composes the shared `Disclosure` primitive
- * (`components/Disclosure.tsx`, design/foundations PR B item 5) rather
- * than a page-local `<details className="ledger-section">` recipe --
- * every disclosure on this app now renders through the one canonical
- * `.disclosure` chrome (box, chevron, summary typography).
+ * The observation-scoped evidence ledger, with its own list of
+ * observation cards made collapsible. Previously an always-open
+ * `<section>` -- with one `ObservationCard` per deposited observation,
+ * each carrying its own `CalculationTable`, this was the single largest
+ * block on the page and the owner's own "big box" complaint.
+ *
+ * The `SectionHeading` (an h2) is a plain, always-rendered heading
+ * OUTSIDE the `Disclosure` (BLOCKING-3 fix, PR B review) -- an earlier
+ * version of this component put the whole heading inside `Disclosure`'s
+ * `summary` prop, which put a 28px serif h2 with its own UA margins
+ * inside a 13px summary row; the brief's "no heading inside a summary"
+ * rule holds for every disclosure on this app, including this one.
+ * `Disclosure` wraps only the observation-card LIST, with a plain-text
+ * summary (the deposited-observation count) -- collapsing that list is a
+ * reader's own choice to declutter the page, not a reason to hide the
+ * section's own heading, which now stays visible (and registered in the
+ * page's table of contents) regardless of open/closed state, the same as
+ * every other section on this page.
  *
  * Default OPEN on this page (a later reviewer pass reversed the original
  * "default closed, matching every other disclosure" call below). This is
@@ -232,20 +248,12 @@ function Ledger({ group }: { group: ConformerGroup }) {
  * focused `<summary>`) and focus-visible styling both come for free from
  * `<summary>` being a real native interactive element.
  *
- * `SectionHeading` lives INSIDE the `summary` prop, so it stays mounted --
- * and therefore stays registered in the page's table of contents --
- * whether the disclosure is open or closed. Only its own native
- * open/hidden rendering changes; React never unmounts it. That is a
- * deliberate choice, not an accident of reusing the pattern: collapsing
- * this section is a reader's OWN choice to declutter the page, not a
- * decision that the section doesn't exist -- it should stay one click
- * away from the ToC exactly as before, not vanish from it.
- *
  * When there is nothing behind it (zero deposited observations), this
- * renders a plain, always-open `<section>` instead -- the same "nothing
- * to disclose" convention `CalculationDetailPage`'s `LazySection` uses for
- * an unavailable section. Offering a "click to expand" control over an
- * empty result would tell a reader there might be something to find.
+ * renders a plain, always-open `<section>` with no `Disclosure` at all --
+ * the same "nothing to disclose" convention `CalculationDetailPage`'s
+ * `LazySection` uses for an unavailable section. Offering a "click to
+ * expand" control over an empty result would tell a reader there might
+ * be something to find.
  */
 function EvidenceDisclosure({ observations }: { observations: Observation[] }) {
     const count = observations.length
@@ -267,23 +275,40 @@ function EvidenceDisclosure({ observations }: { observations: Observation[] }) {
         )
     }
 
-    const summaryLabel = `Observation-scoped evidence (${count} deposited observation${count === 1 ? "" : "s"})`
+    const countLabel = `${count} deposited observation${count === 1 ? "" : "s"}`
     return (
-        <Disclosure
-            id="observation-ledger-disclosure"
-            defaultOpen
-            summary={<SectionHeading id="observation-ledger" label={summaryLabel}>{summaryLabel}</SectionHeading>}
-        >
-            <p className="note">Methods remain on their actual calculation rows so differing levels stay visible.</p>
-            <div className="observation-list">
-                {observations.map((observation) => (
-                    <ObservationCard
-                        key={observation.conformer_observation.conformer_observation_ref}
-                        observation={observation}
-                    />
-                ))}
-            </div>
-        </Disclosure>
+        <section className="ledger-section" aria-labelledby="observation-ledger">
+            {/* BLOCKING-3 fix (PR B review): the section heading is a plain
+                `SectionHeading` OUTSIDE the disclosure now, never an h2
+                nested inside `Disclosure`'s `<summary>` -- a 28px serif
+                heading with its own UA margins never belonged inside a
+                13px summary row, and the brief's "no headings inside a
+                summary" rule holds for every disclosure on these five
+                pages, not just the ones that started as a page-local
+                `<details>`. `Disclosure`'s own `summary` prop below is
+                plain text (the count), not `SectionHeading` -- collapsing
+                is the READER'S choice to declutter the observation list,
+                not a reason to hide the section's own heading (it stays
+                registered in the ToC and visible either way). */}
+            <SectionHeading
+                id="observation-ledger"
+                kicker="Deposited provenance"
+                intro="Methods remain on their actual calculation rows so differing levels stay visible."
+                label={`Observation-scoped evidence (${countLabel})`}
+            >
+                Observation-scoped evidence
+            </SectionHeading>
+            <Disclosure id="observation-ledger-disclosure" defaultOpen summary={countLabel}>
+                <div className="observation-list">
+                    {observations.map((observation) => (
+                        <ObservationCard
+                            key={observation.conformer_observation.conformer_observation_ref}
+                            observation={observation}
+                        />
+                    ))}
+                </div>
+            </Disclosure>
+        </section>
     )
 }
 
@@ -306,7 +331,7 @@ function groupGeometries(links: GeometryLink[]) {
 
 function Metric({ label, value, detail }: { label: string; value: number; detail?: string }) {
     return (
-        <div className="metric">
+        <div className="card metric">
             <span>{label}</span>
             <strong>{value}</strong>
             {detail && <small>{detail}</small>}

@@ -44,12 +44,26 @@ function stripComments(source: string): string {
  * `.value-pill--muted` are DEFINED there -- that is the primitive itself,
  * not a page restyling it.
  */
+// SHOULD-FIX-6 (PR B review): the original version of this pattern only
+// matched a selector ending directly in `{` (`\.value-pill\s*\{`) -- it
+// missed a `:hover`/`:focus-visible` pseudo-class, a compound selector
+// (`.foo.value-pill`), an attribute selector, a combinator
+// (`.value-pill > span`), or a comma-separated selector list
+// (`.value-pill, .other-thing`), any of which restyles the primitive just
+// as much as a bare `{` does. The lookahead below requires only that
+// `.value-pill`/`.value-pill--muted` be followed by a character that can
+// legally follow a class name in a selector (whitespace, `,`, `.`, `:`,
+// `{`, `[`, or a combinator) -- i.e. it matches the class name ANYWHERE
+// it appears as a real selector token, not only immediately before an
+// opening brace.
+const VALUE_PILL_SELECTOR = /\.value-pill(?:--muted)?(?=[\s,.:{[>+~])/
+
 describe("no page stylesheet restyles the shared .value-pill primitive directly", () => {
     it("only design-system.css/index.css declare a .value-pill-suffixed rule", () => {
         const offenders: string[] = []
         for (const [name, css] of Object.entries(ALL_STYLESHEETS)) {
             if (name === "design-system.css" || name === "index.css") continue
-            if (/(?<![\w.-])\.value-pill(?:--muted)?\s*\{/.test(stripComments(css))) offenders.push(name)
+            if (VALUE_PILL_SELECTOR.test(stripComments(css))) offenders.push(name)
         }
         expect(offenders).toEqual([])
     })
@@ -57,5 +71,18 @@ describe("no page stylesheet restyles the shared .value-pill primitive directly"
     it("transition-state-entry.css no longer overrides .value-pill's font-size via a descendant selector", () => {
         const css = stripComments(ALL_STYLESHEETS["transition-state-entry.css"] ?? "")
         expect(css).not.toMatch(/\.value-pill/)
+    })
+
+    // Mutation check: the OLD pattern (`\.value-pill\s*\{`, requiring an
+    // immediate opening brace) would have missed every one of these --
+    // each is a real restyle of the primitive from a page stylesheet, just
+    // not shaped as a bare `.value-pill { ... }` rule.
+    it("mutation check: catches a :hover restyle, a compound selector, and a comma-list, not just a bare declaration", () => {
+        expect(VALUE_PILL_SELECTOR.test(".geometry-page .value-pill:hover {}")).toBe(true)
+        expect(VALUE_PILL_SELECTOR.test(".foo.value-pill { color: red; }")).toBe(true)
+        expect(VALUE_PILL_SELECTOR.test(".value-pill, .other-thing { color: red; }")).toBe(true)
+        expect(VALUE_PILL_SELECTOR.test(".value-pill > span {}")).toBe(true)
+        // Sanity: unrelated selectors never match.
+        expect(VALUE_PILL_SELECTOR.test(".value-pillbox { color: red; }")).toBe(false)
     })
 })

@@ -78,13 +78,22 @@ function withSmilesBreaks(value: string): ReactNode {
  * of that shared order, not every tier.
  */
 export function RecordIdentityHeader({
-    kicker, pill, title, titleVariant = "display-1",
+    kicker, pill, title, titleVariant = "display-1", intro,
     identity, facets, submissionRef, explainTransitionStateIdentity = true,
 }: {
     kicker: ReactNode
     pill?: ReactNode
     title: ReactNode
     titleVariant?: "display-1" | "display-2"
+    /** SHOULD-FIX-7 (PR B review): an optional descriptive sentence
+     *  between the h1 and the identity tier -- the same slot/role
+     *  `SectionHeading`'s own `intro` prop plays for an in-page section,
+     *  reused here so the canonical order (kicker -> h1 -> intro ->
+     *  identity -> provenance -> References) is the SAME on every record
+     *  page, not just the three that composed a page-local `<p>` for it
+     *  in three different positions relative to identity. Rendered as
+     *  `--type-body` capped to `--measure-prose`, same as `SectionHeading`'s. */
+    intro?: ReactNode
     identity: RecordIdentity
     facets?: EntryFacetAxes
     submissionRef?: string | null
@@ -99,6 +108,7 @@ export function RecordIdentityHeader({
             <h1 className={titleVariant === "display-2" ? "t-display-2 record-identity-title" : "t-display-1 record-identity-title"}>
                 {title}
             </h1>
+            {intro && <p className="t-body section-intro">{intro}</p>}
             <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} />
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
@@ -215,6 +225,22 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                 </p>
             )}
             <dl className="kv-list record-identity-facts">
+                {/* The producer's own label (e.g. "TS0") -- BLOCKING-1 fix
+                    (PR B review): this used to be its own `.tse-label-facet`
+                    span in `TransitionStateEntryPage.tsx`'s kicker row, a
+                    class this stylesheet consolidation retired without
+                    updating that page's markup to match, leaving an
+                    unstyled 16px sans span next to an 11.5px pill. A plain
+                    identity fact -- the same tier as charge/multiplicity
+                    and the entry ref below -- needs no page-local class of
+                    its own. Only rendered when the identity actually
+                    carries a label: `GeometryDetailPage`'s TS-owned-
+                    geometry identity (`GeometryTransitionStateIdentity`)
+                    never serves this field, so this fact is silently
+                    absent there rather than showing an empty row. */}
+                {identity.label && (
+                    <IdentityFact label="Label">{identity.label}</IdentityFact>
+                )}
                 <IdentityFact label="Reaction SMILES (unmapped)" wide>
                     {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                 </IdentityFact>

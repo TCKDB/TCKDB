@@ -36,6 +36,7 @@ import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
+import { reviewPillClass } from "../domain/reviewPillFormat"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
@@ -103,20 +104,6 @@ const typeLabel = (type: string) => CALC_TYPE_LABELS[type] ?? type.replaceAll("_
 const roleLabel = (role: string) => role.replaceAll("_", " ")
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
-
-/**
- * The one canonical pill rule every record page follows now (item 6,
- * design/foundations PR B): accent `.value-pill` for a positive/settled
- * state, `.value-pill--muted` for an absent/not-yet-reviewed one. Review
- * status only ever has one "absent" reading -- `not_reviewed` -- so that
- * is the only status this maps to the muted variant; every other status
- * (a record that HAS been reviewed, whatever the verdict) is the plain
- * accent pill, matching the identical rule `TransitionStateEntryPage`'s
- * sibling list already used before this PR.
- */
-function reviewPillClass(status: string): string {
-    return status === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill"
-}
 
 // The owner's own wording for a presence check with nothing recorded --
 // kept in this ONE place (not four separate ternaries) so a future
@@ -608,8 +595,16 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                 <div>
                     <dt>Stage</dt>
                     <dd>
+                        {/* SHOULD-FIX-4 (PR B review): a calculation ref is
+                            an identifier -- `<code className="data">`,
+                            like every other ref on these five pages, same
+                            treatment inside a link as outside one. The
+                            conformer-group link just below is NOT
+                            code-wrapped when it shows the producer's own
+                            LABEL rather than the ref -- a label is a human
+                            word, not an identifier. */}
                         {stage.linkRef
-                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}>{stage.linkRef}</Link></>
+                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{stage.linkRef}</code></Link></>
                             : stage.text}
                     </dd>
                 </div>
@@ -619,11 +614,13 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                     <dt>Conformer</dt>
                     <dd>
                         <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
-                            {conformer.conformer_observation_ref}
+                            <code className="data">{conformer.conformer_observation_ref}</code>
                         </Link>
                         {" · "}
                         <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
-                            {conformer.conformer_group_label ?? conformer.conformer_group_ref}
+                            {conformer.conformer_group_label
+                                ? conformer.conformer_group_label
+                                : <code className="data">{conformer.conformer_group_ref}</code>}
                         </Link>
                     </dd>
                 </div>

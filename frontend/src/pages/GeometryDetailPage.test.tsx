@@ -849,10 +849,12 @@ describe("GeometryDetailPage", () => {
             await screen.findByRole("heading", { name: "CH4 geometry" })
 
             // `.basin-intro` retired (design/foundations PR B) -- this
-            // header's intro paragraph now composes `.section-intro`
-            // (`conformer-group.css`), the same `--measure-prose` (44rem)
-            // cap `SectionHeading`'s own optional `intro` prop uses for
-            // every in-page section on these five record pages.
+            // header's intro paragraph now goes through `RecordIdentityHeader`'s
+            // own `intro` prop, which composes `.section-intro`
+            // (`conformer-group.css`), the same `--measure-prose` (40rem,
+            // NOT 44 -- see `index.css`) cap `SectionHeading`'s own
+            // optional `intro` prop uses for every in-page section on
+            // these five record pages.
             const prose = container.querySelector(".section-intro") as HTMLElement
             const viewer = container.querySelector(".geometry-viewer") as HTMLElement
             // `.stage-table` retired from this page's own tables in favour

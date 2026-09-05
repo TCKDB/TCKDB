@@ -122,25 +122,32 @@ describe("ConformerGroupPage", () => {
         expect(screen.getByText(/Their count is not a conformer count/)).toBeVisible()
     })
 
-    // Design/foundations PR B (item 5): this disclosure now composes the
-    // shared `Disclosure` primitive (`.disclosure`, `design-system.css`)
-    // instead of a page-local `<details className="ledger-section">`
-    // recipe. `Disclosure` is deliberately UNCONTROLLED -- it does not set
-    // `aria-expanded` itself (native `<details>`/`<summary>` already
-    // conveys expanded state to real assistive tech on its own) -- so this
-    // test now asserts the native `open` attribute and content visibility
-    // directly, the same mechanism `CalculationDetailPage`'s `LazySection`
-    // tests already rely on for the identical primitive.
-    it("opens the observation-scoped evidence ledger by default, naming its count, and still collapses it via the keyboard", async () => {
+    // Design/foundations PR B (item 5, BLOCKING-3 fix per review): this
+    // disclosure now composes the shared `Disclosure` primitive
+    // (`.disclosure`, `design-system.css`) instead of a page-local
+    // `<details className="ledger-section">` recipe -- and the section
+    // heading is a plain, always-visible `SectionHeading` OUTSIDE the
+    // disclosure, never an h2 nested inside its `<summary>` (a 28px serif
+    // heading never belonged inside a 13px summary row). `Disclosure` is
+    // deliberately UNCONTROLLED -- it does not set `aria-expanded` itself
+    // (native `<details>`/`<summary>` already conveys expanded state to
+    // real assistive tech on its own) -- so this test asserts the native
+    // `open` attribute and content visibility directly, the same
+    // mechanism `CalculationDetailPage`'s `LazySection` tests already
+    // rely on for the identical primitive.
+    it("opens the observation-scoped evidence ledger by default, naming its count in the disclosure summary, and keeps its heading outside the disclosure", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
 
-        const heading = screen.getByRole("heading", { name: "Observation-scoped evidence (1 deposited observation)" })
-        const details = heading.closest("details")
-        const summary = heading.closest("summary")
+        const heading = screen.getByRole("heading", { name: "Observation-scoped evidence" })
+        // BLOCKING-3: the heading itself is never inside a details/summary.
+        expect(heading.closest("details")).toBeNull()
+        expect(heading.closest("summary")).toBeNull()
+
+        const summary = screen.getByText("1 deposited observation").closest("summary") as HTMLElement
+        const details = summary?.closest("details") as HTMLElement
         expect(details).not.toBeNull()
-        expect(summary).not.toBeNull()
         // Mutation check: rename the class away and this fails.
         expect(details).toHaveClass("disclosure")
 
@@ -156,10 +163,27 @@ describe("ConformerGroupPage", () => {
         // jsdom implements native `<details>` toggle behaviour (the same
         // mechanism `LazySection`'s own tests rely on), so no `waitFor` is
         // needed for either assertion below.
-        fireEvent.click(heading)
+        fireEvent.click(summary)
 
         expect(details).not.toHaveAttribute("open")
         expect(screen.getByText("b3lyp/def2tzvp")).not.toBeVisible()
+        // The heading itself is unaffected by the toggle -- it was never
+        // inside the collapsing element to begin with.
+        expect(heading).toBeVisible()
+    })
+
+    // BLOCKING-3 mutation check: no heading element sits inside any
+    // `<summary>` on this page. Put an h2 back inside a `Disclosure`'s
+    // `summary` prop and this test fails.
+    it("never puts a heading (h1-h4) inside a <summary> on this page", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        const summaries = document.querySelectorAll("summary")
+        expect(summaries.length).toBeGreaterThan(0)
+        for (const summary of summaries) {
+            expect(summary.querySelector("h1, h2, h3, h4")).toBeNull()
+        }
     })
 
     it("keeps the evidence-ledger heading registered in the table of contents", async () => {
@@ -182,7 +206,7 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
         expect(screen.getByText("Group ref")).toBeVisible()
-        expect(screen.getByText("cg_demo", { selector: "dd" })).toBeVisible()
+        expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
         expect(screen.getByText("Producer label")).toBeVisible()
         expect(screen.getByText("conformer_1", { selector: "dd" })).toBeVisible()
     })
@@ -196,11 +220,18 @@ describe("ConformerGroupPage", () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
         const h1 = await screen.findByRole("heading", { name: "Conformer basin" })
-        const header = h1.closest(".basin-header") as HTMLElement
-        expect(header).not.toBeNull()
-        const kickerRow = header.querySelector(".record-identity-kicker-row") as HTMLElement
+        // SHOULD-FIX-7 (PR B review): the kicker row, h1, intro and identity
+        // `.kv-list` all sit inside the SAME `.record-identity-header`
+        // wrapper `RecordIdentityHeader` itself renders -- not bare
+        // siblings of `.basin-header` -- so this hand-matched header gets
+        // the same `gap` between them. Mutation check: h1 must be a
+        // descendant of `.record-identity-header`, and that wrapper's own
+        // direct children must carry the kicker row before the h1.
+        const wrapper = h1.closest(".record-identity-header") as HTMLElement
+        expect(wrapper).not.toBeNull()
+        const kickerRow = wrapper.querySelector(".record-identity-kicker-row") as HTMLElement
         expect(kickerRow).not.toBeNull()
-        const order = Array.from(header.children)
+        const order = Array.from(wrapper.children)
         expect(order.indexOf(kickerRow)).toBeLessThan(order.indexOf(h1))
 
         const pill = within(kickerRow).getByText("not reviewed")
@@ -227,7 +258,7 @@ describe("ConformerGroupPage", () => {
         // back to the ref or the (now absent) label.
         await screen.findByRole("heading", { name: "Conformer basin" })
         expect(screen.getByText("Group ref")).toBeVisible()
-        expect(screen.getByText("cg_demo", { selector: "dd" })).toBeVisible()
+        expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
         expect(screen.queryByText("Producer label")).not.toBeInTheDocument()
     })
 

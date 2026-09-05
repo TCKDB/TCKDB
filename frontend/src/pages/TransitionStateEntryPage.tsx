@@ -14,14 +14,11 @@ import { RefsDisclosure } from "../components/RefsDisclosure"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
+import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
 const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not recorded")
-// The one canonical pill rule every record page follows now (item 6,
-// design/foundations PR B) -- see `CalculationDetailPage.tsx`'s own copy
-// of this helper for the fuller rationale.
-const reviewPillClass = (status: string) => (status === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill")
 
 type Calculation = NonNullable<TransitionStateEntryRecord["calculations"]>[number]
 type Geometry = NonNullable<TransitionStateEntryRecord["geometries"]>[number]
@@ -285,15 +282,17 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             not a short label) + identity now all live in
                             `RecordIdentityHeader` (item 1, design/foundations
                             PR B). The review pill is the header's ONE pill
-                            slot; the TS label facet (`.tse-label-facet`,
-                            "not a pill itself" -- see that class's own
-                            comment in `transition-state-entry.css`) travels
-                            alongside it in that same slot, since this page
-                            has no second slot to give it. The trust verdict
-                            is NOT a second pill either -- it is a plain
-                            fact in the provenance `.kv-list` below, the same
-                            treatment every other computed verdict on these
-                            five pages gets.
+                            slot. The producer's own label (e.g. "TS0") is
+                            NOT a second pill in that slot any more (BLOCKING-1
+                            fix, PR B review) -- it is a plain identity fact
+                            in `RecordIdentityHeader`'s own `.kv-list`, the
+                            same tier as charge/multiplicity, via
+                            `identity.label`; see that component's own
+                            comment. The trust verdict is likewise NOT a
+                            second pill -- it is a plain fact in the
+                            provenance `.kv-list` below, the same treatment
+                            every other computed verdict on these five pages
+                            gets.
                             explainTransitionStateIdentity=false: the Reaction
                             section's own lede below is this page's one
                             "no canonical SMILES" sentence -- see that
@@ -301,12 +300,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                             docstring for the duplication this avoids. */}
                         <RecordIdentityHeader
                             kicker="Transition state entry · deposited scientific record"
-                            pill={(
-                                <>
-                                    <span className={reviewPillClass(entry.review.status)}>{statusLabel(entry.review.status)}</span>
-                                    <span className="tse-label-facet">label {ts.label ?? "not recorded"}</span>
-                                </>
-                            )}
+                            pill={<span className={reviewPillClass(entry.review.status)}>{statusLabel(entry.review.status)}</span>}
                             title={reaction.equation ? renderEquationWithBreaks(reaction.equation) : "Reaction not recorded"}
                             titleVariant="display-2"
                             identity={identity}
@@ -391,7 +385,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
-                                    <span className={`${reviewPillClass(reviewStatus)} tse-sibling-pill`}>
+                                    <span className={reviewPillClass(reviewStatus)}>
                                         {statusLabel(reviewStatus)}
                                     </span>
                                 </li>

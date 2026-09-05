@@ -146,10 +146,12 @@
 /* Short muted line under a `.kv-list dd` value -- currently just the τ row's
    basis explanation ("analytic, tight convergence" / "assumed from the
    program's default (...)"). */
+/* NIT (PR B review): was `.7rem` (11.2px), under the accessibility-pass
+   11px floor -- raised to the shared `--type-note-font` step. */
 .kv-list dd .kv-note {
     margin-top: .2rem;
     color: var(--muted);
-    font-size: .7rem;
+    font: var(--type-note-font);
 }
 
 /* Marks an ADR 0012 Hessian-method/τ value that TCKDB assumed rather than

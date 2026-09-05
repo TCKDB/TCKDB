@@ -7,6 +7,7 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerObservation } from "../hooks/useConformerObservation"
 
 const statusLabel = (status: string) => status.replaceAll("_", " ")
@@ -14,10 +15,6 @@ const isoDate = (value?: string | null) => (value ? value.slice(0, 10) : "not re
 const originTitle = (origin?: string | null) => (
     origin ? `${origin.charAt(0).toUpperCase()}${origin.slice(1)} observation` : "Conformer observation"
 )
-// The one canonical pill rule every record page follows now (item 6,
-// design/foundations PR B) -- see `CalculationDetailPage.tsx`'s own copy
-// of this helper for the fuller rationale.
-const reviewPillClass = (status: string) => (status === "not_reviewed" ? "value-pill value-pill--muted" : "value-pill")
 type CalculationEntry = NonNullable<ConformerObservation["calculations"]>[number]
 type GeometryLink = NonNullable<ConformerObservation["geometries"]>[number]
 type SiblingObservation = NonNullable<ConformerObservation["observations"]>[number]
@@ -120,68 +117,73 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                             component directly (its `species` context carries no
                             charge/multiplicity/InChIKey/formula in the shape
                             `RecordIdentity` needs). */}
-                        <div className="record-identity-kicker-row">
-                            <span className="t-kicker record-identity-kicker">Conformer observation · deposited evidence</span>
-                            <span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>
+                        <div className="record-identity-header">
+                            <div className="record-identity-kicker-row">
+                                <span className="t-kicker record-identity-kicker">Conformer observation · deposited evidence</span>
+                                <span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>
+                            </div>
+                            <h1 className="t-display-1 record-identity-title">{originTitle(core.scientific_origin)}</h1>
+                            <p className="t-body section-intro">
+                                One deposition of evidence for this torsional basin, and the provenance boundary to the
+                                calculations and geometries derived from it. This is one observation, not the basin
+                                itself.
+                            </p>
+                            <dl className="kv-list">
+                                {/* SHOULD-FIX-4 (PR B review): these refs are
+                                    identifiers and get `<code className="data">`
+                                    like every other ref on these five pages --
+                                    see `ConformerGroupPage.tsx`'s identical
+                                    comment on its own "Group ref" row for why
+                                    an EARLIER version of this file kept them
+                                    as plain `dd` text instead (to keep a test
+                                    query passing) and why that was backwards.
+                                    The tests below now query the `code`
+                                    element. */}
+                                <div><dt>Observation ref</dt><dd><code className="data">{core.conformer_observation_ref}</code></dd></div>
+                                <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
+                                <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
+                                <div>
+                                    <dt>Conformer basin</dt>
+                                    <dd>
+                                        <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
+                                            {group.label ?? group.conformer_group_ref}
+                                        </Link>
+                                    </dd>
+                                </div>
+                                {/* Separate ref row only when the link above is showing
+                                    something OTHER than the ref -- see
+                                    `CalculationDetailPage.tsx`'s `OwnerCard` for the
+                                    measured defect (species_entry_label null on every
+                                    sampled entry) this same shape was fixed for. */}
+                                {group.label && (
+                                    <div><dt>Group ref</dt><dd><code className="data">{group.conformer_group_ref}</code></dd></div>
+                                )}
+                                <div>
+                                    <dt>Species entry</dt>
+                                    <dd>
+                                        <Link to={`/species-entries/${species.species_entry_ref}`}>
+                                            {species.species_entry_label ?? species.species_entry_ref}
+                                        </Link>
+                                    </dd>
+                                </div>
+                                <div><dt>Species ref</dt><dd><code className="data">{species.species_ref}</code></dd></div>
+                                <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
+                                {/* InChIKey and charge/multiplicity complete this page's
+                                    identity tier -- served here (unlike the conformer
+                                    basin surface, which does not carry them), so shown
+                                    rather than left off for consistency with a
+                                    thinner sibling endpoint. No classification-facet
+                                    tier follows: this endpoint's `species` context has
+                                    no `species_entry_kind`/`electronic_state_kind` to
+                                    build one from, and no `submission_ref` provenance
+                                    tier either -- both omitted rather than fabricated. */}
+                                {species.inchi_key && <div><dt>InChIKey</dt><dd><code>{species.inchi_key}</code></dd></div>}
+                                {(species.charge !== null && species.charge !== undefined
+                                    && species.multiplicity !== null && species.multiplicity !== undefined) && (
+                                    <div><dt>Charge / multiplicity</dt><dd>{species.charge} / {species.multiplicity}</dd></div>
+                                )}
+                            </dl>
                         </div>
-                        <h1 className="t-display-1 record-identity-title">{originTitle(core.scientific_origin)}</h1>
-                        <p className="t-body section-intro">
-                            One deposition of evidence for this torsional basin, and the provenance boundary to the
-                            calculations and geometries derived from it. This is one observation, not the basin
-                            itself.
-                        </p>
-                        <dl className="kv-list">
-                            {/* Plain text, not `<code>`, for the ref rows
-                                below -- see `ConformerGroupPage.tsx`'s
-                                identical comment on its own "Group ref"
-                                row: `getByText(..., { selector: "dd" })`
-                                only matches a node's own direct text, and
-                                nesting the ref one element deeper breaks
-                                that query. */}
-                            <div><dt>Observation ref</dt><dd>{core.conformer_observation_ref}</dd></div>
-                            <div><dt>Scientific origin</dt><dd>{core.scientific_origin ?? "not recorded"}</dd></div>
-                            <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
-                            <div>
-                                <dt>Conformer basin</dt>
-                                <dd>
-                                    <Link to={`/conformer-groups/${group.conformer_group_ref}`}>
-                                        {group.label ?? group.conformer_group_ref}
-                                    </Link>
-                                </dd>
-                            </div>
-                            {/* Separate ref row only when the link above is showing
-                                something OTHER than the ref -- see
-                                `CalculationDetailPage.tsx`'s `OwnerCard` for the
-                                measured defect (species_entry_label null on every
-                                sampled entry) this same shape was fixed for. */}
-                            {group.label && (
-                                <div><dt>Group ref</dt><dd>{group.conformer_group_ref}</dd></div>
-                            )}
-                            <div>
-                                <dt>Species entry</dt>
-                                <dd>
-                                    <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                        {species.species_entry_label ?? species.species_entry_ref}
-                                    </Link>
-                                </dd>
-                            </div>
-                            <div><dt>Species ref</dt><dd>{species.species_ref}</dd></div>
-                            <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>
-                            {/* InChIKey and charge/multiplicity complete this page's
-                                identity tier -- served here (unlike the conformer
-                                basin surface, which does not carry them), so shown
-                                rather than left off for consistency with a
-                                thinner sibling endpoint. No classification-facet
-                                tier follows: this endpoint's `species` context has
-                                no `species_entry_kind`/`electronic_state_kind` to
-                                build one from, and no `submission_ref` provenance
-                                tier either -- both omitted rather than fabricated. */}
-                            {species.inchi_key && <div><dt>InChIKey</dt><dd><code>{species.inchi_key}</code></dd></div>}
-                            {(species.charge !== null && species.charge !== undefined
-                                && species.multiplicity !== null && species.multiplicity !== undefined) && (
-                                <div><dt>Charge / multiplicity</dt><dd>{species.charge} / {species.multiplicity}</dd></div>
-                            )}
-                        </dl>
                         {core.note && <p className="observation-note">{core.note}</p>}
                     </header>
                 )}
@@ -348,13 +350,21 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
 
             {selections.length > 0 && (
                 <section className="ledger-section">
+                    {/* BLOCKING-3 fix (PR B review): the heading is a plain
+                        `SectionHeading` OUTSIDE the `Disclosure` now, never
+                        an h2 nested inside its `<summary>` -- see the
+                        identical fix (and fuller rationale) on
+                        `ConformerGroupPage.tsx`'s `EvidenceDisclosure`. The
+                        heading itself still carries the count in its own
+                        text (it is a fixed fact about the section, not
+                        state that changes with open/closed); `Disclosure`'s
+                        own `summary` is separate, plain text. */}
+                    <SectionHeading id="curation-selections" label={`Curation selections (${selections.length})`}>
+                        Curation selections ({selections.length})
+                    </SectionHeading>
                     <Disclosure
                         id="curation-selections-disclosure"
-                        summary={(
-                            <SectionHeading id="curation-selections" label={`Curation selections (${selections.length})`}>
-                                Curation selections ({selections.length})
-                            </SectionHeading>
-                        )}
+                        summary={`${selections.length} selection${selections.length === 1 ? "" : "s"}`}
                     >
                         <ul>
                             {selections.map((selection, index) => (
@@ -426,7 +436,7 @@ function groupGeometries(links: GeometryLink[]) {
 
 function Metric({ label, value }: { label: string; value: number }) {
     return (
-        <div className="metric">
+        <div className="card metric">
             <span>{label}</span>
             <strong>{value}</strong>
         </div>

@@ -172,17 +172,24 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
             <PageShell
                 identity={(
                     <header className="basin-header">
+                        {/* SHOULD-FIX-7 (PR B review): the intro sentence
+                            now goes through `RecordIdentityHeader`'s own
+                            `intro` prop -- kicker -> h1 -> intro -> identity
+                            is the one order every record page's header
+                            follows now, rather than each page picking its
+                            own position for this sentence relative to
+                            identity (this page used to put it AFTER the
+                            whole header/identity block; `ConformerGroupPage`/
+                            `ConformerObservationPage`'s hand-matched headers
+                            put it BEFORE identity -- three different
+                            orders for the same fact). */}
                         <RecordIdentityHeader
                             kicker="Geometry · deposited evidence"
                             title={displayFormula ? `${displayFormula} geometry` : "Geometry"}
+                            intro="One stored set of atomic coordinates: the exact positions a calculation consumed or produced. This is not a species or a calculation — the same coordinates can be reused across more than one calculation, in either direction."
                             identity={identity}
                             submissionRef={geometry.submission_ref}
                         />
-                        <p className="t-body section-intro">
-                            One stored set of atomic coordinates: the exact positions a calculation consumed or
-                            produced. This is not a species or a calculation — the same coordinates can be reused
-                            across more than one calculation, in either direction.
-                        </p>
                         {formulaIsFallback && (
                             // Only reachable when the archive's own identity is absent
                             // or ambiguous — the honest label the brief asks for,
@@ -299,7 +306,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
 function Metric({ label, value }: { label: string; value: number }) {
     return (
-        <div className="metric">
+        <div className="card metric">
             <span>{label}</span>
             <strong>{value}</strong>
         </div>
