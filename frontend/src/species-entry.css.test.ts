@@ -260,7 +260,12 @@ describe("linkage connector alignment and wrap-safe hiding", () => {
         const rule = extractRule(css, ".linkage-connector")
         expect(rule).toMatch(/align-self:\s*start/)
         expect(rule).not.toMatch(/align-self:\s*center/)
-        expect(rule).toMatch(/margin-top:\s*\S+/)
+        // Pinned to the actual value (not just "some value") -- `\S+`
+        // alone would have accepted a regression to `margin-top: 0`,
+        // which is exactly `align-self: center`'s own effective
+        // top-offset on this element (no explicit margin there at all)
+        // and would have silently un-done the baseline-approximating fix.
+        expect(rule).toMatch(/margin-top:\s*\.55rem/)
     })
 
     it("hides the connector via a container query scoped to widths ABOVE the 880px column breakpoint, so it never suppresses the intentional rotated arrow in column layout", () => {
