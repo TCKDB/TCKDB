@@ -47,17 +47,22 @@ describe("refs-disclosure.css: on-scale typography (SHOULD-FIX-14)", () => {
         expect(refItemValueRule![1]).not.toMatch(/\.72rem/)
     })
 
-    it(".ref-item a / .ref-item-value prefer a real break boundary, with an overflow-safety fallback", () => {
-        // word-break: keep-all makes a hyphen (or, on a page whose ref
-        // renderer inserts one, a <wbr>) win first; overflow-wrap:
-        // anywhere STAYS as the fallback for a value with no break
-        // opportunity at all (this component is shared outside this PR's
-        // scope, so its refs are not run through `refWithBreaks`) --
-        // switching this to `normal` regressed a bare hash/hex value into
-        // overflowing its row instead of wrapping (the same mutation
-        // `design-system.css.test.ts`'s matching `.kv-list` fix guards).
-        expect(refItemValueRule![1]).toMatch(/word-break:\s*keep-all/)
+    it(".ref-item a / .ref-item-value keep overflow-wrap: anywhere, not word-break: keep-all (post-review pass)", () => {
+        // `word-break: keep-all` was added, then retired: it only ever
+        // affects CJK line breaking, so it changed nothing for these
+        // refs, and this component's ref values are not run through a
+        // <wbr>-inserting helper (`RefsDisclosure.tsx` is shared outside
+        // this PR's scope) for it to have preferred anyway. `overflow-
+        // wrap: anywhere` stays -- it is what a value with no break
+        // opportunity wraps at instead of overflowing this box; switching
+        // it to `normal` was the caught regression `design-system.css`'s
+        // matching `.kv-list dd` test also guards.
         expect(refItemValueRule![1]).toMatch(/overflow-wrap:\s*anywhere/)
+        expect(refItemValueRule![1]).not.toMatch(/overflow-wrap:\s*normal/)
+    })
+
+    it("word-break: keep-all does not appear anywhere in refs-disclosure.css", () => {
+        expect(css).not.toMatch(/word-break:\s*keep-all/)
     })
 
     it(".copy-button uses --type-ui (was .58rem, under the 11px floor)", () => {

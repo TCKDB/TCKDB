@@ -14,7 +14,6 @@ import { RefsDisclosure } from "../components/RefsDisclosure"
 import { formatEnergyForDisplay } from "../domain/energyUnits"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import type { TransitionStateIdentity } from "../domain/recordIdentity"
-import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useScientificRecord } from "../hooks/useScientificRecord"
 
@@ -382,7 +381,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         read "TS4 · MRCI+Davidson/... · Molpro (version not
                                         recorded) · NOT REVIEWED", indistinguishable without
                                         these two facts. */}
-                                    <code>{refWithBreaks(siblingRef)}</code>
+                                    <code>{siblingRef}</code>
                                     <span>deposited {isoDate(sibling.transition_state_entry.created_at)}</span>
                                     <span>{primary?.level_of_theory ? lotLabel(primary.level_of_theory) : "level of theory not recorded"}</span>
                                     <span>{primary?.software_release ? (softwareCellText(primary.software_release) ?? "software not recorded") : "software not recorded"}</span>
@@ -485,7 +484,7 @@ function EntryDetail({ record }: { record: TransitionStateEntryRecord }) {
                                         {roleGeometries.map((geometry, index) => (
                                             <li key={geometry.geometry_ref}>
                                                 <span>{index + 1}</span>
-                                                <Link to={`/geometries/${geometry.geometry_ref}`}>{refWithBreaks(geometry.geometry_ref)}</Link>
+                                                <Link to={`/geometries/${geometry.geometry_ref}`}>{geometry.geometry_ref}</Link>
                                             </li>
                                         ))}
                                     </ol>

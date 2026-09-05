@@ -36,7 +36,6 @@ import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
-import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
@@ -349,12 +348,17 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // with no data-run styling at all, MEASURED as the one raw ref on
     // these pages rendered in the wrong face. `.data` (mono, the same
     // step every other ref on this page uses) is the honest treatment for
-    // a ref, even when it happens to sit inside an h1.
+    // a ref, even when it happens to sit inside an h1 -- `font-size:
+    // inherit` on `.calc-headline-ref` (`calculation-detail.css`) is what
+    // keeps it at the h1's own 52px serif-adjacent scale rather than
+    // dropping to `--type-data-font`'s bare 13px baseline-aligned inside
+    // it (post-review fix: MEASURED, a 13px mono ref sitting on the
+    // baseline of a 52px heading).
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
             ? (identity.label ?? (identity.transitionStateEntryRef
-                ? <code className="data">{refWithBreaks(identity.transitionStateEntryRef)}</code>
+                ? <code className="data calc-headline-ref">{identity.transitionStateEntryRef}</code>
                 : "this record"))
             : "this record"
 
@@ -615,7 +619,7 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                             LABEL rather than the ref -- a label is a human
                             word, not an identifier. */}
                         {stage.linkRef
-                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{refWithBreaks(stage.linkRef)}</code></Link></>
+                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{stage.linkRef}</code></Link></>
                             : stage.text}
                     </dd>
                 </div>
@@ -625,13 +629,13 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                     <dt>Conformer</dt>
                     <dd>
                         <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
-                            <code className="data">{refWithBreaks(conformer.conformer_observation_ref)}</code>
+                            <code className="data">{conformer.conformer_observation_ref}</code>
                         </Link>
                         {" · "}
                         <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
                             {conformer.conformer_group_label
                                 ? conformer.conformer_group_label
-                                : <code className="data">{refWithBreaks(conformer.conformer_group_ref)}</code>}
+                                : <code className="data">{conformer.conformer_group_ref}</code>}
                         </Link>
                     </dd>
                 </div>
@@ -984,7 +988,16 @@ function ReviewHistorySection({ entries, availability }: {
     const neverReviewed = isNeverReviewed(entries)
     return (
         <section className="ledger-section" aria-labelledby="review-heading">
-            <SectionHeading id="review-heading" kicker="Review">Review history</SectionHeading>
+            {/* No kicker (SHOULD-FIX-6, re-review pass): "Review" is a
+                prefix of "Review history" -- the same near-restatement
+                case as "Structure"/"Structure view" and "Raw"/"Raw XYZ",
+                which the component itself now suppresses regardless (see
+                `PageSections.tsx`'s own doc comment), but dropped here at
+                the call site too so this file has no dead prop left over.
+                This was previously the ONE kicker of five on this page's
+                own sections -- an inconsistency the re-review flagged
+                directly ("one stray kicker in five"). */}
+            <SectionHeading id="review-heading">Review history</SectionHeading>
             {availability === "populated" && !neverReviewed ? (
                 <div className="table-scroll">
                     <table className="data-table" aria-label="Review history">

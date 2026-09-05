@@ -99,11 +99,16 @@
    wrap) meant column 1 printed OVER column 2 at every viewport this grid
    ever showed more than one column at -- MEASURED `document.
    documentElement.scrollWidth` 714 at a 680px viewport. `minmax(18rem,
-   1fr)` (288px) is wide enough for the widest ref this list renders
-   (`refWithBreaks`, `domain/refBreaks.tsx`, gives it somewhere to break
-   if it still doesn't fit); the explicit `62rem` breakpoint below forces
-   a single column below that width rather than relying on auto-fill to
-   happen to resolve to one on its own. */
+   1fr)` (288px) is wide enough for the widest ref this list renders (a
+   30-char `geom_…` ref is ~234px at `--type-data-font`) -- a controlled
+   before/after on the re-review pass confirmed the width alone is what
+   fixes all six required routes; an earlier version of this comment
+   credited a `<wbr>`-inserting ref renderer with "somewhere to break if
+   it still doesn't fit", which that pass retired as unneeded (see
+   `design-system.css`'s matching note on its own `.kv-list` fix). The
+   explicit `62rem` breakpoint below forces a single column below that
+   width rather than relying on auto-fill to happen to resolve to one on
+   its own. */
 .tse-irc-point-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));

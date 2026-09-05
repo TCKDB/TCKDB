@@ -332,35 +332,44 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
     })
 })
 
-describe(".kv-list dd .data / code prefer a real break boundary, with a safety fallback (SHOULD-FIX-3)", () => {
-    // MEASURED (the finding this guards): with `.kv-list dd`'s own bare
-    // `overflow-wrap: anywhere` in force, a long ref broke at an
-    // arbitrary character once its (now-widened) column still wasn't
-    // wide enough -- one orphaned character on its own line
-    // ("tse_aq5ktxlu27nvul3hmdwp / uyuz4e"). `word-break: keep-all` makes
-    // an existing break opportunity (a hyphen, or a `<wbr>` inserted by
-    // `domain/refBreaks.tsx` after every `_`) win FIRST. `overflow-wrap:
-    // anywhere` deliberately STAYS as the fallback -- a mutation check
-    // below pins the regression an earlier version of this fix shipped:
-    // switching it to `normal` made a bare-`<code>` value with no break
-    // opportunity at all (a 64-char geometry/software hash, no `_`, no
-    // `-`) overflow into the NEXT `.kv-list` column instead of wrapping,
-    // caught screenshotting `/geometries/:ref`.
-    it("declares overflow-wrap: anywhere (fallback) and word-break: keep-all (preferred) for .data/code inside dd", () => {
-        const rule = /\.kv-list dd \.data,\s*\.kv-list dd code \{([^}]*)\}/.exec(designSystemCss)
-        expect(rule, ".kv-list dd .data, .kv-list dd code rule not found").not.toBeNull()
+describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable value (post-review pass)", () => {
+    // Post-review retirement: an earlier version of this fix added a
+    // SECOND rule (`.kv-list dd .data, .kv-list dd code`) carrying
+    // `word-break: keep-all` plus a duplicate `overflow-wrap: anywhere`,
+    // on the theory that a ref should prefer breaking at a `<wbr>`
+    // (`domain/refBreaks.tsx`) or hyphen over an arbitrary character.
+    // Reviewer finding: `word-break: keep-all` only ever affects CJK line
+    // breaking -- it changed nothing for these Latin/underscore refs --
+    // and a controlled before/after on the six required routes showed
+    // the `<wbr>` insertion itself was neutral-to-harmful (it split a ref
+    // on `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/1100 that
+    // `origin/main` rendered whole). The 16rem column width (below) is
+    // what actually fixed all six routes; both the second rule and the
+    // `<wbr>` helper are retired, and `.data`/`code` inherit `overflow-
+    // wrap: anywhere` from `.kv-list dd` directly -- no rule of their own
+    // needed for that property (they still need their own `font:` rule,
+    // pinned separately above, since `code` carries a UA-stylesheet
+    // `font-family` that inheritance alone would not override).
+    it("declares overflow-wrap: anywhere on the base .kv-list dd rule", () => {
+        const rule = /\.kv-list dd \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule, ".kv-list dd rule not found").not.toBeNull()
         expect(rule![1]).toMatch(/overflow-wrap:\s*anywhere/)
-        expect(rule![1]).toMatch(/word-break:\s*keep-all/)
     })
 
-    it("mutation check: overflow-wrap: normal here is the caught regression, not the fix", () => {
-        // A hash-shaped run has no space, no hyphen, no <wbr> -- keep-all
-        // finds no break opportunity for it either way, so `normal`
-        // leaves it completely unbreakable (real regression); `anywhere`
-        // is what still wraps it as a last resort.
-        const trap = ".kv-list dd .data,\n.kv-list dd code {\n    overflow-wrap: normal;\n    word-break: keep-all;\n}"
-        const rule = /\.kv-list dd \.data,\s*\.kv-list dd code \{([^}]*)\}/.exec(trap)
-        expect(rule![1]).not.toMatch(/overflow-wrap:\s*anywhere/)
+    it("does not narrow that fallback to overflow-wrap: normal (the caught regression: a 64-char hash with no _/- overflowed the next column instead of wrapping)", () => {
+        const rule = /\.kv-list dd \{([^}]*)\}/.exec(designSystemCss)
+        expect(rule![1]).not.toMatch(/overflow-wrap:\s*normal/)
+    })
+
+    it("no longer declares a separate .kv-list dd .data, .kv-list dd code overflow-wrap/word-break override", () => {
+        expect(designSystemCss).not.toMatch(/\.kv-list dd \.data,\s*\n?\s*\.kv-list dd code \{[^}]*overflow-wrap/)
+    })
+
+    it("word-break: keep-all does not appear as a live declaration in design-system.css (retired -- inert for Latin/underscore refs)", () => {
+        // stripComments first: this file's own history comment quotes
+        // `word-break: keep-all` by name to explain what was retired and
+        // why -- prose mentioning a retired declaration is not a live one.
+        expect(stripComments(designSystemCss)).not.toMatch(/word-break:\s*keep-all/)
     })
 })
 

@@ -295,31 +295,27 @@
     font: var(--type-data-font);
 }
 
-/* Companion fix to the column widening above: a ref that is STILL wider
-   than its column (a 30+ char id) should wrap at a natural token boundary
-   (`_`/`-`) FIRST, never at an arbitrary character the way `dd`'s own
-   bare `overflow-wrap: anywhere` picks eagerly. `word-break: keep-all`
-   stops non-CJK text breaking outside an existing break opportunity; a
-   hyphen already is one (an InChIKey wrapped cleanly at its own `-` even
-   before this fix, e.g. "VGGSQFUCUMXWEO- / UHFFFAOYSA-N" -- correct, if
-   narrow), but `_` is not, which is why the ref renderer additionally
-   inserts a `<wbr>` after every `_` it prints (`domain/refBreaks.tsx`).
-   `overflow-wrap: anywhere` STAYS here, deliberately, as the fallback for
-   a run with NO break opportunity at all (a bare `<code>` geometry/
-   software hash, `GeometryDetailPage.tsx`'s "Geometry hash" row --
-   64 hex characters, no `_`, no `-`, never passed through
-   `refWithBreaks`): per spec, `overflow-wrap: anywhere` is only
-   consulted once `word-break`'s own rule finds no fitting break, so a
-   ref WITH a `<wbr>`/hyphen breaks there first (no more single-character
-   orphans), and a hash with none still wraps instead of overflowing into
-   the next column -- MEASURED regression, caught screenshotting this fix:
-   an unconditional `overflow-wrap: normal` here made the geometry-hash
-   row overlap the FORMAT column beside it. */
-.kv-list dd .data,
-.kv-list dd code {
-    overflow-wrap: anywhere;
-    word-break: keep-all;
-}
+/* Companion note to the column widening above (post-review pass):
+   an earlier version of this fix also inserted a `<wbr>` after every `_`
+   in a rendered ref (a `domain/refBreaks.tsx` helper) plus a `word-break:
+   keep-all` rule here, on the theory that a still-too-wide ref should
+   prefer breaking at that `<wbr>`/a hyphen over an arbitrary character.
+   Retired (re-review): `word-break: keep-all` only ever affects CJK line
+   breaking, so it changed nothing for these Latin/underscore refs, and a
+   controlled before/after on the six required routes showed the `<wbr>`
+   insertion was neutral-to-harmful -- it could split a ref ("tse_" /
+   "aq5ktxlu27nvul3hmdwpuyuz" / "4e") that had room to sit whole, and did
+   split one on `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/
+   1100 that `origin/main` rendered unbroken. The 12rem -> 16rem widening
+   above is what actually fixed all six routes; `.data`/`code` need no
+   rule of their own beyond what `.kv-list dd` already declares.
+   `overflow-wrap: anywhere` on `.kv-list dd` (above) is still what a
+   too-wide value (a 64-hex-character geometry/software hash, no `_`, no
+   `-`, `GeometryDetailPage.tsx`'s "Geometry hash" row) falls back on to
+   wrap instead of overflowing into the next column -- switching it to
+   `normal` was a real, MEASURED regression caught screenshotting this
+   fix (the hash row overlapped the FORMAT column beside it), which is
+   why this stays `anywhere`, not `normal`. */
 
 /* Put on the `<div>` wrapping one dt/dd pair that should span the full row
    width (a long value that would otherwise fight its neighbour column for

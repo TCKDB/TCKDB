@@ -7,7 +7,6 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
-import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
@@ -110,7 +109,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                     specifically so `getByText(..., { selector:
                                     "dd" })` kept matching, which is the test
                                     shape driving the markup, backwards). */}
-                                <div><dt>Group ref</dt><dd><code className="data">{refWithBreaks(basin.conformer_group_ref)}</code></dd></div>
+                                <div><dt>Group ref</dt><dd><code className="data">{basin.conformer_group_ref}</code></dd></div>
                                 {basin.label && (
                                     <div><dt>Producer label</dt><dd>{basin.label}</dd></div>
                                 )}
@@ -360,7 +359,7 @@ function ObservationCard({ observation }: { observation: Observation }) {
                         from the scoped rule below. */}
                     <span className="t-label">Observation</span>
                     <Link to={`/conformer-observations/${core.conformer_observation_ref}`}>
-                        {refWithBreaks(core.conformer_observation_ref)}
+                        {core.conformer_observation_ref}
                     </Link>
                 </div>
                 <div>

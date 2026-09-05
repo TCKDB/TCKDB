@@ -88,18 +88,19 @@
 
 .ref-item a,
 .ref-item-value {
-    /* `word-break: keep-all` added -- see `design-system.css`'s matching
-       `.kv-list dd .data`/`.kv-list dd code` fix for the full "prefer a
-       real break point over an arbitrary one" reasoning. `overflow-wrap:
-       anywhere` STAYS (deliberately, same reasoning as that rule): this
-       component (`RefsDisclosure.tsx`) is shared with pages/components
-       outside this PR's scope, so its ref values are not passed through
-       `refWithBreaks` here -- `anywhere` is what keeps a ref with no
-       other break opportunity from overflowing this box instead of
-       wrapping, the same regression `.kv-list`'s own fix caught (a bare
-       hash with no `_`/`-`). */
+    /* `overflow-wrap: anywhere` kept as-is (was already declared before
+       this pass, just re-scaled to `--type-data-font` below) -- an
+       earlier version of this comment claimed a `word-break: keep-all`
+       addition was needed to prefer a real break point over an arbitrary
+       one; retired (re-review, same finding as `design-system.css`'s
+       matching `.kv-list dd` fix): `word-break: keep-all` only affects
+       CJK line breaking, so it changed nothing for these refs, and this
+       component's ref values were never run through a `<wbr>`-inserting
+       helper in the first place (`RefsDisclosure.tsx` is shared outside
+       this PR's scope), so there was no break opportunity for `keep-all`
+       to prefer. `anywhere` alone is what a value with no natural break
+       point wraps at instead of overflowing this box. */
     overflow-wrap: anywhere;
-    word-break: keep-all;
     font: var(--type-data-font);
 }
 
