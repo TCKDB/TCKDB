@@ -235,6 +235,22 @@
    race again. */
 .card.observation-card {
     padding: 0;
+    /* SHOULD-FIX-1 fix (PR B review, post-rebase re-measurement): a CSS
+       grid item's default `min-width` is `auto`, which resolves to its
+       content's MIN-CONTENT size, not 0 -- so a wide `.data-table` inside
+       this card's own `.table-scroll` (which has `overflow-x: auto` and
+       should contain that width on its own) instead pushed this whole
+       grid item wider than its track, and from there wider than
+       `.observation-list`, `.disclosure-body`, `.ledger-section`, and
+       `.page-shell-content` in turn -- MEASURED: 741px `scrollWidth` at a
+       680px viewport on `/conformer-groups/:ref` before this fix, the
+       only one of this PR's six screenshot routes still overflowing once
+       PR C's `.page-shell-content` fix (`page-shell.css`) landed. The
+       same "grid item min-width: auto" mechanism PR C's own fix
+       addresses one level up in the tree; this is the same fix one level
+       further down, where THIS card (not the page shell) is the grid
+       item whose default minimum width was the problem. */
+    min-width: 0;
 }
 
 .observation-card > header {
