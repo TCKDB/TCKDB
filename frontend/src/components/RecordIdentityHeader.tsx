@@ -5,7 +5,6 @@ import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
 import type { RecordIdentity } from "../domain/recordIdentity"
-import { Formula } from "./Formula"
 
 /**
  * Breaks a SMILES-shaped string at `>>` (reaction arrow) and `.`
@@ -28,9 +27,22 @@ function withSmilesBreaks(value: string): ReactNode {
 /**
  * The shared header block every record page (species entry, geometry,
  * calculation, conformer group, conformer observation) renders through:
- * identity, then classification facets, then provenance -- top to
- * bottom, always in that order, never reordered per page. See the
- * design brief's "Shared header block on every record page".
+ * a kicker + status pill row, then the h1, then identity, then
+ * classification facets, then provenance -- top to bottom, always in
+ * that order, never reordered per page. See the design brief's "Shared
+ * header block on every record page".
+ *
+ * `kicker`/`title` own the top of the block (design/foundations PR B):
+ * every record page used to build its own eyebrow-row/h1 markup with
+ * its own font-size rule (`.record-title h1`, `.basin-title h1`,
+ * `.tse-equation-heading`, each a different clamp), which is what this
+ * header now owns centrally at the shared `--type-display-1` step (or
+ * `--type-display-2` for `TransitionStateEntryPage`'s wrapping reaction
+ * equation -- pass `titleVariant="display-2"`). `pill` is the record's
+ * ONE status/trust pill (a `.value-pill`/`.value-pill--muted` element the
+ * caller builds) -- never more than one; a second badge (e.g. a trust
+ * verdict) is the caller's to omit or fold in, not this header's to
+ * stack.
  *
  * Each tier renders only what the endpoint actually served:
  * - `identity` is required (it is what tells the ambiguous/absent/known
@@ -57,8 +69,31 @@ function withSmilesBreaks(value: string): ReactNode {
  *   section of its own -- `GeometryDetailPage` on a TS-owned geometry, as
  *   of this writing -- keeps the default `true` and gets the one sentence
  *   this header has always carried for that case.
+ *
+ * `identity`/`facets`/`submissionRef` render as `.kv-list`s (the shared
+ * design-system primitive) rather than this header's own bespoke grid --
+ * a caller's OWN provenance `.kv-list` (level of theory, software, ...)
+ * and its `RefsDisclosure` still render below this component, in the
+ * same page markup as before; this header only owns the identity tier
+ * of that shared order, not every tier.
  */
-export function RecordIdentityHeader({ identity, facets, submissionRef, explainTransitionStateIdentity = true }: {
+export function RecordIdentityHeader({
+    kicker, pill, title, titleVariant = "display-1", intro,
+    identity, facets, submissionRef, explainTransitionStateIdentity = true,
+}: {
+    kicker: ReactNode
+    pill?: ReactNode
+    title: ReactNode
+    titleVariant?: "display-1" | "display-2"
+    /** SHOULD-FIX-7 (PR B review): an optional descriptive sentence
+     *  between the h1 and the identity tier -- the same slot/role
+     *  `SectionHeading`'s own `intro` prop plays for an in-page section,
+     *  reused here so the canonical order (kicker -> h1 -> intro ->
+     *  identity -> provenance -> References) is the SAME on every record
+     *  page, not just the three that composed a page-local `<p>` for it
+     *  in three different positions relative to identity. Rendered as
+     *  `--type-body` capped to `--measure-prose`, same as `SectionHeading`'s. */
+    intro?: ReactNode
     identity: RecordIdentity
     facets?: EntryFacetAxes
     submissionRef?: string | null
@@ -66,6 +101,14 @@ export function RecordIdentityHeader({ identity, facets, submissionRef, explainT
 }) {
     return (
         <div className="record-identity-header">
+            <div className="record-identity-kicker-row">
+                <span className="t-kicker record-identity-kicker">{kicker}</span>
+                {pill}
+            </div>
+            <h1 className={titleVariant === "display-2" ? "t-display-2 record-identity-title" : "t-display-1 record-identity-title"}>
+                {title}
+            </h1>
+            {intro && <p className="t-body section-intro">{intro}</p>}
             <IdentityTier identity={identity} explainTransitionStateIdentity={explainTransitionStateIdentity} />
             {/* No pill boxes: a plain, readable phrase built from the same
                 raw axes a pill row used to read one-per-pill -- see
@@ -76,14 +119,18 @@ export function RecordIdentityHeader({ identity, facets, submissionRef, explainT
                 the wire), so this line has no live duplication to worry
                 about yet -- it exists so a future caller that does supply
                 `facets` starts from the readable shape, not the pill one. */}
-            {facets && <p className="record-identity-facets">{facetChips(facets).join(" · ")}</p>}
+            {facets && <p className="t-value record-identity-facets">{facetChips(facets).join(" · ")}</p>}
             {submissionRef !== undefined && (
-                <p className="record-identity-provenance">
-                    <span className="record-identity-provenance-label">Submission</span>
-                    {submissionRef
-                        ? <code>{submissionRef}</code>
-                        : <span className="record-identity-absent-inline">not recorded</span>}
-                </p>
+                <dl className="kv-list record-identity-provenance">
+                    <div>
+                        <dt>Submission</dt>
+                        <dd>
+                            {submissionRef
+                                ? <code>{submissionRef}</code>
+                                : <span className="record-identity-absent-inline">not recorded</span>}
+                        </dd>
+                    </div>
+                </dl>
             )}
         </div>
     )
@@ -94,7 +141,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
     explainTransitionStateIdentity: boolean
 }) {
     if (identity.kind === "absent") {
-        return <p className="record-identity-absent">No molecular identity is recorded for this record.</p>
+        return <p className="note record-identity-absent">No molecular identity is recorded for this record.</p>
     }
     if (identity.kind === "ambiguous") {
         return (
@@ -106,7 +153,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                 <ul className="record-identity-ambiguous-owners">
                     {identity.owners.map((owner) => (
                         <li key={`${owner.kind}-${owner.ref}`}>
-                            <span className="record-identity-provenance-label">{owner.kind.replaceAll("_", " ")}</span>
+                            <span className="t-label">{owner.kind.replaceAll("_", " ")}</span>
                             <code>{owner.ref}</code>
                         </li>
                     ))}
@@ -117,10 +164,16 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
     if (identity.kind === "species_entry") {
         return (
             <div className="record-identity-known">
-                <p className="record-identity-formula">
-                    {identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles}
-                </p>
-                <dl className="record-identity-facts">
+                {/* No standalone formula paragraph here any more (design/
+                    foundations PR B): every caller of this header already
+                    renders the same formula (or the canonical SMILES
+                    fallback) as the record's own `title`/h1 above, via
+                    `Formula`/`identity.formula` -- a second, large serif
+                    restatement of it here duplicated the page's own title
+                    immediately beneath it. The full identity facts
+                    (SMILES, InChIKey, charge/multiplicity) still render
+                    below unchanged. */}
+                <dl className="kv-list record-identity-facts">
                     <IdentityFact label="SMILES"><code>{identity.canonicalSmiles}</code></IdentityFact>
                     <IdentityFact label="InChIKey"><code>{identity.inchiKey}</code></IdentityFact>
                     <IdentityFact label="Charge / multiplicity">
@@ -157,20 +210,37 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
     // explanation; every other caller (a TS-owned geometry on
     // `GeometryDetailPage`, which has no Reaction section of its own)
     // keeps the default and still gets this sentence.
+    // No standalone formula paragraph here either (see the species_entry
+    // branch's own comment above): a geometry owned by a transition state
+    // that DOES carry a served formula (`GeometryTransitionStateIdentity`,
+    // unlike the calculation-owner shape) already renders it as this
+    // header's own `title`/h1 (`GeometryDetailPage`'s `displayFormula`),
+    // so a second serif restatement here duplicated it immediately below.
     return (
         <div className="record-identity-known">
-            {identity.formula && (
-                <p className="record-identity-formula">
-                    <Formula value={identity.formula} />
-                </p>
-            )}
             {explainTransitionStateIdentity && (
-                <p className="record-identity-note">
+                <p className="note record-identity-note">
                     Transition states have no canonical SMILES the way a species does; the unmapped SMILES below,
                     where deposited, is a depositor-supplied label, not a deduped identity key.
                 </p>
             )}
-            <dl className="record-identity-facts">
+            <dl className="kv-list record-identity-facts">
+                {/* The producer's own label (e.g. "TS0") -- BLOCKING-1 fix
+                    (PR B review): this used to be its own `.tse-label-facet`
+                    span in `TransitionStateEntryPage.tsx`'s kicker row, a
+                    class this stylesheet consolidation retired without
+                    updating that page's markup to match, leaving an
+                    unstyled 16px sans span next to an 11.5px pill. A plain
+                    identity fact -- the same tier as charge/multiplicity
+                    and the entry ref below -- needs no page-local class of
+                    its own. Only rendered when the identity actually
+                    carries a label: `GeometryDetailPage`'s TS-owned-
+                    geometry identity (`GeometryTransitionStateIdentity`)
+                    never serves this field, so this fact is silently
+                    absent there rather than showing an empty row. */}
+                {identity.label && (
+                    <IdentityFact label="Label">{identity.label}</IdentityFact>
+                )}
                 <IdentityFact label="Reaction SMILES (unmapped)" wide>
                     {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                 </IdentityFact>

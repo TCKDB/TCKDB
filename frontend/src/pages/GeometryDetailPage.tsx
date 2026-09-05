@@ -172,30 +172,38 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
             <PageShell
                 identity={(
                     <header className="basin-header">
-                        <p className="eyebrow">Geometry · deposited evidence</p>
-                        <div className="basin-title">
-                            <h1>{displayFormula ? `${displayFormula} geometry` : "Geometry"}</h1>
-                        </div>
-                        <p className="basin-intro">
-                            One stored set of atomic coordinates: the exact positions a calculation consumed or
-                            produced. This is not a species or a calculation — the same coordinates can be reused
-                            across more than one calculation, in either direction.
-                        </p>
+                        {/* SHOULD-FIX-7 (PR B review): the intro sentence
+                            now goes through `RecordIdentityHeader`'s own
+                            `intro` prop -- kicker -> h1 -> intro -> identity
+                            is the one order every record page's header
+                            follows now, rather than each page picking its
+                            own position for this sentence relative to
+                            identity (this page used to put it AFTER the
+                            whole header/identity block; `ConformerGroupPage`/
+                            `ConformerObservationPage`'s hand-matched headers
+                            put it BEFORE identity -- three different
+                            orders for the same fact). */}
+                        <RecordIdentityHeader
+                            kicker="Geometry · deposited evidence"
+                            title={displayFormula ? `${displayFormula} geometry` : "Geometry"}
+                            intro="One stored set of atomic coordinates: the exact positions a calculation consumed or produced. This is not a species or a calculation — the same coordinates can be reused across more than one calculation, in either direction."
+                            identity={identity}
+                            submissionRef={geometry.submission_ref}
+                        />
                         {formulaIsFallback && (
                             // Only reachable when the archive's own identity is absent
                             // or ambiguous — the honest label the brief asks for,
                             // rather than presenting a client-computed value as if it
                             // came from the archive.
-                            <p className="section-note">
+                            <p className="note">
                                 Formula computed on this page from atom symbols — the archive did not serve a formula
                                 for this geometry's owning entry.
                             </p>
                         )}
-                        <RecordIdentityHeader identity={identity} submissionRef={geometry.submission_ref} />
-                        <dl className="basin-context">
-                            <div><dt>Geometry ref</dt><dd>{geometry.geometry_ref}</dd></div>
+                        <dl className="kv-list basin-context">
+                            <div><dt>Geometry ref</dt><dd><code>{geometry.geometry_ref}</code></dd></div>
                             <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
-                            <div><dt>Geometry hash</dt><dd>{geometry.geom_hash}</dd></div>
+                            <div><dt>Geometry hash</dt><dd><code>{geometry.geom_hash}</code></dd></div>
                             <div><dt>Format</dt><dd>{geometry.format}</dd></div>
                             <div><dt>Coordinate units</dt><dd>{geometry.coordinate_units}</dd></div>
                             <div><dt>Deposited</dt><dd>{isoDate(geometry.created_at)}</dd></div>
@@ -206,13 +214,17 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
             <section className="ledger-summary geometry-summary" aria-label="Geometry provenance summary">
                 <Metric label="Producing calculations" value={producedBy.length} />
                 <Metric label="Consuming calculations" value={usedAsInputBy.length} />
-                <div className="coverage-card validation-card">
-                    <span>Validation</span>
+                {/* `.card`, not `--derived`: this states a single fact about ONE
+                    geometry ("no validation field of its own"), not a computed
+                    aggregate -- see the `.card--derived` decision in this PR's
+                    body. */}
+                <div className="card validation-card">
+                    <span className="t-label">Validation</span>
                     {/* Finding #9: "on this endpoint" was API jargon leaking into a
                         chemist-facing page — "for this geometry" says the same thing
                         (this record has no validation field of its own) without it. */}
                     <strong>Not recorded for this geometry</strong>
-                    <p>
+                    <p className="note">
                         This geometry record carries no validation field of its own. A geometry-vs-formula check,
                         where one was recorded, lives on the calculation that produced or consumed it, not here.
                     </p>
@@ -243,7 +255,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                         lists can no longer drift and there is nothing left in this card for a
                         caption-styled ancestor to mis-transform. */}
                     {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
-                        <p>
+                        <p className="note">
                             See "Geometry validation" on the producing or consuming calculations, listed with links
                             in the "Produced by" and "Used as input by" tables below.
                         </p>
@@ -294,7 +306,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
 
 function Metric({ label, value }: { label: string; value: number }) {
     return (
-        <div className="metric">
+        <div className="card metric">
             <span>{label}</span>
             <strong>{value}</strong>
         </div>
@@ -321,10 +333,7 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateU
     const rows = atoms ?? []
     return (
         <section className="ledger-section" aria-labelledby="viewer-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Structure</p>
-                <SectionHeading id="viewer-heading">Structure view</SectionHeading>
-            </div>
+            <SectionHeading id="viewer-heading" kicker="Structure">Structure view</SectionHeading>
             {atomsAvailability === "populated" ? (
                 <SectionErrorBoundary
                     fallback={(
@@ -367,15 +376,13 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
     const unitLabel = unit === "angstrom" ? "Å" : "bohr"
     return (
         <section className="ledger-section" aria-labelledby="coordinates-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Deposited evidence</p>
-                <SectionHeading id="coordinates-heading">Coordinate table</SectionHeading>
-                <p>
-                    Every atom in this geometry, in the order the archive returned them. This table is the
-                    accessible, selectable fallback for the view above — it renders whether or not that
-                    view does.
-                </p>
-            </div>
+            <SectionHeading
+                id="coordinates-heading"
+                kicker="Deposited evidence"
+                intro="Every atom in this geometry, in the order the archive returned them. This table is the accessible, selectable fallback for the view above — it renders whether or not that view does."
+            >
+                Coordinate table
+            </SectionHeading>
             {countMismatch && (
                 <p className="empty-projection" role="alert">
                     The declared atom count ({natoms}) does not match the number of coordinate rows returned
@@ -410,7 +417,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
                         conversion) and the rounding/conversion-factor detail both stay,
                         just said in words a chemist reads without needing to know this
                         app's field names. */}
-                    <p className="coordinate-toggle-note">
+                    <p className="note coordinate-toggle-note">
                         Stored in ångström; bohr here is a display conversion only, rounded to 6 decimal
                         places, at 1 Å = {ANGSTROM_TO_BOHR.toFixed(10)} bohr (CODATA 2018 Bohr radius).
                     </p>
@@ -418,7 +425,7 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
             )}
             {atomsAvailability === "populated" ? (
                 <div className="table-scroll">
-                    <table className="stage-table coordinate-table" aria-label={`Coordinates for ${geometryRef}`}>
+                    <table className="data-table coordinate-table" aria-label={`Coordinates for ${geometryRef}`}>
                         <thead>
                             <tr>
                                 <th scope="col">Atom</th>
@@ -475,11 +482,9 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
 function RawXyzSection({ xyzText }: { xyzText: string | null }) {
     return (
         <section className="ledger-section" aria-labelledby="xyz-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Raw</p>
-                <SectionHeading id="xyz-heading">Raw XYZ</SectionHeading>
-                <p>The archive's own XYZ-format text block for this geometry, selectable as deposited.</p>
-            </div>
+            <SectionHeading id="xyz-heading" kicker="Raw" intro="The archive's own XYZ-format text block for this geometry, selectable as deposited.">
+                Raw XYZ
+            </SectionHeading>
             {xyzText ? (
                 <>
                     <div className="xyz-actions">
@@ -505,14 +510,10 @@ function ProvenanceSection({ title, description, links, availability, showRole, 
     const headingId = `provenance-${title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-")}`
     return (
         <section className="ledger-section" aria-labelledby={headingId}>
-            <div className="ledger-heading">
-                <p className="eyebrow">Deposited provenance</p>
-                <SectionHeading id={headingId}>{title}</SectionHeading>
-                <p>{description}</p>
-            </div>
+            <SectionHeading id={headingId} kicker="Deposited provenance" intro={description}>{title}</SectionHeading>
             {availability === "populated" ? (
                 <div className="table-scroll">
-                    <table className="stage-table" aria-label={`${title} for this geometry`}>
+                    <table className="data-table" aria-label={`${title} for this geometry`}>
                         <thead>
                             <tr>
                                 <th scope="col">Calculation</th>

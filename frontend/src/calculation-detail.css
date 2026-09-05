@@ -1,13 +1,13 @@
 /*
  * CalculationDetailPage. Imported alongside `conformer-group.css`, which
  * already supplies the shared "scientific record ledger" vocabulary this
- * page reuses verbatim: `.review-badge`, `.ledger-section`,
- * `.ledger-heading`, `.ledger-summary`, `.coverage-card`,
- * `.stage-table`, `.empty-projection`, `.geometry-links` / `.geometry-link`,
- * `.geometry-role-disclosure` (the "Further evidence" disclosure recipe).
- * (`.metric` dropped from this list -- the count-tile summary strip that
- * used it is gone; see the "no count tiles" test in this page's spec.)
- * Only the page-root layout and a few calculation-specific patterns live
+ * page reuses verbatim: `.ledger-section`, `.ledger-heading`,
+ * `.empty-projection`, `.geometry-links` / `.geometry-link`. Design/
+ * foundations PR B moved this page's header, pills, disclosures, and
+ * tables onto the shared `design-system.css` primitives (`.kv-list`,
+ * `.value-pill`/`--muted`, `.card`/`--derived`, `.data-table`,
+ * `Disclosure`) -- see this PR's body for the full per-item list. Only
+ * the page-root layout and a few calculation-specific patterns live
  * here.
  */
 
@@ -26,107 +26,61 @@
    -- exactly the bug this rule exists to fix. */
 .record-header { max-width: var(--measure-wide); }
 
-/* Houses the eyebrow label AND the review-status pill -- see the comment
-   in CalculationDetailPage.tsx above this row's markup for why the pill
-   lives here rather than beside the h1: the eyebrow text never wraps at
-   any width this page supports, so the pill has a stable anchor point
-   immediately above the title, always read as part of the same heading
-   block instead of drifting into whitespace when the h1 itself wraps.
-   `flex-wrap` is defensive, not load-bearing -- even a future longer
-   status token wraps onto its own line under the eyebrow rather than
-   overflowing the record's max-width. */
-.record-eyebrow-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: .5rem .75rem;
-}
+/* `.record-eyebrow-row`/`.record-title`/`.record-title h1`/`.has-headline`
+   all retired (design/foundations PR B): the kicker row and the h1 both
+   moved into `RecordIdentityHeader` (`kicker`/`pill`/`title` props), the
+   ONE shared header block every record page renders through now -- see
+   that component's own docstring. The old `.has-headline` media-query
+   clamp existed only because the pre-PR-B h1 had an 88px ceiling wide
+   enough to wrap a long identity string onto two lines; `--type-display-1`
+   (`design-system.css`, `clamp(2.75rem, 5vw, 4rem)`) is already narrow
+   enough that the wrap this clamp worked around does not recur, so the
+   whole mechanism -- not just the rule -- is gone, not replaced. */
 
-.record-eyebrow-row .eyebrow { margin-bottom: 0; }
+.calc-headline-energy { margin: var(--s-4) 0 0; }
 
-.record-title { margin-top: 1.35rem; }
-
-.record-title h1,
-.ledger-section h2 {
-    margin: 0;
-    font-family: var(--serif);
-    letter-spacing: -.04em;
-}
-
-.record-title h1 {
-    min-width: 0;
-    overflow-wrap: anywhere;
-    font-size: clamp(3rem, 8vw, 5.5rem);
-}
-
-/* At ~1100px wide the 8vw term above is already pinned to its 5.5rem
-   ceiling, which is wide enough for an identity h1 ("Optimisation of
-   C2H4") to wrap onto two lines and push the headline energy below it
-   down the page -- review finding. Only calculations that actually carry
-   a headline (`.has-headline`, set from `headline !== null`) get a
-   smaller ceiling, and only below the width where it matters; a page
-   without a headline keeps the original, larger title untouched at every
-   width. */
-@media (max-width: 75rem) {
-    .record-title h1.has-headline {
-        font-size: clamp(2.75rem, 6.5vw, 4.25rem);
-    }
+/* The compact stage/conformer note sits between the identity header and
+   the full provenance row -- same shared `.kv-list` primitive underneath
+   (see `StageAndConformerNote` in `CalculationDetailPage.tsx`), just a
+   tighter top margin since it directly follows the identity block rather
+   than a full section break. */
+.record-context--compact {
+    margin: var(--s-5) 0 0;
 }
 
 .record-context {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1rem;
-    margin: 2rem 0 0;
-    padding: 1rem 0;
+    margin: var(--s-6) 0 0;
+    padding: var(--s-4) 0;
     border-block: 1px solid var(--line);
 }
 
-/* The compact stage/conformer note sits between the identity header and
-   the full provenance row -- same token vocabulary, no border of its own
-   (it is not a distinct provenance block, just two extra facts). */
-.record-context--compact {
-    grid-template-columns: repeat(2, 1fr);
-    margin: 1.25rem 0 0;
-    padding: 0;
-    border-block: 0;
-}
-
-.record-context dt {
-    color: var(--muted);
-    font: .6875rem var(--mono);
-    letter-spacing: .06em;
-    text-transform: uppercase;
-}
-
-.record-context dd {
-    margin: .35rem 0 0;
-    overflow-wrap: anywhere;
-    font: .75rem var(--mono);
-}
-
-.record-context a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
-
 /* A vertical checklist, one row per evidence check, "label: value" —
    replacing a single wrapping `<strong>` (the owner: "this should be a
-   going down list, not a wrap around text"). Stays legible at the
-   content column's narrower width beside the reserved ToC rail. */
+   going down list, not a wrap around text"). Not a `.kv-list` (its rows
+   are a fixed label/value PAIR read left-to-right, not an auto-fit fact
+   grid), but its typography now comes from the same token steps every
+   other label/value pair on this page uses, and the verdict itself is a
+   plain VALUE (`--ink`), not an accent-emphasised one -- MEASURED finding:
+   the old `--accent-700`/600-weight treatment made "recorded"/"absent"
+   read as if it were a clickable or selected state, which it is not. */
 .coverage-checklist {
     display: flex;
     flex-direction: column;
-    gap: .3rem;
-    margin: .55rem 0 0;
-    font: .72rem/1.5 var(--mono);
+    gap: var(--s-1);
+    margin: var(--s-3) 0 0;
 }
 
 .coverage-checklist > div {
     display: flex;
     justify-content: space-between;
-    gap: .75rem;
+    gap: var(--s-3);
 }
 
 .coverage-checklist dt {
-    color: var(--ink-2);
+    color: var(--muted);
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
 .coverage-checklist dt::after {
@@ -135,34 +89,41 @@
 
 .coverage-checklist dd {
     margin: 0;
-    color: var(--accent-700);
-    font-weight: 600;
+    color: var(--ink);
+    font: var(--type-value-font);
     text-align: right;
 }
 
 /* One sentence per row, replacing the old Relationship/Role/Related-
    calculation table -- see `dependencySentence`'s own docstring in
    CalculationDetailPage.tsx for the "reads backwards" finding this
-   replaces. */
+   replaces. Prose (`--type-body`), not raw data -- only the calculation
+   ref link inside each sentence is a `.data` run. */
 .dependency-sentences {
     display: flex;
     flex-direction: column;
-    gap: .6rem;
-    margin: 1rem 1.1rem 1.1rem;
+    gap: var(--s-3);
+    margin: var(--s-4) 0 0;
     padding: 0;
     list-style: none;
-    font: .82rem/1.5 var(--mono);
+    font: var(--type-body-font);
+    color: var(--ink-2);
 }
 
 .dependency-sentences a { color: var(--accent); text-decoration: underline; text-underline-offset: .16em; }
 
-/* On-demand ("Further evidence") sections. A section
-   `available_sections` already reports empty renders no `<details>` at
-   all — there is nothing to expand into, so nothing invites a click. A
-   section that may have data is a real `<details>`, styled with the
-   shared `.geometry-role-disclosure` bordered-list recipe
-   (`conformer-group.css`) rather than a full `.ledger-section` heading of
-   its own -- see `LazySection`'s own docstring for why. */
+/* `.section-note` stays defined here -- it is NOT retired from this file,
+   even though `CalculationDetailPage.tsx`'s OWN markup now uses `.note`
+   (`design-system.css`) everywhere it used to use this class (see item 9
+   in this PR's body). `EntryStatmechSection`/`EntryThermoSection`/
+   `EntryTransportSection`/`ThermoCpChart`/`ConformerAttributionGroups`
+   (all outside this PR's file scope, owned by a parallel builder) still
+   render `className="section-note"` and rely on THIS rule for it --
+   `geometry-detail.css` carries a byte-identical copy for the same
+   load-order reason (see that file's own comment). Deleting it here would
+   silently unstyle every one of those other pages' notes. Retire this
+   rule once every one of those consumers has migrated to `.note` in its
+   own PR. */
 .section-note {
     margin: .5rem 0 0;
     color: var(--muted);
@@ -170,18 +131,11 @@
     line-height: 1.5;
 }
 
-/* The idle-state click affordance -- lives in `<summary>` itself, not
-   `.section-note`, since that's the one part of a closed `<details>` a
-   reader actually sees (see `LazySection`'s own comment). Styled as a
-   quiet trailing label, not a button: the whole `<summary>` row is
-   already the click target. */
-.lazy-section-affordance {
-    margin-left: .5rem;
-    color: var(--muted);
-    font: .6875rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .06em;
-}
+/* `.lazy-section-affordance` (the redundant "SHOW" span) is retired --
+   `LazySection` now composes `components/Disclosure.tsx`, whose own
+   chevron (`.disclosure > summary::before`, `design-system.css`) is
+   the idle-state affordance every disclosure on this app now shares; a
+   second, text "Show" label duplicated that signal. */
 
 .section-note[aria-busy="true"]::after { content: "…"; }
 
@@ -192,10 +146,12 @@
 /* Short muted line under a `.kv-list dd` value -- currently just the τ row's
    basis explanation ("analytic, tight convergence" / "assumed from the
    program's default (...)"). */
+/* NIT (PR B review): was `.7rem` (11.2px), under the accessibility-pass
+   11px floor -- raised to the shared `--type-note-font` step. */
 .kv-list dd .kv-note {
     margin-top: .2rem;
     color: var(--muted);
-    font-size: .7rem;
+    font: var(--type-note-font);
 }
 
 /* Marks an ADR 0012 Hessian-method/τ value that TCKDB assumed rather than
@@ -207,18 +163,17 @@
     text-underline-offset: .15em;
 }
 
-@media (max-width: 680px) {
-    .record-context,
-    .record-context--compact { grid-template-columns: 1fr; }
-}
-/* `.kv-list` dropped from the rule above: the canonical `.kv-list`
-   (`design-system.css`) already uses `auto-fit, minmax(12rem, 1fr)`,
-   which collapses to one column on its own once two 12rem columns plus
-   their gap no longer fit -- a fixed breakpoint override is redundant
-   for it now (and would have needed a bare, empty `.kv-list` rule here,
-   which `design-system.css.test.ts` guards against so a second
-   definition of this selector cannot creep back in). */
+/* No mobile breakpoint override for `.record-context`/`.record-context--
+   compact` needed: the canonical `.kv-list` (`design-system.css`) already
+   uses `auto-fit, minmax(12rem, 1fr)`, which collapses to one column on
+   its own once two 12rem columns plus their gap no longer fit -- a fixed
+   breakpoint override is redundant for it now (and would have needed a
+   bare, empty `.kv-list` rule here, which `design-system.css.test.ts`
+   guards against so a second definition of this selector cannot creep
+   back in). */
 
-/* The evidence strip on this page is a single checklist card, not the
-   four-column tile row `.ledger-summary` lays out on entry pages. */
+/* The evidence strip on this page is a single evidence-checklist card,
+   not the four-column tile row `.ledger-summary` lays out on the
+   conformer/observation ledgers -- see `.coverage-card`'s own `.card`
+   migration in `CalculationDetailPage.tsx`. */
 .ledger-summary--single { grid-template-columns: 1fr; }

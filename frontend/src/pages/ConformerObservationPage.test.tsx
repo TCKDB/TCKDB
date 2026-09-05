@@ -160,6 +160,37 @@ describe("ConformerObservationPage", () => {
         expect(within(siblingMetric as HTMLElement).getByText("1")).toBeVisible()
     })
 
+    // Item 1/6/7, design/foundations PR B: mutation check for header order,
+    // the review pill's `.value-pill` primitive, and the calculation
+    // table's `.data-table` primitive -- see the identical check on
+    // `ConformerGroupPage.test.tsx`.
+    it("renders the kicker row before the h1, the review pill as .value-pill, and the calculation table as .data-table", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        const h1 = await screen.findByRole("heading", { name: "Computed observation" })
+        // SHOULD-FIX-7 (PR B review): same `.record-identity-header`
+        // wrapper `RecordIdentityHeader` itself renders -- see the
+        // identical check/comment on `ConformerGroupPage.test.tsx`.
+        const wrapper = h1.closest(".record-identity-header") as HTMLElement
+        expect(wrapper).not.toBeNull()
+        const kickerRow = wrapper.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(kickerRow).not.toBeNull()
+        const order = Array.from(wrapper.children)
+        expect(order.indexOf(kickerRow)).toBeLessThan(order.indexOf(h1))
+
+        const pill = within(kickerRow).getByText("reviewed")
+        expect(pill).toHaveClass("value-pill")
+        expect(pill).not.toHaveClass("value-pill--muted")
+        expect(document.querySelector(".review-badge")).toBeNull()
+
+        expect(document.querySelector(".stage-table")).toBeNull()
+        const table = screen.getByRole("table", { name: "Calculations for co_one" })
+        expect(table).toHaveClass("data-table")
+        expect(table.closest(".table-scroll")).not.toBeNull()
+    })
+
     it("states each stage's level of theory once, in the calculation table, not in a separate by-stage block", async () => {
         server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
             HttpResponse.json({ record: mockRecord() })
@@ -207,9 +238,9 @@ describe("ConformerObservationPage", () => {
             .toHaveAttribute("href", "/conformer-groups/cg_demo")
 
         // Stable public refs stay visible and copyable even when a label exists.
-        expect(screen.getByText("co_one", { selector: "dd" })).toBeVisible()
-        expect(screen.getByText("cg_demo", { selector: "dd" })).toBeVisible()
-        expect(screen.getByText("spc_demo", { selector: "dd" })).toBeVisible()
+        expect(screen.getByText("co_one", { selector: "code" })).toBeVisible()
+        expect(screen.getByText("cg_demo", { selector: "code" })).toBeVisible()
+        expect(screen.getByText("spc_demo", { selector: "code" })).toBeVisible()
 
         // Sibling list excludes this observation itself and links onward.
         expect(screen.getByRole("link", { name: "co_two" })).toHaveAttribute(
@@ -301,7 +332,29 @@ describe("ConformerObservationPage", () => {
             HttpResponse.json({ record: mockRecord({ selections: [{ selection_kind: "lowest_energy" }] }) })
         )))
         page()
-        expect(await screen.findByRole("heading", { name: "Curation selections (1)" })).toBeVisible()
+        const heading = await screen.findByRole("heading", { name: "Curation selections (1)" })
+        expect(heading).toBeVisible()
+        // BLOCKING-3 fix (PR B review): the heading sits OUTSIDE the
+        // `Disclosure` that collapses the selections list -- never nested
+        // inside its `<summary>` (a 28px serif h2 never belonged inside a
+        // 13px summary row).
+        expect(heading.closest("summary")).toBeNull()
+    })
+
+    // BLOCKING-3 mutation check: no heading element sits inside any
+    // `<summary>` on this page. Put an h2 back inside a `Disclosure`'s
+    // `summary` prop and this test fails.
+    it("never puts a heading (h1-h4) inside a <summary> on this page", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord({ selections: [{ selection_kind: "lowest_energy" }] }) })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+        const summaries = document.querySelectorAll("summary")
+        expect(summaries.length).toBeGreaterThan(0)
+        for (const summary of summaries) {
+            expect(summary.querySelector("h1, h2, h3, h4")).toBeNull()
+        }
     })
 
     it("shows a specific not-found state for a 404", async () => {

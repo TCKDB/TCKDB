@@ -137,8 +137,11 @@ describe("TransitionStateEntryPage", () => {
         page()
         expect(await screen.findByRole("heading", { name: "C1=C[C]2C=CCC2C=C1 <=> C1=Cc2ccccc2C1 + [H]" })).toBeVisible()
 
-        // The label is demoted to a facet beside the review pill, not the h1.
-        expect(document.querySelector(".tse-label-facet")).toHaveTextContent("label TS0")
+        // The label is demoted to a plain identity fact in the header's
+        // `.kv-list`, not the h1 and not a second pill beside the review one
+        // (BLOCKING-1, PR B review).
+        expect(screen.getByText("Label", { selector: "dt" })).toBeVisible()
+        expect(screen.getByText("TS0", { selector: "dd" })).toBeVisible()
 
         // The unmapped SMILES the API actually serves is shown, relabeled...
         const unmappedRow = screen.getByText("Reaction SMILES (unmapped)").closest("div")
@@ -171,6 +174,32 @@ describe("TransitionStateEntryPage", () => {
         const header = document.querySelector(".basin-header") as HTMLElement
         expect(within(header).getAllByText("not reviewed")).toHaveLength(1)
         expect(within(header).queryByText("Transition state review")).not.toBeInTheDocument()
+    })
+
+    // Item 5/7, design/foundations PR B: mutation check for disclosure
+    // adoption (`.disclosure`, never the retired `.geometry-role-
+    // disclosure`) and the table primitive (`.data-table`, never
+    // `.stage-table`) -- see the identical checks on the other four
+    // record pages' own test files.
+    it("renders per-role geometry groups as .disclosure and every table as .data-table, never the retired classes", async () => {
+        server.use(http.get(`/api/v1/scientific/transition-state-entries/${ENTRY_REF}`, () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        const { container } = page()
+        await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
+
+        expect(container.querySelector(".geometry-role-disclosure")).toBeNull()
+        const roleDisclosure = screen.getByText(/IRC reverse/).closest("details") as HTMLElement
+        expect(roleDisclosure).not.toBeNull()
+        expect(roleDisclosure).toHaveClass("disclosure")
+
+        expect(container.querySelector(".stage-table")).toBeNull()
+        const tables = Array.from(container.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThan(0)
+        for (const table of tables) {
+            expect(table).toHaveClass("data-table")
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
     })
 
     it("saddle-point: states the imaginary-mode verdict first, under the identity block, when a freq result exists", async () => {
@@ -575,11 +604,11 @@ describe("TransitionStateEntryPage", () => {
         page()
         await screen.findByRole("heading", { name: /C1=C\[C\]2C=CCC2C=C1/ })
 
-        // "TS0" appears exactly once on the page now -- the label facet
-        // beside the review pill -- not also in the h1 (now the equation)
-        // or a formula-fallback slot in the identity header.
+        // "TS0" appears exactly once on the page now -- the "Label" identity
+        // fact in the header's `.kv-list` -- not also in the h1 (now the
+        // equation) or a formula-fallback slot in the identity header.
         expect(document.body.textContent?.match(/TS0/g)).toHaveLength(1)
-        expect(document.querySelector(".tse-label-facet")).toHaveTextContent("label TS0")
+        expect(screen.getByText("TS0", { selector: "dd" })).toBeVisible()
         expect(screen.getAllByText((_, node) => node?.tagName === "DD" && node.textContent === "0 / doublet (2)"))
             .toHaveLength(1)
     })

@@ -1,57 +1,40 @@
 /*
- * RecordIdentityHeader -- identity, then classification facets, then
- * provenance, in that order, on every record page that renders it. Own
- * stylesheet per this project's convention (see the header comment in
- * `entry-science.css`).
+ * RecordIdentityHeader -- kicker + status pill, then h1, then identity,
+ * then classification facets, then provenance, in that order, on every
+ * record page that renders it. Own stylesheet per this project's
+ * convention (see the header comment in `entry-science.css`).
+ *
+ * design/foundations PR B ("record pages" consolidation): the identity
+ * facts and the (optional) submission-provenance row now render through
+ * the shared `.kv-list` primitive (`design-system.css`) rather than this
+ * file's own bespoke grid/dt/dd rules -- this file keeps only what
+ * `.kv-list` does not already cover: the kicker/pill row, the h1's own
+ * spacing, the wide-fact override, and the three prose states (absent /
+ * ambiguous / the TS "no canonical SMILES" note).
  */
 
 .record-identity-header {
     display: grid;
-    gap: .6rem;
-    margin: .75rem 0;
+    gap: var(--s-3);
+    margin: var(--s-3) 0;
 }
 
-.record-identity-formula {
+.record-identity-kicker-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--s-2) var(--s-3);
+}
+
+.record-identity-kicker {
+    color: var(--accent);
+}
+
+.record-identity-title {
     margin: 0;
-    font: 600 1.4rem/1.3 var(--serif);
-    color: var(--ink);
-}
-
-.record-identity-note {
-    margin: 0;
-    color: var(--muted);
-    font-size: .78rem;
-    line-height: 1.5;
-}
-
-.record-identity-facts {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    gap: .4rem 1.5rem;
-    margin: 0;
-}
-
-.record-identity-facts dt {
-    /* Accessibility-pass floor (11px / .6875rem) -- was .68rem (10.88px). */
-    font: .6875rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--muted);
-}
-
-.record-identity-facts dd {
-    margin: 0;
-    color: var(--ink);
-    word-break: break-word;
-}
-
-/* MEASURED: `.record-identity-facts code` had no rule of its own here,
-   so a fact rendered as `<code>` (the unmapped-SMILES fact) fell back to
-   the UA default monospace at 13px -- visibly inconsistent with every
-   other mono-styled string on this header (`dt` labels, refs). */
-.record-identity-facts code {
-    font-family: var(--mono);
+    min-width: 0;
     overflow-wrap: anywhere;
+    color: var(--ink);
 }
 
 /* A fact whose value can run long (a multi-fragment unmapped SMILES) --
@@ -64,7 +47,6 @@
 .record-identity-facets {
     margin: 0;
     color: var(--ink-2);
-    font: .82rem/1.4 var(--sans);
 }
 
 .record-identity-absent,
@@ -77,10 +59,14 @@
     margin: 0;
 }
 
+.record-identity-note {
+    margin: 0;
+}
+
 .record-identity-ambiguous {
     display: grid;
-    gap: .4rem;
-    padding: .6rem .8rem;
+    gap: var(--s-2);
+    padding: var(--s-3) var(--s-4);
     border: 1px solid var(--line);
     border-radius: .3rem;
     background: var(--accent-50);
@@ -89,11 +75,12 @@
 .record-identity-ambiguous p {
     margin: 0;
     color: var(--ink);
+    font: var(--type-body-font);
 }
 
 .record-identity-ambiguous-owners {
     display: grid;
-    gap: .3rem;
+    gap: var(--s-2);
     margin: 0;
     padding: 0;
     list-style: none;
@@ -101,22 +88,6 @@
 
 .record-identity-ambiguous-owners li {
     display: flex;
-    gap: .5rem;
+    gap: var(--s-2);
     align-items: baseline;
-}
-
-.record-identity-provenance {
-    display: flex;
-    gap: .5rem;
-    align-items: baseline;
-    margin: 0;
-    font-size: .82rem;
-}
-
-.record-identity-provenance-label {
-    /* Accessibility-pass floor (11px / .6875rem) -- was .68rem (10.88px). */
-    font: .6875rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
-    color: var(--muted);
 }

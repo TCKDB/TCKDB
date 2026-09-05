@@ -6,8 +6,16 @@ import type { RecordIdentity } from "../domain/recordIdentity"
 
 afterEach(cleanup)
 
-function renderHeader(props: Parameters<typeof RecordIdentityHeader>[0]) {
-    return render(<MemoryRouter><RecordIdentityHeader {...props} /></MemoryRouter>)
+// `kicker`/`title` became required props in design/foundations PR B (the
+// header now owns the record's own kicker-row/h1, not just identity --
+// see the component's own docstring). Every test below that does not
+// care about their exact content gets a stand-in default here so the
+// existing identity/facets/provenance assertions keep testing exactly
+// what they always tested, without every call site having to repeat
+// boilerplate the test isn't about.
+function renderHeader(props: Partial<Parameters<typeof RecordIdentityHeader>[0]> & Pick<Parameters<typeof RecordIdentityHeader>[0], "identity">) {
+    const merged = { kicker: "Test record · deposited evidence", title: "Test record", ...props }
+    return render(<MemoryRouter><RecordIdentityHeader {...merged} /></MemoryRouter>)
 }
 
 const speciesIdentity: RecordIdentity = {
@@ -118,13 +126,15 @@ describe("RecordIdentityHeader", () => {
     it("renders classification facets as a plain readable phrase, only when facets are supplied -- no pill row", () => {
         const { rerender } = render(
             <MemoryRouter>
-                <RecordIdentityHeader identity={speciesIdentity} />
+                <RecordIdentityHeader kicker="Test record · deposited evidence" title="Test record" identity={speciesIdentity} />
             </MemoryRouter>,
         )
         expect(document.querySelector(".record-identity-facets")).toBeNull()
         rerender(
             <MemoryRouter>
                 <RecordIdentityHeader
+                    kicker="Test record · deposited evidence"
+                    title="Test record"
                     identity={speciesIdentity}
                     facets={{ species_entry_kind: "minimum", electronic_state_kind: "ground" }}
                 />
@@ -136,5 +146,59 @@ describe("RecordIdentityHeader", () => {
         // No pill boxes: never a `.record-facet-chips` / `.record-facet-chip`
         // list, not even when facets are supplied.
         expect(document.querySelector(".record-facet-chips")).toBeNull()
+    })
+
+    // Mutation check: swap the kicker/h1/identity order in the component
+    // (e.g. move the `<h1>` above the kicker row, or the identity `.kv-list`
+    // above the `<h1>`) and this test fails -- it asserts the ACTUAL DOM
+    // order top to bottom, not just presence of each piece.
+    it("renders kicker row, then h1, then identity facts, then classification facets, then provenance -- in that order", () => {
+        const { container } = renderHeader({
+            kicker: "Optimisation calculation · deposited evidence",
+            title: "Optimisation of CH3",
+            identity: speciesIdentity,
+            facets: { species_entry_kind: "minimum", electronic_state_kind: "ground" },
+            submissionRef: "sub_demo",
+        })
+        const header = container.querySelector(".record-identity-header") as HTMLElement
+        expect(header).not.toBeNull()
+        const tags = Array.from(header.children).map((el) => el.className)
+        expect(tags[0]).toBe("record-identity-kicker-row")
+        expect(header.querySelector("h1")).not.toBeNull()
+        expect(Array.from(header.children).findIndex((el) => el.tagName === "H1")).toBe(1)
+        const known = header.querySelector(".record-identity-known") as HTMLElement
+        expect(known).not.toBeNull()
+        expect(known.querySelector("dl.kv-list.record-identity-facts")).not.toBeNull()
+        const facets = header.querySelector(".record-identity-facets")
+        const provenance = header.querySelector("dl.kv-list.record-identity-provenance")
+        expect(facets).not.toBeNull()
+        expect(provenance).not.toBeNull()
+        // identity block precedes facets, which precedes provenance.
+        const order = Array.from(header.children)
+        expect(order.indexOf(known)).toBeLessThan(order.indexOf(facets as Element))
+        expect(order.indexOf(facets as Element)).toBeLessThan(order.indexOf(provenance as Element))
+    })
+
+    it("renders the kicker text and an optional caller-supplied pill together in the kicker row", () => {
+        const { container } = renderHeader({
+            kicker: "Geometry · deposited evidence",
+            title: "Geometry",
+            identity: speciesIdentity,
+            pill: <span className="value-pill" data-testid="test-pill">reviewed</span>,
+        })
+        const row = container.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(row).not.toBeNull()
+        expect(row.querySelector(".t-kicker")).toHaveTextContent("Geometry · deposited evidence")
+        expect(row.querySelector('[data-testid="test-pill"]')).not.toBeNull()
+    })
+
+    it("uses --type-display-2 typography for titleVariant='display-2' (the wrapping TS equation), and --type-display-1 by default", () => {
+        const { container: displayOneContainer } = renderHeader({ identity: speciesIdentity })
+        expect(displayOneContainer.querySelector("h1.t-display-1")).not.toBeNull()
+        expect(displayOneContainer.querySelector("h1.t-display-2")).toBeNull()
+
+        const { container: displayTwoContainer } = renderHeader({ identity: speciesIdentity, titleVariant: "display-2" })
+        expect(displayTwoContainer.querySelector("h1.t-display-2")).not.toBeNull()
+        expect(displayTwoContainer.querySelector("h1.t-display-1")).toBeNull()
     })
 })

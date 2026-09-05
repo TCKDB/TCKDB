@@ -719,15 +719,16 @@ describe("CalculationDetailPage", () => {
         const section = summary.closest("details") as HTMLDetailsElement
         expect(section).not.toBeNull()
         expect(section.open).toBe(false)
-        // Item 10 / nit fix: idle text is "Show", and it must actually be
-        // VISIBLE to a reader before the section is opened -- a closed
-        // `<details>` hides every child except `<summary>` natively, so
-        // "Show" has to live inside the summary itself (not the
-        // `role="status"` paragraph, which is hidden while closed) to be
-        // seen at all. `toBeVisible()`, not `toBeInTheDocument()`: the
-        // latter would have passed even when "Show" sat somewhere the
-        // closed-details rules hide.
-        expect(within(section).getByText("Show")).toBeVisible()
+        // Design/foundations PR B (item 5): every on-demand section now
+        // composes the shared `Disclosure` primitive (`.disclosure`,
+        // `design-system.css`) instead of a page-local bordered `<details>`
+        // -- mutation check: rename this class away and this test fails.
+        // The redundant "SHOW" affordance span is gone with it (the
+        // primitive's own chevron, `.disclosure > summary::before`, is the
+        // idle-state affordance now) -- "Show" must not appear anywhere in
+        // this section.
+        expect(section).toHaveClass("disclosure")
+        expect(within(section).queryByText("Show")).not.toBeInTheDocument()
         expect(within(section).queryByText(/The archive returned no parameter rows/)).not.toBeInTheDocument()
         expect(requestCount).toBe(1) // only the eager fetch so far
 
@@ -831,7 +832,7 @@ describe("CalculationDetailPage", () => {
         })))
         page()
         await findLoaded("Frequency")
-        const summaries = Array.from(document.querySelectorAll(".geometry-role-disclosure summary")).map((el) => el.textContent)
+        const summaries = Array.from(document.querySelectorAll(".geometry-groups .disclosure summary")).map((el) => el.textContent)
         expect(summaries).not.toContain("Imaginary-mode projections")
         const note = screen.getByText(/^Not recorded on this calculation:/)
         expect(note.textContent).toContain("Imaginary-mode projections")
@@ -1029,12 +1030,65 @@ describe("CalculationDetailPage", () => {
         expect(within(section).getByText("Looks solid")).toBeVisible()
     })
 
-    it("omits the Quality row for the default 'raw' value, but keeps the review-status badge visible", async () => {
+    // Item 7, design/foundations PR B: every table on this page moved from
+    // the page-local `.stage-table` recipe to the shared `.data-table`
+    // primitive (`design-system.css`), each inside a `.table-scroll`
+    // wrapper. Mutation check: revert one table's className back to
+    // `.stage-table` and this test fails.
+    it("renders every table on this page as the shared .data-table primitive inside .table-scroll, never .stage-table", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                review_history: [
+                    { status: "approved", note: "Looks solid", reviewed_at: "2026-08-01T00:00:00", submission_ref: "sub_demo" },
+                ],
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        fireEvent.click(screen.getByText("Parsed parameters"))
+        await screen.findByText("scf_convergence")
+
+        expect(document.querySelector(".stage-table")).toBeNull()
+        const tables = Array.from(document.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThan(0)
+        for (const table of tables) {
+            expect(table).toHaveClass("data-table")
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
+    })
+
+    it("omits the Quality row for the default 'raw' value, but keeps the review-status pill visible", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
         page()
         await findLoaded("Frequency")
         expect(screen.queryByText("Quality")).not.toBeInTheDocument()
-        expect(screen.getByText("not reviewed", { selector: ".review-badge" })).toBeVisible()
+        expect(screen.getByText("not reviewed", { selector: ".value-pill" })).toBeVisible()
+    })
+
+    // Item 6, design/foundations PR B: `.review-badge` is retired from this
+    // page's own markup -- the review-status pill is now the ONE shared
+    // `.value-pill` pill primitive, muted for "not reviewed" (an absent
+    // verdict), accent for anything else. Mutation check: swap
+    // `reviewPillClass`'s branches and this test fails on the muted half.
+    it("uses the shared .value-pill primitive for the review-status pill, muted for 'not reviewed'", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({ record: mockRecord() })))
+        page()
+        await findLoaded("Frequency")
+        const pill = screen.getByText("not reviewed", { selector: ".value-pill" })
+        expect(pill).toHaveClass("value-pill")
+        expect(pill).toHaveClass("value-pill--muted")
+        expect(document.querySelector(".review-badge")).toBeNull()
+    })
+
+    it("shows the reviewed pill in the accent (non-muted) register once a calculation has actually been reviewed", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({ calculation: { ...mockRecord().calculation, review: { status: "approved", reviewed_at: "2026-08-01T00:00:00", reviewer_kind: "human" } } }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const pill = screen.getByText("approved", { selector: ".value-pill" })
+        expect(pill).toHaveClass("value-pill")
+        expect(pill).not.toHaveClass("value-pill--muted")
     })
 
     it("nests the review-status pill inside the heading block that contains the h1, not outside it", async () => {
@@ -1043,7 +1097,7 @@ describe("CalculationDetailPage", () => {
         const h1 = await findLoaded("Frequency")
         const headingBlock = h1.closest(".record-header") as HTMLElement
         expect(headingBlock).not.toBeNull()
-        const pill = within(headingBlock).getByText("not reviewed", { selector: ".review-badge" })
+        const pill = within(headingBlock).getByText("not reviewed", { selector: ".value-pill" })
         expect(headingBlock.contains(pill)).toBe(true)
     })
 

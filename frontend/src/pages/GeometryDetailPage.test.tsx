@@ -200,6 +200,29 @@ describe("GeometryDetailPage", () => {
         expect(within(context).getByText("angstrom")).toBeVisible()
     })
 
+    // Item 1/7, design/foundations PR B: mutation check for header order
+    // (the kicker-row/h1 that `RecordIdentityHeader` now owns, ahead of
+    // this page's own provenance `.kv-list`) and the table primitive
+    // (`.data-table`, never `.stage-table`) -- see the identical checks on
+    // `ConformerGroupPage.test.tsx`/`ConformerObservationPage.test.tsx`.
+    it("renders the kicker row before the h1, and every table as .data-table, never .stage-table", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        const { container } = page()
+        const h1 = await screen.findByRole("heading", { name: "CH4 geometry" })
+        const header = h1.closest(".basin-header") as HTMLElement
+        expect(header).not.toBeNull()
+        const kickerRow = header.querySelector(".record-identity-kicker-row") as HTMLElement
+        expect(kickerRow).not.toBeNull()
+
+        expect(container.querySelector(".stage-table")).toBeNull()
+        const tables = Array.from(container.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThan(0)
+        for (const table of tables) {
+            expect(table).toHaveClass("data-table")
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
+    })
+
     it("says validation is not recorded for this geometry, rather than fabricating a verdict", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
@@ -825,12 +848,22 @@ describe("GeometryDetailPage", () => {
             const { container } = page()
             await screen.findByRole("heading", { name: "CH4 geometry" })
 
-            const prose = container.querySelector(".basin-intro") as HTMLElement
+            // `.basin-intro` retired (design/foundations PR B) -- this
+            // header's intro paragraph now goes through `RecordIdentityHeader`'s
+            // own `intro` prop, which composes `.section-intro`
+            // (`conformer-group.css`), the same `--measure-prose` (40rem,
+            // NOT 44 -- see `index.css`) cap `SectionHeading`'s own
+            // optional `intro` prop uses for every in-page section on
+            // these five record pages.
+            const prose = container.querySelector(".section-intro") as HTMLElement
             const viewer = container.querySelector(".geometry-viewer") as HTMLElement
-            const table = container.querySelector(".stage-table") as HTMLElement
+            // `.stage-table` retired from this page's own tables in favour
+            // of the shared `.data-table` primitive (item 7).
+            const table = container.querySelector(".data-table") as HTMLElement
             expect(prose).not.toBeNull()
             expect(viewer).not.toBeNull()
             expect(table).not.toBeNull()
+            expect(container.querySelector(".stage-table")).toBeNull()
 
             const proseMaxWidth = getComputedStyle(prose).maxWidth
             const viewerMaxWidth = getComputedStyle(viewer).maxWidth
@@ -839,7 +872,20 @@ describe("GeometryDetailPage", () => {
             // thing bounding them) -- the two must not resolve to the same
             // value, which is what "wide page, capped prose" actually
             // means as a checkable claim rather than a screenshot.
-            expect(proseMaxWidth).toBe("44rem")
+            // Was a one-off literal `44rem` (`.basin-intro`) -- design/
+            // foundations PR B consolidates every intro-style paragraph on
+            // these five record pages onto the ONE `--measure-prose` token
+            // step, the same cap `SectionHeading`'s own `intro` prop and
+            // the old `.ledger-heading` wrapper already used, rather than a
+            // second, slightly different figure for the page header
+            // specifically. jsdom's CSSOM does not resolve CSS custom
+            // properties (no `var()` substitution -- a documented jsdom
+            // limitation), so the raw, unresolved token reference is what
+            // `getComputedStyle` actually reports here; asserting that
+            // literal string is a STRONGER check than a resolved rem value
+            // would be, since it also pins WHICH token this class points
+            // at, not just its current numeric value.
+            expect(proseMaxWidth).toBe("var(--measure-prose)")
             expect(viewerMaxWidth).not.toBe(proseMaxWidth)
             // jsdom's CSSOM reports an unset property as "" rather than
             // resolving it to CSS's own "none" initial value -- either way,

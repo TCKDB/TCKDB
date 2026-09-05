@@ -24,6 +24,7 @@ import {
     type CalculationWavefunctionDiagnostic,
     type OnDemandSectionToken,
 } from "../api/calculationApi"
+import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
 import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
@@ -35,6 +36,7 @@ import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
+import { reviewPillClass } from "../domain/reviewPillFormat"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
 import { useCalculationSection, type CalculationSectionState } from "../hooks/useCalculationSection"
@@ -378,27 +380,21 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
             <PageShell
                 identity={(
                     <header className="record-header">
-                        {/* The review-status pill sits beside the eyebrow, not the
-                            h1 -- see `.record-eyebrow-row` in
-                            calculation-detail.css for why: the eyebrow line
-                            never wraps at any width this page supports, so the
-                            pill has a stable home immediately above the title
-                            it describes. "Optimisation calculation" (the
-                            classification fact) lives here now too, since the
-                            h1 itself promotes IDENTITY ("Optimisation of
-                            C2H4") ahead of classification -- see
-                            `RecordIdentityHeader`'s own docstring for the
-                            shared header order every record page follows:
-                            identity, then classification, then provenance. */}
-                        <div className="record-eyebrow-row">
-                            <p className="eyebrow">{typeLabel(core.type)} calculation · deposited evidence</p>
-                            <span className="review-badge">{statusLabel(core.review.status)}</span>
-                        </div>
-                        <div className="record-title">
-                            <h1 className={headline ? "has-headline" : undefined}>
-                                {typeLabel(core.type)} of {titleSubject}
-                            </h1>
-                        </div>
+                        {/* Kicker + h1 + identity now all live in
+                            `RecordIdentityHeader` (item 1, design/foundations
+                            PR B): the review-status pill is the header's ONE
+                            pill slot, and "Optimisation calculation" (the
+                            classification fact) is the kicker text, ahead of
+                            the h1's own IDENTITY ("Optimisation of C2H4") --
+                            see that component's own docstring for the shared
+                            header order every record page now follows. */}
+                        <RecordIdentityHeader
+                            kicker={`${typeLabel(core.type)} calculation · deposited evidence`}
+                            pill={<span className={reviewPillClass(core.review.status)}>{statusLabel(core.review.status)}</span>}
+                            title={<>{typeLabel(core.type)} of {titleSubject}</>}
+                            identity={identity}
+                        />
+
                         {/* The answer this page exists to give, promoted to the
                             largest weight on the page. Only sp/opt calculations
                             have a single headline energy; every other
@@ -413,8 +409,6 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             </div>
                         )}
 
-                        <RecordIdentityHeader identity={identity} />
-
                         {/* Item 1 (BLOCKING): the TS entry is now a real link to
                             `/transition-state-entries/:ref` -- that route exists
                             (`App.tsx:52`). `RecordIdentityHeader`'s own TS branch
@@ -422,7 +416,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             used by pages that don't all have this route), so the
                             link lives here instead, right below it. */}
                         {ownerTS && (
-                            <p className="record-identity-note">
+                            <p className="note record-identity-note">
                                 This calculation belongs to the transition-state entry{" "}
                                 <Link to={`/transition-state-entries/${ownerTS.transition_state_entry_ref}`}>
                                     {ownerTS.label ?? ownerTS.transition_state_entry_ref}
@@ -445,7 +439,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             request, null describes the data, and this page never
                             claims "not recorded" for a field most calculations
                             simply don't carry. */}
-                        <dl className="record-context">
+                        <dl className="kv-list record-context">
                             <div><dt>Deposited</dt><dd>{isoDate(core.created_at)}</dd></div>
                             <div><dt>Level of theory</dt><dd>{lot ? lotLabel(lot) : "not recorded"}</dd></div>
                             <div>
@@ -494,8 +488,13 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                 The evidence checklist is the only card that carries a fact
                 with no other home on the page. */}
             <section className="ledger-summary ledger-summary--single" aria-label="Calculation evidence summary">
-                <div className="coverage-card">
-                    <span>Evidence on this calculation</span>
+                {/* `.card--derived` -- a COMPUTED evidence-completeness summary
+                    (item 8's card decision: `--derived` marks an aggregated
+                    verdict, plain `.card` marks a single deposited record; see
+                    this PR's body for the one rule applied consistently across
+                    every record page). */}
+                <div className="card card--derived coverage-card">
+                    <span className="t-label">Evidence on this calculation</span>
                     {/* Geometry validation and SCF stability only -- Result and
                         Convergence are dropped from this checklist (review
                         finding: each already has its own headline/Result-section
@@ -515,7 +514,7 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                             <dd>{scfStabilityOutcomeLabel(provenance.scf_stability_status)}</dd>
                         </div>
                     </dl>
-                    <p>
+                    <p className="note">
                         A recorded outcome here is the actual verdict; the full evidence, where the archive has
                         more to show, is under Further evidence below.
                     </p>
@@ -591,13 +590,21 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
         : null
     if (!stage && !conformer) return null
     return (
-        <dl className="record-context record-context--compact">
+        <dl className="kv-list record-context--compact">
             {stage && (
                 <div>
                     <dt>Stage</dt>
                     <dd>
+                        {/* SHOULD-FIX-4 (PR B review): a calculation ref is
+                            an identifier -- `<code className="data">`,
+                            like every other ref on these five pages, same
+                            treatment inside a link as outside one. The
+                            conformer-group link just below is NOT
+                            code-wrapped when it shows the producer's own
+                            LABEL rather than the ref -- a label is a human
+                            word, not an identifier. */}
                         {stage.linkRef
-                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}>{stage.linkRef}</Link></>
+                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{stage.linkRef}</code></Link></>
                             : stage.text}
                     </dd>
                 </div>
@@ -607,11 +614,13 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                     <dt>Conformer</dt>
                     <dd>
                         <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
-                            {conformer.conformer_observation_ref}
+                            <code className="data">{conformer.conformer_observation_ref}</code>
                         </Link>
                         {" · "}
                         <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
-                            {conformer.conformer_group_label ?? conformer.conformer_group_ref}
+                            {conformer.conformer_group_label
+                                ? conformer.conformer_group_label
+                                : <code className="data">{conformer.conformer_group_ref}</code>}
                         </Link>
                     </dd>
                 </div>
@@ -661,11 +670,9 @@ function ResultsSection({ results, type, availability, contradicted }: {
     const kindLabel = results ? typeLabel(results.kind) : typeLabel(type)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Result</p>
-                <SectionHeading id="results-heading">Result</SectionHeading>
-                <p>The primary scientific result for this {kindLabel.toLowerCase()} calculation.</p>
-            </div>
+            <SectionHeading id="results-heading" kicker="Result" intro={`The primary scientific result for this ${kindLabel.toLowerCase()} calculation.`}>
+                Result
+            </SectionHeading>
             {availability === "populated" && results ? <ResultBody results={results} /> : (
                 <SectionEmptyMessage
                     availability={availability}
@@ -829,11 +836,9 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
 }) {
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Related calculations</p>
-                <SectionHeading id="dependencies-heading">Related calculations</SectionHeading>
-                <p>Other calculations this one was built from, or that were built from it.</p>
-            </div>
+            <SectionHeading id="dependencies-heading" kicker="Related calculations" intro="Other calculations this one was built from, or that were built from it.">
+                Related calculations
+            </SectionHeading>
             {availability === "populated" ? (
                 <ul className="dependency-sentences" aria-label={`Dependency edges for ${ownRef}`}>
                     {dependencies.map((dep, index) => {
@@ -877,14 +882,14 @@ function GeometriesSection({
     const sameGeometry = input.length === 1 && output.length === 1 && input[0].geometry_ref === output[0].geometry_ref
     const validationRow = geometryValidation.status === "ready" ? (geometryValidation.data?.[0] ?? null) : null
     return (
-        <section className="ledger-section geometry-ledger" aria-labelledby="geometries-heading">
-            <p className="eyebrow">Geometries</p>
-            <SectionHeading id="geometries-heading">Geometries</SectionHeading>
-            <p>Links to the full coordinate records this calculation consumed and produced.</p>
+        <section className="ledger-section" aria-labelledby="geometries-heading">
+            <SectionHeading id="geometries-heading" kicker="Geometries" intro="Links to the full coordinate records this calculation consumed and produced.">
+                Geometries
+            </SectionHeading>
             {sameGeometry ? (
                 <div>
-                    <h3 className="ledger-kicker">Input and output</h3>
-                    <p className="section-note">Input and output are the same stored geometry.</p>
+                    <h3 className="t-heading-2">Input and output</h3>
+                    <p className="note">Input and output are the same stored geometry.</p>
                     <div className="geometry-links">
                         <div className="geometry-link" key={input[0].geometry_ref}>
                             <Link to={`/geometries/${input[0].geometry_ref}`}>{input[0].geometry_ref}</Link>
@@ -918,7 +923,7 @@ function GeometriesSection({
 
 function GeometryValidationBanner({ row }: { row: CalculationGeometryValidation }) {
     return (
-        <p className="section-note">
+        <p className="note">
             Geometry validation: {statusLabel(row.validation_status)}
             {row.rmsd != null ? ` · RMSD ${row.rmsd}` : ""}
         </p>
@@ -934,7 +939,7 @@ function GeometryLinkList({ title, links, emptyText, availability, contradicted 
 }) {
     return (
         <div>
-            <h3 className="ledger-kicker">{title}</h3>
+            <h3 className="t-heading-2">{title}</h3>
             {availability === "populated" ? (
                 <div className="geometry-links">
                     {links.map((link) => (
@@ -960,29 +965,28 @@ function ReviewHistorySection({ entries, availability }: {
     const neverReviewed = isNeverReviewed(entries)
     return (
         <section className="ledger-section" aria-labelledby="review-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Review</p>
-                <SectionHeading id="review-heading">Review history</SectionHeading>
-            </div>
+            <SectionHeading id="review-heading" kicker="Review">Review history</SectionHeading>
             {availability === "populated" && !neverReviewed ? (
-                <table className="stage-table" aria-label="Review history">
-                    <thead>
-                        <tr>
-                            <th scope="col">Status</th>
-                            <th scope="col">Reviewed at</th>
-                            <th scope="col">Note</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((entry, index) => (
-                            <tr key={`review-${index}`}>
-                                <td data-label="Status">{statusLabel(entry.status)}</td>
-                                <td data-label="Reviewed at">{isoDate(entry.reviewed_at)}</td>
-                                <td data-label="Note">{entry.note ?? "not recorded"}</td>
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Review history">
+                        <thead>
+                            <tr>
+                                <th scope="col">Status</th>
+                                <th scope="col">Reviewed at</th>
+                                <th scope="col">Note</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {rows.map((entry, index) => (
+                                <tr key={`review-${index}`}>
+                                    <td data-label="Status">{statusLabel(entry.status)}</td>
+                                    <td data-label="Reviewed at">{isoDate(entry.reviewed_at)}</td>
+                                    <td data-label="Note">{entry.note ?? "not recorded"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : availability === "populated" ? (
                 <p className="empty-projection">Not yet reviewed.</p>
             ) : (
@@ -1005,20 +1009,23 @@ function ReviewHistorySection({ entries, availability }: {
 /**
  * One disclosure gated on an `available_sections` flag (or, for
  * `imaginary_mode_projections`, on `freq_modes_applicable` -- see the
- * module docstring). Renders an expandable `<details>` that fetches its
- * own token, once, the first time it opens.
+ * module docstring). Composes the shared `Disclosure` primitive
+ * (`components/Disclosure.tsx`), which fetches its own token, once, the
+ * first time it opens.
  *
- * Styled with the SAME bordered-list recipe as
- * `TransitionStateEntryPage.tsx`'s per-role geometry disclosures
- * (`.geometry-role-disclosure`) rather than a full `.ledger-section` of
- * its own -- review finding 8/10: ten individually-headed, individually-
- * ToC-registered sections crowded out the two or three that carry data on
- * most calculations. Every disclosure below is grouped under the ONE
- * "Further evidence" section that registers a single ToC entry; a plain
- * `<summary>` here (not `SectionHeading`) is what keeps it from
- * registering a second one per disclosure. `id` is an explicit, stable
- * prop -- never derived from the heading text -- so a future heading
- * rewrite cannot silently move the anchor.
+ * Design/foundations PR B (item 5): this used to be a page-local bordered
+ * `<details>` styled with the same recipe
+ * `TransitionStateEntryPage.tsx`'s per-role geometry disclosures used
+ * (`.geometry-role-disclosure`) -- both are now the ONE canonical
+ * `.disclosure` every disclosure on the app renders through, and the
+ * redundant "Show" affordance span is gone (`.disclosure`'s own chevron,
+ * `design-system.css`, is the idle-state affordance now). Every
+ * disclosure below is still grouped under the ONE "Further evidence"
+ * section that registers a single ToC entry -- `Disclosure`'s own
+ * `summary` prop (not `SectionHeading`) is what keeps it from registering
+ * a second one per disclosure. `id` is an explicit, stable prop -- never
+ * derived from the heading text -- so a future heading rewrite cannot
+ * silently move the anchor.
  *
  * The live region is a short status *sentence*, not a wrapper around the
  * fetched payload: `role="status"` carries an implicit `aria-atomic="true"`,
@@ -1047,38 +1054,14 @@ function LazySection<T>({
 }) {
     if (!applicable || !available) return null
     return (
-        <details
-            className="ledger-section geometry-role-disclosure"
-            id={id}
-            onToggle={(event) => {
-                if ((event.target as HTMLDetailsElement).open) onOpen()
-            }}
-        >
-            {/*
-             * The idle-state affordance lives HERE, not in the `role="status"`
-             * paragraph below -- review finding (nit): a closed `<details>`
-             * natively hides every child except `<summary>`, so a "Show" line
-             * in that paragraph was never visible while idle, which is the
-             * ONLY state a reader sees before opening it. `<summary>` is the
-             * one element a closed `<details>` still renders, so a visible
-             * affordance has to sit inside it. The heading text stays its own
-             * span so `getByText(heading)` keeps matching it exactly, rather
-             * than the combined "heading + affordance" text of the whole
-             * `<summary>`.
-             */}
-            <summary>
-                <span>{heading}</span>
-                {state.status === "idle" && (
-                    <span className="lazy-section-affordance" aria-hidden="true">Show</span>
-                )}
-            </summary>
-            <p className="section-note" role="status">
+        <Disclosure id={id} summary={heading} onToggle={(open) => { if (open) onOpen() }}>
+            <p className="note" role="status">
                 {state.status === "loading" && "Loading…"}
                 {state.status === "error" && state.message}
                 {state.status === "ready" && `${heading} loaded.`}
             </p>
             {state.status === "ready" && children(state.data)}
-        </details>
+        </Disclosure>
     )
 }
 
@@ -1147,11 +1130,9 @@ function OnDemandSections({ calculation, available, geometryValidationState, ope
 
     return (
         <section className="ledger-section" aria-labelledby="further-evidence-heading">
-            <div className="ledger-heading">
-                <p className="eyebrow">Further evidence</p>
-                <SectionHeading id="further-evidence-heading">Further evidence</SectionHeading>
-                <p>Machine-parsed detail and additional checks, loaded from the archive on request.</p>
-            </div>
+            <SectionHeading id="further-evidence-heading" kicker="Further evidence" intro="Machine-parsed detail and additional checks, loaded from the archive on request.">
+                Further evidence
+            </SectionHeading>
             <div className="geometry-groups">
                 <EnergyCorrectionsSection calculationRef={ref} available={available.has_energy_corrections} />
                 <GeometryValidationSection
@@ -1203,30 +1184,32 @@ function EnergyCorrectionsSection({ calculationRef, available }: { calculationRe
     return (
         <LazySection id="section-energy-corrections" heading="Energy corrections" available={available} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
-                <table className="stage-table" aria-label="Applied energy corrections">
-                    <thead>
-                        <tr>
-                            <th scope="col">Role</th>
-                            <th scope="col">Applied value</th>
-                            <th scope="col">Target</th>
-                            <th scope="col">Scheme</th>
-                            <th scope="col">Scheme ref</th>
-                            <th scope="col">Frequency scale factor ref</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((row, index) => (
-                            <tr key={`ec-${index}`}>
-                                <td data-label="Role">{statusLabel(row.application_role)}</td>
-                                <td data-label="Applied value">{row.applied_value} {row.applied_value_unit}</td>
-                                <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
-                                <td data-label="Scheme">{row.energy_correction_scheme_name ?? "not recorded"}</td>
-                                <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "not recorded"}</td>
-                                <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "not recorded"}</td>
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Applied energy corrections">
+                        <thead>
+                            <tr>
+                                <th scope="col">Role</th>
+                                <th scope="col">Applied value</th>
+                                <th scope="col">Target</th>
+                                <th scope="col">Scheme</th>
+                                <th scope="col">Scheme ref</th>
+                                <th scope="col">Frequency scale factor ref</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, index) => (
+                                <tr key={`ec-${index}`}>
+                                    <td data-label="Role">{statusLabel(row.application_role)}</td>
+                                    <td data-label="Applied value" className="num">{row.applied_value} {row.applied_value_unit}</td>
+                                    <td data-label="Target">{row.target_record_ref ?? "not recorded"}</td>
+                                    <td data-label="Scheme">{row.energy_correction_scheme_name ?? "not recorded"}</td>
+                                    <td data-label="Scheme ref">{row.energy_correction_scheme_ref ?? "not recorded"}</td>
+                                    <td data-label="Frequency scale factor ref">{row.frequency_scale_factor_ref ?? "not recorded"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : <p className="empty-projection">The archive returned no correction rows.</p>)}
         </LazySection>
     )
@@ -1245,7 +1228,7 @@ function GeometryValidationSection({ available, applicable, state, onOpen }: {
                 if (!row) return <p className="empty-projection">The archive returned no validation row.</p>
                 return (
                     <>
-                        <p className="section-note">
+                        <p className="note">
                             <code>is_isomorphic</code> and <code>formula_matches</code> below are the same
                             stored verdict under two names — despite the name, neither claims full
                             structural isomorphism, only that per-element atom counts match the declared
@@ -1288,7 +1271,7 @@ function SCFStabilitySection({ calculationRef, available }: { calculationRef: st
                 return (
                     <>
                         {row.source_calculation_ref && (
-                            <p className="section-note">
+                            <p className="note">
                                 The source calculation below is the analysis's own provenance, and is not
                                 necessarily this calculation.
                             </p>
@@ -1352,18 +1335,20 @@ function ParametersSection({ calculationRef, available }: { calculationRef: stri
     return (
         <LazySection id="section-parsed-parameters" heading="Parsed parameters" available={available} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
-                <table className="stage-table" aria-label="Parsed execution parameters">
-                    <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col">Section</th></tr></thead>
-                    <tbody>
-                        {rows.map((row, index) => (
-                            <tr key={`param-${index}`}>
-                                <td data-label="Key">{row.canonical_key ?? row.raw_key}</td>
-                                <td data-label="Value">{row.canonical_value ?? row.raw_value}{row.unit ? ` ${row.unit}` : ""}</td>
-                                <td data-label="Section">{row.section ?? "not recorded"}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Parsed execution parameters">
+                        <thead><tr><th scope="col">Key</th><th scope="col">Value</th><th scope="col">Section</th></tr></thead>
+                        <tbody>
+                            {rows.map((row, index) => (
+                                <tr key={`param-${index}`}>
+                                    <td data-label="Key">{row.canonical_key ?? row.raw_key}</td>
+                                    <td data-label="Value">{row.canonical_value ?? row.raw_value}{row.unit ? ` ${row.unit}` : ""}</td>
+                                    <td data-label="Section">{row.section ?? "not recorded"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : <p className="empty-projection">The archive returned no parameter rows.</p>)}
         </LazySection>
     )
@@ -1374,18 +1359,20 @@ function ConstraintsSection({ calculationRef, available, applicable }: { calcula
     return (
         <LazySection id="section-constraints" heading="Constraints" available={available} applicable={applicable} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
-                <table className="stage-table" aria-label="Calculation constraints">
-                    <thead><tr><th scope="col">Kind</th><th scope="col">Atoms</th><th scope="col">Target value</th></tr></thead>
-                    <tbody>
-                        {rows.map((row) => (
-                            <tr key={`constraint-${row.constraint_index}`}>
-                                <td data-label="Kind">{statusLabel(row.constraint_kind)}</td>
-                                <td data-label="Atoms">{row.atom_indices.join(", ")}</td>
-                                <td data-label="Target value">{row.target_value ?? "not recorded"}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Calculation constraints">
+                        <thead><tr><th scope="col">Kind</th><th scope="col">Atoms</th><th scope="col">Target value</th></tr></thead>
+                        <tbody>
+                            {rows.map((row) => (
+                                <tr key={`constraint-${row.constraint_index}`}>
+                                    <td data-label="Kind">{statusLabel(row.constraint_kind)}</td>
+                                    <td data-label="Atoms" className="num">{row.atom_indices.join(", ")}</td>
+                                    <td data-label="Target value" className="num">{row.target_value ?? "not recorded"}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : <p className="empty-projection">The archive returned no constraint rows.</p>)}
         </LazySection>
     )
@@ -1396,18 +1383,20 @@ function FreqModesSection({ calculationRef, available, applicable }: { calculati
     return (
         <LazySection id="section-vibrational-modes" heading="Vibrational modes" available={available} applicable={applicable} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
-                <table className="stage-table" aria-label="Vibrational modes">
-                    <thead><tr><th scope="col">Mode</th><th scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
-                    <tbody>
-                        {rows.map((row) => (
-                            <tr key={`mode-${row.mode_index}`}>
-                                <td data-label="Mode">{row.mode_index}</td>
-                                <td data-label="Frequency (cm-1)">{row.frequency_cm1}</td>
-                                <td data-label="Imaginary">{boolLabel(row.is_imaginary)}</td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Vibrational modes">
+                        <thead><tr><th scope="col">Mode</th><th scope="col">Frequency (cm-1)</th><th scope="col">Imaginary</th></tr></thead>
+                        <tbody>
+                            {rows.map((row) => (
+                                <tr key={`mode-${row.mode_index}`}>
+                                    <td data-label="Mode" className="num">{row.mode_index}</td>
+                                    <td data-label="Frequency (cm-1)" className="num">{row.frequency_cm1}</td>
+                                    <td data-label="Imaginary">{boolLabel(row.is_imaginary)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : <p className="empty-projection">The archive returned no mode rows.</p>)}
         </LazySection>
     )
@@ -1428,28 +1417,30 @@ function ImaginaryModeProjectionsSection({ calculationRef, hessianAvailable, app
                             ["Linear molecule", boolLabel(projection.is_linear)],
                         ]} />
                         {modes.length > 0 && (
-                            <table className="stage-table" aria-label="Imaginary mode projections">
-                                <thead>
-                                    <tr>
-                                        <th scope="col">Mode</th>
-                                        <th scope="col">Frequency (cm-1)</th>
-                                        <th scope="col">Declared</th>
-                                        <th scope="col">Determination</th>
-                                        <th scope="col">Agreement</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {modes.map((mode) => (
-                                        <tr key={`imag-${mode.mode_index}`}>
-                                            <td data-label="Mode">{mode.mode_index}</td>
-                                            <td data-label="Frequency (cm-1)">{mode.frequency_cm1}</td>
-                                            <td data-label="Declared">{mode.declared_disposition ? statusLabel(mode.declared_disposition) : "not recorded"}</td>
-                                            <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "not determined"}</td>
-                                            <td data-label="Agreement">{statusLabel(mode.agreement)}</td>
+                            <div className="table-scroll">
+                                <table className="data-table" aria-label="Imaginary mode projections">
+                                    <thead>
+                                        <tr>
+                                            <th scope="col">Mode</th>
+                                            <th scope="col">Frequency (cm-1)</th>
+                                            <th scope="col">Declared</th>
+                                            <th scope="col">Determination</th>
+                                            <th scope="col">Agreement</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {modes.map((mode) => (
+                                            <tr key={`imag-${mode.mode_index}`}>
+                                                <td data-label="Mode" className="num">{mode.mode_index}</td>
+                                                <td data-label="Frequency (cm-1)" className="num">{mode.frequency_cm1}</td>
+                                                <td data-label="Declared">{mode.declared_disposition ? statusLabel(mode.declared_disposition) : "not recorded"}</td>
+                                                <td data-label="Determination">{mode.determination ? statusLabel(mode.determination) : "not determined"}</td>
+                                                <td data-label="Agreement">{statusLabel(mode.agreement)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </>
                 )
@@ -1516,31 +1507,33 @@ function ArtifactsSection({ calculationRef, available }: { calculationRef: strin
     return (
         <LazySection id="section-artifacts" heading="Artifacts" available={available} state={state} onOpen={open}>
             {(rows) => (rows?.length ? (
-                <table className="stage-table" aria-label="Calculation artifacts">
-                    <thead>
-                        <tr>
-                            <th scope="col">Kind</th>
-                            <th scope="col">Filename</th>
-                            <th scope="col">Size</th>
-                            <th scope="col">Artifact ref</th>
-                            <th scope="col">SHA-256</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {rows.map((row, index) => (
-                            <tr key={`artifact-${index}`}>
-                                <td data-label="Kind">{statusLabel(row.kind)}</td>
-                                <td data-label="Filename">{row.filename ?? "not recorded"}</td>
-                                <td data-label="Size">{row.bytes.toLocaleString()} bytes</td>
-                                <td data-label="Artifact ref">{row.artifact_ref ?? "not recorded"}</td>
-                                {/* The sha256 is the artifact's identity — the storage URI (row.uri)
-                                    is not a downloadable link, so this is the one stable handle for
-                                    the bytes this row describes. */}
-                                <td data-label="SHA-256"><code>{row.sha256}</code></td>
+                <div className="table-scroll">
+                    <table className="data-table" aria-label="Calculation artifacts">
+                        <thead>
+                            <tr>
+                                <th scope="col">Kind</th>
+                                <th scope="col">Filename</th>
+                                <th scope="col">Size</th>
+                                <th scope="col">Artifact ref</th>
+                                <th scope="col">SHA-256</th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody>
+                            {rows.map((row, index) => (
+                                <tr key={`artifact-${index}`}>
+                                    <td data-label="Kind">{statusLabel(row.kind)}</td>
+                                    <td data-label="Filename">{row.filename ?? "not recorded"}</td>
+                                    <td data-label="Size" className="num">{row.bytes.toLocaleString()} bytes</td>
+                                    <td data-label="Artifact ref">{row.artifact_ref ?? "not recorded"}</td>
+                                    {/* The sha256 is the artifact's identity — the storage URI (row.uri)
+                                        is not a downloadable link, so this is the one stable handle for
+                                        the bytes this row describes. */}
+                                    <td data-label="SHA-256"><code>{row.sha256}</code></td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
             ) : <p className="empty-projection">The archive returned no artifact rows.</p>)}
         </LazySection>
     )

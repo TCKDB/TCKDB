@@ -1,11 +1,13 @@
 /*
  * GeometryDetailPage. Imported alongside `conformer-group.css`, which
  * supplies the shared "scientific record ledger" vocabulary this page
- * reuses verbatim: `.basin-header`, `.basin-title`, `.basin-context`,
- * `.ledger-section`, `.ledger-heading`, `.ledger-summary`, `.metric`,
- * `.coverage-card`, `.stage-table`, `.empty-projection`,
- * `.record-breadcrumbs`. Only the viewer, raw-XYZ block, validation-card
- * shaping and coordinate-table controls below are new here.
+ * reuses verbatim: `.basin-header`, `.ledger-section`, `.ledger-heading`,
+ * `.ledger-summary`, `.metric`, `.empty-projection`, `.record-
+ * breadcrumbs`. Design/foundations PR B moved this page's header,
+ * evidence card, and tables onto the shared `design-system.css`
+ * primitives (`.kv-list`, `.card`, `.data-table`) -- see this PR's body
+ * for the full per-item list. Only the viewer, raw-XYZ block, and
+ * coordinate-table controls below are new here.
  */
 
 .geometry-page { max-width: 100rem; }
@@ -16,7 +18,13 @@
    page disclaiming fabricated-for-display data) rendered unstyled on a
    cold load, and inconsistently styled if a reader had `calculation-
    detail.css` cached from a prior page. Defined here so this page's
-   styling does not depend on load order or navigation history. */
+   styling does not depend on load order or navigation history.
+   NOT retired in design/foundations PR B, even though this page's OWN
+   markup now uses `.note` (`design-system.css`) wherever it used to use
+   this class: `GeometryViewer.tsx`'s bond-inference caption is outside
+   this PR's file scope (owned by a parallel builder) and still renders
+   `className="section-note"` -- see `calculation-detail.css`'s matching
+   copy of this same comment for the fuller reasoning. */
 .section-note {
     margin: .5rem 0 0;
     color: var(--muted);
@@ -69,15 +77,18 @@
    rule (matching `.viewer-controls button` etc. below) rather than a
    reference to `species-entry.css`'s `.copy-button`, since this page
    still should not depend on that file loading at all. */
+/* NIT (PR B review): was `.64rem` (10.24px), under the accessibility-pass
+   11px floor -- raised to the shared `--type-ui-font` step, the same one
+   this page's other interactive controls (the energy-display unit
+   toggle, item 11) use. */
 .geometry-page .copy-button {
     flex: none;
     border: 1px solid var(--control-border);
     border-radius: .3rem;
     background: var(--surface);
     color: var(--muted);
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
     padding: .3rem .6rem;
     cursor: pointer;
 }
@@ -122,11 +133,25 @@
    those refs are the SAME ones those tables already render as real,
    correctly-cased links, so duplicating them here bought nothing and gave
    a caption-styled ancestor a second place to mis-transform identifier
-   text. See the comment on this paragraph in GeometryDetailPage.tsx. */
+   text. See the comment on this paragraph in GeometryDetailPage.tsx.
+   `.validation-card` itself composes `.card` (`design-system.css`,
+   plain -- not `--derived`: this states a single fact about ONE
+   geometry, not a computed aggregate) -- this file keeps only its
+   pointer-sentence typography, which `.card`/`.note` do not already
+   cover. */
+.validation-card span {
+    display: block;
+}
+
 .validation-card p {
-    margin: .5rem 0 0;
-    color: var(--muted);
-    font: .68rem/1.5 var(--mono);
+    margin: var(--s-2) 0 0;
+}
+
+.validation-card strong {
+    display: block;
+    margin-top: var(--s-2);
+    color: var(--ink);
+    font: var(--type-value-font);
 }
 
 /* Owns no width of its own any more — the caption (`.viewer-caption`)
@@ -391,11 +416,13 @@
     border: 0;
 }
 
+/* NIT (PR B review): was `.64rem` (10.24px), under the accessibility-pass
+   11px floor -- raised to the shared `--type-label-font` step. */
 .coordinate-toggle legend {
     padding: 0;
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .05em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
     color: var(--muted);
 }
 
@@ -404,7 +431,7 @@
     border: 1px solid var(--control-border);
     background: var(--surface);
     color: var(--accent);
-    font: .7rem var(--mono);
+    font: .72rem var(--mono);
     text-transform: uppercase;
     letter-spacing: .04em;
     cursor: pointer;
@@ -426,12 +453,14 @@
    angstrom cause that's how it's stored", so this says exactly that
    (and names the exact CODATA factor used) rather than a "(converted)"
    badge floating near the values themselves. */
+/* Typography now comes from `.note` (`design-system.css`) -- this page
+   composes `className="note coordinate-toggle-note"` -- this rule keeps
+   only the layout behaviour `.note` does not own: this paragraph is a
+   full-width row inside the `.coordinate-controls` flex toolbar, not a
+   text block capped to `--measure-note` alongside the toggle buttons. */
 .coordinate-toggle-note {
     flex-basis: 100%;
-    margin: 0;
-    color: var(--muted);
-    font-size: .66rem;
-    line-height: 1.5;
+    max-width: none;
 }
 
 .coordinate-toggle-note code {
