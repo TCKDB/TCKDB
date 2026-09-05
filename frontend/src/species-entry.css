@@ -96,80 +96,26 @@
    stable refs are demoted to a quiet strip beneath the facts, present and
    copyable but never competing with the science for attention.
 
-   No max-width here (was 56rem) -- this block holds the formula heading,
-   the SMILES/InChIKey identifier chips and the entry-facts list, none of
-   which is a paragraph anyone reads left-to-right at length. The 56rem
-   cap was inherited from a "prose stays readable" rule meant for actual
-   running text; applied here it just wrapped the identifier-chip and
-   facts rows into extra lines with empty page width beside them. The
-   formula heading's own responsive clamp() and the chip/fact flex-wrap
-   layout already bound how wide any single element gets -- this rule
-   never needed its own cap, only `.entry-page`'s outer one.
+   SHOULD-FIX-4/15 (species-entry/browse/chrome residuals re-review):
+   `.entry-formula-row`/`.entry-formula-row h1`/`.entry-identifiers`/
+   `.identifier-chip*` are RETIRED -- the h1 (was an off-scale
+   `clamp(3rem, 7.5vw, 5.5rem)`, 88px, vs. `--type-display-1`'s 64px
+   everywhere else) and the SMILES/InChIKey identifier-chip pill family
+   (a SECOND pill style next to `.value-pill`) both moved onto
+   `RecordIdentityHeader` (`SpeciesEntrySummary.tsx`'s `EntryIdentity`),
+   the same shared component every other record page's hero already uses.
+   Only this page's own remaining facts (`.entry-facts` below --
+   classification axes RecordIdentityHeader has no vocabulary for) still
+   need page-local styling.
    --------------------------------------------------------------------- */
 
-.entry-formula-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 1rem;
-    margin-top: .6rem;
+/* Ties "Transition states for reactions of this species" (item 1/5;
+   `.note`, design-system.css, at its call site) to the identity block
+   immediately above it, with no bottom margin -- it is the last thing
+   before `RefsDisclosure`, which supplies its own top spacing. */
+.entry-ts-browse-note {
+    margin: 1.5rem 0 0;
 }
-
-.entry-formula-row h1 {
-    margin: 0;
-    min-width: 0;
-    overflow-wrap: anywhere;
-    font: 600 clamp(3rem, 7.5vw, 5.5rem)/.95 var(--serif);
-    letter-spacing: -.045em;
-    color: var(--ink);
-}
-
-/* SMILES + InChIKey — always visible chemistry facts, never behind the
-   References disclosure ("INCHI with SMILES should always be shown"). Only
-   the InChIKey is served on this record (no full InChI is stored anywhere
-   in the archive -- see `SpeciesEntrySummary.tsx`), so it is labeled
-   "InChIKey", never "InChI". */
-.entry-identifiers {
-    display: flex;
-    flex-wrap: wrap;
-    gap: .6rem 1rem;
-    margin: 1.1rem 0 0;
-    padding: 0;
-    list-style: none;
-}
-
-.identifier-chip {
-    display: flex;
-    min-width: 0;
-    align-items: center;
-    gap: .5rem;
-    padding: .3rem .3rem .3rem .7rem;
-    border-radius: .4rem;
-    background: var(--accent-50);
-}
-
-/* Was `600 .62rem var(--mono)` (9.92px) -- below the 11px accessibility
-   floor, and a bespoke third label style next to `.kv-list dt`'s
-   `--type-label` and this same chip's own value. Now the same
-   `--type-label` step every other label on this page uses, only the
-   colour kept local (accent-700, not muted) since this label sits on the
-   accent-tinted chip background, not a plain surface. */
-.identifier-chip-label {
-    flex: none;
-    color: var(--accent-700);
-    font: var(--type-label-font);
-    letter-spacing: var(--type-label-tracking);
-    text-transform: var(--type-label-transform);
-}
-
-/* The value itself is `.data` (design-system.css) at its call site now,
-   not a bare `<code>` -- this rule only supplies the chip-local colour
-   `.data` has no opinion on. */
-.identifier-chip .data {
-    color: var(--accent-700);
-}
-
-.identifier-chip .copy-button { background: none; }
 
 .entry-facts {
     display: flex;
@@ -408,11 +354,23 @@
    tooltip `ConformerSelector.tsx` sets on both spans from the exact same
    source text the visible line is built from -- one render, two
    representations, kept for the mouse/long-press affordance it already
-   gave, not because the visible line still needs a fallback. */
+   gave, not because the visible line still needs a fallback.
+
+   SHOULD-FIX-3 (species-entry/browse/chrome residuals re-review): face
+   changed mono -> `--type-note-font` (sans). "4 observations · 16
+   calculation rows (4 opt · 4 freq · 4 sp · 4 scan)" is a metrics
+   SUMMARY, not an identifier -- MEASURED, this and the sibling mono
+   sentences below were most of why the entry/statmech/thermo tabs ran
+   51-68% mono by visible character count. The `34rem`/`22rem` column
+   floors above stay unchanged rather than being re-derived for the new
+   face's own character width: the wrap-not-clip degrade this rule
+   already documents (no forced `nowrap`, an overflowing value wraps to a
+   second line rather than clipping) already covers a face whose average
+   character is very slightly wider than mono's fixed width was. */
 .conformer-card-meta,
 .conformer-card-coverage {
     color: var(--ink-2);
-    font: .72rem var(--mono);
+    font: var(--type-note-font);
 }
 
 .conformer-card-coverage { color: var(--muted-2); }
@@ -487,13 +445,20 @@
    with no rotatable bonds) -- a positive sentence, not an empty section,
    so it reads as "nothing to show here BECAUSE there is nothing to
    rotate" rather than as missing data. Same slot `.conformer-basin-
-   identity` would occupy for a group that does have rotors. */
+   identity` would occupy for a group that does have rotors.
+
+   SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
+   (sans) -- this is a full prose sentence ("No rotatable bonds recorded
+   for this basin — a single rigid conformer, not one of several possible
+   torsional arrangements."), not an identifier or number; mono here was
+   one of the biggest single contributors to this page's MEASURED 51-68%
+   mono-by-character-count share. */
 .conformer-basin-rigid {
     margin: 0;
     padding: .85rem 1.25rem;
     border-top: 1px solid var(--line-2);
     color: var(--muted-2);
-    font: .72rem/1.5 var(--mono);
+    font: var(--type-note-font);
 }
 
 /* ---------------------------------------------------------------------
@@ -573,12 +538,21 @@
    every number was already correct, it just never said what it counted.
    --------------------------------------------------------------------- */
 
-/* `.card`/`.card--sunken` (design-system.css, applied at the call site
-   alongside this class) now supply the border/radius/background/padding
-   every other card on this page shares -- this rule keeps only the
-   evidence panel's own spacing from the element above it. */
+/* SHOULD-FIX-7 (species-entry/browse/chrome residuals re-review): this
+   used to carry `.card.card--sunken` (a sunken box) at its call site,
+   sitting between the bare `.conformer-picker` above it and the bare tab
+   strip below it -- one boxed section between two unboxed ones, the only
+   box of its kind on this page. Neither `SpeciesOverviewPage` nor any
+   record page boxes a plain content section either (a box on this page
+   means "this content is quoted/aside", e.g. `.supersession-notice` --
+   evidence for the selected conformer is neither), so this becomes bare
+   too, with the SAME top-rule rhythm `.conformer-picker` above it already
+   uses -- one shared "next section starts here" boundary treatment
+   rather than a second, box-shaped one. */
 .evidence-linkage {
-    margin-top: 2rem;
+    margin-top: 3rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--line);
 }
 
 .evidence-linkage h2 {
@@ -592,12 +566,18 @@
    `Disclosure` below, on purpose: it is the answer, and it must read
    without a click. Kept at its own serif prose size (distinct from
    `.note`'s smaller step) so it still reads as the panel's thesis, not as
-   another muted caption. */
+   another muted caption.
+
+   SHOULD-FIX-14 (species-entry/browse/chrome residuals re-review): was a
+   bespoke `1rem/1.6 var(--serif)` -- the named `--type-lede` step
+   (design-system.css) now, the same one `.tagline`/`.browse-intro` use --
+   see that token's own comment for why this role gets a named step
+   rather than a third near-identical bespoke declaration. */
 .evidence-linkage-story {
     max-width: var(--measure-prose);
     margin: .6rem 0 0;
     color: var(--ink);
-    font: 1rem/1.6 var(--serif);
+    font: var(--type-lede-font);
 }
 
 /* `.evidence-linkage-note`/`.linkage-coverage` are RETIRED onto `.note`
@@ -624,6 +604,18 @@
     align-items: stretch;
     gap: 1rem 0;
     margin-top: 1.4rem;
+    /* SHOULD-FIX-5 (species-entry/browse/chrome residuals re-review): a
+       named container so the hide-on-wrap rule below (near
+       `.linkage-connector`) can key off THIS ROW'S OWN rendered width,
+       not the viewport's. At 1100px viewport the reserved 14rem ToC rail
+       (`page-shell.css`) leaves this row narrower than the ~836px three
+       steps need side by side, so it wraps mid-row -- above the existing
+       880px viewport breakpoint below, which never fires there (MEASURED:
+       third tile wraps, connector left pointing at nothing). A container
+       query catches the case a viewport media query structurally cannot:
+       chrome the row's OWN box, not the window, is eating. */
+    container-type: inline-size;
+    container-name: linkage-flow;
 }
 
 .linkage-step {
@@ -635,39 +627,91 @@
     padding: 0 1.25rem;
 }
 
+/* SHOULD-FIX-3 (re-review): was `600 2rem var(--serif)` -- a bespoke
+   headline size with no named step. This IS a number (the count each
+   step names, "18"/"7"/"11") -- `--type-data-large`, the design system's
+   own step for a headline scientific figure, is mono deliberately (per
+   the "mono only where the text is an identifier or number" target this
+   whole item measures against), not a face swap to avoid. */
 .linkage-step-count {
     color: var(--accent-700);
-    font: 600 2rem var(--serif);
+    font: var(--type-data-large-font);
+    letter-spacing: var(--type-data-large-tracking);
     line-height: 1;
 }
 
+/* Was `600 .8rem var(--sans)` -- a bespoke size next to `--type-heading-3`
+   (sans 600 .875rem), the step this component's own role (a short label
+   naming what the number above it counts) already matches elsewhere on
+   this page. */
 .linkage-step-unit {
     color: var(--ink);
-    font: 600 .8rem var(--sans);
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
 }
 
+/* SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
+   (sans). "each a separate sighting of this basin" / "18 opt · 7 freq ·
+   7 sp, in 11 optimisation chains" are prose fragments describing what
+   the number above means, not identifiers -- MEASURED, this and its
+   mono siblings were most of why this page ran 51-68% mono by visible
+   character count. */
 .linkage-step-detail {
     color: var(--muted-2);
-    font: .72rem/1.5 var(--mono);
+    font: var(--type-note-font);
 }
 
+/* SHOULD-FIX-3 (re-review): face changed mono -> `--type-note-font`
+   (sans) on the LIST -- "— 2 calculation outputs" is prose, not an
+   identifier. The geometry ref itself (`code` below) keeps `--type-data-
+   font` (mono) explicitly now that it no longer inherits it from this
+   parent -- "mono only where the text is an identifier or number", never
+   zero mono on this page. */
 .linkage-geometry-list {
     margin: .4rem 0 0;
     padding: 0;
     list-style: none;
     color: var(--ink-2);
-    font: .72rem/1.7 var(--mono);
+    font: var(--type-note-font);
+    line-height: 1.7;
 }
 
-.linkage-geometry-list code { overflow-wrap: anywhere; color: var(--accent-700); }
+.linkage-geometry-list code {
+    overflow-wrap: anywhere;
+    color: var(--accent-700);
+    font: var(--type-data-font);
+}
 
 .linkage-connector {
     display: flex;
     flex: none;
     align-items: center;
-    align-self: center;
+    /* SHOULD-FIX-5 (re-review): this used to be centered on the cross
+       axis against the WHOLE column -- against a short tile (a "1
+       observations" step with little detail text under it, next to a
+       taller sibling) the arrow hung well below the number it belongs
+       next to (MEASURED, ~150px below on a 350px-tall column). `start`
+       plus a top margin approximating the number's own baseline keeps
+       the arrow level with `.linkage-step-count` (2rem/line-height 1)
+       regardless of how much text renders beneath either step. */
+    align-self: start;
+    margin-top: .55rem;
     color: var(--faint);
     font-size: 1.4rem;
+}
+
+/* Companion to `.linkage-flow`'s container-query above: once a step
+   drops to its own line (the row is too narrow for three side by side,
+   but not narrow enough to have already switched to the deliberate
+   column layout below), an arrow next to a wrapped tile points at
+   nothing -- hide it rather than let it float. Gated to viewports ABOVE
+   the 880px column breakpoint: below that, `.linkage-flow` is
+   INTENTIONALLY a column with a rotated down-arrow between every step
+   (see that rule), which this must never suppress. */
+@media (min-width: 881px) {
+    @container linkage-flow (max-width: 836px) {
+        .linkage-connector { display: none; }
+    }
 }
 
 /* Layout-only now -- typography comes from `.note` (design-system.css) at
@@ -771,6 +815,12 @@
    opened this tab to ask. Emphasized relative to the plain `.empty-projection`
    wording every OTHER empty state on this page uses, so it reads as an
    answer rather than a caption easy to skim past. */
+/* SHOULD-FIX-3 (re-review): was `600 .92rem/1.55 var(--sans)` -- a
+   bespoke size next to `--type-heading-3` (sans 600 .875rem), the
+   nearest named step for a short, emphasized statement like this one.
+   `line-height` stays its own wider value (this can run to two lines
+   inside the box; `--type-heading-3`'s own 1.4 was tuned for a
+   single-line heading). */
 .conformer-attribution-answer {
     margin: .5rem 0 0;
     padding: .85rem 1rem;
@@ -778,7 +828,9 @@
     border-radius: .4rem;
     background: var(--accent-50);
     color: var(--ink);
-    font: 600 .92rem/1.55 var(--sans);
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
+    line-height: 1.55;
 }
 
 /* Records traced to a conformer OTHER than the one selected are context,
@@ -799,9 +851,18 @@
     border-left: 2px solid var(--line);
 }
 
+/* SHOULD-FIX-3 (re-review): was a bare `font-size: .95rem` override (on
+   the base rule's serif `--type-heading-2`) -- another off-scale size.
+   `--type-heading-3` (sans 600 .875rem) is the demoted-heading step this
+   page already uses elsewhere for "a heading, but a secondary one"
+   (`entry-science.css`'s `.model-block-heading`, this same fix's own
+   change to statmech's per-record card heading -- see that component's
+   comment); a demoted "From Conformer Group N" heading matches that
+   role, not a smaller serif restatement of the primary one. */
 .conformer-attribution-other .conformer-evidence-group-heading {
     color: var(--muted-2);
-    font-size: .95rem;
+    font: var(--type-heading-3-font);
+    letter-spacing: var(--type-heading-3-tracking);
 }
 
 /* `.linkage-flow`'s three steps (`flex: 1 1 14rem` + `0 1.25rem` padding

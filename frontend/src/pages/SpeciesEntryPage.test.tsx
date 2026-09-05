@@ -381,12 +381,17 @@ describe("species-entry page: identity and errors", () => {
         // the identity header -- never behind the References disclosure.
         // Labeled explicitly (and honestly: this record only carries an
         // InChIKey, never a full InChI, so the label says "InChIKey").
-        const identifiers = screen.getByRole("list", { name: "Chemical identifiers" })
-        expect(within(identifiers).getByText("SMILES")).toBeVisible()
-        expect(within(identifiers).getByText("[CH3]")).toBeVisible()
-        expect(within(identifiers).getByText("InChIKey")).toBeVisible()
-        expect(within(identifiers).getByText("WCYWZMWISLQXQU-UHFFFAOYSA-N")).toBeVisible()
-        expect(within(identifiers).queryByText("InChI", { exact: true })).not.toBeInTheDocument()
+        // SHOULD-FIX-4 (species-entry/browse/chrome residuals re-review):
+        // these used to render as their own `.identifier-chip` pill list
+        // (`role="list"`, `aria-label="Chemical identifiers"`) -- now
+        // `RecordIdentityHeader`'s own shared `dl.kv-list.record-identity-
+        // facts`, the same primitive every other record page's identity
+        // tier uses (see `SpeciesEntrySummary.tsx`'s own comment).
+        const facts = document.querySelector("dl.kv-list.record-identity-facts") as HTMLElement
+        expect(facts).not.toBeNull()
+        expect(within(facts).getByText("SMILES").nextElementSibling).toHaveTextContent("[CH3]")
+        expect(within(facts).getByText("InChIKey").nextElementSibling).toHaveTextContent("WCYWZMWISLQXQU-UHFFFAOYSA-N")
+        expect(within(facts).queryByText("InChI", { exact: true })).not.toBeInTheDocument()
 
         // Public refs are collapsed by default (References disclosure) but
         // present, visible, and copyable once opened -- never hidden by
@@ -432,6 +437,16 @@ describe("species-entry page: identity and errors", () => {
         // DOCUMENT_POSITION_FOLLOWING (4) means `link` comes AFTER
         // `heading` in the DOM -- below the identity block, not above it.
         expect(heading.compareDocumentPosition(link) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+
+        // BLOCKING-1 (species-entry/browse/chrome residuals re-review): this
+        // used to be a bare `<p><Link>` with no class -- `index.css`'s
+        // `a { color: inherit; text-decoration: none }` made it read as a
+        // stray, unstyled heading (MEASURED). It renders through `.note`
+        // now (the house muted-line primitive, `.note a` gives the link
+        // itself the accent/underline treatment), placed with the identity
+        // block via `SpeciesEntrySummary.tsx`'s `EntryIdentity`.
+        const wrappingParagraph = link.closest("p") as HTMLElement
+        expect(wrappingParagraph.className.split(" ")).toContain("note")
     })
 
     it("distinguishes empty, malformed-success, HTTP error, and loading states", async () => {
@@ -674,9 +689,9 @@ describe("species-entry page: tabs are a real, keyboard-operable ARIA tablist", 
         expect(within(screen.getByRole("tabpanel")).queryByText("Statistical mechanics")).not.toBeInTheDocument()
 
         await user.click(screen.getByRole("tab", { name: "Statistical mechanics" }))
-        // "sm_1" also appears (not visibly) inside the pre-existing
-        // "Conformer context" disclosure this same statmech list already
-        // renders -- match on the visible record card's own `<code>` ref.
+        // Match on the visible record card's own `<code>` ref -- "sm_1" may
+        // also appear inside the "Conformer context & review history"
+        // disclosure once its own (separately gated) fetches are ready.
         const smRefs = await within(screen.getByRole("tabpanel")).findAllByText("sm_1")
         expect(smRefs.some((node) => node.tagName === "CODE")).toBe(true)
         expect(within(screen.getByRole("tabpanel")).queryByText("thm_one")).not.toBeInTheDocument()

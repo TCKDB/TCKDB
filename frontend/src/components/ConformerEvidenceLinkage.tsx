@@ -74,7 +74,7 @@ export function ConformerEvidenceLinkage({ conformer }: { conformer: ConformerPr
     const staging = stagingSentence(conformer)
 
     return (
-        <section className="evidence-linkage card card--sunken" aria-labelledby="evidence-linkage-heading">
+        <section className="evidence-linkage" aria-labelledby="evidence-linkage-heading">
             {/* No separate "Evidence" eyebrow here -- the conformer picker
                 right above already carries one, and the tab strip below
                 carries its own "Evidence for this conformer" eyebrow too.
