@@ -7,6 +7,7 @@ import { Disclosure } from "../components/Disclosure"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
+import { stereoChip } from "../domain/recordFacets"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
@@ -75,9 +76,13 @@ function Ledger({ group }: { group: ConformerGroup }) {
                             record IS. The h1 now states what the record is;
                             the producer's own label, when one was deposited,
                             moves into the identity list below as a plain
-                            secondary fact next to the stable ref -- same
-                            treatment `species_entry_label` gets everywhere
-                            else in this app. */}
+                            secondary fact next to the stable ref -- the
+                            same treatment `species_entry_label` gets
+                            everywhere else in this app: expanded through
+                            `stereoChip` (`domain/recordFacets.ts`) rather
+                            than shown as the raw server-computed
+                            discriminator string, which read as a bare
+                            "R" with no explanation on a real record. */}
                         {/* SHOULD-FIX-7 (PR B review): wrapped in the SAME
                             `.record-identity-header` div `RecordIdentityHeader`
                             itself renders, not left as bare siblings -- an
@@ -116,8 +121,28 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                 <div>
                                     <dt>Species entry</dt>
                                     <dd>
+                                        {/* SF-1 (post-review): this page hand-rolls its
+                                            own identity markup rather than composing
+                                            `RecordIdentityHeader` (see this header's own
+                                            comment above), so it grew its own copy of the
+                                            same bug that header's "Species entry" fact had
+                                            -- the raw `species_entry_label` shown as the
+                                            whole link text (a bare "R" on a real record,
+                                            with no explanation). Same fix, same reasoning:
+                                            `species_entry_label` is a server-computed
+                                            discriminator (`backend/app/services/
+                                            scientific_read/species_identity.py:42`), not
+                                            free text, so it's expanded via `stereoChip`
+                                            ("R" -> "R enantiomer") rather than shown raw.
+                                            This endpoint's `species` context serves no
+                                            `formula` at all (this file's own comment above
+                                            `.basin-header` documents that), so the base
+                                            text is always the literal "Species entry",
+                                            never the ref -- matching
+                                            `RecordIdentityHeader.tsx`'s own fallback. */}
                                         <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                            {species.species_entry_label ?? species.species_entry_ref}
+                                            {"Species entry"}
+                                            {species.species_entry_label && <> · {stereoChip(species.species_entry_label)}</>}
                                         </Link>
                                     </dd>
                                 </div>

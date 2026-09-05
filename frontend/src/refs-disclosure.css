@@ -18,32 +18,26 @@
  * different jobs — kicker, field label, table header, disclosure
  * summary, pill, button, legend — done by one uppercase-tracked mono
  * style; this was one of those seven) all come from `.disclosure` in
- * `design-system.css`. What stays here is `.refs-disclosure`'s OWN box
- * override (a slightly different border colour, `--line-2` not `--line`
- * — read on) and the ref-row/copy-button internals, plus the
- * `.conformer-card`-scoped overrides `species-entry.css` still needs
- * (kept, not retired: `species-entry.css.test.ts` and
- * `ConformerSelector.test.tsx` both pin `.conformer-card .refs-
- * disclosure`'s exact CSS and DOM shape).
+ * `design-system.css`. What stays here is the ref-row/copy-button
+ * internals, plus the `.conformer-card`-scoped overrides
+ * `species-entry.css` still needs (kept, not retired:
+ * `species-entry.css.test.ts` and `ConformerSelector.test.tsx` both pin
+ * `.conformer-card .refs-disclosure`'s exact CSS and DOM shape).
  *
- * `.refs-disclosure`'s ONLY divergence from `.disclosure` is the border
- * colour (`--line-2`, not `--line`) — border-radius and background were
- * always the SAME value re-declared here (`.5rem` / `var(--surface-
- * sunken)`), a duplicate that could silently drift from `.disclosure`'s
- * own if that ever changed. Collapsed ("header copy and inset
- * disclosure" PR) to override just the one token that actually differs
- * — `border-color`, not the full `border` shorthand — rather than
- * re-declaring the whole box. This also happens to make `.disclosure.
- * disclosure--inset`'s `border: 0` (below/`design-system.css`) safe to
- * override regardless of file load order: `border-color` alone can
- * never resurrect a side's WIDTH once `border: 0` has zeroed it, so this
- * rule can win the color for every side without undoing the inset
- * modifier's zeroed sides.
+ * SF-2 (post-review, "header copy and inset disclosure" PR):
+ * `.refs-disclosure` NO LONGER overrides its own border colour. It used
+ * to set `border-color: var(--line-2)` here — a slightly different grey
+ * from `.disclosure`'s own `--line` — which meant the site still had
+ * THREE distinct computed disclosure boxes (the base `.disclosure` box,
+ * this `--line-2` variant, and the `.disclosure--inset` modifier) even
+ * after the inset modifier was named, one more than the two the owner
+ * wants (a standard box, and the inset variant). Dropped: this class now
+ * owns only `margin-top`, and gets its border colour — like every other
+ * property of the box — entirely from `.disclosure`.
  */
 
 .refs-disclosure {
     margin-top: 1.75rem;
-    border-color: var(--line-2);
 }
 
 /* `.refs-disclosure summary`'s own typography rule (the retired

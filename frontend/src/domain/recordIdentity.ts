@@ -30,14 +30,23 @@ export type SpeciesIdentity = {
     multiplicity: number
     speciesRef?: string
     speciesEntryRef?: string
-    /** Free text typed by whoever submitted the record (MEASURED showing
-     *  as a bare "R" on the live calculation and geometry pages when it
-     *  was used as the "Species entry" fact's own link text). Kept ON THE
-     *  TYPE for a caller that still supplies it, but deliberately UNREAD
-     *  by `RecordIdentityHeader` ("header copy and inset disclosure" PR):
-     *  the fact's link text is now the entry's own formula (or the
-     *  literal "Species entry"), never this field -- see that
-     *  component's own comment above the "Species entry" fact. */
+    /** NOT depositor free text, despite reading like a short caption --
+     *  a compact DISCRIMINATOR computed server-side
+     *  (`backend/app/services/scientific_read/species_identity.py:42`'s
+     *  `species_entry_label()`) from the identity columns that make one
+     *  species entry differ from its siblings (`stereo_label`,
+     *  `electronic_state_kind`/`electronic_state_label`, `term_symbol`,
+     *  `isotope_key`), omitting anything at the default. For an entry
+     *  whose only distinguishing feature is a stereo descriptor, that
+     *  discriminator really is just `"R"` -- correct on the server's own
+     *  terms, but MEASURED reading as an unexplained bare "R" when shown
+     *  as-is on the live calculation/geometry pages.
+     *
+     *  `RecordIdentityHeader.tsx:218` reads this field for its "Species
+     *  entry" fact's link text, expanding it through `recordFacets.ts`'s
+     *  `stereoChip` ("R" -> "R enantiomer") rather than showing the raw
+     *  discriminator -- see that component's own comment above the
+     *  "Species entry" fact. */
     speciesEntryLabel?: string | null
 }
 

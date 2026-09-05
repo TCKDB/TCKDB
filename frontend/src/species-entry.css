@@ -378,9 +378,11 @@
 /* ONE faint grey rule above this box, none below (was above AND below --
    see the design note below for why that produced a double line before
    REFERENCES). `border-top` is the separator from the card-select button
-   above it; `.refs-disclosure`'s OWN `border-top` (right above, in
-   `.conformer-card .refs-disclosure`) is what separates this box from
-   References below -- adjacent blocks own exactly one shared boundary,
+   above it; the References disclosure's OWN `border-top` (the shared
+   `.disclosure--inset` modifier in `design-system.css`, taken via
+   `RefsDisclosure`'s `inset` prop -- `ConformerSelector.tsx`'s own usage)
+   is what separates this box from References below -- adjacent blocks
+   own exactly one shared boundary,
    never a border-bottom on one AND a border-top on the next stacked
    together. `.conformer-basin-rigid` (the sibling "no rotatable bonds"
    paragraph two rules down, rendered instead of this `<dl>` for a rigid

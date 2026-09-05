@@ -286,6 +286,50 @@ describe("ConformerGroupPage", () => {
         expect(screen.queryByText("Producer label")).not.toBeInTheDocument()
     })
 
+    // SF-1 (post-review): this page hand-rolls its own identity markup
+    // (it does not compose `RecordIdentityHeader`, see this file's own
+    // comment above `.basin-header`), so it grew its OWN copy of the
+    // `species_entry_label` bug independently of that component --
+    // `species.species_entry_label` rendered directly as the "Species
+    // entry" fact's link text, a bare "R" on a real record. Fixed the
+    // same way `RecordIdentityHeader.tsx`'s "Species entry" fact is:
+    // `stereoChip` expands the served discriminator ("R" -> "R
+    // enantiomer") rather than showing it raw. This endpoint's `species`
+    // context carries no `formula` at all (this file's own comment above
+    // `.basin-header` documents that), so the base text is always the
+    // literal "Species entry" here, with the expanded label appended
+    // when one was served.
+    it("expands the species-entry label via stereoChip instead of showing the raw discriminator ('R' -> 'R enantiomer')", async () => {
+        const labelledPayload = {
+            record: {
+                ...payload.record,
+                species: { ...payload.record.species, species_entry_label: "R" },
+            },
+        }
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(labelledPayload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
+        const link = within(identityDl).getByRole("link", { name: "Species entry · R enantiomer" })
+        expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        // Never the bare raw token as the whole link text.
+        expect(within(identityDl).queryByRole("link", { name: "R" })).not.toBeInTheDocument()
+    })
+
+    it("shows the literal 'Species entry' with no label suffix when the entry has no deposited label", async () => {
+        const noLabelPayload = {
+            record: {
+                ...payload.record,
+                species: { ...payload.record.species, species_entry_label: null },
+            },
+        }
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noLabelPayload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
+        expect(within(identityDl).getByRole("link", { name: "Species entry" })).toHaveAttribute("href", "/species-entries/spe_demo")
+    })
+
     it("carries the TCKDB / Species / Species entry / Conformer basin breadcrumb -- the record page this was reported missing it on", async () => {
         server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
         page()
