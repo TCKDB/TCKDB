@@ -26,21 +26,24 @@
  * `ConformerSelector.test.tsx` both pin `.conformer-card .refs-
  * disclosure`'s exact CSS and DOM shape).
  *
- * `.refs-disclosure` keeps its own border/radius/background here rather
- * than relying on `.disclosure`'s (same shape, `--line-2` instead of
- * `--line`) — this file loads AFTER `design-system.css` for every
- * consumer (component-level import order), so these declarations win
- * the cascade for the properties they share; `species-entry.css.test.ts`
- * pins the exact `--line-2` value on the `.conformer-card`-scoped
- * variant of this same border, so this file keeps that token rather
- * than silently drifting to `--line` when `.disclosure` was adopted.
+ * `.refs-disclosure`'s ONLY divergence from `.disclosure` is the border
+ * colour (`--line-2`, not `--line`) — border-radius and background were
+ * always the SAME value re-declared here (`.5rem` / `var(--surface-
+ * sunken)`), a duplicate that could silently drift from `.disclosure`'s
+ * own if that ever changed. Collapsed ("header copy and inset
+ * disclosure" PR) to override just the one token that actually differs
+ * — `border-color`, not the full `border` shorthand — rather than
+ * re-declaring the whole box. This also happens to make `.disclosure.
+ * disclosure--inset`'s `border: 0` (below/`design-system.css`) safe to
+ * override regardless of file load order: `border-color` alone can
+ * never resurrect a side's WIDTH once `border: 0` has zeroed it, so this
+ * rule can win the color for every side without undoing the inset
+ * modifier's zeroed sides.
  */
 
 .refs-disclosure {
     margin-top: 1.75rem;
-    border: 1px solid var(--line-2);
-    border-radius: .5rem;
-    background: var(--surface-sunken);
+    border-color: var(--line-2);
 }
 
 /* `.refs-disclosure summary`'s own typography rule (the retired

@@ -20,10 +20,23 @@ export type RefEntry = { label: string; value: string; to?: string }
  * differ only by ref), keep that record's own primary identifier visible
  * OUTSIDE this component -- collapsing every ref would make the siblings
  * indistinguishable at rest.
+ *
+ * `inset`: this disclosure's box chrome, demoted to a top-only separator
+ * (no border on the other three sides, no radius, no background) for a
+ * caller whose disclosure sits INSIDE another already-boxed container --
+ * `ConformerSelector.tsx`'s `.conformer-card` is the one real consumer
+ * today. Composes the shared `.disclosure--inset` modifier
+ * (`design-system.css`) rather than a page-scoped override: this used to
+ * be `species-entry.css`'s own `.conformer-card .refs-disclosure`
+ * rule (plus its `[open] summary` border-bottom removal), the tested fix
+ * for a double-border bug reported against that page -- named and moved
+ * here (reviewer's proposal) so a THIRD page needing this exact shape
+ * composes it via a class instead of growing a second page-scoped
+ * override of its own.
  */
-export function RefsDisclosure({ refs, label = "References" }: { refs: RefEntry[]; label?: string }) {
+export function RefsDisclosure({ refs, label = "References", inset }: { refs: RefEntry[]; label?: string; inset?: boolean }) {
     return (
-        <Disclosure summary={label} count={refs.length} className="refs-disclosure">
+        <Disclosure summary={label} count={refs.length} className={inset ? "refs-disclosure disclosure--inset" : "refs-disclosure"}>
             {refs.map((ref) => <RefRow key={ref.label} {...ref} />)}
         </Disclosure>
     )

@@ -30,6 +30,14 @@ export type SpeciesIdentity = {
     multiplicity: number
     speciesRef?: string
     speciesEntryRef?: string
+    /** Free text typed by whoever submitted the record (MEASURED showing
+     *  as a bare "R" on the live calculation and geometry pages when it
+     *  was used as the "Species entry" fact's own link text). Kept ON THE
+     *  TYPE for a caller that still supplies it, but deliberately UNREAD
+     *  by `RecordIdentityHeader` ("header copy and inset disclosure" PR):
+     *  the fact's link text is now the entry's own formula (or the
+     *  literal "Species entry"), never this field -- see that
+     *  component's own comment above the "Species entry" fact. */
     speciesEntryLabel?: string | null
 }
 

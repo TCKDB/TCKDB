@@ -160,39 +160,20 @@
 }
 
 /* Base `.refs-disclosure`/`.refs-disclosure summary`/`.refs-disclosure-
-   body` styling moved to `refs-disclosure.css` (imported by
+   body` styling lives in `refs-disclosure.css` (imported by
    `components/RefsDisclosure.tsx` itself) so every page rendering the
-   component gets it, not just this one. Only this page's own overrides
-   (higher-specificity, `.conformer-card`-scoped) stay here. */
-
-/* `border-top` here is the ONE separator between this card's previous
-   block (the basin box when it renders, otherwise the card-select
-   button directly) and References -- `--line-2`, the same token every
-   other separator inside a conformer card uses (`.conformer-basin-
-   identity`/`-rigid`'s own `border-top` below), a deliberate choice so
-   two adjacent card blocks are never divided by two DIFFERENT shades of
-   rule ("the two borders use different tokens... they may also differ
-   in shade" -- exactly the two-lines defect this reconciles). Previously
-   `var(--line)` -- see the git history for why that, paired with the
-   basin box's OWN `border-bottom` immediately above it, produced the
-   double line the owner reported before REFERENCES. */
-.conformer-card .refs-disclosure {
-    margin-top: 0;
-    border: 0;
-    border-top: 1px solid var(--line-2);
-    border-radius: 0;
-    background: none;
-}
-
-/* The owner's complaint ("i dont want to see a faint grey line between
-   the word REFERENCES and the conformer group line that appears") is
-   about the conformer card specifically -- scoped to `.conformer-card`
-   rather than deleting the base `.refs-disclosure[open] summary` rule
-   above, since `.entry-hero` (this page's own top-of-page identifiers
-   block) uses the SAME `RefsDisclosure` component and was never part of
-   this complaint. Higher specificity than the base rule (three class/
-   attribute selectors vs two) wins this regardless of source order. */
-.conformer-card .refs-disclosure[open] summary { border-bottom: none; }
+   component gets it, not just this one.
+   This page's own `.conformer-card`-scoped override -- border-top only
+   (`--line-2`), no radius, no background; the tested fix for the owner-
+   reported double-line-before-References defect (the basin box's own
+   border-bottom stacking against `.refs-disclosure`'s border-top) -- is
+   retired ("header copy and inset disclosure" PR). `ConformerSelector.tsx`
+   now passes `RefsDisclosure`'s own `inset` prop instead, which composes
+   the shared `.disclosure--inset` modifier (`design-system.css`) -- see
+   that modifier's own comment for the double-border reasoning, carried
+   over unchanged. `species-entry.css.test.ts` and
+   `ConformerSelector.test.tsx` assert the modifier (and this page no
+   longer restyling `.refs-disclosure` directly) in its place. */
 
 /* ---------------------------------------------------------------------
    Conformer picker — the page's signature interaction, replacing the

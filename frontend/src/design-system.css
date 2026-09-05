@@ -201,12 +201,17 @@
  * those 7) into one box, one chevron, one summary typography.
  *
  * `RefsDisclosure.tsx` composes this primitive (passing its own
- * `refs-disclosure` class alongside `.disclosure` so its page-specific
- * `.conformer-card`-scoped overrides in `species-entry.css` keep working
- * unchanged -- those overrides are pinned by real tests in
- * `species-entry.css.test.ts` and `ConformerSelector.test.tsx`, so this
- * PR keeps them rather than retiring them). No other disclosure consumer
- * is migrated in this PR.
+ * `refs-disclosure` class alongside `.disclosure`). Retiring the third
+ * disclosure box style ("header copy and inset disclosure" PR): what
+ * used to be `species-entry.css`'s own `.conformer-card`-scoped override
+ * (border-top only, no radius, no background -- the tested fix for a
+ * double-border bug reported on the conformer card, before References)
+ * is now the named `.disclosure--inset` modifier below, composed by
+ * `RefsDisclosure`'s own `inset` prop instead of grown as a THIRD
+ * page-scoped box style. `species-entry.css.test.ts` and
+ * `ConformerSelector.test.tsx` still pin the same DOM/CSS shape, updated
+ * to assert the modifier and the absence of the page-level override
+ * rather than deleted.
  * ------------------------------------------------------------------- */
 .disclosure {
     border: 1px solid var(--line);
@@ -253,6 +258,38 @@
 
 .disclosure-body {
     padding: var(--s-4);
+}
+
+/* A disclosure inset inside an already-boxed card: border-top only, no
+ * radius, no background -- the card itself already supplies the box, so
+ * a second full box (border on all four sides + radius + background)
+ * double-draws the boundary between the card's previous block and this
+ * disclosure's own top edge. Originated as the fix for a real double-
+ * border bug (owner: "I am seeing two faint grey line breaks before the
+ * REFERENCE section" -- `.conformer-basin-identity`'s own border-bottom
+ * stacking directly against `.refs-disclosure`'s border-top); named here
+ * so a third page needing the same shape composes this modifier instead
+ * of growing its own page-scoped override.
+ *
+ * `.disclosure.disclosure--inset` (compound, not a bare `.disclosure--
+ * inset`) so this always outranks `.refs-disclosure`'s own border-color
+ * override below regardless of which stylesheet happens to load second
+ * -- two classes (0,2,0) beats `.refs-disclosure`'s one (0,1,0)
+ * unconditionally, rather than relying on import order between this file
+ * and `refs-disclosure.css`. */
+.disclosure.disclosure--inset {
+    margin-top: 0;
+    border: 0;
+    border-top: 1px solid var(--line-2);
+    border-radius: 0;
+    background: none;
+}
+
+/* Same specificity reasoning as above, extended to the attribute + child
+ * selector: (0,3,1) beats `.refs-disclosure[open] summary`'s (0,2,1)
+ * regardless of source order. */
+.disclosure.disclosure--inset[open] > summary {
+    border-bottom: none;
 }
 
 /* ---------------------------------------------------------------------

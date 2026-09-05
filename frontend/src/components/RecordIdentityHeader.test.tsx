@@ -1,10 +1,13 @@
-import { describe, expect, it, afterEach } from "vitest"
-import { cleanup, render, screen } from "@testing-library/react"
+import { describe, expect, it, afterEach, vi } from "vitest"
+import { cleanup, fireEvent, render, screen } from "@testing-library/react"
 import { MemoryRouter } from "react-router-dom"
 import { RecordIdentityHeader } from "./RecordIdentityHeader"
 import type { RecordIdentity } from "../domain/recordIdentity"
 
-afterEach(cleanup)
+afterEach(() => {
+    cleanup()
+    Object.defineProperty(navigator, "clipboard", { value: undefined, configurable: true })
+})
 
 // `kicker`/`title` became required props in design/foundations PR B (the
 // header now owns the record's own kicker-row/h1, not just identity --
@@ -200,5 +203,92 @@ describe("RecordIdentityHeader", () => {
         const { container: displayTwoContainer } = renderHeader({ identity: speciesIdentity, titleVariant: "display-2" })
         expect(displayTwoContainer.querySelector("h1.t-display-2")).not.toBeNull()
         expect(displayTwoContainer.querySelector("h1.t-display-1")).toBeNull()
+    })
+
+    // PR #372 moved the species-entry hero onto this shared header and, in
+    // doing so, dropped the "Copy SMILES" / "Copy InChIKey" buttons the old
+    // hero had -- only the ref copy button (`RefsDisclosure`'s own
+    // `CopyButton`) survived. This reuses that EXACT component (clipboard
+    // write, "Copied" feedback, aria-label pattern) rather than building a
+    // second copy button, so every page composing this header (species
+    // entry, calculation, geometry, conformer group, observation,
+    // transition-state entry) gets the affordance back for free.
+    describe("copy affordances on identity facts rendered as .data", () => {
+        it("a header with a SMILES renders a copy button whose accessible name names the field, and clicking it writes the value to the clipboard", async () => {
+            const writeText = vi.fn().mockResolvedValue(undefined)
+            Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+
+            renderHeader({ identity: speciesIdentity })
+            const button = screen.getByRole("button", { name: /copy smiles/i })
+            fireEvent.click(button)
+            expect(writeText).toHaveBeenCalledWith(speciesIdentity.canonicalSmiles)
+        })
+
+        it("a header with an InChIKey renders a copy button whose accessible name names the field, and clicking it writes the value to the clipboard", async () => {
+            const writeText = vi.fn().mockResolvedValue(undefined)
+            Object.defineProperty(navigator, "clipboard", { value: { writeText }, configurable: true })
+
+            renderHeader({ identity: speciesIdentity })
+            const button = screen.getByRole("button", { name: /copy inchikey/i })
+            fireEvent.click(button)
+            expect(writeText).toHaveBeenCalledWith(speciesIdentity.inchiKey)
+        })
+
+        it("a header without SMILES (a transition-state identity, which carries no such field at all) renders no SMILES copy button", () => {
+            renderHeader({ identity: tsIdentity })
+            expect(screen.queryByRole("button", { name: /copy smiles/i })).not.toBeInTheDocument()
+            expect(screen.queryByRole("button", { name: /copy inchikey/i })).not.toBeInTheDocument()
+        })
+
+        it("a transition-state identity's own unmapped-SMILES and entry-ref facts get copy buttons too, once deposited", () => {
+            renderHeader({
+                identity: { ...tsIdentity, unmappedSmiles: "[CH3].[OH2]", transitionStateEntryRef: "tse_demo" },
+            })
+            expect(screen.getByRole("button", { name: /copy reaction smiles \(unmapped\)/i })).toBeVisible()
+            expect(screen.getByRole("button", { name: /copy transition state entry/i })).toBeVisible()
+        })
+
+        it("a transition-state identity with no unmapped SMILES deposited renders no copy button for that fact -- 'not recorded' isn't copyable", () => {
+            renderHeader({ identity: tsIdentity })
+            expect(screen.queryByRole("button", { name: /copy reaction smiles/i })).not.toBeInTheDocument()
+        })
+    })
+
+    // The "Species entry" fact used to fall back to the RAW
+    // `identity.speciesEntryLabel` string as the link's own visible/
+    // accessible text (MEASURED showing as a bare "R" on the live
+    // calculation and geometry pages). `species_entry_label` is NOT
+    // depositor free text -- it is built server-side (`backend/app/
+    // services/scientific_read/species_identity.py:42`'s
+    // `species_entry_label()`) as a compact discriminator from the
+    // identity columns that make one entry differ from its siblings
+    // (stereo_label, electronic_state_kind/label, term_symbol,
+    // isotope_key), omitting anything at the default -- the live "R" is
+    // the entry's stereo label (R enantiomer). The link now shows the
+    // entry's own formula (same `<Formula>` rendering the h1 uses, so
+    // subscripts match) -- or the literal "Species entry" when none was
+    // served -- followed by the EXPANDED label via `recordFacets.ts`'s
+    // own `stereoChip` helper (documented at `domain/recordFacets.ts:53-68`)
+    // when one was served, never the raw discriminator string alone.
+    describe("the species-entry link expands the served discriminator via the shared stereoChip helper", () => {
+        it("shows the formula plus the EXPANDED label ('R' -> 'R enantiomer'), reusing recordFacets.ts's own stereoChip wording", () => {
+            renderHeader({
+                identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: "R" },
+            })
+            const link = screen.getByRole("link", { name: "CH3 · R enantiomer" })
+            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        })
+
+        it("shows the formula alone when the identity carries no label", () => {
+            renderHeader({ identity: { ...speciesIdentity, formula: "CH3", speciesEntryLabel: null } })
+            const link = screen.getByRole("link", { name: "CH3" })
+            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        })
+
+        it("falls back to the literal 'Species entry' when the identity carries no formula and no label", () => {
+            renderHeader({ identity: { ...speciesIdentity, formula: null, speciesEntryLabel: null } })
+            const link = screen.getByRole("link", { name: "Species entry" })
+            expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        })
     })
 })

@@ -177,7 +177,14 @@ function ConformerCard({ conformer, isSelected, onSelect }: {
                     </p>
                 )
             )}
-            <RefsDisclosure refs={[{ label: "Conformer group", value: ref, to: `/conformer-groups/${ref}` }]} />
+            {/* `inset`: this disclosure sits inside the already-boxed
+                `.conformer-card` -- the shared `.disclosure--inset`
+                modifier (`design-system.css`) gives it a border-top-only
+                separator instead of a second full box, the fix for the
+                owner-reported double line before "References". Used to
+                be a `.conformer-card .refs-disclosure` override in
+                `species-entry.css`; retired in favour of this prop. */}
+            <RefsDisclosure inset refs={[{ label: "Conformer group", value: ref, to: `/conformer-groups/${ref}` }]} />
         </div>
     )
 }

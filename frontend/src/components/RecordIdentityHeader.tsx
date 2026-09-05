@@ -1,8 +1,10 @@
 import type { ReactNode } from "react"
 import { Link } from "react-router-dom"
 import "../record-identity-header.css"
+import { CopyButton } from "./RefsDisclosure"
+import { Formula } from "./Formula"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
-import { facetChips } from "../domain/recordFacets"
+import { facetChips, stereoChip } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
 import type { RecordIdentity } from "../domain/recordIdentity"
 
@@ -174,15 +176,46 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                     (SMILES, InChIKey, charge/multiplicity) still render
                     below unchanged. */}
                 <dl className="kv-list record-identity-facts">
-                    <IdentityFact label="SMILES"><code>{identity.canonicalSmiles}</code></IdentityFact>
-                    <IdentityFact label="InChIKey"><code>{identity.inchiKey}</code></IdentityFact>
+                    <IdentityFact label="SMILES" copy={identity.canonicalSmiles}><code>{identity.canonicalSmiles}</code></IdentityFact>
+                    <IdentityFact label="InChIKey" copy={identity.inchiKey}><code>{identity.inchiKey}</code></IdentityFact>
                     <IdentityFact label="Charge / multiplicity">
                         {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
                     </IdentityFact>
                     {identity.speciesEntryRef && (
                         <IdentityFact label="Species entry">
+                            {/* The link text is the entry's own formula
+                                (the SAME `Formula` component the h1 uses,
+                                so subscripts match), falling back to the
+                                literal "Species entry" when none was
+                                served -- never the RAW `speciesEntryLabel`
+                                string as the sole text.
+                                CORRECTION (was: "free text a depositor
+                                typed" -- wrong): `species_entry_label` is
+                                built server-side, `backend/app/services/
+                                scientific_read/species_identity.py:42`'s
+                                `species_entry_label()`, as a compact
+                                DISCRIMINATOR from the identity columns that
+                                make this entry differ from its siblings
+                                (stereo_label, electronic_state_kind/label,
+                                term_symbol, isotope_key), omitting anything
+                                at the default -- the live "R" MEASURED on
+                                calculation/geometry pages is the entry's
+                                stereo label (R enantiomer), not free text.
+                                `domain/recordFacets.ts:53-68` documents
+                                this and already expands single-token
+                                stereo descriptors ("R"/"S"/"E"/"Z") to
+                                their full words via `stereoChip` -- reused
+                                here (not re-implemented) so the wording
+                                matches every other place this app shows a
+                                stereo descriptor. A label that is not one
+                                of those four tokens (a compound
+                                discriminator, or a bare state/isotope
+                                token) passes through `stereoChip`
+                                unchanged, exactly as it does everywhere
+                                else that function is already used. */}
                             <Link to={`/species-entries/${identity.speciesEntryRef}`}>
-                                {identity.speciesEntryLabel ?? identity.speciesEntryRef}
+                                {identity.formula ? <Formula value={identity.formula} /> : "Species entry"}
+                                {identity.speciesEntryLabel && <> · {stereoChip(identity.speciesEntryLabel)}</>}
                             </Link>
                         </IdentityFact>
                     )}
@@ -241,20 +274,51 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                 {identity.label && (
                     <IdentityFact label="Label">{identity.label}</IdentityFact>
                 )}
-                <IdentityFact label="Reaction SMILES (unmapped)" wide>
+                <IdentityFact label="Reaction SMILES (unmapped)" wide copy={identity.unmappedSmiles ?? undefined}>
                     {identity.unmappedSmiles ? <code>{withSmilesBreaks(identity.unmappedSmiles)}</code> : <span className="record-identity-absent-inline">not recorded</span>}
                 </IdentityFact>
                 <IdentityFact label="Charge / multiplicity">
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
                 </IdentityFact>
                 {identity.transitionStateEntryRef && (
-                    <IdentityFact label="Transition state entry"><code>{identity.transitionStateEntryRef}</code></IdentityFact>
+                    <IdentityFact label="Transition state entry" copy={identity.transitionStateEntryRef}><code>{identity.transitionStateEntryRef}</code></IdentityFact>
                 )}
             </dl>
         </div>
     )
 }
 
-function IdentityFact({ label, children, wide }: { label: string; children: ReactNode; wide?: boolean }) {
-    return <div className={wide ? "record-identity-fact-wide" : undefined}><dt>{label}</dt><dd>{children}</dd></div>
+/**
+ * `copy`, when given a truthy value, adds a small copy button beside the
+ * fact's own rendered value -- reusing `RefsDisclosure`'s `CopyButton`
+ * (same clipboard write / "Copied" feedback / aria-label pattern) rather
+ * than a second, bespoke button (PR #372 dropped the species-entry
+ * hero's old "Copy SMILES"/"Copy InChIKey" buttons when that hero moved
+ * onto this shared header; only the ref copy button survived -- this
+ * brings the affordance back for every identifier value the header
+ * renders as `.data`: SMILES, InChIKey, an unmapped reaction SMILES, a
+ * TS entry ref). Deliberately NOT wired for `children` generally -- only
+ * a caller passing `copy` gets the button, so a plain fact like "Charge
+ * / multiplicity" (not an identifier, nothing meaningful to copy alone)
+ * stays exactly as it renders today. `undefined`/empty means nothing to
+ * copy -- e.g. a transition-state identity's optional unmapped SMILES
+ * before one is deposited -- and renders no button, matching the "not
+ * recorded" placeholder those facts already show instead of an empty
+ * value.
+ */
+function IdentityFact({ label, children, wide, copy }: {
+    label: string
+    children: ReactNode
+    wide?: boolean
+    copy?: string
+}) {
+    return (
+        <div className={wide ? "record-identity-fact-wide" : undefined}>
+            <dt>{label}</dt>
+            <dd className={copy ? "record-identity-fact-copyable" : undefined}>
+                {children}
+                {copy && <CopyButton value={copy} label={label} srLabel="value" />}
+            </dd>
+        </div>
+    )
 }
