@@ -36,6 +36,7 @@ import { RefsDisclosure, type RefEntry } from "../components/RefsDisclosure"
 import { softwareLabel, toolReleaseLabel } from "../domain/provenanceFormat"
 import { formatQuantity } from "../domain/quantityFormat"
 import { identityFromCalculationOwner } from "../domain/recordIdentity"
+import { refWithBreaks } from "../domain/refBreaks"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { hessianMethodLabel, isAssumedTauBasis, tauBasisNote } from "../domain/tauBasis"
 import { useCalculation } from "../hooks/useCalculation"
@@ -341,10 +342,20 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // canonical SMILES only when no formula was derived. A TS entry has
     // no formula the way a species does, so it falls back through its own
     // label/ref instead.
+    // SHOULD-FIX-8 ("record-page residuals" re-review): when a TS-owned
+    // calculation's transition state has no depositor label, this used to
+    // fall back to the RAW ref, printed straight into the h1 as plain
+    // serif display text ("Optimisation of tse_aq5…") -- an identifier
+    // with no data-run styling at all, MEASURED as the one raw ref on
+    // these pages rendered in the wrong face. `.data` (mono, the same
+    // step every other ref on this page uses) is the honest treatment for
+    // a ref, even when it happens to sit inside an h1.
     const titleSubject: ReactNode = identity.kind === "species_entry"
         ? (identity.formula ? <Formula value={identity.formula} /> : identity.canonicalSmiles)
         : identity.kind === "transition_state_entry"
-            ? (identity.label ?? identity.transitionStateEntryRef ?? "this record")
+            ? (identity.label ?? (identity.transitionStateEntryRef
+                ? <code className="data">{refWithBreaks(identity.transitionStateEntryRef)}</code>
+                : "this record"))
             : "this record"
 
     return (
@@ -604,7 +615,7 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                             LABEL rather than the ref -- a label is a human
                             word, not an identifier. */}
                         {stage.linkRef
-                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{stage.linkRef}</code></Link></>
+                            ? <>{stage.text} <Link to={`/calculations/${stage.linkRef}`}><code className="data">{refWithBreaks(stage.linkRef)}</code></Link></>
                             : stage.text}
                     </dd>
                 </div>
@@ -614,13 +625,13 @@ function StageAndConformerNote({ calcType, dependencies, dependenciesAvailabilit
                     <dt>Conformer</dt>
                     <dd>
                         <Link to={`/conformer-observations/${conformer.conformer_observation_ref}`}>
-                            <code className="data">{conformer.conformer_observation_ref}</code>
+                            <code className="data">{refWithBreaks(conformer.conformer_observation_ref)}</code>
                         </Link>
                         {" · "}
                         <Link to={`/conformer-groups/${conformer.conformer_group_ref}`}>
                             {conformer.conformer_group_label
                                 ? conformer.conformer_group_label
-                                : <code className="data">{conformer.conformer_group_ref}</code>}
+                                : <code className="data">{refWithBreaks(conformer.conformer_group_ref)}</code>}
                         </Link>
                     </dd>
                 </div>
@@ -670,7 +681,13 @@ function ResultsSection({ results, type, availability, contradicted }: {
     const kindLabel = results ? typeLabel(results.kind) : typeLabel(type)
     return (
         <section className="ledger-section" aria-labelledby="results-heading">
-            <SectionHeading id="results-heading" kicker="Result" intro={`The primary scientific result for this ${kindLabel.toLowerCase()} calculation.`}>
+            {/* No kicker here (SHOULD-FIX-6, "record-page residuals"
+                re-review): it used to repeat this section's own title
+                verbatim ("Result" / "Result") -- a kicker earns its place
+                only when it adds a category the title lacks, the same
+                rule "Review"'s kicker below satisfies and this one
+                didn't. */}
+            <SectionHeading id="results-heading" intro={`The primary scientific result for this ${kindLabel.toLowerCase()} calculation.`}>
                 Result
             </SectionHeading>
             {availability === "populated" && results ? <ResultBody results={results} /> : (
@@ -836,7 +853,8 @@ function DependenciesSection({ dependencies, ownRef, availability, contradicted 
 }) {
     return (
         <section className="ledger-section" aria-labelledby="dependencies-heading">
-            <SectionHeading id="dependencies-heading" kicker="Related calculations" intro="Other calculations this one was built from, or that were built from it.">
+            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            <SectionHeading id="dependencies-heading" intro="Other calculations this one was built from, or that were built from it.">
                 Related calculations
             </SectionHeading>
             {availability === "populated" ? (
@@ -883,7 +901,8 @@ function GeometriesSection({
     const validationRow = geometryValidation.status === "ready" ? (geometryValidation.data?.[0] ?? null) : null
     return (
         <section className="ledger-section" aria-labelledby="geometries-heading">
-            <SectionHeading id="geometries-heading" kicker="Geometries" intro="Links to the full coordinate records this calculation consumed and produced.">
+            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            <SectionHeading id="geometries-heading" intro="Links to the full coordinate records this calculation consumed and produced.">
                 Geometries
             </SectionHeading>
             {sameGeometry ? (
@@ -1130,7 +1149,8 @@ function OnDemandSections({ calculation, available, geometryValidationState, ope
 
     return (
         <section className="ledger-section" aria-labelledby="further-evidence-heading">
-            <SectionHeading id="further-evidence-heading" kicker="Further evidence" intro="Machine-parsed detail and additional checks, loaded from the archive on request.">
+            {/* No kicker (SHOULD-FIX-6): repeated this section's own title. */}
+            <SectionHeading id="further-evidence-heading" intro="Machine-parsed detail and additional checks, loaded from the archive on request.">
                 Further evidence
             </SectionHeading>
             <div className="geometry-groups">
