@@ -148,18 +148,25 @@
     background: var(--accent-50);
 }
 
+/* Was `600 .62rem var(--mono)` (9.92px) -- below the 11px accessibility
+   floor, and a bespoke third label style next to `.kv-list dt`'s
+   `--type-label` and this same chip's own value. Now the same
+   `--type-label` step every other label on this page uses, only the
+   colour kept local (accent-700, not muted) since this label sits on the
+   accent-tinted chip background, not a plain surface. */
 .identifier-chip-label {
     flex: none;
     color: var(--accent-700);
-    font: 600 .62rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .07em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
-.identifier-chip code {
-    overflow-wrap: anywhere;
+/* The value itself is `.data` (design-system.css) at its call site now,
+   not a bare `<code>` -- this rule only supplies the chip-local colour
+   `.data` has no opinion on. */
+.identifier-chip .data {
     color: var(--accent-700);
-    font: 1rem var(--mono);
 }
 
 .identifier-chip .copy-button { background: none; }
@@ -181,17 +188,29 @@
     min-width: 8.5rem;
 }
 
+/* Was `.64rem var(--mono)` (10.24px) -- below the 11px floor, and its own
+   third label style next to `.kv-list dt`/`.identifier-chip-label`'s
+   `--type-label`. This is the same fact-label role as those two -- same
+   step now, so a reader sees one label typography for the whole hero,
+   not three near-identical ones. */
 .entry-facts span {
     color: var(--muted-2);
-    font: .64rem var(--mono);
-    text-transform: uppercase;
-    letter-spacing: .06em;
+    font: var(--type-label-font);
+    letter-spacing: var(--type-label-tracking);
+    text-transform: var(--type-label-transform);
 }
 
+/* `--type-value` (sans, 400) -- matches `.kv-list dd`'s own step exactly,
+   so this hero's facts and every `.kv-list` value below it on the page
+   read as the same kind of thing. Was bolded (600); `--type-value` has
+   no bold variant of its own (the type scale is 400/600 by ROLE, not a
+   free choice per rule -- see design-system.css), and a value already
+   reads as distinct here by sitting under its own muted label. */
 .entry-facts strong {
     overflow-wrap: anywhere;
     color: var(--ink-2);
-    font: 600 .85rem var(--sans);
+    font: var(--type-value-font);
+    letter-spacing: var(--type-value-tracking);
 }
 
 /* Base `.refs-disclosure`/`.refs-disclosure summary`/`.refs-disclosure-
@@ -244,8 +263,8 @@
 
 .conformer-picker h2 {
     margin: 0;
-    font: 600 1.9rem var(--serif);
-    letter-spacing: -.025em;
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
     color: var(--ink);
 }
 
@@ -352,8 +371,13 @@
     color: inherit;
 }
 
+/* Plays the same "identifies one card among several siblings" role as a
+   record card's own `.science-record-heading h3` -- same step now
+   (`--type-heading-2`), so a reader sees one card-title typography across
+   the whole page, not a slightly bigger bespoke one just for this list. */
 .conformer-card-label {
-    font: 600 1.05rem var(--serif);
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
     color: var(--ink);
 }
 
@@ -549,25 +573,26 @@
    every number was already correct, it just never said what it counted.
    --------------------------------------------------------------------- */
 
+/* `.card`/`.card--sunken` (design-system.css, applied at the call site
+   alongside this class) now supply the border/radius/background/padding
+   every other card on this page shares -- this rule keeps only the
+   evidence panel's own spacing from the element above it. */
 .evidence-linkage {
     margin-top: 2rem;
-    padding: 1.5rem 1.5rem 1.75rem;
-    border: 1px solid var(--line);
-    border-radius: .6rem;
-    background: var(--surface-sunken);
 }
 
 .evidence-linkage h2 {
     margin: 0;
-    font: 600 1.3rem var(--serif);
-    letter-spacing: -.02em;
+    font: var(--type-heading-1-font);
+    letter-spacing: var(--type-heading-1-tracking);
     color: var(--ink);
 }
 
 /* The lead sentence -- `describeConformerEvidence` -- sits OUTSIDE the
-   `<details>` below, on purpose: it is the answer, and it must read without
-   a click. Set a size and two-line max-width so it reads as the panel's
-   thesis, not as another `.section-note`-weight caption. */
+   `Disclosure` below, on purpose: it is the answer, and it must read
+   without a click. Kept at its own serif prose size (distinct from
+   `.note`'s smaller step) so it still reads as the panel's thesis, not as
+   another muted caption. */
 .evidence-linkage-story {
     max-width: var(--measure-prose);
     margin: .6rem 0 0;
@@ -575,29 +600,22 @@
     font: 1rem/1.6 var(--serif);
 }
 
-.evidence-linkage-note {
-    max-width: var(--measure-prose);
-    margin: .5rem 0 0;
-    color: var(--ink-2);
-    font: .82rem/1.55 var(--sans);
-}
-
-/* Collapsed by default (per the owner: it "kinda hides the tabs of Geom
-   etc." when left open) -- the mechanics of how the story's numbers add up
-   are one click away, never zero, never mandatory. */
+/* `.evidence-linkage-note`/`.linkage-coverage` are RETIRED onto `.note`
+   (design-system.css) at their call sites -- both used to be their own
+   near-duplicate of that primitive (muted, capped prose width, small
+   sans text); one shared style now, per the same "one canonical style per
+   role" consolidation the rest of this page follows.
+   `.evidence-linkage-detail`'s own summary styling is RETIRED onto the
+   shared `Disclosure` component -- collapsed-by-default box/chevron/
+   summary chrome now comes from `.disclosure` (design-system.css) rather
+   than a local summary rule that had drifted to its own mono,
+   uncoloured-chevron style. It keeps ONE rule of its own: pure spacing
+   above the box (this is the last child inside `.evidence-linkage`, so
+   there is nothing below it to leave flush) -- the original top value,
+   preserved, so the disclosure's now-visible border doesn't sit flush
+   against `.evidence-linkage-story` immediately above it. */
 .evidence-linkage-detail {
     margin-top: 1.1rem;
-}
-
-.evidence-linkage-detail > summary {
-    cursor: pointer;
-    color: var(--muted-2);
-    font: 600 .78rem var(--mono);
-    letter-spacing: .03em;
-}
-
-.evidence-linkage-detail[open] > summary {
-    margin-bottom: .5rem;
 }
 
 .linkage-flow {
@@ -652,13 +670,14 @@
     font-size: 1.4rem;
 }
 
+/* Layout-only now -- typography comes from `.note` (design-system.css) at
+   the call site (`className="note linkage-coverage"`); this keeps only
+   what `.note` doesn't supply: the top rule separating this line from the
+   flow diagram above it, and the emphasis on "Stage coverage" itself. */
 .linkage-coverage {
-    max-width: var(--measure-note);
     margin: 1.4rem 0 0;
     padding-top: 1.1rem;
     border-top: 1px solid var(--line-2);
-    color: var(--ink-2);
-    font: .78rem/1.6 var(--sans);
 }
 
 .linkage-coverage strong { color: var(--ink); }
@@ -681,11 +700,17 @@
 .entry-tabs a {
     padding: .1rem 0 .9rem;
     color: var(--ink-2);
-    /* Was a literal 500 -- this app loads only Plex 400/600 (`index.css`'s
-       @font-face block), so a 500 rendered as a browser-synthesised
-       weight between the two real ones. 400 here reads as the inactive
-       tab against the selected tab's explicit 600 immediately below. */
-    font: 400 .88rem var(--sans);
+    /* `--type-ui` (design-system.css) -- was a literal 500 originally,
+       replaced with a literal 400/600 pair, now the named UI step so this
+       tablist shares its face/size with every other UI control on the
+       page (chart toggles, disclosure summaries). Weight itself is still
+       overridden per state, never left at `--type-ui`'s own default 600:
+       400 here reads as the inactive tab against the selected tab's
+       explicit 600 immediately below -- never the browser-synthesised 500
+       this app's two loaded Plex weights (400/600) can't produce. */
+    font: var(--type-ui-font);
+    letter-spacing: var(--type-ui-tracking);
+    font-weight: 400;
     white-space: nowrap;
 }
 
@@ -720,57 +745,10 @@
 
 .tab-panel { margin-top: 2rem; }
 
-/* ---------------------------------------------------------------------
-   Section heading rhythm, shared by the geometry/single-point panels.
-   --------------------------------------------------------------------- */
-
-.section-heading { max-width: var(--measure-note); }
-
-.section-heading h2 {
-    margin: 0;
-    font: 600 1.9rem var(--serif);
-    letter-spacing: -.025em;
-    color: var(--ink);
-}
-
-.section-heading > p:last-child {
-    max-width: var(--measure-note);
-    color: var(--ink-2);
-    line-height: 1.6;
-}
-
-/* ---------------------------------------------------------------------
-   Geometry tab: distinct stored geometries, then a per-observation list.
-   --------------------------------------------------------------------- */
-
-.geometry-list {
-    display: grid;
-    gap: .6rem;
-    margin: 1.2rem 0 0;
-    padding: 0;
-    list-style: none;
-}
-
-.geometry-item {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: .3rem 1rem;
-    padding: .7rem .9rem;
-    border: 1px solid var(--line-2);
-    border-radius: .4rem;
-}
-
-.geometry-item a {
-    overflow-wrap: anywhere;
-    color: var(--accent);
-    font: 600 .82rem var(--mono);
-}
-
-.geometry-meta {
-    color: var(--muted-2);
-    font: .72rem var(--mono);
-}
+/* `.geometry-list`/`.geometry-item`/`.geometry-meta` (review finding,
+   NIT, PR 366): DELETED -- dead, no component in this page's scope
+   renders these classes; `ConformerGeometryTab.tsx` renders the geometry
+   tab through `.checklist` (entry-science.css) instead. */
 
 /* ---------------------------------------------------------------------
    Records grouped by whether they trace to the selected conformer's own
@@ -784,7 +762,8 @@
 .conformer-evidence-group-heading {
     margin: 0;
     color: var(--ink);
-    font: 600 1.1rem var(--serif);
+    font: var(--type-heading-2-font);
+    letter-spacing: var(--type-heading-2-tracking);
 }
 
 /* "Say so first and plainly" -- when the selected conformer has no records
@@ -806,15 +785,12 @@
    not the answer -- collapsed by default, and visually secondary even once
    opened, so "From Conformer Group 1" never reads with the same weight as
    the selected conformer's own "From Conformer Group 2" heading above it. */
+/* Renders through the shared `Disclosure` component now -- box/chevron/
+   summary chrome comes from `.disclosure` (design-system.css); this rule
+   keeps only the spacing above it and the nested-group indentation below,
+   neither of which the shared primitive has an opinion on. */
 .conformer-attribution-other {
     margin-top: 1.75rem;
-}
-
-.conformer-attribution-other > summary {
-    cursor: pointer;
-    color: var(--muted-2);
-    font: 600 .78rem var(--mono);
-    letter-spacing: .03em;
 }
 
 .conformer-attribution-other .conformer-evidence-group {

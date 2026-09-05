@@ -36,7 +36,7 @@ export function SourceCalculationsTable({ rows }: { rows: SourceCalculationRow[]
     }
     return (
         <div className="table-scroll table-scroll--compact">
-            <table className="stage-table" aria-label="Source calculations">
+            <table className="data-table" aria-label="Source calculations">
                 <thead>
                     <tr>
                         <th scope="col">Role</th>
@@ -50,7 +50,7 @@ export function SourceCalculationsTable({ rows }: { rows: SourceCalculationRow[]
                     {rows.map((row, index) => (
                         <tr key={`source-${row.calculation_ref}-${index}`}>
                             <td data-label="Role">{statusLabel(row.role)}</td>
-                            <td data-label="Calculation"><Link to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
+                            <td data-label="Calculation"><Link className="data" to={`/calculations/${row.calculation_ref}`}>{row.calculation_ref}</Link></td>
                             <td data-label="Type">{statusLabel(row.calculation_type)}</td>
                             <td data-label="Level of theory">{row.level_of_theory ? lotLabel(row.level_of_theory) : "not recorded"}</td>
                             <td data-label="Review">{statusLabel(row.review.status)}</td>

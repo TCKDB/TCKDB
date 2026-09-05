@@ -1036,3 +1036,72 @@ describe("EntryThermoSection: identical-value records group under one card", () 
         expect(duplicates).toEqual([])
     })
 })
+
+describe("EntryThermoSection: design-system adoption (design/species-entry)", () => {
+    // Same four invariants as `EntryStatmechSection.test.tsx`'s matching
+    // block, checked against this tab's own disclosures ("Full checklist",
+    // "Show all N records individually") and record tables (NASA-7,
+    // NASA-9) -- rendering the real component tree, not inferred from
+    // source text.
+
+    it("never renders an <h2>/<h3>/<h4> inside a <summary>", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        document.querySelectorAll("details > summary").forEach((summary) => fireEvent.click(summary))
+        const headingsInsideSummaries = document.querySelectorAll("summary h1, summary h2, summary h3, summary h4, summary h5, summary h6")
+        expect(headingsInsideSummaries).toHaveLength(0)
+    })
+
+    // Review finding (SHOULD-FIX 1, PR 366): the "N records · review: …"
+    // line carries `.records-note` (layout-only, entry-science.css) at
+    // every call site, but must ALSO carry `.note` (design-system.css) --
+    // `.records-note` was stripped down to margin-only, so without `.note`
+    // this line silently falls back to 16px unstyled body ink with no
+    // max-width, on exactly the two tabs (statmech, transport) where the
+    // migration was missed.
+    it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const recordsNote = document.querySelector(".records-note")
+        expect(recordsNote).not.toBeNull()
+        expect(recordsNote!.className.split(" ")).toContain("note")
+    })
+
+    it("every <details> on this tab (Full checklist, evidence-completeness) is the shared Disclosure component -- carries the `disclosure` class", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const detailsElements = Array.from(document.querySelectorAll("details"))
+        expect(detailsElements.length).toBeGreaterThan(0)
+        for (const details of detailsElements) {
+            expect(details.className.split(" ")).toContain("disclosure")
+        }
+    })
+
+    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never the retired .review-badge", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const notReviewedPills = screen.getAllByText("not reviewed")
+        expect(notReviewedPills.length).toBeGreaterThan(0)
+        for (const pill of notReviewedPills) {
+            expect(pill.className.split(" ")).toContain("value-pill--muted")
+            expect(pill.className.split(" ")).not.toContain("review-badge")
+        }
+    })
+
+    it("every record table on this tab (NASA-7, NASA-9) is the shared .data-table primitive inside .table-scroll, never the retired .stage-table or a stacked fallback", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("thm_alpha")
+        const tables = Array.from(document.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThanOrEqual(2) // NASA-7 (thm_alpha) + NASA-9 (thm_beta)
+        for (const table of tables) {
+            expect(table.className.split(" ")).toContain("data-table")
+            expect(table.className.split(" ")).not.toContain("stage-table")
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
+    })
+})

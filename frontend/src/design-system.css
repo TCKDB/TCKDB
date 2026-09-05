@@ -443,4 +443,11 @@
 .data-table td code,
 .data-table td .data {
     font: var(--type-data-font);
+    /* Inside a table the wrapper already scrolls, so an identifier must not
+       be breakable: with `.data`'s `overflow-wrap: anywhere` in force, auto
+       table layout shrank ref columns to min-content and a `calc_…` cell
+       wrapped into three-character lines twelve rows tall at 680 (PR C
+       review). Refs stay whole; the table scrolls. */
+    overflow-wrap: normal;
+    white-space: nowrap;
 }

@@ -154,6 +154,45 @@
         flex-direction: column;
     }
 
+    /* Review finding (blocking, PR 366): `.page-shell-layout`'s base
+       `align-items: flex-start` (set above, for the wide row layout) was
+       never reset here -- in THIS block's column flex-direction, the
+       same declaration controls the CROSS axis, which is now horizontal.
+       `flex-start` on the cross axis means "size to content, don't
+       stretch," so `.page-shell-content` (base rule: `flex: 1 1 0;
+       min-width: 0` -- both properties meaningful only on the MAIN axis)
+       shrank to its own max-content width instead of filling the
+       viewport the moment any child had unconstrained intrinsic width.
+       `.data-table` (design-system.css) sets no width of its own -- unlike
+       the retired `.stage-table`, whose `width: calc(100% - 2.2rem)`
+       happened to mask this (a percentage width contributes NOTHING to
+       max-content sizing, so the flex item's shrink-to-fit calculation
+       never saw the table's real width) -- so a wide `.data-table` now
+       pushed `.page-shell-content`, and with it the whole page body,
+       wider than the viewport instead of staying put and letting its own
+       `.table-scroll` wrapper scroll. MEASURED at 680px on this branch
+       before this fix: `document.documentElement.scrollWidth` was 809px
+       (single-record `/thermo`), 848px (`/statmech`), 1176px (`/thermo`,
+       NASA-9's 12-column table) against every route's `.table-scroll`
+       itself reporting `scrollWidth == clientWidth` -- proof the PAGE was
+       widening around the table, not the table scrolling inside a fixed-
+       width page, the opposite of what `.table-scroll` exists for.
+       `align-self: stretch` here overrides the inherited `flex-start` for
+       this one item; `width: 100%` is the belt-and-braces companion
+       `align-self: stretch` alone does not reliably give a flex item in
+       every engine version, and `min-width: 0` is repeated (already on
+       the base rule, restated here for the same reason the row-layout
+       version needed it: a flex item's default `min-width: auto` would
+       otherwise still let its content's intrinsic width win over the
+       100% this rule now asks for). `.page-toc` needs no equivalent fix:
+       it already sets its own explicit `width: 100%; flex: none;` inside
+       this same media query, unaffected by `align-items` either way. */
+    .page-shell-content {
+        align-self: stretch;
+        width: 100%;
+        min-width: 0;
+    }
+
     .page-toc {
         /* Review finding: `order: 1` (set above, for the wide two-column
            layout) left the chip strip AFTER the last section in this

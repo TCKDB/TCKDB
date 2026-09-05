@@ -182,12 +182,90 @@ describe("EntryTransportSection", () => {
         await screen.findByText("trn_one")
         expect(requestedIncludeSets).toEqual([[]])
 
-        const section = screen.getByRole("heading", { name: "Source calculations" }).closest("details") as HTMLDetailsElement
-        fireEvent.click(screen.getByRole("heading", { name: "Source calculations" }))
+        const section = screen.getByText("Source calculations", { selector: "summary" }).closest("details") as HTMLDetailsElement
+        fireEvent.click(screen.getByText("Source calculations", { selector: "summary" }))
         await within(section).findByText("Source calculations loaded.")
         expect(requestedIncludeSets).toEqual([[], ["source_calculations"]])
 
         // "Review history" was never opened, so it must never be requested.
         expect(requestedIncludeSets.flat()).not.toContain("review")
+    })
+})
+
+describe("EntryTransportSection: design-system adoption (design/species-entry)", () => {
+    // Same four invariants as `EntryStatmechSection.test.tsx`'s matching
+    // block, checked against this tab's own "Source calculations"/"Review
+    // history" disclosures and record table.
+
+    it("never renders an <h2>/<h3>/<h4> inside a <summary>", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        document.querySelectorAll("details > summary").forEach((summary) => fireEvent.click(summary))
+        const headingsInsideSummaries = document.querySelectorAll("summary h1, summary h2, summary h3, summary h4, summary h5, summary h6")
+        expect(headingsInsideSummaries).toHaveLength(0)
+    })
+
+    // Review finding (SHOULD-FIX 1, PR 366): this tab's own "N records ·
+    // review: …" line was missed by the `.note` migration -- it kept
+    // `.records-note` (now margin-only) but never gained `.note` itself,
+    // so it silently fell back to unstyled 16px body text.
+    it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        const recordsNote = document.querySelector(".records-note")
+        expect(recordsNote).not.toBeNull()
+        expect(recordsNote!.className.split(" ")).toContain("note")
+    })
+
+    it("every <details> on this tab is the shared Disclosure component -- carries the `disclosure` class", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        const detailsElements = Array.from(document.querySelectorAll("details"))
+        expect(detailsElements.length).toBeGreaterThan(0)
+        for (const details of detailsElements) {
+            expect(details.className.split(" ")).toContain("disclosure")
+        }
+    })
+
+    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never the retired .review-badge", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("trn_one")
+        const notReviewedPills = screen.getAllByText("not reviewed")
+        expect(notReviewedPills.length).toBeGreaterThan(0)
+        for (const pill of notReviewedPills) {
+            expect(pill.className.split(" ")).toContain("value-pill--muted")
+            expect(pill.className.split(" ")).not.toContain("review-badge")
+        }
+    })
+
+    it("every record table on this tab (Source calculations, Review history) is the shared .data-table primitive inside .table-scroll, never the retired .stage-table or a stacked fallback", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            mockRecord({
+                available_sections: { has_source_calculations: true, has_review: true },
+                source_calculations: [{
+                    role: "opt", calculation_ref: "calc_1", calculation_type: "opt",
+                    quality: "primary", created_at: "2026-07-21T12:14:32.845900",
+                    review: { status: "not_reviewed" }, level_of_theory: null,
+                }],
+                review_history: [{ status: "not_reviewed", reviewed_at: null, note: null }],
+            }),
+        ]))))
+        page()
+        await screen.findByText("trn_one")
+        fireEvent.click(screen.getByText("Source calculations", { selector: "summary" }))
+        await screen.findByRole("table", { name: "Source calculations" })
+        fireEvent.click(screen.getByText("Review history", { selector: "summary" }))
+        await screen.findByRole("table", { name: "Review history" })
+        const tables = Array.from(document.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThan(0)
+        for (const table of tables) {
+            expect(table.className.split(" ")).toContain("data-table")
+            expect(table.className.split(" ")).not.toContain("stage-table")
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
     })
 })

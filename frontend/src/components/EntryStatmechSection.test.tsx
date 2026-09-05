@@ -375,11 +375,11 @@ describe("EntryStatmechSection", () => {
         // its own disclosure to be opened.
         await waitFor(() => expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"]]))
 
-        const section = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLDetailsElement
+        const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
         expect(section.open).toBe(false)
         expect(within(section).getByText("Expand to load this section from the archive.")).toBeInTheDocument()
 
-        fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
+        fireEvent.click(screen.getByText("Torsions"))
         await within(section).findByText("Torsions loaded.")
         expect(requestedIncludeSets).toEqual([[], ["source_calculations"], ["frequencies"], ["torsions"]])
     })
@@ -406,8 +406,8 @@ describe("EntryStatmechSection", () => {
         page()
         await screen.findByText("sm_one")
 
-        fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
-        const section = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLDetailsElement
+        fireEvent.click(screen.getByText("Torsions"))
+        const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
         await within(section).findByText("Torsions loaded.")
 
         // sm_one's own row within the Torsions section reports "not
@@ -456,8 +456,8 @@ describe("EntryStatmechSection", () => {
         }))
         page()
         await screen.findByText("sm_one")
-        fireEvent.click(screen.getByRole("heading", { name: "Torsions" }))
-        const section = screen.getByRole("heading", { name: "Torsions" }).closest("details") as HTMLDetailsElement
+        fireEvent.click(screen.getByText("Torsions"))
+        const section = screen.getByText("Torsions").closest("details") as HTMLDetailsElement
         await within(section).findByText("Torsions loaded.")
 
         const table = within(section).getByRole("table", { name: "Torsions" })
@@ -996,5 +996,90 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         })
         const duplicates = [...idCounts.entries()].filter(([, count]) => count > 1)
         expect(duplicates).toEqual([])
+    })
+})
+
+describe("EntryStatmechSection: design-system adoption (design/species-entry)", () => {
+    // Four invariants the PR C brief calls out by name -- checked directly
+    // against the rendered DOM, not inferred from source text, so a future
+    // regression that reintroduces the old shape is caught by rendering
+    // the real component tree, exactly like every other test in this file.
+
+    it("never renders an <h2>/<h3>/<h4> inside a <summary> -- the six lazy sections (Source calculations, Torsions, Electronic levels, Conformer context, Review history) render a plain-text summary through the shared Disclosure component now, not a SectionHeading", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("sm_one")
+        // Open every disclosure that has one, so a heading hiding inside a
+        // collapsed <details> would still be caught (jsdom renders
+        // collapsed <details> content in the DOM either way, but this also
+        // exercises onToggle so the fetch-triggering wiring stays intact).
+        document.querySelectorAll("details > summary").forEach((summary) => fireEvent.click(summary))
+        const headingsInsideSummaries = document.querySelectorAll("summary h1, summary h2, summary h3, summary h4, summary h5, summary h6")
+        expect(headingsInsideSummaries).toHaveLength(0)
+    })
+
+    // Review finding (SHOULD-FIX 1, PR 366): this tab's own "N records ·
+    // review: …" line was missed by the `.note` migration -- it kept
+    // `.records-note` (now margin-only) but never gained `.note` itself,
+    // so it silently fell back to unstyled 16px body text.
+    it("the 'N records · review: …' line renders through .note, not a bare unstyled paragraph", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("sm_one")
+        const recordsNote = document.querySelector(".records-note")
+        expect(recordsNote).not.toBeNull()
+        expect(recordsNote!.className.split(" ")).toContain("note")
+    })
+
+    it("every <details> on this tab is the shared Disclosure component -- carries the `disclosure` class design-system.css's chrome is keyed on, not a bare <details>", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("sm_one")
+        // The default two-record fixture already renders five lazy-section
+        // <details> (Source calculations, Torsions, Electronic levels,
+        // Conformer context, Review history) regardless of open/closed
+        // state -- a <details> element and its class list are present in
+        // the DOM either way, only its body's visibility differs.
+        const detailsElements = Array.from(document.querySelectorAll("details"))
+        expect(detailsElements.length).toBeGreaterThan(0)
+        for (const details of detailsElements) {
+            expect(details.className.split(" ")).toContain("disclosure")
+        }
+    })
+
+    it("'not reviewed' renders in exactly one pill style -- .value-pill--muted, never the retired .review-badge", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
+        page()
+        await screen.findByText("sm_one")
+        const notReviewedPills = screen.getAllByText("not reviewed")
+        expect(notReviewedPills.length).toBeGreaterThan(0)
+        for (const pill of notReviewedPills) {
+            expect(pill.className.split(" ")).toContain("value-pill--muted")
+            expect(pill.className.split(" ")).not.toContain("review-badge")
+        }
+    })
+
+    it("every record table on this tab is the shared .data-table primitive, never the retired .stage-table, and scrolls its own container rather than a page-body stacked fallback", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse([
+            baseRecord({
+                available_sections: { ...baseRecord().available_sections, has_electronic_levels: true },
+                electronic_levels: [{ level_index: 0, energy_cm1: 0, degeneracy: 1 }],
+            }),
+        ]))))
+        page()
+        await screen.findByText("sm_one")
+        // Electronic levels is the one lazy section in this file whose
+        // populated body is a <table> -- open it so that table mounts.
+        fireEvent.click(screen.getByText("Electronic levels", { selector: "summary" }))
+        await screen.findByRole("table", { name: "Electronic levels" })
+        const tables = Array.from(document.querySelectorAll("table"))
+        expect(tables.length).toBeGreaterThan(0)
+        for (const table of tables) {
+            expect(table.className.split(" ")).toContain("data-table")
+            expect(table.className.split(" ")).not.toContain("stage-table")
+            // Every real table on this tab sits inside a `.table-scroll`
+            // wrapper (horizontal scroll), never bare in the page body.
+            expect(table.closest(".table-scroll")).not.toBeNull()
+        }
     })
 })

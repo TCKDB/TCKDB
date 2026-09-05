@@ -156,7 +156,7 @@ function ChartControls({ mode, unit, onModeChange, onUnitChange }: {
             {/* Same rule the Å/bohr note follows in geometry-detail.css: names
                 the stored unit plainly rather than let the converted column
                 imply that's how the archive holds it. */}
-            <p className="cp-chart-unit-note">
+            <p className="note cp-chart-unit-note">
                 Always stored in J/mol·K; cal/mol·K here is a display
                 conversion only, at 1 cal = {JOULES_PER_CALORIE} J exactly.
             </p>
@@ -201,7 +201,7 @@ function AbsenceNotes({ groups }: { groups: CpChartRenderGroup[] }) {
     if (notes.length === 0) return null
     return (
         <ul className="cp-chart-absence-notes">
-            {notes.map((note) => <li key={note} className="section-note">{note}</li>)}
+            {notes.map((note) => <li key={note} className="note">{note}</li>)}
         </ul>
     )
 }

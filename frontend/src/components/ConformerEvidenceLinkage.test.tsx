@@ -108,7 +108,7 @@ describe("ConformerEvidenceLinkage", () => {
     it("ties the card's 'obs'/'calc' abbreviations back to their full words, inside the mechanics disclosure", () => {
         render(<ConformerEvidenceLinkage conformer={conformer()} />)
         openMechanics()
-        const note = document.querySelector(".evidence-linkage-note")
+        const note = screen.getByText(/the card above abbreviates the first two as/)
         expect(note).toHaveTextContent(
             "the card above abbreviates the first two as \"obs\" and \"calc\": an observation is a deposited "
             + "sighting of this basin",
