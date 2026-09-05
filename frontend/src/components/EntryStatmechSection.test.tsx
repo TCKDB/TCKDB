@@ -871,6 +871,45 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         expect(within(refsTable).getByText("sm_g3")).toBeVisible()
     })
 
+    // BLOCKING-2 (species-entry/browse/chrome residuals re-review): MEASURED
+    // at 1920 before this fix, the 8th column ("Workflow tool") clipped at
+    // the `.table-scroll` edge with no scroll affordance. The structural
+    // guarantee this table now keeps is "at most 6 columns" -- "Record
+    // software"/"Workflow tool" render as a provenance row beneath each
+    // record's own row instead of two more columns.
+    it("keeps the group table to at most 6 columns, with software/workflow tool on a provenance row instead", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
+        page()
+        await screen.findByText("3 records with identical values")
+        const refsTable = screen.getByRole("table", { name: "Records sharing these identical values" })
+        const headerCells = within(refsTable).getAllByRole("columnheader")
+        expect(headerCells.length).toBeLessThanOrEqual(6)
+        expect(headerCells.map((cell) => cell.textContent)).not.toContain("Record software")
+        expect(headerCells.map((cell) => cell.textContent)).not.toContain("Workflow tool")
+
+        const provenanceRows = refsTable.querySelectorAll("tr.data-table-provenance-row")
+        expect(provenanceRows).toHaveLength(3)
+        provenanceRows.forEach((row) => {
+            expect(row.textContent).toMatch(/^Software: .+ · Workflow tool: .+$/)
+            // Spans every remaining column, not a 7th/8th cell of its own.
+            expect(row.querySelector("td")?.getAttribute("colspan")).toBe(String(headerCells.length))
+        })
+    })
+
+    // BLOCKING-2 (species-entry/browse/chrome residuals re-review): "Record
+    // software"/"Workflow tool" are no longer their own `<td data-label>`
+    // columns -- they moved to a `.data-table-provenance-row` spanning the
+    // row directly beneath each record's own row, so the table fits at
+    // 1920 without clipping (see `IdenticalStatmechGroupRefs`'s own
+    // comment). This finds that sibling row rather than a named cell.
+    function provenanceRowFor(recordRow: HTMLElement): HTMLElement {
+        const next = recordRow.nextElementSibling as HTMLElement | null
+        if (!next?.classList.contains("data-table-provenance-row")) {
+            throw new Error("Expected a .data-table-provenance-row immediately after this record's row")
+        }
+        return next
+    }
+
     it("keeps provenance that differs across an identical-value group visible per ref -- six 'not recorded', one 'Arkane'", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse(identicalClones()))))
         page()
@@ -879,8 +918,8 @@ describe("EntryStatmechSection: identical-value records group under one card", (
         const rows = within(refsTable).getAllByRole("row").slice(1)
         const g1Row = rows.find((row) => within(row).queryByText("sm_g1"))!
         const g3Row = rows.find((row) => within(row).queryByText("sm_g3"))!
-        expect(cellAt(g1Row, "Record software")).toBe("not recorded")
-        expect(cellAt(g3Row, "Record software")).toBe("Arkane")
+        expect(provenanceRowFor(g1Row).textContent).toContain("Software: not recorded")
+        expect(provenanceRowFor(g3Row).textContent).toContain("Software: Arkane")
     })
 
     it("show-all mounts every member's own full card, in a disclosure closed by default", async () => {
@@ -1005,7 +1044,7 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
     // regression that reintroduces the old shape is caught by rendering
     // the real component tree, exactly like every other test in this file.
 
-    it("never renders an <h2>/<h3>/<h4> inside a <summary> -- the six lazy sections (Source calculations, Torsions, Electronic levels, Conformer context, Review history) render a plain-text summary through the shared Disclosure component now, not a SectionHeading", async () => {
+    it("never renders an <h2>/<h3>/<h4> inside a <summary> -- the lazy sections (Source calculations, Torsions, Electronic levels, Conformer context & review history) render a plain-text summary through the shared Disclosure component now, not a SectionHeading", async () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_one")
@@ -1035,9 +1074,9 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockResponse())))
         page()
         await screen.findByText("sm_one")
-        // The default two-record fixture already renders five lazy-section
+        // The default two-record fixture already renders four lazy-section
         // <details> (Source calculations, Torsions, Electronic levels,
-        // Conformer context, Review history) regardless of open/closed
+        // Conformer context & review history) regardless of open/closed
         // state -- a <details> element and its class list are present in
         // the DOM either way, only its body's visibility differs.
         const detailsElements = Array.from(document.querySelectorAll("details"))
@@ -1081,5 +1120,83 @@ describe("EntryStatmechSection: design-system adoption (design/species-entry)", 
             // wrapper (horizontal scroll), never bare in the page body.
             expect(table.closest(".table-scroll")).not.toBeNull()
         }
+    })
+})
+
+// ---------------------------------------------------------------------------
+// SHOULD-FIX-6 (species-entry/browse/chrome residuals re-review): "Conformer
+// context" and "Review history" used to each render one FULL card per
+// record -- MEASURED, this page ran 12,700px tall at 1920 with every
+// <details> opened. Both fold into one disclosure, one table, one row per
+// record now (`ConformerAndReviewSection`).
+// ---------------------------------------------------------------------------
+describe("EntryStatmechSection: conformer context & review history fold into one table", () => {
+    it("renders one combined disclosure, not two, with each record's ref appearing exactly once outside the group table", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const records = mockRecords().map((record) => ({
+                ...record,
+                ...(includes.includes("conformers")
+                    ? { conformers: [{ conformer_group_ref: "cg_one", label: "conformer_1" }] }
+                    : {}),
+                ...(includes.includes("review")
+                    ? { review_history: [{ status: "not_reviewed", reviewed_at: null, note: null }] }
+                    : {}),
+            }))
+            return HttpResponse.json(mockResponse(records))
+        }))
+        page()
+        await screen.findByText("sm_one")
+
+        expect(screen.queryByText("Conformer context", { selector: "summary" })).not.toBeInTheDocument()
+        expect(screen.queryByText("Review history", { selector: "summary" })).not.toBeInTheDocument()
+        const summary = screen.getByText("Conformer context & review history", { selector: "summary" })
+        expect(summary).toBeVisible()
+
+        fireEvent.click(summary)
+        const table = await screen.findByRole("table", { name: "Conformer context and review history" })
+        for (const ref of ["sm_one", "sm_two"]) {
+            const matches = within(table).getAllByText(ref)
+            expect(matches).toHaveLength(1)
+        }
+        const rows = within(table).getAllByRole("row").slice(1)
+        expect(rows).toHaveLength(2)
+        expect(cellAt(rows[0], "Conformer")).toContain("conformer_1")
+        expect(cellAt(rows[0], "Review")).toBe("not reviewed")
+    })
+
+    it("collapses multiple conformer-context or review-history entries for one record into a single cell, joined, rather than adding rows", async () => {
+        server.use(http.get(ENDPOINT, ({ request }) => {
+            const includes = new URL(request.url).searchParams.getAll("include")
+            const record = baseRecord({
+                ...(includes.includes("conformers")
+                    ? {
+                        conformers: [
+                            { conformer_group_ref: "cg_one", label: "conformer_1" },
+                            { conformer_group_ref: "cg_two", label: "conformer_2" },
+                        ],
+                    }
+                    : {}),
+                ...(includes.includes("review")
+                    ? {
+                        review_history: [
+                            { status: "not_reviewed", reviewed_at: null, note: null },
+                            { status: "approved", reviewed_at: "2026-01-05T00:00:00", note: "looks right" },
+                        ],
+                    }
+                    : {}),
+            })
+            return HttpResponse.json(mockResponse([record]))
+        }))
+        page()
+        await screen.findByText("sm_one")
+        fireEvent.click(screen.getByText("Conformer context & review history", { selector: "summary" }))
+        const table = await screen.findByRole("table", { name: "Conformer context and review history" })
+        const rows = within(table).getAllByRole("row").slice(1)
+        expect(rows).toHaveLength(1)
+        expect(cellAt(rows[0], "Conformer")).toContain("conformer_1")
+        expect(cellAt(rows[0], "Conformer")).toContain("conformer_2")
+        expect(cellAt(rows[0], "Review")).toContain("not reviewed")
+        expect(cellAt(rows[0], "Review")).toContain("approved")
     })
 })

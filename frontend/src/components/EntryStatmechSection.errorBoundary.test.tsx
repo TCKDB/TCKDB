@@ -221,8 +221,11 @@ describe("EntryStatmechSection — a broken Torsions row", () => {
         const goodFreqHeading = within(goodCard).getByRole("heading", { name: "Frequencies" })
         expect(goodFreqHeading.closest("details")).toBeNull()
         expect(screen.getAllByRole("heading", { name: "Frequencies" })).toHaveLength(2)
-        expect(screen.getByText("Conformer context", { selector: "summary" })).toBeVisible()
-        expect(screen.getByText("Review history", { selector: "summary" })).toBeVisible()
+        // SHOULD-FIX-6 (species-entry/browse/chrome residuals re-review):
+        // "Conformer context" and "Review history" are one combined
+        // disclosure now (`ConformerAndReviewSection`) -- see that
+        // component's own comment.
+        expect(screen.getByText("Conformer context & review history", { selector: "summary" })).toBeVisible()
 
         consoleSpy.mockRestore()
     })
