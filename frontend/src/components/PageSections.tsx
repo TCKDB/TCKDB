@@ -47,6 +47,17 @@ export function PageSectionsProvider({ children }: { children: ReactNode }) {
  * `t-heading-1` step (`design-system.css`) rather than replacing it, so
  * a caller can add a page-scoped modifier without having to re-specify
  * the base heading typography.
+ *
+ * `kicker` is suppressed when it case-insensitively equals `children`'s
+ * own text (design/foundations PR E, "record-page residuals" re-review,
+ * SHOULD-FIX-6): a kicker earns its place only when it names a category
+ * the title itself lacks ("Deposited provenance" above "Structure view",
+ * say) -- four callers across this app's record pages used to pass the
+ * heading's own title straight back in as its kicker ("Result" / "Result",
+ * "Geometries" / "Geometries", ...), MEASURED as a plain restatement with
+ * no added information. Enforced HERE, once, rather than trusted to every
+ * call site getting it right on its own -- a caller that still passes a
+ * redundant kicker (today or in the future) renders correctly regardless.
  */
 export function SectionHeading({ id, children, label, className, kicker, intro }: {
     id: string
@@ -58,9 +69,13 @@ export function SectionHeading({ id, children, label, className, kicker, intro }
 }) {
     const resolvedLabel = label ?? (typeof children === "string" ? children : id)
     useRegisteredSection(id, resolvedLabel)
+    const titleText = typeof children === "string" ? children : undefined
+    const kickerIsRedundant = typeof kicker === "string" && titleText !== undefined
+        && kicker.trim().toLowerCase() === titleText.trim().toLowerCase()
+    const showKicker = kicker != null && kicker !== "" && !kickerIsRedundant
     return (
         <>
-            {kicker && <p className="t-kicker section-kicker">{kicker}</p>}
+            {showKicker && <p className="t-kicker section-kicker">{kicker}</p>}
             <h2 className={className ? `t-heading-1 ${className}` : "t-heading-1"} id={id}>{children}</h2>
             {intro && <p className="t-body section-intro">{intro}</p>}
         </>
