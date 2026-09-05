@@ -76,10 +76,10 @@
 
    The JSX (`CalculationDetailPage.tsx`, the coverage card) now renders
    this `<dl>` with BOTH `kv-list` and `coverage-checklist` classes --
-   `kv-list` (`design-system.css`) supplies the actual layout (label
-   above value, auto-fit columns, the same `dt`/`dd` typography every
-   other fact list on this page renders at); `coverage-checklist` stays
-   only as a stable selector for this file's own spacing below and for
+   `kv-list` (`design-system.css`) supplies the label-above-value
+   layout and the same `dt`/`dd` typography every other fact list on
+   this page renders at; `coverage-checklist` stays as a stable
+   selector for this file's own spacing/column override below and for
    the existing RTL tests that query it. No bespoke `dt`/`dd`/`> div`
    rules remain here -- letting them fall through to `.kv-list`'s own
    rules IS the fix; redeclaring them here would just reintroduce the
@@ -87,9 +87,20 @@
    are equal specificity, and this file loads after `design-system.css`,
    so a local override here would keep winning the cascade). The
    trailing colon after each label (`dt::after { content: ":" }`) is
-   also gone -- no other `.kv-list` label on this page carries one. */
+   also gone -- no other `.kv-list` label on this page carries one.
+
+   ONE column, always -- `kv-list`'s own `auto-fit, minmax(16rem, 1fr)`
+   grid would otherwise put these two rows side by side at any width
+   comfortably over ~32rem (MEASURED at 1920: x=207 and x=837, two
+   columns). That is the SAME layout the original owner report on this
+   card asked to get away from ("this should be a going down list, not
+   a wrap around text") -- `kv-list`'s auto-fit is the right primitive
+   for a multi-column fact grid elsewhere on this page, but wrong for a
+   short, always-two-row checklist that reads as a sequence. Pinned by
+   `calculation-detail.css.test.ts`. */
 .coverage-checklist {
     margin: var(--s-3) 0 0;
+    grid-template-columns: 1fr;
 }
 
 /* One sentence per row, replacing the old Relationship/Role/Related-

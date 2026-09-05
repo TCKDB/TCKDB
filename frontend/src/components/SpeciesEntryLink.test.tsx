@@ -60,21 +60,34 @@ describe("SpeciesEntryLink", () => {
         expect(link.textContent).toBe("C9H9 · T1")
     })
 
-    it("falls back to the literal text 'Species entry' when there is neither a formula nor a label", () => {
+    // Post-review fix: when there is no formula (ConformerObservationPage's
+    // species context never serves one), the base text falls back to the
+    // entry's own ref as `<code className="data">` -- NEVER the literal
+    // words "Species entry", which would repeat the enclosing <dt> ("Species
+    // entry / Species entry · R enantiomer") and say nothing new.
+    it("falls back to the entry ref, styled as a data code run, when there is no formula and no label", () => {
         const { container } = renderLink({ speciesEntryRef: "se_abc123", formula: null, speciesEntryLabel: null })
         const link = container.querySelector("a")!
-        expect(link.textContent).toBe("Species entry")
+        expect(link.textContent).toBe("se_abc123")
+        const code = link.querySelector("code")
+        expect(code).not.toBeNull()
+        expect(code).toHaveClass("data")
+        expect(code!.textContent).toBe("se_abc123")
+        // Never the redundant literal text this fallback used to render.
+        expect(link.textContent).not.toContain("Species entry")
     })
 
-    it("falls back to 'Species entry' as the base text, still followed by an expanded label, when only the label is served", () => {
+    it("falls back to the entry ref as the base text, still followed by an expanded label, when only the label is served", () => {
         const { container } = renderLink({ speciesEntryRef: "se_abc123", formula: null, speciesEntryLabel: "R" })
         const link = container.querySelector("a")!
-        expect(link.textContent).toBe("Species entry · R enantiomer")
+        expect(link.textContent).toBe("se_abc123 · R enantiomer")
+        expect(link.querySelector("code")).toHaveClass("data")
+        expect(link.textContent).not.toContain("Species entry")
     })
 
-    it("treats an empty-string formula the same as absent", () => {
+    it("treats an empty-string formula the same as absent -- falls back to the ref", () => {
         const { container } = renderLink({ speciesEntryRef: "se_abc123", formula: "" })
         const link = container.querySelector("a")!
-        expect(link.textContent).toBe("Species entry")
+        expect(link.textContent).toBe("se_abc123")
     })
 })

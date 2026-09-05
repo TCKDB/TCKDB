@@ -52,6 +52,28 @@ describe(".viewer-stage (defect 1: accent bar)", () => {
     })
 })
 
+/**
+ * Item 1 ("record-page residuals" re-review, post-review fix): the
+ * measurements panel used to float to the right of and below the 3D
+ * picture (see `geometry-measure.layout.css.test.ts`, which pins the
+ * panel's own half of this fix). Half of that fix lives HERE: the
+ * canvas and toolbar were centred inside `.viewer-stage` (`align-items:
+ * center`) rather than left-aligned to the same edge the panel now
+ * anchors to. Reverting `align-items` alone (leaving the panel's own
+ * `margin: 0` fix in place) is a silent regression: MEASURED (CDP,
+ * 1920px) the canvas snaps back to x=228 while the panel sits at
+ * x=180 -- no longer sharing a left edge, the exact defect this item
+ * exists to fix, just with the panel's OWN half of the bug gone. This
+ * guards the other half.
+ */
+describe(".viewer-stage (item 1: canvas/toolbar left-alignment)", () => {
+    it("uses align-items: flex-start, not center -- the canvas and panel must share one left edge", () => {
+        const rule = extractRule(css, ".viewer-stage")
+        expect(rule).toMatch(/align-items:\s*flex-start/)
+        expect(rule).not.toMatch(/align-items:\s*center/)
+    })
+})
+
 describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
     const rule = extractRule(css, ".viewer-canvas")
 

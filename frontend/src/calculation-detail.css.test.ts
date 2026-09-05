@@ -36,9 +36,28 @@ describe(".coverage-checklist defers its label/value layout to .kv-list (item 3)
         expect(css).not.toMatch(/\.coverage-checklist\s+dt::after/)
     })
 
-    it("keeps only its own top margin", () => {
+    it("keeps its own top margin", () => {
         const rule = extractRule(css, ".coverage-checklist")
         expect(rule).toMatch(/margin:\s*var\(--s-3\)\s+0\s+0/)
+    })
+})
+
+/**
+ * Post-review fix: `kv-list`'s own `auto-fit, minmax(16rem, 1fr)` grid
+ * puts these two rows side by side at any width comfortably over
+ * ~32rem -- MEASURED at 1920, x=207 and x=837, two columns. That is the
+ * SAME "wrap around text" shape the original owner report on this card
+ * asked to get away from ("this should be a going down list") --
+ * `kv-list`'s auto-fit is right for a multi-column fact grid elsewhere
+ * on this page, wrong for this always-two-row checklist. `.coverage-
+ * checklist` forces one column, overriding `kv-list`'s template (same
+ * specificity, this file loads after `design-system.css`, so the local
+ * rule wins).
+ */
+describe(".coverage-checklist stays a single column, always (going-down-list instruction)", () => {
+    it("declares grid-template-columns: 1fr, overriding kv-list's auto-fit", () => {
+        const rule = extractRule(css, ".coverage-checklist")
+        expect(rule).toMatch(/grid-template-columns:\s*1fr/)
     })
 })
 

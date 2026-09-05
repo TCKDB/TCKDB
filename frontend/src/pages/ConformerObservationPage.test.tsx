@@ -235,15 +235,18 @@ describe("ConformerObservationPage", () => {
         // body link no longer shows the deposited label ("ground state" in
         // this fixture) ALONE -- this endpoint's `species` context carries
         // no `formula` field at all, so `SpeciesEntryLink`'s base text
-        // falls back to "Species entry", with the label (unrecognised by
-        // `stereoChip`, so rendered unchanged) still riding along after it
-        // -- see `SpeciesEntryLink.test.tsx` for the component-level
-        // version of this assertion, and that component's own docstring
-        // for why `species_entry_label` is a computed discriminator, not
-        // free text, and is not suppressed.
+        // falls back to the entry REF (`<code className="data">`), never
+        // the literal words "Species entry" (the enclosing <dt> already
+        // says that -- repeating it as the value said nothing new). The
+        // label (unrecognised by `stereoChip`, so rendered unchanged)
+        // still rides along after the ref -- see `SpeciesEntryLink.test.tsx`
+        // for the component-level version of this assertion, and that
+        // component's own docstring for why `species_entry_label` is a
+        // computed discriminator, not free text, and is not suppressed.
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "Species entry · ground state" })
+        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "spe_demo · ground state" })
         expect(speciesEntryLink).toHaveAttribute("href", "/species-entries/spe_demo")
+        expect(within(speciesEntryLink).getByText("spe_demo")).toHaveClass("data")
 
         // The conformer-basin label ("conformer_1") is a DIFFERENT fact
         // (a depositor label on the conformer group, not the species

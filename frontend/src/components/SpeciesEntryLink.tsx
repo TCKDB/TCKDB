@@ -41,15 +41,33 @@ import { stereoChip } from "../domain/recordFacets"
  * component). `stereoChip("R")` -> "R enantiomer"; anything it does not
  * recognise (a term symbol, an isotope key, a multi-part discriminator)
  * passes through unchanged -- still shown, next to the formula, never as
- * the sole text. "Species entry" is the base text only when there is
- * neither a formula nor a label to show.
+ * the sole text.
+ *
+ * Post-review fix: when there is no formula (`ConformerObservationPage`'s
+ * species context never serves one -- see that page's own comment), the
+ * base text falls back to the entry's own ref as `<code className="data">`
+ * -- the same treatment every OTHER ref on these pages gets -- NOT the
+ * literal words "Species entry". That fallback existed in an earlier
+ * draft and produced "SPECIES ENTRY / Species entry · R enantiomer": the
+ * `<dt>` beside this `<dd>` already says "Species entry", so repeating it
+ * as the value said nothing a reader didn't already have. A ref is a
+ * real, if terse, identifier the same way `EntryStatmechSection.tsx`'s
+ * "Species entry: spe_…" rows already treat one.
+ *
+ * The intended shape once every page here serves a formula is uniformly
+ * "C9H9 · R enantiomer" -- `ConformerObservationPage` cannot reach that
+ * today because its wire shape has no `formula` field at all (unlike the
+ * calculation/geometry payloads, which do). Filed as a backend follow-up
+ * to add it; see the PR body.
  */
 export function SpeciesEntryLink({ speciesEntryRef, formula, speciesEntryLabel }: {
     speciesEntryRef: string
     formula?: string | null
     speciesEntryLabel?: string | null
 }) {
-    const base = formula ? <Formula value={formula} /> : "Species entry"
+    const base = formula
+        ? <Formula value={formula} />
+        : <code className="data">{speciesEntryRef}</code>
     return (
         <Link to={`/species-entries/${speciesEntryRef}`}>
             {base}
