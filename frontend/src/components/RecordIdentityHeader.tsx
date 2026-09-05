@@ -5,6 +5,7 @@ import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
 import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
 import type { RecordIdentity } from "../domain/recordIdentity"
+import { refWithBreaks } from "../domain/refBreaks"
 
 /**
  * Breaks a SMILES-shaped string at `>>` (reaction arrow) and `.`
@@ -126,7 +127,7 @@ export function RecordIdentityHeader({
                         <dt>Submission</dt>
                         <dd>
                             {submissionRef
-                                ? <code>{submissionRef}</code>
+                                ? <code>{refWithBreaks(submissionRef)}</code>
                                 : <span className="record-identity-absent-inline">not recorded</span>}
                         </dd>
                     </div>
@@ -154,7 +155,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                     {identity.owners.map((owner) => (
                         <li key={`${owner.kind}-${owner.ref}`}>
                             <span className="t-label">{owner.kind.replaceAll("_", " ")}</span>
-                            <code>{owner.ref}</code>
+                            <code>{refWithBreaks(owner.ref)}</code>
                         </li>
                     ))}
                 </ul>
@@ -248,7 +249,7 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                     {chargeDisplay(identity.charge)} / {spinDisplay(identity.multiplicity)}
                 </IdentityFact>
                 {identity.transitionStateEntryRef && (
-                    <IdentityFact label="Transition state entry"><code>{identity.transitionStateEntryRef}</code></IdentityFact>
+                    <IdentityFact label="Transition state entry"><code>{refWithBreaks(identity.transitionStateEntryRef)}</code></IdentityFact>
                 )}
             </dl>
         </div>

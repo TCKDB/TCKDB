@@ -63,6 +63,21 @@
     margin: 0;
 }
 
+/* SHOULD-FIX-7 ("record-page residuals" re-review): both the "no
+   canonical SMILES" note and the identity facts `.kv-list` that follows
+   it inside `.record-identity-known` own no margin of their own (the
+   note: `.record-identity-note { margin: 0 }` above; the `.kv-list`:
+   `design-system.css`'s own "carries no external-spacing opinion"
+   contract) -- MEASURED 10px baseline-to-cap on calc-freq/geometry pages
+   where NEITHER side owned the gap. `display: grid; gap: var(--s-3)`
+   here gives the wrapper the gap instead, the same "the container owns
+   spacing between its children" pattern `.record-identity-header` (just
+   above) already uses one level up. */
+.record-identity-known {
+    display: grid;
+    gap: var(--s-3);
+}
+
 .record-identity-ambiguous {
     display: grid;
     gap: var(--s-2);
