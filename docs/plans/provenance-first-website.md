@@ -201,6 +201,27 @@ provenance and machine detail live on dedicated linked pages.
     references box keeps a third disclosure style because it is the
     tested fix for a double border, and a reviewer proposed promoting
     it to a named inset modifier.
+17. Owner walk-through fixes. The owner read the calculation, geometry
+    and observation pages and named what still looked wrong. Two PRs,
+    on disjoint files, each reviewed by measurement. Record header
+    (#375): the SMILES and InChIKey copy buttons lost in slice 16 are
+    back on every page that composes the header; the conformer card's
+    references box moved onto a named inset disclosure, and the
+    references box's own lighter border was dropped, so the site has
+    two box styles and a test that no page restyles a disclosure.
+    Calculation and geometry pages (#374): the measurements panel sits
+    directly under the 3D picture sharing its left edge (it had centred
+    itself in the wide column, 300px to the right); the electronic
+    energy comes down from 24px to the ordinary data step; the evidence
+    box uses label-above-value rows in one column. One misreading was
+    caught by a builder: the bare "R" that linked to the species entry
+    is not a submitter-typed label but the server-computed stereo
+    facet, so it now reads "C9H9 · R enantiomer" through the existing
+    facet helper. Two fields really are submitter-typed and still
+    render, transition-state labels ("TS0") and conformer labels
+    ("conformer_1"); the owner has not yet ruled on them. Backend
+    follow-up: the conformer-observation payload carries no formula, so
+    that page falls back to the entry ref until it does.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
