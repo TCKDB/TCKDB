@@ -333,23 +333,25 @@ describe("value-pill--muted matches .value-pill's face and size EXACTLY, includi
 })
 
 describe(".kv-list dd falls back to overflow-wrap: anywhere for an unbreakable value (post-review pass)", () => {
-    // Post-review retirement: an earlier version of this fix added a
-    // SECOND rule (`.kv-list dd .data, .kv-list dd code`) carrying
-    // `word-break: keep-all` plus a duplicate `overflow-wrap: anywhere`,
-    // on the theory that a ref should prefer breaking at a `<wbr>`
-    // (`domain/refBreaks.tsx`) or hyphen over an arbitrary character.
+    // What is true now: the 16rem column width (below) is what fixes all
+    // six required routes, and `.data`/`code` inherit `overflow-wrap:
+    // anywhere` from `.kv-list dd` directly -- no rule of their own
+    // needed for that property (they still need their own `font:` rule,
+    // pinned separately above, since `code` carries a UA-stylesheet
+    // `font-family` that inheritance alone would not override).
+    //
+    // Retired: an earlier draft of this fix added a SECOND rule
+    // (`.kv-list dd .data, .kv-list dd code`) carrying `word-break:
+    // keep-all` plus a duplicate `overflow-wrap: anywhere`, on the theory
+    // that a ref should prefer breaking at a `<wbr>` (inserted by a
+    // ref-rendering helper) or hyphen over an arbitrary character.
     // Reviewer finding: `word-break: keep-all` only ever affects CJK line
     // breaking -- it changed nothing for these Latin/underscore refs --
     // and a controlled before/after on the six required routes showed
     // the `<wbr>` insertion itself was neutral-to-harmful (it split a ref
     // on `/calculations/calc_mxhadodv3hsdead3rnmofh3xyi` at 680/1100 that
-    // `origin/main` rendered whole). The 16rem column width (below) is
-    // what actually fixed all six routes; both the second rule and the
-    // `<wbr>` helper are retired, and `.data`/`code` inherit `overflow-
-    // wrap: anywhere` from `.kv-list dd` directly -- no rule of their own
-    // needed for that property (they still need their own `font:` rule,
-    // pinned separately above, since `code` carries a UA-stylesheet
-    // `font-family` that inheritance alone would not override).
+    // `origin/main` rendered whole). Both the second rule and the helper
+    // are retired.
     it("declares overflow-wrap: anywhere on the base .kv-list dd rule", () => {
         const rule = /\.kv-list dd \{([^}]*)\}/.exec(designSystemCss)
         expect(rule, ".kv-list dd rule not found").not.toBeNull()

@@ -54,3 +54,23 @@ describe(".section-note uses --type-note-font, not a literal .8rem (SHOULD-FIX-1
         expect(rule).not.toMatch(/font-size:\s*\.8rem/)
     })
 })
+
+/**
+ * SHOULD-FIX-2 (re-review, criterion-6 on the second re-review pass): the
+ * label-less-TS-owner ref fallback in `CalculationDetailPage`'s h1 (`<code
+ * className="data calc-headline-ref">`) was rendering at `.data`'s own
+ * `--type-data-font` size (13px mono) sitting on the baseline of the
+ * surrounding 52px serif h1 -- MEASURED. `.calc-headline-ref { font-size:
+ * inherit }` is the fix; this is the SOURCE assertion for it. The
+ * existing RTL test on `CalculationDetailPage.test.tsx` only pins
+ * `toHaveClass("data", "calc-headline-ref")` -- jsdom does not apply
+ * stylesheets, so that test cannot see whether the class actually DOES
+ * anything, and emptying this very rule still left it green. This is the
+ * guard that closes that gap.
+ */
+describe(".calc-headline-ref tracks the surrounding heading's size (SHOULD-FIX-2)", () => {
+    it("declares font-size: inherit", () => {
+        const rule = extractRule(css, ".calc-headline-ref")
+        expect(rule).toMatch(/font-size:\s*inherit/)
+    })
+})
