@@ -11,6 +11,7 @@ import { SectionErrorBoundary } from "../components/SectionErrorBoundary"
 import { CopyButton } from "../components/RefsDisclosure"
 import type { GeometryProvenanceCalcLink, GeometryRecord } from "../api/geometryApi"
 import { identityFormula, identityFromGeometry } from "../domain/recordIdentity"
+import { refWithBreaks } from "../domain/refBreaks"
 import { useGeometry } from "../hooks/useGeometry"
 import {
     ANGSTROM_TO_BOHR,
@@ -201,7 +202,7 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
                             </p>
                         )}
                         <dl className="kv-list basin-context">
-                            <div><dt>Geometry ref</dt><dd><code>{geometry.geometry_ref}</code></dd></div>
+                            <div><dt>Geometry ref</dt><dd><code>{refWithBreaks(geometry.geometry_ref)}</code></dd></div>
                             <div><dt>Atom count</dt><dd>{geometry.natoms}</dd></div>
                             <div><dt>Geometry hash</dt><dd><code>{geometry.geom_hash}</code></dd></div>
                             <div><dt>Format</dt><dd>{geometry.format}</dd></div>
@@ -333,7 +334,12 @@ function ViewerSection({ atoms, atomsAvailability, formula, xyzText, coordinateU
     const rows = atoms ?? []
     return (
         <section className="ledger-section" aria-labelledby="viewer-heading">
-            <SectionHeading id="viewer-heading" kicker="Structure">Structure view</SectionHeading>
+            {/* No kicker (SHOULD-FIX-6, "record-page residuals" re-review):
+                "Structure" added nothing "Structure view" didn't already
+                say -- a kicker earns its place only when it names a
+                category the title lacks, the way "Deposited provenance"
+                below does. */}
+            <SectionHeading id="viewer-heading">Structure view</SectionHeading>
             {atomsAvailability === "populated" ? (
                 <SectionErrorBoundary
                     fallback={(
@@ -482,7 +488,9 @@ function CoordinateTableSection({ atoms, atomsAvailability, geometryRef, natoms,
 function RawXyzSection({ xyzText }: { xyzText: string | null }) {
     return (
         <section className="ledger-section" aria-labelledby="xyz-heading">
-            <SectionHeading id="xyz-heading" kicker="Raw" intro="The archive's own XYZ-format text block for this geometry, selectable as deposited.">
+            {/* No kicker (SHOULD-FIX-6): "Raw" added nothing "Raw XYZ" didn't
+                already say. */}
+            <SectionHeading id="xyz-heading" intro="The archive's own XYZ-format text block for this geometry, selectable as deposited.">
                 Raw XYZ
             </SectionHeading>
             {xyzText ? (

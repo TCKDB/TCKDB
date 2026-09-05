@@ -67,3 +67,53 @@ describe(".viewer-canvas (defect 2: only 2 of 4 borders visible)", () => {
         expect(rule).toMatch(/outline:\s*1px solid var\(--line\)/)
     })
 })
+
+/**
+ * SHOULD-FIX-11 ("record-page residuals" re-review): `margin: 0 auto`
+ * centred the viewer picture and its caption inside the page while every
+ * other block on this page sits flush left -- MEASURED ~350px gutter at
+ * 1920. Both are left-aligned now (`margin: 0`).
+ */
+describe(".viewer-stage / .viewer-caption are left-aligned, not centred (SHOULD-FIX-11)", () => {
+    it(".viewer-stage no longer auto-centres", () => {
+        const rule = extractRule(css, ".viewer-stage")
+        expect(rule).toMatch(/margin:\s*0;/)
+        expect(rule).not.toMatch(/margin:\s*0 auto/)
+    })
+
+    it(".viewer-caption no longer auto-centres", () => {
+        const rule = extractRule(css, ".viewer-caption")
+        expect(rule).toMatch(/margin:\s*0;/)
+        expect(rule).not.toMatch(/margin:\s*0 auto/)
+    })
+})
+
+/**
+ * SHOULD-FIX-10 ("record-page residuals" re-review): the viewer's own
+ * button vocabulary (`.72rem uppercase mono`) was used nowhere else on
+ * the site -- mapped onto `--type-ui-font`, the sans step every other
+ * button/toggle in this app (the chart's own controls included) uses.
+ */
+describe("viewer buttons/legends use --type-ui, not a one-off uppercase mono (SHOULD-FIX-10)", () => {
+    it(".viewer-controls button / .viewer-style-choice button use --type-ui-font", () => {
+        const rule = /\.viewer-controls button,\s*\.viewer-style-choice button \{([^}]*)\}/.exec(css)
+        expect(rule, "rule not found").not.toBeNull()
+        expect(rule![1]).toMatch(/font:\s*var\(--type-ui-font\)/)
+        expect(rule![1]).not.toMatch(/text-transform:\s*uppercase/)
+    })
+
+    for (const selector of [".viewer-style-choice legend", ".viewer-label-choice", ".coordinate-toggle button"]) {
+        it(`${selector} uses --type-ui-font, no uppercase transform, no .72rem literal`, () => {
+            const rule = extractRule(css, selector)
+            expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
+            expect(rule).not.toMatch(/text-transform:\s*uppercase/)
+            expect(rule).not.toMatch(/\.72rem/)
+        })
+    }
+
+    it(".viewer-label-choice select uses --type-ui-font", () => {
+        const rule = extractRule(css, ".viewer-label-choice select")
+        expect(rule).toMatch(/font:\s*var\(--type-ui-font\)/)
+        expect(rule).not.toMatch(/\.72rem/)
+    })
+})
