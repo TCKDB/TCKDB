@@ -59,6 +59,7 @@ const payload = {
             species_ref: "spc_demo",
             species_entry_ref: "spe_demo",
             species_entry_label: "ground state",
+            formula: "CH3",
             canonical_smiles: "[CH3]",
         },
         observations_summary: { total: 2, by_scientific_origin: { computed: 2 } },
@@ -127,7 +128,12 @@ describe("ConformerGroupPage", () => {
         expect(await screen.findByRole("heading", { name: "Conformer basin" })).toBeVisible()
         expect(screen.getByText(/One torsional basin, shown through its deposited observations/))
             .toBeVisible()
-        expect(screen.getByText("3")).toBeVisible()
+        // selector: "strong" -- the metric tile's own element (`Metric`
+        // renders its number in a `<strong>`) -- disambiguates from the
+        // "3" subscript inside this fixture's own "CH3" formula rendering
+        // (`Formula` renders the digit as a `<sub>`), now that the
+        // species-entry link shows the served formula.
+        expect(screen.getByText("3", { selector: "strong" })).toBeVisible()
         expect(screen.getByText("1 optimisation chains")).toBeVisible()
 
         // The observation-scoped evidence ledger is open by default on this
@@ -352,15 +358,13 @@ describe("ConformerGroupPage", () => {
     // comment above `.basin-header`), so it grew its OWN copy of the
     // `species_entry_label` bug independently of that component --
     // `species.species_entry_label` rendered directly as the "Species
-    // entry" fact's link text, a bare "R" on a real record. Fixed the
-    // same way `RecordIdentityHeader.tsx`'s "Species entry" fact is:
-    // `stereoChip` expands the served discriminator ("R" -> "R
-    // enantiomer") rather than showing it raw. This endpoint's `species`
-    // context carries no `formula` at all (this file's own comment above
-    // `.basin-header` documents that), so the base text is always the
-    // literal "Species entry" here, with the expanded label appended
-    // when one was served.
-    it("expands the species-entry label via stereoChip instead of showing the raw discriminator ('R' -> 'R enantiomer')", async () => {
+    // entry" fact's link text, a bare "R" on a real record. Now
+    // delegates to `SpeciesEntryLink`, the same shared component
+    // `RecordIdentityHeader.tsx` and `ConformerObservationPage.tsx` use,
+    // which pairs the entry's served `formula` (RDKit-derived, backend
+    // fix) with the discriminator expanded via `stereoChip` ("R" -> "R
+    // enantiomer") rather than showing it raw.
+    it("shows the formula plus the EXPANDED label ('R' -> 'R enantiomer') instead of the raw discriminator", async () => {
         const labelledPayload = {
             record: {
                 ...payload.record,
@@ -371,13 +375,13 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
         const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        const link = within(identityDl).getByRole("link", { name: "Species entry · R enantiomer" })
+        const link = within(identityDl).getByRole("link", { name: "CH3 · R enantiomer" })
         expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
         // Never the bare raw token as the whole link text.
         expect(within(identityDl).queryByRole("link", { name: "R" })).not.toBeInTheDocument()
     })
 
-    it("shows the literal 'Species entry' with no label suffix when the entry has no deposited label", async () => {
+    it("shows the formula alone with no label suffix when the entry has no deposited label", async () => {
         const noLabelPayload = {
             record: {
                 ...payload.record,
@@ -388,7 +392,31 @@ describe("ConformerGroupPage", () => {
         page()
         await screen.findByRole("heading", { name: "Conformer basin" })
         const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
-        expect(within(identityDl).getByRole("link", { name: "Species entry" })).toHaveAttribute("href", "/species-entries/spe_demo")
+        expect(within(identityDl).getByRole("link", { name: "CH3" })).toHaveAttribute("href", "/species-entries/spe_demo")
+    })
+
+    // Unified fallback rule (per this component's own reviewer-flagged
+    // duplication fix): when the species SMILES did not parse and the
+    // backend serves no `formula`, the base link text is the entry REF
+    // as `<code className="data">`, never the literal words "Species
+    // entry" -- the `<dt>` beside this `<dd>` already says that.
+    it("falls back to the entry ref, as a data code run, when the species context carries no formula", async () => {
+        const noFormulaPayload = {
+            record: {
+                ...payload.record,
+                species: { ...payload.record.species, formula: null, species_entry_label: null },
+            },
+        }
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(noFormulaPayload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        const identityDl = document.querySelector(".basin-header dl.kv-list") as HTMLElement
+        const link = within(identityDl).getByRole("link", { name: "spe_demo" })
+        expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+        const code = link.querySelector("code")
+        expect(code).not.toBeNull()
+        expect(code).toHaveClass("data")
+        expect(link.textContent).not.toContain("Species entry")
     })
 
     it("carries the TCKDB / Species / Species entry / Conformer basin breadcrumb -- the record page this was reported missing it on", async () => {

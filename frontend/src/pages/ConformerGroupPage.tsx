@@ -8,7 +8,7 @@ import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
-import { stereoChip } from "../domain/recordFacets"
+import { SpeciesEntryLink } from "../components/SpeciesEntryLink"
 import { reviewPillClass } from "../domain/reviewPillFormat"
 import { useConformerGroup } from "../hooks/useConformerGroup"
 
@@ -61,7 +61,8 @@ function Ledger({ group }: { group: ConformerGroup }) {
                 identity={(
                     <header className="basin-header">
                         {/* This page's data shape (`species` context: no charge/
-                            multiplicity/InChIKey/formula) does not fit
+                            multiplicity/InChIKey -- `formula` is now served, see
+                            the "Species entry" fact below) does not fit
                             `RecordIdentityHeader`'s `RecordIdentity` union, so it
                             renders the SAME kicker-row + h1 + identity `.kv-list`
                             markup that component renders for the other three
@@ -129,22 +130,29 @@ function Ledger({ group }: { group: ConformerGroup }) {
                                             same bug that header's "Species entry" fact had
                                             -- the raw `species_entry_label` shown as the
                                             whole link text (a bare "R" on a real record,
-                                            with no explanation). Same fix, same reasoning:
-                                            `species_entry_label` is a server-computed
-                                            discriminator (`backend/app/services/
-                                            scientific_read/species_identity.py:42`), not
-                                            free text, so it's expanded via `stereoChip`
-                                            ("R" -> "R enantiomer") rather than shown raw.
-                                            This endpoint's `species` context serves no
-                                            `formula` at all (this file's own comment above
-                                            `.basin-header` documents that), so the base
-                                            text is always the literal "Species entry",
-                                            never the ref -- matching
-                                            `RecordIdentityHeader.tsx`'s own fallback. */}
-                                        <Link to={`/species-entries/${species.species_entry_ref}`}>
-                                            {"Species entry"}
-                                            {species.species_entry_label && <> · {stereoChip(species.species_entry_label)}</>}
-                                        </Link>
+                                            with no explanation).
+                                            Now delegates to `SpeciesEntryLink`
+                                            (`../components/SpeciesEntryLink.tsx`) rather
+                                            than re-deriving the same formula-then-
+                                            `stereoChip`-label expression here -- the
+                                            reviewer of #375 flagged this exact
+                                            duplication across this page,
+                                            `ConformerObservationPage.tsx`, and
+                                            `RecordIdentityHeader.tsx`. The backend now
+                                            serves `formula` on this endpoint's `species`
+                                            context (RDKit-derived, same expression as the
+                                            calculation/geometry surfaces), so the base
+                                            link text is the formula when present, falling
+                                            back to the ref as `<code className="data">` --
+                                            matching `RecordIdentityHeader.tsx`'s own
+                                            fallback -- never the literal words "Species
+                                            entry" (the `<dt>` beside this `<dd>` already
+                                            says that). */}
+                                        <SpeciesEntryLink
+                                            speciesEntryRef={species.species_entry_ref}
+                                            formula={species.formula}
+                                            speciesEntryLabel={species.species_entry_label}
+                                        />
                                     </dd>
                                 </div>
                                 <div><dt>Structure</dt><dd>{species.canonical_smiles ? <code>{species.canonical_smiles}</code> : "not projected"}</dd></div>

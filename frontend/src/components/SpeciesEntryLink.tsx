@@ -4,7 +4,8 @@ import { stereoChip } from "../domain/recordFacets"
 
 /**
  * The "Species entry" link every record page that owns a species (the
- * calculation, geometry, and conformer-observation pages) points at
+ * calculation and geometry pages via `RecordIdentityHeader`, and the
+ * conformer-group and conformer-observation pages directly) points at
  * `/species-entries/:ref`.
  *
  * Owner report ("record-page residuals" re-review, item 4): this used to
@@ -43,22 +44,29 @@ import { stereoChip } from "../domain/recordFacets"
  * passes through unchanged -- still shown, next to the formula, never as
  * the sole text.
  *
- * Post-review fix: when there is no formula (`ConformerObservationPage`'s
- * species context never serves one -- see that page's own comment), the
- * base text falls back to the entry's own ref as `<code className="data">`
- * -- the same treatment every OTHER ref on these pages gets -- NOT the
- * literal words "Species entry". That fallback existed in an earlier
- * draft and produced "SPECIES ENTRY / Species entry · R enantiomer": the
- * `<dt>` beside this `<dd>` already says "Species entry", so repeating it
- * as the value said nothing a reader didn't already have. A ref is a
- * real, if terse, identifier the same way `EntryStatmechSection.tsx`'s
- * "Species entry: spe_…" rows already treat one.
+ * Post-review fix: when there is no formula (an unparseable species
+ * SMILES, on any caller), the base text falls back to the entry's own
+ * ref as `<code className="data">` -- the same treatment every OTHER ref
+ * on these pages gets -- NOT the literal words "Species entry". That
+ * fallback existed in an earlier draft and produced "SPECIES ENTRY /
+ * Species entry · R enantiomer": the `<dt>` beside this `<dd>` already
+ * says "Species entry", so repeating it as the value said nothing a
+ * reader didn't already have. A ref is a real, if terse, identifier the
+ * same way `EntryStatmechSection.tsx`'s "Species entry: spe_…" rows
+ * already treat one.
  *
- * The intended shape once every page here serves a formula is uniformly
- * "C9H9 · R enantiomer" -- `ConformerObservationPage` cannot reach that
- * today because its wire shape has no `formula` field at all (unlike the
- * calculation/geometry payloads, which do). Filed as a backend follow-up
- * to add it; see the PR body.
+ * Every caller now reaches the intended "C9H9 · R enantiomer" shape:
+ * `ConformerObservationPage`, `ConformerGroupPage`, and
+ * `RecordIdentityHeader` (used by the calculation and geometry pages)
+ * all pass this component their own `formula`. The conformer surfaces'
+ * `formula` field was a backend gap (their `ConformerSpeciesContext`
+ * carried no formula at all, unlike the calculation/geometry payloads'
+ * `formula`-bearing shapes) closed alongside this component -- see
+ * `backend/app/services/scientific_read/conformers.py`'s
+ * `_build_species_context`. `RecordIdentityHeader` and
+ * `ConformerGroupPage` were also switched to call this component
+ * directly rather than re-deriving the same expression locally (a
+ * duplicate flagged on #375's review).
  */
 export function SpeciesEntryLink({ speciesEntryRef, formula, speciesEntryLabel }: {
     speciesEntryRef: string

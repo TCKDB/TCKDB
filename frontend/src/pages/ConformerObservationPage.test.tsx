@@ -60,6 +60,7 @@ function mockRecord(overrides: Record<string, unknown> = {}) {
             species_ref: "spc_demo",
             species_entry_ref: "spe_demo",
             species_entry_label: "ground state",
+            formula: "CH3",
             canonical_smiles: "[CH3]",
         },
         assignment_scheme: null,
@@ -251,20 +252,20 @@ describe("ConformerObservationPage", () => {
 
         // Item 4/5 ("record-page residuals" re-review): the species-entry
         // body link no longer shows the deposited label ("ground state" in
-        // this fixture) ALONE -- this endpoint's `species` context carries
-        // no `formula` field at all, so `SpeciesEntryLink`'s base text
-        // falls back to the entry REF (`<code className="data">`), never
-        // the literal words "Species entry" (the enclosing <dt> already
-        // says that -- repeating it as the value said nothing new). The
-        // label (unrecognised by `stereoChip`, so rendered unchanged)
-        // still rides along after the ref -- see `SpeciesEntryLink.test.tsx`
-        // for the component-level version of this assertion, and that
-        // component's own docstring for why `species_entry_label` is a
-        // computed discriminator, not free text, and is not suppressed.
+        // this fixture) ALONE. This endpoint's `species` context now
+        // carries `formula` (backend fix), so `SpeciesEntryLink`'s base
+        // text is the formula -- with the label (unrecognised by
+        // `stereoChip`, so rendered unchanged) riding along after it --
+        // see `SpeciesEntryLink.test.tsx` for the component-level version
+        // of this assertion, and that component's own docstring for why
+        // `species_entry_label` is a computed discriminator, not free
+        // text, and is not suppressed. A sibling test below covers the
+        // no-`formula` case, where the base text falls back to the entry
+        // REF (`<code className="data">`) instead -- never the literal
+        // words "Species entry" (the enclosing <dt> already says that).
         const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
-        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "spe_demo · ground state" })
+        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "CH3 · ground state" })
         expect(speciesEntryLink).toHaveAttribute("href", "/species-entries/spe_demo")
-        expect(within(speciesEntryLink).getByText("spe_demo")).toHaveClass("data")
 
         // The conformer-basin label ("conformer_1") is a DIFFERENT fact
         // (a depositor label on the conformer group, not the species
@@ -290,6 +291,37 @@ describe("ConformerObservationPage", () => {
 
         // Geometry links point at the geometry detail route.
         expect(screen.getByRole("link", { name: "geo_one" })).toHaveAttribute("href", "/geometries/geo_one")
+    })
+
+    // Unified fallback rule (per `SpeciesEntryLink`'s own reviewer-flagged
+    // duplication fix, shared with `ConformerGroupPage.tsx` and
+    // `RecordIdentityHeader.tsx`): when the species SMILES did not parse
+    // and the backend serves no `formula`, the base link text is the
+    // entry REF as `<code className="data">`, never the literal words
+    // "Species entry" -- the enclosing <dt> already says that.
+    it("falls back to the entry ref, as a data code run, when the species context carries no formula", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({
+                record: mockRecord({
+                    species: {
+                        species_ref: "spc_demo",
+                        species_entry_ref: "spe_demo",
+                        species_entry_label: "ground state",
+                        formula: null,
+                        canonical_smiles: "not-a-smiles(((",
+                    },
+                }),
+            })
+        )))
+
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        const identityHeader = document.querySelector(".record-identity-header") as HTMLElement
+        const speciesEntryLink = within(identityHeader).getByRole("link", { name: "spe_demo · ground state" })
+        expect(speciesEntryLink).toHaveAttribute("href", "/species-entries/spe_demo")
+        expect(within(speciesEntryLink).getByText("spe_demo")).toHaveClass("data")
+        expect(speciesEntryLink.textContent).not.toContain("Species entry")
     })
 
     // Same shape as the fix on `CalculationDetailPage.tsx`'s `OwnerCard`:

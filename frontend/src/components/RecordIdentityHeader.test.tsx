@@ -266,10 +266,22 @@ describe("RecordIdentityHeader", () => {
     // isotope_key), omitting anything at the default -- the live "R" is
     // the entry's stereo label (R enantiomer). The link now shows the
     // entry's own formula (same `<Formula>` rendering the h1 uses, so
-    // subscripts match) -- or the literal "Species entry" when none was
-    // served -- followed by the EXPANDED label via `recordFacets.ts`'s
-    // own `stereoChip` helper (documented at `domain/recordFacets.ts:53-68`)
-    // when one was served, never the raw discriminator string alone.
+    // subscripts match) -- or the entry ref as `<code className="data">`
+    // when none was served -- followed by the EXPANDED label via
+    // `recordFacets.ts`'s own `stereoChip` helper (documented at
+    // `domain/recordFacets.ts:53-68`) when one was served, never the raw
+    // discriminator string alone.
+    //
+    // This fact now delegates to `SpeciesEntryLink`
+    // (`./SpeciesEntryLink.tsx`) rather than re-deriving the expression
+    // here -- see that component's own test file for the exhaustive
+    // formula/label matrix. These three cases stay here as an
+    // integration check that this header actually wires `identity.formula`
+    // / `identity.speciesEntryLabel` through, and -- per the unified
+    // fallback rule across all four species-entry-link call sites (this
+    // header, `ConformerGroupPage`, `ConformerObservationPage`) -- that
+    // the fallback is the entry REF, never the literal words "Species
+    // entry" (the `<dt>` beside this `<dd>` already says that).
     describe("the species-entry link expands the served discriminator via the shared stereoChip helper", () => {
         it("shows the formula plus the EXPANDED label ('R' -> 'R enantiomer'), reusing recordFacets.ts's own stereoChip wording", () => {
             renderHeader({
@@ -285,10 +297,14 @@ describe("RecordIdentityHeader", () => {
             expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
         })
 
-        it("falls back to the literal 'Species entry' when the identity carries no formula and no label", () => {
+        it("falls back to the entry ref, as a data code run, when the identity carries no formula and no label", () => {
             renderHeader({ identity: { ...speciesIdentity, formula: null, speciesEntryLabel: null } })
-            const link = screen.getByRole("link", { name: "Species entry" })
+            const link = screen.getByRole("link", { name: "spe_demo" })
             expect(link).toHaveAttribute("href", "/species-entries/spe_demo")
+            const code = link.querySelector("code")
+            expect(code).not.toBeNull()
+            expect(code).toHaveClass("data")
+            expect(link.textContent).not.toContain("Species entry")
         })
     })
 })

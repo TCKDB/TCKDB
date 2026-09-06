@@ -16,6 +16,7 @@ const speciesContextSchema = z.object({
     species_ref: z.string(),
     species_entry_ref: z.string(),
     species_entry_label: z.string().nullable().optional(),
+    formula: z.string().nullable().optional(),
     canonical_smiles: z.string().nullable().optional(),
     inchi_key: z.string().nullable().optional(),
     charge: z.number().nullable().optional(),
