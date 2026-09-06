@@ -5,6 +5,24 @@ import { cleanup, render, screen, within } from "@testing-library/react"
 import { MemoryRouter, Route, Routes } from "react-router-dom"
 import ConformerObservationPage from "./ConformerObservationPage"
 
+/** Reads the `<dd>` text for a `.kv-list`-shaped `<dt>` term inside `container` --
+ *  the same helper `CalculationDetailPage.test.tsx` uses on its own coverage
+ *  checklist, reused here now both pages render the identical structure. */
+function ddFor(container: HTMLElement, term: string): string {
+    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
+    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
+    return dt.nextElementSibling?.textContent ?? ""
+}
+
+/** Reads the `.value-pill` span inside the `<dd>` for a `<dt>` term. */
+function ddPillFor(container: HTMLElement, term: string): HTMLElement {
+    const dt = Array.from(container.querySelectorAll("dt")).find((el) => el.textContent === term)
+    if (!dt) throw new Error(`No <dt> with text "${term}" found in this container`)
+    const pill = dt.nextElementSibling?.querySelector("span")
+    if (!pill) throw new Error(`No pill span found in the <dd> for "${term}"`)
+    return pill as HTMLElement
+}
+
 const server = setupServer()
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }))
 afterEach(() => {
@@ -340,9 +358,78 @@ describe("ConformerObservationPage", () => {
         )))
         page()
         await screen.findByRole("heading", { name: "Computed observation" })
-        expect(screen.getByText(/geometry validation recorded/)).toBeVisible()
-        expect(screen.getByText(/SCF stability not recorded/)).toBeVisible()
-        expect(screen.queryByText(/SCF stability no\b/)).not.toBeInTheDocument()
+        // record-summary-row PR: the inline run-on sentence ("opt yes ·
+        // freq yes · ...") is gone -- each check is now its own labelled
+        // row in the evidence checklist (`.coverage-checklist`, the SAME
+        // shape `CalculationDetailPage`'s own checklist uses).
+        const checklist = document.querySelector(".coverage-checklist") as HTMLElement
+        expect(checklist).not.toBeNull()
+        expect(ddFor(checklist, "Geometry validation")).toBe("recorded")
+        expect(ddFor(checklist, "SCF stability")).toBe("not recorded")
+    })
+
+    // record-summary-row PR, item 1: the evidence box sits BELOW the tile
+    // row now, as its own full-width `.ledger-summary--single` section --
+    // never a 4th item sharing the tiles' own grid row (the owner report
+    // this fixes). And item 3: every check is present/absent (or
+    // recorded/not recorded) as its own pilled row, using the SAME
+    // `value-pill`/`value-pill--muted` pair every other bounded-status-word
+    // checklist on this app uses.
+    it("renders the tile row and the evidence checklist as two separate sections, tiles with no evidence card among them", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+
+        const tileRow = screen.getByLabelText("Observation evidence summary")
+        expect(tileRow).not.toHaveClass("ledger-summary--single")
+        expect(tileRow.querySelector(".coverage-card")).toBeNull()
+        expect(within(tileRow).getAllByText(/Calculation rows|Distinct stored geometries|Other observations in this basin/)).toHaveLength(3)
+
+        const checklistSection = screen.getByLabelText("Observation evidence checklist")
+        expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
+        const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        expect(card).not.toBeNull()
+        expect(within(card).getByText("Evidence on this observation")).toHaveClass("t-label")
+
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        // Default mockRecord: has_opt/has_freq true (present), has_sp false
+        // (absent), has_geometry_validation true (recorded),
+        // has_scf_stability false (not recorded) -- see the mockRecord
+        // definition above.
+        for (const [label, value] of [
+            ["Optimisation", "present"], ["Frequency", "present"], ["Geometry validation", "recorded"],
+        ] as const) {
+            const pill = ddPillFor(checklist, label)
+            expect(pill).toHaveClass("value-pill")
+            expect(pill).not.toHaveClass("value-pill--muted")
+            expect(pill).toHaveTextContent(value)
+        }
+        for (const [label, value] of [["Single point", "absent"], ["SCF stability", "not recorded"]] as const) {
+            const pill = ddPillFor(checklist, label)
+            expect(pill).toHaveClass("value-pill", "value-pill--muted")
+            expect(pill).toHaveTextContent(value)
+        }
+    })
+
+    // Post-review (review of 2bd17511): the tile-alignment fix moved from a
+    // reserved label height to number-first markup -- the number (`<strong>`)
+    // must be each tile's FIRST child, with the label (`<span>`) after it,
+    // so the number always sits at the tile's own top edge regardless of
+    // whether the label wraps.
+    it("renders each metric tile number-first: <strong> before <span>", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+        const tiles = screen.getByLabelText("Observation evidence summary").querySelectorAll(".metric")
+        expect(tiles).toHaveLength(3)
+        for (const tile of tiles) {
+            expect(tile.children[0].tagName).toBe("STRONG")
+            expect(tile.children[1].tagName).toBe("SPAN")
+        }
     })
 
     it("gives the disclosure a real heading so heading-navigation does not skip it", async () => {

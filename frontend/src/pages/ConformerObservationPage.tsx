@@ -4,6 +4,7 @@ import "../record-identity-header.css"
 import type { ConformerObservation } from "../api/conformerObservationApi"
 import { lotLabel } from "../api/scientificSchemas"
 import { Disclosure } from "../components/Disclosure"
+import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -205,21 +206,36 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 <Metric label="Calculation rows" value={evidence.calculation_count} />
                 <Metric label="Distinct stored geometries" value={evidence.geometry_count} />
                 <Metric label="Other observations in this basin" value={siblings.length} />
-                {/* `.card--derived` -- see `ConformerGroupPage.tsx`'s identical
-                    comment on its own coverage card (item 8). */}
-                <div className="card card--derived coverage-card">
-                    <span className="t-label">Evidence present on this observation</span>
-                    <strong>
-                        opt {evidence.has_opt ? "yes" : "no"} · freq {evidence.has_freq ? "yes" : "no"} · sp
-                        {` ${evidence.has_sp ? "yes" : "no"}`} · geometry validation
-                        {` ${evidence.has_geometry_validation ? "recorded" : "not recorded"}`} · SCF stability
-                        {` ${evidence.has_scf_stability ? "recorded" : "not recorded"}`}
-                    </strong>
-                    <p className="note">
-                        Presence says this observation carries that check, not that the result was favourable —
-                        "SCF stability recorded" means a stability test ran, not that the wavefunction was stable.
-                    </p>
-                </div>
+            </section>
+            {/* Sits BELOW the tile row above, full row width, as its own
+                `.ledger-summary--single` section -- the SAME shape
+                `CalculationDetailPage.tsx`'s evidence card has always used
+                (see the owner report this fixes: this box used to sit IN
+                THE SAME ROW as the three metric tiles above, one inline
+                run-on sentence rather than a going-down list -- record-
+                summary-row PR). `.card--derived` -- see
+                `ConformerGroupPage.tsx`'s identical comment on its own
+                coverage card (item 8). */}
+            <section className="ledger-summary ledger-summary--single" aria-label="Observation evidence checklist">
+                <EvidenceChecklist
+                    heading="Evidence on this observation"
+                    rows={[
+                        { label: "Optimisation", value: evidence.has_opt ? "present" : "absent", tone: evidence.has_opt ? "pill" : "pill-muted" },
+                        { label: "Frequency", value: evidence.has_freq ? "present" : "absent", tone: evidence.has_freq ? "pill" : "pill-muted" },
+                        { label: "Single point", value: evidence.has_sp ? "present" : "absent", tone: evidence.has_sp ? "pill" : "pill-muted" },
+                        {
+                            label: "Geometry validation",
+                            value: evidence.has_geometry_validation ? "recorded" : "not recorded",
+                            tone: evidence.has_geometry_validation ? "pill" : "pill-muted",
+                        },
+                        {
+                            label: "SCF stability",
+                            value: evidence.has_scf_stability ? "recorded" : "not recorded",
+                            tone: evidence.has_scf_stability ? "pill" : "pill-muted",
+                        },
+                    ]}
+                    note='Presence says this observation carries that check, not that the result was favourable — "SCF stability recorded" means a stability test ran, not that the wavefunction was stable.'
+                />
             </section>
 
             {/* The "Levels of theory by stage" section that used to sit here
@@ -461,11 +477,13 @@ function groupGeometries(links: GeometryLink[]) {
     return [...byRef.values()]
 }
 
+// Post-review (2bd17511): number FIRST, label after -- see the tile-
+// alignment comment on `.ledger-summary` (`conformer-group.css`) for why.
 function Metric({ label, value }: { label: string; value: number }) {
     return (
         <div className="card metric">
-            <span>{label}</span>
             <strong>{value}</strong>
+            <span>{label}</span>
         </div>
     )
 }

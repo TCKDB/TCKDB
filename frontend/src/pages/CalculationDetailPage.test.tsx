@@ -718,6 +718,51 @@ describe("CalculationDetailPage", () => {
         expect(within(checklist).queryByText("Convergence")).not.toBeInTheDocument()
     })
 
+    // record-summary-row PR, post-review (owner decision: every status word
+    // is a pill on every page, no exception for this one): this page's
+    // evidence card renders through the SHARED `components/
+    // EvidenceChecklist.tsx` component -- confirmed here via its
+    // `data-component="evidence-checklist"` marker (not a page-local class
+    // or copy this page could drift from independently), and its two rows
+    // carry the SAME pill classes `ConformerObservationPage.tsx`'s own
+    // present/absent checklist uses: a real recorded outcome ("passed",
+    // "unstable") is a plain `.value-pill`, and the absent/not-applicable
+    // case is `.value-pill.value-pill--muted` (see `evidenceTone`'s own
+    // docstring in `CalculationDetailPage.tsx`).
+    it("renders through the shared EvidenceChecklist component, with both rows pilled per the one-rule tone convention", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                calculation: { ...mockRecord().calculation, type: "sp" },
+                provenance: {
+                    has_result: true, result_applicable: true,
+                    // Geometry validation: not applicable to an `sp` calc
+                    // -> muted. SCF stability: a real recorded outcome
+                    // -> plain.
+                    geometry_validation_status: "not_present", geometry_validation_applicable: false,
+                    scf_stability_status: "unstable",
+                },
+            }),
+        })))
+        page()
+        await findLoaded("Single-point")
+
+        const card = document.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        expect(card).not.toBeNull()
+        expect(card).toHaveAttribute("data-component", "evidence-checklist")
+
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        const gvDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Geometry validation")
+        const gvPill = gvDt?.nextElementSibling?.querySelector("span") as HTMLElement
+        expect(gvPill).toHaveClass("value-pill", "value-pill--muted")
+        expect(gvPill).toHaveTextContent("not applicable")
+
+        const scfDt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "SCF stability")
+        const scfPill = scfDt?.nextElementSibling?.querySelector("span") as HTMLElement
+        expect(scfPill).toHaveClass("value-pill")
+        expect(scfPill).not.toHaveClass("value-pill--muted")
+        expect(scfPill).toHaveTextContent("unstable")
+    })
+
     // Item 3 (post-review): the `<dl>` must carry the shared `kv-list`
     // class, not just its own `coverage-checklist` marker class -- without
     // `kv-list`, this element has NO layout rules of its own any more
