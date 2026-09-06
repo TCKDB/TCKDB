@@ -200,7 +200,7 @@ function Ledger({ group }: { group: ConformerGroup }) {
                 for why a count stays plain text). */}
             <section className="ledger-summary ledger-summary--single" aria-label="Basin evidence checklist">
                 <EvidenceChecklist
-                    heading="Observation coverage"
+                    heading="Evidence on this conformer group"
                     rows={[
                         { label: "Optimisation", value: `${evidence.evidence_coverage.opt} of ${summary.total} observations` },
                         { label: "Frequency", value: `${evidence.evidence_coverage.freq} of ${summary.total} observations` },
@@ -362,11 +362,18 @@ function groupGeometries(links: GeometryLink[]) {
     return [...byRef.values()]
 }
 
+// Post-review (2bd17511): number FIRST, label second, an optional detail
+// line LAST -- see the tile-alignment comment on `.ledger-summary`
+// (`conformer-group.css`) for why. The detail line (this page's only
+// caller that ever passes one, "N optimisation chains") sits AFTER the
+// label, at the bottom of the tile either way -- it never sits between
+// the number and its own label, so it cannot displace the number the
+// way a wrapping LABEL used to.
 function Metric({ label, value, detail }: { label: string; value: number; detail?: string }) {
     return (
         <div className="card metric">
-            <span>{label}</span>
             <strong>{value}</strong>
+            <span>{label}</span>
             {detail && <small>{detail}</small>}
         </div>
     )

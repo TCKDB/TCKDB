@@ -267,6 +267,19 @@ describe("GeometryDetailPage", () => {
         expect(pill).toHaveTextContent("not recorded for this geometry")
     })
 
+    // Post-review (review of 2bd17511): number-first tile markup.
+    it("renders each metric tile number-first: <strong> before <span>", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+        const tiles = screen.getByLabelText("Geometry provenance summary").querySelectorAll(".metric")
+        expect(tiles).toHaveLength(2)
+        for (const tile of tiles) {
+            expect(tile.children[0].tagName).toBe("STRONG")
+            expect(tile.children[1].tagName).toBe("SPAN")
+        }
+    })
+
     it("points to the Produced by / Used as input by tables below, rather than repeating every ref inline", async () => {
         // Finding #13: this card used to repeat every producing/consuming
         // calculation ref inline as its own `<dl>` of links -- up to twelve

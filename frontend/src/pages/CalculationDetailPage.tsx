@@ -138,6 +138,23 @@ function scfStabilityOutcomeLabel(status: string): string {
 }
 
 /**
+ * Post-review (owner decision, one rule across every page): a status word
+ * is a pill EVERYWHERE, no exception for this page -- the muted case is
+ * exactly the two "nothing to report" labels above
+ * (`EVIDENCE_ABSENT_LABEL` / `EVIDENCE_NOT_APPLICABLE_LABEL`); every other
+ * outcome word this checklist can show (a real recorded verdict --
+ * "passed"/"warning"/"fail"/"stable"/"unstable"/...) is a plain, non-muted
+ * pill, the SAME axis `ConformerObservationPage.tsx`'s "present"/"recorded"
+ * rows already pill. This checklist previously rendered both rows as bare
+ * text -- the one place on the app the pill convention didn't reach; see
+ * `EvidenceChecklist`'s own docstring for why that was the inconsistency
+ * fixed here, not a shape worth preserving.
+ */
+function evidenceTone(label: string): "pill" | "pill-muted" {
+    return label === EVIDENCE_ABSENT_LABEL || label === EVIDENCE_NOT_APPLICABLE_LABEL ? "pill-muted" : "pill"
+}
+
+/**
  * The one headline energy figure this page promotes into its header —
  * see the design brief's "Promote the answer". Only `sp` (electronic
  * energy) and `opt` (final energy) calculations have a single number
@@ -314,6 +331,14 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
     // renders no row at all; `null` still renders as "not recorded" so
     // an authenticated reader can tell "checked, none" from "not told".
     const submissionRefKeyPresent = "submission_ref" in provenance
+
+    // Computed once and reused for both the row's `value` and its
+    // `tone` (`evidenceTone`'s own docstring) -- avoids calling either
+    // outcome function twice per render for the same two facts.
+    const geometryValidationOutcome = geometryValidationOutcomeLabel(
+        provenance.geometry_validation_status, provenance.geometry_validation_applicable,
+    )
+    const scfStabilityOutcome = scfStabilityOutcomeLabel(provenance.scf_stability_status)
 
     // Geometry validation's fetched state is lifted here, out of the
     // "Further evidence" disclosure that would otherwise own it, so the
@@ -511,28 +536,25 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     every record page). Renders through the shared
                     `EvidenceChecklist` component (record-summary-row PR) -- this
                     page's OWN markup was the origin of the shape every other
-                    record page's evidence box now matches; extracted here as a
-                    pure refactor, not a redesign (see that component's own
-                    docstring and this PR's DOM-comparison test). Geometry
-                    validation and SCF stability only -- Result and Convergence
-                    are dropped from this checklist (review finding: each
-                    already has its own headline/Result-section home, so a
-                    THIRD "recorded"/"absent" line for the same fact stated
-                    nothing new). The two rows that remain have no section of
-                    their own when they come up empty, so this is the only
-                    place a reader learns whether they exist at all -- and each
-                    shows the actual recorded OUTCOME (passed / failed / stable
-                    / ...), not just "recorded". No `tone` on either row: this
-                    page's own values were never rendered as pills, and this
-                    extraction changes nothing about that. */}
+                    record page's evidence box now matches. Geometry validation
+                    and SCF stability only -- Result and Convergence are dropped
+                    from this checklist (review finding: each already has its
+                    own headline/Result-section home, so a THIRD "recorded"/
+                    "absent" line for the same fact stated nothing new). The two
+                    rows that remain have no section of their own when they come
+                    up empty, so this is the only place a reader learns whether
+                    they exist at all -- and each shows the actual recorded
+                    OUTCOME (passed / failed / stable / ...), not just
+                    "recorded". `tone: evidenceTone(...)` on both rows
+                    (post-review, owner decision): the muted case is exactly
+                    "absent"/"not applicable"; every real outcome word is a
+                    plain pill -- see `evidenceTone`'s own docstring for why
+                    this page no longer keeps a bare-text exception. */}
                 <EvidenceChecklist
                     heading="Evidence on this calculation"
                     rows={[
-                        {
-                            label: "Geometry validation",
-                            value: geometryValidationOutcomeLabel(provenance.geometry_validation_status, provenance.geometry_validation_applicable),
-                        },
-                        { label: "SCF stability", value: scfStabilityOutcomeLabel(provenance.scf_stability_status) },
+                        { label: "Geometry validation", value: geometryValidationOutcome, tone: evidenceTone(geometryValidationOutcome) },
+                        { label: "SCF stability", value: scfStabilityOutcome, tone: evidenceTone(scfStabilityOutcome) },
                     ]}
                     note="A recorded outcome here is the actual verdict; the full evidence, where the archive has more to show, is under Further evidence below."
                 />

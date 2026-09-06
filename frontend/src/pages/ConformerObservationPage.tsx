@@ -218,7 +218,7 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                 coverage card (item 8). */}
             <section className="ledger-summary ledger-summary--single" aria-label="Observation evidence checklist">
                 <EvidenceChecklist
-                    heading="Evidence present on this observation"
+                    heading="Evidence on this observation"
                     rows={[
                         { label: "Optimisation", value: evidence.has_opt ? "present" : "absent", tone: evidence.has_opt ? "pill" : "pill-muted" },
                         { label: "Frequency", value: evidence.has_freq ? "present" : "absent", tone: evidence.has_freq ? "pill" : "pill-muted" },
@@ -477,11 +477,13 @@ function groupGeometries(links: GeometryLink[]) {
     return [...byRef.values()]
 }
 
+// Post-review (2bd17511): number FIRST, label after -- see the tile-
+// alignment comment on `.ledger-summary` (`conformer-group.css`) for why.
 function Metric({ label, value }: { label: string; value: number }) {
     return (
         <div className="card metric">
-            <span>{label}</span>
             <strong>{value}</strong>
+            <span>{label}</span>
         </div>
     )
 }

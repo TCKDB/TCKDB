@@ -85,39 +85,53 @@ describe(".ledger-summary is the tile row ONLY now, align-items: stretch (record
 })
 
 /**
- * record-summary-row PR, item 1: MEASURED before this fix, three tiles in
- * one row came out 261×107 / 261×107 / 261×127 -- the third taller only
- * because its own label happened to wrap to two lines. `align-items:
- * stretch` alone equalises the tiles' OUTER box height, but the digit
- * below a two-line label still sat lower than a digit below a one-line
- * label -- this reserves a fixed two-line height on the label itself so
- * the digit always starts from the same y regardless of whether ITS OWN
- * label wrapped.
+ * record-summary-row PR, item 1 (post-review fix, review of 2bd17511):
+ * MEASURED before the FIRST attempt at this fix, three tiles in one row
+ * came out 261×107 / 261×107 / 261×127 -- the third taller only because
+ * its own label happened to wrap to two lines. That attempt reserved a
+ * fixed two-line height on `.metric span` (the label) via `min-height:
+ * 2.6em` -- MEASURED (review of 2bd17511) as ~10px of dead space below
+ * the number and a ~10px number displacement on EVERY tile on every page,
+ * since no label in the live data actually wraps at 1920. Fixed properly
+ * by reordering the markup instead (`<strong>` first, `<span>` after --
+ * see each page's own `Metric` component): the number sits at the tile's
+ * own top edge by construction, so this file no longer needs -- and must
+ * not re-add -- a `min-height` reservation on the label at all.
  */
-describe(".metric span reserves a fixed two-line label height (record-summary-row PR, item 1)", () => {
-    it("declares display: block (required for min-height to apply to an inline span)", () => {
-        const rule = extractRule(css, ".metric span")
-        expect(rule).toMatch(/display:\s*block/)
+describe(".metric: number-first markup, no label height reservation (record-summary-row PR, item 1, post-review)", () => {
+    it(".metric strong (the number) declares no margin-top -- it is always the tile's first child", () => {
+        const rule = extractRule(css, ".metric strong")
+        expect(rule).not.toMatch(/margin-top/)
     })
 
-    it("declares min-height: 2.6em -- two line-heights of --type-label-font (.72rem / 1.3)", () => {
+    it(".metric span (the label) declares margin-top: var(--s-2) -- it follows the number, not the reverse", () => {
         const rule = extractRule(css, ".metric span")
-        expect(rule).toMatch(/min-height:\s*2\.6em/)
+        expect(rule).toMatch(/margin-top:\s*var\(--s-2\)/)
+    })
+
+    it("declares no min-height reservation on the label, number, or detail line (the superseded fix)", () => {
+        // `.metric` ITSELF still legitimately declares `min-height: 5rem`
+        // (SHOULD-FIX-9, unrelated to the label-wrap fix this guards) --
+        // only the three CHILD elements that would have carried the
+        // superseded reservation are checked here.
+        for (const selector of [".metric span", ".metric strong", ".metric small"]) {
+            const rule = extractRule(css, selector)
+            expect(rule, `${selector} must not declare a min-height`).not.toMatch(/min-height/)
+        }
     })
 })
 
 /**
- * record-summary-row PR: `.coverage-card`/`.coverage-checklist`/
- * `.ledger-summary--single` are now consolidated in THIS file (moved from
- * `calculation-detail.css`, the pre-fix sole owner) -- see
- * `evidenceChecklist.css.test.ts` for the source test asserting no OTHER
- * page stylesheet still declares any of the three.
+ * `.ledger-summary--single` stays in THIS file (a `.ledger-summary`
+ * variant used directly in page markup, not a class `EvidenceChecklist`
+ * itself renders) -- `.coverage-card`/`.coverage-checklist` moved OUT,
+ * to the component's own `evidence-checklist.css` (post-review of
+ * 2bd17511: the repo convention is a component owns its own stylesheet,
+ * the same as `RecordIdentityHeader`/`RefsDisclosure`/`EnergyDisplay`).
+ * See `evidenceChecklist.css.test.ts` for the glob-based source test
+ * covering both files' declarations.
  */
-describe("conformer-group.css is the one CSS home for the evidence checklist card (record-summary-row PR)", () => {
-    it("declares .coverage-card is a single column (via .coverage-checklist) below its tile row", () => {
-        expect(css).toMatch(/\.coverage-checklist\s*\{[^}]*grid-template-columns:\s*1fr/)
-    })
-
+describe("conformer-group.css owns .ledger-summary and its .ledger-summary--single variant (record-summary-row PR)", () => {
     it("declares .ledger-summary--single as the full-width, one-column variant", () => {
         const rule = extractRule(css, ".ledger-summary--single")
         expect(rule).toMatch(/grid-template-columns:\s*1fr/)
@@ -125,6 +139,11 @@ describe("conformer-group.css is the one CSS home for the evidence checklist car
 
     it("tightens the gap between a tile row and the evidence card that immediately follows it", () => {
         expect(css).toMatch(/\.ledger-summary\s*\+\s*\.ledger-summary--single\s*\{[^}]*margin-top:\s*var\(--s-3\)/)
+    })
+
+    it("no longer declares .coverage-card or .coverage-checklist -- moved to evidence-checklist.css", () => {
+        expect(css).not.toMatch(/\.coverage-card\s*\{/)
+        expect(css).not.toMatch(/\.coverage-checklist\s*\{/)
     })
 })
 

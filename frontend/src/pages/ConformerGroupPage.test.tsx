@@ -166,7 +166,7 @@ describe("ConformerGroupPage", () => {
         expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
         const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
         expect(card).not.toBeNull()
-        expect(within(card).getByText("Observation coverage")).toHaveClass("t-label")
+        expect(within(card).getByText("Evidence on this conformer group")).toHaveClass("t-label")
 
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
         for (const [label, value] of [
@@ -180,6 +180,31 @@ describe("ConformerGroupPage", () => {
             // A count, not a status word -- plain text, no pill wrapper.
             expect(dd.querySelector(".value-pill")).toBeNull()
         }
+    })
+
+    // Post-review (review of 2bd17511): number-first tile markup -- and
+    // specifically, THIS page's "Calculation rows" tile is the one caller
+    // with a `<small>` detail line ("N optimisation chains"). The detail
+    // must sit AFTER the label, never between the number and its own
+    // label, so it cannot displace the number the way a wrapping LABEL
+    // used to.
+    it("renders each metric tile number-first, with the detail line (where present) last, never before the label", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-groups/cg_demo", () => HttpResponse.json(payload)))
+        page()
+        await screen.findByRole("heading", { name: "Conformer basin" })
+        const tiles = screen.getByLabelText("Basin evidence summary").querySelectorAll(".metric")
+        expect(tiles).toHaveLength(3)
+        for (const tile of tiles) {
+            expect(tile.children[0].tagName).toBe("STRONG")
+            expect(tile.children[1].tagName).toBe("SPAN")
+        }
+        const calcRowsTile = within(screen.getByLabelText("Basin evidence summary")).getByText("Calculation rows").closest(".metric") as HTMLElement
+        expect(calcRowsTile.children).toHaveLength(3)
+        expect(calcRowsTile.children[0]).toHaveTextContent("3")
+        expect(calcRowsTile.children[0].tagName).toBe("STRONG")
+        expect(calcRowsTile.children[1].tagName).toBe("SPAN")
+        expect(calcRowsTile.children[2].tagName).toBe("SMALL")
+        expect(calcRowsTile.children[2]).toHaveTextContent("1 optimisation chains")
     })
 
     // Design/foundations PR B (item 5, BLOCKING-3 fix per review): this

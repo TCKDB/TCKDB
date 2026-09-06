@@ -1,0 +1,62 @@
+/*
+ * EvidenceChecklist -- the evidence/coverage/validation summary card every
+ * record page renders now (`/calculations`, `/conformer-observations`,
+ * `/conformer-groups`, `/geometries`). Own stylesheet per this project's
+ * convention (`RecordIdentityHeader` -> `record-identity-header.css`,
+ * `RefsDisclosure` -> `refs-disclosure.css`, `EnergyDisplay` -> `energy-
+ * display.css`): a component's styling should not depend on some OTHER
+ * page's stylesheet happening to load first, or on a caller remembering
+ * to import a second file by hand. Before this file existed, a future
+ * fifth caller of `EvidenceChecklist` that did not already import
+ * `conformer-group.css` for unrelated reasons would have gotten a `<dl>`
+ * with no rules of its own at all -- `.kv-list`'s own `auto-fit,
+ * minmax(16rem, 1fr)` grid (`design-system.css`), producing two columns
+ * of "wrap around text" instead of the "going down list" the owner asked
+ * for. `EvidenceChecklist.tsx` imports this file directly, so the
+ * component now supplies its own styling regardless of what else the
+ * caller happens to import.
+ *
+ * `.ledger-summary--single` (the full-width, one-column ledger-summary
+ * variant this card's own section renders through) stays in
+ * `conformer-group.css`: it is a `.ledger-summary` variant used directly
+ * in page markup (`<section className="ledger-summary ledger-summary--
+ * single">`), not a class this component's own JSX ever renders, so it
+ * belongs with `.ledger-summary` itself, not here.
+ *
+ * Post-review fix (review of 2bd17511): retiring `conformer-group.css`'s
+ * old `.coverage-card span { display: block }` also un-blocked the
+ * `<span class="t-label">` HEADING -- that rule was styling two different
+ * things at once (the heading span AND, via `.coverage-card strong`
+ * alongside it, the old inline value), and only the heading survived
+ * into `EvidenceChecklist`. Un-scoped, the heading now computes `display:
+ * inline` (a bare `<span>`'s UA default), MEASURED: the heading's own box
+ * drops ~4px, and the `<dl>` that follows it drops with it -- the whole
+ * card shrinks by that much on every one of the four pages (237px ->
+ * 242px follows the OTHER direction, restoring the block box back to its
+ * correct height; the regression was the shrink, not the growth).
+ * `.coverage-card > .t-label` (direct-child, scoped to exactly the
+ * heading span this component renders, never any OTHER `.t-label`
+ * elsewhere on a page that happens to also sit inside a `.coverage-card`
+ * ancestor for unrelated layout reasons) is the fix -- pinned by
+ * `evidence-checklist.css.test.ts`.
+ */
+.coverage-card > .t-label {
+    display: block;
+}
+
+/* `.coverage-checklist` -- the `<dl>` `EvidenceChecklist` renders its rows
+   into. `kv-list` (`design-system.css`) supplies the label-above-value
+   `dt`/`dd` typography every other fact list on these pages renders at;
+   this rule keeps the checklist ONE column always (`kv-list`'s own
+   `auto-fit, minmax(16rem, 1fr)` grid would otherwise put rows side by
+   side at any width over ~32rem -- the exact "wrap around text" shape
+   the owner report asked to get away from, "this should be a going down
+   list") and the spacing below the heading, including the spacing
+   around each row's own pill (a `.value-pill` inherits its vertical
+   position from the `<dd>` it sits in -- `.kv-list dd`'s own `margin:
+   .3rem 0 0` already gives every row, pilled or plain-text, the same
+   breathing room above it; no further pill-specific rule is needed here). */
+.coverage-checklist {
+    margin: var(--s-3) 0 0;
+    grid-template-columns: 1fr;
+}

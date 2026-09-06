@@ -23,6 +23,15 @@ describe("EvidenceChecklist", () => {
         expect(heading).toHaveClass("t-label")
     })
 
+    // The marker a page-level test uses to confirm "this card came from the
+    // shared component" without depending on any one page's own class names
+    // or copy (see e.g. `CalculationDetailPage.test.tsx`'s own use of it).
+    it('marks its root with data-component="evidence-checklist"', () => {
+        const { container } = render(<EvidenceChecklist heading="Evidence" rows={[]} />)
+        const card = container.querySelector(".coverage-card") as HTMLElement
+        expect(card).toHaveAttribute("data-component", "evidence-checklist")
+    })
+
     it("renders rows as a single-column .kv-list.coverage-checklist, label above value", () => {
         const { container } = render(
             <EvidenceChecklist

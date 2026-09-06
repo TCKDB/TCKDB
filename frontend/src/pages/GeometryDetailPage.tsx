@@ -309,11 +309,13 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
     )
 }
 
+// Post-review (2bd17511): number FIRST, label after -- see the tile-
+// alignment comment on `.ledger-summary` (`conformer-group.css`) for why.
 function Metric({ label, value }: { label: string; value: number }) {
     return (
         <div className="card metric">
-            <span>{label}</span>
             <strong>{value}</strong>
+            <span>{label}</span>
         </div>
     )
 }

@@ -1,91 +1,141 @@
 import { describe, expect, it } from "vitest"
-// `?raw` = plain source text (see geometry-detail.css.test.ts for why).
-import calculationDetailCss from "./calculation-detail.css?raw"
-import conformerGroupCss from "./conformer-group.css?raw"
-import geometryDetailCss from "./geometry-detail.css?raw"
 
-/** Strips `/* ... *\/` comments -- a comment MENTIONING a retired
- *  selector's name in prose (e.g. explaining why it is gone) must not
- *  itself trip a "this is still declared" check. */
+// DISCOVERED, never enumerated -- same technique `value-pill-scope.css.test.ts`/
+// `design-system.css.test.ts` each use for their own "exactly one declaration"
+// guards: an explicit file list is a guard pointed at a fixed set of targets,
+// and a new stylesheet absent from that list would be unexamined, not
+// passing, which is indistinguishable from the outside. `import.meta.glob`
+// enumerates what actually exists under `src/**/*.css` instead -- recursive
+// (post-review, review of 2bd17511: the sibling guards above only glob
+// `./*.css`, since every stylesheet they care about is flat under `src/`
+// today; this one globs `./**/*.css` so a future component-owned sheet
+// placed under a subdirectory, e.g. `components/`, is still covered).
+const STYLESHEET_SOURCES = import.meta.glob("./**/*.css", { query: "?raw", import: "default", eager: true }) as Record<string, string>
+const ALL_STYLESHEETS: Record<string, string> = Object.fromEntries(
+    Object.entries(STYLESHEET_SOURCES).map(([path, css]) => [path.replace(/^\.\//, ""), css]),
+)
+
+/** Strips `/* ... *\/` block comments so a comment mentioning a retired
+ *  class name in prose (explaining why it's gone) can never be mistaken
+ *  for a live declaration -- same helper `value-pill-scope.css.test.ts`/
+ *  `design-system.css.test.ts`/`theme.css.test.ts` each carry their own
+ *  copy of, for the same reason. */
 function stripComments(source: string): string {
     return source.replace(/\/\*[\s\S]*?\*\//g, "")
 }
 
 /**
- * Extracts the declaration block for a BARE selector rule (the selector
- * alone, at the start of its own line) -- deliberately does NOT match the
- * selector when it appears as part of a compound/combinator selector like
- * `.ledger-summary + .ledger-summary--single`, so a query for
- * `.ledger-summary--single` cannot accidentally pick up that unrelated
- * sibling-combinator rule's block instead of its own standalone one.
+ * Post-review fix (review of 2bd17511): the FIRST version of this guard
+ * only matched a selector immediately followed by `{` at the start of its
+ * own line (`^\s*SELECTOR\s*\{`) -- MEASURED, that pattern let every one
+ * of these through as a "declares no rule" false pass: a page-scoped
+ * descendant selector (`.geometry-page .coverage-checklist {}`), a
+ * bespoke nested override (`.coverage-checklist dt {}`), and a bare
+ * duplicate declared anywhere BUT the start of its own line (e.g. two
+ * selectors on one line, `.foo, .coverage-checklist {}`). Any of those is
+ * a real second declaration of the class this guard exists to keep to
+ * one file -- the class name appearing ANYWHERE in a selector list, not
+ * just as a lone bare selector, is what matters. `selectorPattern` below
+ * requires the class name be followed by a character that can legally
+ * follow a class name in a real CSS selector (whitespace, `,`, `.`, `:`,
+ * `{`, `[`, or a combinator) -- i.e. it matches the class name wherever it
+ * appears as a real selector token, the same technique
+ * `value-pill-scope.css.test.ts`'s own `VALUE_PILL_SELECTOR` uses.
  */
-function extractRule(source: string, selector: string): string | null {
-    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    const match = new RegExp(`^[ \\t]*${escaped}\\s*\\{([^}]*)\\}`, "m").exec(stripComments(source))
-    return match ? match[1] : null
+function selectorPattern(className: string): RegExp {
+    const escaped = className.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+    return new RegExp(`${escaped}(?=[\\s,.:{[>+~])`)
+}
+
+/** Every stylesheet (name, comment-stripped source) that declares `className`
+ *  as a real selector token anywhere. */
+function declaredIn(className: string): string[] {
+    const pattern = selectorPattern(className)
+    return Object.entries(ALL_STYLESHEETS)
+        .filter(([, css]) => pattern.test(stripComments(css)))
+        .map(([name]) => name)
 }
 
 /**
- * record-summary-row PR: `.coverage-checklist` and `.ledger-summary--
- * single` used to live only in `calculation-detail.css` -- the ONE page
- * that rendered the evidence card before this PR. `.coverage-card`
- * itself has no bespoke rule of its own on any page: its box comes
- * entirely from the generic `.card`/`.card--derived` primitives
- * (`design-system.css`), and its internal layout from `.kv-list` +
- * `.coverage-checklist`'s one-column override -- there is nothing left
- * for a page-specific `.coverage-card { ... }` rule to say (the old
- * `.coverage-card span`/`strong` rules this file used to carry are
- * retired outright: the component never renders a bare `<strong>` any
- * more). Three OTHER page stylesheets now need this same box
- * (`components/EvidenceChecklist.tsx`; `ConformerGroupPage`/
- * `ConformerObservationPage`/`GeometryDetailPage`), so a future page
- * needing it too must have ONE file to reach for -- `conformer-group.css`,
- * the "scientific record ledger" stylesheet already loaded by every one
- * of the four record pages that render the box. This is the source test
- * that keeps a second declaration from creeping back into either of the
- * other two page stylesheets.
+ * `.coverage-card`/`.coverage-checklist` are `EvidenceChecklist.tsx`'s own
+ * classes -- declared in exactly one place, its own stylesheet,
+ * `evidence-checklist.css` (the repo's "a component owns its own CSS"
+ * convention: `RecordIdentityHeader` -> `record-identity-header.css`,
+ * `RefsDisclosure` -> `refs-disclosure.css`, `EnergyDisplay` -> `energy-
+ * display.css`). `.ledger-summary--single` is a `.ledger-summary` variant
+ * used directly in page markup (not a class the component itself
+ * renders), so it stays in `conformer-group.css` next to `.ledger-
+ * summary`. `.validation-card` (the geometry page's former bespoke,
+ * non-`--derived` evidence-box class) is retired outright -- declared
+ * nowhere.
  */
-const SELECTORS = [".coverage-checklist", ".ledger-summary--single"]
+describe("evidence checklist card: each selector has exactly one CSS home (or none, for the retired one)", () => {
+    it(".coverage-card is declared only in evidence-checklist.css", () => {
+        expect(declaredIn(".coverage-card")).toEqual(["evidence-checklist.css"])
+    })
 
-describe("evidence checklist card: one CSS home, in conformer-group.css", () => {
-    for (const selector of SELECTORS) {
-        it(`conformer-group.css declares ${selector}`, () => {
-            expect(extractRule(conformerGroupCss, selector)).not.toBeNull()
-        })
+    it(".coverage-checklist is declared only in evidence-checklist.css", () => {
+        expect(declaredIn(".coverage-checklist")).toEqual(["evidence-checklist.css"])
+    })
 
-        it(`calculation-detail.css no longer declares ${selector} (moved out)`, () => {
-            expect(extractRule(calculationDetailCss, selector)).toBeNull()
-        })
+    it(".ledger-summary--single is declared only in conformer-group.css", () => {
+        expect(declaredIn(".ledger-summary--single")).toEqual(["conformer-group.css"])
+    })
 
-        it(`geometry-detail.css never declares ${selector}`, () => {
-            expect(extractRule(geometryDetailCss, selector)).toBeNull()
-        })
-    }
-
-    it("no page stylesheet declares a bespoke .coverage-card rule of its own -- the box composes .card/.card--derived", () => {
-        for (const css of [calculationDetailCss, conformerGroupCss, geometryDetailCss]) {
-            expect(extractRule(css, ".coverage-card")).toBeNull()
-        }
+    it(".validation-card is declared nowhere -- retired outright", () => {
+        expect(declaredIn(".validation-card")).toEqual([])
     })
 })
 
 /**
- * `.validation-card` (`GeometryDetailPage`'s former bespoke evidence-box
- * class, plain `.card` with no `--derived` border) is retired outright,
- * not merged into the shared class -- the page now renders
- * `.card.card--derived.coverage-card` like every other record page (see
- * that page's own JSX comment for why it picks up `--derived`: this box
- * states a COMPUTED verdict about the record, the same axis the other
- * three pages' cards are already on). Nothing should declare it any more.
+ * Item 1 fix (review of 2bd17511): retiring the old `.coverage-card span
+ * { display: block }` (which used to style BOTH the heading span and,
+ * via a sibling `.coverage-card strong` rule, the pre-`EvidenceChecklist`
+ * inline value) also un-blocked the `<span class="t-label">` HEADING --
+ * un-scoped, a bare `<span>` computes `display: inline` by default.
+ * MEASURED: the heading's own box lost ~4px, and the `<dl>` below it (a
+ * block sibling, unaffected in itself) sat 4px higher for it -- the whole
+ * card shrunk by that much on all four pages. `.coverage-card > .t-label`
+ * (direct-child, scoped to exactly the heading this component renders)
+ * is the fix.
  */
-describe(".validation-card is retired -- no page stylesheet declares it", () => {
-    for (const [name, css] of [
-        ["calculation-detail.css", calculationDetailCss],
-        ["conformer-group.css", conformerGroupCss],
-        ["geometry-detail.css", geometryDetailCss],
-    ] as const) {
-        it(`${name} does not declare .validation-card`, () => {
-            expect(stripComments(css)).not.toMatch(/\.validation-card/)
-        })
-    }
+describe(".coverage-card > .t-label heading is display: block (item 1, post-review of 2bd17511)", () => {
+    it("evidence-checklist.css declares .coverage-card > .t-label { display: block }", () => {
+        const css = stripComments(ALL_STYLESHEETS["evidence-checklist.css"] ?? "")
+        const match = /\.coverage-card\s*>\s*\.t-label\s*\{([^}]*)\}/.exec(css)
+        expect(match, "no .coverage-card > .t-label rule found in evidence-checklist.css").not.toBeNull()
+        expect(match![1]).toMatch(/display:\s*block/)
+    })
+})
+
+// Mutation check: the FIRST version of this guard (`^\s*SELECTOR\s*\{`)
+// would have let every one of these through undetected -- each is a real
+// second declaration of `.coverage-checklist`, just not shaped as a bare
+// `.coverage-checklist { ... }` rule sitting alone at the start of its own
+// line. Proven directly against the pattern (not by actually mutating a
+// real file) -- same technique `value-pill-scope.css.test.ts`'s own
+// mutation check uses.
+describe("mutation check: the selector-anywhere pattern catches what a bare-declaration check misses", () => {
+    const pattern = selectorPattern(".coverage-checklist")
+
+    it("catches a page-scoped descendant selector", () => {
+        expect(pattern.test(".geometry-page .coverage-checklist{}")).toBe(true)
+    })
+
+    it("catches a bespoke nested override", () => {
+        expect(pattern.test(".coverage-checklist dt{}")).toBe(true)
+    })
+
+    it("catches a bare duplicate declared mid-line, not at the start of its own line", () => {
+        expect(pattern.test("   .coverage-checklist {\n    margin: 0;\n}")).toBe(true)
+        expect(pattern.test(".some-other-rule {} .coverage-checklist {}")).toBe(true)
+    })
+
+    it("catches the class inside a comma-separated selector list", () => {
+        expect(pattern.test(".foo, .coverage-checklist { color: red; }")).toBe(true)
+    })
+
+    it("sanity: a longer, unrelated class name is never mistaken for it", () => {
+        expect(pattern.test(".coverage-checklist-extra { color: red; }")).toBe(false)
+    })
 })

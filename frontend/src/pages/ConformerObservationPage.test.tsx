@@ -391,7 +391,7 @@ describe("ConformerObservationPage", () => {
         expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
         const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
         expect(card).not.toBeNull()
-        expect(within(card).getByText("Evidence present on this observation")).toHaveClass("t-label")
+        expect(within(card).getByText("Evidence on this observation")).toHaveClass("t-label")
 
         const checklist = card.querySelector(".coverage-checklist") as HTMLElement
         // Default mockRecord: has_opt/has_freq true (present), has_sp false
@@ -410,6 +410,25 @@ describe("ConformerObservationPage", () => {
             const pill = ddPillFor(checklist, label)
             expect(pill).toHaveClass("value-pill", "value-pill--muted")
             expect(pill).toHaveTextContent(value)
+        }
+    })
+
+    // Post-review (review of 2bd17511): the tile-alignment fix moved from a
+    // reserved label height to number-first markup -- the number (`<strong>`)
+    // must be each tile's FIRST child, with the label (`<span>`) after it,
+    // so the number always sits at the tile's own top edge regardless of
+    // whether the label wraps.
+    it("renders each metric tile number-first: <strong> before <span>", async () => {
+        server.use(http.get("/api/v1/scientific/conformer-observations/co_one", () => (
+            HttpResponse.json({ record: mockRecord() })
+        )))
+        page()
+        await screen.findByRole("heading", { name: "Computed observation" })
+        const tiles = screen.getByLabelText("Observation evidence summary").querySelectorAll(".metric")
+        expect(tiles).toHaveLength(3)
+        for (const tile of tiles) {
+            expect(tile.children[0].tagName).toBe("STRONG")
+            expect(tile.children[1].tagName).toBe("SPAN")
         }
     })
 
