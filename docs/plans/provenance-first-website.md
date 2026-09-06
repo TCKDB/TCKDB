@@ -237,6 +237,17 @@ provenance and machine detail live on dedicated linked pages.
     retiring an old span rule had silently un-blocked the heading on
     all four pages, and the "byte-identical" calculation card had
     quietly kept plain text where the other pages used pills.
+19. One species-entry link. The same entry read "C9H9 · R enantiomer"
+    on the calculation and geometry pages, the raw entry reference on
+    the observation page and the words "Species entry" on the conformer
+    group page, because the two conformer payloads carried no formula.
+    The backend now serves the formula on both, computed by the same
+    RDKit-cartridge expression the other reads use (#379, additive
+    read field, no migration), and one component renders the link on
+    every record page with one fallback: the entry reference in the
+    data face when no formula can be parsed. The reviewer noted the
+    statmech and transport species contexts still lack a formula; the
+    next copy of that expression is the moment to share it.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
