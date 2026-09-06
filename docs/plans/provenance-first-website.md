@@ -222,6 +222,21 @@ provenance and machine detail live on dedicated linked pages.
     ("conformer_1"); the owner has not yet ruled on them. Backend
     follow-up: the conformer-observation payload carries no formula, so
     that page falls back to the entry ref until it does.
+18. One summary-row rule. The owner opened the observation page and
+    found three metric tiles of three heights with the evidence box
+    beside them as a dotted sentence, while the calculation page put
+    its evidence underneath as a list. Now every record page does what
+    the calculation page did (#377): metric tiles form one row, number
+    first so every number sits at the same height with no reserved
+    blank space; the evidence box sits below the row at full width as
+    a one-column list, label above value, status words as pills on all
+    four pages, headed "Evidence on this …". The box is one component
+    that owns its stylesheet, and a test globs every stylesheet to
+    refuse a second declaration of its selectors anywhere, in any
+    selector list. Two things only the reviewer's measurement caught:
+    retiring an old span rule had silently un-blocked the heading on
+    all four pages, and the "byte-identical" calculation card had
+    quietly kept plain text where the other pages used pills.
 
 Each slice must use the existing public API where possible, add only bounded
 additive API projections when necessary, and pass Terra implementation, Sol
