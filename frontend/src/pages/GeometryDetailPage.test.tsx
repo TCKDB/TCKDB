@@ -224,13 +224,47 @@ describe("GeometryDetailPage", () => {
     })
 
     it("says validation is not recorded for this geometry, rather than fabricating a verdict", async () => {
+        // record-summary-row PR: the evidence box moved OUT of "Geometry
+        // provenance summary" (now tiles only) into its own full-width
+        // section below, "Geometry validation checklist" -- see that
+        // section's own aria-label in `GeometryDetailPage.tsx`.
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
-        const summary = screen.getByLabelText("Geometry provenance summary")
-        expect(within(summary).getByText("Not recorded for this geometry")).toBeVisible()
-        expect(within(summary).queryByText(/passed/i)).not.toBeInTheDocument()
-        expect(within(summary).queryByText(/failed/i)).not.toBeInTheDocument()
+        const checklist = screen.getByLabelText("Geometry validation checklist")
+        expect(within(checklist).getByText("not recorded for this geometry")).toBeVisible()
+        expect(within(checklist).queryByText(/passed/i)).not.toBeInTheDocument()
+        expect(within(checklist).queryByText(/failed/i)).not.toBeInTheDocument()
+    })
+
+    // record-summary-row PR, item 1: the tile row and the evidence card are
+    // two separate sections now, the card renders through the SAME
+    // `.card.card--derived.coverage-card` > `.kv-list.coverage-checklist`
+    // structure every other record page uses (no more page-local
+    // `.validation-card`), and its one row is pilled -- the absent case of
+    // a bounded status word, same as the other pages' checklists.
+    it("renders the tile row and the evidence checklist as two separate sections, sharing the calculation page's card structure", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
+        page()
+        await screen.findByRole("heading", { name: "CH4 geometry" })
+
+        const tileRow = screen.getByLabelText("Geometry provenance summary")
+        expect(tileRow).not.toHaveClass("ledger-summary--single")
+        expect(tileRow.querySelector(".coverage-card")).toBeNull()
+        expect(tileRow.querySelector(".validation-card")).toBeNull()
+
+        const checklistSection = screen.getByLabelText("Geometry validation checklist")
+        expect(checklistSection).toHaveClass("ledger-summary", "ledger-summary--single")
+        const card = checklistSection.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        expect(card).not.toBeNull()
+        expect(card).not.toHaveClass("validation-card")
+
+        const checklist = card.querySelector(".coverage-checklist") as HTMLElement
+        const dt = Array.from(checklist.querySelectorAll("dt")).find((el) => el.textContent === "Validation")
+        const dd = dt?.nextElementSibling as HTMLElement
+        const pill = dd.querySelector("span") as HTMLElement
+        expect(pill).toHaveClass("value-pill", "value-pill--muted")
+        expect(pill).toHaveTextContent("not recorded for this geometry")
     })
 
     it("points to the Produced by / Used as input by tables below, rather than repeating every ref inline", async () => {
@@ -246,12 +280,12 @@ describe("GeometryDetailPage", () => {
         server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
-        const summary = screen.getByLabelText("Geometry provenance summary")
+        const checklist = screen.getByLabelText("Geometry validation checklist")
 
-        expect(within(summary).getByText(/Produced by.*Used as input by/s)).toBeVisible()
+        expect(within(checklist).getByText(/Produced by.*Used as input by/s)).toBeVisible()
         // No calculation refs repeated inline in this card -- confirmed by
         // there being no links inside it at all (the pointer is plain text).
-        expect(within(summary).queryAllByRole("link")).toHaveLength(0)
+        expect(within(checklist).queryAllByRole("link")).toHaveLength(0)
     })
 
     it("says nothing about a validation pointer when a geometry has no producers or consumers at all", async () => {
@@ -260,8 +294,8 @@ describe("GeometryDetailPage", () => {
         }))))
         page()
         await screen.findByRole("heading", { name: "CH4 geometry" })
-        const summary = screen.getByLabelText("Geometry provenance summary")
-        expect(within(summary).queryByText(/Produced by/)).not.toBeInTheDocument()
+        const checklist = screen.getByLabelText("Geometry validation checklist")
+        expect(within(checklist).queryByText(/Produced by/)).not.toBeInTheDocument()
     })
 
     it("renders every atom row in the coordinate table, in payload order", async () => {
@@ -801,20 +835,26 @@ describe("GeometryDetailPage", () => {
 
     describe("validation card shape", () => {
         // Finding #13: this card no longer repeats every producing/consuming
-        // calculation ref inline (a `<dl>` of named pointer rows, previously
-        // asserted here) -- it points at the "Produced by" / "Used as input
-        // by" tables further down the page instead, where those SAME refs
+        // calculation ref inline as its own SET OF LINKS -- it points at the
+        // "Produced by" / "Used as input by" tables further down the page
+        // instead (plain prose, in the `.note`), where those SAME refs
         // already render as real, correctly-cased links. See the
         // "points to the Produced by / Used as input by tables below" and
         // "says nothing about a validation pointer..." tests above, which
         // now cover this card's shape.
-        it("renders the pointer sentence as plain prose inside the validation card, not a link list", async () => {
+        //
+        // record-summary-row PR: `.validation-card` is retired -- this box
+        // now renders through the shared `.coverage-card` structure (a
+        // `.kv-list.coverage-checklist` `<dl>` DOES appear now, by design;
+        // that is the "going down list" fix -- what stays asserted here is
+        // that it holds no LINKS, since the pointer sentence is plain prose).
+        it("renders the pointer sentence as plain prose inside the evidence card, not a link list", async () => {
             server.use(http.get(ENDPOINT, () => HttpResponse.json(mockRecord())))
             page()
             await screen.findByRole("heading", { name: "CH4 geometry" })
-            const summary = screen.getByLabelText("Geometry provenance summary")
-            const card = within(summary).getByText("Validation").closest(".validation-card") as HTMLElement
-            expect(card.querySelector("dl")).toBeNull()
+            const checklist = screen.getByLabelText("Geometry validation checklist")
+            const card = within(checklist).getByText("Evidence on this geometry", { selector: ".t-label" }).closest(".coverage-card") as HTMLElement
+            expect(card).not.toBeNull()
             expect(card.querySelector("a")).toBeNull()
         })
     })

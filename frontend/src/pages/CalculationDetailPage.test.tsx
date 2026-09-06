@@ -718,6 +718,41 @@ describe("CalculationDetailPage", () => {
         expect(within(checklist).queryByText("Convergence")).not.toBeInTheDocument()
     })
 
+    // record-summary-row PR: this page's own evidence card is now a pure
+    // extraction onto `components/EvidenceChecklist.tsx` -- the SAME
+    // rendered DOM as before the refactor (verified during development by
+    // diffing this exact string against the pre-refactor markup with `git
+    // stash`; pinned here so a future change to the shared component
+    // cannot silently alter this page's own long-standing output without
+    // this test catching it). No `tone` on either row -- this page's
+    // values were never rendered as pills, unlike the other three record
+    // pages' NEW checklist rows.
+    it("renders the evidence card as byte-identical markup to the pre-extraction page-local version", async () => {
+        server.use(http.get(ENDPOINT, () => HttpResponse.json({
+            record: mockRecord({
+                provenance: {
+                    has_result: true, converged: true,
+                    geometry_validation_status: "passed",
+                    scf_stability_status: "unstable",
+                },
+            }),
+        })))
+        page()
+        await findLoaded("Frequency")
+        const card = document.querySelector(".card.card--derived.coverage-card") as HTMLElement
+        expect(card.outerHTML).toBe(
+            '<div class="card card--derived coverage-card">'
+            + '<span class="t-label">Evidence on this calculation</span>'
+            + '<dl class="kv-list coverage-checklist">'
+            + '<div><dt>Geometry validation</dt><dd>passed</dd></div>'
+            + '<div><dt>SCF stability</dt><dd>unstable</dd></div>'
+            + "</dl>"
+            + '<p class="note">A recorded outcome here is the actual verdict; the full evidence, where the archive '
+            + "has more to show, is under Further evidence below.</p>"
+            + "</div>",
+        )
+    })
+
     // Item 3 (post-review): the `<dl>` must carry the shared `kv-list`
     // class, not just its own `coverage-checklist` marker class -- without
     // `kv-list`, this element has NO layout rules of its own any more

@@ -2,6 +2,7 @@ import { useState } from "react"
 import { Link, useParams } from "react-router-dom"
 import "../conformer-group.css"
 import "../geometry-detail.css"
+import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { GeometryViewer } from "../components/GeometryViewer"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -214,53 +215,57 @@ function GeometryDetail({ geometry }: { geometry: GeometryRecord }) {
             <section className="ledger-summary geometry-summary" aria-label="Geometry provenance summary">
                 <Metric label="Producing calculations" value={producedBy.length} />
                 <Metric label="Consuming calculations" value={usedAsInputBy.length} />
-                {/* `.card`, not `--derived`: this states a single fact about ONE
-                    geometry ("no validation field of its own"), not a computed
-                    aggregate -- see the `.card--derived` decision in this PR's
-                    body. */}
-                <div className="card validation-card">
-                    <span className="t-label">Validation</span>
-                    {/* Finding #9: "on this endpoint" was API jargon leaking into a
-                        chemist-facing page — "for this geometry" says the same thing
-                        (this record has no validation field of its own) without it. */}
-                    <strong>Not recorded for this geometry</strong>
-                    <p className="note">
-                        This geometry record carries no validation field of its own. A geometry-vs-formula check,
-                        where one was recorded, lives on the calculation that produced or consumed it, not here.
-                    </p>
-                    {/* Finding #13: the panel used to repeat every producing/consuming
-                        calculation ref inline (twelve on the live CH3 record, comma-joined
-                        under one caption) with no visual link affordance -- the same refs
-                        are already a proper linked table further down this page, under
-                        "Produced by" / "Used as input by". Pointing here instead of
-                        repeating the list keeps this card short and gives the reader ONE
-                        place to click through, not two lists that can drift out of sync. */}
-                    {/* No `#section-geometry-validation` fragment: this app has no fragment-scroll
-                        handling (no ScrollRestoration, no hash effect) and a react-router `<Link>`
-                        does a pushState navigation the browser does not scroll for anyway — and the
-                        id sits inside a closed `<details>` whose content never loads until opened.
-                        A fragment that silently does nothing is worse than a plain link to the right
-                        page, so this points at the "Produced by" / "Used as input by" tables further
-                        down this same page, not at a fragment.
-
-                        Previously repeated every producing/consuming calculation ref inline here too
-                        (a `<dl>` of named pointers, one row per relationship) — up to twelve refs,
-                        comma-joined, on the live CH3 record, reported rendering all-caps despite the
-                        DOM holding the lowercase ref. Those are the SAME refs the "Produced by" /
-                        "Used as input by" tables below already render as real, correctly-cased links
-                        (`ProvenanceSection` below; no `text-transform` on that table's `td`s at all).
-                        Rather than hunt the specific inherited-uppercase source in THIS card's own
-                        rules, this removes the duplicate identifier list altogether — one pointer
-                        sentence to the tables that already render these refs correctly, so the two
-                        lists can no longer drift and there is nothing left in this card for a
-                        caption-styled ancestor to mis-transform. */}
-                    {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
-                        <p className="note">
-                            See "Geometry validation" on the producing or consuming calculations, listed with links
-                            in the "Produced by" and "Used as input by" tables below.
-                        </p>
+            </section>
+            {/* Sits BELOW the tile row above, full row width -- see
+                `ConformerObservationPage.tsx`'s identical comment on its own
+                evidence checklist for the owner report this fixes. Now
+                `.card--derived.coverage-card` (the SAME class every other
+                record page's evidence box carries), not the page-local
+                `.validation-card` this used to be -- item 8's `--derived`
+                rule ("a COMPUTED verdict about the record") applies here
+                exactly as it does on the calculation page: "this geometry
+                has no validation of its own" is a computed absence, not a
+                single deposited field, so it gets the same left-border
+                treatment as the other three pages' evidence cards
+                (CONSISTENCY -- record-summary-row PR). `tone="pill-muted"`:
+                this row's value is the absent case of a bounded status
+                word, the same axis `EvidenceChecklist`'s other callers
+                already pill (see that component's own docstring). Heading
+                names the CARD ("Evidence on this geometry", matching the
+                calculation page's "Evidence on this calculation"); the row
+                below names the specific CHECK ("Validation") -- restating
+                "Validation" as both would be the exact near-restatement
+                this app's own section-heading rule already avoids
+                elsewhere (see `SectionHeading`'s kicker-suppression
+                comment in `PageSections.tsx`). */}
+            <section className="ledger-summary ledger-summary--single" aria-label="Geometry validation checklist">
+                {/* Finding #9: "on this endpoint" was API jargon leaking into a
+                    chemist-facing page — "for this geometry" says the same thing
+                    (this record has no validation field of its own) without it.
+                    Finding #13: the note used to also repeat every producing/
+                    consuming calculation ref inline (twelve on the live CH3
+                    record, comma-joined, no visual link affordance) -- the same
+                    refs already render as real, correctly-cased links in the
+                    "Produced by" / "Used as input by" tables further down this
+                    page, so this note points there instead of duplicating them.
+                    The single note prop below joins what used to be two
+                    separate `<p className="note">` paragraphs -- see
+                    `EvidenceChecklist`'s one-`note`-slot contract; the second
+                    sentence still only renders when there is somewhere for it
+                    to point (`producedBy`/`usedAsInputBy` non-empty). */}
+                <EvidenceChecklist
+                    heading="Evidence on this geometry"
+                    rows={[{ label: "Validation", value: "not recorded for this geometry", tone: "pill-muted" }]}
+                    note={(
+                        <>
+                            This geometry record carries no validation field of its own. A geometry-vs-formula check,
+                            where one was recorded, lives on the calculation that produced or consumed it, not here.
+                            {(producedBy.length > 0 || usedAsInputBy.length > 0) && (
+                                <> See "Geometry validation" on the producing or consuming calculations, listed with links in the "Produced by" and "Used as input by" tables below.</>
+                            )}
+                        </>
                     )}
-                </div>
+                />
             </section>
 
             <ViewerSection

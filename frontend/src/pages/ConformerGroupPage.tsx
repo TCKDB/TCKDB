@@ -4,6 +4,7 @@ import "../record-identity-header.css"
 import type { ConformerGroup } from "../api/conformerGroupApi"
 import { lotLabel } from "../api/scientificSchemas"
 import { Disclosure } from "../components/Disclosure"
+import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
 import { RecordStatus } from "../components/RecordStatus"
@@ -186,20 +187,27 @@ function Ledger({ group }: { group: ConformerGroup }) {
                     detail={`${evidence.optimization_chain_count} optimisation chains`}
                 />
                 <Metric label="Distinct stored geometries" value={evidence.geometry_count} />
-                {/* `.card--derived` -- a COMPUTED coverage summary across every
-                    deposited observation, the same `--derived` rule
-                    `CalculationDetailPage`'s evidence checklist follows (item 8
-                    in this PR's body: `--derived` marks an aggregate, plain
-                    `.card` marks a single record). */}
-                <div className="card card--derived coverage-card">
-                    <span className="t-label">Observation coverage</span>
-                    <strong>
-                        opt {evidence.evidence_coverage.opt}/{summary.total} · freq
-                        {` ${evidence.evidence_coverage.freq}/${summary.total}`} · sp
-                        {` ${evidence.evidence_coverage.sp}/${summary.total}`}
-                    </strong>
-                    <p className="note">Coverage says which observations have a stage, not whether methods are comparable.</p>
-                </div>
+            </section>
+            {/* Sits BELOW the tile row above, full row width -- see
+                `ConformerObservationPage.tsx`'s identical comment on its own
+                evidence checklist for the owner report this fixes.
+                `.card--derived` -- a COMPUTED coverage summary across every
+                deposited observation, the same `--derived` rule
+                `CalculationDetailPage`'s evidence checklist follows (item 8
+                in this PR's body: `--derived` marks an aggregate, plain
+                `.card` marks a single record). Counts, not status words --
+                no `tone` on any row (see `EvidenceChecklist`'s own docstring
+                for why a count stays plain text). */}
+            <section className="ledger-summary ledger-summary--single" aria-label="Basin evidence checklist">
+                <EvidenceChecklist
+                    heading="Observation coverage"
+                    rows={[
+                        { label: "Optimisation", value: `${evidence.evidence_coverage.opt} of ${summary.total} observations` },
+                        { label: "Frequency", value: `${evidence.evidence_coverage.freq} of ${summary.total} observations` },
+                        { label: "Single point", value: `${evidence.evidence_coverage.sp} of ${summary.total} observations` },
+                    ]}
+                    note="Coverage says which observations have a stage, not whether methods are comparable."
+                />
             </section>
             <EvidenceDisclosure observations={observations} />
             <section className="ledger-section" aria-labelledby="geometry-ledger">

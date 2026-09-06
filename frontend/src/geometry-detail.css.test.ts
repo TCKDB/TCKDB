@@ -139,3 +139,33 @@ describe("viewer buttons/legends use --type-ui, not a one-off uppercase mono (SH
         expect(rule).not.toMatch(/\.72rem/)
     })
 })
+
+/**
+ * record-summary-row PR, item 1: the Validation card used to share this
+ * page's `.ledger-summary` grid as a 3rd column (`repeat(2, 1fr) 2fr`) --
+ * it now renders below the tile row instead, in its own full-width
+ * `.ledger-summary--single` section, so this page's tile row only ever
+ * has the 2 `Metric` tiles left in it.
+ */
+describe(".geometry-summary is a 2-tile row now, no trailing card column (record-summary-row PR, item 1)", () => {
+    it("declares grid-template-columns: repeat(2, 1fr), not repeat(2, 1fr) 2fr", () => {
+        const rule = extractRule(css, ".geometry-summary")
+        expect(rule).toMatch(/grid-template-columns:\s*repeat\(2,\s*1fr\)/)
+        expect(rule).not.toMatch(/2fr/)
+    })
+})
+
+/**
+ * `.validation-card` is retired (record-summary-row PR): this page's
+ * evidence box now renders through the shared `.coverage-card` structure
+ * every other record page uses -- see `evidenceChecklist.css.test.ts` for
+ * the cross-file source test.
+ */
+describe(".validation-card is retired from this file", () => {
+    it("declares no .validation-card rule of any kind", () => {
+        // Comments mentioning the retired class name in prose (explaining
+        // WHY it's gone) must not trip this -- only an actual declaration.
+        const withoutComments = css.replace(/\/\*[\s\S]*?\*\//g, "")
+        expect(withoutComments).not.toMatch(/\.validation-card/)
+    })
+})

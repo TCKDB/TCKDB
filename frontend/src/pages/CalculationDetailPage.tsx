@@ -26,6 +26,7 @@ import {
 } from "../api/calculationApi"
 import { Disclosure } from "../components/Disclosure"
 import { EnergyDisplay } from "../components/EnergyDisplay"
+import { EvidenceChecklist } from "../components/EvidenceChecklist"
 import { Formula } from "../components/Formula"
 import { PageShell } from "../components/PageShell"
 import { SectionHeading } from "../components/PageSections"
@@ -507,33 +508,34 @@ function CalculationDetail({ calculation }: { calculation: CalculationRecord }) 
                     (item 8's card decision: `--derived` marks an aggregated
                     verdict, plain `.card` marks a single deposited record; see
                     this PR's body for the one rule applied consistently across
-                    every record page). */}
-                <div className="card card--derived coverage-card">
-                    <span className="t-label">Evidence on this calculation</span>
-                    {/* Geometry validation and SCF stability only -- Result and
-                        Convergence are dropped from this checklist (review
-                        finding: each already has its own headline/Result-section
-                        home, so a THIRD "recorded"/"absent" line for the same
-                        fact stated nothing new). The two rows that remain have
-                        no section of their own when they come up empty, so this
-                        is the only place a reader learns whether they exist at
-                        all -- and each now shows the actual recorded OUTCOME
-                        (passed / failed / stable / ...), not just "recorded". */}
-                    <dl className="kv-list coverage-checklist">
-                        <div>
-                            <dt>Geometry validation</dt>
-                            <dd>{geometryValidationOutcomeLabel(provenance.geometry_validation_status, provenance.geometry_validation_applicable)}</dd>
-                        </div>
-                        <div>
-                            <dt>SCF stability</dt>
-                            <dd>{scfStabilityOutcomeLabel(provenance.scf_stability_status)}</dd>
-                        </div>
-                    </dl>
-                    <p className="note">
-                        A recorded outcome here is the actual verdict; the full evidence, where the archive has
-                        more to show, is under Further evidence below.
-                    </p>
-                </div>
+                    every record page). Renders through the shared
+                    `EvidenceChecklist` component (record-summary-row PR) -- this
+                    page's OWN markup was the origin of the shape every other
+                    record page's evidence box now matches; extracted here as a
+                    pure refactor, not a redesign (see that component's own
+                    docstring and this PR's DOM-comparison test). Geometry
+                    validation and SCF stability only -- Result and Convergence
+                    are dropped from this checklist (review finding: each
+                    already has its own headline/Result-section home, so a
+                    THIRD "recorded"/"absent" line for the same fact stated
+                    nothing new). The two rows that remain have no section of
+                    their own when they come up empty, so this is the only
+                    place a reader learns whether they exist at all -- and each
+                    shows the actual recorded OUTCOME (passed / failed / stable
+                    / ...), not just "recorded". No `tone` on either row: this
+                    page's own values were never rendered as pills, and this
+                    extraction changes nothing about that. */}
+                <EvidenceChecklist
+                    heading="Evidence on this calculation"
+                    rows={[
+                        {
+                            label: "Geometry validation",
+                            value: geometryValidationOutcomeLabel(provenance.geometry_validation_status, provenance.geometry_validation_applicable),
+                        },
+                        { label: "SCF stability", value: scfStabilityOutcomeLabel(provenance.scf_stability_status) },
+                    ]}
+                    note="A recorded outcome here is the actual verdict; the full evidence, where the archive has more to show, is under Further evidence below."
+                />
             </section>
 
             <ResultsSection

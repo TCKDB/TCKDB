@@ -81,19 +81,47 @@
     text-underline-offset: .16em;
 }
 
-/* `align-items: start` (NIT, re-review pass): grid items default to
-   `stretch`, so at desktop the three `.metric` tiles were being pulled
-   up to the evidence/coverage card's own (taller, multi-line) content
-   height in the same row -- MEASURED 188/160/201px, `.metric`'s own
-   `min-height: 5rem` (below) only ever binding at 680px where the row
-   collapses to one column and there is no taller sibling left to
-   stretch to. Each card now sizes to its own content instead. */
+/* `.ledger-summary` is now the metric-tile row ONLY (record-summary-row
+   PR) -- the evidence/coverage/validation card that used to be this
+   grid's own trailing `1.8fr` column now renders BELOW it instead, as a
+   sibling `.ledger-summary.ledger-summary--single` section (see the
+   consolidated `.coverage-card` block further down this file, and
+   `ConformerObservationPage.tsx`'s comment on the owner report this
+   fixes: "the box is in line with the other boxes when I thought it
+   would be underneath them"). Dropping that trailing column is also why
+   `align-items` goes back to the grid default, `stretch`, rather than the
+   `start` this rule used while a taller multi-line card shared the row:
+   with only same-shaped `.metric` tiles left in it, `stretch` is what
+   makes every tile in the row the SAME height (the tile-alignment rule
+   this PR's body names) -- each tile's own label now also reserves a
+   fixed two-line height (`.metric span` below) so the digit sits at the
+   same y in every tile regardless of whether ITS OWN label happened to
+   wrap, not just whether the row's tallest tile did.
+
+   Bottom margin moves off THIS rule and onto `.ledger-summary--single`
+   itself (below): this row's own trailing `3.5rem` used to be the gap to
+   the NEXT ledger section back when the evidence card was its own last
+   grid item; now that card is a following SIBLING section, not a sibling
+   grid item, so the gap has to live on whichever `.ledger-summary` is
+   actually LAST (the single-card one) instead. */
 .ledger-summary {
     display: grid;
-    align-items: start;
-    grid-template-columns: repeat(3, 1fr) 1.8fr;
+    align-items: stretch;
+    grid-template-columns: repeat(3, 1fr);
     gap: var(--s-3);
-    margin: var(--s-6) 0 3.5rem;
+    margin: var(--s-6) 0 0;
+}
+
+/* The evidence card sits close beneath its own tile row, read as one
+   visual group -- not the full `--s-6` (2rem) gap `.ledger-summary--
+   single` would otherwise inherit as its OWN top margin from the base
+   rule above. `CalculationDetailPage`'s own `.ledger-summary--single`
+   (no tile row precedes it there -- see that page's markup) keeps that
+   `--s-6` top margin unchanged; this compound selector's higher
+   specificity only overrides it when a tile row IS the immediately
+   preceding sibling. */
+.ledger-summary + .ledger-summary--single {
+    margin-top: var(--s-3);
 }
 
 /* SHOULD-FIX-9: at ~1100px the 4-column desktop template squeezed each
@@ -127,7 +155,29 @@
     min-height: 5rem;
 }
 
+/* Tile-alignment rule (record-summary-row PR, item 1: "the number pinned
+   to the same baseline in each tile so a two-line label does not push
+   its number down differently from its neighbours"). MEASURED before this
+   fix: three tiles in one `align-items: stretch` row (`.ledger-summary`
+   above) came out 261×107 / 261×107 / 261×127 -- the third taller only
+   because ITS OWN label ("Distinct stored geometries") happened to wrap
+   to two lines while its neighbours' didn't. `align-items: stretch`
+   alone equalises the tiles' OUTER height, but the `<strong>` digit below
+   a two-line label still sits lower inside that box than a digit below a
+   one-line label, because the two run one line taller before it.
+   `display: block` (required for `min-height` to apply to what is
+   otherwise an inline `<span>`) plus `min-height: 2.6em` -- two line-
+   heights of `--type-label-font` (`.72rem` font-size × `1.3` line-height
+   = `1.3em` per line, reserved in `em`s of this SAME element so it tracks
+   that font-size, not the page's) -- reserves the SAME vertical space for
+   the label regardless of whether it wraps, so `.metric strong`'s own
+   `margin-top: var(--s-2)` always starts from the identical y offset in
+   every tile in the row. Picked "label reserves fixed height" over
+   "number first, label after" (the brief's other option) to keep the
+   existing reading order (a metric is announced, then its value) intact. */
 .metric span {
+    display: block;
+    min-height: 2.6em;
     color: var(--muted);
     font: var(--type-label-font);
     letter-spacing: var(--type-label-tracking);
@@ -192,22 +242,48 @@
     color: var(--ink-2);
 }
 
-/* `.coverage-card` -- the evidence-completeness summary strip's own
-   `.card--derived` cell (`CalculationDetailPage`/`ConformerGroupPage`/
-   `ConformerObservationPage`). `.card` supplies the box; this is the
-   internal `<span>` label / `<strong>` headline value / `<p class="note">`
-   stack layout that box does not own an opinion on. Without `display:
-   block` here the label and value sit on one run-on line -- MEASURED
-   regression caught in this PR's own screenshot pass. */
-.coverage-card span {
-    display: block;
+/* `.coverage-card` -- the evidence/coverage/validation summary card every
+   record page renders now (`components/EvidenceChecklist.tsx`;
+   `CalculationDetailPage`/`ConformerGroupPage`/`ConformerObservationPage`/
+   `GeometryDetailPage`, record-summary-row PR). ONE home for these three
+   selectors -- they used to be split across THIS file (`.coverage-card
+   span`/`strong`, now retired: the component never renders a bare
+   `<strong>` any more, its values go through `.kv-list dd`
+   (`design-system.css`) like every other fact list on these pages) and
+   `calculation-detail.css` (`.coverage-checklist`, `.ledger-summary--
+   single`) -- consolidated here, the ONE "scientific record ledger"
+   stylesheet already loaded by all four pages, so a future page cannot
+   silently diverge by editing only one copy. Guarded by
+   `evidenceChecklist.css.test.ts` (no OTHER page stylesheet may declare
+   any of these three selectors again).
+
+   `.ledger-summary--single` is the full-row-width, one-child variant of
+   `.ledger-summary` above -- the box always renders through THIS
+   template, never as a grid item sharing a row with `.metric` tiles (see
+   the tile-row comment above `.ledger-summary` for the owner report this
+   whole split fixes). It also owns the `3.5rem` gap to whatever ledger
+   section follows it -- always the LAST `.ledger-summary` variant on the
+   page (a tile row, where one exists, is always first), so this is the
+   one place that bottom margin belongs regardless of whether a tile row
+   precedes it. */
+.ledger-summary--single {
+    grid-template-columns: 1fr;
+    margin-bottom: 3.5rem;
 }
 
-.coverage-card strong {
-    display: block;
-    margin-top: var(--s-2);
-    color: var(--ink);
-    font: var(--type-value-font);
+/* Post-review fix (originally `calculation-detail.css`'s comment):
+   `kv-list`'s own `auto-fit, minmax(16rem, 1fr)` grid puts two rows side
+   by side at any width comfortably over ~32rem -- MEASURED at 1920,
+   x=207 and x=837, two columns. That is the "wrap around text" shape the
+   original owner report on this card asked to get away from ("this
+   should be a going down list") -- `kv-list`'s auto-fit is right for a
+   multi-column fact grid elsewhere on these pages, wrong for this
+   always-short checklist that reads as a sequence. `.coverage-checklist`
+   forces one column, overriding `kv-list`'s template (same specificity;
+   this file loads after `design-system.css`, so the local rule wins). */
+.coverage-checklist {
+    margin: var(--s-3) 0 0;
+    grid-template-columns: 1fr;
 }
 
 .observation-list {

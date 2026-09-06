@@ -2,10 +2,18 @@ import { describe, expect, it } from "vitest"
 // `?raw` = plain source text (see geometry-detail.css.test.ts for why).
 import css from "./conformer-group.css?raw"
 
-/** Extracts the declaration block for a single, non-nested selector. */
+/**
+ * Extracts the declaration block for a single, BARE, non-nested selector
+ * (the selector alone at the start of its own line) -- anchored to line
+ * start so a query for `.ledger-summary--single` cannot accidentally
+ * match inside the unrelated compound selector
+ * `.ledger-summary + .ledger-summary--single` (record-summary-row PR
+ * added that sibling-combinator rule; a plain substring search would
+ * find IT first, since it appears earlier in the file).
+ */
 function extractRule(source: string, selector: string): string {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
-    const match = new RegExp(`${escaped}\\s*\\{([^}]*)\\}`).exec(source)
+    const match = new RegExp(`^[ \\t]*${escaped}\\s*\\{([^}]*)\\}`, "m").exec(source)
     if (!match) throw new Error(`No rule found for selector ${selector} in conformer-group.css`)
     return match[1]
 }
@@ -46,16 +54,77 @@ describe(".metric / .ledger-summary: no reserved empty space, 2x2 before 680 (SH
     it(".ledger-summary collapses to a 2x2 grid below 72rem (covers the 1100px MEASURED width), ahead of the 680px single-column breakpoint", () => {
         expect(css).toMatch(/@media \(max-width: 72rem\) \{\s*\.ledger-summary\s*\{\s*grid-template-columns:\s*repeat\(2,\s*1fr\);/)
     })
+})
 
-    // NIT (re-review pass): grid items default to `align-items: stretch`,
-    // so at desktop the three `.metric` tiles were pulled up to the
-    // evidence/coverage card's own taller content in the same row --
-    // MEASURED 188/160/201px -- `.metric`'s `min-height: 5rem` above only
-    // ever bound at 680px, where the row is already single-column with no
-    // taller sibling to stretch to.
-    it(".ledger-summary uses align-items: start so a tile does not stretch to a taller sibling's height", () => {
+/**
+ * record-summary-row PR, item 1: the owner's evidence/coverage card used
+ * to render IN THE SAME `.ledger-summary` grid row as the metric tiles
+ * ("the box is in line with the other boxes when I thought it would be
+ * underneath them") -- it now renders below the tile row, as its own
+ * full-width `.ledger-summary--single` section (see
+ * `EvidenceChecklist.test.tsx` and each page's own RTL test for the DOM
+ * side of this fix). `.ledger-summary` itself goes back to `align-items:
+ * stretch` (the SUPERSEDED `start` behaviour, above, existed only to stop
+ * tiles being pulled up to a taller CARD sharing the row -- with only
+ * same-shaped tiles left in it, `stretch` is what makes every tile in the
+ * row the same height) and drops the trailing `1.8fr` card column
+ * entirely, down to `repeat(3, 1fr)`.
+ */
+describe(".ledger-summary is the tile row ONLY now, align-items: stretch (record-summary-row PR, item 1)", () => {
+    it("uses align-items: stretch, not start -- every tile in the row is now the same shape", () => {
         const rule = extractRule(css, ".ledger-summary")
-        expect(rule).toMatch(/align-items:\s*start/)
+        expect(rule).toMatch(/align-items:\s*stretch/)
+        expect(rule).not.toMatch(/align-items:\s*start/)
+    })
+
+    it("no longer reserves a trailing 1.8fr column for the evidence card", () => {
+        const rule = extractRule(css, ".ledger-summary")
+        expect(rule).toMatch(/grid-template-columns:\s*repeat\(3,\s*1fr\)/)
+        expect(rule).not.toMatch(/1\.8fr/)
+    })
+})
+
+/**
+ * record-summary-row PR, item 1: MEASURED before this fix, three tiles in
+ * one row came out 261×107 / 261×107 / 261×127 -- the third taller only
+ * because its own label happened to wrap to two lines. `align-items:
+ * stretch` alone equalises the tiles' OUTER box height, but the digit
+ * below a two-line label still sat lower than a digit below a one-line
+ * label -- this reserves a fixed two-line height on the label itself so
+ * the digit always starts from the same y regardless of whether ITS OWN
+ * label wrapped.
+ */
+describe(".metric span reserves a fixed two-line label height (record-summary-row PR, item 1)", () => {
+    it("declares display: block (required for min-height to apply to an inline span)", () => {
+        const rule = extractRule(css, ".metric span")
+        expect(rule).toMatch(/display:\s*block/)
+    })
+
+    it("declares min-height: 2.6em -- two line-heights of --type-label-font (.72rem / 1.3)", () => {
+        const rule = extractRule(css, ".metric span")
+        expect(rule).toMatch(/min-height:\s*2\.6em/)
+    })
+})
+
+/**
+ * record-summary-row PR: `.coverage-card`/`.coverage-checklist`/
+ * `.ledger-summary--single` are now consolidated in THIS file (moved from
+ * `calculation-detail.css`, the pre-fix sole owner) -- see
+ * `evidenceChecklist.css.test.ts` for the source test asserting no OTHER
+ * page stylesheet still declares any of the three.
+ */
+describe("conformer-group.css is the one CSS home for the evidence checklist card (record-summary-row PR)", () => {
+    it("declares .coverage-card is a single column (via .coverage-checklist) below its tile row", () => {
+        expect(css).toMatch(/\.coverage-checklist\s*\{[^}]*grid-template-columns:\s*1fr/)
+    })
+
+    it("declares .ledger-summary--single as the full-width, one-column variant", () => {
+        const rule = extractRule(css, ".ledger-summary--single")
+        expect(rule).toMatch(/grid-template-columns:\s*1fr/)
+    })
+
+    it("tightens the gap between a tile row and the evidence card that immediately follows it", () => {
+        expect(css).toMatch(/\.ledger-summary\s*\+\s*\.ledger-summary--single\s*\{[^}]*margin-top:\s*var\(--s-3\)/)
     })
 })
 
