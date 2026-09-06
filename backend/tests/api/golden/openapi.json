@@ -12142,7 +12142,7 @@
         "type": "object"
       },
       "ConformerSpeciesContext": {
-        "description": "Lightweight species/species-entry pointer for a conformer record.\n\nMirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by\nthe calculation surface so a generic client can reuse one parser\nfor both surfaces. Integer ids are Phase D policy-gated.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.",
+        "description": "Lightweight species/species-entry pointer for a conformer record.\n\nMirrors :class:`SpeciesEntryOwnerSummary` shape conventions used by\nthe calculation surface so a generic client can reuse one parser\nfor both surfaces. Integer ids are Phase D policy-gated.\n\n``species_entry_label`` is the short discriminator that says *which*\nentry of that species this is -- ``\"E\"``, ``\"Z\"``, ``\"excited T1\"``.\n``canonical_smiles`` is the species' graph identity and is shared by\nevery entry under it, so without the label a search that returns\nrecords for two entries of one species labels them identically. That\nis not hypothetical: a statmech search for the deployed ``N=N``\nspecies returns eight records across cis- and trans-diazene,\nmolecules with different thermochemistry, and every one of them\nreads ``N=N``. ``None`` for the plain ground-state, all-standard,\nstereo-unlabelled entry -- never ``\"\"``. Derived by\n:func:`app.services.scientific_read.species_identity.species_entry_label`,\nthe one definition every surface shares.\n\n``formula`` is derived server-side (RDKit cartridge, Hill notation)\nfrom ``canonical_smiles`` and is ``null`` only if that SMILES fails\nto parse — see ``app.services.scientific_read.species._formula_expr``\nfor the same derivation used elsewhere on the read surface.",
         "properties": {
           "canonical_smiles": {
             "anyOf": [
@@ -12165,6 +12165,17 @@
               }
             ],
             "title": "Charge"
+          },
+          "formula": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Formula"
           },
           "inchi_key": {
             "anyOf": [

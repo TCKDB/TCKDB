@@ -1,10 +1,9 @@
 import type { ReactNode } from "react"
-import { Link } from "react-router-dom"
 import "../record-identity-header.css"
 import { CopyButton } from "./RefsDisclosure"
-import { Formula } from "./Formula"
+import { SpeciesEntryLink } from "./SpeciesEntryLink"
 import { chargeDisplay, spinDisplay } from "../domain/chemistryFormat"
-import { facetChips, stereoChip } from "../domain/recordFacets"
+import { facetChips } from "../domain/recordFacets"
 import type { EntryFacetAxes } from "../domain/recordFacets"
 import type { RecordIdentity } from "../domain/recordIdentity"
 
@@ -183,40 +182,32 @@ function IdentityTier({ identity, explainTransitionStateIdentity }: {
                     </IdentityFact>
                     {identity.speciesEntryRef && (
                         <IdentityFact label="Species entry">
-                            {/* The link text is the entry's own formula
-                                (the SAME `Formula` component the h1 uses,
-                                so subscripts match), falling back to the
-                                literal "Species entry" when none was
-                                served -- never the RAW `speciesEntryLabel`
-                                string as the sole text.
-                                CORRECTION (was: "free text a depositor
-                                typed" -- wrong): `species_entry_label` is
-                                built server-side, `backend/app/services/
-                                scientific_read/species_identity.py:42`'s
-                                `species_entry_label()`, as a compact
-                                DISCRIMINATOR from the identity columns that
-                                make this entry differ from its siblings
-                                (stereo_label, electronic_state_kind/label,
-                                term_symbol, isotope_key), omitting anything
-                                at the default -- the live "R" MEASURED on
-                                calculation/geometry pages is the entry's
-                                stereo label (R enantiomer), not free text.
-                                `domain/recordFacets.ts:53-68` documents
-                                this and already expands single-token
-                                stereo descriptors ("R"/"S"/"E"/"Z") to
-                                their full words via `stereoChip` -- reused
-                                here (not re-implemented) so the wording
-                                matches every other place this app shows a
-                                stereo descriptor. A label that is not one
-                                of those four tokens (a compound
-                                discriminator, or a bare state/isotope
-                                token) passes through `stereoChip`
-                                unchanged, exactly as it does everywhere
-                                else that function is already used. */}
-                            <Link to={`/species-entries/${identity.speciesEntryRef}`}>
-                                {identity.formula ? <Formula value={identity.formula} /> : "Species entry"}
-                                {identity.speciesEntryLabel && <> · {stereoChip(identity.speciesEntryLabel)}</>}
-                            </Link>
+                            {/* Delegates to `SpeciesEntryLink` (`./SpeciesEntryLink.tsx`)
+                                rather than re-deriving the same link text here --
+                                the reviewer of #375 flagged this exact duplication
+                                (this header, `ConformerGroupPage.tsx`, and
+                                `ConformerObservationPage.tsx` each hand-rolling the
+                                same formula-then-`stereoChip`-label logic with three
+                                different fallbacks for "no formula served"). One
+                                expression now: the entry's own formula (the SAME
+                                `Formula` component the h1 uses, so subscripts
+                                match) when served, falling back to the entry ref
+                                as `<code className="data">` -- never the literal
+                                words "Species entry" (an earlier version of this
+                                header did that; the `<dt>` beside this `<dd>`
+                                already says "Species entry", so repeating it as
+                                the value said nothing a reader didn't already
+                                have), and never the raw `speciesEntryLabel` string
+                                alone as the sole text. See `SpeciesEntryLink`'s own
+                                docstring for why `species_entry_label` is a
+                                server-computed discriminator, not depositor free
+                                text, and why it is expanded through `stereoChip`
+                                rather than shown raw. */}
+                            <SpeciesEntryLink
+                                speciesEntryRef={identity.speciesEntryRef}
+                                formula={identity.formula}
+                                speciesEntryLabel={identity.speciesEntryLabel}
+                            />
                         </IdentityFact>
                     )}
                 </dl>

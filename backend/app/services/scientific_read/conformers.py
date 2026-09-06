@@ -16,7 +16,7 @@ See ``backend/docs/specs/scientific_conformer_reads.md``.
 
 from __future__ import annotations
 
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import Text, and_, exists, func, select
 from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import not_found
@@ -637,6 +637,22 @@ def _build_group_fingerprint(
     )
 
 
+def _formula_expr(smiles_column):
+    """Hill-notation formula for *smiles_column*, via the RDKit cartridge.
+
+    Same expression as ``app.services.scientific_read.species._formula_expr``
+    / ``app.services.scientific_read.geometry._formula_expr`` (see either
+    docstring for the full rationale), redefined locally rather than
+    imported across a private (leading-underscore) module boundary — the
+    same "one expression, redefined at each call site" precedent
+    ``geometry.py`` and ``calculations.py`` already established for this
+    exact string. ``species`` has no stored formula column;
+    ``mol_from_smiles()`` returns SQL NULL for an unparseable SMILES, so
+    an unparseable species yields a NULL formula rather than raising.
+    """
+    return func.mol_formula(func.mol_from_smiles(smiles_column)).cast(Text)
+
+
 def _build_species_context(
     session: Session, species_entry_id: int
 ) -> ConformerSpeciesContext:
@@ -650,6 +666,7 @@ def _build_species_context(
             Species.inchi_key.label("inchi_key"),
             Species.charge.label("charge"),
             Species.multiplicity.label("multiplicity"),
+            _formula_expr(Species.smiles).label("formula"),
             # The entry's identity columns, so the context can say which
             # entry of the species this record belongs to. Selected here
             # under their own names because species_entry_label_for()
@@ -674,6 +691,7 @@ def _build_species_context(
         species_entry_id=row.entry_id,
         species_entry_ref=row.entry_ref,
         species_entry_label=species_entry_label_for(row),
+        formula=row.formula,
         canonical_smiles=row.smiles,
         inchi_key=row.inchi_key,
         charge=row.charge,

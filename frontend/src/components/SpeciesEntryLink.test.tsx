@@ -60,11 +60,12 @@ describe("SpeciesEntryLink", () => {
         expect(link.textContent).toBe("C9H9 · T1")
     })
 
-    // Post-review fix: when there is no formula (ConformerObservationPage's
-    // species context never serves one), the base text falls back to the
-    // entry's own ref as `<code className="data">` -- NEVER the literal
-    // words "Species entry", which would repeat the enclosing <dt> ("Species
-    // entry / Species entry · R enantiomer") and say nothing new.
+    // Post-review fix: when there is no formula (any caller, on an entry
+    // whose species SMILES does not parse), the base text falls back to
+    // the entry's own ref as `<code className="data">` -- NEVER the
+    // literal words "Species entry", which would repeat the enclosing
+    // <dt> ("Species entry / Species entry · R enantiomer") and say
+    // nothing new.
     it("falls back to the entry ref, styled as a data code run, when there is no formula and no label", () => {
         const { container } = renderLink({ speciesEntryRef: "se_abc123", formula: null, speciesEntryLabel: null })
         const link = container.querySelector("a")!

@@ -188,7 +188,10 @@ def test_cg_detail_review_badge_present(client, db_session):
 
 
 def test_cg_detail_species_context_present(client, db_session):
-    species, entry = _make_species_entry(db_session)
+    species = make_species(
+        db_session, smiles="C=C", inchi_key=next_inchi_key("CONFFORM")
+    )
+    entry = make_species_entry(db_session, species)
     cg = make_conformer_group(db_session, entry, label="basin_a")
     body = client.get(_cg_url(cg.public_ref)).json()
     sp = body["record"]["species"]
@@ -197,6 +200,27 @@ def test_cg_detail_species_context_present(client, db_session):
     assert sp["canonical_smiles"] == species.smiles
     # CHAR(27) column right-pads with spaces in the DB; compare trimmed.
     assert sp["inchi_key"].rstrip() == species.inchi_key.rstrip()
+    assert sp["formula"] == "C2H4"
+
+
+def test_cg_detail_species_context_formula_null_when_unparseable(client, db_session):
+    """A species whose ``smiles`` RDKit cannot parse yields a NULL formula
+    (:func:`app.services.scientific_read.conformers._formula_expr`'s
+    documented NULL-on-unparseable behaviour) rather than raising -- same
+    fixture technique as
+    ``test_browse_species.test_structure_filter_size_sort_keeps_unparseable_smiles_species_visible``.
+    """
+    species = make_species(
+        db_session,
+        smiles="not-a-smiles(((",
+        inchi_key=next_inchi_key("CONFNOFORM"),
+    )
+    entry = make_species_entry(db_session, species)
+    cg = make_conformer_group(db_session, entry, label="basin_a")
+    body = client.get(_cg_url(cg.public_ref)).json()
+    sp = body["record"]["species"]
+    assert sp["canonical_smiles"] == species.smiles
+    assert sp["formula"] is None
 
 
 def test_cg_detail_observations_summary_counts(client, db_session):
@@ -1076,13 +1100,35 @@ def test_co_detail_review_badge_present(client, db_session):
 
 
 def test_co_detail_species_context_present(client, db_session):
-    species, entry = _make_species_entry(db_session)
+    species = make_species(
+        db_session, smiles="C=C", inchi_key=next_inchi_key("COFORM")
+    )
+    entry = make_species_entry(db_session, species)
     cg = make_conformer_group(db_session, entry)
     obs = make_conformer_observation(db_session, conformer_group=cg)
     body = client.get(_co_url(obs.public_ref)).json()
     sp = body["record"]["species"]
     assert sp["species_ref"] == species.public_ref
     assert sp["species_entry_ref"] == entry.public_ref
+    assert sp["formula"] == "C2H4"
+
+
+def test_co_detail_species_context_formula_null_when_unparseable(client, db_session):
+    """Mirrors ``test_cg_detail_species_context_formula_null_when_unparseable``
+    for the observation surface -- same species context builder, same
+    unparseable-SMILES fixture technique."""
+    species = make_species(
+        db_session,
+        smiles="not-a-smiles(((",
+        inchi_key=next_inchi_key("CONOFORM"),
+    )
+    entry = make_species_entry(db_session, species)
+    cg = make_conformer_group(db_session, entry)
+    obs = make_conformer_observation(db_session, conformer_group=cg)
+    body = client.get(_co_url(obs.public_ref)).json()
+    sp = body["record"]["species"]
+    assert sp["canonical_smiles"] == species.smiles
+    assert sp["formula"] is None
 
 
 def test_co_detail_evidence_summary_scoped_to_observation(client, db_session):

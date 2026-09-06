@@ -194,6 +194,11 @@ class ConformerSpeciesContext(BaseModel):
     stereo-unlabelled entry -- never ``""``. Derived by
     :func:`app.services.scientific_read.species_identity.species_entry_label`,
     the one definition every surface shares.
+
+    ``formula`` is derived server-side (RDKit cartridge, Hill notation)
+    from ``canonical_smiles`` and is ``null`` only if that SMILES fails
+    to parse — see ``app.services.scientific_read.species._formula_expr``
+    for the same derivation used elsewhere on the read surface.
     """
 
     species_id: int | None = None
@@ -201,6 +206,7 @@ class ConformerSpeciesContext(BaseModel):
     species_entry_id: int | None = None
     species_entry_ref: str
     species_entry_label: str | None = None
+    formula: str | None = None
     canonical_smiles: str | None = None
     inchi_key: str | None = None
     charge: int | None = None

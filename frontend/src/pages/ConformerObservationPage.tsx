@@ -116,9 +116,10 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                             `RecordIdentityHeader` renders for the other record
                             pages, rendered by hand -- see `ConformerGroupPage.tsx`'s
                             identical comment for why this page cannot use that
-                            component directly (its `species` context carries no
-                            charge/multiplicity/InChIKey/formula in the shape
-                            `RecordIdentity` needs). */}
+                            component directly (its `species` context does not
+                            match the `RecordIdentity` union's shape, even though
+                            it now carries `formula`/charge/multiplicity/InChIKey
+                            individually). */}
                         <div className="record-identity-header">
                             <div className="record-identity-kicker-row">
                                 <span className="t-kicker record-identity-kicker">Conformer observation · deposited evidence</span>
@@ -170,12 +171,17 @@ function ObservationDetail({ observation }: { observation: ConformerObservation 
                                             discriminator, not depositor free text, and why
                                             the fix is to always pair it with the formula
                                             rather than suppress it. This endpoint's
-                                            `species` context carries no `formula` field at
-                                            all, so the base text always falls back to the
-                                            literal "Species entry"; the label, when
-                                            present, still rides along after it. */}
+                                            `species` context now carries `formula` (backend
+                                            fix: conformer observation/group reads reuse the
+                                            same RDKit-derived expression the calculation/
+                                            geometry surfaces already served), so the base
+                                            text is the formula when present, falling back
+                                            to the ref -- matching every other caller of
+                                            `SpeciesEntryLink`; the label, when present,
+                                            still rides along after it. */}
                                         <SpeciesEntryLink
                                             speciesEntryRef={species.species_entry_ref}
+                                            formula={species.formula}
                                             speciesEntryLabel={species.species_entry_label}
                                         />
                                     </dd>
