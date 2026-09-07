@@ -162,9 +162,14 @@ export const NODE_RX = 8
 // node-ref estimate above, which is a different size -- averages 7.6px
 // per character, not the 6.6 this module used before; "IRC started from
 // this geometry" (30 characters incl. spaces, the longest label this
-// table produces) sets at 228px, not 198px. `SMALL_PAD` is 6px on each
-// side (12px total), the minimum slack a text-vs-background-box test
-// checks for on that exact longest label.
+// table produced at the time) set at 228px, not 198px. `SMALL_PAD` is
+// 6px on each side (12px total), the minimum slack a text-vs-background-
+// box test checks for on the longest label. (2026-09 wording rewrite:
+// the longest label is now `irc_followup`'s "continued by the IRC
+// follow-up", 30 characters / 240px -- this module's own test file's
+// "longest label fits inside its own background box" describe block
+// derives which role is longest from the wording table itself rather
+// than naming one, so it stays correct as the wording keeps changing.)
 const SMALL_CHAR_W = 7.6
 const SMALL_PAD = 6
 const LABEL_H = 18
@@ -347,9 +352,9 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     // The gap between sibling boxes must be wide enough that a label
     // CENTRED ON ITS OWN BOX (see below) cannot reach a neighbour's box
     // OR a neighbour's label -- sized off the widest label in the tier,
-    // not a flat constant, since a long label ("starting geometry for the
-    // fine optimisation", 339px) is wider than this app's own minimum
-    // node box (140px).
+    // not a flat constant, since a long label
+    // ("continued by the IRC follow-up", 240px) is wider than this
+    // app's own minimum node box (140px).
     const maxParentLabelW = Math.max(0, ...parentEdges.map((e) => smallTextBoxWidth(e.label)))
     const maxChildLabelW = Math.max(0, ...childEdges.map((e) => smallTextBoxWidth(e.label)))
     const parentGapX = Math.max(WIDE_GAP_X_MIN, maxParentLabelW / 2 + 16)
@@ -364,16 +369,22 @@ export function computeWideLayout(model: DependencyGraphModel): GraphLayout {
     // label clear of its NEIGHBOUR -- the row's own OUTERMOST sibling
     // (first/last in `parentRefs`/`childRefs`) has no neighbour on its
     // outward side, only the plain `WIDE_MARGIN`. Once a label is wider
-    // than its own node box (`optimized_from`'s 339px label vs. a
-    // ~290px box), that flat margin alone is not enough and the label's
-    // own background rect sticks out past `[0, svgWidth]` -- MEASURED
-    // (post-review, longer edge-label wording): a lone child box centred
-    // 167.5px from the left edge with a 339px-wide label landed 2px
-    // past x=0. `outerLabelOverhang` is how much EXTRA half-width the
-    // margin needs on top of `WIDE_MARGIN` to cover the worst case
-    // across both tiers; adding it to BOTH sides keeps the row (still
-    // centred on `centreX`) entirely inside the SVG regardless of which
-    // end the long label sits on.
+    // than its own node box, that flat margin alone is not enough and
+    // the label's own background rect can stick out past `[0, svgWidth]`
+    // -- MEASURED (post-review, longer edge-label wording, using this
+    // archive's real `calc_<26 lowercase-alnum>` refs, 31 characters ->
+    // a 257px node box): a lone child box with `optimized_from`'s
+    // original 43-character label ("starting geometry for the fine
+    // optimisation", 339px) landed 17px past x=0. That specific label
+    // was shortened in review (see `dependencyWording.ts`) and no longer
+    // clips at this exact box width, but the fix stays: it is a general
+    // guard against any tier whose one label genuinely outgrows its own
+    // box, not tied to today's specific strings or ref length.
+    // `outerLabelOverhang` is how much EXTRA half-width the margin needs
+    // on top of `WIDE_MARGIN` to cover the worst case across both tiers;
+    // adding it to BOTH sides keeps the row (still centred on `centreX`)
+    // entirely inside the SVG regardless of which end the long label
+    // sits on.
     const outerMargin = WIDE_MARGIN + Math.max(
         outerLabelOverhang(parentEdges, parentRefs, parentWidths),
         outerLabelOverhang(childEdges, childRefs, childWidths),

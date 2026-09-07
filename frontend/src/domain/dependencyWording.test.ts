@@ -30,18 +30,28 @@ import {
  * `childSentence`/`parentSentence` were re-checked against the actual
  * parent/child semantics in `backend/app/db/models/calculation.py`
  * (`CalculationDependency.parent_calculation_id` /
- * `.child_calculation_id`) and `_DEPENDENCY_ROLE_TO_PARENT_TYPE` /
- * `_TS_UPSTREAM_DEPENDENCY_ROLES` / `_TS_DOWNSTREAM_DEPENDENCY_ROLES`
- * in `backend/app/services/{calculation_resolution,trust/rubrics}.py`,
- * not just reworded in place -- each sentence names the calc it is
- * template'd for correctly as parent or child of the edge.
+ * `.child_calculation_id`) -- not just reworded in place -- each
+ * sentence names the calc it is template'd for correctly as parent or
+ * child of the edge.
+ *
+ * Post-review (blocking): ground truth for parent/child is the ENFORCED
+ * `_DEPENDENCY_ROLE_TO_PARENT_TYPE` constraint in
+ * `backend/app/services/calculation_resolution.py`, cross-checked
+ * against live deployed edges -- NOT `trust/rubrics.py`'s
+ * `_TS_UPSTREAM_DEPENDENCY_ROLES` docstring, which is wrong for
+ * `scan_parent` (describes the parent as "a scan", when the enforced
+ * constraint and 73 deployed edges show the parent is the `opt` that
+ * provided the geometry and the scan is the CHILD). `optimized_from`'s
+ * parent is not always an `opt` either (`_OPTIMIZED_FROM_PARENT_TYPES`
+ * also allows `path_search`), so its wording is type-neutral about the
+ * parent.
  */
 describe("DEPENDENCY_ROLE_WORDING — every one of the seven roles, pinned literally", () => {
-    it("optimized_from — parent is the earlier/coarser geometry source, child is the fine optimisation that used it", () => {
+    it("optimized_from — parent is the geometry source (opt OR path_search, per _OPTIMIZED_FROM_PARENT_TYPES -- neither wording may name its type), child is the optimisation that used it", () => {
         expect(DEPENDENCY_ROLE_WORDING.optimized_from).toEqual({
             childSentence: "This is the fine optimisation; its starting geometry came from {link}",
-            parentSentence: "This coarse optimisation's geometry was the starting point for {link}",
-            edgeLabel: "starting geometry for the fine optimisation",
+            parentSentence: "This calculation's geometry was the starting point for {link}",
+            edgeLabel: "geometry for the optimisation",
         })
     })
 
@@ -77,11 +87,11 @@ describe("DEPENDENCY_ROLE_WORDING — every one of the seven roles, pinned liter
         })
     })
 
-    it("scan_parent — per rubrics.py's _TS_UPSTREAM_DEPENDENCY_ROLES docstring, the parent is the scan that produced the TS guess, the child is the TS-owned optimisation built from it", () => {
+    it("scan_parent — per the ENFORCED _DEPENDENCY_ROLE_TO_PARENT_TYPE constraint (parent type == opt) and the 73 deployed edges, the parent is the opt that provided the geometry, the child is the scan itself; rubrics.py's docstring describing the parent as 'a scan' is wrong for this role", () => {
         expect(DEPENDENCY_ROLE_WORDING.scan_parent).toEqual({
-            childSentence: "This optimisation continued from the scan {link}",
-            parentSentence: "{link} continued from this scan",
-            edgeLabel: "parent of the scan",
+            childSentence: "This scan started from the geometry of {link}",
+            parentSentence: "{link} is a scan started from this geometry",
+            edgeLabel: "geometry for the scan",
         })
     })
 
@@ -127,8 +137,8 @@ describe("splitLinkTemplate", () => {
         expect(splitLinkTemplate("This is the fine optimisation; its starting geometry came from {link}")).toEqual({
             before: "This is the fine optimisation; its starting geometry came from ", after: "",
         })
-        expect(splitLinkTemplate("{link} continued from this scan")).toEqual({
-            before: "", after: " continued from this scan",
+        expect(splitLinkTemplate("{link} is a scan started from this geometry")).toEqual({
+            before: "", after: " is a scan started from this geometry",
         })
     })
 
